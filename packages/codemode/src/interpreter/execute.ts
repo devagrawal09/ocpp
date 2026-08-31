@@ -50,7 +50,7 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
     // Set only after copy-out so timeouts cannot report invalid values as completed.
     let returned: { value: DataValue; promises: PromiseRuntime<Services<Provided>> } | undefined
 
-    const base = Effect.acquireUseRelease(
+    const base: Effect.Effect<Result, unknown, Services<Provided>> = Effect.acquireUseRelease(
       Scope.make("parallel"),
       (scope) =>
         Effect.gen(function* () {

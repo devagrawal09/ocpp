@@ -9,6 +9,7 @@ import { Location } from "../location.js"
 import { PluginSupervisor } from "../plugin/supervisor-service.js"
 import { Shell } from "../shell.js"
 import { ShellResult } from "../shell/result.js"
+import { Reference } from "../reference.js"
 import {
   BusyError,
   CompactionConflictError,
@@ -30,7 +31,12 @@ import { SessionRevert } from "./revert.js"
 import { SessionSchema } from "./schema.js"
 import { SessionStore } from "./store.js"
 
-export type Services = PluginSupervisor.Service | SessionPrompt.Service | SessionRevert.Service | Shell.Service
+export type Services =
+  | PluginSupervisor.Service
+  | Reference.Service
+  | SessionPrompt.Service
+  | SessionRevert.Service
+  | Shell.Service
 
 type PromptRequest = SessionPrompt.Input & {
   id?: SessionMessage.ID
@@ -160,18 +166,22 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
             delivery: input.delivery ?? "steer",
           })
           if (existing) return existing
-          const item = yield* restore(
-            SessionPrompt.Service.use((preparation) => preparation.prepare({ sessionID, messageID, input })).pipe(
-              Effect.provide(servicesFor(session.location)),
-            ),
+          const prepared = yield* restore(
+            Effect.gen(function* () {
+              const preparation = yield* SessionPrompt.Service
+              const references = yield* Reference.Service
+              return { item: yield* preparation.prepare({ sessionID, messageID, input }), references }
+            }).pipe(Effect.provide(servicesFor(session.location))),
           )
           // Commit a staged revert only after preparation succeeds, before admitting new work.
           if (session.revert) yield* SessionRevert.commit(bus, session)
-          return yield* admission.admit({
+          const admitted = yield* admission.admit({
             id: messageID,
             sessionID: session.id,
-            item,
+            item: prepared.item,
           })
+          yield* prepared.references.refresh()
+          return admitted
         }).pipe(
           Effect.catchTag("SessionInbox.LifecycleConflict", () => new PromptConflictError({ sessionID, messageID })),
         )

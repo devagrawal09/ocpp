@@ -155,6 +155,7 @@ export namespace Timeline {
     let current: Turn | undefined
 
     messages.forEach((message) => {
+      if (message.type === "synthetic" && message.metadata?.source === "codemode") return
       if (isNotice(message)) {
         if (current) current.entries.push({ type: "notice", message })
         if (!current) leading.push(message)
@@ -489,15 +490,20 @@ function groupContent(
   editToolDefaultOpen: boolean,
 ): PartGroup[] {
   const groups: PartGroup[] = []
-  let adjacent: { type: "context" | "patch" | "edit"; refs: PartRef[]; tools: boolean } | undefined
+  let adjacent: { type: "context" | "patch" | "edit"; refs: PartRef[]; tools: boolean; execute: boolean } | undefined
   const flush = () => {
     const current = adjacent
     const first = current?.refs[0]
     if (!first) return
     if (!current.tools) {
-      groups.push(
-        ...current.refs.map((ref) => ({ type: "part" as const, key: `part:${ref.messageID}:${ref.partID}`, ref })),
-      )
+      if (current.refs.length === 1)
+        groups.push({ type: "part", key: `part:${first.messageID}:${first.partID}`, ref: first })
+      if (current.refs.length > 1)
+        groups.push({
+          type: "reasoning",
+          key: `reasoning:${first.messageID}:${first.partID}`,
+          refs: current.refs,
+        })
       adjacent = undefined
       return
     }
@@ -525,9 +531,11 @@ function groupContent(
           ? "context"
           : undefined
     if (type) {
-      if (adjacent?.type !== type) flush()
-      adjacent ??= { type, refs: [], tools: false }
+      const execute = item.content.type === "tool" && item.content.name === "execute"
+      if (adjacent && (adjacent.type !== type || execute || adjacent.execute)) flush()
+      adjacent ??= { type, refs: [], tools: false, execute: false }
       adjacent.tools ||= item.content.type === "tool"
+      adjacent.execute ||= execute
       adjacent.refs.push({ messageID: item.messageID, partID: item.partID })
       return
     }

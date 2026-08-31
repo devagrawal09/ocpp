@@ -20,6 +20,7 @@ import { ConfigWebSearch } from "./config/websearch.js"
 import { ConfigToolOutput } from "./config/tool-output.js"
 import { ConfigWatcher } from "./config/watcher.js"
 import { ConfigWarming } from "./config/warming.js"
+import { ConfigSubagent } from "./config/subagent.js"
 
 export class Info extends Schema.Class<Info>("Config.Info")({
   $schema: optional(Schema.String).annotate({
@@ -102,6 +103,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   }),
   warming: ConfigWarming.Warming.pipe(optional).annotate({
     description: "Keep recently active sessions warm with transient model requests (default: false)",
+  }),
+  subagent: ConfigSubagent.Info.pipe(optional).annotate({
+    description: "Control model selection for delegated subagents",
   }),
   providers: Schema.Record(Schema.String, ConfigProvider.Info).pipe(optional),
   experimental: ConfigExperimental.Info.pipe(optional),

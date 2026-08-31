@@ -5,6 +5,7 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Bus } from "@opencode-ai/core/bus"
 import { Job } from "@opencode-ai/core/job"
+import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
 import { KV } from "@opencode-ai/core/kv"
 import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
 import type { LocationServices } from "@opencode-ai/core/location-services"
@@ -125,6 +126,7 @@ describe("SessionExecution lifecycle", () => {
   it.effect("a user interrupt releases the claim so the turn never resurrects", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
+      const jobs = yield* Job.Service
       const sessionID = Session.ID.make("ses_claim_user_cancel")
       yield* seedSessions(database, [sessionID])
 
@@ -135,6 +137,13 @@ describe("SessionExecution lifecycle", () => {
         Deferred.succeed(draining, undefined).pipe(Effect.andThen(Effect.never)),
       )
       const execution = Context.get(context, SessionExecution.Service)
+      yield* jobs.startLimited({
+        id: "exe_user_cancel",
+        type: "codemode",
+        ownerSessionID: sessionID,
+        maxConcurrent: 4,
+        run: Effect.never,
+      })
       yield* execution.resume(sessionID).pipe(Effect.forkScoped)
       yield* Deferred.await(draining)
       expect((yield* claims(database))[sessionID]).toBe(true)
@@ -142,6 +151,7 @@ describe("SessionExecution lifecycle", () => {
       expect(yield* execution.interrupt(sessionID)).toBeTrue()
       yield* execution.awaitIdle(sessionID)
       expect((yield* claims(database))[sessionID]).toBe(false)
+      expect((yield* jobs.wait({ id: "exe_user_cancel" })).info?.status).toBe("cancelled")
     }),
   )
 
@@ -449,6 +459,234 @@ describe("SessionRestart background recovery", () => {
       expect(drained).toHaveLength(2)
       expect((yield* store.context(parent)).filter((message) => message.type === "synthetic")).toHaveLength(1)
       expect((yield* store.context(child)).filter((message) => message.type === "synthetic")).toHaveLength(1)
+    }),
+  )
+
+  it.effect("fails stale Code Mode work and admits one recovery steer", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const jobs = yield* Job.Service
+      const bus = yield* Bus.Service
+      const sessionID = Session.ID.make("ses_codemode_recovery")
+      const executionID = CodeModeExecution.ID.make("exe_codemode_recovery")
+      const assistantMessageID = SessionMessage.ID.make("msg_codemode_recovery")
+      yield* seedSessions(database, [sessionID])
+      yield* jobs.start({
+        id: executionID,
+        type: "codemode",
+        recovery: {
+          kind: "codemode",
+          parentSessionID: sessionID,
+          assistantMessageID,
+          toolCallID: "call-codemode-recovery",
+          code: "return 1",
+          timeoutMs: 1_000,
+        },
+        run: Effect.never,
+      })
+      yield* jobs.background(executionID)
+
+      const failed: SessionEvent.CodeMode.Failed[] = []
+      yield* bus.project(SessionEvent.CodeMode.Failed, (event) =>
+        Effect.sync(() => void failed.push(event)),
+      )
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const restarted = yield* Job.make.pipe(Scope.provide(scope))
+      const drained: Session.ID[] = []
+      const context = yield* buildExecution(
+        scope,
+        ({ sessionID }) => Effect.sync(() => void drained.push(sessionID)),
+        undefined,
+        restarted,
+      )
+      const restart = Context.get(context, SessionRestart.Service)
+      const execution = Context.get(context, SessionExecution.Service)
+      yield* restart.resumeSuspendedSessions
+      yield* execution.awaitIdle(sessionID)
+
+      expect(failed).toMatchObject([
+        {
+          data: {
+            sessionID,
+            assistantMessageID,
+            id: "call-codemode-recovery",
+            executionID,
+            events: [],
+            status: "error",
+            error: "Execution failed because the server restarted.",
+          },
+        },
+      ])
+      expect(drained).toEqual([sessionID])
+      expect(yield* SessionInbox.list(database.db, sessionID)).toMatchObject([
+        {
+          type: "synthetic",
+          payload: {
+            text: expect.stringContaining(`codemode executionID="${executionID}" state="error"`),
+            metadata: { source: "codemode", executionID, state: "error" },
+          },
+        },
+      ])
+      expect(yield* restarted.pendingBackground).toEqual([])
+
+      yield* restart.resumeSuspendedSessions
+      expect(failed).toHaveLength(1)
+      expect(drained).toHaveLength(1)
+
+      const interruptedID = CodeModeExecution.ID.make("exe_codemode_interrupted_recovery")
+      yield* jobs.start({
+        id: interruptedID,
+        type: "codemode",
+        recovery: {
+          kind: "codemode",
+          parentSessionID: sessionID,
+          assistantMessageID,
+          toolCallID: "call-codemode-interrupted-recovery",
+          code: "return 1",
+          timeoutMs: 1_000,
+        },
+        run: Effect.fail(new Error("All fibers interrupted without error")),
+      })
+      yield* jobs.background(interruptedID)
+      yield* jobs.wait({ id: interruptedID })
+      expect((yield* jobs.pendingBackground).find((item) => item.id === interruptedID)).toMatchObject({
+        status: "error",
+        error: "All fibers interrupted without error",
+      })
+
+      yield* restart.resumeSuspendedSessions
+      yield* execution.awaitIdle(sessionID)
+      expect(failed.at(-1)).toMatchObject({
+        data: {
+          executionID: interruptedID,
+          status: "error",
+          error: "Execution failed because the server restarted.",
+        },
+      })
+      expect(drained).toHaveLength(2)
+      expect(yield* restarted.pendingBackground).toEqual([])
+    }),
+  )
+
+  it.effect("acknowledges an already delivered Code Mode terminal without waking again", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const jobs = yield* Job.Service
+      const bus = yield* Bus.Service
+      const sessions = yield* Session.Service
+      const sessionID = Session.ID.make("ses_codemode_delivered")
+      const executionID = CodeModeExecution.ID.make("exe_codemode_delivered")
+      yield* seedSessions(database, [sessionID])
+      yield* jobs.start({
+        id: executionID,
+        type: "codemode",
+        recovery: {
+          kind: "codemode",
+          parentSessionID: sessionID,
+          assistantMessageID: SessionMessage.ID.make("msg_codemode_delivered"),
+          toolCallID: "call-codemode-delivered",
+          code: "return 1",
+          timeoutMs: 1_000,
+        },
+        run: Effect.never,
+      })
+      yield* jobs.background(executionID)
+      const background = (yield* jobs.pendingBackground)[0]
+      if (!background) return yield* Effect.die("Code Mode background marker is unavailable")
+      yield* jobs.markBackgroundTerminal(background.notificationID)
+      const failed: SessionEvent.CodeMode.Failed[] = []
+      yield* bus.project(SessionEvent.CodeMode.Failed, (event) => Effect.sync(() => void failed.push(event)))
+      yield* sessions.synthetic({
+        id: background.notificationID,
+        sessionID,
+        text: "Execution already delivered",
+        metadata: { source: "codemode", executionID, state: "error" },
+        resume: false,
+      })
+      yield* SessionInbox.promote(database.db, bus, sessionID, "steer")
+
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const restarted = yield* Job.make.pipe(Scope.provide(scope))
+      const drained: Session.ID[] = []
+      const context = yield* buildExecution(
+        scope,
+        ({ sessionID }) => Effect.sync(() => void drained.push(sessionID)),
+        undefined,
+        restarted,
+      )
+      yield* Context.get(context, SessionRestart.Service).resumeSuspendedSessions
+
+      expect(drained).toEqual([])
+      expect(failed).toEqual([])
+      expect(yield* sessions.messages({ sessionID })).toMatchObject([
+        { id: background.notificationID, type: "synthetic", text: "Execution already delivered" },
+      ])
+      expect(yield* restarted.pendingBackground).toEqual([])
+    }),
+  )
+
+  it.effect("delivers a committed Code Mode terminal after a crash without publishing it again", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const jobs = yield* Job.Service
+      const bus = yield* Bus.Service
+      const sessionID = Session.ID.make("ses_codemode_terminal_crash")
+      const executionID = CodeModeExecution.ID.make("exe_codemode_terminal_crash")
+      yield* seedSessions(database, [sessionID])
+      yield* jobs.start({
+        id: executionID,
+        type: "codemode",
+        recovery: {
+          kind: "codemode",
+          parentSessionID: sessionID,
+          assistantMessageID: SessionMessage.ID.make("msg_codemode_terminal_crash"),
+          toolCallID: "call-codemode-terminal-crash",
+          code: "return 1",
+          timeoutMs: 1_000,
+        },
+        run: Effect.never,
+      })
+      yield* jobs.background(executionID)
+      const background = (yield* jobs.pendingBackground)[0]
+      if (!background) return yield* Effect.die("Code Mode background marker is unavailable")
+      yield* jobs.markBackgroundTerminal(background.notificationID)
+
+      const failed: SessionEvent.CodeMode.Failed[] = []
+      yield* bus.project(SessionEvent.CodeMode.Failed, (event) => Effect.sync(() => void failed.push(event)))
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const restarted = yield* Job.make.pipe(Scope.provide(scope))
+      const drained: Session.ID[] = []
+      const context = yield* buildExecution(
+        scope,
+        ({ sessionID }) => Effect.sync(() => void drained.push(sessionID)),
+        undefined,
+        restarted,
+      )
+      const restart = Context.get(context, SessionRestart.Service)
+      const execution = Context.get(context, SessionExecution.Service)
+      yield* restart.resumeSuspendedSessions
+      yield* execution.awaitIdle(sessionID)
+
+      expect(failed).toEqual([])
+      expect(drained).toEqual([sessionID])
+      expect(yield* SessionInbox.list(database.db, sessionID)).toMatchObject([
+        {
+          id: background.notificationID,
+          type: "synthetic",
+          payload: {
+            text: expect.stringContaining('codemode executionID="' + executionID + '" state="error"'),
+            metadata: { source: "codemode", executionID, state: "error" },
+          },
+        },
+      ])
+      expect(yield* restarted.pendingBackground).toEqual([])
+
+      yield* restart.resumeSuspendedSessions
+      expect(failed).toEqual([])
+      expect(drained).toEqual([sessionID])
     }),
   )
 

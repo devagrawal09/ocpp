@@ -221,7 +221,7 @@ export const Plugin = {
               yield* context.progress({ shellID: info.id })
 
               const settled = yield* Deferred.make<Output>()
-              const run = Effect.gen(function* () {
+              const settle = Effect.gen(function* () {
                 const result = yield* shell.result(info)
                 if (!result.capture) return yield* new Shell.NotFoundError({ id: info.id })
                 const output = ShellResult.output(result)
@@ -234,43 +234,30 @@ export const Plugin = {
                 }
               }).pipe(
                 Effect.tap((output) => Deferred.succeed(settled, output)),
-                Effect.map((output) => resultMessages(output).join("\n\n")),
                 Effect.onInterrupt(() => shell.remove(info.id).pipe(Effect.ignore)),
               )
-              const job = yield* runtime.job.start({
-                // CodeMode children share a tool-call ID, but each shell must own its job.
-                id: info.id,
-                type: name,
-                title: info.command,
-                metadata: { sessionID: context.sessionID, shellID: info.id },
-                recovery: {
-                  kind: "shell",
-                  sessionID: context.sessionID,
-                  shellID: info.id,
-                  command: info.command,
-                },
-                run,
-              })
 
               if (input.background === true) {
+                // TODO: move detached shells to the managed-service lifecycle.
+                const job = yield* runtime.job.start({
+                  id: info.id,
+                  type: name,
+                  title: info.command,
+                  metadata: { sessionID: context.sessionID, shellID: info.id },
+                  recovery: {
+                    kind: "shell",
+                    sessionID: context.sessionID,
+                    shellID: info.id,
+                    command: info.command,
+                  },
+                  run: settle.pipe(Effect.map((output) => resultMessages(output).join("\n\n"))),
+                })
                 yield* runtime.job.background(job.id)
                 yield* notifyWhenDone(context.sessionID, job.id, info.id, info.command, settled)
                 return backgroundResult(info.id, info.file)
               }
 
-              const result = yield* runtime.job
-                .block({ id: job.id, sessionID: context.sessionID })
-                .pipe(Effect.onInterrupt(() => runtime.job.cancel(job.id).pipe(Effect.ignore)))
-              if (result?.type === "backgrounded") {
-                yield* shell.timeout(info.id, 0)
-                yield* notifyWhenDone(context.sessionID, job.id, info.id, info.command, settled)
-                return backgroundResult(info.id, info.file)
-              }
-              if (result?.info.status === "error")
-                return yield* Effect.fail(new Error(result.info.error ?? "Command failed"))
-              if (result?.info.status === "cancelled") return yield* Effect.fail(new Error("Command cancelled"))
-
-              return yield* Deferred.await(settled)
+              return yield* settle
             }).pipe(
               Effect.map(toolResult),
               Effect.mapError(

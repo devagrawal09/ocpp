@@ -1,11 +1,15 @@
 import { Agent } from "@opencode-ai/core/agent"
+import { Bus } from "@opencode-ai/core/bus"
+import { Job } from "@opencode-ai/core/job"
 import type { Permission } from "@opencode-ai/core/permission"
+import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
+import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
 import { toSessionError } from "@opencode-ai/core/session/to-session-error"
 import type { SessionError } from "@opencode-ai/schema/session-error"
 import { Tool } from "@opencode-ai/core/tool"
 import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { Effect, type Scope } from "effect"
+import { Effect, Schema, type Scope } from "effect"
 import { host } from "../plugin/host"
 
 export const toolIdentity = {
@@ -27,6 +31,39 @@ export function waitForTool(registry: Tool.Interface, name: string, remaining = 
     yield* waitForTool(registry, name, remaining - 1)
   })
 }
+
+const CodeModeOutput = Schema.Struct({ executionID: CodeModeExecution.ID, status: Schema.Literal("running") })
+
+type CodeModeContext = {
+  sessionID: Parameters<Tool.Snapshot["execute"]>[0]["sessionID"]
+  assistantMessageID: SessionMessage.ID
+  id: string
+}
+
+export const activateCodeMode = (output: unknown, context: CodeModeContext) =>
+  Effect.gen(function* () {
+    const value = Schema.decodeUnknownSync(CodeModeOutput)(output)
+    const bus = yield* Bus.Service
+    yield* bus.publish(SessionEvent.Tool.Success, {
+      sessionID: context.sessionID,
+      assistantMessageID: context.assistantMessageID,
+      id: context.id,
+      content: [{ type: "text", text: "Execution started" }],
+      executed: false,
+    })
+    return value.executionID
+  })
+
+export const waitForCodeModeExecution = (executionID: CodeModeExecution.ID) =>
+  Effect.gen(function* () {
+    const jobs = yield* Job.Service
+    const info = (yield* jobs.wait({ id: executionID })).info
+    if (!info) return yield* Effect.die("Code Mode Job is unavailable")
+    return info
+  })
+
+export const waitForCodeMode = (output: unknown, context: CodeModeContext) =>
+  activateCodeMode(output, context).pipe(Effect.flatMap(waitForCodeModeExecution))
 
 export function waitForCodeModeTool(
   registry: Tool.Interface,

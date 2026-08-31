@@ -99,6 +99,52 @@ export function createSessionTimelineRowRenderer(input: {
   }
 
   const renderAssistant = (row: Accessor<TimelineRow.AssistantPart>, onSizeChange?: () => void) => {
+    if (row().group.type === "reasoning") {
+      const refs = createMemo(() => {
+        const group = row().group
+        return group.type === "reasoning" ? group.refs : []
+      })
+      const parts = createMemo(() => {
+        const contents = indexGroupContents(refs())
+        return refs().flatMap((ref) => {
+          const content = contents.get(ref.messageID)?.get(ref.partID)
+          return content?.type === "reasoning" ? [content] : []
+        })
+      })
+      const content = createMemo(() => {
+        const first = parts()[0]
+        if (!first) return undefined
+        return { ...first, text: parts().map((part) => part.text).join("\n\n") }
+      })
+      const durationMs = createMemo(() =>
+        parts().reduce<number | undefined>(
+          (total, part) =>
+            total === undefined || part.time?.completed === undefined
+              ? undefined
+              : total + Math.max(0, part.time.completed - part.time.created),
+          0,
+        ),
+      )
+      const id = () => refs()[0]?.partID
+      return (
+        <Show when={content()}>
+          {(content) => (
+            <AssistantReasoningContent
+              id={id()!}
+              ids={refs().map((ref) => ref.partID)}
+              content={content()}
+              streaming={false}
+              durationMs={durationMs()}
+              defaultOpen={input.reasoningMode() === "full"}
+              open={input.disclosure.value(id()!)}
+              onOpenChange={(open) => input.disclosure.set(id()!, open)}
+              onContentRendered={onSizeChange}
+            />
+          )}
+        </Show>
+      )
+    }
+
     if (row().group.type === "context") {
       const parts = createMemo(() => {
         const group = row().group

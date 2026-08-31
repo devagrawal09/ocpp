@@ -4,6 +4,7 @@ import { testRender, type JSX } from "@opentui/solid"
 import {
   InlineToolRow,
   executeCallSummary,
+  executeTraceSummary,
   genericToolSummary,
   isBackgroundSubagent,
   parseApplyPatchFiles,
@@ -198,6 +199,18 @@ describe("TUI inline tool wrapping", () => {
     expect(
       executeCallSummary({ tool: "session.prompt", status: "completed", input: { text: "first line\nsecond line" } }),
     ).toBe("session.prompt [text=first line second line]")
+  })
+
+  test("summarizes execute traces on one line", () => {
+    expect(executeTraceSummary({ type: "trace", kind: "assignment", target: "answer", value: "42" })).toBe(
+      "Set answer = 42",
+    )
+    expect(executeTraceSummary({ type: "trace", kind: "branch", expression: "items.length > 0", result: true })).toBe(
+      "Matched items.length > 0",
+    )
+    expect(executeTraceSummary({ type: "trace", kind: "log", method: "warn", message: "retrying" })).toBe(
+      "warn retrying",
+    )
   })
 
   test("summarizes generic tool arguments on one line", () => {

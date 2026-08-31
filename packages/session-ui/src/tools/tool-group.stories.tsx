@@ -36,6 +36,52 @@ export const MixedTools = {
   },
 }
 
+export const CodeModeTrace = {
+  render: () => {
+    const [open, setOpen] = createSignal(true)
+    const execute = storyTool(
+      "codemode_execute",
+      "execute",
+      "completed",
+      { code: "const files = [...]" },
+      {
+        output: "{ total: 1482 }",
+        metadata: {
+          events: [
+            { type: "trace", kind: "assignment", target: "files", value: "[package.json, src] (24 items)" },
+            { type: "trace", kind: "operation", operation: "map", input: "24 items", output: "24 paths" },
+            { type: "trace", kind: "branch", expression: "files.length > 0", result: true },
+            {
+              type: "tool",
+              tool: "search",
+              status: "completed",
+              input: { query: "package metadata" },
+              output: '{ "items": [{ "path": "tools.read" }] }',
+            },
+            { type: "trace", kind: "assignment", target: "reader", value: "tools.read" },
+            {
+              type: "tool",
+              tool: "read",
+              status: "completed",
+              input: { path: "package.json" },
+              output: '{ "name": "opencode" }',
+            },
+            { type: "trace", kind: "log", method: "log", message: "Loaded package opencode" },
+            { type: "trace", kind: "return", value: "{ total: 1482 }" },
+          ],
+        },
+      },
+    )
+    return (
+      <section style={{ width: "100%", "max-width": "720px", padding: "24px" }}>
+        <CurrentSessionProviders document={storyDocument([execute])}>
+          <CurrentContextToolGroup parts={[execute]} busy={false} open={open()} onOpenChange={setOpen} />
+        </CurrentSessionProviders>
+      </section>
+    )
+  },
+}
+
 export const MixedReasoning = {
   args: { reasoningDefaultOpen: false },
   render: (args: { reasoningDefaultOpen: boolean }) => {

@@ -13,6 +13,7 @@ import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Form } from "@opencode-ai/core/form"
 import { Generate } from "@opencode-ai/core/generate"
 import { Integration } from "@opencode-ai/core/integration"
+import { Job } from "@opencode-ai/core/job"
 import { KV } from "@opencode-ai/core/kv"
 import { Location } from "@opencode-ai/core/location"
 import { Mcp } from "@opencode-ai/core/mcp/index"
@@ -55,43 +56,80 @@ const permissionLayer = Layer.succeed(
   }),
 )
 
-export const PluginTestLayer = LayerNode.compile(
-  LayerNode.group([
-    AppProcess.node,
-    FileSystem.node,
-    FSUtil.node,
-    Location.node,
-    Npm.node,
-    Credential.node,
-    Bus.node,
-    Form.node,
-    Generate.node,
-    LayerNodePlatform.httpClient,
-    Plugin.node,
-    Agent.node,
-    AISDK.node,
-    Catalog.node,
-    Command.node,
-    Integration.node,
-    KV.node,
-    Mcp.node,
-    PluginRuntime.node,
-    Permission.node,
-    PluginHooks.node,
-    Reference.node,
-    Skill.node,
-    SkillDiscovery.node,
-    Tool.node,
-    Vcs.node,
-    Watcher.node,
-    WebSearch.node,
-  ]),
-  [
-    [Location.node, tempLocationLayer],
-    [Npm.node, npmLayer],
-    [Config.node, Config.testLayer()],
-    [Mcp.node, emptyMcpLayer],
-    [Generate.node, generateLayer],
-    [Permission.node, permissionLayer],
-  ],
+const jobLayer = LayerNode.compile(LayerNode.group([Job.node]))
+const runtimeLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    const jobs = yield* Job.Service
+    return Layer.mock(PluginRuntime.Service, {
+      job: jobs,
+      session: {
+        get: () => Effect.die("Unavailable in Plugin tests"),
+        create: () => Effect.die("Unavailable in Plugin tests"),
+        messages: () => Effect.die("Unavailable in Plugin tests"),
+        message: () => Effect.succeed(undefined),
+        prompt: () => Effect.die("Unavailable in Plugin tests"),
+        generate: () => Effect.die("Unavailable in Plugin tests"),
+        command: () => Effect.die("Unavailable in Plugin tests"),
+        rename: () => Effect.die("Unavailable in Plugin tests"),
+        move: () => Effect.die("Unavailable in Plugin tests"),
+        resume: () => Effect.die("Unavailable in Plugin tests"),
+        switchAgent: () => Effect.die("Unavailable in Plugin tests"),
+        switchModel: () => Effect.die("Unavailable in Plugin tests"),
+        interrupt: () => Effect.die("Unavailable in Plugin tests"),
+        synthetic: () => Effect.never,
+        wait: () => Effect.die("Unavailable in Plugin tests"),
+        context: () => Effect.die("Unavailable in Plugin tests"),
+      },
+      persistentPty: { read: () => Effect.die("Unavailable in Plugin tests") },
+      location: {
+        agent: { list: () => Effect.die("Unavailable in Plugin tests") },
+        mcp: { list: () => Effect.die("Unavailable in Plugin tests") },
+      },
+    })
+  }),
+).pipe(Layer.provide(jobLayer))
+
+export const PluginTestLayer = Layer.merge(
+  LayerNode.compile(
+    LayerNode.group([
+      AppProcess.node,
+      FileSystem.node,
+      FSUtil.node,
+      Location.node,
+      Npm.node,
+      Credential.node,
+      Bus.node,
+      Form.node,
+      Generate.node,
+      LayerNodePlatform.httpClient,
+      Plugin.node,
+      Agent.node,
+      AISDK.node,
+      Catalog.node,
+      Command.node,
+      Integration.node,
+      KV.node,
+      Mcp.node,
+      PluginRuntime.node,
+      Permission.node,
+      PluginHooks.node,
+      Reference.node,
+      Skill.node,
+      SkillDiscovery.node,
+      Tool.node,
+      Vcs.node,
+      Watcher.node,
+      WebSearch.node,
+    ]),
+    [
+      [Location.node, tempLocationLayer],
+      [Npm.node, npmLayer],
+      [Config.node, Config.testLayer()],
+      [Mcp.node, emptyMcpLayer],
+      [Generate.node, generateLayer],
+      [Permission.node, permissionLayer],
+      [PluginRuntime.node, runtimeLayer],
+    ],
+  ),
+  jobLayer,
 ) as unknown as Layer.Layer<unknown, never>

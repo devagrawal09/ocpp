@@ -280,6 +280,7 @@ const layer = Layer.effect(
     const environments = yield* SessionEnvironment.Service
     const scope = yield* Scope.Scope
     const sessions = yield* Session.make((ref) => locations.get(ref))
+    const removing = new Set<SessionSchema.ID>()
     const admission = yield* SessionInbox.Service
     const closeTransport = Effect.fn("Session.closeTransport")(function* (session: SessionSchema.Info) {
       const location = Location.Ref.make({
@@ -400,14 +401,18 @@ const layer = Layer.effect(
       view: (input) => sessions.forSession(input.sessionID).view(input),
       remove: Effect.fn("Session.remove")(function* (sessionID) {
         const session = yield* result.get(sessionID)
-        yield* execution.interrupt(sessionID)
-        yield* execution.awaitIdle(sessionID)
-        yield* closeTransport(session)
-        const children = yield* result.list({ parentID: sessionID })
-        yield* Effect.forEach(children.data, (child) => result.remove(child.id), { concurrency: 1, discard: true })
-        yield* environments.clear(sessionID)
-        yield* bus.publish(SessionEvent.Deleted, { sessionID })
-        yield* bus.remove(sessionID)
+        removing.add(sessionID)
+        yield* Effect.gen(function* () {
+          yield* execution.interrupt(sessionID)
+          yield* execution.awaitIdle(sessionID)
+          yield* jobs.cancelAll({ ownerSessionID: sessionID, type: "codemode", discardBackground: true })
+          yield* closeTransport(session)
+          const children = yield* result.list({ parentID: sessionID })
+          yield* Effect.forEach(children.data, (child) => result.remove(child.id), { concurrency: 1, discard: true })
+          yield* environments.clear(sessionID)
+          yield* bus.publish(SessionEvent.Deleted, { sessionID })
+          yield* bus.remove(sessionID)
+        }).pipe(Effect.ensuring(Effect.sync(() => removing.delete(sessionID))))
       }),
       list: Effect.fn("Session.list")(function* (input = {}) {
         const direction = input.anchor?.direction ?? "next"
@@ -637,7 +642,10 @@ const layer = Layer.effect(
           .pipe(Effect.catchTag("Session.SyntheticConflictError", Effect.die))
       }),
       resume: (sessionID) => sessions.forSession(sessionID).resume(),
-      synthetic: (input) => sessions.forSession(input.sessionID).synthetic(input),
+      synthetic: (input) =>
+        sessions
+          .forSession(input.sessionID)
+          .synthetic(removing.has(input.sessionID) ? { ...input, resume: false } : input),
       interrupt: (sessionID, options) => sessions.forSession(sessionID).interrupt(options),
       revert: {
         stage: (input) => sessions.forSession(input.sessionID).revert.stage(input),

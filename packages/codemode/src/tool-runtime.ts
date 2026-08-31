@@ -28,7 +28,7 @@ type ServicesOf<T, Depth extends ReadonlyArray<unknown>> = Depth["length"] exten
   ? never
   : T extends {
         readonly _tag: "CodeModeTool"
-        readonly execute: (input: unknown) => Effect.Effect<unknown, unknown, infer R>
+        readonly execute: (...args: never[]) => Effect.Effect<unknown, unknown, infer R>
       }
     ? R
     : T extends object
@@ -53,6 +53,7 @@ export type ToolCallEnded = {
   readonly input: unknown
   readonly durationMs: number
   readonly outcome: "success" | "failure" | "interrupted"
+  readonly output?: unknown
   readonly message?: string
 }
 
@@ -495,7 +496,7 @@ export const make = <R>(
     return effect.pipe(
       Effect.onExit((exit) => {
         const durationMs = Date.now() - startedAt
-        if (Exit.isSuccess(exit)) return onEnd({ ...call, durationMs, outcome: "success" })
+        if (Exit.isSuccess(exit)) return onEnd({ ...call, durationMs, outcome: "success", output: exit.value })
         if (Cause.hasInterruptsOnly(exit.cause)) return onEnd({ ...call, durationMs, outcome: "interrupted" })
         const error = Cause.squash(exit.cause)
         const message = error instanceof Error ? error.message : Cause.pretty(exit.cause)
@@ -532,7 +533,7 @@ export const make = <R>(
       return yield* observeEnd(
         Effect.gen(function* () {
           if (hooks?.onToolCallStart !== undefined) yield* hooks.onToolCallStart(call)
-          const raw = yield* Effect.suspend(() => tool.execute(input)).pipe(
+          const raw = yield* Effect.suspend(() => tool.execute(input, { index, name })).pipe(
             Effect.catchCause((cause) => {
               if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt
               return Effect.fail(

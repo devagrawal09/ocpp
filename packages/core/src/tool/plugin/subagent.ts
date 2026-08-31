@@ -2,54 +2,52 @@ export * as SubagentTool from "./subagent.js"
 
 import { ToolFailure } from "@opencode-ai/ai"
 import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { Effect, Schema, Scope } from "effect"
+import { Model } from "@opencode-ai/schema/model"
+import { Deferred, Effect, Schema } from "effect"
 import { Agent } from "../../agent.js"
+import { Bus } from "../../bus.js"
 import { Config } from "../../config.js"
-import type { Job } from "../../job.js"
 import { PluginRuntime } from "../../plugin/runtime.js"
 import { Permission } from "../../permission.js"
+import { SessionEvent } from "../../session/event.js"
 import { SessionSchema } from "../../session/schema.js"
-import { SubagentCompletion } from "../../session/subagent-completion.js"
+import { Tool } from "../../tool.js"
+import { SubagentCustomTool } from "./subagent-custom.js"
 
 export const name = "subagent"
 
 const NO_TEXT = "Subagent completed without a text response."
-const backgroundResult = (sessionID: SessionSchema.ID) => ({
-  sessionID,
-  status: "running" as const,
-  output: [
-    `The subagent is working in the background (sessionID: ${sessionID}). You will be notified automatically when it finishes.`,
-    "DO NOT sleep, poll for progress, ask the subagent for status, or duplicate this subagent's work; avoid working with the same files or topics it is using.",
-    "Work on non-overlapping tasks, or briefly tell the user what you launched and end your response.",
-  ].join("\n"),
-})
 
 export const Input = Schema.Struct({
   agent: Schema.String.annotate({ description: "The type of specialized agent to use for this task" }),
   description: Schema.String.annotate({ description: "A short 3-5 word label for the task, displayed to the user" }),
   prompt: Schema.String.annotate({ description: "The task for the subagent to perform" }),
+  model: Schema.optionalKey(Schema.String).annotate({
+    description: "Model to use, optionally including a variant after #",
+  }),
+  outputSchema: Schema.optionalKey(SubagentCustomTool.JSONSchema).annotate({
+    description: "JSON Schema for a required structured result",
+  }),
+  tools: Schema.optionalKey(Schema.Array(SubagentCustomTool.Definition)).annotate({
+    description: "Serializable Code Mode tools available only during this subagent call",
+  }),
   sessionID: Schema.optionalKey(SessionSchema.ID).annotate({
     description:
       "Continue a specific previous subagent conversation by passing its sessionID. Calls without a sessionID start a new conversation.",
-  }),
-  background: Schema.optionalKey(Schema.Boolean).annotate({
-    description:
-      "Run the subagent in the background and return immediately. You will be notified when it completes. DO NOT sleep, poll, or proactively check on its progress.",
   }),
 })
 
 export const Output = Schema.Struct({
   sessionID: SessionSchema.ID,
-  status: Schema.Literals(["completed", "running"]),
-  output: Schema.String,
+  status: Schema.Literal("completed"),
+  output: Schema.Json,
 })
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
-  "Foreground (default) runs the subagent to completion and returns its final response.",
-  "Background mode (background=true) launches it asynchronously and returns immediately; you are notified when it finishes.",
-  "Use background only for independent work that can run while you continue elsewhere.",
+  "The subagent runs to completion and returns its final response.",
+  "Custom tools run with the parent session's Code Mode tools and permissions, not the child agent's restrictions.",
 ].join("\n")
 
 export const Plugin = {
@@ -57,12 +55,10 @@ export const Plugin = {
   effect: Effect.fn("SubagentTool.Plugin")(function* (ctx: Context) {
     const runtime = yield* PluginRuntime.Service
     const agents = yield* Agent.Service
+    const bus = yield* Bus.Service
     const config = yield* Config.Service
     const permission = yield* Permission.Service
-    const scope = yield* Scope.Scope
-    // One completion observer per job generation. Keyed by child plus start time so a fresh
-    // continuation job is observable even while a settled generation's observer is finalizing.
-    const notifications = new Set<string>()
+    const tools = yield* Tool.Service
 
     // Concatenate the child's final completed assistant text. Distinguishes "completed with no
     // text" (generic string) from "failed" (the run effect fails, surfaced as a job error).
@@ -78,22 +74,6 @@ export const Plugin = {
         .map((part) => part.text)
         .join("")
       return text.length > 0 ? text : NO_TEXT
-    })
-
-    const notifyWhenDone = Effect.fn("SubagentTool.notifyWhenDone")(function* (
-      recovery: Extract<Job.Recovery, { kind: "subagent" }>,
-      startedAt: number,
-    ) {
-      const key = `${recovery.childSessionID}:${startedAt}`
-      if (notifications.has(key)) return
-      notifications.add(key)
-      yield* Effect.gen(function* () {
-        const info = (yield* runtime.job.wait({ id: recovery.childSessionID })).info
-        if (info) yield* SubagentCompletion.deliver(runtime.session, runtime.job, { ...info, recovery })
-      }).pipe(
-        Effect.ensuring(Effect.sync(() => notifications.delete(key))),
-        Effect.forkIn(scope, { startImmediately: true }),
-      )
     })
 
     yield* ctx.tool
@@ -148,6 +128,40 @@ export const Plugin = {
                   },
                 })
                 .pipe(Effect.mapError((error) => new ToolFailure({ message: `Subagent denied: ${agent.id}`, error })))
+              yield* SubagentCustomTool.validate(input.tools ?? []).pipe(
+                Effect.mapError((error) => new ToolFailure({ message: error.message, error })),
+              )
+              if (input.outputSchema !== undefined)
+                yield* SubagentCustomTool.validateSchema("structured result", input.outputSchema).pipe(
+                  Effect.mapError((error) => new ToolFailure({ message: error.message, error })),
+                )
+              const selectedModel = input.model
+              const requestedModel =
+                selectedModel === undefined
+                  ? undefined
+                  : yield* Effect.try({
+                      try: () => Model.Ref.parse(selectedModel),
+                      catch: (error) => new ToolFailure({ message: `Invalid subagent model: ${selectedModel}`, error }),
+                    })
+              if (requestedModel !== undefined) {
+                const resource = `${requestedModel.providerID}/${requestedModel.id}`
+                const allowed = Config.latest(yield* config.entries(), "subagent")?.models?.includes(resource) === true
+                if (!allowed)
+                  yield* permission
+                    .assert({
+                      action: "subagent_model",
+                      resources: [resource],
+                      save: [],
+                      sessionID: context.sessionID,
+                      agent: context.agent,
+                      source: { type: "tool", messageID: context.messageID, id: context.id },
+                    })
+                    .pipe(
+                      Effect.mapError(
+                        (error) => new ToolFailure({ message: `Subagent model denied: ${selectedModel}`, error }),
+                      ),
+                    )
+              }
 
               const existing =
                 input.sessionID === undefined
@@ -164,24 +178,24 @@ export const Plugin = {
                 return yield* new ToolFailure({
                   message: `Session ${existing.id} is not a child of the current session`,
                 })
-              // Continuing with a different agent switches the child, mirroring create semantics
-              // where the agent's configured model wins over the inherited one.
-              if (existing !== undefined && existing.agent !== agent.id) {
-                yield* runtime.session.switchAgent({ sessionID: existing.id, agent: agent.id }).pipe(
+              if (existing !== undefined && (existing.agent !== agent.id || requestedModel !== undefined)) {
+                const model = requestedModel ?? (existing.agent !== agent.id ? agent.model : undefined)
+                yield* (
+                  existing.agent === agent.id
+                    ? Effect.void
+                    : runtime.session.switchAgent({ sessionID: existing.id, agent: agent.id })
+                ).pipe(
                   Effect.andThen(
-                    agent.model === undefined
-                      ? Effect.void
-                      : runtime.session.switchModel({ sessionID: existing.id, model: agent.model }),
+                    model === undefined ? Effect.void : runtime.session.switchModel({ sessionID: existing.id, model }),
                   ),
                   Effect.mapError(
                     (error) =>
-                      new ToolFailure({ message: `Failed to switch subagent session agent: ${existing.id}`, error }),
+                      new ToolFailure({ message: `Failed to configure subagent session: ${existing.id}`, error }),
                   ),
                 )
               }
 
-              // Model selection is policy/config/session state, not an LLM-facing tool argument.
-              const model = agent.model ?? parent.model
+              const model = requestedModel ?? agent.model ?? parent.model
               const child =
                 existing ??
                 (yield* runtime.session
@@ -197,19 +211,87 @@ export const Plugin = {
                     ),
                   ))
 
-              const background = input.background === true
+              const caller = yield* agents.resolve(context.agent)
+              if (caller === undefined)
+                return yield* new ToolFailure({ message: `Parent agent not found: ${context.agent}` })
+              const parentTools = (yield* tools.registrations(caller.permissions, parent.id)).filter(
+                (tool) => tool.options?.codemode !== false,
+              )
+              const submitted =
+                input.outputSchema === undefined ? undefined : yield* Deferred.make<typeof Schema.Json.Type>()
+              const pending = new Map<string, typeof Schema.Json.Type>()
+              let accepted = false
+              const temporary: Tool.Info[] = [
+                ...(input.outputSchema === undefined
+                  ? []
+                  : [
+                      {
+                        name: "submit_result",
+                        description: "Submit the final structured result. The first valid submission ends this call.",
+                        input: input.outputSchema,
+                        options: { pinned: true },
+                        execute: (value: unknown, submitContext: Tool.Context) =>
+                          Effect.gen(function* () {
+                            if (accepted) return yield* new Tool.Error({ message: "A result was already submitted" })
+                            const result = yield* Schema.decodeUnknownEffect(Schema.Json)(value)
+                            accepted = true
+                            pending.set(submitContext.id, result)
+                            return { content: "Result submitted." }
+                          }).pipe(
+                            Effect.mapError((error) =>
+                              error instanceof Tool.Error
+                                ? error
+                                : new Tool.Error({ message: "Submitted result is not valid JSON", error }),
+                            ),
+                          ),
+                      } satisfies Tool.Info,
+                    ]),
+                ...SubagentCustomTool.make(input.tools ?? [], parentTools, context),
+              ]
+              const registration =
+                temporary.length === 0
+                  ? undefined
+                  : yield* tools
+                      .registerSession(child.id, temporary)
+                      .pipe(
+                        Effect.mapError(
+                          (error) => new ToolFailure({ message: `Invalid subagent tool: ${error.message}`, error }),
+                        ),
+                      )
+              const unsubscribe =
+                submitted === undefined
+                  ? undefined
+                  : yield* bus.listen((event) => {
+                      if (!isToolSuccess(event) || event.data.sessionID !== child.id) return Effect.void
+                      const result = pending.get(event.data.id)
+                      if (!pending.has(event.data.id) || result === undefined) return Effect.void
+                      pending.delete(event.data.id)
+                      return Deferred.succeed(submitted, result).pipe(Effect.asVoid)
+                    })
               yield* context.progress({ sessionID: child.id, status: "running" })
-
-              // Standard prompt admission outside the job: Job.start joining a running child skips
-              // its run effect, and the default wake starts an idle child or steers a running one.
               yield* runtime.session
                 .prompt({
                   sessionID: child.id,
                   text:
                     existing === undefined
-                      ? ["You are a subagent spawned by another session.", input.prompt].join("\n")
-                      : input.prompt,
-                  ...(background && existing === undefined ? { resume: false } : {}),
+                      ? [
+                          "You are a subagent spawned by another session.",
+                          ...(submitted === undefined
+                            ? []
+                            : [
+                                "You must finish by calling tools.submit_result with a value matching the requested schema. Do not return the final result as plain text.",
+                              ]),
+                          input.prompt,
+                        ].join("\n")
+                      : [
+                          ...(submitted === undefined
+                            ? []
+                            : [
+                                "You must finish by calling tools.submit_result with a value matching the requested schema. Do not return the final result as plain text.",
+                              ]),
+                          input.prompt,
+                        ].join("\n"),
+                  resume: false,
                 })
                 .pipe(
                   Effect.mapError(
@@ -217,54 +299,58 @@ export const Plugin = {
                   ),
                 )
 
-              const recovery = {
-                kind: "subagent" as const,
-                parentSessionID: context.sessionID,
-                childSessionID: child.id,
-                agent: agent.name,
-                description: input.description,
-              }
-              const info = yield* runtime.job.start({
-                id: child.id,
-                type: name,
-                title: input.description,
-                metadata: {},
-                recovery,
-                run: runtime.session.resume(child.id).pipe(Effect.andThen(latestAssistantText(child.id))),
+              const resume = () =>
+                runtime.session.resume(child.id).pipe(
+                  Effect.as({ type: "idle" as const }),
+                  Effect.onInterrupt(() => runtime.session.interrupt(child.id).pipe(Effect.ignore)),
+                  Effect.mapError(
+                    (error) => new ToolFailure({ message: `Subagent failed (sessionID: ${child.id})`, error }),
+                  ),
+                )
+              const run = Effect.gen(function* () {
+                if (submitted === undefined) {
+                  yield* resume()
+                  return yield* latestAssistantText(child.id).pipe(
+                    Effect.mapError(
+                      (error) => new ToolFailure({ message: `Failed to read subagent output: ${child.id}`, error }),
+                    ),
+                  )
+                }
+                const first = yield* Effect.raceFirst(
+                  resume(),
+                  Deferred.await(submitted).pipe(Effect.map((output) => ({ type: "submitted" as const, output }))),
+                )
+                if (first.type === "submitted") return first.output
+                yield* runtime.session
+                  .prompt({
+                    sessionID: child.id,
+                    text: "You did not submit the required result. Call tools.submit_result now with a value matching the requested schema.",
+                    resume: false,
+                  })
+                  .pipe(
+                    Effect.mapError(
+                      (error) => new ToolFailure({ message: `Failed to remind subagent: ${child.id}`, error }),
+                    ),
+                  )
+                const second = yield* Effect.raceFirst(
+                  resume(),
+                  Deferred.await(submitted).pipe(Effect.map((output) => ({ type: "submitted" as const, output }))),
+                )
+                if (second.type === "submitted") return second.output
+                return yield* new ToolFailure({
+                  message: `Subagent did not submit a structured result (sessionID: ${child.id})`,
+                })
               })
-
-              if (background) {
-                yield* runtime.job.background(info.id)
-                yield* notifyWhenDone(recovery, info.started_at)
-                return backgroundResult(child.id)
-              }
-
-              const result = yield* runtime.job.block({ id: child.id, sessionID: context.sessionID }).pipe(
-                Effect.onInterrupt(() =>
-                  Effect.all([runtime.session.interrupt(child.id), runtime.job.cancel(child.id)], {
-                    discard: true,
-                  }),
+              const output = yield* run.pipe(
+                Effect.ensuring(
+                  Effect.all([registration?.dispose ?? Effect.void, unsubscribe ?? Effect.void], { discard: true }),
                 ),
               )
-              if (result?.type === "backgrounded") {
-                yield* notifyWhenDone(recovery, result.info.started_at)
-                return backgroundResult(child.id)
-              }
-              // Failure surfaces keep the sessionID visible so the model can continue the child.
-              if (result?.info.status === "error")
-                return yield* new ToolFailure({
-                  message: `Subagent failed (sessionID: ${child.id}): ${result.info.error ?? "unknown error"}`,
-                })
-              if (result?.info.status === "cancelled")
-                return yield* new ToolFailure({ message: `Subagent cancelled (sessionID: ${child.id})` })
-              return { sessionID: child.id, status: "completed" as const, output: result?.info.output ?? NO_TEXT }
+              return { sessionID: child.id, status: "completed" as const, output }
             }).pipe(
               Effect.map((output) => ({
                 output,
-                content:
-                  output.status === "completed"
-                    ? `<subagent sessionID="${output.sessionID}" state="completed">\n${output.output}\n</subagent>`
-                    : output.output,
+                content: `<subagent sessionID="${output.sessionID}" state="completed">\n${render(output.output)}\n</subagent>`,
                 metadata: { sessionID: output.sessionID, status: output.status },
               })),
             ),
@@ -299,4 +385,13 @@ export const Plugin = {
       }),
     )
   }),
+}
+
+function render(value: typeof Schema.Json.Type) {
+  if (typeof value === "string") return value
+  return JSON.stringify(value, null, 2) ?? String(value)
+}
+
+function isToolSuccess(event: Bus.LogItem): event is SessionEvent.Tool.Success {
+  return event.type === SessionEvent.Tool.Success.type
 }

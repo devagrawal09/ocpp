@@ -1,10 +1,14 @@
 import { describe, expect } from "bun:test"
 import { Agent } from "@opencode-ai/core/agent"
+import { Bus } from "@opencode-ai/core/bus"
 import type { Permission } from "@opencode-ai/core/permission"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Image } from "@opencode-ai/core/image"
+import { Job } from "@opencode-ai/core/job"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
+import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { Session } from "@opencode-ai/core/session"
+import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionModelRequest } from "@opencode-ai/core/session/model-request"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
@@ -15,7 +19,7 @@ import { Tool } from "@opencode-ai/core/tool"
 import type { Info } from "@opencode-ai/schema/tool"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { executeTool, toolDefinitions } from "./lib/tool"
-import { Deferred, Effect, Exit, Fiber, Layer, Logger, Schema, SchemaGetter, SchemaIssue, Scope } from "effect"
+import { Deferred, Effect, Exit, Fiber, Layer, Logger, Schema, SchemaGetter, SchemaIssue, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { z } from "zod"
 import { testEffect } from "./lib/effect"
@@ -42,9 +46,57 @@ const imageStore = Layer.mock(Image.Service, {
     })
   },
 })
-const registryLayer = AppNodeBuilder.build(LayerNode.group([Tool.node, PluginHooks.node, SessionModelRequest.node]), [
-  [Image.node, imageStore],
-])
+let testJobs: Job.Interface | undefined
+const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
+const runtimeLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    const jobs = yield* Job.Service
+    testJobs = jobs
+    return Layer.mock(PluginRuntime.Service, {
+      job: {
+        start: jobs.start,
+        startLimited: jobs.startLimited,
+        wait: jobs.wait,
+        block: jobs.block,
+        background: jobs.background,
+        cancel: jobs.cancel,
+        cancelAll: jobs.cancelAll,
+        markBackgroundTerminal: jobs.markBackgroundTerminal,
+        completeBackground: jobs.completeBackground,
+      },
+      session: {
+        get: () => Effect.die("Unavailable in Tool registry tests"),
+        create: () => Effect.die("Unavailable in Tool registry tests"),
+        messages: () => Effect.die("Unavailable in Tool registry tests"),
+        message: () => Effect.succeed(undefined),
+        prompt: () => Effect.die("Unavailable in Tool registry tests"),
+        generate: () => Effect.die("Unavailable in Tool registry tests"),
+        command: () => Effect.die("Unavailable in Tool registry tests"),
+        rename: () => Effect.die("Unavailable in Tool registry tests"),
+        move: () => Effect.die("Unavailable in Tool registry tests"),
+        resume: () => Effect.die("Unavailable in Tool registry tests"),
+        switchAgent: () => Effect.die("Unavailable in Tool registry tests"),
+        switchModel: () => Effect.die("Unavailable in Tool registry tests"),
+        interrupt: () => Effect.die("Unavailable in Tool registry tests"),
+        synthetic: () => Effect.never,
+        wait: () => Effect.die("Unavailable in Tool registry tests"),
+        context: () => Effect.die("Unavailable in Tool registry tests"),
+      },
+      persistentPty: { read: () => Effect.die("Unavailable in Tool registry tests") },
+      location: {
+        agent: { list: () => Effect.die("Unavailable in Tool registry tests") },
+        mcp: { list: () => Effect.die("Unavailable in Tool registry tests") },
+      },
+    })
+  }),
+).pipe(Layer.provide(jobLayer))
+const registryLayer = AppNodeBuilder.build(
+  LayerNode.group([Tool.node, PluginHooks.node, SessionModelRequest.node, Bus.node]),
+  [
+    [Image.node, imageStore],
+    [PluginRuntime.node, runtimeLayer],
+  ],
+)
 const it = testEffect(registryLayer)
 const identity = {
   agent: Agent.ID.make("build"),
@@ -56,6 +108,25 @@ const call = (name: string, id = `call-${name}`): Parameters<Tool.Snapshot["exec
   ...identity,
   call: { type: "tool-call", id, name, input: { text: name } },
 })
+
+const CodeModeOutput = Schema.Struct({ executionID: Schema.String, status: Schema.Literal("running") })
+const waitCodeMode = (output: unknown, id: string) =>
+  Effect.gen(function* () {
+    const jobs = testJobs
+    if (!jobs) return yield* Effect.die("Job test service is unavailable")
+    const value = Schema.decodeUnknownSync(CodeModeOutput)(output)
+    expect(value.executionID).toStartWith("exe_")
+    expect((yield* jobs.get(value.executionID))?.status).toBe("running")
+    const bus = yield* Bus.Service
+    yield* bus.publish(SessionEvent.Tool.Success, {
+      sessionID,
+      assistantMessageID: identity.messageID,
+      id,
+      content: [{ type: "text", text: "Execution started" }],
+      executed: false,
+    })
+    return (yield* jobs.wait({ id: value.executionID })).info
+  })
 
 const make = (): Info => ({
   name: "echo",
@@ -89,6 +160,33 @@ describe("Tool", () => {
         expect(draft.get("acme_echo")?.name).toBe("echo")
         expect(draft.get("missing")).toBeUndefined()
       })
+    }),
+  )
+
+  it.effect("isolates temporary tools to one Session and restores earlier registrations", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { echo: constant("base") }, { codemode: false })
+      const other = Session.ID.make("ses_registry_other")
+      const first = yield* service.registerSession(sessionID, [
+        { ...constant("session"), name: "echo", options: { codemode: false } },
+        { ...constant("temporary"), name: "temporary" },
+      ])
+
+      expect((yield* service.snapshot(undefined, other)).codeModeCatalog?.map((tool) => tool.path)).toEqual([])
+      expect((yield* service.snapshot(undefined, sessionID)).codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "temporary",
+      ])
+      expect((yield* (yield* service.snapshot(undefined, sessionID)).execute(call("echo"))).output).toEqual({
+        text: "session",
+      })
+      expect((yield* (yield* service.snapshot(undefined, other)).execute(call("echo"))).output).toEqual({
+        text: "base",
+      })
+
+      yield* first.dispose
+      expect((yield* service.snapshot(undefined, sessionID)).codeModeCatalog).toEqual([])
+      expect((yield* service.registrations(undefined, sessionID)).map((tool) => tool.name)).toEqual(["echo"])
     }),
   )
 
@@ -186,7 +284,10 @@ describe("Tool", () => {
           input: { code: 'return await tools.echo({ text: "hello" })' },
         },
       })
-      expect(known.output).toMatchObject({ output: '{\n  "text": "hello"\n}' })
+      expect(yield* waitCodeMode(known.output, "known")).toMatchObject({
+        status: "completed",
+        output: '{\n  "text": "hello"\n}',
+      })
       expect(seen).toEqual(["run_code", "echo"])
       const unknown = yield* snapshot.execute({
         ...call("execute"),
@@ -197,7 +298,10 @@ describe("Tool", () => {
           input: { code: "return await tools.missing({})" },
         },
       })
-      expect(unknown.output).toMatchObject({ error: true })
+      expect(yield* waitCodeMode(unknown.output, "unknown")).toMatchObject({
+        status: "error",
+        error: expect.stringContaining("missing"),
+      })
       expect(seen).toEqual(["run_code", "echo", "execute"])
     }),
   )
@@ -526,7 +630,10 @@ describe("Tool", () => {
           },
         },
       })
-      expect(result.content).toEqual([{ type: "text", text: "digit,numeric,underscore,hyphen,namespaced" }])
+      expect(yield* waitCodeMode(result.output, "call-nonletter-names")).toMatchObject({
+        status: "completed",
+        output: "digit,numeric,underscore,hyphen,namespaced",
+      })
     }),
   )
 
@@ -1117,7 +1224,28 @@ describe("Tool", () => {
         },
       })
 
-      const progress: Tool.Metadata[] = []
+      const bus = yield* Bus.Service
+      let backgroundAtStarted = false
+      yield* bus.project(SessionEvent.CodeMode.Started, () => {
+        const jobs = testJobs
+        if (!jobs) return Effect.die("Job test service is unavailable")
+        return jobs.pendingBackground.pipe(
+          Effect.map((items) => {
+            backgroundAtStarted = items.some((item) => item.recovery.kind === "codemode")
+          }),
+        )
+      })
+      const progress: Array<SessionEvent.CodeMode.Progress["data"]["events"]> = []
+      const boundedProgress: Array<SessionEvent.CodeMode.Progress["data"]["events"]> = []
+      const progressFiber = yield* bus.subscribe(SessionEvent.CodeMode.Progress).pipe(
+        Stream.runForEach((event) =>
+          Effect.sync(() => {
+            if (event.data.id === "call-execute") progress.push(event.data.events)
+            if (event.data.id === "call-bounded") boundedProgress.push(event.data.events)
+          }),
+        ),
+        Effect.forkIn(yield* Scope.Scope, { startImmediately: true }),
+      )
       const execution = yield* toolSet.execute({
         ...call("execute"),
         call: {
@@ -1126,16 +1254,55 @@ describe("Tool", () => {
           name: "execute",
           input: { code: 'return await tools.echo({ text: "request" })' },
         },
-        progress: (update) => Effect.sync(() => progress.push(update)),
       })
 
-      expect(execution).toMatchObject({ content: [{ type: "text" }] })
+      expect(backgroundAtStarted).toBe(true)
+      expect(yield* waitCodeMode(execution.output, "call-execute")).toMatchObject({
+        status: "completed",
+        output: '{\n  "text": "request"\n}',
+      })
       expect(executed).toEqual(["old:request"])
-      expect(progress).toEqual([
-        { toolCalls: [{ tool: "echo", status: "running", input: { text: "request" } }] },
-        { stage: "old" },
-        { toolCalls: [{ tool: "echo", status: "completed", input: { text: "request" } }] },
+      expect(progress.at(-1)).toEqual([
+        {
+          type: "tool",
+          tool: "echo",
+          status: "completed",
+          input: { text: "request" },
+          output: '{"text":"request"}',
+          metadata: { stage: "old" },
+        },
+        { type: "trace", kind: "return", value: "{ text: request }" },
       ])
+
+      const bounded = yield* toolSet.execute({
+        ...call("execute"),
+        call: {
+          type: "tool-call",
+          id: "call-bounded",
+          name: "execute",
+          input: {
+            code: 'console.log("\u{1F600}".repeat(5000)); return await Promise.all(Array.from({ length: 101 }, (_, index) => tools.echo({ text: String.fromCharCode(0).repeat(5000) + index })))',
+          },
+        },
+      })
+      expect(yield* waitCodeMode(bounded.output, "call-bounded")).toMatchObject({ status: "completed" })
+      yield* Fiber.interrupt(progressFiber)
+      const boundedEvents = boundedProgress.at(-1) ?? []
+      expect(boundedEvents.filter((event) => event.type === "tool")).toHaveLength(100)
+      expect(boundedEvents).toHaveLength(102)
+      expect(boundedEvents.find((event) => event.type === "tool")).toMatchObject({
+        input: { truncated: expect.any(String) },
+        output: expect.any(String),
+      })
+      const first = boundedEvents.find((event) => event.type === "tool")
+      const output = first?.output ?? ""
+      expect(new TextEncoder().encode(JSON.stringify(first?.input)).length).toBeLessThanOrEqual(4 * 1024)
+      expect(new TextEncoder().encode(JSON.stringify(output)).length).toBeLessThanOrEqual(4 * 1024)
+      const log = boundedEvents.find((event) => event.type === "trace" && event.kind === "log")
+      expect(log).toMatchObject({ message: expect.any(String) })
+      expect(
+        new TextEncoder().encode(JSON.stringify(log?.kind === "log" ? log.message : "")).length,
+      ).toBeLessThanOrEqual(4 * 1024)
     }),
   )
 })

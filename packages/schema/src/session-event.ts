@@ -25,6 +25,7 @@ import { TokenUsage } from "./token-usage.js"
 import { SessionInbox } from "./session-inbox.js"
 import { Project } from "./project.js"
 import { SessionFork } from "./session-fork.js"
+import { CodeModeExecution } from "./codemode-execution.js"
 
 export { FileAttachment }
 
@@ -544,6 +545,58 @@ export namespace Tool {
   export type Failed = typeof Failed.Type
 }
 
+export namespace CodeMode {
+  const CodeModeBase = {
+    ...Base,
+    assistantMessageID: SessionMessage.ID,
+    id: Schema.String,
+    executionID: CodeModeExecution.ID,
+  }
+
+  export const Started = Event.durable({
+    type: "session.codemode.started",
+    ...options,
+    schema: {
+      ...CodeModeBase,
+      code: Schema.String,
+      timeoutMs: PositiveInt,
+    },
+  })
+  export type Started = typeof Started.Type
+
+  export const Progress = Event.ephemeral({
+    type: "session.codemode.progress",
+    schema: {
+      ...CodeModeBase,
+      events: CodeModeExecution.Entries,
+    },
+  })
+  export type Progress = typeof Progress.Type
+
+  export const Completed = Event.durable({
+    type: "session.codemode.completed",
+    ...options,
+    schema: {
+      ...CodeModeBase,
+      events: CodeModeExecution.Entries,
+      output: Schema.String,
+    },
+  })
+  export type Completed = typeof Completed.Type
+
+  export const Failed = Event.durable({
+    type: "session.codemode.failed",
+    ...options,
+    schema: {
+      ...CodeModeBase,
+      events: CodeModeExecution.Entries,
+      status: Schema.Literals(["error", "cancelled"]),
+      error: Schema.String,
+    },
+  })
+  export type Failed = typeof Failed.Type
+}
+
 export const RetryScheduled = Event.durable({
   type: "session.retry.scheduled",
   ...options,
@@ -658,6 +711,10 @@ export const Definitions = Event.inventory(
   Tool.Progress,
   Tool.Success,
   Tool.Failed,
+  CodeMode.Started,
+  CodeMode.Progress,
+  CodeMode.Completed,
+  CodeMode.Failed,
   RetryScheduled,
   Compaction.Started,
   Compaction.Delta,

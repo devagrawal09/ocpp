@@ -11,9 +11,12 @@ import { SessionSchema } from "../schema.js"
 import { SessionStore } from "../store.js"
 import { ShellResult } from "../../shell/result.js"
 import { SubagentCompletion } from "../subagent-completion.js"
+import { CodeModeCompletion } from "../codemode-completion.js"
+import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
 
 const CONTINUE_AFTER_SERVER_RESTART =
   "The server restarted while you were working. Continue from where you left off without repeating completed work."
+const INTERRUPTED_WITHOUT_ERROR = "All fibers interrupted without error"
 
 const RESUME_EXHAUSTED = {
   type: "aborted",
@@ -54,11 +57,10 @@ export interface Interface {
  *
  * The sweep assumes every orphaned claim's owner is dead. The managed-server
  * protocol guarantees this: a successor is only spawned after the previous
- * process is confirmed dead (client service `kill`/`evict` poll the PID), the
- * registration lock admits one managed server at a time, and unregistered
- * servers sharing the database never sweep. The service is inert until called
- * — the managed server invokes it at boot; embedders may call it from their
- * own start-up.
+ * process is confirmed dead (client service `kill`/`evict` poll the PID), and
+ * the registration lock admits one managed server at a time. Other hosts must
+ * have exclusive execution ownership of their database until clustered
+ * ownership exists. The service is inert until called by its host at boot.
  */
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRestart") {}
 
@@ -131,6 +133,69 @@ export const layer = (options?: Options) =>
             Effect.orDie,
           )
         yield* jobs.completeBackground(background.notificationID)
+      })
+
+      const recoverCodeMode = Effect.fnUntraced(function* (
+        background: Job.Background,
+        recovery: Extract<Job.Recovery, { kind: "codemode" }>,
+        suspended: ReadonlySet<SessionSchema.ID>,
+      ) {
+        if (!(yield* store.get(recovery.parentSessionID))) {
+          yield* jobs.completeBackground(background.notificationID)
+          return
+        }
+        const restarted =
+          background.status === "running" ||
+          (background.status === "error" && background.error === INTERRUPTED_WITHOUT_ERROR)
+        const status = restarted ? "error" : background.status
+        const error =
+          restarted
+            ? "Execution failed because the server restarted."
+            : background.status === "cancelled"
+              ? (background.error ?? "Execution cancelled")
+              : (background.error ?? "Execution failed")
+        const terminal = background.terminal === true
+        if (!terminal && status === "completed") {
+          yield* bus.publish(
+            SessionEvent.CodeMode.Completed,
+            {
+              sessionID: recovery.parentSessionID,
+              assistantMessageID: recovery.assistantMessageID,
+              id: recovery.toolCallID,
+              executionID: CodeModeExecution.ID.make(background.id),
+              events: [],
+              output: background.output ?? "",
+            },
+            { commit: () => jobs.markBackgroundTerminal(background.notificationID) },
+          )
+        }
+        if (!terminal && (status === "error" || status === "cancelled")) {
+          yield* bus.publish(
+            SessionEvent.CodeMode.Failed,
+            {
+              sessionID: recovery.parentSessionID,
+              assistantMessageID: recovery.assistantMessageID,
+              id: recovery.toolCallID,
+              executionID: CodeModeExecution.ID.make(background.id),
+              events: [],
+              status,
+              error,
+            },
+            { commit: () => jobs.markBackgroundTerminal(background.notificationID) },
+          )
+        }
+        yield* CodeModeCompletion.deliver(sessions, jobs, {
+          id: background.id,
+          status,
+          ...(background.output === undefined ? {} : { output: background.output }),
+          ...(status === "error" || status === "cancelled" ? { error } : {}),
+          notificationID: background.notificationID,
+          recovery,
+          resume: suspended.has(recovery.parentSessionID) ? false : undefined,
+        }).pipe(
+          Effect.catchTag("Session.NotFoundError", () => jobs.completeBackground(background.notificationID)),
+          Effect.orDie,
+        )
       })
 
       const recoverSubagent = Effect.fnUntraced(function* (
@@ -213,9 +278,17 @@ export const layer = (options?: Options) =>
             Effect.fnUntraced(function* (background) {
               if ((yield* jobs.get(background.id))?.status === "running") return
               const recovery = background.recovery
-              yield* recovery.kind === "shell"
-                ? recoverShell(background, recovery, suspended)
-                : recoverSubagent(background, recovery, suspended)
+              switch (recovery.kind) {
+                case "shell":
+                  yield* recoverShell(background, recovery, suspended)
+                  return
+                case "codemode":
+                  yield* recoverCodeMode(background, recovery, suspended)
+                  return
+                case "subagent":
+                  yield* recoverSubagent(background, recovery, suspended)
+                  return
+              }
             }),
             { discard: true },
           )

@@ -160,6 +160,65 @@ describe("CodeMode host failure boundary", () => {
   })
 })
 
+describe("CodeMode semantic tracing", () => {
+  test("reports assignments, array summaries, branches, logs, and returns in order", async () => {
+    const events: Array<CodeMode.TraceEvent> = []
+    const result = await Effect.runPromise(
+      CodeMode.execute({
+        code:
+          "const values = [1, 2, 3, 4]\n" +
+          "const active = values.filter((value) => value > 2)\n" +
+          "if (active.length > 1) console.log('active', active.length)\n" +
+          "return active.reduce((total, value) => total + value, 0)",
+        onTrace: (event) => Effect.sync(() => events.push(event)),
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    expect(events).toStrictEqual([
+      { kind: "assignment", target: "values", value: "[1, 2, 3, 4] (4 items)" },
+      { kind: "operation", operation: "filter", input: "4 items", output: "2 items" },
+      { kind: "assignment", target: "active", value: "[3, 4] (2 items)" },
+      { kind: "branch", expression: "active.length > 1", result: true },
+      { kind: "log", method: "log", message: "active 2" },
+      { kind: "operation", operation: "reduce", input: "2 items", output: "7" },
+      { kind: "return", value: "7" },
+    ])
+  })
+})
+
+describe("CodeMode callback tracing", () => {
+  test("traces direct helpers without expanding callback assignments", async () => {
+    const events: Array<CodeMode.TraceEvent> = []
+    const result = await Effect.runPromise(
+      CodeMode.execute({
+        code:
+          "function select(values) {\n" +
+          "  const mapped = values.map((value) => {\n" +
+          "    const doubled = value * 2\n" +
+          "    console.info('item', value)\n" +
+          "    return doubled\n" +
+          "  })\n" +
+          "  return mapped\n" +
+          "}\n" +
+          "const result = select([1, 2])\n" +
+          "return result",
+        onTrace: (event) => Effect.sync(() => events.push(event)),
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    expect(events).toStrictEqual([
+      { kind: "log", method: "info", message: "item 1" },
+      { kind: "log", method: "info", message: "item 2" },
+      { kind: "operation", operation: "map", input: "2 items", output: "2 items" },
+      { kind: "assignment", target: "mapped", value: "[2, 4] (2 items)" },
+      { kind: "assignment", target: "result", value: "[2, 4] (2 items)" },
+      { kind: "return", value: "[2, 4] (2 items)" },
+    ])
+  })
+})
+
 describe("CodeMode tool-call observation", () => {
   test("reports the tools actually invoked with decoded input", async () => {
     const calls: Array<unknown> = []

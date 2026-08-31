@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { DateTime, Schema } from "effect"
 import { Agent } from "../src/agent.js"
 import { ConfigAgent } from "../src/config/agent.js"
+import { CodeModeExecution } from "../src/codemode-execution.js"
 import { FileSystem } from "../src/filesystem.js"
 import { Form } from "../src/form.js"
 import { Mcp } from "../src/mcp.js"
@@ -159,6 +160,24 @@ describe("contract hygiene", () => {
   test("current ID constructors expose create", () => {
     expect(Form.ID.create()).toStartWith("frm_")
     expect(Pty.ID.create()).toStartWith("pty_")
+    expect(CodeModeExecution.ID.create()).toStartWith("exe_")
+    expect(() => Schema.decodeUnknownSync(CodeModeExecution.ID)("job_execution")).toThrow()
+    expect(() =>
+      Schema.decodeUnknownSync(CodeModeExecution.Entries)(
+        Array.from({ length: 201 }, () => ({ type: "trace", kind: "return", value: "done" })),
+      ),
+    ).toThrow()
+    expect(
+      Schema.encodeSync(CodeModeExecution.ToolEvent)({
+        type: "tool",
+        tool: "read",
+        status: "running",
+        input: undefined,
+        output: undefined,
+        metadata: undefined,
+        error: undefined,
+      }),
+    ).toEqual({ type: "tool", tool: "read", status: "running" })
   })
 
   test("VCS info omits unavailable branch names", () => {
@@ -168,6 +187,10 @@ describe("contract hygiene", () => {
   test("reusable public identifiers are stable and unique", () => {
     const identifiers = [
       Agent.Color,
+      CodeModeExecution.ToolEvent,
+      CodeModeExecution.TraceEvent,
+      CodeModeExecution.Entry,
+      CodeModeExecution.Entries,
       FileSystem.Submatch,
       Form.Field,
       Form.Fields,

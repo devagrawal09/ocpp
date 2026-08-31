@@ -24,6 +24,8 @@ import { Bus } from "@opencode-ai/core/bus"
 import { ID, type Payload } from "@opencode-ai/schema/event"
 import { Form } from "@opencode-ai/core/form"
 import { Integration } from "@opencode-ai/core/integration"
+import { Job } from "@opencode-ai/core/job"
+import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { Environment } from "@opencode-ai/core/environment/index"
 import { EnvironmentUnavailable } from "@opencode-ai/core/environment/unavailable"
 import { Location } from "@opencode-ai/core/location"
@@ -44,7 +46,15 @@ import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
 import { location } from "./fixture/location"
 import { hostEnvironmentLayer, recordingEnvironmentLayer } from "./fixture/environment"
-import { executeTool, toolDefinitions, toolIdentity, waitForTool } from "./lib/tool"
+import {
+  activateCodeMode,
+  executeTool,
+  toolDefinitions,
+  toolIdentity,
+  waitForCodeMode,
+  waitForCodeModeExecution,
+  waitForTool,
+} from "./lib/tool"
 
 let assertion: Deferred.Deferred<Permission.AssertInput> | undefined
 let decision: Effect.Effect<void, Permission.Error> = Effect.void
@@ -373,14 +383,48 @@ const permissions = Layer.mock(Permission.Service, {
       yield* decision
     }),
 })
-const events = Layer.mock(Bus.Service, { subscribe: () => Stream.never })
+const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
+const runtimeLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    const jobs = yield* Job.Service
+    return Layer.mock(PluginRuntime.Service, {
+      job: jobs,
+      session: {
+        get: () => Effect.die("Unavailable in MCP tests"),
+        create: () => Effect.die("Unavailable in MCP tests"),
+        messages: () => Effect.die("Unavailable in MCP tests"),
+        message: () => Effect.succeed(undefined),
+        prompt: () => Effect.die("Unavailable in MCP tests"),
+        generate: () => Effect.die("Unavailable in MCP tests"),
+        command: () => Effect.die("Unavailable in MCP tests"),
+        rename: () => Effect.die("Unavailable in MCP tests"),
+        move: () => Effect.die("Unavailable in MCP tests"),
+        resume: () => Effect.die("Unavailable in MCP tests"),
+        switchAgent: () => Effect.die("Unavailable in MCP tests"),
+        switchModel: () => Effect.die("Unavailable in MCP tests"),
+        interrupt: () => Effect.die("Unavailable in MCP tests"),
+        synthetic: () => Effect.never,
+        wait: () => Effect.die("Unavailable in MCP tests"),
+        context: () => Effect.die("Unavailable in MCP tests"),
+      },
+      persistentPty: { read: () => Effect.die("Unavailable in MCP tests") },
+      location: {
+        agent: { list: () => Effect.die("Unavailable in MCP tests") },
+        mcp: { list: () => Effect.die("Unavailable in MCP tests") },
+      },
+    })
+  }),
+).pipe(Layer.provide(jobLayer))
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node]), [
-    [Mcp.node, mcp],
-    [Permission.node, permissions],
-    [Bus.node, events],
-    [Image.node, imagePassthrough],
-  ]),
+  Layer.merge(
+    AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node, Bus.node]), [
+      [Mcp.node, mcp],
+      [Permission.node, permissions],
+      [PluginRuntime.node, runtimeLayer],
+      [Image.node, imagePassthrough],
+    ]),
+    jobLayer,
+  ),
 )
 
 describe("MCP errors", () => {
@@ -1695,7 +1739,7 @@ it.effect("forwards the invoking session through direct and Code Mode MCP tools"
     })
 
     const codeModeSessionID = Session.ID.make("ses_mcp_codemode")
-    yield* toolSet.execute({
+    const started = yield* toolSet.execute({
       sessionID: codeModeSessionID,
       ...toolIdentity,
       call: {
@@ -1704,6 +1748,11 @@ it.effect("forwards the invoking session through direct and Code Mode MCP tools"
         name: "execute",
         input: { code: "return await tools.demo.search({})" },
       },
+    })
+    yield* waitForCodeMode(started.output, {
+      sessionID: codeModeSessionID,
+      assistantMessageID: toolIdentity.messageID,
+      id: "call_mcp_codemode",
     })
     expect(invocations[1]).toEqual({
       server: "demo",
@@ -1736,10 +1785,13 @@ it.effect("returns content-only MCP results through Code Mode", () =>
       },
     })
 
-    expect(execution).toMatchObject({
-      output: { output: "hello", toolCalls: [{ tool: "demo.status", status: "completed" }] },
-      content: [{ type: "text", text: "hello" }],
-    })
+    expect(
+      yield* waitForCodeMode(execution.output, {
+        sessionID: Session.ID.make("ses_mcp_content_only"),
+        assistantMessageID: toolIdentity.messageID,
+        id: "call_mcp_content_only",
+      }),
+    ).toMatchObject({ status: "completed", output: "hello" })
   }),
 )
 
@@ -1811,18 +1863,22 @@ it.effect("waits for permission before calling an MCP tool", () =>
     const toolSet = yield* registry.snapshot()
     expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.search")).toBe(true)
 
-    const fiber = yield* toolSet
-      .execute({
-        sessionID: Session.ID.make("ses_mcp_permission"),
-        ...toolIdentity,
-        call: {
-          type: "tool-call",
-          id: "call_mcp_permission",
-          name: "execute",
-          input: { code: "return await tools.demo.search({})" },
-        },
-      })
-      .pipe(Effect.forkScoped)
+    const sessionID = Session.ID.make("ses_mcp_permission")
+    const started = yield* toolSet.execute({
+      sessionID,
+      ...toolIdentity,
+      call: {
+        type: "tool-call",
+        id: "call_mcp_permission",
+        name: "execute",
+        input: { code: "return await tools.demo.search({})" },
+      },
+    })
+    const executionID = yield* activateCodeMode(started.output, {
+      sessionID,
+      assistantMessageID: toolIdentity.messageID,
+      id: "call_mcp_permission",
+    })
     expect(yield* Deferred.await(assertion)).toEqual({
       action: "demo_search",
       resources: ["*"],
@@ -1839,7 +1895,7 @@ it.effect("waits for permission before calling an MCP tool", () =>
     expect(calls).toBe(0)
 
     yield* Deferred.succeed(permission, undefined)
-    yield* Fiber.join(fiber)
+    expect(yield* waitForCodeModeExecution(executionID)).toMatchObject({ status: "completed" })
     expect(calls).toBe(1)
   }),
 )
@@ -1865,11 +1921,13 @@ it.effect("does not call MCP when permission is blocked", () =>
         input: { code: "return await tools.demo.search({})" },
       },
     })
-    expect(execution.content).toEqual([{ type: "text", text: "Unable to execute demo_search" }])
-    expect(execution.metadata).toEqual({
-      toolCalls: [{ tool: "demo.search", status: "error" }],
-      error: true,
-    })
+    expect(
+      yield* waitForCodeMode(execution.output, {
+        sessionID: Session.ID.make("ses_mcp_blocked"),
+        assistantMessageID: toolIdentity.messageID,
+        id: "call_mcp_blocked",
+      }),
+    ).toMatchObject({ status: "error", error: expect.stringContaining("Unable to execute demo_search") })
     expect(calls).toBe(0)
   }),
 )

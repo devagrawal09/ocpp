@@ -20,7 +20,11 @@ function tool(name: string, files: JsonValue[] = []): SessionMessageAssistantToo
 describe("current content default open", () => {
   test("uses the shell disclosure preference", () => {
     expect(currentContentDefaultOpen(tool("shell"), true, false)).toBe(true)
+  })
+
+  test("keeps execute grouped", () => {
     expect(currentContentDefaultOpen(tool("execute"), false, true)).toBe(false)
+    expect(currentContentDefaultOpen(tool("execute"), true, true)).toBe(false)
   })
 
   test("uses the file-change disclosure preference", () => {

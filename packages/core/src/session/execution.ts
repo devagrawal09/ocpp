@@ -122,7 +122,10 @@ export const layer = Layer.effect(
             if (outcome.type === "interrupted") {
               // A user cancel releases the claim: the turn must not resurrect at the next
               // boot. Shutdown interruption keeps it for restart continuity.
-              if (outcome.reason === "user") yield* jobs.cancel(sessionID)
+              if (outcome.reason === "user") {
+                yield* jobs.cancel(sessionID)
+                yield* jobs.cancelAll({ ownerSessionID: sessionID, type: "codemode" })
+              }
               yield* bus.publish(
                 SessionEvent.Execution.Interrupted,
                 { sessionID, reason: outcome.reason },

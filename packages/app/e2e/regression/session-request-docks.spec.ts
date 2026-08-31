@@ -110,7 +110,7 @@ test("shows a pending permission dock", async ({ page }) => {
   expect(request.postDataJSON()).toEqual({ reply: "once" })
 })
 
-test("restores the draft caret before typing after a request dock closes", async ({ page }) => {
+test("restores the draft caret after a locationless request dock closes", async ({ page }) => {
   const transport = await installSseTransport(page, {
     server,
     retry: 20,
@@ -142,7 +142,6 @@ test("restores the draft caret before typing after a request dock closes", async
     id: "evt_form_created",
     created: 1700000001000,
     type: "form.created",
-    location: { directory },
     data: {
       form: {
         id: "frm_question_caret",

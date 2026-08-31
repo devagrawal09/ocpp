@@ -6,7 +6,7 @@ import { Agent } from "@opencode-ai/schema/agent"
 import { Session } from "@opencode-ai/schema/session"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import type { Info } from "@opencode-ai/schema/tool"
-import { Effect, Schema } from "effect"
+import { Effect, Schema, Scope } from "effect"
 
 const context = {
   sessionID: Session.ID.make("ses_execute"),
@@ -17,7 +17,25 @@ const context = {
 }
 
 const createCodeMode = (tools: ReadonlyMap<string, Info>) =>
-  CodeModeTool.create(tools, (_, tool, input, context) => execute(tool, input, context))
+  CodeModeTool.create(tools, (_, tool, input, context) => execute(tool, input, context), {
+    bus: {
+      publish: () => Effect.die("Unavailable in catalog-only tests"),
+      listen: () => Effect.die("Unavailable in catalog-only tests"),
+    },
+    jobs: {
+      startLimited: () => Effect.die("Unavailable in catalog-only tests"),
+      wait: () => Effect.die("Unavailable in catalog-only tests"),
+      background: () => Effect.die("Unavailable in catalog-only tests"),
+      cancel: () => Effect.die("Unavailable in catalog-only tests"),
+      markBackgroundTerminal: () => Effect.die("Unavailable in catalog-only tests"),
+      completeBackground: () => Effect.die("Unavailable in catalog-only tests"),
+    },
+    sessions: {
+      message: () => Effect.die("Unavailable in catalog-only tests"),
+      synthetic: () => Effect.die("Unavailable in catalog-only tests"),
+    },
+    scope: Effect.runSync(Scope.make()),
+  })
 
 test("execute describes invariant Code Mode behavior", () => {
   expect(createCodeMode(new Map()).description).toBe(
@@ -28,8 +46,22 @@ test("execute describes invariant Code Mode behavior", () => {
       'Call tools through `tools` using only exact paths and signatures from the catalog. Do not infer or normalize tool names; preserve bracket notation such as `tools.<namespace>["tool-name"](input)`.',
       "Prefer an explicit `return`; if omitted, the final top-level expression becomes the result.",
       "Await every call whose completion matters; pending calls are interrupted when execution ends. Run independent calls concurrently with `Promise.all`.",
+      "Execute returns an execution ID immediately. Results and bounded logs arrive later as a Session message.",
     ].join("\n"),
   )
+})
+
+test("execute accepts long and omitted timeouts", () => {
+  const input = createCodeMode(new Map()).input
+  expect(Schema.decodeUnknownSync(input)({ code: "return 1" })).toEqual({ code: "return 1" })
+  expect(Schema.decodeUnknownSync(input)({ code: "return 1", timeoutMs: undefined })).toEqual({
+    code: "return 1",
+    timeoutMs: undefined,
+  })
+  expect(Schema.decodeUnknownSync(input)({ code: "return 1", timeoutMs: 3_600_000 })).toEqual({
+    code: "return 1",
+    timeoutMs: 3_600_000,
+  })
 })
 
 test("canonical execution distinguishes declared, model-only, and raw schema outputs", async () => {
@@ -108,40 +140,4 @@ test("foreign typed failures settle as Tool.Error at the untrusted boundary", as
   const error = await Effect.runPromise(execute(lying, {}, context).pipe(Effect.flip))
   expect(error).toBeInstanceOf(Tool.Error)
   expect(error.message).toBe("transport died")
-})
-
-test("execute supports callable namespace tools", async () => {
-  const callable: Info = {
-    name: "admin",
-    description: "Administer Slack",
-    input: Schema.Struct({}),
-    output: Schema.String,
-    options: { namespace: "slack" },
-    execute: () => Effect.succeed({ output: "admin" }),
-  }
-  const child: Info = {
-    name: "create",
-    description: "Create a Slack resource",
-    input: Schema.Struct({}),
-    output: Schema.String,
-    options: { namespace: "slack.admin" },
-    execute: () => Effect.succeed({ output: "created" }),
-  }
-  const codeMode = createCodeMode(
-    new Map([
-      ["slack_admin", callable],
-      ["slack_admin_create", child],
-    ]),
-  )
-  const result = await Effect.runPromise(
-    codeMode.execute({ code: "return [await tools.slack.admin({}), await tools.slack.admin.create({})]" }, context),
-  )
-
-  expect(result.metadata).toEqual({
-    toolCalls: [
-      { tool: "slack.admin", status: "completed" },
-      { tool: "slack.admin.create", status: "completed" },
-    ],
-  })
-  expect(result.content).toEqual([{ type: "text", text: '[\n  "admin",\n  "created"\n]' }])
 })

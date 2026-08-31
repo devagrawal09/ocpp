@@ -317,8 +317,35 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
           }
         })
       },
-      // Terminal tool events are self-contained; projection is a direct copy and
-      // never reaches into ephemeral progress history.
+      "session.codemode.started": () => Effect.void,
+      "session.codemode.completed": (event) => {
+        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
+          const match = latestTool(draft, event.data.id)
+          if (!match || match.state.status === "streaming") return
+          match.state.metadata = castDraft({
+            ...match.state.metadata,
+            executionID: event.data.executionID,
+            executionStatus: "completed",
+            events: event.data.events,
+            output: event.data.output,
+          })
+        })
+      },
+      "session.codemode.failed": (event) => {
+        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
+          const match = latestTool(draft, event.data.id)
+          if (!match || match.state.status === "streaming") return
+          match.state.metadata = castDraft({
+            ...match.state.metadata,
+            executionID: event.data.executionID,
+            executionStatus: event.data.status,
+            events: event.data.events,
+            error: event.data.error,
+          })
+        })
+      },
+      // Terminal tool events are self-contained. The only preserved state is a
+      // durable Code Mode terminal that raced ahead of this outer tool success.
       "session.tool.success": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
           const match = latestTool(draft, event.data.id)
@@ -326,12 +353,18 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             match.executed = event.data.executed || match.executed === true
             match.providerResultState = event.data.resultState
             match.time.completed = created
+            const terminal =
+              match.state.metadata.executionStatus !== undefined && match.state.metadata.executionStatus !== "running"
+                ? match.state.metadata
+                : undefined
             match.state = castDraft(
               SessionMessage.ToolStateCompleted.make({
                 status: "completed",
                 input: match.state.input,
                 content: event.data.content,
-                ...(event.data.metadata === undefined ? {} : { metadata: event.data.metadata }),
+                ...(event.data.metadata === undefined && terminal === undefined
+                  ? {}
+                  : { metadata: { ...event.data.metadata, ...terminal } }),
               }),
             )
           }

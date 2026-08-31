@@ -2292,6 +2292,12 @@ test("adds, dismisses, and refreshes form requests", async () => {
 
   try {
     await wait(() => client.connection.status() === "connected")
+    events.emit({
+      id: "evt_form_created_locationless",
+      created: 0,
+      type: "form.created",
+      data: { form: { id: "frm_1", sessionID: "ses_1", title: "Input requested", fields: formFields } },
+    })
     emitEvent(events, {
       id: "evt_form_created_1",
       created: 0,

@@ -12,18 +12,29 @@ for (const tool of ["shell", "execute", "subagent"]) {
       if (open) await trigger.click()
       await expect(trigger).toHaveAttribute("aria-expanded", String(open))
       await timeline.getByRole("button", { name: "Start tool", exact: true }).click()
-      await expect(group).toHaveAttribute("data-timeline-part-ids", "tool_context_lifecycle,tool_shell_lifecycle")
       const original = await group.elementHandle()
-      for (const action of [undefined, "Complete input", "Run command", "Complete command"]) {
+      for (const action of [undefined, "Complete input", "Run command", "Complete command"] as const) {
         if (action) await timeline.getByRole("button", { name: action, exact: true }).click()
-        await expect(group).toHaveAttribute("data-timeline-part-ids", "tool_context_lifecycle,tool_shell_lifecycle")
+        const executeStarted = tool === "execute" && (action === "Run command" || action === "Complete command")
+        const partIDs =
+          tool !== "execute"
+            ? "tool_context_lifecycle,tool_shell_lifecycle"
+            : executeStarted
+              ? "tool_context_lifecycle,tool_shell_lifecycle:0"
+              : "tool_context_lifecycle"
+        await expect(group).toHaveAttribute("data-timeline-part-ids", partIDs)
         await expect(
           group.locator('[data-component="context-tool-group-trigger"] [data-slot="basic-tool-tool-title"]'),
-        ).toHaveText(/^2 /)
+        ).toHaveText(tool === "execute" ? (executeStarted ? "Code Mode: 2 steps" : "Code Mode: 1 step") : /^2 /)
         await expect(timeline.locator('[data-timeline-row="AssistantPart"]')).toHaveCount(1)
         await expect(trigger).toHaveAttribute("aria-expanded", String(open))
         expect(await original!.evaluate((node) => node.isConnected)).toBe(true)
-        if (open) await expect(group.locator('[data-timeline-part-id="tool_shell_lifecycle"]')).toBeVisible()
+        if (open && tool !== "execute") {
+          await expect(group.locator('[data-timeline-part-id="tool_shell_lifecycle"]')).toBeVisible()
+        }
+        if (open && executeStarted) {
+          await expect(group.locator('[data-timeline-part-id="tool_shell_lifecycle:0"]')).toBeVisible()
+        }
       }
     })
   }

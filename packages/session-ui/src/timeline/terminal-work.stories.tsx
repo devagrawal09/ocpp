@@ -8,6 +8,7 @@ import {
   executeCodeDocument,
   expandedShellDocument,
   recoveryDocument,
+  STORY_TIME,
   standaloneShellCompletedDocument,
   standaloneShellRunningDocument,
   terminalFailedDocument,
@@ -177,6 +178,64 @@ export const ExecuteCode = {
   ),
 }
 
+const parallelCodeModeBase = storyDocument(
+  ["a", "b", "c"].map((id) =>
+    storyTool(
+      "parallel_execute_" + id,
+      "execute",
+      "completed",
+      { code: "return tools.task" + id + "()" },
+      {
+        metadata: {
+          executionID: "exe_story_" + id,
+          executionStatus: "completed",
+          events: [
+            {
+              type: "tool",
+              tool: "shell",
+              status: "completed",
+              input: { command: "task-" + id },
+              output: "execute-" + id + " finished",
+            },
+            { type: "trace", kind: "assignment", target: "result", value: "execute-" + id + " finished" },
+            { type: "trace", kind: "return", value: "{ execution: " + id + " }" },
+          ],
+        },
+      },
+    ),
+  ),
+)
+const parallelCodeModeDocument = {
+  ...parallelCodeModeBase,
+  messages: [
+    ...parallelCodeModeBase.messages,
+    ...["a", "b", "c"].map((id, index) => ({
+      id: "msg_parallel_codemode_" + id,
+      type: "synthetic" as const,
+      text:
+        '<codemode executionID="exe_story_' +
+        id +
+        '" state="completed">execute-' +
+        id +
+        " finished</codemode>",
+      description: "Code Mode execution",
+      metadata: { source: "codemode", executionID: "exe_story_" + id, state: "completed" },
+      time: { created: STORY_TIME + 400 + index },
+    })),
+  ],
+}
+
+export const ParallelCodeMode = {
+  render: () => (
+    <CurrentSessionTimelineStory
+      title="Parallel executions"
+      description="Independent Execute calls retain separate lifecycle cards without duplicate completion notices."
+      document={parallelCodeModeDocument}
+      width="786px"
+    />
+  ),
+}
+
 export const TestFailed = {
   render: () => (
     <CurrentSessionTimelineStory
@@ -204,6 +263,8 @@ function InteractiveCommandStory(props: {
   })
   const document = createMemo(() => {
     const phase = state.phase as "streaming" | "input" | "running" | "completed"
+    const execute = props.tool === "execute"
+    const executeStarted = execute && (phase === "running" || phase === "completed")
     const content: SessionMessageAssistant["content"] = [
       ...(props.existingGroup
         ? [storyTool("tool_context_lifecycle", "read", "completed", { filePath: "/workspace/README.md" })]
@@ -213,7 +274,7 @@ function InteractiveCommandStory(props: {
             storyTool(
               "tool_shell_lifecycle",
               props.tool ?? "shell",
-              phase === "input" ? "streaming" : phase,
+              executeStarted ? "completed" : phase === "input" ? "streaming" : phase,
               phase === "streaming"
                 ? {}
                 : props.tool === "execute"
@@ -227,6 +288,25 @@ function InteractiveCommandStory(props: {
                     ? "still running"
                     : Array.from({ length: state.lines }, (_, index) => `line ${index + 1}`).join("\n"),
                 ...(phase === "streaming" ? { raw: "" } : {}),
+                ...(executeStarted
+                  ? {
+                      metadata: {
+                        executionStatus: phase === "running" ? "running" : "completed",
+                        events: [
+                          {
+                            type: "tool",
+                            tool: "shell",
+                            status: phase === "running" ? "running" : "completed",
+                            input: { command: "printf ready" },
+                            output:
+                              phase === "running"
+                                ? "still running"
+                                : Array.from({ length: state.lines }, (_, index) => `line ${index + 1}`).join("\n"),
+                          },
+                        ],
+                      },
+                    }
+                  : {}),
               },
             ),
           ]

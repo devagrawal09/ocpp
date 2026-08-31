@@ -35,7 +35,12 @@ export type Tool<R = never> = {
   readonly description: string
   readonly input: SchemaType
   readonly output: SchemaType | undefined
-  readonly execute: (input: unknown) => Effect.Effect<unknown, unknown, R>
+  readonly execute: (input: unknown, call?: ToolCallContext) => Effect.Effect<unknown, unknown, R>
+}
+
+export type ToolCallContext = {
+  readonly index: number
+  readonly name: string
 }
 
 type InputType<S> = S extends Schema.Decoder<unknown> ? S["Type"] : unknown
@@ -47,7 +52,7 @@ export type Options<I extends SchemaType, O extends SchemaType | undefined, R = 
   readonly description: string
   readonly input: I
   readonly output?: O
-  readonly execute: (input: InputType<I>) => Effect.Effect<ResultType<O>, unknown, R>
+  readonly execute: (input: InputType<I>, call?: ToolCallContext) => Effect.Effect<ResultType<O>, unknown, R>
 }
 
 // Object.hasOwn: an inherited _tag must not classify a namespace as a Tool.
@@ -72,5 +77,5 @@ export const make = <I extends SchemaType, const O extends SchemaType | undefine
   description: options.description,
   input: options.input,
   output: options.output,
-  execute: (input) => options.execute(input as InputType<I>),
+  execute: (input, call) => options.execute(input as InputType<I>, call),
 })

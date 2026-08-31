@@ -729,7 +729,19 @@ describe("ShellTool", () => {
               },
             }).pipe(Effect.timeout("3 seconds"))
             expect(result.status).toBe("completed")
-            expect(JSON.parse(result.output.output)).toEqual([
+            const text = result.content?.find((item) => item.type === "text")?.text ?? ""
+            const executionID = /Code Mode execution (exe_[^ ]+) started\./.exec(text)?.[1]
+            if (!executionID) return yield* Effect.die("Code Mode execution ID is unavailable")
+            yield* (yield* Bus.Service).publish(SessionEvent.Tool.Success, {
+              sessionID,
+              assistantMessageID: toolIdentity.messageID,
+              id: "call-parallel-shells",
+              content: [{ type: "text", text: "Execution started" }],
+              executed: false,
+            })
+            const output = (yield* (yield* Job.Service).wait({ id: executionID })).info?.output
+            if (!output) return yield* Effect.die("Code Mode execution output is unavailable")
+            expect(JSON.parse(output)).toEqual([
               { output: "one", exit: 0, truncated: false, status: "completed" },
               { output: "two", exit: 0, truncated: false, status: "completed" },
             ])
@@ -1573,55 +1585,5 @@ describe("ShellTool", () => {
     )
   }
 
-  it.live("backgrounds a foreground command when the session is signaled", () =>
-    Effect.acquireUseRelease(
-      Effect.promise(() => tmpdir()),
-      (tmp) => {
-        reset()
-        return withSession(tmp.path, (registry) =>
-          Effect.gen(function* () {
-            const jobs = yield* Job.Service
-            const scope = yield* Scope.Scope
-            const waiting = yield* executeTool(
-              registry,
-              call({ command: idleCommand, timeout: 50 }, "call-background-signal"),
-            ).pipe(Effect.forkIn(scope, { startImmediately: true }))
 
-            const backgroundWhenReady = (remaining = 1000): Effect.Effect<Job.Info[], Error> =>
-              Effect.gen(function* () {
-                const backgrounded = yield* jobs.backgroundAll({ sessionID })
-                if (backgrounded.length > 0) return backgrounded
-                if (remaining <= 0) return yield* Effect.fail(new Error("Timed out waiting for foreground shell job"))
-                yield* Effect.promise(() => Bun.sleep(1))
-                return yield* backgroundWhenReady(remaining - 1)
-              })
-            const backgrounded = yield* backgroundWhenReady()
-            const settled = yield* Fiber.join(waiting)
-            const shellID = typeof settled.metadata?.shellID === "string" ? settled.metadata.shellID : undefined
-            expect(backgrounded).toMatchObject([{ id: shellID, type: "shell" }])
-            expect(settled.metadata).toMatchObject({ truncated: false })
-            expect(shellID).toStartWith("sh_")
-
-            const shell = yield* Shell.Service
-            if (!shellID) return
-            const id = ShellSchema.ID.make(shellID)
-            const info = yield* shell.get(id)
-            expect(settled.content?.[0]).toEqual({
-              type: "text",
-              text: `Command moved to the background (shell ID: ${shellID}).\nOutput is streaming to: ${info.file}`,
-            })
-            expect(settled.content?.[1]).toEqual({
-              type: "text",
-              text: "You will be notified automatically when the command finishes. The notification will include the command's output. DO NOT run sleep commands or poll the output file to check for completion. You can read from the file when its current output would be useful, such as when inspecting logs from a background server. Otherwise, continue with other work or end your response.",
-            })
-            yield* Effect.sleep(Duration.millis(100))
-            expect((yield* shell.get(id)).status).toBe("running")
-            expect((yield* shell.list()).map((info) => info.id)).toContain(id)
-            yield* shell.remove(id)
-          }),
-        )
-      },
-      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]().then(() => undefined)),
-    ),
-  )
 })

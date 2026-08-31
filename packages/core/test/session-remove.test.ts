@@ -1,14 +1,16 @@
 import { describe, expect } from "bun:test"
-import { Effect, Layer } from "effect"
+import { Deferred, Effect, Fiber, Layer } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Database } from "@opencode-ai/core/database/database"
 import { Bus } from "@opencode-ai/core/bus"
+import { Job } from "@opencode-ai/core/job"
 import { Location } from "@opencode-ai/core/location"
 import { Project } from "@opencode-ai/core/project"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { Session } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
+import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionModelTransport } from "@opencode-ai/core/session/model-transport"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionStore } from "@opencode-ai/core/session/store"
@@ -19,12 +21,30 @@ import { globalProjectNode } from "./lib/project"
 import { tmpdirScoped } from "./fixture/tmpdir"
 
 const closed: Session.ID[] = []
+const wakes: Session.ID[] = []
+let closeStarted: Deferred.Deferred<void> | undefined
+let closeGate: Deferred.Deferred<void> | undefined
 const transport = Layer.succeed(
   SessionModelTransport.Service,
   SessionModelTransport.Service.of({
     bind: () => ({ execute: () => Effect.die("Unexpected WebSocket execution") }),
-    close: (sessionID) => Effect.sync(() => closed.push(sessionID)),
+    close: (sessionID) =>
+      Effect.sync(() => closed.push(sessionID)).pipe(
+        Effect.andThen(Effect.suspend(() => (closeStarted ? Deferred.succeed(closeStarted, undefined) : Effect.void))),
+        Effect.andThen(Effect.suspend(() => (closeGate ? Deferred.await(closeGate) : Effect.void))),
+      ),
     closeAll: Effect.void,
+  }),
+)
+const execution = Layer.succeed(
+  SessionExecution.Service,
+  SessionExecution.Service.of({
+    active: Effect.succeed(new Set()),
+    isActive: () => Effect.succeed(false),
+    resume: () => Effect.void,
+    wake: (sessionID) => Effect.sync(() => wakes.push(sessionID)),
+    interrupt: () => Effect.succeed(false),
+    awaitIdle: () => Effect.void,
   }),
 )
 const it = testEffect(
@@ -35,12 +55,13 @@ const it = testEffect(
       SessionProjector.node,
       SessionStore.node,
       SessionEnvironment.node,
+      Job.node,
       Session.node,
       LocationServiceMap.node,
     ]),
     [
       [Project.node, globalProjectNode],
-      [SessionExecution.node, SessionExecution.noopLayer],
+      [SessionExecution.node, execution],
       [SessionModelTransport.node, transport],
     ],
   ),
@@ -52,6 +73,7 @@ describe("Session.remove", () => {
       const temporary = yield* tmpdirScoped()
       const location = Location.Ref.make({ directory: AbsolutePath.make(temporary.path) })
       const session = yield* Session.Service
+      const jobs = yield* Job.Service
       const parent = yield* session.create({ location })
       const child = yield* session.create({ parentID: parent.id })
       yield* session.environment({ sessionID: parent.id, variables: { SESSION_ENV: "parent" } })
@@ -59,11 +81,71 @@ describe("Session.remove", () => {
       const locations = yield* LocationServiceMap.Service
       yield* Effect.acquireRelease(locations.contextEffect(location), () => locations.invalidate(location))
       closed.length = 0
+      wakes.length = 0
+      const notificationID = SessionMessage.ID.create()
+      yield* jobs.startLimited({
+        id: "exe_removed_session",
+        type: "codemode",
+        ownerSessionID: parent.id,
+        maxConcurrent: 4,
+        notificationID,
+        recovery: {
+          kind: "codemode",
+          parentSessionID: parent.id,
+          assistantMessageID: SessionMessage.ID.create(),
+          toolCallID: "call-removed-session",
+          code: "return 1",
+          timeoutMs: 1_000,
+        },
+        run: Effect.never,
+      })
+      yield* jobs.background("exe_removed_session")
+      const completedNotificationID = SessionMessage.ID.create()
+      yield* jobs.startLimited({
+        id: "exe_settled_removed_session",
+        type: "codemode",
+        ownerSessionID: parent.id,
+        maxConcurrent: 4,
+        notificationID: completedNotificationID,
+        recovery: {
+          kind: "codemode",
+          parentSessionID: parent.id,
+          assistantMessageID: SessionMessage.ID.create(),
+          toolCallID: "call-settled-removed-session",
+          code: "return 2",
+          timeoutMs: 1_000,
+        },
+        run: Effect.succeed("2"),
+      })
+      yield* jobs.wait({ id: "exe_settled_removed_session" })
+      yield* jobs.background("exe_settled_removed_session")
+      expect(yield* jobs.pendingBackground).toMatchObject([
+        { notificationID },
+        { notificationID: completedNotificationID, status: "completed" },
+      ])
 
-      yield* session.remove(parent.id)
+      closeStarted = yield* Deferred.make<void>()
+      closeGate = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          closeStarted = undefined
+          closeGate = undefined
+        }),
+      )
+      const removing = yield* session.remove(parent.id).pipe(Effect.forkScoped)
+      yield* Deferred.await(closeStarted)
+      yield* session.synthetic({ sessionID: parent.id, text: "Terminal notification during removal" })
+      expect(wakes).toEqual([])
+      yield* Deferred.succeed(closeGate, undefined)
+      yield* Fiber.join(removing)
+      closeStarted = undefined
+      closeGate = undefined
 
       expect((yield* session.list()).data).toEqual([])
       expect(closed).toEqual([parent.id, child.id])
+      expect((yield* jobs.wait({ id: "exe_removed_session" })).info?.status).toBe("cancelled")
+      expect((yield* jobs.wait({ id: "exe_settled_removed_session" })).info?.status).toBe("completed")
+      expect(yield* jobs.pendingBackground).toEqual([])
       const environments = yield* SessionEnvironment.Service
       expect(yield* environments.get(parent.id)).toBeUndefined()
       expect(yield* environments.get(child.id)).toBeUndefined()

@@ -176,6 +176,23 @@ export type SessionMessageProviderState1 = { [x: string]: any }
 
 export type ToolFileContent1 = { type: "file"; uri: string; mime: string; name?: string | undefined }
 
+export type CodeModeExecutionToolEvent = {
+  type: "tool"
+  tool: string
+  status: "running" | "completed" | "error"
+  input?: { [x: string]: JsonValue }
+  output?: string
+  metadata?: { [x: string]: JsonValue }
+  error?: string
+}
+
+export type CodeModeExecutionTraceEvent =
+  | { type: "trace"; kind: "assignment"; target: string; value: string }
+  | { type: "trace"; kind: "branch"; expression: string; result: boolean }
+  | { type: "trace"; kind: "operation"; operation: string; input: string; output: string }
+  | { type: "trace"; kind: "log"; method: string; message: string }
+  | { type: "trace"; kind: "return"; value: string }
+
 export type SessionMessageToolStateRunning1 = {
   status: "running"
   input: { [x: string]: any }
@@ -775,6 +792,23 @@ export type SessionToolInputEnded = {
   data: { sessionID: string; assistantMessageID: string; id: string; text: string }
 }
 
+export type SessionCodemodeStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.codemode.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    id: string
+    executionID: string
+    code: string
+    timeoutMs: number
+  }
+}
+
 export type SessionRetryScheduled = {
   id: string
   created: number
@@ -1357,6 +1391,8 @@ export type SessionMessageAssistantReasoning1 = {
 
 export type ToolContent1 = ToolTextContent | ToolFileContent1
 
+export type CodeModeExecutionEntry = CodeModeExecutionToolEvent | CodeModeExecutionTraceEvent
+
 export type ModelCompatibility = {
   reasoningField?: ModelReasoningField
   requireReasoning?: boolean
@@ -1799,6 +1835,8 @@ export type SessionMessageToolStateError1 = {
   metadata?: { [x: string]: JsonValue }
 }
 
+export type CodeModeExecutionEntries = Array<CodeModeExecutionEntry>
+
 export type ModelInfo = {
   id: string
   modelID: string
@@ -1978,6 +2016,7 @@ export type ConfigEntry =
         websearch?: false | { provider: "random" | (string & {}) }
         plugins?: Array<string | { package: string; options?: { [x: string]: JsonValue } }>
         warming?: boolean | { prompt?: string; interval?: string; duration?: string }
+        subagent?: { models?: Array<string> }
         providers?: {
           [x: string]: {
             name?: string
@@ -2078,6 +2117,56 @@ export type SessionMessageAssistantTool1 = {
     | SessionMessageToolStateCompleted1
     | SessionMessageToolStateError1
   time: { created: number; ran?: number; completed?: number }
+}
+
+export type SessionCodemodeCompleted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.codemode.completed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    id: string
+    executionID: string
+    events: CodeModeExecutionEntries
+    output: string
+  }
+}
+
+export type SessionCodemodeFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.codemode.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    id: string
+    executionID: string
+    events: CodeModeExecutionEntries
+    status: "error" | "cancelled"
+    error: string
+  }
+}
+
+export type SessionCodemodeProgress = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.codemode.progress"
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    id: string
+    executionID: string
+    events: CodeModeExecutionEntries
+  }
 }
 
 export type FormFields = [FormField, ...Array<FormField>]
@@ -2206,6 +2295,9 @@ export type SessionEventDurable =
   | SessionToolCalled
   | SessionToolSuccess
   | SessionToolFailed
+  | SessionCodemodeStarted
+  | SessionCodemodeCompleted
+  | SessionCodemodeFailed
   | SessionRetryScheduled
   | SessionCompactionStarted
   | SessionCompactionEnded
@@ -2270,6 +2362,10 @@ export type V2Event =
   | SessionToolProgress
   | SessionToolSuccess
   | SessionToolFailed
+  | SessionCodemodeStarted
+  | SessionCodemodeProgress
+  | SessionCodemodeCompleted
+  | SessionCodemodeFailed
   | SessionRetryScheduled
   | SessionCompactionStarted
   | SessionCompactionDelta

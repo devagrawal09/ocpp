@@ -36,6 +36,7 @@ import { changedFileDiff, patchFileGroups } from "../components/apply-patch-file
 import { animate } from "motion"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
 import type {
+  JsonValue,
   SessionMessageAssistantReasoning,
   SessionMessageAssistantTool,
   SessionMessageShell,
@@ -474,6 +475,235 @@ function ExaOutput(props: { output?: string }) {
 
 export type ContextGroupPart = SessionMessageAssistantTool | (SessionMessageAssistantReasoning & { id: string })
 
+type ExecuteToolEvent = {
+  type: "tool"
+  tool: string
+  status: "running" | "completed" | "error"
+  input: Record<string, JsonValue>
+  output?: string
+  metadata: Record<string, JsonValue>
+  error?: string
+}
+
+type ExecuteTraceEvent =
+  | { type: "trace"; kind: "assignment"; target: string; value: string }
+  | { type: "trace"; kind: "branch"; expression: string; result: boolean }
+  | { type: "trace"; kind: "operation"; operation: string; input: string; output: string }
+  | { type: "trace"; kind: "log"; method: string; message: string }
+  | { type: "trace"; kind: "return"; value: string }
+
+type ExecuteTracePart = ExecuteTraceEvent & { id: string }
+type RenderedContextPart = ContextGroupPart | ExecuteTracePart
+
+const codeModeOperationLabels = {
+  map: "ui.codemode.trace.operation.map",
+  filter: "ui.codemode.trace.operation.filter",
+  find: "ui.codemode.trace.operation.find",
+  findIndex: "ui.codemode.trace.operation.findIndex",
+  findLast: "ui.codemode.trace.operation.findLast",
+  findLastIndex: "ui.codemode.trace.operation.findLastIndex",
+  some: "ui.codemode.trace.operation.some",
+  every: "ui.codemode.trace.operation.every",
+  reduce: "ui.codemode.trace.operation.reduce",
+  reduceRight: "ui.codemode.trace.operation.reduceRight",
+  flatMap: "ui.codemode.trace.operation.flatMap",
+  forEach: "ui.codemode.trace.operation.forEach",
+  sort: "ui.codemode.trace.operation.sort",
+  toSorted: "ui.codemode.trace.operation.toSorted",
+  slice: "ui.codemode.trace.operation.slice",
+  concat: "ui.codemode.trace.operation.concat",
+  flat: "ui.codemode.trace.operation.flat",
+  reverse: "ui.codemode.trace.operation.reverse",
+  toReversed: "ui.codemode.trace.operation.toReversed",
+} as const
+
+const codeModeLogLabels = {
+  log: "ui.codemode.trace.log.log",
+  info: "ui.codemode.trace.log.info",
+  debug: "ui.codemode.trace.log.debug",
+  warn: "ui.codemode.trace.log.warn",
+  error: "ui.codemode.trace.log.error",
+  dir: "ui.codemode.trace.log.dir",
+  table: "ui.codemode.trace.log.table",
+} as const
+
+function jsonValue(value: unknown): value is JsonValue {
+  if (value === null) return true
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return true
+  if (Array.isArray(value)) return value.every(jsonValue)
+  if (!record(value)) return false
+  return Object.values(value).every(jsonValue)
+}
+
+function jsonRecord(value: unknown): value is Record<string, JsonValue> {
+  return record(value) && Object.values(value).every(jsonValue)
+}
+
+function executeEvents(value: unknown): Array<ExecuteToolEvent | ExecuteTraceEvent> {
+  if (!Array.isArray(value)) return []
+  return value.flatMap<ExecuteToolEvent | ExecuteTraceEvent>((event) => {
+    if (!record(event)) return []
+    if (event.type === "tool") {
+      if (typeof event.tool !== "string") return []
+      if (event.status !== "running" && event.status !== "completed" && event.status !== "error") return []
+      return [
+        {
+          type: "tool" as const,
+          tool: event.tool,
+          status: event.status,
+          input: jsonRecord(event.input) ? event.input : {},
+          ...(typeof event.output === "string" ? { output: event.output } : {}),
+          metadata: jsonRecord(event.metadata) ? event.metadata : {},
+          ...(typeof event.error === "string" ? { error: event.error } : {}),
+        },
+      ]
+    }
+    if (event.type !== "trace" || typeof event.kind !== "string") return []
+    if (event.kind === "assignment" && typeof event.target === "string" && typeof event.value === "string") {
+      return [{ type: "trace" as const, kind: event.kind, target: event.target, value: event.value }]
+    }
+    if (event.kind === "branch" && typeof event.expression === "string" && typeof event.result === "boolean") {
+      return [{ type: "trace" as const, kind: event.kind, expression: event.expression, result: event.result }]
+    }
+    if (
+      event.kind === "operation" &&
+      typeof event.operation === "string" &&
+      typeof event.input === "string" &&
+      typeof event.output === "string"
+    ) {
+      return [
+        {
+          type: "trace" as const,
+          kind: event.kind,
+          operation: event.operation,
+          input: event.input,
+          output: event.output,
+        },
+      ]
+    }
+    if (event.kind === "log" && typeof event.method === "string" && typeof event.message === "string") {
+      return [{ type: "trace" as const, kind: event.kind, method: event.method, message: event.message }]
+    }
+    if (event.kind === "return" && typeof event.value === "string") {
+      return [{ type: "trace" as const, kind: event.kind, value: event.value }]
+    }
+    return []
+  })
+}
+
+function executeParts(tool: SessionMessageAssistantTool, fallback: string): RenderedContextPart[] {
+  if (tool.name !== "execute") return [tool]
+  const metadata = currentToolMetadata(tool)
+  const events = executeEvents(metadata.events)
+  const executionFailed = metadata.executionStatus === "error" || metadata.executionStatus === "cancelled"
+  const failed = tool.state.status === "error" || metadata.error === true || executionFailed
+  const failure =
+    executionFailed && tool.state.status === "completed"
+      ? {
+          ...tool,
+          state: {
+            status: "error" as const,
+            input: tool.state.input,
+            error: {
+              type: "ToolExecutionError",
+              message: typeof metadata.error === "string" ? metadata.error : fallback,
+            },
+            metadata: jsonRecord(metadata) ? metadata : {},
+          },
+        }
+      : tool
+  if (events.length === 0) return failed ? [failure] : []
+  const parts = events.map<SessionMessageAssistantTool | ExecuteTracePart>((event, index) => {
+    if (event.type === "trace") return { ...event, id: tool.id + ":" + index }
+    const call = event
+    const base = { type: "tool" as const, id: `${tool.id}:${index}`, name: call.tool, time: tool.time }
+    if (call.status === "running") {
+      return {
+        ...base,
+        state: {
+          status: call.status,
+          input: call.input,
+          metadata: { ...call.metadata, ...(call.output === undefined ? {} : { output: call.output }) },
+        },
+      }
+    }
+    if (call.status === "error") {
+      return {
+        ...base,
+        state: {
+          status: call.status,
+          input: call.input,
+          error: { type: "ToolExecutionError", message: call.error ?? fallback },
+          metadata: call.metadata,
+        },
+      }
+    }
+    return {
+      ...base,
+      state: {
+        status: call.status,
+        input: call.input,
+        content: [{ type: "text", text: call.output ?? "" }],
+        metadata: call.metadata,
+      },
+    }
+  })
+  return failed && !events.some((event) => event.type === "tool" && event.status === "error")
+    ? [...parts, failure]
+    : parts
+}
+
+function CodeModeTrace(props: { trace: ExecuteTracePart }) {
+  const i18n = useI18n()
+  const content = createMemo(() => {
+    switch (props.trace.kind) {
+      case "assignment":
+        return {
+          label: i18n.t("ui.codemode.trace.assignment"),
+          expression: props.trace.target,
+          detail: "= " + props.trace.value,
+        }
+      case "branch":
+        return {
+          label: i18n.t(
+            props.trace.result ? "ui.codemode.trace.branch.matched" : "ui.codemode.trace.branch.notMatched",
+          ),
+          expression: props.trace.expression,
+          detail: "",
+        }
+      case "operation": {
+        const key = codeModeOperationLabels[props.trace.operation as keyof typeof codeModeOperationLabels]
+        return {
+          label: key ? i18n.t(key) : props.trace.operation,
+          expression: props.trace.input,
+          detail: "-> " + props.trace.output,
+        }
+      }
+      case "log": {
+        const key = codeModeLogLabels[props.trace.method as keyof typeof codeModeLogLabels]
+        return { label: key ? i18n.t(key) : props.trace.method, expression: props.trace.message, detail: "" }
+      }
+      case "return":
+        return { label: i18n.t("ui.codemode.trace.return"), expression: props.trace.value, detail: "" }
+    }
+  })
+  return (
+    <div data-component="codemode-trace" data-kind={props.trace.kind}>
+      <span data-slot="codemode-trace-label">{content().label}</span>
+      <bdi dir="auto" data-slot="codemode-trace-expression">
+        {content().expression}
+      </bdi>
+      <Show when={content().detail}>
+        {(detail) => (
+          <bdi dir="auto" data-slot="codemode-trace-detail">
+            {detail()}
+          </bdi>
+        )}
+      </Show>
+    </div>
+  )
+}
+
 export function CurrentContextToolGroup(props: {
   parts: ContextGroupPart[]
   busy: boolean
@@ -485,7 +715,14 @@ export function CurrentContextToolGroup(props: {
   onReasoningOpenChange?: (id: string, open: boolean) => void
 }) {
   const i18n = useI18n()
-  const tools = createMemo(() => props.parts.filter((part) => part.type === "tool"))
+  const codemode = createMemo(() => props.parts.some((part) => part.type === "tool" && part.name === "execute"))
+  const parts = createMemo(() =>
+    props.parts.flatMap<RenderedContextPart>((part) => {
+      if (part.type === "tool") return executeParts(part, i18n.t("ui.toolErrorCard.failed"))
+      return [part]
+    }),
+  )
+  const tools = createMemo(() => parts().filter((part): part is SessionMessageAssistantTool => part.type === "tool"))
   const pending = createMemo(
     () => props.busy || tools().some((tool) => tool.state.status === "streaming" || tool.state.status === "running"),
   )
@@ -502,46 +739,51 @@ export function CurrentContextToolGroup(props: {
     ].join(", "),
   )
   const label = createMemo(() => {
-    const title = `${tools().length} ${names()}`
+    if (codemode()) {
+      const count = parts().length
+      const title = i18n.plural("ui.codemode.steps", count)
+      return { text: title, title, before: "", after: "" }
+    }
+    const title = tools().length + " " + names()
     const text = i18n.t("ui.messagePart.tools.used", { tools: title })
     const index = text.indexOf(title)
     return { text, title, before: text.slice(0, index).trim(), after: text.slice(index + title.length).trim() }
   })
   const items = createMemo(() =>
-    props.parts.reduce<(SessionMessageAssistantTool[] | (SessionMessageAssistantReasoning & { id: string }))[]>(
-      (groups, tool) => {
-        if (tool.type === "reasoning") {
-          groups.push(tool)
-          return groups
-        }
-        const previous = groups.at(-1)
-        if (
-          tool.name === "patch" &&
-          tool.state.status !== "error" &&
-          Array.isArray(previous) &&
-          previous?.[0]?.name === "patch" &&
-          previous[0].state.status !== "error"
-        ) {
-          previous.push(tool)
-          return groups
-        }
-        if (
-          tool.name === "skill" &&
-          tool.state.status !== "error" &&
-          skillToolName(currentToolInput(tool), currentToolMetadata(tool)) &&
-          Array.isArray(previous) &&
-          previous?.[0]?.name === "skill" &&
-          previous[0].state.status !== "error" &&
-          skillToolName(currentToolInput(previous[0]), currentToolMetadata(previous[0]))
-        ) {
-          previous.push(tool)
-          return groups
-        }
-        groups.push([tool])
+    parts().reduce<
+      (SessionMessageAssistantTool[] | (SessionMessageAssistantReasoning & { id: string }) | ExecuteTracePart)[]
+    >((groups, part) => {
+      if (part.type === "reasoning" || part.type === "trace") {
+        groups.push(part)
         return groups
-      },
-      [],
-    ),
+      }
+      const tool = part
+      const previous = groups.at(-1)
+      if (
+        tool.name === "patch" &&
+        tool.state.status !== "error" &&
+        Array.isArray(previous) &&
+        previous?.[0]?.name === "patch" &&
+        previous[0].state.status !== "error"
+      ) {
+        previous.push(tool)
+        return groups
+      }
+      if (
+        tool.name === "skill" &&
+        tool.state.status !== "error" &&
+        skillToolName(currentToolInput(tool), currentToolMetadata(tool)) &&
+        Array.isArray(previous) &&
+        previous?.[0]?.name === "skill" &&
+        previous[0].state.status !== "error" &&
+        skillToolName(currentToolInput(previous[0]), currentToolMetadata(previous[0]))
+      ) {
+        previous.push(tool)
+        return groups
+      }
+      groups.push([tool])
+      return groups
+    }, []),
   )
   const change = (open: boolean) => {
     props.onOpenChange(open)
@@ -549,7 +791,13 @@ export function CurrentContextToolGroup(props: {
   }
 
   return (
-    <div data-component="collapsed-tool-group" data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}>
+    <div
+      hidden={parts().length === 0}
+      data-component="collapsed-tool-group"
+      data-timeline-part-ids={parts()
+        .map((part) => part.id)
+        .join(",")}
+    >
       <BasicTool
         icon="glasses"
         status={pending() ? "running" : "completed"}
@@ -581,24 +829,39 @@ export function CurrentContextToolGroup(props: {
               })
               const reasoning = createMemo(() => {
                 const value = item()
-                return Array.isArray(value) ? undefined : value
+                return !Array.isArray(value) && value.type === "reasoning" ? value : undefined
+              })
+              const trace = createMemo(() => {
+                const value = item()
+                return !Array.isArray(value) && value.type === "trace" ? value : undefined
               })
               return (
                 <Show
                   when={group()}
                   fallback={
-                    <Show when={reasoning()}>
+                    <Show
+                      when={trace()}
+                      fallback={
+                        <Show when={reasoning()}>
+                          {(part) => (
+                            <div data-slot="context-tool-group-item">
+                              <AssistantReasoningContent
+                                id={part().id}
+                                content={part()}
+                                streaming={false}
+                                defaultOpen={props.reasoningDefaultOpen}
+                                open={props.reasoningOpen?.(part().id)}
+                                onOpenChange={(open) => props.onReasoningOpenChange?.(part().id, open)}
+                                onContentRendered={props.onSizeChange}
+                              />
+                            </div>
+                          )}
+                        </Show>
+                      }
+                    >
                       {(part) => (
                         <div data-slot="context-tool-group-item">
-                          <AssistantReasoningContent
-                            id={part().id}
-                            content={part()}
-                            streaming={false}
-                            defaultOpen={props.reasoningDefaultOpen}
-                            open={props.reasoningOpen?.(part().id)}
-                            onOpenChange={(open) => props.onReasoningOpenChange?.(part().id, open)}
-                            onContentRendered={props.onSizeChange}
-                          />
+                          <CodeModeTrace trace={part()} />
                         </div>
                       )}
                     </Show>
@@ -948,7 +1211,9 @@ export function ToolDisplay(
     return taskId()
   })
   const errorSubtitle = createMemo(() => toolErrorSubtitle(props, i18n))
-  const error = createMemo(() => toolDisplayError(props, i18n.t("ui.toolErrorCard.failed")))
+  const error = createMemo(() =>
+    props.tool === "execute" ? undefined : toolDisplayError(props, i18n.t("ui.toolErrorCard.failed")),
+  )
   const render = createMemo(() => ToolRegistry.render(props.tool) ?? GenericTool)
 
   return (
@@ -1027,7 +1292,7 @@ function toolErrorSubtitle(props: ToolProps, i18n: UiI18n) {
 function toolDisplayError(props: ToolProps & { error?: string }, fallback: string) {
   if (props.status === "error") return props.error
   if (props.tool !== "execute") return undefined
-  const calls = props.metadata.toolCalls
+  const calls = props.metadata.events
   const failed =
     props.metadata.error === true ||
     (Array.isArray(calls) &&
@@ -1431,36 +1696,9 @@ ToolRegistry.register({
   name: "execute",
   render(props) {
     const i18n = useI18n()
-    const pending = () => props.status === "streaming" || props.status === "running"
     const code = createMemo(() => (typeof props.input.code === "string" ? props.input.code : ""))
-    const output = createMemo(() => stripAnsi(props.output ?? "").replace(/\r\n?/g, "\n"))
-    const sawPending = pending()
-    return (
-      <BasicTool
-        {...props}
-        icon="console"
-        rail={false}
-        compact
-        allowOpenWhilePending
-        trigger={(open) => (
-          <div data-slot="basic-tool-tool-info-structured">
-            <div data-slot="basic-tool-tool-info-main">
-              <span data-slot="basic-tool-tool-title">
-                <TextShimmer text={i18n.t("ui.tool.execute")} active={pending()} />
-              </span>
-              <Show when={!open() && code()}>
-                <ShellSubmessage text={code().split("\n")[0]} animate={sawPending} />
-              </Show>
-            </div>
-          </div>
-        )}
-      >
-        <ConsoleOutput copy={code()} variant="shell">
-          <span data-slot="bash-command">{code()}</span>
-          <Show when={output()}>{(value) => <span data-slot="bash-result">{value()}</span>}</Show>
-        </ConsoleOutput>
-      </BasicTool>
-    )
+    const failed = createMemo(() => toolDisplayError(props, i18n.t("ui.toolErrorCard.failed")))
+    return <Show when={failed()}>{(error) => <ToolErrorCard tool="execute" error={error()} subtitle={code()} />}</Show>
   },
 })
 

@@ -1,8 +1,53 @@
+import { Database } from "bun:sqlite"
 import { expect } from "bun:test"
+import path from "node:path"
 import { Effect } from "effect"
 import { HttpServer, HttpServerError, HttpServerResponse } from "effect/unstable/http"
 import { it } from "../../core/test/lib/effect"
+import { tmpdirScoped } from "../../core/test/fixture/tmpdir"
 import { ServerProcess } from "../src/process"
+
+it.live("recovers durable background work for a foreground server", () =>
+  Effect.gen(function* () {
+    const directory = yield* tmpdirScoped("opencode-server-process-")
+    const filename = path.join(directory.path, "process.db")
+    const options = {
+      hostname: "127.0.0.1",
+      port: 0,
+      password: "secret",
+      database: { path: filename },
+    }
+    yield* ServerProcess.start<never, never>(options)
+
+    const database = new Database(filename)
+    yield* Effect.addFinalizer(() => Effect.sync(() => database.close()))
+    const key = "job.background/msg_process_restart"
+    const now = Date.now()
+    database
+      .query("insert into kv (key, value, time_created, time_updated) values (?, ?, ?, ?)")
+      .run(
+        key,
+        JSON.stringify({
+          id: "exe_process_restart",
+          notificationID: "msg_process_restart",
+          recovery: {
+            kind: "codemode",
+            parentSessionID: "ses_process_restart_missing",
+            assistantMessageID: "msg_process_restart_assistant",
+            toolCallID: "call_process_restart",
+            code: "return 1",
+            timeoutMs: 1_000,
+          },
+          status: "running",
+        }),
+        now,
+        now,
+      )
+
+    yield* ServerProcess.start<never, never>(options)
+    yield* waitForMarkerRemoval(database, key)
+  }),
+)
 
 it.live("allows browser preflight requests without credentials", () =>
   Effect.gen(function* () {
@@ -116,3 +161,9 @@ it.live("allows browser preflight requests without credentials", () =>
     expect(yield* Effect.promise(() => missing.text())).toBe(fallback)
   }),
 )
+
+function waitForMarkerRemoval(database: Database, key: string, remaining = 1_000): Effect.Effect<void, Error> {
+  if (!database.query("select value from kv where key = ?").get(key)) return Effect.void
+  if (remaining === 0) return Effect.fail(new Error("Timed out waiting for restart recovery"))
+  return Effect.promise(() => Bun.sleep(1)).pipe(Effect.andThen(waitForMarkerRemoval(database, key, remaining - 1)))
+}

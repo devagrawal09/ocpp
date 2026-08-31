@@ -101,11 +101,9 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
       ).pipe(Layer.provideMerge(NodeHttpServer.layerHttpServices)),
       applicationScope,
     )
-    if (lifecycle) {
-      yield* installRestartContinuity(Context.get(context, SessionRestart.Service)).pipe(
-        Effect.provideService(Scope.Scope, applicationScope),
-      )
-    }
+    yield* installRestartContinuity(Context.get(context, SessionRestart.Service)).pipe(
+      Effect.provideService(Scope.Scope, applicationScope),
+    )
     const app = Context.get(context, HttpRouter.HttpRouter)
       .asHttpEffect()
       .pipe(
@@ -228,8 +226,8 @@ function unavailable(status: Status.State) {
 }
 
 /**
- * The managed server owns restart continuity: at boot it resumes Sessions whose execution claim was
- * never released. Claims are written when execution starts (see SessionExecution), so recovery covers
+ * The server owns restart continuity: at boot it resumes Sessions whose execution claim was never
+ * released. Claims are written when execution starts (see SessionExecution), so recovery covers
  * graceful restarts and unclean deaths alike — no shutdown hook participates.
  */
 const installRestartContinuity = Effect.fnUntraced(function* (restart: SessionRestart.Interface) {

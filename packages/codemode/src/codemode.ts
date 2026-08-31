@@ -2,16 +2,21 @@ import { Effect, Schema } from "effect"
 import { executeWithLimits } from "./interpreter/execute.js"
 import { type Services, type ToolDescription, ToolRuntime } from "./tool-runtime.js"
 import type { Tools } from "./tools.js"
+import type { TraceHook } from "./trace.js"
 
 /** A tool call admitted during an execution. */
 export type { ToolCall, ToolCallEnded, ToolCallHooks, ToolCallStarted, ToolDescription } from "./tool-runtime.js"
+export type { TraceEvent, TraceHook } from "./trace.js"
 /** Signature-construction helpers for host-owned catalog instructions. */
 export { searchSignature, toolExpression } from "./tool-runtime.js"
 
 /** Resource budgets enforced independently during each CodeMode program execution. */
 export type ExecutionLimits = {
   /**
-   * Wall-clock milliseconds before interruption. Result delivery waits for tool cleanup.
+   * Wall-clock milliseconds of program work before interruption. Time spent
+   * awaiting tool calls does not count: host tools own their wait policies (user
+   * questions, permission prompts), so a pending call is never interrupted by
+   * this deadline. Result delivery waits for tool cleanup.
    * No default: absent means no timeout.
    */
   readonly timeoutMs?: number
@@ -42,6 +47,8 @@ export type ExecuteOptions<Provided extends Record<string, unknown> = {}> = {
   onToolCallStart?: (call: ToolRuntime.ToolCallStarted) => Effect.Effect<void, never, Services<Provided>>
   /** Observes each admitted tool call as it succeeds, fails, or is interrupted. */
   onToolCallEnd?: (call: ToolRuntime.ToolCallEnded) => Effect.Effect<void, never, Services<Provided>>
+  /** Observes semantic JavaScript steps in execution order. */
+  onTrace?: TraceHook<Services<Provided>>
 }
 
 /** A JSON value that can cross the confined interpreter boundary. */

@@ -905,6 +905,121 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.codemode.started"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: {
+            readonly sessionID: Session.ID
+            readonly assistantMessageID: SessionMessage.ID
+            readonly id: string
+            readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+            readonly code: string
+            readonly timeoutMs: number
+          }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.codemode.completed"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: {
+            readonly sessionID: Session.ID
+            readonly assistantMessageID: SessionMessage.ID
+            readonly id: string
+            readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+            readonly events: ReadonlyArray<
+              | {
+                  readonly type: "tool"
+                  readonly tool: string
+                  readonly status: "running" | "completed" | "error"
+                  readonly input?: { readonly [x: string]: Schema.Json } | undefined
+                  readonly output?: string | undefined
+                  readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
+                  readonly error?: string | undefined
+                }
+              | (
+                  | {
+                      readonly type: "trace"
+                      readonly kind: "assignment"
+                      readonly target: string
+                      readonly value: string
+                    }
+                  | {
+                      readonly type: "trace"
+                      readonly kind: "branch"
+                      readonly expression: string
+                      readonly result: boolean
+                    }
+                  | {
+                      readonly type: "trace"
+                      readonly kind: "operation"
+                      readonly operation: string
+                      readonly input: string
+                      readonly output: string
+                    }
+                  | { readonly type: "trace"; readonly kind: "log"; readonly method: string; readonly message: string }
+                  | { readonly type: "trace"; readonly kind: "return"; readonly value: string }
+                )
+            >
+            readonly output: string
+          }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.codemode.failed"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: {
+            readonly sessionID: Session.ID
+            readonly assistantMessageID: SessionMessage.ID
+            readonly id: string
+            readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+            readonly events: ReadonlyArray<
+              | {
+                  readonly type: "tool"
+                  readonly tool: string
+                  readonly status: "running" | "completed" | "error"
+                  readonly input?: { readonly [x: string]: Schema.Json } | undefined
+                  readonly output?: string | undefined
+                  readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
+                  readonly error?: string | undefined
+                }
+              | (
+                  | {
+                      readonly type: "trace"
+                      readonly kind: "assignment"
+                      readonly target: string
+                      readonly value: string
+                    }
+                  | {
+                      readonly type: "trace"
+                      readonly kind: "branch"
+                      readonly expression: string
+                      readonly result: boolean
+                    }
+                  | {
+                      readonly type: "trace"
+                      readonly kind: "operation"
+                      readonly operation: string
+                      readonly input: string
+                      readonly output: string
+                    }
+                  | { readonly type: "trace"; readonly kind: "log"; readonly method: string; readonly message: string }
+                  | { readonly type: "trace"; readonly kind: "return"; readonly value: string }
+                )
+            >
+            readonly status: "error" | "cancelled"
+            readonly error: string
+          }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session.retry.scheduled"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined

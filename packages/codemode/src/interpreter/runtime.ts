@@ -64,6 +64,7 @@ import { containsOpaqueReference, isRuntimeReference, rejectCircularInsertion, t
 import { ScopeStack } from "./scope.js"
 import { arrayMethods, mapMethods, mapStatics, setMethods } from "../stdlib/collections.js"
 import { consoleMethods, formatConsoleMessage } from "../stdlib/console.js"
+import { traceSource, traceValue, type TraceEvent, type TraceHook } from "../trace.js"
 import { dateMethods, dateStatics } from "../stdlib/date.js"
 import { invokeJsonMethod, jsonStatics, type JsonMethodName } from "../stdlib/json.js"
 import { invokeMathSumPrecise, mathConstants, mathMethods } from "../stdlib/math.js"
@@ -121,6 +122,27 @@ const globalStaticMembers: Partial<Record<GlobalNamespaceName, Set<string>>> = {
 }
 
 const MAX_ARRAY_LENGTH = 4_294_967_295
+const tracedArrayMethods = new Set([
+  "map",
+  "filter",
+  "find",
+  "findIndex",
+  "findLast",
+  "findLastIndex",
+  "some",
+  "every",
+  "reduce",
+  "reduceRight",
+  "flatMap",
+  "forEach",
+  "sort",
+  "toSorted",
+  "slice",
+  "concat",
+  "flat",
+  "reverse",
+  "toReversed",
+])
 
 const parseArrayIndex = (key: string | number): number | undefined => {
   const property = String(key)
@@ -279,11 +301,14 @@ export class Interpreter<R> {
   private readonly toolKeys: (path: ReadonlyArray<string>) => ReadonlyArray<string>
   private readonly logs: Array<string>
   private readonly promises: PromiseRuntime<R>
+  private readonly trace: TraceHook<R> | undefined
+  private readonly source: string
+  private readonly traceStatements: boolean
   private generatorState?: GeneratorState
   private generatorAsync = false
   private readonly runner: CallbackRunner<R> & SyncIteratorRunner<R> = {
-    invokeFunction: (fn, args) => this.invokeFunction(fn, args),
-    invokeCallable: (callable, args, node) => this.invokeCallable(callable, args, node),
+    invokeFunction: (fn, args) => this.invokeFunction(fn, args, false),
+    invokeCallable: (callable, args, node) => this.invokeCallable(callable, args, node, node, false),
     settlePromise: (promise) => this.settlePromise(promise),
     syncIterator: (value, node) => this.syncIterator(value, node),
   }
@@ -294,6 +319,9 @@ export class Interpreter<R> {
     toolKeys: (path: ReadonlyArray<string>) => ReadonlyArray<string>,
     promises: PromiseRuntime<R>,
     logs: Array<string> = [],
+    trace?: TraceHook<R>,
+    source = "",
+    traceStatements = true,
   ) {
     const globalScope = new Map<string, Binding>()
     this.scopes = new ScopeStack([globalScope])
@@ -302,6 +330,9 @@ export class Interpreter<R> {
     this.toolKeys = toolKeys
     this.logs = logs
     this.promises = promises
+    this.trace = trace
+    this.source = source
+    this.traceStatements = traceStatements
     globalScope.set("tools", { mutable: false, value: new ToolReference([]) })
     globalScope.set("search", { mutable: false, value: new SearchFunction() })
     globalScope.set("Promise", { mutable: false, value: new PromiseNamespace() })
@@ -363,8 +394,18 @@ export class Interpreter<R> {
 
       // The implicit async body adopts returned promises before copy-out.
       value = yield* resolvePromiseValue(self.runner, value, program)
+      yield* self.emitTrace({ kind: "return", value: traceValue(value) })
       return value
     }).pipe(Effect.ensuring(Effect.sync(() => self.scopes.pop())))
+  }
+
+  private emitTrace(event: TraceEvent): Effect.Effect<void, never, R> {
+    if (this.trace === undefined || (!this.traceStatements && event.kind !== "log")) return Effect.void
+    return this.trace(event)
+  }
+
+  private sourceText(node: AstNode, fallback: string) {
+    return traceSource(this.source, node, fallback)
   }
 
   // Fork at the call site so admission and hooks occur when the call is made.
@@ -498,12 +539,16 @@ export class Interpreter<R> {
     const consequentNode = getNode(node, "consequent")
     const alternateNode = getOptionalNode(node, "alternate")
 
+    const self = this
     return Effect.flatMap(this.evaluateExpression(testNode), (test) =>
-      test
-        ? this.evaluateStatement(consequentNode)
-        : alternateNode
-          ? this.evaluateStatement(alternateNode)
-          : Effect.succeed({ kind: "none" }),
+      Effect.andThen(
+        self.emitTrace({ kind: "branch", expression: self.sourceText(testNode, "if"), result: Boolean(test) }),
+        test
+          ? self.evaluateStatement(consequentNode)
+          : alternateNode
+            ? self.evaluateStatement(alternateNode)
+            : Effect.succeed({ kind: "none" } satisfies StatementResult),
+      ),
     )
   }
 
@@ -1136,7 +1181,13 @@ export class Interpreter<R> {
 
         const init = getOptionalNode(declaration, "init")
         const value = init ? yield* self.evaluateExpression(init) : undefined
-        yield* self.declarePattern(getNode(declaration, "id"), value, kind !== "const", declaration, kind !== "var")
+        const pattern = getNode(declaration, "id")
+        yield* self.declarePattern(pattern, value, kind !== "const", declaration, kind !== "var")
+        yield* self.emitTrace({
+          kind: "assignment",
+          target: self.sourceText(pattern, "binding"),
+          value: traceValue(value),
+        })
       }
     })
   }
@@ -1846,7 +1897,11 @@ export class Interpreter<R> {
         )
       }
       throw new InterpreterRuntimeError("Assignment target must be an Identifier or MemberExpression.", left)
-    })
+    }).pipe(
+      Effect.tap((value) =>
+        self.emitTrace({ kind: "assignment", target: self.sourceText(left, "binding"), value: traceValue(value) }),
+      ),
+    )
   }
 
   private evaluateLogicalAssignment(
@@ -1942,6 +1997,7 @@ export class Interpreter<R> {
     args: Array<unknown>,
     node: AstNode,
     callee: AstNode = node,
+    traceStatements = this.traceStatements,
   ): Effect.Effect<unknown, unknown, R> {
     const self = this
     return Effect.gen(function* () {
@@ -1956,7 +2012,7 @@ export class Interpreter<R> {
         return yield* invokePromiseInstanceMethod(self.runner, self.promises, callable, args, node)
       }
       if (callable instanceof CodeModeFunction) {
-        return yield* self.invokeFunction(callable, args)
+        return yield* self.invokeFunction(callable, args, traceStatements)
       }
       if (callable instanceof GeneratorMethodReference) {
         if (callable.kind === "iterator") return callable.generator
@@ -1964,10 +2020,19 @@ export class Interpreter<R> {
         return callable.generator.asynchronous ? yield* self.createPromise(requested) : yield* requested
       }
       if (callable instanceof IntrinsicReference) {
-        return yield* invokeIntrinsic(self.runner, callable, args, node)
+        const result = yield* invokeIntrinsic(self.runner, callable, args, node)
+        if (Array.isArray(callable.receiver) && tracedArrayMethods.has(callable.name)) {
+          yield* self.emitTrace({
+            kind: "operation",
+            operation: callable.name,
+            input: callable.receiver.length + " items",
+            output: Array.isArray(result) ? result.length + " items" : traceValue(result),
+          })
+        }
+        return result
       }
       if (callable instanceof GlobalMethodReference) {
-        if (callable.namespace === "console") return self.invokeConsole(callable.name, args, node)
+        if (callable.namespace === "console") return yield* self.invokeConsole(callable.name, args, node)
         if (callable.namespace === "Object" && args[0] instanceof ToolReference) {
           return self.invokeObjectMethodOnTools(callable.name, args[0], node)
         }
@@ -2049,10 +2114,11 @@ export class Interpreter<R> {
     )
   }
 
-  private invokeConsole(name: string, args: Array<unknown>, node: AstNode): undefined {
+  private invokeConsole(name: string, args: Array<unknown>, node: AstNode): Effect.Effect<undefined, never, R> {
     if (!consoleMethods.has(name)) throw new InterpreterRuntimeError(`console.${name} is not available.`, node)
-    this.logs.push(formatConsoleMessage(name, args))
-    return undefined
+    const message = formatConsoleMessage(name, args)
+    this.logs.push(message)
+    return Effect.as(this.emitTrace({ kind: "log", method: name, message }), undefined)
   }
 
   private evaluateCallArguments(argNodes: Array<unknown>): Effect.Effect<Array<unknown>, unknown, R> {
@@ -2081,8 +2147,21 @@ export class Interpreter<R> {
     })
   }
 
-  private invokeFunction(fn: CodeModeFunction, args: Array<unknown>): Effect.Effect<unknown, unknown, R> {
-    const invocation = new Interpreter(this.executeTool, this.invokeSearch, this.toolKeys, this.promises, this.logs)
+  private invokeFunction(
+    fn: CodeModeFunction,
+    args: Array<unknown>,
+    traceStatements = this.traceStatements,
+  ): Effect.Effect<unknown, unknown, R> {
+    const invocation = new Interpreter(
+      this.executeTool,
+      this.invokeSearch,
+      this.toolKeys,
+      this.promises,
+      this.logs,
+      this.trace,
+      this.source,
+      traceStatements,
+    )
     invocation.scopes = new ScopeStack([...fn.capturedScopes, new Map()])
     const run = Effect.gen(function* () {
       // Seed all parameters first so defaults cannot fall through to same-named outer bindings.
@@ -2480,8 +2559,13 @@ export class Interpreter<R> {
   }
 
   private evaluateConditionalExpression(node: AstNode): Effect.Effect<unknown, unknown, R> {
-    return Effect.flatMap(this.evaluateExpression(getNode(node, "test")), (test) =>
-      this.evaluateExpression(getNode(node, test ? "consequent" : "alternate")),
+    const testNode = getNode(node, "test")
+    const self = this
+    return Effect.flatMap(this.evaluateExpression(testNode), (test) =>
+      Effect.andThen(
+        self.emitTrace({ kind: "branch", expression: self.sourceText(testNode, "condition"), result: Boolean(test) }),
+        self.evaluateExpression(getNode(node, test ? "consequent" : "alternate")),
+      ),
     )
   }
 

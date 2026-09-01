@@ -1,3 +1,28 @@
+# OpenCode Code Mode Fork
+
+> [!IMPORTANT]
+> This repository is a clean, independent fork of [anomalyco/opencode](https://github.com/anomalyco/opencode).
+> It is maintained at [devagrawal09/opencode](https://github.com/devagrawal09/opencode) and is not affiliated with or endorsed by the upstream OpenCode team. Upstream history, project structure, and documentation are preserved; the focused fork changes live on the [`codemode-fork`](https://github.com/devagrawal09/opencode/tree/codemode-fork) branch.
+
+### What This Fork Changes
+
+This branch redesigns Code Mode as a compiled, durable, and bounded execution system:
+
+- **Compiled immutable activations:** JavaScript-shaped code is compiled to versioned IR. Tool calls are direct and blocking; unsupported asynchronous and dynamic forms are rejected before execution.
+- **Durable notebook state:** Top-level `export const` declarations publish immutable values transactionally, with revision conflicts preventing stale activations from overwriting newer state.
+- **Required and detached execution:** Required execution waits for a bounded result projection. Detached execution returns an ID, publishes result-reference-only notifications, and supports paginated retrieval through `execution_result`.
+- **Durable lifecycle and recovery:** Activations, tool-call journals, results, notebook bindings, fork boundaries, and committed reverts are persisted by Core. Interrupted unsettled work is marked indeterminate rather than reported as completed.
+- **Scoped tool handles:** `tool.define` creates same-activation opaque handles with frozen captures and compiler-derived tool capabilities. Handles cross only explicitly opted-in tool boundaries.
+- **Strict resource limits:** Activations enforce wall-clock, tool-call, result, capture, log, projection, and page limits, including interruption of in-flight calls.
+- **Session UI support:** The timeline renders Code Mode progress, execution code, terminal status, and bounded result information using production Session UI components.
+
+The redesign is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. Architecture notes and review findings are available in [`codemode-review.md`](codemode-review.md) and [`packages/codemode/interpreter-support.md`](packages/codemode/interpreter-support.md).
+
+> [!NOTE]
+> The installation commands and release downloads in the upstream README below install upstream OpenCode, not this fork. Build the `codemode-fork` branch from source to run these changes.
+
+---
+
 <p align="center">
   <a href="https://opencode.ai">
     <picture>

@@ -1,8 +1,8 @@
 # @opencode-ai/codemode
 
-This is our take on code mode: a lightweight, pure interpreter for a JavaScript-like language built around calling
-tools. It supports familiar JavaScript syntax with a few key differences and limitations. See the
-[interpreter support checklist](./interpreter-support.md) for more details.
+This is our take on code mode: a lightweight, pure interpreter for a compiled JavaScript-shaped language built around
+direct, blocking tool calls. See the [complete Code Mode guide](./interpreter-support.md) for architecture diagrams,
+hosted execution modes, durable notebook semantics, examples, limits, and the full language contract.
 
 Rather than trying to sandbox arbitrary JavaScript, CodeMode only runs the language features we implement. Programs
 cannot directly access the network, filesystem, processes, or application APIs. They can interact with the outside
@@ -15,13 +15,15 @@ The idea of code mode was originally introduced by Cloudflare. See
 
 - **Only supported APIs are available.** Programs can use the provided tools and supported JavaScript built-ins. APIs
   such as `fetch`, timers, `process`, filesystem access, imports, and modules are unavailable.
-- **Unfinished work is interrupted.** Tool calls and async functions start when called. When the program finishes,
-  anything still running is interrupted. Unhandled rejections from un-awaited promises are returned as warnings.
+- **Tool calls are synchronous to the activation.** A direct call returns its decoded value. `Promise`, `async`, and
+  `await` are rejected before execution.
+- **Aggregate values are immutable.** Derive arrays and objects with methods such as `map`, `filter`, and `slice`, or
+  with spread and literals. Activation-local scalar `let` bindings may be updated.
 - **REPL-style results.** Without an explicit `return`, the final top-level expression becomes the result. `undefined`
   becomes `null`.
 
-Unsupported syntax returns an `UnsupportedSyntax` diagnostic with a source location. Current gaps are tracked in the
-[interpreter support checklist](./interpreter-support.md).
+Unsupported syntax returns an `UnsupportedSyntax` diagnostic with a source location. The supported and rejected forms
+are listed in the [complete guide](./interpreter-support.md).
 
 ## Quick Start
 
@@ -42,7 +44,7 @@ const runtime = CodeMode.make({
 
 const result = await Effect.runPromise(
   runtime.execute(`
-    const order = await tools.orders.lookup({ id: "order_42" })
+    const order = tools.orders.lookup({ id: "order_42" })
     return { id: order.id, needsAttention: order.status !== "complete" }
   `),
 )
@@ -56,9 +58,10 @@ const result = await Effect.runPromise(
 
 `input` and `output` accept either an Effect Schema or a render-only JSON Schema document. Effect Schema input is
 decoded before `execute`; Effect Schema output is decoded and safely copied before the program sees it. JSON Schemas
-only shape the model-visible signature. Without `output`, the signature uses `Promise<void>`.
+only shape the model-visible signature. Without `output`, the signature uses `void`.
 
-Descriptions and schemas are model-visible contracts. Authorization belongs in `execute`.
+Descriptions and schemas are model-visible contracts. Authorization belongs in `execute`. Tool calls return decoded
+values directly inside an activation; without `output`, the model-visible signature returns `void`.
 
 Dots in tool names create namespaces: `{ "issues.list": tool }` and `{ issues: { list: tool } }` both expose
 `tools.issues.list(...)`. Other characters use bracket notation, such as
@@ -125,19 +128,20 @@ failure.
 
 Diagnostic kinds:
 
-| Kind                    | Meaning                                                                                        |
-| ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `ParseError`            | Source is empty or cannot be parsed.                                                           |
-| `UnsupportedSyntax`     | Parsed JavaScript is outside the supported subset.                                             |
-| `UnknownTool`           | The program referenced an unavailable tool.                                                    |
-| `InvalidToolInput`      | Tool input failed schema decoding or safe-data copying.                                        |
-| `InvalidToolOutput`     | Tool output failed schema decoding or safe-data copying.                                       |
-| `InvalidDataValue`      | Program data violated the plain-data contract.                                                 |
-| `ToolCallLimitExceeded` | The program exceeded `maxToolCalls`.                                                           |
-| `TimeoutExceeded`       | Execution timed out; as a warning, background work was interrupted after the program returned. |
-| `ToolFailure`           | A tool refused or failed.                                                                      |
-| `ExecutionFailure`      | The program threw or another execution error occurred.                                         |
-| `Truncated`             | Warning only: additional warnings were omitted by `maxOutputBytes`.                            |
+| Kind                    | Meaning                                                             |
+| ----------------------- | ------------------------------------------------------------------- |
+| `ParseError`            | Source is empty or cannot be parsed.                                |
+| `UnsupportedSyntax`     | Parsed JavaScript is outside the supported subset.                  |
+| `UnknownTool`           | The program referenced an unavailable tool.                         |
+| `InvalidToolInput`      | Tool input failed schema decoding or safe-data copying.             |
+| `InvalidToolOutput`     | Tool output failed schema decoding or safe-data copying.            |
+| `InvalidDataValue`      | Program data violated the plain-data contract.                      |
+| `ToolCallLimitExceeded` | The program exceeded `maxToolCalls`.                                |
+| `TimeoutExceeded`       | Execution exceeded its wall-clock deadline.                         |
+| `ToolFailure`           | A tool refused or failed.                                           |
+| `ExecutionFailure`      | The program threw or another execution error occurred.              |
+| `RevisionConflict`      | Durable notebook publication lost an optimistic revision race.      |
+| `Truncated`             | Warning only: additional warnings were omitted by `maxOutputBytes`. |
 
 Host failures and defects report their messages and underlying causes. Invalid outputs include the validation or
 copying error. Interruption propagates without becoming an error diagnostic.
@@ -154,15 +158,15 @@ empty-query browsing, and pagination, and returns callable paths with full signa
 
 ## Execution Limits
 
-| Limit            | Default   | Controls                        |
-| ---------------- | --------- | ------------------------------- |
-| `timeoutMs`      | unlimited | Total execution time.           |
-| `maxToolCalls`   | unlimited | Admitted tool calls.            |
-| `maxOutputBytes` | unlimited | Retained result value and logs. |
+| Limit            | Default          | Controls                         |
+| ---------------- | ---------------- | -------------------------------- |
+| `timeoutMs`      | unlimited        | Total wall-clock execution time. |
+| `maxToolCalls`   | unlimited        | Admitted tool calls.             |
+| `maxOutputBytes` | unlimited        | Retained result value.           |
+| `maxLogBytes`    | `maxOutputBytes` | Retained console output.         |
 
-Execution limits have no default values.
+No limits are enabled by default. When `maxOutputBytes` is set without `maxLogBytes`, the log budget inherits it.
 
 Invalid limit configuration throws `RangeError`. Warnings receive a separate budget equal to `maxOutputBytes`.
 Truncation does not fail execution; an oversized value becomes a string with an in-band marker. Timeouts interrupt
-tool calls and busy loops, while a result returned before cleanup times out remains successful with a
-`TimeoutExceeded` warning. Tool-call concurrency is unrestricted. Boundary data is limited to 32 nested levels.
+in-flight tool calls and busy loops before settlement. Boundary data is limited to 32 nested levels.

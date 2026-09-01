@@ -16,7 +16,7 @@ This branch redesigns Code Mode as a compiled, durable, and bounded execution sy
 - **Strict resource limits:** Activations enforce wall-clock, tool-call, result, capture, log, projection, and page limits, including interruption of in-flight calls.
 - **Session UI support:** The timeline renders Code Mode progress, execution code, terminal status, and bounded result information using production Session UI components.
 
-The redesign is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. Architecture notes and review findings are available in [`codemode-review.md`](codemode-review.md) and [`packages/codemode/interpreter-support.md`](packages/codemode/interpreter-support.md).
+The redesign is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. See the single [Code Mode guide](packages/codemode/interpreter-support.md) for architecture diagrams, examples, lifecycle semantics, limits, and migration notes.
 
 > [!NOTE]
 > The installation commands and release downloads in the upstream README below install upstream OpenCode, not this fork. Build the `codemode-fork` branch from source to run these changes.

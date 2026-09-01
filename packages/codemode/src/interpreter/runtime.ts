@@ -1,4 +1,5 @@
 import { Cause, Deferred, Effect, Exit } from "effect"
+import { ToolHandle } from "../tool-handle.js"
 import { isBlockedMember, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
 import {
   type AstNode,
@@ -39,6 +40,8 @@ import {
   SearchFunction,
   SymbolNamespace,
   type StatementResult,
+  ToolDefineReference,
+  ToolNamespace,
   unsupportedSyntax,
   UriFunction,
 } from "./model.js"
@@ -122,6 +125,20 @@ const globalStaticMembers: Partial<Record<GlobalNamespaceName, Set<string>>> = {
 }
 
 const MAX_ARRAY_LENGTH = 4_294_967_295
+const mutatingArrayMethods = new Set([
+  "copyWithin",
+  "fill",
+  "pop",
+  "push",
+  "reverse",
+  "shift",
+  "sort",
+  "splice",
+  "unshift",
+])
+const mutatingMapMethods = new Set(["set", "delete", "clear"])
+const mutatingSetMethods = new Set(["add", "delete", "clear"])
+const mutatingURLSearchParamsMethods = new Set(["append", "delete", "set", "sort"])
 const tracedArrayMethods = new Set([
   "map",
   "filter",
@@ -256,6 +273,7 @@ type OpaqueMemberReference =
   | GlobalMethodReference
   | JsonMethodReference
   | GeneratorMethodReference
+  | ToolDefineReference
 
 const isOpaqueMemberReference = (value: unknown): value is OpaqueMemberReference =>
   value instanceof ToolReference ||
@@ -264,7 +282,8 @@ const isOpaqueMemberReference = (value: unknown): value is OpaqueMemberReference
   value instanceof IntrinsicReference ||
   value instanceof GlobalMethodReference ||
   value instanceof JsonMethodReference ||
-  value instanceof GeneratorMethodReference
+  value instanceof GeneratorMethodReference ||
+  value instanceof ToolDefineReference
 
 const copyIteratorSymbols = (source: object, target: object, consumed?: ReadonlySet<PropertyKey>): void => {
   for (const symbol of IteratorSymbols) {
@@ -304,6 +323,10 @@ export class Interpreter<R> {
   private readonly trace: TraceHook<R> | undefined
   private readonly source: string
   private readonly traceStatements: boolean
+  private readonly exportNames: ReadonlyArray<string>
+  private readonly bindingOverrides: ReadonlyMap<Binding, Binding>
+  private readonly allowedTools: ReadonlySet<string> | undefined
+  private readonly handles: Array<ToolHandle>
   private generatorState?: GeneratorState
   private generatorAsync = false
   private readonly runner: CallbackRunner<R> & SyncIteratorRunner<R> = {
@@ -322,6 +345,11 @@ export class Interpreter<R> {
     trace?: TraceHook<R>,
     source = "",
     traceStatements = true,
+    bindings: Readonly<Record<string, unknown>> = {},
+    exportNames: ReadonlyArray<string> = [],
+    bindingOverrides: ReadonlyMap<Binding, Binding> = new Map(),
+    allowedTools?: ReadonlySet<string>,
+    handles: Array<ToolHandle> = [],
   ) {
     const globalScope = new Map<string, Binding>()
     this.scopes = new ScopeStack([globalScope])
@@ -333,9 +361,13 @@ export class Interpreter<R> {
     this.trace = trace
     this.source = source
     this.traceStatements = traceStatements
+    this.exportNames = exportNames
+    this.bindingOverrides = bindingOverrides
+    this.allowedTools = allowedTools
+    this.handles = handles
     globalScope.set("tools", { mutable: false, value: new ToolReference([]) })
+    globalScope.set("tool", { mutable: false, value: new ToolNamespace() })
     globalScope.set("search", { mutable: false, value: new SearchFunction() })
-    globalScope.set("Promise", { mutable: false, value: new PromiseNamespace() })
     globalScope.set("Symbol", { mutable: false, value: new SymbolNamespace() })
     globalScope.set("undefined", { mutable: false, value: undefined })
     globalScope.set("Object", { mutable: false, value: new GlobalNamespace("Object") })
@@ -365,9 +397,12 @@ export class Interpreter<R> {
     }
     globalScope.set("NaN", { mutable: false, value: NaN })
     globalScope.set("Infinity", { mutable: false, value: Infinity })
+    this.scopes.push(
+      new Map(Object.entries(bindings).map(([name, value]) => [name, { mutable: false, value, initialized: true }])),
+    )
   }
 
-  run(program: ProgramNode): Effect.Effect<unknown, unknown, R> {
+  run(program: ProgramNode): Effect.Effect<{ value: unknown; exports: Record<string, unknown> }, unknown, R> {
     const self = this
     // Keep top-level declarations separate so they can shadow builtins.
     this.scopes.push()
@@ -392,11 +427,19 @@ export class Interpreter<R> {
         }
       }
 
-      // The implicit async body adopts returned promises before copy-out.
-      value = yield* resolvePromiseValue(self.runner, value, program)
       yield* self.emitTrace({ kind: "return", value: traceValue(value) })
-      return value
-    }).pipe(Effect.ensuring(Effect.sync(() => self.scopes.pop())))
+      return {
+        value,
+        exports: Object.fromEntries(self.exportNames.map((name) => [name, self.scopes.get(name, program)])),
+      }
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          self.scopes.pop()
+          for (const handle of self.handles) handle.close()
+        }),
+      ),
+    )
   }
 
   private emitTrace(event: TraceEvent): Effect.Effect<void, never, R> {
@@ -408,12 +451,12 @@ export class Interpreter<R> {
     return traceSource(this.source, node, fallback)
   }
 
-  // Fork at the call site so admission and hooks occur when the call is made.
-  private createToolCallPromise(
-    path: ReadonlyArray<string>,
-    args: Array<unknown>,
-  ): Effect.Effect<CodeModePromise, never, R> {
-    return this.createPromise(Effect.suspend(() => this.executeTool(path, args)))
+  private executeToolCall(path: ReadonlyArray<string>, args: Array<unknown>): Effect.Effect<unknown, unknown, R> {
+    const name = path.join(".")
+    if (this.allowedTools !== undefined && !this.allowedTools.has(name)) {
+      throw new ToolRuntimeError("UnknownTool", `Tool handle does not declare capability '${name}'.`)
+    }
+    return Effect.suspend(() => this.executeTool(path, args))
   }
 
   private createPromise(effect: Effect.Effect<unknown, unknown, R>): Effect.Effect<CodeModePromise, never, R> {
@@ -1388,6 +1431,7 @@ export class Interpreter<R> {
     if (key === "length") return source.length
     if (typeof key === "number") return source[key]
     if (Object.hasOwn(source, key)) return Reflect.get(source, key)
+    if (typeof key === "string" && mutatingArrayMethods.has(key)) throw immutableMethod(key)
     if (typeof key === "string" && arrayMethods.has(key)) return new IntrinsicReference(source, key)
     return undefined
   }
@@ -2003,7 +2047,7 @@ export class Interpreter<R> {
     return Effect.gen(function* () {
       if (callable instanceof ToolReference) {
         if (callable.path.length === 0) throw new InterpreterRuntimeError("The tools root is not callable.", callee)
-        return yield* self.createToolCallPromise(callable.path, args)
+        return yield* self.executeToolCall(callable.path, args)
       }
       if (callable instanceof PromiseMethodReference) {
         return yield* invokePromiseMethod(self.runner, self.promises, callable, args, node)
@@ -2014,6 +2058,7 @@ export class Interpreter<R> {
       if (callable instanceof CodeModeFunction) {
         return yield* self.invokeFunction(callable, args, traceStatements)
       }
+      if (callable instanceof ToolDefineReference) return yield* self.defineTool(args, node)
       if (callable instanceof GeneratorMethodReference) {
         if (callable.kind === "iterator") return callable.generator
         const requested = callable.generator.request(callable.kind, args[0], node) as Effect.Effect<unknown, unknown, R>
@@ -2114,6 +2159,47 @@ export class Interpreter<R> {
     )
   }
 
+  private defineTool(args: Array<unknown>, node: AstNode): Effect.Effect<ToolHandle, unknown, R> {
+    const self = this
+    return Effect.gen(function* () {
+      if (args.length !== 1 || !isRecord(args[0])) {
+        throw new InterpreterRuntimeError("tool.define(...) expects one definition object.", node).as("TypeError")
+      }
+      const definition = args[0]
+      if (typeof definition.name !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(definition.name)) {
+        throw new InterpreterRuntimeError("Tool handles require a valid name.", node).as("TypeError")
+      }
+      if (typeof definition.description !== "string") {
+        throw new InterpreterRuntimeError("Tool handles require a description.", node).as("TypeError")
+      }
+      if (!isJsonSchema(definition.inputSchema) || !isJsonSchema(definition.outputSchema)) {
+        throw new InterpreterRuntimeError("Tool handles require inputSchema and outputSchema objects.", node).as(
+          "TypeError",
+        )
+      }
+      if (!(definition.execute instanceof CodeModeFunction)) {
+        throw new InterpreterRuntimeError("Tool handles require a synchronous execute function.", node).as("TypeError")
+      }
+      const execute = definition.execute
+      const capabilities = collectToolCapabilities(execute.body)
+      const bindings = snapshotBindings(execute)
+      const context = yield* Effect.context<R>()
+      const handle = new ToolHandle(
+        {
+          name: definition.name,
+          description: definition.description,
+          inputSchema: definition.inputSchema,
+          outputSchema: definition.outputSchema,
+          capabilities,
+        },
+        (input) =>
+          self.invokeFunction(execute, [input], false, bindings, new Set(capabilities)).pipe(Effect.provide(context)),
+      )
+      self.handles.push(handle)
+      return handle
+    })
+  }
+
   private invokeConsole(name: string, args: Array<unknown>, node: AstNode): Effect.Effect<undefined, never, R> {
     if (!consoleMethods.has(name)) throw new InterpreterRuntimeError(`console.${name} is not available.`, node)
     const message = formatConsoleMessage(name, args)
@@ -2151,6 +2237,8 @@ export class Interpreter<R> {
     fn: CodeModeFunction,
     args: Array<unknown>,
     traceStatements = this.traceStatements,
+    bindingOverrides = this.bindingOverrides,
+    allowedTools = this.allowedTools,
   ): Effect.Effect<unknown, unknown, R> {
     const invocation = new Interpreter(
       this.executeTool,
@@ -2161,8 +2249,13 @@ export class Interpreter<R> {
       this.trace,
       this.source,
       traceStatements,
+      {},
+      [],
+      bindingOverrides,
+      allowedTools,
+      this.handles,
     )
-    invocation.scopes = new ScopeStack([...fn.capturedScopes, new Map()])
+    invocation.scopes = new ScopeStack([...fn.capturedScopes, new Map()], bindingOverrides)
     const run = Effect.gen(function* () {
       // Seed all parameters first so defaults cannot fall through to same-named outer bindings.
       const paramScope = invocation.scopes.current()
@@ -2588,6 +2681,7 @@ export class Interpreter<R> {
     | GlobalMethodReference
     | JsonMethodReference
     | GeneratorMethodReference
+    | ToolDefineReference
     | ComputedValue
     | typeof OptionalShortCircuit
     | undefined,
@@ -2627,6 +2721,11 @@ export class Interpreter<R> {
         )
       }
 
+      if (objectValue instanceof ToolNamespace) {
+        if (key === "define") return new ToolDefineReference()
+        return new ComputedValue(undefined)
+      }
+
       if (objectValue instanceof SymbolNamespace) {
         if (key === "asyncIterator") return new ComputedValue(AsyncIteratorSymbol)
         if (key === "iterator") return new ComputedValue(IteratorSymbol)
@@ -2638,6 +2737,7 @@ export class Interpreter<R> {
           throw new InterpreterRuntimeError(`${objectValue.name}.${key} is not available.`, propertyNode)
         }
         if (typeof key !== "string") return new ComputedValue(undefined)
+        if (objectValue.name === "Object" && key === "assign") throw immutableMethod(key, propertyNode)
         if (objectValue.name === "Math" && mathConstants.has(key)) {
           return new ComputedValue((Math as unknown as Record<string, number>)[key])
         }
@@ -2683,6 +2783,7 @@ export class Interpreter<R> {
       }
 
       if (objectValue instanceof CodeModeDate) {
+        if (typeof key === "string" && key.startsWith("set")) throw immutableMethod(key, propertyNode)
         if (typeof key === "string" && dateMethods.has(key)) return new IntrinsicReference(objectValue, key)
         return new ComputedValue(undefined)
       }
@@ -2696,11 +2797,13 @@ export class Interpreter<R> {
       }
       if (objectValue instanceof CodeModeMap) {
         if (key === "size") return new ComputedValue(objectValue.map.size)
+        if (typeof key === "string" && mutatingMapMethods.has(key)) throw immutableMethod(key, propertyNode)
         if (typeof key === "string" && mapMethods.has(key)) return new IntrinsicReference(objectValue, key)
         return new ComputedValue(undefined)
       }
       if (objectValue instanceof CodeModeSet) {
         if (key === "size") return new ComputedValue(objectValue.set.size)
+        if (typeof key === "string" && mutatingSetMethods.has(key)) throw immutableMethod(key, propertyNode)
         if (typeof key === "string" && setMethods.has(key)) return new IntrinsicReference(objectValue, key)
         return new ComputedValue(undefined)
       }
@@ -2714,6 +2817,7 @@ export class Interpreter<R> {
       }
       if (objectValue instanceof CodeModeURLSearchParams) {
         if (key === "size") return new ComputedValue(objectValue.params.size)
+        if (typeof key === "string" && mutatingURLSearchParamsMethods.has(key)) throw immutableMethod(key, propertyNode)
         if (typeof key === "string" && urlSearchParamsMethods.has(key)) {
           return new IntrinsicReference(objectValue, key)
         }
@@ -2764,6 +2868,7 @@ export class Interpreter<R> {
       if (Array.isArray(objectValue)) {
         if (operation === "delete") return { target: objectValue, key }
         const index = typeof key === "symbol" ? undefined : parseArrayIndex(key)
+        if (typeof key === "string" && mutatingArrayMethods.has(key)) throw immutableMethod(key, propertyNode)
         if (key !== "length" && !(typeof key === "string" && arrayMethods.has(key)) && index === undefined) {
           if (typeof key === "string" && Object.hasOwn(objectValue, key)) {
             return new ComputedValue((objectValue as Record<string, unknown> & Array<unknown>)[key])
@@ -2906,4 +3011,87 @@ export class Interpreter<R> {
       node,
     )
   }
+}
+
+function isJsonSchema(value: unknown): value is ToolHandle["definition"]["inputSchema"] {
+  return isRecord(value)
+}
+
+function collectToolCapabilities(node: AstNode) {
+  const capabilities = new Set<string>()
+  const visit = (current: AstNode): void => {
+    if (current.type === "CallExpression") {
+      const callee = current.callee
+      if (isRecord(callee) && typeof callee.type === "string") {
+        const path = staticToolPath(callee as AstNode)
+        if (path?.length) capabilities.add(path.join("."))
+      }
+    }
+    for (const [key, value] of Object.entries(current)) {
+      if (key === "loc") continue
+      if (Array.isArray(value)) {
+        for (const item of value) if (isRecord(item) && typeof item.type === "string") visit(item as AstNode)
+        continue
+      }
+      if (isRecord(value) && typeof value.type === "string") visit(value as AstNode)
+    }
+  }
+  visit(node)
+  return [...capabilities].sort()
+}
+
+function snapshotBindings(fn: CodeModeFunction) {
+  const overrides = new Map<Binding, Binding>()
+  const visited = new Set<object>()
+  const visitFunction = (current: CodeModeFunction): void => {
+    if (visited.has(current)) return
+    visited.add(current)
+    for (const scope of current.capturedScopes) {
+      for (const binding of scope.values()) {
+        if (!overrides.has(binding)) overrides.set(binding, { ...binding, mutable: false })
+        visitValue(binding.value)
+      }
+    }
+  }
+  const visitValue = (value: unknown): void => {
+    if (value instanceof CodeModeFunction) {
+      visitFunction(value)
+      return
+    }
+    if (value === null || typeof value !== "object" || visited.has(value)) return
+    visited.add(value)
+    if (value instanceof CodeModeMap) {
+      for (const [key, item] of value.map) {
+        visitValue(key)
+        visitValue(item)
+      }
+      return
+    }
+    if (value instanceof CodeModeSet) {
+      for (const item of value.set) visitValue(item)
+      return
+    }
+    for (const key of Reflect.ownKeys(value)) visitValue(Reflect.get(value, key))
+  }
+  visitFunction(fn)
+  return overrides
+}
+
+function immutableMethod(name: string, node?: AstNode) {
+  return new InterpreterRuntimeError(
+    `Mutating method '${name}' is not supported; arrays and objects are immutable.`,
+    node,
+    "UnsupportedSyntax",
+  )
+}
+
+function staticToolPath(node: AstNode): ReadonlyArray<string> | undefined {
+  if (node.type === "Identifier") return node.name === "tools" ? [] : undefined
+  if (node.type !== "MemberExpression" || node.optional === true || !isRecord(node.object)) return
+  const parent = staticToolPath(node.object as AstNode)
+  if (parent === undefined || !isRecord(node.property)) return
+  if (node.computed !== true && node.property.type === "Identifier" && typeof node.property.name === "string")
+    return [...parent, node.property.name]
+  if (node.computed === true && node.property.type === "Literal" && typeof node.property.value === "string")
+    return [...parent, node.property.value]
 }

@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect"
+import type { Program } from "./compiler.js"
 import { executeWithLimits } from "./interpreter/execute.js"
 import { type Services, type ToolDescription, ToolRuntime } from "./tool-runtime.js"
 import type { Tools } from "./tools.js"
@@ -13,10 +14,7 @@ export { searchSignature, toolExpression } from "./tool-runtime.js"
 /** Resource budgets enforced independently during each CodeMode program execution. */
 export type ExecutionLimits = {
   /**
-   * Wall-clock milliseconds of program work before interruption. Time spent
-   * awaiting tool calls does not count: host tools own their wait policies (user
-   * questions, permission prompts), so a pending call is never interrupted by
-   * this deadline. Result delivery waits for tool cleanup.
+   * Wall-clock milliseconds before the activation and any in-flight tool call are interrupted.
    * No default: absent means no timeout.
    */
   readonly timeoutMs?: number
@@ -27,12 +25,15 @@ export type ExecutionLimits = {
    * truncation notices and host formatting are additional.
    */
   readonly maxOutputBytes?: number
+  /** Maximum UTF-8 bytes retained from captured console logs. Defaults to maxOutputBytes. */
+  readonly maxLogBytes?: number
 }
 
 export type ResolvedExecutionLimits = {
   readonly timeoutMs: number | undefined
   readonly maxToolCalls: number | undefined
   readonly maxOutputBytes: number | undefined
+  readonly maxLogBytes: number | undefined
 }
 
 /** Options for one CodeMode execution. */
@@ -41,6 +42,10 @@ export type ExecuteOptions<Provided extends Record<string, unknown> = {}> = {
   code: string
   /** Explicit tools exposed to the program as `tools`. */
   tools?: Provided & Tools<Services<Provided>>
+  /** Immutable notebook values visible to this activation. */
+  bindings?: Readonly<Record<string, DataValue>>
+  /** Precompiled program. Hosts persist this with its version for resumable activations. */
+  program?: Program
   /** Per-execution overrides for the default resource limits. */
   limits?: ExecutionLimits
   /** Observes decoded tool input immediately before tool execution. */
@@ -72,6 +77,7 @@ export const DiagnosticKind = Schema.Literals([
   "TimeoutExceeded",
   "ToolFailure",
   "ExecutionFailure",
+  "RevisionConflict",
   "Truncated",
 ])
 /** Stable categories produced by program, schema, tool, limit, and truncation diagnostics. */
@@ -94,6 +100,7 @@ export const Success = Schema.Struct({
   logs: Schema.optionalKey(Schema.Array(Schema.String)),
   truncated: Schema.optionalKey(Schema.Boolean),
   toolCalls: Schema.Array(ToolCallSchema),
+  exports: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)),
 })
 /** Successful execution after the result has crossed the plain-data boundary. */
 export type Success = typeof Success.Type
@@ -117,7 +124,10 @@ export type Result = typeof Result.Type
 export type Runtime<R = never> = {
   readonly catalog: () => ReadonlyArray<ToolDescription>
   readonly execute: (code: string) => Effect.Effect<Result, never, R>
+  readonly executeCompiled: (program: Program) => Effect.Effect<Result, never, R>
 }
+
+export { compile, IR_VERSION, type Program } from "./compiler.js"
 
 const validateLimit = (name: keyof ExecutionLimits, value: number | undefined, minimum: number): number | undefined => {
   if (value !== undefined && (!Number.isSafeInteger(value) || value < minimum)) {
@@ -130,6 +140,7 @@ const resolveExecutionLimits = (limits?: ExecutionLimits): ResolvedExecutionLimi
   timeoutMs: validateLimit("timeoutMs", limits?.timeoutMs, 1),
   maxToolCalls: validateLimit("maxToolCalls", limits?.maxToolCalls, 0),
   maxOutputBytes: validateLimit("maxOutputBytes", limits?.maxOutputBytes, 0),
+  maxLogBytes: validateLimit("maxLogBytes", limits?.maxLogBytes, 0),
 })
 
 /** Executes one Effect-native CodeMode program without constructing a reusable runtime. */
@@ -151,5 +162,7 @@ export const make = <const Provided extends Record<string, unknown> = {}>(
   return {
     catalog: () => prepared.catalog,
     execute: (code) => executeWithLimits<Provided>({ ...options, code }, limits, prepared.searchIndex),
+    executeCompiled: (program) =>
+      executeWithLimits<Provided>({ ...options, code: program.source, program }, limits, prepared.searchIndex),
   }
 }

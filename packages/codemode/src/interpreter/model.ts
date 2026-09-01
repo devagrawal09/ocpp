@@ -83,6 +83,14 @@ export class ComputedValue {
 
 export class PromiseNamespace {}
 
+export class ToolNamespace {
+  readonly _tag = "ToolNamespace"
+}
+
+export class ToolDefineReference {
+  readonly _tag = "ToolDefineReference"
+}
+
 export class SymbolNamespace {}
 
 export const AsyncIteratorSymbol: unique symbol = Symbol("codemode.async-iterator")
@@ -169,11 +177,12 @@ export type DiagnosticKind =
   | "TimeoutExceeded"
   | "ToolFailure"
   | "ExecutionFailure"
+  | "RevisionConflict"
 
 export const OptionalShortCircuit: unique symbol = Symbol("codemode.optional-short-circuit")
 
 export const supportedSyntaxMessage =
-  "Supported orchestration syntax: tools.* calls (they return promises - resolve them with await), data literals, destructuring, optional chaining, template literals, conditionals, switch, loops (incl. for...of and for...in over object/array/tools keys), arrow functions, spread, try/catch, array methods (map/filter/find/findIndex/some/every/reduce/flatMap/forEach/sort/slice/concat/indexOf/lastIndexOf/at/flat/reverse/includes/join), string methods (incl. match/matchAll/replace/split with regular expressions), Date/RegExp/Map/Set/URL/URLSearchParams, URI encoding helpers, Object/Math/JSON helpers, captured console.log/warn/error/dir/table, Promise.all/allSettled/race/any/resolve/reject over arrays mixing promises and plain values for parallel tool calls, promise chaining with .then/.catch/.finally, and new Promise((resolve, reject) => ...) construction."
+  "Supported orchestration syntax: direct blocking tools.* calls, immutable data literals and transformations, activation-local let bindings, synchronous functions and callbacks, control flow, captured console output, and direct top-level export const publication. Promise, async, await, generators, dynamic tool dispatch, and aggregate mutation are not supported."
 
 export class InterpreterRuntimeError extends Error {
   readonly node?: AstNode

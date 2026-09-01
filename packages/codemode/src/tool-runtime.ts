@@ -9,6 +9,7 @@ import {
   outputTypeScript,
 } from "./tool-schema.js"
 import { isTool, type Tool } from "./tool.js"
+import { ToolHandle } from "./tool-handle.js"
 import type { Tools } from "./tools.js"
 import {
   CodeModeDate,
@@ -123,8 +124,12 @@ const blockedMemberNames = new Set(["__proto__", "constructor", "prototype"])
 export const isBlockedMember = (name: string): boolean => blockedMemberNames.has(name)
 
 // Checkpoint mode preserves CodeMode values; boundary mode JSON-normalizes them.
-export const copyIn = (value: unknown, label: string, preserveCodeModeValues = false): unknown =>
-  copyBounded(value, label, 0, new Set(), preserveCodeModeValues)
+export const copyIn = (
+  value: unknown,
+  label: string,
+  preserveCodeModeValues = false,
+  preserveToolHandles = false,
+): unknown => copyBounded(value, label, 0, new Set(), preserveCodeModeValues, preserveToolHandles)
 
 const copyBounded = (
   value: unknown,
@@ -132,6 +137,7 @@ const copyBounded = (
   depth: number,
   seen: Set<object>,
   preserveCodeModeValues: boolean,
+  preserveToolHandles: boolean,
 ): unknown => {
   if (depth > MAX_VALUE_DEPTH) {
     throw new ToolRuntimeError("InvalidDataValue", `${label} exceeds the maximum value depth of ${MAX_VALUE_DEPTH}.`)
@@ -156,6 +162,10 @@ const copyBounded = (
       `${label} contains an un-awaited Promise; await tool calls (e.g. \`const result = await tools.ns.tool(...)\`) before using their results.`,
     )
   }
+  if (value instanceof ToolHandle) {
+    if (preserveToolHandles) return value
+    throw new ToolRuntimeError("InvalidDataValue", `${label} contains an opaque tool handle.`)
+  }
 
   if (preserveCodeModeValues) {
     if (
@@ -173,13 +183,17 @@ const copyBounded = (
     if (value instanceof Map) {
       const wrapped = new CodeModeMap()
       for (const [key, item] of value.entries()) {
-        wrapped.map.set(copyBounded(key, label, depth + 1, seen, true), copyBounded(item, label, depth + 1, seen, true))
+        wrapped.map.set(
+          copyBounded(key, label, depth + 1, seen, true, preserveToolHandles),
+          copyBounded(item, label, depth + 1, seen, true, preserveToolHandles),
+        )
       }
       return wrapped
     }
     if (value instanceof Set) {
       const wrapped = new CodeModeSet()
-      for (const item of value.values()) wrapped.set.add(copyBounded(item, label, depth + 1, seen, true))
+      for (const item of value.values())
+        wrapped.set.add(copyBounded(item, label, depth + 1, seen, true, preserveToolHandles))
       return wrapped
     }
     if (value instanceof URL) return new CodeModeURL(new URL(value.href))
@@ -214,7 +228,9 @@ const copyBounded = (
   seen.add(value)
 
   if (Array.isArray(value)) {
-    const copied = value.map((item) => copyBounded(item, label, depth + 1, seen, preserveCodeModeValues))
+    const copied = value.map((item) =>
+      copyBounded(item, label, depth + 1, seen, preserveCodeModeValues, preserveToolHandles),
+    )
     if (preserveCodeModeValues) {
       // Checkpoint copies retain array metadata that boundary copies omit.
       for (const [key, item] of Object.entries(value)) {
@@ -222,7 +238,7 @@ const copyBounded = (
         if (isBlockedMember(key)) {
           throw new ToolRuntimeError("InvalidDataValue", `${label} contains blocked property '${key}'.`)
         }
-        Reflect.set(copied, key, copyBounded(item, label, depth + 1, seen, true))
+        Reflect.set(copied, key, copyBounded(item, label, depth + 1, seen, true, preserveToolHandles))
       }
     }
     seen.delete(value)
@@ -239,7 +255,7 @@ const copyBounded = (
     if (isBlockedMember(key)) {
       throw new ToolRuntimeError("InvalidDataValue", `${label} contains blocked property '${key}'.`)
     }
-    copied[key] = copyBounded(item, label, depth + 1, seen, preserveCodeModeValues)
+    copied[key] = copyBounded(item, label, depth + 1, seen, preserveCodeModeValues, preserveToolHandles)
   }
   seen.delete(value)
   return copied
@@ -251,7 +267,8 @@ const copyBounded = (
 // one, into null: use it for program results, where the consumer must never see undefined.
 export type CopyOutMode = "json" | "nullify"
 
-export const copyOut = (value: unknown, mode: CopyOutMode): unknown => {
+export const copyOut = (value: unknown, mode: CopyOutMode, preserveToolHandles = false): unknown => {
+  if (value instanceof ToolHandle && preserveToolHandles) return value
   if (value === undefined && mode === "nullify") return null
   if (typeof value === "number" && !Number.isFinite(value)) {
     return null
@@ -259,7 +276,7 @@ export const copyOut = (value: unknown, mode: CopyOutMode): unknown => {
   if (Array.isArray(value)) {
     // Array.from densifies holes so sparse arrays normalize at the boundary like JSON does.
     return Array.from(value, (item) => {
-      const copied = copyOut(item, mode)
+      const copied = copyOut(item, mode, preserveToolHandles)
       return copied === undefined && mode === "json" ? null : copied
     })
   }
@@ -267,7 +284,7 @@ export const copyOut = (value: unknown, mode: CopyOutMode): unknown => {
   if (value !== null && typeof value === "object" && !(value instanceof ToolReference)) {
     return Object.fromEntries(
       Object.entries(value)
-        .map(([key, item]) => [key, copyOut(item, mode)] as const)
+        .map(([key, item]) => [key, copyOut(item, mode, preserveToolHandles)] as const)
         .filter(([, item]) => !(item === undefined && mode === "json")),
     )
   }
@@ -314,7 +331,7 @@ const flattenTools = <R>(
 const describeTool = <R>(path: string, tool: Tool<R>): ToolDescription => ({
   path,
   description: tool.description,
-  signature: `${toolExpression(path)}(input: ${inputTypeScript(tool, true)}): Promise<${outputTypeScript(tool, true)}>`,
+  signature: `${toolExpression(path)}(input: ${inputTypeScript(tool, true)}): ${outputTypeScript(tool, true)}`,
 })
 
 // Discovery bytes are durable instructions, so order only after canonical-path collisions settle.
@@ -356,6 +373,7 @@ const makeSearchTool = (searchIndex: ReadonlyArray<SearchEntry>): Tool => ({
   description: "Search available tools",
   input: SearchInput,
   output: SearchOutput,
+  acceptsToolHandles: false,
   execute: (input) =>
     Effect.sync(() => {
       const request = input as typeof SearchInput.Type
@@ -569,8 +587,14 @@ export const make = <R>(
     execute: (path, args) =>
       Effect.gen(function* () {
         const name = canonicalSegments(path).join(".")
-        const externalArgs = args.map((arg) => copyOut(copyIn(arg, `Arguments for tool '${name}'`), "json"))
         const tool = resolve(root, path)
+        const externalArgs = args.map((arg) =>
+          copyOut(
+            copyIn(arg, `Arguments for tool '${name}'`, false, tool.acceptsToolHandles),
+            "json",
+            tool.acceptsToolHandles,
+          ),
+        )
         return yield* executeTool(name, tool, externalArgs)
       }),
   }

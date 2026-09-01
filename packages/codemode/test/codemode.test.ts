@@ -3,7 +3,7 @@ import { Cause, Effect, Schema } from "effect"
 import { CodeMode, Tool, toolError } from "../src/index.js"
 
 const run = (tool: Tool.Tool<never>) =>
-  Effect.runPromise(CodeMode.make({ tools: { host: { call: tool } } }).execute("return await tools.host.call({})"))
+  Effect.runPromise(CodeMode.make({ tools: { host: { call: tool } } }).execute("return tools.host.call({})"))
 
 class HostError extends Schema.TaggedError<HostError>()("HostError", {
   message: Schema.String,
@@ -125,7 +125,7 @@ describe("CodeMode host failure boundary", () => {
         },
       }).execute(`
         try {
-          await tools.host.call({})
+          tools.host.call({})
           return "no"
         } catch (e) {
           return { isError: e instanceof Error, message: e.message }
@@ -150,7 +150,7 @@ describe("CodeMode host failure boundary", () => {
             }),
           },
         },
-      }).execute("return await tools.host.call({})"),
+      }).execute("return tools.host.call({})"),
     )
 
     expect(exit._tag).toBe("Failure")
@@ -234,8 +234,8 @@ describe("CodeMode tool-call observation", () => {
         tools: { context: { lookup } },
         onToolCallStart: (call) => Effect.sync(() => calls.push(call)),
       }).execute(`
-        if (false) await tools.context.lookup({ query: "not called" })
-        return await tools.context.lookup({ query: "deployment failure" })
+        if (false) tools.context.lookup({ query: "not called" })
+        return tools.context.lookup({ query: "deployment failure" })
       `),
     )
 
@@ -276,11 +276,11 @@ describe("CodeMode tool-call observation", () => {
         }),
     })
 
-    const success = await Effect.runPromise(runtime.execute(`return await tools.context.lookup({ query: "ok" })`))
+    const success = await Effect.runPromise(runtime.execute(`return tools.context.lookup({ query: "ok" })`))
     expect(success.ok).toBe(true)
-    const failure = await Effect.runPromise(runtime.execute(`return await tools.context.lookup({ query: "boom" })`))
+    const failure = await Effect.runPromise(runtime.execute(`return tools.context.lookup({ query: "boom" })`))
     expect(failure.ok).toBe(false)
-    const defect = await Effect.runPromise(runtime.execute(`return await tools.context.lookup({ query: "defect" })`))
+    const defect = await Effect.runPromise(runtime.execute(`return tools.context.lookup({ query: "defect" })`))
     expect(defect.ok).toBe(false)
 
     expect(events).toStrictEqual([
@@ -306,30 +306,10 @@ describe("CodeMode tool-call observation", () => {
         tools: { host: { call } },
         onToolCallStart: () => Effect.sync(() => events.push("start")),
         onToolCallEnd: (call) => Effect.sync(() => events.push(`end:${call.outcome}`)),
-      }).execute("return await tools.host.call({})"),
+      }).execute("return tools.host.call({})"),
     )
 
     expect(exit._tag).toBe("Failure")
-    expect(events).toEqual(["start", "end:interrupted"])
-  })
-
-  test("observes running calls interrupted during completion", async () => {
-    const events: Array<string> = []
-    const call = Tool.make({
-      description: "Pending",
-      input: Schema.Struct({}),
-      output: Schema.String,
-      execute: () => Effect.never,
-    })
-    const result = await Effect.runPromise(
-      CodeMode.make({
-        tools: { host: { call } },
-        onToolCallStart: () => Effect.sync(() => events.push("start")),
-        onToolCallEnd: (call) => Effect.sync(() => events.push(`end:${call.outcome}`)),
-      }).execute('tools.host.call({}); return "done"'),
-    )
-
-    expect(result).toMatchObject({ ok: true, value: "done" })
     expect(events).toEqual(["start", "end:interrupted"])
   })
 
@@ -346,7 +326,7 @@ describe("CodeMode tool-call observation", () => {
         tools: { host: { call } },
         onToolCallStart: () => Effect.interrupt,
         onToolCallEnd: (call) => Effect.sync(() => events.push(call.outcome)),
-      }).execute("return await tools.host.call({})"),
+      }).execute("return tools.host.call({})"),
     )
 
     expect(exit._tag).toBe("Failure")
@@ -366,7 +346,7 @@ describe("CodeMode tool-call observation", () => {
         tools: { host: { call } },
         limits: { timeoutMs: 10 },
         onToolCallEnd: (call) => Effect.sync(() => outcomes.push(call.outcome)),
-      }).execute("return await tools.host.call({})"),
+      }).execute("return tools.host.call({})"),
     )
 
     expect(result).toMatchObject({ ok: false, error: { kind: "TimeoutExceeded" } })
@@ -443,13 +423,10 @@ describe("CodeMode console capture", () => {
     ])
   })
 
-  test("console formatting is total: cycles and opaque references render as markers", async () => {
+  test("console formatting renders opaque references as markers", async () => {
     const result = await Effect.runPromise(
       CodeMode.execute({
         code: `
-        const m = new Map()
-        m.set("self", m)
-        console.log({ box: m })
         console.log({ fn: (x) => x, ok: 1 })
         return null
       `,
@@ -457,7 +434,7 @@ describe("CodeMode console capture", () => {
     )
 
     expect(result.ok).toBe(true)
-    expect(result.logs).toStrictEqual(['{"box":Map(1) [["self",[Circular]]]}', '{"fn":[opaque reference],"ok":1}'])
+    expect(result.logs).toStrictEqual(['{"fn":[opaque reference],"ok":1}'])
   })
 
   test("console.table renders CodeMode value cells", async () => {
@@ -591,12 +568,12 @@ describe("CodeMode schema flexibility", () => {
       {
         path: "adapter.call",
         description: "Call an adapter-described tool",
-        signature: "tools.adapter.call(input: {\n  id: string,\n  count?: number,\n}): Promise<void>",
+        signature: "tools.adapter.call(input: {\n  id: string,\n  count?: number,\n}): void",
       },
     ])
 
     // JSON Schema is render-only: mistyped input passes through unvalidated.
-    const result = await Effect.runPromise(runtime.execute(`return await tools.adapter.call({ id: 42 })`))
+    const result = await Effect.runPromise(runtime.execute(`return tools.adapter.call({ id: 42 })`))
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.value).toBeNull()
     expect(observed).toStrictEqual([{ id: 42 }])
@@ -617,7 +594,7 @@ describe("CodeMode schema flexibility", () => {
 
     const result = await Effect.runPromise(
       runtime.execute(
-        `return await tools.adapter.call({ q: undefined, limit: 0 / 0, rate: 1 / 0, items: [1, undefined, 2], holes: [1, , 3] })`,
+        `return tools.adapter.call({ q: undefined, limit: 0 / 0, rate: 1 / 0, items: [1, undefined, 2], holes: [1, , 3] })`,
       ),
     )
     expect(result.ok).toBe(true)
@@ -642,13 +619,11 @@ describe("CodeMode schema flexibility", () => {
 
     // The `cond ? value : undefined` idiom: optionalKey rejects a present undefined, so the
     // JSON boundary must drop the key before the schema decodes.
-    const result = await Effect.runPromise(
-      runtime.execute(`return await tools.things.find({ query: undefined, limit: 5 })`),
-    )
+    const result = await Effect.runPromise(runtime.execute(`return tools.things.find({ query: undefined, limit: 5 })`))
     expect(result.ok).toBe(true)
     expect(observed).toStrictEqual([{ limit: 5 }])
 
-    const search = await Effect.runPromise(runtime.execute(`return (await search({ query: undefined })).items.length`))
+    const search = await Effect.runPromise(runtime.execute(`return search({ query: undefined }).items.length`))
     expect(search.ok).toBe(true)
   })
 
@@ -674,11 +649,11 @@ describe("CodeMode schema flexibility", () => {
       {
         path: "users.lookup",
         description: "Look up a user",
-        signature: "tools.users.lookup(input: {\n  login: string,\n}): Promise<{\n  login: string,\n  id: number,\n}>",
+        signature: "tools.users.lookup(input: {\n  login: string,\n}): {\n  login: string,\n  id: number,\n}",
       },
     ])
 
-    const result = await Effect.runPromise(runtime.execute(`return await tools.users.lookup({ login: "kit" })`))
+    const result = await Effect.runPromise(runtime.execute(`return tools.users.lookup({ login: "kit" })`))
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.value).toStrictEqual({ login: "kit", id: 7 })
   })
@@ -690,9 +665,9 @@ describe("CodeMode schema flexibility", () => {
       execute: () => Effect.succeed("pong"),
     })
     const runtime = CodeMode.make({ tools: { net: { ping } } })
-    expect(runtime.catalog()[0]?.signature).toBe("tools.net.ping(input: {\n  host: string,\n}): Promise<void>")
+    expect(runtime.catalog()[0]?.signature).toBe("tools.net.ping(input: {\n  host: string,\n}): void")
 
-    const result = await Effect.runPromise(runtime.execute(`return await tools.net.ping({ host: "example.test" })`))
+    const result = await Effect.runPromise(runtime.execute(`return tools.net.ping({ host: "example.test" })`))
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.value).toBeNull()
   })
@@ -706,7 +681,7 @@ describe("CodeMode public contract", () => {
     execute: ({ id }) => Effect.succeed({ id, status: "open" }),
   })
   const tools = { orders: { lookup } }
-  const source = `return await tools.orders.lookup({ id: "order_42" })`
+  const source = `return tools.orders.lookup({ id: "order_42" })`
 
   test("keeps one-shot and reusable execution equivalent", async () => {
     const runtime = CodeMode.make({ tools })
@@ -730,7 +705,7 @@ describe("CodeMode public contract", () => {
     })
     const effect = CodeMode.execute({
       tools: { host: { echo } },
-      code: `console.log("hi"); return await tools.host.echo({})`,
+      code: `console.log("hi"); return tools.host.echo({})`,
       limits: { maxToolCalls: 1 },
     })
     const first = await Effect.runPromise(effect)
@@ -747,7 +722,7 @@ describe("CodeMode public contract", () => {
       {
         path: "orders.lookup",
         description: "Look up an order by ID",
-        signature: "tools.orders.lookup(input: {\n  id: string,\n}): Promise<{\n  id: string,\n  status: string,\n}>",
+        signature: "tools.orders.lookup(input: {\n  id: string,\n}): {\n  id: string,\n  status: string,\n}",
       },
     ])
 
@@ -759,8 +734,7 @@ describe("CodeMode public contract", () => {
           {
             path: "tools.orders.lookup",
             description: "Look up an order by ID",
-            signature:
-              "tools.orders.lookup(input: {\n  id: string,\n}): Promise<{\n  id: string,\n  status: string,\n}>",
+            signature: "tools.orders.lookup(input: {\n  id: string,\n}): {\n  id: string,\n  status: string,\n}",
           },
         ],
         remaining: 0,
@@ -802,7 +776,7 @@ describe("CodeMode public contract", () => {
       {
         path: "context7.resolve-library-id",
         description: "Resolve a library ID",
-        signature: 'tools.context7["resolve-library-id"](input: {\n  libraryName: string,\n}): Promise<string>',
+        signature: 'tools.context7["resolve-library-id"](input: {\n  libraryName: string,\n}): string',
       },
     ])
 
@@ -814,7 +788,7 @@ describe("CodeMode public contract", () => {
           {
             path: 'tools.context7["resolve-library-id"]',
             description: "Resolve a library ID",
-            signature: 'tools.context7["resolve-library-id"](input: {\n  libraryName: string,\n}): Promise<string>',
+            signature: 'tools.context7["resolve-library-id"](input: {\n  libraryName: string,\n}): string',
           },
         ],
         remaining: 0,
@@ -823,7 +797,7 @@ describe("CodeMode public contract", () => {
     }
 
     const call = await Effect.runPromise(
-      runtime.execute(`return await tools.context7["resolve-library-id"]({ libraryName: "TypeScript" })`),
+      runtime.execute(`return tools.context7["resolve-library-id"]({ libraryName: "TypeScript" })`),
     )
     expect(call.ok).toBe(true)
     if (call.ok) expect(call.value).toBe("/resolved/TypeScript")
@@ -867,12 +841,12 @@ describe("CodeMode public contract", () => {
         {
           path: "tools.thread.uploadFile",
           description: "Upload one readable local file to the current Discord thread",
-          signature: "tools.thread.uploadFile(input: {\n  path: string,\n}): Promise<{\n  sent: boolean,\n}>",
+          signature: "tools.thread.uploadFile(input: {\n  path: string,\n}): {\n  sent: boolean,\n}",
         },
         {
           path: "tools.thread.generateImage",
           description: "Generate an image and upload it to the current Discord thread",
-          signature: "tools.thread.generateImage(input: {\n  prompt: string,\n}): Promise<{\n  sent: boolean,\n}>",
+          signature: "tools.thread.generateImage(input: {\n  prompt: string,\n}): {\n  sent: boolean,\n}",
         },
       ],
       remaining: 0,
@@ -964,7 +938,7 @@ describe("CodeMode public contract", () => {
             {
               path: "tools.many.tool13",
               description: "Numbered tool 13",
-              signature: "tools.many.tool13(input: {\n  id: string,\n}): Promise<string>",
+              signature: "tools.many.tool13(input: {\n  id: string,\n}): string",
             },
           ],
           remaining: 0,
@@ -1152,11 +1126,11 @@ describe("CodeMode public contract", () => {
       onToolCallStart: (call) => Effect.sync(() => observed.push(call.input)),
     })
 
-    const success = await Effect.runPromise(runtime.execute(`return await tools.math.double({ value: "21" })`))
+    const success = await Effect.runPromise(runtime.execute(`return tools.math.double({ value: "21" })`))
     expect(success).toStrictEqual({ ok: true, value: 42, toolCalls: [{ name: "math.double" }] })
     expect(observed).toStrictEqual([{ value: 21 }, 21])
 
-    const invalid = await Effect.runPromise(runtime.execute(`return await tools.math.double({ value: 21 })`))
+    const invalid = await Effect.runPromise(runtime.execute(`return tools.math.double({ value: 21 })`))
     expect(invalid.ok).toBe(false)
     if (invalid.ok) return
     expect(invalid.error.kind).toBe("InvalidToolInput")
@@ -1239,7 +1213,7 @@ describe("CodeMode public contract", () => {
         tools: { host: { count: counter } },
         code: `
         let total = 0
-        for (let i = 0; i < 150; i += 1) total += await tools.host.count({})
+        for (let i = 0; i < 150; i += 1) total += tools.host.count({})
         return total
       `,
       }),

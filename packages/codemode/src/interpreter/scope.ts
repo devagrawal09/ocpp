@@ -2,9 +2,11 @@ import { type AstNode, type Binding, InterpreterRuntimeError } from "./model.js"
 
 export class ScopeStack {
   private readonly scopes: Array<Map<string, Binding>>
+  private readonly overrides: ReadonlyMap<Binding, Binding>
 
-  constructor(scopes: Array<Map<string, Binding>>) {
+  constructor(scopes: Array<Map<string, Binding>>, overrides: ReadonlyMap<Binding, Binding> = new Map()) {
     this.scopes = scopes
+    this.overrides = overrides
   }
 
   reserve(name: string, mutable: boolean, node: AstNode): void {
@@ -71,7 +73,7 @@ export class ScopeStack {
       const binding = scope?.get(name)
 
       if (binding) {
-        return binding
+        return this.overrides.get(binding) ?? binding
       }
     }
 
@@ -97,6 +99,6 @@ export class ScopeStack {
   }
 
   capture(): Array<Map<string, Binding>> {
-    return this.scopes.slice()
+    return [...this.scopes]
   }
 }

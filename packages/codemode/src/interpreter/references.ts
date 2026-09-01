@@ -16,8 +16,11 @@ import {
   PromiseNamespace,
   SearchFunction,
   SymbolNamespace,
+  ToolDefineReference,
+  ToolNamespace,
   UriFunction,
 } from "./model.js"
+import { ToolHandle } from "../tool-handle.js"
 import { ToolReference } from "../tool-runtime.js"
 import { isCodeModeValue, CodeModePromise } from "../values.js"
 
@@ -26,6 +29,9 @@ export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof CodeModeGenerator ||
   value instanceof GeneratorMethodReference ||
   value instanceof ToolReference ||
+  value instanceof ToolHandle ||
+  value instanceof ToolNamespace ||
+  value instanceof ToolDefineReference ||
   value instanceof IntrinsicReference ||
   value instanceof GlobalNamespace ||
   value instanceof GlobalMethodReference ||
@@ -121,10 +127,14 @@ export const typeofValue = (value: unknown): string => {
     value instanceof PromiseNamespace ||
     value instanceof PromiseCapabilityFunction ||
     value instanceof ErrorConstructorReference ||
-    value instanceof SymbolNamespace
+    value instanceof SymbolNamespace ||
+    value instanceof ToolDefineReference
   )
     return "function"
-  if (value instanceof UriFunction || value instanceof SearchFunction) return "function"
+  if (value instanceof UriFunction || value instanceof SearchFunction || value instanceof ToolDefineReference)
+    return "function"
+  if (value instanceof ToolHandle) return "object"
+  if (value instanceof ToolNamespace) return "object"
   if (value instanceof ToolReference) return value.path.length > 0 ? "function" : "object"
   if (value instanceof GlobalNamespace) {
     return value.name === "Math" || value.name === "JSON" || value.name === "console" ? "object" : "function"

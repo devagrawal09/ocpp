@@ -1,13 +1,9 @@
-import { parse } from "acorn"
-import { Cause, Deferred, Duration, Effect, Scope } from "effect"
-// #transpile: conditional import — full typescript on node/bun, an identity
-// pass-through on workerd (the compiler is ~11 MiB and can't init there).
-import { transpile } from "#transpile"
+import { Cause, Duration, Effect, Scope } from "effect"
+import { compile, IR_VERSION } from "../compiler.js"
 import type { DataValue, Diagnostic, ExecuteOptions, ResolvedExecutionLimits, Result } from "../codemode.js"
 import { copyIn, copyOut, ToolRuntime, type Services } from "../tool-runtime.js"
 import type { Tools } from "../tools.js"
 import { normalizeError } from "./errors.js"
-import { InterpreterRuntimeError, isRecord, type ProgramNode } from "./model.js"
 import { PromiseRuntime } from "./promises.js"
 import { Interpreter } from "./runtime.js"
 
@@ -23,26 +19,26 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
       toolCalls: [],
     })
   }
+  if (options.program !== undefined && options.program.version !== IR_VERSION) {
+    return Effect.succeed({
+      ok: false,
+      error: {
+        kind: "ExecutionFailure",
+        message: `Compiled program version ${options.program.version} is unsupported; expected ${IR_VERSION}.`,
+      },
+      toolCalls: [],
+    })
+  }
 
   // Allocate execution state inside suspension so reused Effects never share it.
   return Effect.suspend(() => {
-    // The deadline pauses while tool calls are pending: host tools own their wait
-    // policies (user questions, permission prompts, shell timeouts), so awaiting
-    // them must not consume the program budget or interrupt an interactive call.
-    const deadline = limits.timeoutMs === undefined ? undefined : makeToolCallDeadline(limits.timeoutMs)
     const tools = ToolRuntime.make(
       (options.tools ?? {}) as Tools<Services<Provided>>,
       limits.maxToolCalls,
       searchIndex,
       {
-        onToolCallStart: (call) =>
-          deadline === undefined
-            ? (options.onToolCallStart?.(call) ?? Effect.void)
-            : Effect.andThen(deadline.pause, () => options.onToolCallStart?.(call) ?? Effect.void),
-        onToolCallEnd: (call) =>
-          deadline === undefined
-            ? (options.onToolCallEnd?.(call) ?? Effect.void)
-            : Effect.andThen(deadline.resume, () => options.onToolCallEnd?.(call) ?? Effect.void),
+        onToolCallStart: (call) => options.onToolCallStart?.(call) ?? Effect.void,
+        onToolCallEnd: (call) => options.onToolCallEnd?.(call) ?? Effect.void,
       },
     )
     const logs: Array<string> = []
@@ -54,7 +50,7 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
       Scope.make("parallel"),
       (scope) =>
         Effect.gen(function* () {
-          const parsed = parseProgram(options.code)
+          const parsed = options.program ?? compile(options.code)
           const promises = new PromiseRuntime<Services<Provided>>(scope)
           const interpreter = new Interpreter<Services<Provided>>(
             tools.execute,
@@ -64,14 +60,19 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             logs,
             options.onTrace,
             parsed.source,
+            true,
+            options.bindings,
+            parsed.exports,
           )
-          const value = yield* interpreter.run(parsed.program)
-          const result = copyOut(copyIn(value, "Execution result"), "nullify") as DataValue
+          const executed = yield* interpreter.run(parsed.body)
+          const result = copyOut(copyIn(executed.value, "Execution result"), "nullify") as DataValue
+          const exports = copyOut(copyIn(executed.exports, "Execution exports"), "nullify") as Record<string, DataValue>
           returned = { value: result, promises }
           const warnings = yield* promises.interrupt()
           return {
             ok: true,
             value: result,
+            ...(Object.keys(exports).length > 0 ? { exports } : {}),
             ...(warnings.length > 0 ? { warnings } : {}),
             ...logged(),
             toolCalls: tools.calls,
@@ -106,9 +107,9 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
         } satisfies Result
       })
     const operation =
-      deadline === undefined
+      timeoutMs === undefined
         ? base
-        : Effect.flatMap(raceDeadline(deadline.timer, base), (outcome) =>
+        : Effect.flatMap(raceDeadline(Effect.sleep(Duration.millis(timeoutMs)), base), (outcome) =>
             outcome.kind === "expired" ? expired() : Effect.succeed(outcome.value),
           )
 
@@ -124,69 +125,12 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             } satisfies Result),
       ),
       Effect.map((result) =>
-        limits.maxOutputBytes === undefined ? result : boundOutput(result, limits.maxOutputBytes),
+        limits.maxOutputBytes === undefined
+          ? result
+          : boundOutput(result, limits.maxOutputBytes, limits.maxLogBytes ?? limits.maxOutputBytes),
       ),
     )
   })
-}
-
-type ToolCallDeadline = {
-  readonly pause: Effect.Effect<void>
-  readonly resume: Effect.Effect<void>
-  readonly timer: Effect.Effect<void>
-}
-
-// A wall-clock deadline that pauses while tool calls are pending: awaiting a host
-// tool never consumes budget and is never interrupted by the timeout, so
-// interactive tools can block on user input indefinitely. Pauses shift the
-// deadline rather than re-arming a fresh budget per tool call, and the timer only
-// fires while the clock is running (no pending call).
-function makeToolCallDeadline(timeoutMs: number): ToolCallDeadline {
-  const state = {
-    pending: 0,
-    remainingMs: timeoutMs,
-    mark: Date.now(),
-    gate: undefined as Deferred.Deferred<void> | undefined,
-  }
-  const pause = Effect.gen(function* () {
-    const gate = yield* Deferred.make<void>()
-    yield* Effect.sync(() => {
-      state.pending += 1
-      if (state.pending > 1) return
-      const now = Date.now()
-      state.remainingMs -= now - state.mark
-      state.mark = now
-      state.gate = gate
-    })
-  })
-  const resume = Effect.gen(function* () {
-    const gate = yield* Effect.sync(() => {
-      state.pending -= 1
-      if (state.pending > 0) return undefined
-      state.mark = Date.now()
-      const current = state.gate
-      state.gate = undefined
-      return current
-    })
-    if (gate !== undefined) yield* Deferred.succeed(gate, undefined)
-  })
-  const timer = Effect.gen(function* () {
-    while (true) {
-      const snapshot = yield* Effect.sync(() => ({
-        // `gate` is set exactly while a tool call is pending (pause and resume
-        // update both fields in one atomic step).
-        gate: state.gate,
-        left: state.pending > 0 ? state.remainingMs : state.remainingMs - (Date.now() - state.mark),
-      }))
-      if (snapshot.gate !== undefined) {
-        yield* Deferred.await(snapshot.gate)
-        continue
-      }
-      if (snapshot.left <= 0) return
-      yield* Effect.sleep(Duration.millis(snapshot.left))
-    }
-  })
-  return { pause, resume, timer }
 }
 
 // raceFirst interrupts the loser and waits for its interruption, so an expired
@@ -201,31 +145,6 @@ function raceDeadline<A, E, R>(
   )
 }
 
-const parseProgram = (code: string): { readonly program: ProgramNode; readonly source: string } => {
-  const transpiled = transpile(`async function __codemode__() {\n${code}\n}`)
-
-  if (transpiled.error !== undefined) {
-    throw new InterpreterRuntimeError(`Failed to parse TypeScript: ${transpiled.error}`, undefined, "ParseError")
-  }
-
-  const bodyStart = transpiled.outputText.indexOf("{") + 1
-  const bodyEnd = transpiled.outputText.lastIndexOf("}")
-  const executableCode = transpiled.outputText.slice(bodyStart, bodyEnd)
-  const parsed = parse(executableCode, {
-    ecmaVersion: "latest",
-    sourceType: "script",
-    allowReturnOutsideFunction: true,
-    allowAwaitOutsideFunction: true,
-    locations: true,
-  }) as unknown
-
-  if (!isRecord(parsed) || parsed.type !== "Program" || !Array.isArray(parsed.body)) {
-    throw new InterpreterRuntimeError("Failed to parse script as a Program node.")
-  }
-
-  return { program: parsed as ProgramNode, source: executableCode }
-}
-
 const utf8ByteLength = (value: string): number => new TextEncoder().encode(value).byteLength
 
 // Drop a replacement character produced by truncating inside a UTF-8 sequence.
@@ -237,7 +156,7 @@ const utf8Truncate = (value: string, maxBytes: number): string => {
 }
 
 // Warnings have a separate budget so result data cannot starve diagnostics.
-const boundOutput = (result: Result, maxOutputBytes: number): Result => {
+const boundOutput = (result: Result, maxOutputBytes: number, maxLogBytes: number): Result => {
   let truncated = false
 
   let value: DataValue = null
@@ -274,7 +193,7 @@ const boundOutput = (result: Result, maxOutputBytes: number): Result => {
 
   const logs = result.logs ?? []
   const kept: Array<string> = []
-  const logBudget = Math.max(0, maxOutputBytes - valueBytes)
+  const logBudget = Math.min(maxLogBytes, Math.max(0, maxOutputBytes - valueBytes))
   let logBytes = 0
   for (const line of logs) {
     const lineBytes = utf8ByteLength(line) + 1
@@ -294,6 +213,7 @@ const boundOutput = (result: Result, maxOutputBytes: number): Result => {
     ? {
         ok: true,
         value,
+        ...(result.exports ? { exports: result.exports } : {}),
         ...warningsPart,
         ...logsPart,
         truncated: true,

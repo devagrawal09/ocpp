@@ -373,7 +373,7 @@ describe("JSDoc signatures in catalogs and search results", () => {
         "   */",
         "  labels?: Array<string>,",
         '  state?: "open" | "closed",',
-        "}): Promise<unknown>",
+        "}): unknown",
       ].join("\n"),
     )
   })
@@ -388,10 +388,10 @@ describe("JSDoc signatures in catalogs and search results", () => {
           "  /** Order identifier */",
           "  id: string,",
           "  verbose?: boolean,",
-          "}): Promise<{",
+          "}): {",
           "  /** Current order status */",
           "  status: string,",
-          "}>",
+          "}",
         ].join("\n"),
       )
     }
@@ -427,7 +427,7 @@ describe("non-identifier tool paths", () => {
 
   test("catalog signatures use bracket notation for dashed tool names", () => {
     expect(runtime.catalog()[0]?.signature).toBe(
-      'tools.context7["resolve-library-id"](input: {\n  query: string,\n  libraryName: string,\n}): Promise<unknown>',
+      'tools.context7["resolve-library-id"](input: {\n  query: string,\n  libraryName: string,\n}): unknown',
     )
   })
 

@@ -35,6 +35,7 @@ export type Tool<R = never> = {
   readonly description: string
   readonly input: SchemaType
   readonly output: SchemaType | undefined
+  readonly acceptsToolHandles: boolean
   readonly execute: (input: unknown, call?: ToolCallContext) => Effect.Effect<unknown, unknown, R>
 }
 
@@ -52,6 +53,8 @@ export type Options<I extends SchemaType, O extends SchemaType | undefined, R = 
   readonly description: string
   readonly input: I
   readonly output?: O
+  /** Allows this in-process host boundary to receive opaque same-activation tool handles. */
+  readonly acceptsToolHandles?: boolean
   readonly execute: (input: InputType<I>, call?: ToolCallContext) => Effect.Effect<ResultType<O>, unknown, R>
 }
 
@@ -77,5 +80,6 @@ export const make = <I extends SchemaType, const O extends SchemaType | undefine
   description: options.description,
   input: options.input,
   output: options.output,
+  acceptsToolHandles: options.acceptsToolHandles === true,
   execute: (input, call) => options.execute(input as InputType<I>, call),
 })

@@ -913,8 +913,6 @@ export type SessionLogOutput =
             readonly assistantMessageID: SessionMessage.ID
             readonly id: string
             readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
-            readonly code: string
-            readonly timeoutMs: number
           }
         }
       | {
@@ -963,7 +961,6 @@ export type SessionLogOutput =
                   | { readonly type: "trace"; readonly kind: "return"; readonly value: string }
                 )
             >
-            readonly output: string
           }
         }
       | {

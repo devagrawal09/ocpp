@@ -799,14 +799,7 @@ export type SessionCodemodeStarted = {
   type: "session.codemode.started"
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
-  data: {
-    sessionID: string
-    assistantMessageID: string
-    id: string
-    executionID: string
-    code: string
-    timeoutMs: number
-  }
+  data: { sessionID: string; assistantMessageID: string; id: string; executionID: string }
 }
 
 export type SessionRetryScheduled = {
@@ -2132,7 +2125,6 @@ export type SessionCodemodeCompleted = {
     id: string
     executionID: string
     events: CodeModeExecutionEntries
-    output: string
   }
 }
 

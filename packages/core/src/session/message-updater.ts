@@ -327,7 +327,6 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             executionID: event.data.executionID,
             executionStatus: "completed",
             events: event.data.events,
-            output: event.data.output,
           })
         })
       },

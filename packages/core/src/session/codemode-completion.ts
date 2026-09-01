@@ -7,7 +7,7 @@ import type { Session } from "../session.js"
 export const deliver = Effect.fnUntraced(function* (
   sessions: Pick<Session.Interface, "message" | "synthetic">,
   jobs: Pick<Job.Interface, "completeBackground">,
-  input: Pick<Job.Info, "id" | "status" | "output" | "error" | "notificationID"> & {
+  input: Pick<Job.Info, "id" | "status" | "notificationID"> & {
     recovery: Extract<Job.Recovery, { kind: "codemode" }>
     resume?: boolean
   },
@@ -20,19 +20,19 @@ export const deliver = Effect.fnUntraced(function* (
     yield* jobs.completeBackground(input.notificationID)
     return
   }
-  const text =
-    input.status === "completed"
-      ? (input.output ?? "Execution completed without a result.")
-      : input.status === "error"
-        ? (input.error ?? "Execution failed")
-        : "Execution cancelled"
+  const state = input.status === "completed" ? "completed" : input.status === "cancelled" ? "cancelled" : "failed"
   yield* sessions.synthetic({
     ...(input.notificationID ? { id: input.notificationID } : {}),
     sessionID: input.recovery.parentSessionID,
     ...(input.resume === false || input.status === "cancelled" ? { resume: false } : {}),
-    description: "Code Mode execution",
-    text: `<codemode executionID="${input.id}" state="${input.status}">\n${text}\n</codemode>`,
-    metadata: { source: "codemode", executionID: input.id, state: input.status },
+    description: "Execution completed",
+    text:
+      "Execution " +
+      input.id +
+      " is " +
+      state +
+      ". Use execution_result with this execution ID to retrieve the durable result.",
+    metadata: { source: "codemode", executionID: input.id, state },
   })
   if (input.notificationID) yield* jobs.completeBackground(input.notificationID)
 })

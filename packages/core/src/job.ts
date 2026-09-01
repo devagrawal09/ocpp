@@ -42,8 +42,6 @@ const Background = Schema.Struct({
       parentSessionID: SessionSchema.ID,
       assistantMessageID: SessionMessage.ID,
       toolCallID: Schema.String,
-      code: Schema.String,
-      timeoutMs: Schema.optionalKey(Schema.Number),
     }),
   ]),
   status: Schema.Literals(["running", "completed", "error", "cancelled"]),

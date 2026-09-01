@@ -5,11 +5,9 @@ import type { Context } from "@opencode-ai/plugin/effect/plugin"
 import { Model } from "@opencode-ai/schema/model"
 import { Deferred, Effect, Schema } from "effect"
 import { Agent } from "../../agent.js"
-import { Bus } from "../../bus.js"
 import { Config } from "../../config.js"
 import { PluginRuntime } from "../../plugin/runtime.js"
 import { Permission } from "../../permission.js"
-import { SessionEvent } from "../../session/event.js"
 import { SessionSchema } from "../../session/schema.js"
 import { Tool } from "../../tool.js"
 import { SubagentCustomTool } from "./subagent-custom.js"
@@ -28,8 +26,8 @@ export const Input = Schema.Struct({
   outputSchema: Schema.optionalKey(SubagentCustomTool.JSONSchema).annotate({
     description: "JSON Schema for a required structured result",
   }),
-  tools: Schema.optionalKey(Schema.Array(SubagentCustomTool.Definition)).annotate({
-    description: "Serializable Code Mode tools available only during this subagent call",
+  tools: Schema.optionalKey(Schema.Array(Schema.Unknown)).annotate({
+    description: "Opaque tool.define(...) handles available only during this subagent call",
   }),
   sessionID: Schema.optionalKey(SessionSchema.ID).annotate({
     description:
@@ -47,7 +45,7 @@ export const description = [
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "The subagent runs to completion and returns its final response.",
-  "Custom tools run with the parent session's Code Mode tools and permissions, not the child agent's restrictions.",
+  "tool.define(...) handles retain only compiler-derived capabilities allowed by the parent activation.",
 ].join("\n")
 
 export const Plugin = {
@@ -55,7 +53,6 @@ export const Plugin = {
   effect: Effect.fn("SubagentTool.Plugin")(function* (ctx: Context) {
     const runtime = yield* PluginRuntime.Service
     const agents = yield* Agent.Service
-    const bus = yield* Bus.Service
     const config = yield* Config.Service
     const permission = yield* Permission.Service
     const tools = yield* Tool.Service
@@ -80,7 +77,7 @@ export const Plugin = {
       .transform((draft) =>
         draft.add({
           name,
-          options: { codemode: false },
+          options: { codemode: "both", acceptsToolHandles: true },
           description,
           input: Input,
           output: Output,
@@ -128,7 +125,7 @@ export const Plugin = {
                   },
                 })
                 .pipe(Effect.mapError((error) => new ToolFailure({ message: `Subagent denied: ${agent.id}`, error })))
-              yield* SubagentCustomTool.validate(input.tools ?? []).pipe(
+              const customTools = yield* SubagentCustomTool.validate(input.tools ?? []).pipe(
                 Effect.mapError((error) => new ToolFailure({ message: error.message, error })),
               )
               if (input.outputSchema !== undefined)
@@ -211,15 +208,8 @@ export const Plugin = {
                     ),
                   ))
 
-              const caller = yield* agents.resolve(context.agent)
-              if (caller === undefined)
-                return yield* new ToolFailure({ message: `Parent agent not found: ${context.agent}` })
-              const parentTools = (yield* tools.registrations(caller.permissions, parent.id)).filter(
-                (tool) => tool.options?.codemode !== false,
-              )
               const submitted =
                 input.outputSchema === undefined ? undefined : yield* Deferred.make<typeof Schema.Json.Type>()
-              const pending = new Map<string, typeof Schema.Json.Type>()
               let accepted = false
               const temporary: Tool.Info[] = [
                 ...(input.outputSchema === undefined
@@ -230,12 +220,12 @@ export const Plugin = {
                         description: "Submit the final structured result. The first valid submission ends this call.",
                         input: input.outputSchema,
                         options: { pinned: true },
-                        execute: (value: unknown, submitContext: Tool.Context) =>
+                        execute: (value: unknown) =>
                           Effect.gen(function* () {
                             if (accepted) return yield* new Tool.Error({ message: "A result was already submitted" })
                             const result = yield* Schema.decodeUnknownEffect(Schema.Json)(value)
                             accepted = true
-                            pending.set(submitContext.id, result)
+                            if (submitted !== undefined) yield* Deferred.succeed(submitted, result)
                             return { content: "Result submitted." }
                           }).pipe(
                             Effect.mapError((error) =>
@@ -246,7 +236,7 @@ export const Plugin = {
                           ),
                       } satisfies Tool.Info,
                     ]),
-                ...SubagentCustomTool.make(input.tools ?? [], parentTools, context),
+                ...SubagentCustomTool.make(customTools),
               ]
               const registration =
                 temporary.length === 0
@@ -258,47 +248,8 @@ export const Plugin = {
                           (error) => new ToolFailure({ message: `Invalid subagent tool: ${error.message}`, error }),
                         ),
                       )
-              const unsubscribe =
-                submitted === undefined
-                  ? undefined
-                  : yield* bus.listen((event) => {
-                      if (!isToolSuccess(event) || event.data.sessionID !== child.id) return Effect.void
-                      const result = pending.get(event.data.id)
-                      if (!pending.has(event.data.id) || result === undefined) return Effect.void
-                      pending.delete(event.data.id)
-                      return Deferred.succeed(submitted, result).pipe(Effect.asVoid)
-                    })
+              const cleanup = registration?.dispose ?? Effect.void
               yield* context.progress({ sessionID: child.id, status: "running" })
-              yield* runtime.session
-                .prompt({
-                  sessionID: child.id,
-                  text:
-                    existing === undefined
-                      ? [
-                          "You are a subagent spawned by another session.",
-                          ...(submitted === undefined
-                            ? []
-                            : [
-                                "You must finish by calling tools.submit_result with a value matching the requested schema. Do not return the final result as plain text.",
-                              ]),
-                          input.prompt,
-                        ].join("\n")
-                      : [
-                          ...(submitted === undefined
-                            ? []
-                            : [
-                                "You must finish by calling tools.submit_result with a value matching the requested schema. Do not return the final result as plain text.",
-                              ]),
-                          input.prompt,
-                        ].join("\n"),
-                  resume: false,
-                })
-                .pipe(
-                  Effect.mapError(
-                    (error) => new ToolFailure({ message: `Failed to prompt subagent: ${child.id}`, error }),
-                  ),
-                )
-
               const resume = () =>
                 runtime.session.resume(child.id).pipe(
                   Effect.as({ type: "idle" as const }),
@@ -308,6 +259,35 @@ export const Plugin = {
                   ),
                 )
               const run = Effect.gen(function* () {
+                yield* runtime.session
+                  .prompt({
+                    sessionID: child.id,
+                    text:
+                      existing === undefined
+                        ? [
+                            "You are a subagent spawned by another session.",
+                            ...(submitted === undefined
+                              ? []
+                              : [
+                                  "You must finish by calling tools.submit_result with a value matching the requested schema. Do not return the final result as plain text.",
+                                ]),
+                            input.prompt,
+                          ].join("\n")
+                        : [
+                            ...(submitted === undefined
+                              ? []
+                              : [
+                                  "You must finish by calling tools.submit_result with a value matching the requested schema. Do not return the final result as plain text.",
+                                ]),
+                            input.prompt,
+                          ].join("\n"),
+                    resume: false,
+                  })
+                  .pipe(
+                    Effect.mapError(
+                      (error) => new ToolFailure({ message: `Failed to prompt subagent: ${child.id}`, error }),
+                    ),
+                  )
                 if (submitted === undefined) {
                   yield* resume()
                   return yield* latestAssistantText(child.id).pipe(
@@ -341,11 +321,7 @@ export const Plugin = {
                   message: `Subagent did not submit a structured result (sessionID: ${child.id})`,
                 })
               })
-              const output = yield* run.pipe(
-                Effect.ensuring(
-                  Effect.all([registration?.dispose ?? Effect.void, unsubscribe ?? Effect.void], { discard: true }),
-                ),
-              )
+              const output = yield* run.pipe(Effect.ensuring(cleanup))
               return { sessionID: child.id, status: "completed" as const, output }
             }).pipe(
               Effect.map((output) => ({
@@ -390,8 +366,4 @@ export const Plugin = {
 function render(value: typeof Schema.Json.Type) {
   if (typeof value === "string") return value
   return JSON.stringify(value, null, 2) ?? String(value)
-}
-
-function isToolSuccess(event: Bus.LogItem): event is SessionEvent.Tool.Success {
-  return event.type === SessionEvent.Tool.Success.type
 }

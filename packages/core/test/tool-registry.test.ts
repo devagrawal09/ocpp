@@ -1,6 +1,9 @@
 import { describe, expect } from "bun:test"
 import { Agent } from "@opencode-ai/core/agent"
 import { Bus } from "@opencode-ai/core/bus"
+import { Database } from "@opencode-ai/core/database/database"
+import { CodeModeStore } from "@opencode-ai/core/codemode/store"
+import { CodeModeActivationTable } from "@opencode-ai/core/codemode/sql"
 import type { Permission } from "@opencode-ai/core/permission"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Image } from "@opencode-ai/core/image"
@@ -12,13 +15,14 @@ import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionModelRequest } from "@opencode-ai/core/session/model-request"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
+import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
 import { LanguageModel } from "@opencode-ai/ai"
 import { route } from "@opencode-ai/ai/protocols/openai-chat"
 import { State } from "@opencode-ai/core/state"
 import { Tool } from "@opencode-ai/core/tool"
 import type { Info } from "@opencode-ai/schema/tool"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { executeTool, toolDefinitions } from "./lib/tool"
+import { executeTool, readCodeModeResult, seedToolSession, toolDefinitions } from "./lib/tool"
 import { Deferred, Effect, Exit, Fiber, Layer, Logger, Schema, SchemaGetter, SchemaIssue, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { z } from "zod"
@@ -91,7 +95,7 @@ const runtimeLayer = Layer.unwrap(
   }),
 ).pipe(Layer.provide(jobLayer))
 const registryLayer = AppNodeBuilder.build(
-  LayerNode.group([Tool.node, PluginHooks.node, SessionModelRequest.node, Bus.node]),
+  LayerNode.group([Tool.node, PluginHooks.node, SessionModelRequest.node, Bus.node, Database.node, CodeModeStore.node]),
   [
     [Image.node, imageStore],
     [PluginRuntime.node, runtimeLayer],
@@ -109,7 +113,9 @@ const call = (name: string, id = `call-${name}`): Parameters<Tool.Snapshot["exec
   call: { type: "tool-call", id, name, input: { text: name } },
 })
 
-const CodeModeOutput = Schema.Struct({ executionID: Schema.String, status: Schema.Literal("running") })
+const CodeModeOutput = Schema.Struct({ executionID: CodeModeExecution.ID, status: Schema.Literal("running") })
+const isCodeModeStarted = (event: Bus.LogItem): event is SessionEvent.CodeMode.Started =>
+  event.type === SessionEvent.CodeMode.Started.type
 const waitCodeMode = (output: unknown, id: string) =>
   Effect.gen(function* () {
     const jobs = testJobs
@@ -125,7 +131,8 @@ const waitCodeMode = (output: unknown, id: string) =>
       content: [{ type: "text", text: "Execution started" }],
       executed: false,
     })
-    return (yield* jobs.wait({ id: value.executionID })).info
+    yield* jobs.wait({ id: value.executionID })
+    return yield* readCodeModeResult(value.executionID, sessionID)
   })
 
 const make = (): Info => ({
@@ -152,6 +159,7 @@ const transform = (service: Tool.Interface, tools: Readonly<Record<string, Info>
 describe("Tool", () => {
   it.effect("reads the current draft tools by effective name", () =>
     Effect.gen(function* () {
+      yield* seedToolSession(sessionID)
       const service = yield* Tool.Service
       yield* transform(service, { echo: make() }, { namespace: "acme", codemode: false })
       yield* service.transform((draft) => {
@@ -226,7 +234,7 @@ describe("Tool", () => {
         },
         transcript: { system: [], messages: [] },
       })
-      expect(prepared.request.tools.map((tool) => tool.name)).toEqual(["execute", "alias"])
+      expect(prepared.request.tools.map((tool) => tool.name)).toEqual(["execute", "execution_result", "alias"])
       yield* transform(service, { echo: constant("new") }, { codemode: false })
       const before: string[] = []
       const after: string[] = []
@@ -263,6 +271,7 @@ describe("Tool", () => {
 
   it.effect("hooks execute and known Code Mode calls once but leaves unknown interpreter paths unchanged", () =>
     Effect.gen(function* () {
+      yield* seedToolSession(sessionID)
       const service = yield* Tool.Service
       const hooks = yield* PluginHooks.Service
       yield* transform(service, { echo: make() })
@@ -281,12 +290,12 @@ describe("Tool", () => {
           type: "tool-call",
           id: "known",
           name: "run_code",
-          input: { code: 'return await tools.echo({ text: "hello" })' },
+          input: { mode: "detached", code: 'return tools.echo({ text: "hello" })' },
         },
       })
       expect(yield* waitCodeMode(known.output, "known")).toMatchObject({
-        status: "completed",
-        output: '{\n  "text": "hello"\n}',
+        ok: true,
+        value: { text: "hello" },
       })
       expect(seen).toEqual(["run_code", "echo"])
       const unknown = yield* snapshot.execute({
@@ -295,12 +304,12 @@ describe("Tool", () => {
           type: "tool-call",
           id: "unknown",
           name: "execute",
-          input: { code: "return await tools.missing({})" },
+          input: { mode: "detached", code: "return tools.missing({})" },
         },
       })
       expect(yield* waitCodeMode(unknown.output, "unknown")).toMatchObject({
-        status: "error",
-        error: expect.stringContaining("missing"),
+        ok: false,
+        error: { message: expect.stringContaining("missing") },
       })
       expect(seen).toEqual(["run_code", "echo", "execute"])
     }),
@@ -359,7 +368,7 @@ describe("Tool", () => {
         }),
       )
       yield* Scope.close(source, Exit.void)
-      expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
     }),
   )
 
@@ -384,7 +393,7 @@ describe("Tool", () => {
         })
       })
       const snapshot = yield* service.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["acme_tools_echo", "execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["acme_tools_echo", "execute", "execution_result"])
       expect(snapshot.definitions[0]?.inputSchema.properties).toEqual({ value: { type: "number" } })
       expect(
         (yield* snapshot.execute({
@@ -420,7 +429,7 @@ describe("Tool", () => {
       const service = yield* Tool.Service
       let source: Info[] = []
       yield* service.transform((draft) => source.forEach((tool) => draft.add(tool)))
-      expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
 
       const tool = { ...constant("first"), name: "echo", options: { codemode: false } }
       source = [tool]
@@ -442,7 +451,7 @@ describe("Tool", () => {
       const removed = yield* service.reload().pipe(Effect.forkChild({ startImmediately: true }))
       yield* TestClock.adjust("500 millis")
       yield* Fiber.join(removed)
-      expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
       expect((yield* advertised.execute(call("echo"))).output).toEqual({ text: "first" })
     }),
   )
@@ -490,7 +499,10 @@ describe("Tool", () => {
             draft.add({ ...constant("overlay"), name: "echo", options: { codemode: false } })
           })
           expect(runs).toEqual([])
-          expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
+          expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual([
+            "execute",
+            "execution_result",
+          ])
         }).pipe(Scope.provide(scope)),
       )
 
@@ -543,7 +555,7 @@ describe("Tool", () => {
         ],
       ])
       const snapshot = yield* service.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
       expect(snapshot.codeModeCatalog).toEqual([])
     }).pipe(Effect.provide(Logger.layer([logger])))
   })
@@ -565,7 +577,13 @@ describe("Tool", () => {
         { codemode: false },
       )
       const snapshot = yield* service.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["after", "before", "echo_tool", "execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual([
+        "after",
+        "before",
+        "echo_tool",
+        "execute",
+        "execution_result",
+      ])
       expect((yield* snapshot.execute(call("before"))).output).toEqual({ text: "before" })
       expect((yield* snapshot.execute(call("after"))).output).toEqual({ text: "after" })
       expect((yield* snapshot.execute(call("echo_tool"))).output).toEqual({ text: "last" })
@@ -591,6 +609,7 @@ describe("Tool", () => {
         "2d_get_scene",
         "_lookup",
         "execute",
+        "execution_result",
       ])
       for (const name of ["2d_get_scene", "123", "_lookup", "-lookup", "123__private_-tools_2d_get_scene"]) {
         expect((yield* snapshot.execute(call(name))).output).toEqual({ text: name })
@@ -600,12 +619,13 @@ describe("Tool", () => {
 
   it.effect("executes Code Mode tools without requiring letter-leading names or namespace segments", () =>
     Effect.gen(function* () {
+      yield* seedToolSession(sessionID)
       const service = yield* Tool.Service
       yield* transform(service, { "2d_get_scene": make(), "123": make(), _lookup: make(), "-lookup": make() })
       yield* transform(service, { "2d_get_scene": make() }, { namespace: "123._private.-tools", codemode: true })
 
       const snapshot = yield* service.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
       expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual([
         "-lookup",
         "123",
@@ -620,19 +640,96 @@ describe("Tool", () => {
           id: "call-nonletter-names",
           name: "execute",
           input: {
-            code: `const results = await Promise.all([
+            mode: "detached",
+            code: `const results = [
               tools["2d_get_scene"]({ text: "digit" }),
               tools["123"]({ text: "numeric" }),
               tools._lookup({ text: "underscore" }),
               tools["-lookup"]({ text: "hyphen" }),
               tools["123"]._private["-tools"]["2d_get_scene"]({ text: "namespaced" }),
-            ]); return results.map(result => result.text).join(",");`,
+            ]; return results.map(result => result.text).join(",");`,
           },
         },
       })
       expect(yield* waitCodeMode(result.output, "call-nonletter-names")).toMatchObject({
-        status: "completed",
-        output: "digit,numeric,underscore,hyphen,namespaced",
+        ok: true,
+        value: "digit,numeric,underscore,hyphen,namespaced",
+      })
+    }),
+  )
+
+  it.effect("discards detached activations rejected by the concurrency limit", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID)
+      const service = yield* Tool.Service
+      const snapshot = yield* service.snapshot()
+      const started = yield* Effect.forEach([0, 1, 2, 3], (index) =>
+        snapshot.execute({
+          ...call("execute", "detached-" + index),
+          call: {
+            type: "tool-call",
+            id: "detached-" + index,
+            name: "execute",
+            input: { mode: "detached", code: "return null" },
+          },
+        }),
+      )
+      const rejected = yield* snapshot
+        .execute({
+          ...call("execute", "detached-rejected"),
+          call: {
+            type: "tool-call",
+            id: "detached-rejected",
+            name: "execute",
+            input: { mode: "detached", code: "return null" },
+          },
+        })
+        .pipe(Effect.flip)
+      expect(rejected.message).toContain("At most 4 detached executions")
+
+      const db = (yield* Database.Service).db
+      expect((yield* db.select({ id: CodeModeActivationTable.id }).from(CodeModeActivationTable).all()).length).toBe(4)
+      const jobs = testJobs ?? (yield* Effect.die("Job test service is unavailable"))
+      yield* Effect.forEach(
+        started,
+        (item) => jobs.cancel(Schema.decodeUnknownSync(CodeModeOutput)(item.output).executionID),
+        { discard: true },
+      )
+    }),
+  )
+
+  it.effect("cancels a detached job when launch is interrupted before listener registration", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID)
+      const service = yield* Tool.Service
+      const bus = yield* Bus.Service
+      const started = yield* Deferred.make<CodeModeExecution.ID>()
+      const block = yield* Deferred.make<void>()
+      const unsubscribe = yield* bus.listen((event) => {
+        if (!isCodeModeStarted(event) || event.data.id !== "detached-interrupted") return Effect.void
+        return Deferred.succeed(started, event.data.executionID).pipe(Effect.andThen(Deferred.await(block)))
+      })
+      const snapshot = yield* service.snapshot()
+      const fiber = yield* snapshot
+        .execute({
+          ...call("execute", "detached-interrupted"),
+          call: {
+            type: "tool-call",
+            id: "detached-interrupted",
+            name: "execute",
+            input: { mode: "detached", code: "return null" },
+          },
+        })
+        .pipe(Effect.forkChild)
+      const executionID = yield* Deferred.await(started)
+      yield* Fiber.interrupt(fiber)
+      yield* unsubscribe
+
+      const jobs = testJobs ?? (yield* Effect.die("Job test service is unavailable"))
+      expect((yield* jobs.get(executionID))?.status).toBe("cancelled")
+      expect(yield* readCodeModeResult(executionID, sessionID)).toMatchObject({
+        ok: false,
+        error: { kind: "ExecutionFailure", message: expect.stringContaining("indeterminate") },
       })
     }),
   )
@@ -647,7 +744,7 @@ describe("Tool", () => {
       })
 
       const snapshot = yield* service.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["first", "execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["first", "execute", "execution_result"])
       expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["invalid__namespace.second"])
     }),
   )
@@ -681,7 +778,7 @@ describe("Tool", () => {
         ],
       ])
       const snapshot = yield* service.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["healthy", "execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["healthy", "execute", "execution_result"])
       expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["codemode"])
       expect((yield* snapshot.execute(call("phone_type")).pipe(Effect.flip)).message).toBe("Unknown tool: phone_type")
     }).pipe(Effect.provide(Logger.layer([logger])))
@@ -698,11 +795,20 @@ describe("Tool", () => {
             draft.add({ ...make(), name: "temporary", options: { codemode: false } })
           })
           const snapshot = yield* service.snapshot()
-          expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["echo", "temporary", "execute"])
+          expect(snapshot.definitions.map((tool) => tool.name)).toEqual([
+            "echo",
+            "temporary",
+            "execute",
+            "execution_result",
+          ])
           expect((yield* snapshot.execute(call("echo"))).output).toEqual({ text: "original" })
         }),
       )
-      expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["echo", "execute"])
+      expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual([
+        "echo",
+        "execute",
+        "execution_result",
+      ])
     }),
   )
 
@@ -731,7 +837,13 @@ describe("Tool", () => {
       ])
 
       expect(first).toEqual(second)
-      expect(first.map((definition) => definition.name)).toEqual(["alpha", "alpha_beta", "zeta", "execute"])
+      expect(first.map((definition) => definition.name)).toEqual([
+        "alpha",
+        "alpha_beta",
+        "zeta",
+        "execute",
+        "execution_result",
+      ])
     }),
   )
 
@@ -746,7 +858,7 @@ describe("Tool", () => {
       )
 
       const snapshot = yield* service.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
       expect(snapshot.codeModeCatalog?.[0]?.signature).toContain("tools.echo")
     }),
   )
@@ -756,7 +868,7 @@ describe("Tool", () => {
       const service = yield* Tool.Service
 
       const available = yield* service.snapshot()
-      expect(available.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(available.definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
       expect(available.codeModeCatalog).toEqual([])
 
       const denied = yield* service.snapshot([{ action: "execute", resource: "*", effect: "deny" }])
@@ -778,6 +890,7 @@ describe("Tool", () => {
         "edit",
         "write",
         "execute",
+        "execution_result",
       ])
       expect(
         yield* names([
@@ -791,7 +904,12 @@ describe("Tool", () => {
           { action: "*", resource: "*", effect: "deny" },
         ]),
       ).toEqual([])
-      expect(yield* names([{ action: "edit", resource: "*", effect: "deny" }])).toEqual(["bash", "question", "execute"])
+      expect(yield* names([{ action: "edit", resource: "*", effect: "deny" }])).toEqual([
+        "bash",
+        "question",
+        "execute",
+        "execution_result",
+      ])
     }),
   )
 
@@ -804,7 +922,7 @@ describe("Tool", () => {
 
       expect(
         (yield* toolDefinitions(service, [{ action: "edit", resource: "*", effect: "deny" }])).map((tool) => tool.name),
-      ).toEqual(["first", "execute"])
+      ).toEqual(["first", "execute", "execution_result"])
     }),
   )
 
@@ -813,9 +931,13 @@ describe("Tool", () => {
       const service = yield* Tool.Service
       const scope = yield* Scope.make()
       yield* transform(service, { echo: make() }, { codemode: false }).pipe(Scope.provide(scope))
-      expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual(["echo", "execute"])
+      expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual([
+        "echo",
+        "execute",
+        "execution_result",
+      ])
       yield* Scope.close(scope, Exit.void)
-      expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual(["execute"])
+      expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual(["execute", "execution_result"])
     }),
   )
 
@@ -833,9 +955,13 @@ describe("Tool", () => {
       yield* Deferred.await(registered)
       yield* Fiber.interrupt(fiber)
 
-      expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual(["echo", "execute"])
+      expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual([
+        "echo",
+        "execute",
+        "execution_result",
+      ])
       yield* Scope.close(scope, Exit.void)
-      expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual(["execute"])
+      expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual(["execute", "execution_result"])
     }),
   )
 
@@ -1192,6 +1318,7 @@ describe("Tool", () => {
 
   it.effect("executes and reports progress for codemode tools advertised in a model request", () =>
     Effect.gen(function* () {
+      yield* seedToolSession(sessionID)
       const service = yield* Tool.Service
       const executed: string[] = []
       const scope = yield* Scope.make()
@@ -1211,7 +1338,7 @@ describe("Tool", () => {
       const toolSet = yield* service.snapshot()
       const execute = toolSet.definitions.find((tool) => tool.name === "execute")
       expect(toolSet.codeModeCatalog?.[0]?.signature).toContain("tools.echo")
-      expect(execute?.description).toContain("confined Code Mode runtime")
+      expect(execute?.description).toContain("compiled JavaScript-shaped activation")
       expect(execute?.description).not.toContain("Echo text")
       yield* Scope.close(scope, Exit.void)
       yield* transform(service, {
@@ -1252,14 +1379,14 @@ describe("Tool", () => {
           type: "tool-call",
           id: "call-execute",
           name: "execute",
-          input: { code: 'return await tools.echo({ text: "request" })' },
+          input: { mode: "detached", code: 'return tools.echo({ text: "request" })' },
         },
       })
 
       expect(backgroundAtStarted).toBe(true)
       expect(yield* waitCodeMode(execution.output, "call-execute")).toMatchObject({
-        status: "completed",
-        output: '{\n  "text": "request"\n}',
+        ok: true,
+        value: { text: "request" },
       })
       expect(executed).toEqual(["old:request"])
       expect(progress.at(-1)).toEqual([
@@ -1281,15 +1408,19 @@ describe("Tool", () => {
           id: "call-bounded",
           name: "execute",
           input: {
-            code: 'console.log("\u{1F600}".repeat(5000)); return await Promise.all(Array.from({ length: 101 }, (_, index) => tools.echo({ text: String.fromCharCode(0).repeat(5000) + index })))',
+            mode: "detached",
+            code: 'console.log("\u{1F600}".repeat(5000)); return Array.from({ length: 101 }, (_, index) => tools.echo({ text: String.fromCharCode(0).repeat(5000) + index }))',
           },
         },
       })
-      expect(yield* waitCodeMode(bounded.output, "call-bounded")).toMatchObject({ status: "completed" })
+      expect(yield* waitCodeMode(bounded.output, "call-bounded")).toMatchObject({
+        ok: false,
+        error: { kind: "ToolCallLimitExceeded" },
+      })
       yield* Fiber.interrupt(progressFiber)
       const boundedEvents = boundedProgress.at(-1) ?? []
-      expect(boundedEvents.filter((event) => event.type === "tool")).toHaveLength(100)
-      expect(boundedEvents).toHaveLength(102)
+      expect(boundedEvents.filter((event) => event.type === "tool").length).toBeLessThanOrEqual(100)
+      expect(new TextEncoder().encode(JSON.stringify(boundedEvents)).length).toBeLessThanOrEqual(256 * 1024)
       expect(boundedEvents.find((event) => event.type === "tool")).toMatchObject({
         input: { truncated: expect.any(String) },
         output: expect.any(String),
@@ -1303,6 +1434,48 @@ describe("Tool", () => {
       expect(
         new TextEncoder().encode(JSON.stringify(log?.kind === "log" ? log.message : "")).length,
       ).toBeLessThanOrEqual(4 * 1024)
+    }),
+  )
+
+  it.effect("settles interrupted required executions durably", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID)
+      const service = yield* Tool.Service
+      const gate = yield* Deferred.make<void>()
+      yield* transform(service, {
+        blocked: {
+          name: "blocked",
+          description: "Never completes",
+          input: Schema.Struct({}),
+          output: Schema.Null,
+          execute: () => Deferred.await(gate).pipe(Effect.as({ output: null })),
+        },
+      })
+      const started = yield* Deferred.make<CodeModeExecution.ID>()
+      const bus = yield* Bus.Service
+      yield* bus.project(SessionEvent.CodeMode.Started, (event) =>
+        event.data.id === "call-interrupted" ? Deferred.succeed(started, event.data.executionID) : Effect.void,
+      )
+      const snapshot = yield* service.snapshot()
+      const scope = yield* Scope.Scope
+      const fiber = yield* snapshot
+        .execute({
+          ...call("execute"),
+          call: {
+            type: "tool-call",
+            id: "call-interrupted",
+            name: "execute",
+            input: { code: "return tools.blocked({})" },
+          },
+        })
+        .pipe(Effect.forkIn(scope, { startImmediately: true }))
+      const executionID = yield* Deferred.await(started)
+      yield* Fiber.interrupt(fiber)
+      const store = yield* CodeModeStore.Service
+      expect(yield* store.getResult(executionID)).toMatchObject({
+        status: "indeterminate",
+        result: { ok: false, error: { kind: "ExecutionFailure" } },
+      })
     }),
   )
 })

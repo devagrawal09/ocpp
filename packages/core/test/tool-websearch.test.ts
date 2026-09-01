@@ -105,7 +105,11 @@ describe("WebSearchTool registration", () => {
       const registry = fixture.registry
       yield* fixture.websearch.select(WebSearch.ID.make("exa"))
 
-      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["websearch", "execute"])
+      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual([
+        "websearch",
+        "execute",
+        "execution_result",
+      ])
       expect(
         yield* executeTool(registry, {
           sessionID,

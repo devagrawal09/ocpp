@@ -22,12 +22,14 @@ export interface Context {
 interface BaseOptions {
   readonly namespace?: string
   readonly permission?: string
+  /** Allows this in-process tool boundary to receive opaque same-activation tool handles. */
+  readonly acceptsToolHandles?: boolean
 }
 
 export type Options = BaseOptions &
   (
     | {
-        readonly codemode?: true
+        readonly codemode?: true | "both"
         readonly pinned?: boolean
       }
     | {

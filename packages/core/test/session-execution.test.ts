@@ -479,17 +479,13 @@ describe("SessionRestart background recovery", () => {
           parentSessionID: sessionID,
           assistantMessageID,
           toolCallID: "call-codemode-recovery",
-          code: "return 1",
-          timeoutMs: 1_000,
         },
         run: Effect.never,
       })
       yield* jobs.background(executionID)
 
       const failed: SessionEvent.CodeMode.Failed[] = []
-      yield* bus.project(SessionEvent.CodeMode.Failed, (event) =>
-        Effect.sync(() => void failed.push(event)),
-      )
+      yield* bus.project(SessionEvent.CodeMode.Failed, (event) => Effect.sync(() => void failed.push(event)))
       const scope = yield* Scope.make()
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
       const restarted = yield* Job.make.pipe(Scope.provide(scope))
@@ -523,8 +519,8 @@ describe("SessionRestart background recovery", () => {
         {
           type: "synthetic",
           payload: {
-            text: expect.stringContaining(`codemode executionID="${executionID}" state="error"`),
-            metadata: { source: "codemode", executionID, state: "error" },
+            text: expect.stringContaining("Use execution_result with this execution ID"),
+            metadata: { source: "codemode", executionID, state: "failed" },
           },
         },
       ])
@@ -543,8 +539,6 @@ describe("SessionRestart background recovery", () => {
           parentSessionID: sessionID,
           assistantMessageID,
           toolCallID: "call-codemode-interrupted-recovery",
-          code: "return 1",
-          timeoutMs: 1_000,
         },
         run: Effect.fail(new Error("All fibers interrupted without error")),
       })
@@ -586,8 +580,6 @@ describe("SessionRestart background recovery", () => {
           parentSessionID: sessionID,
           assistantMessageID: SessionMessage.ID.make("msg_codemode_delivered"),
           toolCallID: "call-codemode-delivered",
-          code: "return 1",
-          timeoutMs: 1_000,
         },
         run: Effect.never,
       })
@@ -643,8 +635,6 @@ describe("SessionRestart background recovery", () => {
           parentSessionID: sessionID,
           assistantMessageID: SessionMessage.ID.make("msg_codemode_terminal_crash"),
           toolCallID: "call-codemode-terminal-crash",
-          code: "return 1",
-          timeoutMs: 1_000,
         },
         run: Effect.never,
       })
@@ -677,8 +667,8 @@ describe("SessionRestart background recovery", () => {
           id: background.notificationID,
           type: "synthetic",
           payload: {
-            text: expect.stringContaining('codemode executionID="' + executionID + '" state="error"'),
-            metadata: { source: "codemode", executionID, state: "error" },
+            text: expect.stringContaining("Use execution_result with this execution ID"),
+            metadata: { source: "codemode", executionID, state: "failed" },
           },
         },
       ])

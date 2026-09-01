@@ -26,7 +26,7 @@ import { PersistentPty } from "@opencode-ai/schema/persistent-pty"
 import { Pty } from "@opencode-ai/schema/pty"
 import type { SessionHooks } from "@opencode-ai/plugin/effect/session"
 import { testEffect } from "../lib/effect"
-import { waitForCodeMode } from "../lib/tool"
+import { seedToolSession, waitForCodeMode } from "../lib/tool"
 import { PluginTestLayer } from "./fixture"
 import { host } from "./host"
 
@@ -921,7 +921,7 @@ describe("fromPromise", () => {
         }),
       ).effect(host)
       const snapshot = yield* registry.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute", "execution_result"])
       expect(snapshot.definitions[0]?.description).toBe("Wrapped")
       expect(snapshot.definitions[0]?.outputSchema).toBeUndefined()
       expect(
@@ -942,7 +942,12 @@ describe("fromPromise", () => {
       yield* Effect.promise(() => registration.dispose())
       yield* Effect.promise(() => registration.dispose())
       const restored = yield* registry.snapshot()
-      expect(restored.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "temporary", "execute"])
+      expect(restored.definitions.map((tool) => tool.name)).toEqual([
+        "acme_hello",
+        "temporary",
+        "execute",
+        "execution_result",
+      ])
       expect(restored.definitions[0]?.description).toBe("Hello")
     }),
   )
@@ -963,7 +968,7 @@ describe("fromPromise", () => {
         })
       })
       const original = yield* registry.snapshot()
-      expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
+      expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute", "execution_result"])
       expect(original.codeModeCatalog).toEqual([])
 
       yield* PluginPromise.fromPromise(
@@ -981,10 +986,11 @@ describe("fromPromise", () => {
       ).effect(host)
 
       const snapshot = yield* registry.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
       expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["acme.hello"])
-      expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
+      expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute", "execution_result"])
       const sessionID = Session.ID.make("ses_promise_tool_options")
+      yield* seedToolSession(sessionID)
       const messageID = SessionMessage.ID.make("msg_promise_tool_options")
       const execution = yield* snapshot.execute({
         sessionID,
@@ -994,7 +1000,7 @@ describe("fromPromise", () => {
           type: "tool-call",
           id: "call_options",
           name: "execute",
-          input: { code: "return await tools.acme.hello({})" },
+          input: { mode: "detached", code: "return tools.acme.hello({})" },
         },
       })
       expect(
@@ -1003,7 +1009,7 @@ describe("fromPromise", () => {
           assistantMessageID: messageID,
           id: "call_options",
         }),
-      ).toMatchObject({ status: "completed", output: "Hello" })
+      ).toMatchObject({ ok: true, value: "Hello" })
     }),
   )
 
@@ -1034,6 +1040,7 @@ describe("fromPromise", () => {
 
       const toolSet = yield* registry.snapshot()
       const sessionID = Session.ID.make("ses_content_only_tool")
+      yield* seedToolSession(sessionID)
       const messageID = SessionMessage.ID.make("msg_content_only_tool")
       const throughCodeMode = yield* toolSet.execute({
         sessionID,
@@ -1043,7 +1050,7 @@ describe("fromPromise", () => {
           type: "tool-call",
           id: "call_content_only_tool",
           name: "execute",
-          input: { code: "return await tools.demo_status({})" },
+          input: { mode: "detached", code: "return tools.demo_status({})" },
         },
       })
       expect(
@@ -1052,7 +1059,7 @@ describe("fromPromise", () => {
           assistantMessageID: messageID,
           id: "call_content_only_tool",
         }),
-      ).toMatchObject({ status: "completed", output: "hello" })
+      ).toMatchObject({ ok: true, value: "hello" })
       const failed = yield* toolSet.execute({
         sessionID,
         agent: Agent.ID.make("build"),
@@ -1061,7 +1068,7 @@ describe("fromPromise", () => {
           type: "tool-call",
           id: "call_failed_tool",
           name: "execute",
-          input: { code: "return await tools.demo_status({ fail: true })" },
+          input: { mode: "detached", code: "return tools.demo_status({ fail: true })" },
         },
       })
       expect(
@@ -1070,7 +1077,10 @@ describe("fromPromise", () => {
           assistantMessageID: messageID,
           id: "call_failed_tool",
         }),
-      ).toMatchObject({ status: "error", error: expect.stringContaining('Expected string | null\n  at ["agent"]') })
+      ).toMatchObject({
+        ok: false,
+        error: { message: expect.stringContaining('Expected string | null\n  at ["agent"]') },
+      })
     }),
   )
 })

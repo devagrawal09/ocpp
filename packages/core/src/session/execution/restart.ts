@@ -148,12 +148,11 @@ export const layer = (options?: Options) =>
           background.status === "running" ||
           (background.status === "error" && background.error === INTERRUPTED_WITHOUT_ERROR)
         const status = restarted ? "error" : background.status
-        const error =
-          restarted
-            ? "Execution failed because the server restarted."
-            : background.status === "cancelled"
-              ? (background.error ?? "Execution cancelled")
-              : (background.error ?? "Execution failed")
+        const error = restarted
+          ? "Execution failed because the server restarted."
+          : background.status === "cancelled"
+            ? (background.error ?? "Execution cancelled")
+            : (background.error ?? "Execution failed")
         const terminal = background.terminal === true
         if (!terminal && status === "completed") {
           yield* bus.publish(
@@ -164,7 +163,6 @@ export const layer = (options?: Options) =>
               id: recovery.toolCallID,
               executionID: CodeModeExecution.ID.make(background.id),
               events: [],
-              output: background.output ?? "",
             },
             { commit: () => jobs.markBackgroundTerminal(background.notificationID) },
           )
@@ -187,8 +185,6 @@ export const layer = (options?: Options) =>
         yield* CodeModeCompletion.deliver(sessions, jobs, {
           id: background.id,
           status,
-          ...(background.output === undefined ? {} : { output: background.output }),
-          ...(status === "error" || status === "cancelled" ? { error } : {}),
           notificationID: background.notificationID,
           recovery,
           resume: suspended.has(recovery.parentSessionID) ? false : undefined,

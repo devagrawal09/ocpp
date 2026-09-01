@@ -30,6 +30,11 @@ import {
 } from "@opencode-ai/core/session/sql"
 import { testEffect } from "./lib/effect"
 import { Snapshot } from "@opencode-ai/core/snapshot"
+import {
+  CodeModeBindingHistoryTable,
+  CodeModeBindingTable,
+  CodeModeNotebookTable,
+} from "@opencode-ai/core/codemode/sql"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionInbox.node]), [
@@ -168,6 +173,18 @@ describe("SessionProjector", () => {
           current_values: {},
         })
         .run()
+      yield* db.insert(CodeModeNotebookTable).values({ session_id: sessionID, revision: 2 }).run()
+      yield* db
+        .insert(CodeModeBindingHistoryTable)
+        .values([
+          { session_id: sessionID, revision: 1, message_seq: 0, name: "value", value: 1 },
+          { session_id: sessionID, revision: 2, message_seq: 1, name: "value", value: 2 },
+        ])
+        .run()
+      yield* db
+        .insert(CodeModeBindingTable)
+        .values({ session_id: sessionID, name: "value", revision: 2, value: 2 })
+        .run()
       const bus = yield* Bus.Service
       yield* bus.publish(SessionEvent.RevertEvent.Staged, {
         sessionID,
@@ -199,8 +216,61 @@ describe("SessionProjector", () => {
         tokens_cache_read: 3,
         tokens_cache_write: 1,
       })
+      // Revert advances the notebook generation while restoring the historical binding revision.
+      expect(yield* db.select().from(CodeModeNotebookTable).get()).toMatchObject({ revision: 3 })
+      expect(yield* db.select().from(CodeModeBindingTable).get()).toMatchObject({ revision: 1, value: 1 })
+      expect(yield* db.select().from(CodeModeBindingHistoryTable).all()).toHaveLength(1)
       // A committed revert resets the fold cache so the next boundary establishes a new epoch.
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toBeUndefined()
+    }),
+  )
+
+  it.effect("forks notebook bindings through the copied message boundary", () =>
+    Effect.gen(function* () {
+      const db = yield* seedSession()
+      const bus = yield* Bus.Service
+      const boundary = SessionMessage.ID.make("msg_fork_boundary")
+      const later = SessionMessage.ID.make("msg_fork_later")
+      const child = Session.ID.make("ses_projector_fork")
+      yield* db
+        .insert(SessionMessageTable)
+        .values([
+          assistantRow(boundary, 0, { created, completed: created }),
+          assistantRow(later, 1, { created, completed: created }),
+        ])
+        .run()
+      yield* db.insert(CodeModeNotebookTable).values({ session_id: sessionID, revision: 2 }).run()
+      yield* db
+        .insert(CodeModeBindingHistoryTable)
+        .values([
+          { session_id: sessionID, revision: 1, message_seq: 0, name: "value", value: 1 },
+          { session_id: sessionID, revision: 2, message_seq: 1, name: "value", value: 2 },
+        ])
+        .run()
+      yield* db
+        .insert(CodeModeBindingTable)
+        .values({ session_id: sessionID, name: "value", revision: 2, value: 2 })
+        .run()
+
+      yield* bus.publish(SessionEvent.Forked, {
+        sessionID: child,
+        parentID: sessionID,
+        boundary: { type: "through", messageID: boundary },
+      })
+
+      expect(
+        yield* db.select().from(CodeModeNotebookTable).where(eq(CodeModeNotebookTable.session_id, child)).get(),
+      ).toMatchObject({ revision: 1 })
+      expect(
+        yield* db.select().from(CodeModeBindingTable).where(eq(CodeModeBindingTable.session_id, child)).get(),
+      ).toMatchObject({ revision: 1, value: 1 })
+      expect(
+        yield* db
+          .select({ seq: SessionMessageTable.seq })
+          .from(SessionMessageTable)
+          .where(eq(SessionMessageTable.session_id, child))
+          .all(),
+      ).toEqual([{ seq: 0 }])
     }),
   )
 

@@ -1,16 +1,23 @@
 import { Agent } from "@opencode-ai/core/agent"
 import { Bus } from "@opencode-ai/core/bus"
+import { CodeModeStore } from "@opencode-ai/core/codemode/store"
 import { Job } from "@opencode-ai/core/job"
 import type { Permission } from "@opencode-ai/core/permission"
 import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
+import { CodeMode } from "@opencode-ai/codemode"
 import { toSessionError } from "@opencode-ai/core/session/to-session-error"
 import type { SessionError } from "@opencode-ai/schema/session-error"
 import { Tool } from "@opencode-ai/core/tool"
 import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { Effect, Schema, type Scope } from "effect"
+import { Effect, Option, Schema, type Scope } from "effect"
 import { host } from "../plugin/host"
+import { Database } from "@opencode-ai/core/database/database"
+import { Project } from "@opencode-ai/core/project"
+import { ProjectTable } from "@opencode-ai/core/project/sql"
+import { AbsolutePath } from "@opencode-ai/core/schema"
+import { SessionTable } from "@opencode-ai/core/session/sql"
 
 export const toolIdentity = {
   agent: Agent.ID.make("build"),
@@ -62,8 +69,27 @@ export const waitForCodeModeExecution = (executionID: CodeModeExecution.ID) =>
     return info
   })
 
+export const readCodeModeResult = (executionID: CodeModeExecution.ID, sessionID: CodeModeContext["sessionID"]) =>
+  Effect.gen(function* () {
+    const store = yield* CodeModeStore.Service
+    const pages: Array<string> = []
+    let offset = 0
+    while (true) {
+      const page = yield* store.resultPage({ activationID: executionID, sessionID, offset })
+      if (!page) return yield* Effect.die("Code Mode result is unavailable")
+      pages.push(page.content)
+      if (page.next === null) break
+      offset = page.next
+    }
+    return Schema.decodeUnknownSync(CodeMode.Result)(JSON.parse(pages.join("")))
+  })
+
 export const waitForCodeMode = (output: unknown, context: CodeModeContext) =>
-  activateCodeMode(output, context).pipe(Effect.flatMap(waitForCodeModeExecution))
+  Effect.gen(function* () {
+    const executionID = yield* activateCodeMode(output, context)
+    yield* waitForCodeModeExecution(executionID)
+    return yield* readCodeModeResult(executionID, context.sessionID)
+  })
 
 export function waitForCodeModeTool(
   registry: Tool.Interface,
@@ -117,12 +143,40 @@ export interface ToolExecution {
   readonly error?: SessionError.Error
 }
 
+export const seedToolSession = Effect.fnUntraced(function* (
+  sessionID: Parameters<Tool.Snapshot["execute"]>[0]["sessionID"],
+) {
+  const database = Option.getOrUndefined(yield* Effect.serviceOption(Database.Service))
+  if (!database) return
+  yield* database.db
+    .insert(ProjectTable)
+    .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+    .onConflictDoNothing()
+    .run()
+    .pipe(Effect.orDie)
+  yield* database.db
+    .insert(SessionTable)
+    .values({
+      id: sessionID,
+      project_id: Project.ID.global,
+      slug: sessionID,
+      directory: AbsolutePath.make("/project"),
+      title: sessionID,
+      version: "test",
+    })
+    .onConflictDoNothing()
+    .run()
+    .pipe(Effect.orDie)
+})
+
 export const executeTool = (
   registry: Tool.Interface,
   input: Parameters<Tool.Snapshot["execute"]>[0],
 ): Effect.Effect<ToolExecution> =>
-  registry.snapshot().pipe(
-    Effect.flatMap((tools) => tools.execute(input)),
+  Effect.gen(function* () {
+    yield* seedToolSession(input.sessionID)
+    return yield* registry.snapshot().pipe(Effect.flatMap((tools) => tools.execute(input)))
+  }).pipe(
     Effect.map((result) => ({ status: "completed" as const, ...result }) satisfies ToolExecution),
     Effect.catchTag("Tool.Error", (error) =>
       Effect.succeed({ status: "error" as const, error: toSessionError(error) } satisfies ToolExecution),

@@ -121,8 +121,6 @@ describe("Session tool progress", () => {
         assistantMessageID,
         id: "call-codemode",
         executionID,
-        code: "return 1",
-        timeoutMs: 1_000,
       })
       const codeProgress = yield* service.publish(SessionEvent.CodeMode.Progress, {
         sessionID,
@@ -137,7 +135,6 @@ describe("Session tool progress", () => {
         id: "call-codemode",
         executionID,
         events: [{ type: "trace", kind: "return", value: "1" }],
-        output: "1",
       })
       yield* service.publish(SessionEvent.Tool.Success, {
         sessionID,
@@ -154,7 +151,6 @@ describe("Session tool progress", () => {
             executionID,
             executionStatus: "completed",
             events: [{ type: "trace", kind: "return", value: "1" }],
-            output: "1",
           },
         },
       })

@@ -94,8 +94,6 @@ describe("Session.remove", () => {
           parentSessionID: parent.id,
           assistantMessageID: SessionMessage.ID.create(),
           toolCallID: "call-removed-session",
-          code: "return 1",
-          timeoutMs: 1_000,
         },
         run: Effect.never,
       })
@@ -112,8 +110,6 @@ describe("Session.remove", () => {
           parentSessionID: parent.id,
           assistantMessageID: SessionMessage.ID.create(),
           toolCallID: "call-settled-removed-session",
-          code: "return 2",
-          timeoutMs: 1_000,
         },
         run: Effect.succeed("2"),
       })

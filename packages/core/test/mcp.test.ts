@@ -43,12 +43,15 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { ExitCode, makeHandle, ProcessId } from "effect/unstable/process/ChildProcessSpawner"
 import { Image } from "@opencode-ai/core/image"
 import { testEffect } from "./lib/effect"
+import { Database } from "@opencode-ai/core/database/database"
+import { CodeModeStore } from "@opencode-ai/core/codemode/store"
 import { imagePassthrough } from "./lib/image"
 import { location } from "./fixture/location"
 import { hostEnvironmentLayer, recordingEnvironmentLayer } from "./fixture/environment"
 import {
   activateCodeMode,
   executeTool,
+  seedToolSession,
   toolDefinitions,
   toolIdentity,
   waitForCodeMode,
@@ -417,7 +420,7 @@ const runtimeLayer = Layer.unwrap(
 ).pipe(Layer.provide(jobLayer))
 const it = testEffect(
   Layer.merge(
-    AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node, Bus.node]), [
+    AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node, Bus.node, Database.node, CodeModeStore.node]), [
       [Mcp.node, mcp],
       [Permission.node, permissions],
       [PluginRuntime.node, runtimeLayer],
@@ -1523,6 +1526,7 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
         "demo_search",
         "other_lookup",
         "execute",
+        "execution_result",
       ])
       const override = yield* registry.transform((draft) => {
         draft.add({
@@ -1549,6 +1553,7 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
         "demo_search",
         "other_lookup",
         "execute",
+        "execution_result",
       ])
       expect((yield* toolDefinitions(registry)).find((tool) => tool.name === "demo_search")?.description).toBe(
         "Override search",
@@ -1587,6 +1592,7 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
         "demo_status",
         "other_lookup",
         "execute",
+        "execution_result",
       ])
       expect((yield* toolDefinitions(registry)).find((tool) => tool.name === "demo_search")?.description).toBe(
         "Override search",
@@ -1612,6 +1618,7 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
         "demo_refreshed",
         "demo_search",
         "execute",
+        "execution_result",
       ])
       expect((yield* toolDefinitions(registry)).find((tool) => tool.name === "demo_search")?.description).toBe(
         "Latest search",
@@ -1659,14 +1666,22 @@ testEffect(Layer.empty).effect("coalesces queued MCP tool notifications after in
     const bus = yield* Bus.Service
     yield* registration.flush
     expect(reads).toBe(1)
-    expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["demo_read_1", "execute"])
+    expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual([
+      "demo_read_1",
+      "execute",
+      "execution_result",
+    ])
 
     yield* bus.publish(McpEvent.ToolsChanged, { server: "demo" })
     yield* TestClock.adjust("250 millis")
     yield* Effect.forEach(Array.from({ length: 20 }), () => bus.publish(McpEvent.ToolsChanged, { server: "demo" }))
     yield* TestClock.adjust("2 seconds")
     expect(reads).toBe(3)
-    expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["demo_read_3", "execute"])
+    expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual([
+      "demo_read_3",
+      "execute",
+      "execution_result",
+    ])
   }).pipe(
     Effect.provide(
       AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node, Bus.node]), [
@@ -1704,6 +1719,7 @@ it.effect("advertises MCP output schemas to Code Mode", () =>
       "direct_lookup",
       "direct_media",
       "execute",
+      "execution_result",
     ])
     expect(toolSet.codeModeCatalog?.find((tool) => tool.path === "demo.search")?.signature).toContain("ok: boolean")
     expect(execute?.description).not.toContain("tools.demo.search")
@@ -1739,6 +1755,7 @@ it.effect("forwards the invoking session through direct and Code Mode MCP tools"
     })
 
     const codeModeSessionID = Session.ID.make("ses_mcp_codemode")
+    yield* seedToolSession(codeModeSessionID)
     const started = yield* toolSet.execute({
       sessionID: codeModeSessionID,
       ...toolIdentity,
@@ -1746,7 +1763,7 @@ it.effect("forwards the invoking session through direct and Code Mode MCP tools"
         type: "tool-call",
         id: "call_mcp_codemode",
         name: "execute",
-        input: { code: "return await tools.demo.search({})" },
+        input: { mode: "detached", code: "return tools.demo.search({})" },
       },
     })
     yield* waitForCodeMode(started.output, {
@@ -1774,24 +1791,26 @@ it.effect("returns content-only MCP results through Code Mode", () =>
 
     expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.status")).toBe(true)
 
+    const sessionID = Session.ID.make("ses_mcp_content_only")
+    yield* seedToolSession(sessionID)
     const execution = yield* toolSet.execute({
-      sessionID: Session.ID.make("ses_mcp_content_only"),
+      sessionID,
       ...toolIdentity,
       call: {
         type: "tool-call",
         id: "call_mcp_content_only",
         name: "execute",
-        input: { code: "return await tools.demo.status({})" },
+        input: { mode: "detached", code: "return tools.demo.status({})" },
       },
     })
 
     expect(
       yield* waitForCodeMode(execution.output, {
-        sessionID: Session.ID.make("ses_mcp_content_only"),
+        sessionID,
         assistantMessageID: toolIdentity.messageID,
         id: "call_mcp_content_only",
       }),
-    ).toMatchObject({ status: "completed", output: "hello" })
+    ).toMatchObject({ ok: true, value: "hello" })
   }),
 )
 
@@ -1864,6 +1883,7 @@ it.effect("waits for permission before calling an MCP tool", () =>
     expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.search")).toBe(true)
 
     const sessionID = Session.ID.make("ses_mcp_permission")
+    yield* seedToolSession(sessionID)
     const started = yield* toolSet.execute({
       sessionID,
       ...toolIdentity,
@@ -1871,7 +1891,7 @@ it.effect("waits for permission before calling an MCP tool", () =>
         type: "tool-call",
         id: "call_mcp_permission",
         name: "execute",
-        input: { code: "return await tools.demo.search({})" },
+        input: { mode: "detached", code: "return tools.demo.search({})" },
       },
     })
     const executionID = yield* activateCodeMode(started.output, {
@@ -1889,7 +1909,7 @@ it.effect("waits for permission before calling an MCP tool", () =>
       source: {
         type: "tool",
         messageID: toolIdentity.messageID,
-        id: "call_mcp_permission",
+        id: "call_mcp_permission:0",
       },
     })
     expect(calls).toBe(0)
@@ -1911,23 +1931,25 @@ it.effect("does not call MCP when permission is blocked", () =>
     const toolSet = yield* registry.snapshot()
     expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.search")).toBe(true)
 
+    const sessionID = Session.ID.make("ses_mcp_blocked")
+    yield* seedToolSession(sessionID)
     const execution = yield* toolSet.execute({
-      sessionID: Session.ID.make("ses_mcp_blocked"),
+      sessionID,
       ...toolIdentity,
       call: {
         type: "tool-call",
         id: "call_mcp_blocked",
         name: "execute",
-        input: { code: "return await tools.demo.search({})" },
+        input: { mode: "detached", code: "return tools.demo.search({})" },
       },
     })
     expect(
       yield* waitForCodeMode(execution.output, {
-        sessionID: Session.ID.make("ses_mcp_blocked"),
+        sessionID,
         assistantMessageID: toolIdentity.messageID,
         id: "call_mcp_blocked",
       }),
-    ).toMatchObject({ status: "error", error: expect.stringContaining("Unable to execute demo_search") })
+    ).toMatchObject({ ok: false, error: { message: expect.stringContaining("Unable to execute demo_search") } })
     expect(calls).toBe(0)
   }),
 )

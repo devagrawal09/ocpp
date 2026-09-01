@@ -24,6 +24,7 @@ import { Project } from "@opencode-ai/schema/project"
 import { AbsolutePath, RelativePath } from "../schema.js"
 import type { SessionSchema } from "./schema.js"
 import { ProjectTable } from "../project/sql.js"
+import { CodeModeStore } from "../codemode/store.js"
 
 type DatabaseService = Database.Interface["db"]
 type MessageEvent = Exclude<
@@ -105,6 +106,7 @@ const publishSessionUsage = Effect.fn("SessionProjector.publishUsage")(function*
 
 const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
   db: DatabaseService,
+  codemode: CodeModeStore.Interface,
   event: typeof SessionEvent.Forked.Type,
 ) {
   const parent = yield* db
@@ -220,6 +222,11 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
     cursor = rows.at(-1)!.seq
   }
   if (copiedSeq !== undefined) yield* Bus.reserveSequence(db, event.data.sessionID, copiedSeq)
+  yield* codemode.fork({
+    from: event.data.parentID,
+    to: event.data.sessionID,
+    throughSeq: copiedSeq ?? -1,
+  })
   if (event.data.instructions)
     yield* InstructionState.initialize(db, event.data.sessionID, event.durable.seq, event.data.instructions)
 })
@@ -434,6 +441,7 @@ const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
+    const codemode = yield* CodeModeStore.Service
     yield* bus.project(SessionEvent.Created, (event) =>
       Effect.gen(function* () {
         const stored = yield* db
@@ -587,7 +595,7 @@ const layer = Layer.effectDiscard(
     })
     yield* bus.project(SessionEvent.MessageContentUpdated, (event) => run(db, event))
     yield* bus.project(SessionEvent.UsageRecorded, (event) => applyUsage(db, event.data.sessionID, event.data))
-    yield* bus.project(SessionEvent.Forked, (event) => projectFork(db, event))
+    yield* bus.project(SessionEvent.Forked, (event) => projectFork(db, codemode, event))
     yield* bus.project(SessionEvent.InboxDelivered, (event) =>
       Effect.gen(function* () {
         const input = yield* SessionInbox.projectDelivered(db, {
@@ -755,6 +763,7 @@ const layer = Layer.effectDiscard(
           .where(eq(SessionTable.id, event.data.sessionID))
           .run()
           .pipe(Effect.orDie)
+        yield* codemode.revert({ sessionID: event.data.sessionID, beforeSeq: boundary.seq })
         yield* InstructionState.reset(db, event.data.sessionID)
       }),
     )
@@ -772,4 +781,8 @@ const layer = Layer.effectDiscard(
   }),
 )
 
-export const node = makeGlobalNode({ name: "session-projector", layer, deps: [Bus.node, Database.node] })
+export const node = makeGlobalNode({
+  name: "session-projector",
+  layer,
+  deps: [Bus.node, Database.node, CodeModeStore.node],
+})

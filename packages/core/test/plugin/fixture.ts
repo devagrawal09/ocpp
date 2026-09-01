@@ -8,6 +8,8 @@ import { LayerNodePlatform } from "@opencode-ai/util/effect/app-node-platform"
 import { AppProcess } from "@opencode-ai/util/process"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Bus } from "@opencode-ai/core/bus"
+import { Database } from "@opencode-ai/core/database/database"
+import { CodeModeStore } from "@opencode-ai/core/codemode/store"
 import { FileSystem } from "@opencode-ai/core/filesystem"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Form } from "@opencode-ai/core/form"
@@ -99,6 +101,8 @@ export const PluginTestLayer = Layer.merge(
       Npm.node,
       Credential.node,
       Bus.node,
+      Database.node,
+      CodeModeStore.node,
       Form.node,
       Generate.node,
       LayerNodePlatform.httpClient,

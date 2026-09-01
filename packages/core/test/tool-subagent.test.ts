@@ -109,7 +109,7 @@ const subagentPluginSupervisor = makeLocationNode({
     PluginSupervisor.Service,
     registerToolPlugin(SubagentTool.Plugin).pipe(Effect.as(PluginSupervisor.Service.of({ flush: Effect.void }))),
   ),
-  deps: [Agent.node, Bus.node, Config.node, Permission.node, PluginRuntime.node, Tool.node],
+  deps: [Agent.node, Config.node, Permission.node, PluginRuntime.node, Tool.node],
 })
 
 const nodes = LayerNode.group([
@@ -131,7 +131,14 @@ const completionIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([nodes, SessionRestart.node, KV.node]), [
     [Global.node, tempGlobalLayer],
     [PluginSupervisor.node, subagentPluginSupervisor],
-    [LayerNodePlatform.llmClient, TestLLM.testLayer({ fallback: TestLLM.text(childText, "completion") })],
+    [
+      LayerNodePlatform.llmClient,
+      TestLLM.testLayer({
+        fallback: TestLLM.tool("call-submit", "execute", {
+          code: "return tools.submit_result({ answer: 42 })",
+        }),
+      }),
+    ],
     [
       SessionRunnerModel.node,
       Layer.succeed(SessionRunnerModel.Service, {
@@ -191,7 +198,9 @@ describe("SubagentTool", () => {
 
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
-          expect((yield* registry.snapshot()).definitions.map((tool) => tool.name)).toContain(SubagentTool.name)
+          const snapshot = yield* registry.snapshot()
+          expect(snapshot.definitions.map((tool) => tool.name)).toContain(SubagentTool.name)
+          expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toContain(SubagentTool.name)
           expect(
             yield* executeTool(registry, {
               sessionID: parent.id,
@@ -527,6 +536,50 @@ describe("SubagentTool", () => {
               message: expect.stringContaining("No model is available for session"),
             },
           })
+        }),
+      ),
+    ),
+  )
+
+  completionIt.live("returns a structured submission and removes the temporary tool", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const settled = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-structured-subagent",
+              name: SubagentTool.name,
+              input: {
+                agent: "reviewer",
+                description: "structured review",
+                prompt: "Return the answer",
+                outputSchema: {
+                  type: "object",
+                  properties: { answer: { type: "number" } },
+                  required: ["answer"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          })
+
+          expect(settled.output).toMatchObject({ status: "completed", output: { answer: 42 } })
+          const childID = outputSessionID(settled.metadata)
+          expect(
+            (yield* registry.snapshot(undefined, childID)).codeModeCatalog?.map((tool) => tool.path),
+          ).not.toContain("submit_result")
         }),
       ),
     ),

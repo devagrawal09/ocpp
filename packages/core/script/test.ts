@@ -30,6 +30,7 @@ const environment = {
   OPENCODE_CONFIG_DIR: path.join(home, ".config", "opencode"),
   OPENCODE_CONFIG: undefined,
   OPENCODE_CONFIG_CONTENT: undefined,
+  ZDOTDIR: undefined,
   TMPDIR: temporary,
   ...(process.platform === "win32" ? { USERPROFILE: home, TMP: temporary, TEMP: temporary } : {}),
 }

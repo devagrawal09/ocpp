@@ -3,13 +3,15 @@ import { realpathSync } from "node:fs"
 import os from "os"
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Queue, Scope, Stream } from "effect"
+import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect"
+import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
 import { Money } from "@opencode-ai/schema/money"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { makeGlobalNode, makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { filesystem } from "@opencode-ai/util/effect/app-node-platform"
 import { Database } from "@opencode-ai/core/database/database"
+import { CodeModeStore } from "@opencode-ai/core/codemode/store"
 import { Bus } from "@opencode-ai/core/bus"
 import { Config } from "@opencode-ai/core/config"
 import { Environment } from "@opencode-ai/core/environment/index"
@@ -44,7 +46,7 @@ import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
 import { Expected } from "./lib/session-message"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { executeTool, readCodeModeResult, registerToolPlugin, toolDefinitions, toolIdentity } from "./lib/tool"
 
 const sessionID = Session.ID.make("ses_shell_tool_test")
 const sessionModel = Model.Ref.make({ id: Model.ID.make("test"), providerID: Provider.ID.make("test") })
@@ -145,6 +147,7 @@ const shellPluginSupervisor = makeLocationNode({
 
 const nodes = LayerNode.group([
   Database.node,
+  CodeModeStore.node,
   Bus.node,
   Job.node,
   Session.node,
@@ -704,7 +707,7 @@ describe("ShellTool ordinary shell syntax", () => {
 })
 
 describe("ShellTool", () => {
-  it.live("returns both parallel CodeMode shell results", () =>
+  it.live("returns both sequential Code Mode shell results", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => {
@@ -725,26 +728,20 @@ describe("ShellTool", () => {
                 type: "tool-call",
                 id: "call-parallel-shells",
                 name: "execute",
-                input: { code: `return await Promise.all([tools.shell(${inputs[0]}), tools.shell(${inputs[1]})])` },
+                input: { code: `return [tools.shell(${inputs[0]}), tools.shell(${inputs[1]})]` },
               },
             }).pipe(Effect.timeout("3 seconds"))
             expect(result.status).toBe("completed")
-            const text = result.content?.find((item) => item.type === "text")?.text ?? ""
-            const executionID = /Code Mode execution (exe_[^ ]+) started\./.exec(text)?.[1]
-            if (!executionID) return yield* Effect.die("Code Mode execution ID is unavailable")
-            yield* (yield* Bus.Service).publish(SessionEvent.Tool.Success, {
-              sessionID,
-              assistantMessageID: toolIdentity.messageID,
-              id: "call-parallel-shells",
-              content: [{ type: "text", text: "Execution started" }],
-              executed: false,
+            const output = Schema.decodeUnknownSync(
+              Schema.Struct({ executionID: CodeModeExecution.ID, status: Schema.Literal("completed") }),
+            )(result.output)
+            expect(yield* readCodeModeResult(output.executionID, sessionID)).toMatchObject({
+              ok: true,
+              value: [
+                { output: "one", exit: 0, truncated: false, status: "completed" },
+                { output: "two", exit: 0, truncated: false, status: "completed" },
+              ],
             })
-            const output = (yield* (yield* Job.Service).wait({ id: executionID })).info?.output
-            if (!output) return yield* Effect.die("Code Mode execution output is unavailable")
-            expect(JSON.parse(output)).toEqual([
-              { output: "one", exit: 0, truncated: false, status: "completed" },
-              { output: "two", exit: 0, truncated: false, status: "completed" },
-            ])
           }),
         )
       },
@@ -1584,6 +1581,4 @@ describe("ShellTool", () => {
       ),
     )
   }
-
-
 })

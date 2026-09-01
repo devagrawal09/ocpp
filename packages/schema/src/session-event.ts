@@ -556,11 +556,7 @@ export namespace CodeMode {
   export const Started = Event.durable({
     type: "session.codemode.started",
     ...options,
-    schema: {
-      ...CodeModeBase,
-      code: Schema.String,
-      timeoutMs: PositiveInt,
-    },
+    schema: CodeModeBase,
   })
   export type Started = typeof Started.Type
 
@@ -579,7 +575,6 @@ export namespace CodeMode {
     schema: {
       ...CodeModeBase,
       events: CodeModeExecution.Entries,
-      output: Schema.String,
     },
   })
   export type Completed = typeof Completed.Type

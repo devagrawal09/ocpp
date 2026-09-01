@@ -43,7 +43,7 @@ export const CodeModeTrace = {
       "codemode_execute",
       "execute",
       "completed",
-      { code: "const files = [...]" },
+      { code: 'const files = await tools.glob({ pattern: "**/*.ts" })\nreturn { total: files.length }' },
       {
         output: "{ total: 1482 }",
         metadata: {
@@ -76,6 +76,54 @@ export const CodeModeTrace = {
       <section style={{ width: "100%", "max-width": "720px", padding: "24px" }}>
         <CurrentSessionProviders document={storyDocument([execute])}>
           <CurrentContextToolGroup parts={[execute]} busy={false} open={open()} onOpenChange={setOpen} />
+        </CurrentSessionProviders>
+      </section>
+    )
+  },
+}
+
+export const CustomToolTrace = {
+  render: () => {
+    const [open, setOpen] = createSignal(true)
+    const custom = storyTool(
+      "custom_inspect",
+      "inspect_repository",
+      "completed",
+      { area: "tools" },
+      {
+        output: '{ "files": 2 }',
+        metadata: {
+          executionKind: "custom-tool",
+          executionStatus: "completed",
+          events: [
+            {
+              type: "tool",
+              tool: "grep",
+              status: "completed",
+              input: { pattern: "Tool.Info" },
+              output: "src/tool.ts:42",
+            },
+            {
+              type: "tool",
+              tool: "read",
+              status: "running",
+              input: { path: "src/tool.ts" },
+            },
+            {
+              type: "tool",
+              tool: "shell",
+              status: "error",
+              input: { command: "bun test" },
+              error: "Command failed",
+            },
+          ],
+        },
+      },
+    )
+    return (
+      <section style={{ width: "100%", "max-width": "720px", padding: "24px" }}>
+        <CurrentSessionProviders document={storyDocument([custom])}>
+          <CurrentContextToolGroup parts={[custom]} busy={false} open={open()} onOpenChange={setOpen} />
         </CurrentSessionProviders>
       </section>
     )

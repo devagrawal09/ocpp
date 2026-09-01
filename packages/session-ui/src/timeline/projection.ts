@@ -490,7 +490,7 @@ function groupContent(
   editToolDefaultOpen: boolean,
 ): PartGroup[] {
   const groups: PartGroup[] = []
-  let adjacent: { type: "context" | "patch" | "edit"; refs: PartRef[]; tools: boolean; execute: boolean } | undefined
+  let adjacent: { type: "context" | "patch" | "edit"; refs: PartRef[]; tools: boolean; isolated: boolean } | undefined
   const flush = () => {
     const current = adjacent
     const first = current?.refs[0]
@@ -531,11 +531,14 @@ function groupContent(
           ? "context"
           : undefined
     if (type) {
-      const execute = item.content.type === "tool" && item.content.name === "execute"
-      if (adjacent && (adjacent.type !== type || execute || adjacent.execute)) flush()
-      adjacent ??= { type, refs: [], tools: false, execute: false }
+      const isolated =
+        item.content.type === "tool" &&
+        (item.content.name === "execute" ||
+          ("metadata" in item.content.state && item.content.state.metadata?.executionKind === "custom-tool"))
+      if (adjacent && (adjacent.type !== type || isolated || adjacent.isolated)) flush()
+      adjacent ??= { type, refs: [], tools: false, isolated: false }
       adjacent.tools ||= item.content.type === "tool"
-      adjacent.execute ||= execute
+      adjacent.isolated ||= isolated
       adjacent.refs.push({ messageID: item.messageID, partID: item.partID })
       return
     }
@@ -567,7 +570,7 @@ function toolGroupType(
     !hasContextGroup &&
     (content.state.status !== "completed" ||
       ("metadata" in content.state && content.state.metadata?.status === "running")) &&
-    (content.name === "shell" || content.name === "execute" || content.name === "subagent")
+    (content.name === "shell" || content.name === "subagent")
   )
     return undefined
   if (currentContentDefaultOpen(content, shellExpanded, editExpanded) !== true) return "context"

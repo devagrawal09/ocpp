@@ -1,6 +1,6 @@
 import { expect, story } from "../../storybook/playwright/story"
 
-for (const tool of ["shell", "execute", "subagent"]) {
+for (const tool of ["shell", "subagent"]) {
   for (const open of [false, true]) {
     story(`keeps ${tool} inside an existing ${open ? "open" : "closed"} group through execution`, async ({ mount }) => {
       const timeline = await mount("current-session-terminal-work--terminal-commands", {
@@ -15,30 +15,43 @@ for (const tool of ["shell", "execute", "subagent"]) {
       const original = await group.elementHandle()
       for (const action of [undefined, "Complete input", "Run command", "Complete command"] as const) {
         if (action) await timeline.getByRole("button", { name: action, exact: true }).click()
-        const executeStarted = tool === "execute" && (action === "Run command" || action === "Complete command")
-        const partIDs =
-          tool !== "execute"
-            ? "tool_context_lifecycle,tool_shell_lifecycle"
-            : executeStarted
-              ? "tool_context_lifecycle,tool_shell_lifecycle:0"
-              : "tool_context_lifecycle"
-        await expect(group).toHaveAttribute("data-timeline-part-ids", partIDs)
+        await expect(group).toHaveAttribute("data-timeline-part-ids", "tool_context_lifecycle,tool_shell_lifecycle")
         await expect(
           group.locator('[data-component="context-tool-group-trigger"] [data-slot="basic-tool-tool-title"]'),
-        ).toHaveText(tool === "execute" ? (executeStarted ? "Code Mode: 2 steps" : "Code Mode: 1 step") : /^2 /)
+        ).toHaveText(/^2 /)
         await expect(timeline.locator('[data-timeline-row="AssistantPart"]')).toHaveCount(1)
         await expect(trigger).toHaveAttribute("aria-expanded", String(open))
         expect(await original!.evaluate((node) => node.isConnected)).toBe(true)
-        if (open && tool !== "execute") {
+        if (open) {
           await expect(group.locator('[data-timeline-part-id="tool_shell_lifecycle"]')).toBeVisible()
-        }
-        if (open && executeStarted) {
-          await expect(group.locator('[data-timeline-part-id="tool_shell_lifecycle:0"]')).toBeVisible()
         }
       }
     })
   }
 }
+
+story("shows Executing for a standalone execute call while its input streams", async ({ mount }) => {
+  const timeline = await mount("current-session-terminal-work--terminal-commands", {
+    args: { streaming: true, tool: "execute" },
+  })
+  const group = timeline.locator('[data-component="collapsed-tool-group"]')
+  const title = group.locator('[data-slot="basic-tool-tool-title"]')
+  const shimmer = title.locator('[data-component="text-shimmer"]')
+  const steps = group.locator('[data-slot="context-tool-group-prefix"]')
+
+  await expect(group).toBeVisible()
+  await expect(shimmer).toHaveAttribute("aria-label", "Executing")
+  await expect(shimmer).toHaveAttribute("data-active", "true")
+  await expect(steps).toHaveCount(0)
+  await timeline.getByRole("button", { name: "Complete input", exact: true }).click()
+  await expect(shimmer).toHaveAttribute("aria-label", "Executing")
+  await timeline.getByRole("button", { name: "Run command", exact: true }).click()
+  await expect(shimmer).toHaveAttribute("aria-label", "Executing")
+  await expect(steps).toHaveText("1 step")
+  await timeline.getByRole("button", { name: "Complete command", exact: true }).click()
+  await expect(shimmer).toHaveAttribute("aria-label", "Executed")
+  await expect(shimmer).toHaveAttribute("data-active", "false")
+})
 
 for (const expanded of [false, true]) {
   // Moved from packages/app/e2e/regression/session-timeline-lifecycle-state.spec.ts

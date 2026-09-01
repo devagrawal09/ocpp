@@ -9,7 +9,8 @@ for (const { width, direction } of [
     const root = await mount("current-tool-group--code-mode-trace")
     await root.evaluate((element, dir) => element.setAttribute("dir", dir), direction)
     const group = root.locator('[data-component="collapsed-tool-group"]')
-    await expect(group.getByRole("button", { name: "Code Mode: 8 steps", exact: true })).toBeVisible()
+    await expect(group.getByRole("button", { name: "Executed 8 steps", exact: true })).toBeVisible()
+    await expect(group.locator('[data-slot="context-tool-group-prefix"]')).toHaveText("8 steps")
     const rows = group.locator('[data-slot="context-tool-group-item"]')
     await expect(rows).toHaveCount(8)
     await expect(rows).toHaveText([
@@ -32,13 +33,16 @@ story("renders parallel Execute calls separately without completion notices", as
   const root = await mount("current-session-terminal-work--parallel-code-mode")
   const groups = root.locator('[data-component="collapsed-tool-group"]')
   await expect(groups).toHaveCount(3)
-  await expect(groups.getByRole("button", { name: "Code Mode: 3 steps", exact: true })).toHaveCount(3)
+  await expect(groups.getByRole("button", { name: "Executed 3 steps", exact: true })).toHaveCount(3)
+  await expect(groups.locator('[data-slot="context-tool-group-prefix"]')).toHaveText(["3 steps", "3 steps", "3 steps"])
   await expect(root.getByText("Code Mode execution", { exact: true })).toHaveCount(0)
-  expect(await groups.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-timeline-part-ids")))).toEqual([
-    "parallel_execute_a:0,parallel_execute_a:1,parallel_execute_a:2",
-    "parallel_execute_b:0,parallel_execute_b:1,parallel_execute_b:2",
-    "parallel_execute_c:0,parallel_execute_c:1,parallel_execute_c:2",
-  ])
+  expect(await groups.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-timeline-part-ids")))).toEqual(
+    [
+      "parallel_execute_a:0,parallel_execute_a:1,parallel_execute_a:2",
+      "parallel_execute_b:0,parallel_execute_b:1,parallel_execute_b:2",
+      "parallel_execute_c:0,parallel_execute_c:1,parallel_execute_c:2",
+    ],
+  )
 })
 
 for (const reasoningDefaultOpen of [false, true]) {

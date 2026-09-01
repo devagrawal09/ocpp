@@ -4,11 +4,13 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  ErrorBoundary,
   For,
   Match,
   onCleanup,
   onMount,
   Show,
+  Suspense,
   Switch,
   Index,
   type JSX,
@@ -19,6 +21,8 @@ import { type SessionSummary, useData } from "../context"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
 import { type UiI18n, useI18n } from "@opencode-ai/ui/context/i18n"
 import { BasicTool, GenericTool } from "../components/basic-tool"
+import { formatExecutionCode } from "../components/execution-code"
+import { HighlightedCode } from "../components/highlighted-code"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
@@ -592,8 +596,9 @@ function executeEvents(value: unknown): Array<ExecuteToolEvent | ExecuteTraceEve
 }
 
 function executeParts(tool: SessionMessageAssistantTool, fallback: string): RenderedContextPart[] {
-  if (tool.name !== "execute") return [tool]
   const metadata = currentToolMetadata(tool)
+  const custom = metadata.executionKind === "custom-tool"
+  if (tool.name !== "execute" && !custom) return [tool]
   const events = executeEvents(metadata.events)
   const executionFailed = metadata.executionStatus === "error" || metadata.executionStatus === "cancelled"
   const failed = tool.state.status === "error" || metadata.error === true || executionFailed
@@ -612,7 +617,7 @@ function executeParts(tool: SessionMessageAssistantTool, fallback: string): Rend
           },
         }
       : tool
-  if (events.length === 0) return failed ? [failure] : []
+  if (events.length === 0) return custom || failed ? [failure] : []
   const parts = events.map<SessionMessageAssistantTool | ExecuteTracePart>((event, index) => {
     if (event.type === "trace") return { ...event, id: tool.id + ":" + index }
     const call = event
@@ -716,6 +721,17 @@ export function CurrentContextToolGroup(props: {
 }) {
   const i18n = useI18n()
   const codemode = createMemo(() => props.parts.some((part) => part.type === "tool" && part.name === "execute"))
+  const custom = createMemo(() =>
+    props.parts.some((part) => part.type === "tool" && currentToolMetadata(part).executionKind === "custom-tool"),
+  )
+  const source = createMemo(
+    () =>
+      props.parts.flatMap((part) => {
+        if (part.type !== "tool" || part.name !== "execute") return []
+        const code = currentToolInput(part).code
+        return typeof code === "string" && code ? [formatExecutionCode(code)] : []
+      })[0],
+  )
   const parts = createMemo(() =>
     props.parts.flatMap<RenderedContextPart>((part) => {
       if (part.type === "tool") return executeParts(part, i18n.t("ui.toolErrorCard.failed"))
@@ -723,6 +739,16 @@ export function CurrentContextToolGroup(props: {
     }),
   )
   const tools = createMemo(() => parts().filter((part): part is SessionMessageAssistantTool => part.type === "tool"))
+  const executing = createMemo(() =>
+    props.parts.some(
+      (part) =>
+        part.type === "tool" &&
+        part.name === "execute" &&
+        (part.state.status === "streaming" ||
+          part.state.status === "running" ||
+          currentToolMetadata(part).executionStatus === "running"),
+    ),
+  )
   const pending = createMemo(
     () => props.busy || tools().some((tool) => tool.state.status === "streaming" || tool.state.status === "running"),
   )
@@ -739,10 +765,15 @@ export function CurrentContextToolGroup(props: {
     ].join(", "),
   )
   const label = createMemo(() => {
-    if (codemode()) {
+    if (custom()) {
       const count = parts().length
-      const title = i18n.plural("ui.codemode.steps", count)
+      const title = i18n.plural("ui.customTool.steps", count)
       return { text: title, title, before: "", after: "" }
+    }
+    if (codemode()) {
+      const title = i18n.t(executing() ? "ui.codemode.executing" : "ui.codemode.executed")
+      const steps = parts().length === 0 ? "" : i18n.plural("ui.codemode.steps", parts().length)
+      return { text: [title, steps].filter(Boolean).join(" "), title, before: "", after: steps }
     }
     const title = tools().length + " " + names()
     const text = i18n.t("ui.messagePart.tools.used", { tools: title })
@@ -792,7 +823,7 @@ export function CurrentContextToolGroup(props: {
 
   return (
     <div
-      hidden={parts().length === 0}
+      hidden={parts().length === 0 && !source() && !codemode()}
       data-component="collapsed-tool-group"
       data-timeline-part-ids={parts()
         .map((part) => part.id)
@@ -800,7 +831,7 @@ export function CurrentContextToolGroup(props: {
     >
       <BasicTool
         icon="glasses"
-        status={pending() ? "running" : "completed"}
+        status={(codemode() ? executing() : pending()) ? "running" : "completed"}
         compact
         hasContent
         allowOpenWhilePending
@@ -812,7 +843,11 @@ export function CurrentContextToolGroup(props: {
               <Show when={label().before}>
                 {(before) => <span data-slot="context-tool-group-prefix">{before()}</span>}
               </Show>
-              <span data-slot="basic-tool-tool-title">{label().title}</span>
+              <span data-slot="basic-tool-tool-title">
+                <Show when={codemode()} fallback={label().title}>
+                  <TextShimmer text={label().title} active={executing()} />
+                </Show>
+              </span>
               <Show when={label().after}>
                 {(after) => <span data-slot="context-tool-group-prefix">{after()}</span>}
               </Show>
@@ -821,6 +856,33 @@ export function CurrentContextToolGroup(props: {
         }
       >
         <div data-component="context-tool-group-list">
+          <Show when={source()}>
+            {(code) => (
+              <div data-component="codemode-source">
+                <div data-slot="codemode-section-label">{i18n.t("ui.codemode.source")}</div>
+                <ErrorBoundary
+                  fallback={() => (
+                    <pre data-component="highlighted-code">
+                      <code class="language-javascript">{code()}</code>
+                    </pre>
+                  )}
+                >
+                  <Suspense
+                    fallback={
+                      <pre data-component="highlighted-code">
+                        <code class="language-javascript">{code()}</code>
+                      </pre>
+                    }
+                  >
+                    <HighlightedCode code={code()} language="javascript" />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+          </Show>
+          <Show when={source() && items().length > 0}>
+            <div data-slot="codemode-section-label">{i18n.t("ui.codemode.executionTrace")}</div>
+          </Show>
           <Index each={items()}>
             {(item) => {
               const group = createMemo(() => {

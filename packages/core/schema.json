@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "49e6caa1-6ff6-47d2-bc5f-b47ec12b1635",
-  "prevIds": ["be60f352-8da1-40e1-8d70-dc41121cfbc5"],
+  "id": "846b5034-3f91-4682-8f50-6df6df15a661",
+  "prevIds": ["49e6caa1-6ff6-47d2-bc5f-b47ec12b1635"],
   "ddl": [
     {
       "name": "account_state",
@@ -17,15 +17,11 @@
       "entityType": "tables"
     },
     {
-      "name": "codemode_activation",
-      "entityType": "tables"
-    },
-    {
-      "name": "codemode_binding_history",
-      "entityType": "tables"
-    },
-    {
       "name": "codemode_binding",
+      "entityType": "tables"
+    },
+    {
+      "name": "codemode_execution",
       "entityType": "tables"
     },
     {
@@ -33,11 +29,7 @@
       "entityType": "tables"
     },
     {
-      "name": "codemode_notebook",
-      "entityType": "tables"
-    },
-    {
-      "name": "codemode_result",
+      "name": "codemode_reservation",
       "entityType": "tables"
     },
     {
@@ -296,13 +288,63 @@
     },
     {
       "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "codemode_binding"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "codemode_binding"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "value",
+      "entityType": "columns",
+      "table": "codemode_binding"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_seq",
+      "entityType": "columns",
+      "table": "codemode_binding"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "execution_id",
+      "entityType": "columns",
+      "table": "codemode_binding"
+    },
+    {
+      "type": "text",
       "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
       "name": "id",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "text",
@@ -312,7 +354,7 @@
       "generated": null,
       "name": "session_id",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "text",
@@ -322,7 +364,7 @@
       "generated": null,
       "name": "assistant_message_id",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "text",
@@ -332,27 +374,7 @@
       "generated": null,
       "name": "tool_call_id",
       "entityType": "columns",
-      "table": "codemode_activation"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "base_revision",
-      "entityType": "columns",
-      "table": "codemode_activation"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "mode",
-      "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "text",
@@ -362,7 +384,7 @@
       "generated": null,
       "name": "status",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "text",
@@ -370,9 +392,9 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "code",
+      "name": "program",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "integer",
@@ -382,7 +404,27 @@
       "generated": null,
       "name": "ir_version",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "snapshot",
+      "entityType": "columns",
+      "table": "codemode_execution"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "saved",
+      "entityType": "columns",
+      "table": "codemode_execution"
     },
     {
       "type": "text",
@@ -392,7 +434,7 @@
       "generated": null,
       "name": "error",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "integer",
@@ -402,7 +444,7 @@
       "generated": null,
       "name": "time_created",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "integer",
@@ -412,7 +454,7 @@
       "generated": null,
       "name": "time_updated",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "integer",
@@ -422,7 +464,7 @@
       "generated": null,
       "name": "time_completed",
       "entityType": "columns",
-      "table": "codemode_activation"
+      "table": "codemode_execution"
     },
     {
       "type": "text",
@@ -430,87 +472,7 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "session_id",
-      "entityType": "columns",
-      "table": "codemode_binding_history"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "revision",
-      "entityType": "columns",
-      "table": "codemode_binding_history"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "name",
-      "entityType": "columns",
-      "table": "codemode_binding_history"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "value",
-      "entityType": "columns",
-      "table": "codemode_binding_history"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "session_id",
-      "entityType": "columns",
-      "table": "codemode_binding"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "name",
-      "entityType": "columns",
-      "table": "codemode_binding"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "revision",
-      "entityType": "columns",
-      "table": "codemode_binding"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "value",
-      "entityType": "columns",
-      "table": "codemode_binding"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "activation_id",
+      "name": "execution_id",
       "entityType": "columns",
       "table": "codemode_journal"
     },
@@ -606,23 +568,33 @@
     },
     {
       "type": "text",
-      "notNull": false,
+      "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
       "name": "session_id",
       "entityType": "columns",
-      "table": "codemode_notebook"
+      "table": "codemode_reservation"
     },
     {
-      "type": "integer",
+      "type": "text",
       "notNull": true,
       "autoincrement": false,
-      "default": "0",
+      "default": null,
       "generated": null,
-      "name": "revision",
+      "name": "name",
       "entityType": "columns",
-      "table": "codemode_notebook"
+      "table": "codemode_reservation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "execution_id",
+      "entityType": "columns",
+      "table": "codemode_reservation"
     },
     {
       "type": "integer",
@@ -632,77 +604,7 @@
       "generated": null,
       "name": "time_created",
       "entityType": "columns",
-      "table": "codemode_notebook"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_updated",
-      "entityType": "columns",
-      "table": "codemode_notebook"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "activation_id",
-      "entityType": "columns",
-      "table": "codemode_result"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "status",
-      "entityType": "columns",
-      "table": "codemode_result"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "data",
-      "entityType": "columns",
-      "table": "codemode_result"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "bytes",
-      "entityType": "columns",
-      "table": "codemode_result"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_created",
-      "entityType": "columns",
-      "table": "codemode_result"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_updated",
-      "entityType": "columns",
-      "table": "codemode_result"
+      "table": "codemode_reservation"
     },
     {
       "type": "text",
@@ -1962,40 +1864,29 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "fk_codemode_activation_session_id_session_v2_id_fk",
-      "entityType": "fks",
-      "table": "codemode_activation"
-    },
-    {
-      "columns": ["session_id"],
-      "tableTo": "session_v2",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "name": "fk_codemode_binding_history_session_id_session_v2_id_fk",
-      "entityType": "fks",
-      "table": "codemode_binding_history"
-    },
-    {
-      "columns": ["session_id"],
-      "tableTo": "session_v2",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
       "name": "fk_codemode_binding_session_id_session_v2_id_fk",
       "entityType": "fks",
       "table": "codemode_binding"
     },
     {
-      "columns": ["activation_id"],
-      "tableTo": "codemode_activation",
+      "columns": ["session_id"],
+      "tableTo": "session_v2",
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "fk_codemode_journal_activation_id_codemode_activation_id_fk",
+      "name": "fk_codemode_execution_session_id_session_v2_id_fk",
+      "entityType": "fks",
+      "table": "codemode_execution"
+    },
+    {
+      "columns": ["execution_id"],
+      "tableTo": "codemode_execution",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_codemode_journal_execution_id_codemode_execution_id_fk",
       "entityType": "fks",
       "table": "codemode_journal"
     },
@@ -2006,20 +1897,9 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "fk_codemode_notebook_session_id_session_v2_id_fk",
+      "name": "fk_codemode_reservation_session_id_session_v2_id_fk",
       "entityType": "fks",
-      "table": "codemode_notebook"
-    },
-    {
-      "columns": ["activation_id"],
-      "tableTo": "codemode_activation",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "name": "fk_codemode_result_activation_id_codemode_activation_id_fk",
-      "entityType": "fks",
-      "table": "codemode_result"
+      "table": "codemode_reservation"
     },
     {
       "columns": ["aggregate_id"],
@@ -2139,13 +2019,6 @@
       "table": "control_account"
     },
     {
-      "columns": ["session_id", "revision", "name"],
-      "nameExplicit": false,
-      "name": "codemode_binding_history_pk",
-      "entityType": "pks",
-      "table": "codemode_binding_history"
-    },
-    {
       "columns": ["session_id", "name"],
       "nameExplicit": false,
       "name": "codemode_binding_pk",
@@ -2153,11 +2026,18 @@
       "table": "codemode_binding"
     },
     {
-      "columns": ["activation_id", "call_index"],
+      "columns": ["execution_id", "call_index"],
       "nameExplicit": false,
       "name": "codemode_journal_pk",
       "entityType": "pks",
       "table": "codemode_journal"
+    },
+    {
+      "columns": ["session_id", "name"],
+      "nameExplicit": false,
+      "name": "codemode_reservation_pk",
+      "entityType": "pks",
+      "table": "codemode_reservation"
     },
     {
       "columns": ["project_id", "directory"],
@@ -2197,22 +2077,8 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "codemode_activation_pk",
-      "table": "codemode_activation",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["session_id"],
-      "nameExplicit": false,
-      "name": "codemode_notebook_pk",
-      "table": "codemode_notebook",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["activation_id"],
-      "nameExplicit": false,
-      "name": "codemode_result_pk",
-      "table": "codemode_result",
+      "name": "codemode_execution_pk",
+      "table": "codemode_execution",
       "entityType": "pks"
     },
     {
@@ -2313,16 +2179,16 @@
           "isExpression": false
         },
         {
-          "value": "time_created",
+          "value": "message_seq",
           "isExpression": false
         }
       ],
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "codemode_activation_session_created_idx",
+      "name": "codemode_binding_session_seq_idx",
       "entityType": "indexes",
-      "table": "codemode_activation"
+      "table": "codemode_binding"
     },
     {
       "columns": [
@@ -2331,20 +2197,30 @@
           "isExpression": false
         },
         {
-          "value": "name",
-          "isExpression": false
-        },
-        {
-          "value": "revision",
+          "value": "time_created",
           "isExpression": false
         }
       ],
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "codemode_binding_history_session_name_revision_idx",
+      "name": "codemode_execution_session_created_idx",
       "entityType": "indexes",
-      "table": "codemode_binding_history"
+      "table": "codemode_execution"
+    },
+    {
+      "columns": [
+        {
+          "value": "execution_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "codemode_reservation_execution_idx",
+      "entityType": "indexes",
+      "table": "codemode_reservation"
     },
     {
       "columns": [

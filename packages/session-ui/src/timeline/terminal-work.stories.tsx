@@ -212,12 +212,7 @@ const parallelCodeModeDocument = {
     ...["a", "b", "c"].map((id, index) => ({
       id: "msg_parallel_codemode_" + id,
       type: "synthetic" as const,
-      text:
-        '<codemode executionID="exe_story_' +
-        id +
-        '" state="completed">execute-' +
-        id +
-        " finished</codemode>",
+      text: '<codemode executionID="exe_story_' + id + '" state="completed">execute-' + id + " finished</codemode>",
       description: "Code Mode execution",
       metadata: { source: "codemode", executionID: "exe_story_" + id, state: "completed" },
       time: { created: STORY_TIME + 400 + index },
@@ -229,7 +224,7 @@ export const ParallelCodeMode = {
   render: () => (
     <CurrentSessionTimelineStory
       title="Parallel executions"
-      description="Independent Execute calls retain separate lifecycle cards without duplicate completion notices."
+      description="Adjacent Execute calls share one lifecycle card without duplicate completion notices."
       document={parallelCodeModeDocument}
       width="786px"
     />

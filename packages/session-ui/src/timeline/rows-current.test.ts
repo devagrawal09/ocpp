@@ -162,7 +162,7 @@ describe("current session timeline rows", () => {
     ])
   })
 
-  test("separates parallel Code Mode executions and hides their completion notices", () => {
+  test("groups adjacent Code Mode executions and hides their completion notices", () => {
     const source = [
       { id: "msg_user", type: "user", text: "run in parallel", time: { created: 1 } },
       {
@@ -194,10 +194,9 @@ describe("current session timeline rows", () => {
       rows.flatMap((row) =>
         row._tag === "AssistantPart" && row.group.type === "context" ? [row.group.refs.map((ref) => ref.partID)] : [],
       ),
-    ).toEqual([["execute_a"], ["read_between"], ["execute_b"], ["execute_c"]])
+    ).toEqual([["execute_a"], ["read_between"], ["execute_b", "execute_c"]])
     expect(rows.map((row) => row._tag)).toEqual([
       "UserMessage",
-      "AssistantPart",
       "AssistantPart",
       "AssistantPart",
       "AssistantPart",

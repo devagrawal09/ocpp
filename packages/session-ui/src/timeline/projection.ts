@@ -490,7 +490,9 @@ function groupContent(
   editToolDefaultOpen: boolean,
 ): PartGroup[] {
   const groups: PartGroup[] = []
-  let adjacent: { type: "context" | "patch" | "edit"; refs: PartRef[]; tools: boolean; isolated: boolean } | undefined
+  let adjacent:
+    | { type: "context" | "patch" | "edit"; refs: PartRef[]; tools: boolean; execute: boolean; isolated: boolean }
+    | undefined
   const flush = () => {
     const current = adjacent
     const first = current?.refs[0]
@@ -531,12 +533,13 @@ function groupContent(
           ? "context"
           : undefined
     if (type) {
+      const execute = item.content.type === "tool" && item.content.name === "execute"
       const isolated =
         item.content.type === "tool" &&
-        (item.content.name === "execute" ||
-          ("metadata" in item.content.state && item.content.state.metadata?.executionKind === "custom-tool"))
-      if (adjacent && (adjacent.type !== type || isolated || adjacent.isolated)) flush()
-      adjacent ??= { type, refs: [], tools: false, isolated: false }
+        "metadata" in item.content.state &&
+        item.content.state.metadata?.executionKind === "custom-tool"
+      if (adjacent && (adjacent.type !== type || adjacent.execute !== execute || isolated || adjacent.isolated)) flush()
+      adjacent ??= { type, refs: [], tools: false, execute, isolated: false }
       adjacent.tools ||= item.content.type === "tool"
       adjacent.isolated ||= isolated
       adjacent.refs.push({ messageID: item.messageID, partID: item.partID })

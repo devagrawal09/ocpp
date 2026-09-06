@@ -11,6 +11,10 @@ for (const { width, direction } of [
     const group = root.locator('[data-component="collapsed-tool-group"]')
     await expect(group.getByRole("button", { name: "Executed 8 steps", exact: true })).toBeVisible()
     await expect(group.locator('[data-slot="context-tool-group-prefix"]')).toHaveText("8 steps")
+    const source = group.getByRole("button", { name: "Source", exact: true })
+    const trace = group.getByRole("button", { name: "Execution trace", exact: true })
+    await expect(source).toHaveAttribute("aria-expanded", "false")
+    await expect(trace).toHaveAttribute("aria-expanded", "true")
     const rows = group.locator('[data-slot="context-tool-group-item"]')
     await expect(rows).toHaveCount(8)
     await expect(rows).toHaveText([
@@ -26,22 +30,35 @@ for (const { width, direction } of [
     await expect(root.locator('[data-timeline-part-id="codemode_execute"]')).toHaveCount(0)
     await expect(root.locator('[data-timeline-part-id="codemode_execute:3"]')).toBeVisible()
     await expect(root.locator('[data-component="codemode-trace"]').first()).toHaveCSS("direction", direction)
+    await source.click()
+    await trace.click()
+    await expect(source).toHaveAttribute("aria-expanded", "true")
+    await expect(trace).toHaveAttribute("aria-expanded", "false")
+    await expect(group.locator('[data-component="highlighted-code"]')).toBeVisible()
+    await expect(rows).not.toBeVisible()
   })
 }
 
-story("renders parallel Execute calls separately without completion notices", async ({ mount }) => {
+story("renders parallel Execute calls together without completion notices", async ({ mount }) => {
   const root = await mount("current-session-terminal-work--parallel-code-mode")
   const groups = root.locator('[data-component="collapsed-tool-group"]')
-  await expect(groups).toHaveCount(3)
-  await expect(groups.getByRole("button", { name: "Executed 3 steps", exact: true })).toHaveCount(3)
-  await expect(groups.locator('[data-slot="context-tool-group-prefix"]')).toHaveText(["3 steps", "3 steps", "3 steps"])
+  await expect(groups).toHaveCount(1)
+  const executed = groups.getByRole("button", { name: "Executed 9 steps", exact: true })
+  await expect(executed).toBeVisible()
+  await expect(groups.locator('[data-slot="context-tool-group-prefix"]')).toHaveText("9 steps")
   await expect(root.getByText("Code Mode execution", { exact: true })).toHaveCount(0)
   expect(await groups.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-timeline-part-ids")))).toEqual(
     [
-      "parallel_execute_a:0,parallel_execute_a:1,parallel_execute_a:2",
-      "parallel_execute_b:0,parallel_execute_b:1,parallel_execute_b:2",
-      "parallel_execute_c:0,parallel_execute_c:1,parallel_execute_c:2",
+      "parallel_execute_a:0,parallel_execute_a:1,parallel_execute_a:2,parallel_execute_b:0,parallel_execute_b:1,parallel_execute_b:2,parallel_execute_c:0,parallel_execute_c:1,parallel_execute_c:2",
     ],
+  )
+  await executed.click()
+  const trace = groups.locator('[data-component="codemode-trace-content"]')
+  await expect(trace.locator('[data-slot="context-tool-group-item"]')).toHaveCount(9)
+  await expect(trace).toHaveCSS("gap", "0px")
+  await groups.getByRole("button", { name: "Source", exact: true }).click()
+  await expect(groups.locator('[data-component="highlighted-code"]')).toContainText(
+    /return tools\.taska\(\)\s*return tools\.taskb\(\)\s*return tools\.taskc\(\)/,
   )
 })
 

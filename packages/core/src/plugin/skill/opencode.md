@@ -4,37 +4,64 @@ Use this guide as the starting point for work involving OpenCode itself. It
 covers the core concepts needed to configure and customize OpenCode, extend it
 with plugins, and build integrations with the OpenCode SDK, clients, and API.
 
-Full documentation is available at <https://opencode.ai/v2/docs/>. This overview is
-only an index of core concepts. Before answering a question about a topic below,
-fetch the URL named in that section and use the full page as the source of
-truth. Follow links from that page when the question needs more detail. Fetch
-<https://opencode.ai/v2/docs/> first when you need to discover the relevant
-documentation page.
+This repository contains a heavily modified OpenCode V2 implementation. Do not
+assume it matches a published release or the upstream website. When the active
+workspace is an OpenCode checkout, resolve questions against that checkout and
+the running local service before consulting public documentation.
+
+## Source policy
+
+Choose the source of truth based on the question:
+
+- For observed runtime behavior and the runtime API, inspect the elected local
+  service with `opencode2 service status`, `opencode2 api`, its `/openapi.json`,
+  and its logs. The running binary may differ from the current worktree.
+- For implementation behavior, inspect the current checkout's source and tests.
+  Do not infer behavior from package versions, released clients, or upstream
+  code.
+- For API shape, use `packages/protocol/src/api.ts`,
+  `packages/protocol/src/groups/`, and `packages/protocol/openapi.json`; use
+  `packages/server/src/handlers/` for server behavior. Generated client code is
+  downstream of this contract.
+- For configuration shape, use `packages/schema/src/config.ts`, the modules in
+  `packages/schema/src/config/`, the loader in `packages/core/src/config.ts`,
+  and its supporting modules in `packages/core/src/config/`.
+- For architecture and intended V2 invariants, read `AGENTS.md`, the nearest
+  package `AGENTS.md`, and `specs/v2/`.
+- For explanatory documentation, read the local sources in
+  `packages/www/src/docs/content/`. They may lag implementation, so resolve any
+  conflict in favor of code, tests, generated contracts, and observed runtime
+  behavior.
+
+Use <https://opencode.ai/v2/docs/> only as an upstream fallback when the relevant
+local source is unavailable. Clearly label information taken only from upstream
+and do not let it override this fork. Do not use general web search when the
+checkout or running service can answer the question.
 
 ## Version policy
 
 Always answer for OpenCode V2 unless the user explicitly asks about V1,
 legacy OpenCode, or migrating from V1.
 
-Use only <https://opencode.ai/v2/docs/> documentation as the source of truth for V2.
-Do not use <https://opencode.ai/docs/>, which documents V1, and do not use
-general web search to resolve a V2 documentation question when the V2 docs or
-linked pages cover it. The schema served from
+Treat this checkout as the source of truth for its V2 behavior. Do not use
+<https://opencode.ai/docs/>, which documents V1. The schema served from
 <https://opencode.ai/config.json> may describe V1 even though V2 configuration
 files include that URL for editor integration. Never use it to infer V2 field
-names or shapes. If V2 documentation is missing or contradictory, state the
-uncertainty or ask for clarification instead of falling back to V1.
+names or shapes. If local documentation is missing or contradictory, inspect
+the implementation and tests; state any remaining uncertainty instead of
+falling back to V1 or assuming upstream behavior.
 
 V1 documentation and syntax may be consulted only when the user explicitly
 asks about V1 or when needed as migration input. Outputs and recommendations
 must still use V2 unless the user specifically requests a V1 result.
 
-## [CLI](https://opencode.ai/v2/docs/cli)
+## CLI
 
 For questions about the terminal interface, command-line invocation, `run`,
-`mini`, terminal providers, or other CLI behavior, fetch the
-[CLI guide](https://opencode.ai/v2/docs/cli) and the relevant page linked from
-that section.
+`mini`, terminal providers, or other CLI behavior, read
+`packages/www/src/docs/content/cli/index.mdx` and the relevant local page.
+Confirm behavior in `packages/cli/src/` or `packages/tui/src/` when exact current
+behavior matters.
 
 CLI and TUI preferences are separate from OpenCode's server and project
 configuration. They live in the global `~/.config/opencode/cli.json`, or
@@ -42,12 +69,13 @@ configuration. They live in the global `~/.config/opencode/cli.json`, or
 project-local CLI configuration. Most preferences can also be changed from the
 TUI by pressing `Ctrl+P` and selecting **Open settings**.
 
-Fetch the full [CLI configuration guide](https://opencode.ai/v2/docs/cli/config)
-before editing `cli.json`. It covers terminal-only settings such as themes,
-keybindings, terminal plugins, scrolling, attention alerts, diff presentation,
-and terminal integration. Do not put these settings in `opencode.json(c)`.
+Read `packages/www/src/docs/content/cli/config.mdx` before editing `cli.json`. It
+covers terminal-only settings such as themes, keybindings, terminal plugins,
+scrolling, attention alerts, diff presentation, and terminal integration.
+Confirm accepted fields in `packages/cli/src/config/`. Do not put these settings
+in `opencode.json(c)`.
 
-### [Keybinds](https://opencode.ai/v2/docs/cli/keybinds)
+### Keybinds
 
 Configure keybindings under `keybinds` in `cli.json`. The leader key is the
 `keybinds.leader` entry; leader timing is configured separately under
@@ -55,11 +83,11 @@ Configure keybindings under `keybinds` in `cli.json`. The leader key is the
 when event behavior such as `preventDefault` is required. Disable a binding
 with `"none"` or `false`.
 
-Never guess a command ID, default binding, or accepted key syntax. Fetch the
-full [keybind reference](https://opencode.ai/v2/docs/cli/keybinds), which lists
-the current IDs and defaults, before answering or editing a binding.
+Never guess a command ID, default binding, or accepted key syntax. Read
+`packages/www/src/docs/content/cli/keybinds.mdx`, then confirm current IDs and
+defaults in the CLI and TUI source before answering or editing a binding.
 
-## [OpenCode configuration](https://opencode.ai/v2/docs/config)
+## OpenCode configuration
 
 OpenCode's server and project configuration uses JSON or JSONC. Include the
 published schema so the user's editor can validate fields and provide
@@ -89,18 +117,24 @@ Common configuration fields include `model`, `default_agent`, `permissions`,
 `references`, `formatter`, and `lsp`.
 
 This configuration is distinct from `cli.json`. Use the
-[CLI configuration guide](https://opencode.ai/v2/docs/cli/config) for terminal
+local `packages/www/src/docs/content/cli/config.mdx` guide for terminal
 preferences, especially themes and keybindings.
 
-Do not guess field names or shapes. Fetch the V2 configuration guide and its
-linked topic guide as the source of truth, and preserve unrelated settings when
-editing an existing file. Keep the published `$schema` URL in configuration
-examples, but do not fetch it to determine the V2 configuration shape.
+Do not guess field names or shapes. Read
+`packages/www/src/docs/content/config.mdx` and its linked local topic guide,
+then confirm shapes in `packages/schema/src/config.ts` and
+`packages/schema/src/config/`. Preserve unrelated settings when editing an
+existing file. Keep the published `$schema` URL in configuration examples, but
+do not fetch it to determine the V2 configuration shape.
 
-See the [full configuration guide](https://opencode.ai/v2/docs/config) for
-every field, examples, config locations, and links to dedicated feature guides.
+The local configuration guide contains field examples, config locations, and
+links to dedicated feature guides.
 
-## [MCP servers](https://opencode.ai/v2/docs/mcp-servers)
+## MCP servers
+
+Read `packages/www/src/docs/content/mcp-servers.mdx` for setup guidance. Confirm
+the current configuration and behavior in `packages/schema/src/config/mcp.ts`,
+`packages/core/src/config/plugin/mcp.ts`, and the relevant tests.
 
 Configure MCP servers under `mcp.servers`. Prefer the CLI because it preserves
 unrelated configuration. Use `--global` when the user asks to set up a service
@@ -127,37 +161,41 @@ only when OAuth is unavailable or the user explicitly requires them, and use an
 environment substitution such as `{env:MCP_API_KEY}` instead of writing a
 secret into configuration.
 
-## [V1 to V2 migration](https://opencode.ai/v2/docs/migrate-v1)
+## V1 to V2 migration
 
 For any request to migrate OpenCode configuration, agents, commands, skills,
-plugins, integrations, or other behavior from V1 to V2, read the full
-[migration guide](https://opencode.ai/v2/docs/migrate-v1) before acting. In
-the repository, its source is `packages/www/src/docs/content/migrate-v1.mdx`.
+plugins, integrations, or other behavior from V1 to V2, read
+`packages/www/src/docs/content/migrate-v1.mdx` before acting.
 
 V1 config files and `.opencode/` definitions are intended to remain compatible.
 The only intentional breaking changes are the server API and plugin API. Native
 V2 config uses more ergonomic shapes, but conversion is optional. When the user
 requests conversion, inspect the complete configuration, preserve behavior and
 unrelated settings, and apply only the relevant migrations from the guide. For
-plugin migrations, fetch and follow both the migration guide and the full
-[plugins guide](https://opencode.ai/v2/docs/build/plugins). If non-API V1
-functionality fails in V2, use the `report` skill to file it as a compatibility
-bug.
+plugin migrations, follow both the migration guide and
+`packages/www/src/docs/content/build/plugins/index.mdx`. If non-API V1
+functionality fails in V2, confirm the failure against this checkout before
+using the `report` skill to file it as a compatibility bug.
 
-## [Plugins](https://opencode.ai/v2/docs/build/plugins)
+## Plugins
 
 For questions about creating, configuring, loading, publishing, or migrating
-plugins, fetch the full [plugins guide](https://opencode.ai/v2/docs/build/plugins)
-before answering. Refer to this guide when the user wants to build a plugin. It
-covers hooks, transforms, tools, plugin context capabilities, and package
-entrypoints. Plugins can also extend the TUI; for those, fetch the
-[CLI plugin guide](https://opencode.ai/v2/docs/build/plugins/cli).
+plugins, read `packages/www/src/docs/content/build/plugins/index.mdx` before
+answering. Confirm current APIs in `packages/plugin/src/` and loading behavior
+in `packages/core/src/plugin.ts`. Plugins can also extend the TUI; for those,
+read `packages/www/src/docs/content/build/plugins/cli.mdx` and inspect
+`packages/plugin/src/tui/`.
 
-## [Service](https://opencode.ai/v2/docs/troubleshooting#check-the-background-service)
+## Service
 
 OpenCode uses a client-server architecture. Interfaces such as the TUI connect
 to a background OpenCode service, which owns sessions, configuration, plugins,
 permissions, and tool execution.
+
+For the active service, prefer `opencode2 service status`, `opencode2 api`, and
+the service log over assumptions from the worktree. Inspect
+`packages/cli/src/services/` and `packages/server/src/` for implementation
+details.
 
 OpenCode normally discovers or starts the shared background service
 automatically. If the service is stuck or unhealthy, restart it:
@@ -172,7 +210,7 @@ Check its status after restarting:
 opencode2 service status
 ```
 
-## [API](https://opencode.ai/v2/docs/api)
+## API
 
 OpenCode exposes an HTTP API from its server. The API is described by an
 OpenAPI document available from the running server at `/openapi.json`.
@@ -201,16 +239,16 @@ connected to an explicit server instead of its managed background service, use
 the same configured server and authentication context rather than constructing
 an unauthenticated request separately.
 
-See the [full API reference](https://opencode.ai/v2/docs/api) for available
-endpoints, parameters, request bodies, and response schemas. The
-raw [OpenAPI specification](https://opencode.ai/v2/openapi.json) is also
-available for code generation and other tooling.
+For the running API, retrieve `/openapi.json` from that service. For the
+worktree contract, inspect `packages/protocol/src/api.ts`,
+`packages/protocol/src/groups/`, and `packages/protocol/openapi.json`. Handler
+behavior lives in `packages/server/src/handlers/`.
 
-## [Client](https://opencode.ai/v2/docs/build/client)
+## Client
 
 For questions about connecting an application to OpenCode over the network,
-fetch the full [client guide](https://opencode.ai/v2/docs/build/client) before
-answering.
+read `packages/www/src/docs/content/build/client/index.mdx`, then inspect
+`packages/client/src/` for the generated surface in this checkout.
 
 `@opencode-ai/client` is the generated TypeScript client for the OpenCode HTTP
 API. Its methods and types come from the same contract as the API reference.
@@ -220,7 +258,7 @@ exposes typed Effects, Streams, and decoded OpenCode schema values. Its
 `Service` API can discover, start, stop, and authenticate with the local
 background service from a Node application.
 
-## [Troubleshooting](https://opencode.ai/v2/docs/troubleshooting)
+## Troubleshooting
 
 OpenCode runs a client and a background server. Start by determining whether a
 problem belongs to the client, the shared server, or one project.
@@ -240,6 +278,7 @@ problem belongs to the client, the shared server, or one project.
 - Redact API keys, authorization headers, prompts, file contents, and other
   sensitive data before sharing diagnostics.
 
-See the [full troubleshooting guide](https://opencode.ai/v2/docs/troubleshooting)
-for service lifecycle commands, API inspection, log locations, explicit server
-connections, issue-reporting details, and local development paths.
+Read `packages/www/src/docs/content/troubleshooting.mdx` for service lifecycle
+commands, API inspection, log locations, explicit server connections,
+issue-reporting details, and local development paths. Confirm all commands and
+paths against this checkout and the running service.

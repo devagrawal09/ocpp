@@ -1,478 +1,535 @@
-# Code Mode: Compiled Durable Activations
+# Code Mode: The Durable Notebook
 
-This fork redesigns Code Mode as a compiled, immutable activation language backed by durable Core state. It replaces the earlier Promise-oriented evaluator and background-output delivery model.
+This fork redesigns Code Mode around one idea: **a Session owns an append-only notebook, and running
+code is how the model writes into it.** Every direct top-level `const` and `function` declaration
+becomes a durable notebook value that later executions can read by name. There is no publication
+syntax, no revision negotiation, and no separate durable result payload.
 
 The implementation has two deliberate layers:
 
-- `@opencode-ai/codemode` compiles and evaluates a restricted JavaScript-shaped language over an explicit catalog of schema-described tools. It has no Session, database, authorization, or delivery knowledge.
-- OpenCode Core supplies the authorized tool catalog, execution limits, durable notebook and result storage, Session lifecycle integration, detached Jobs, and model-facing delivery.
+- `@opencode-ai/codemode` compiles and evaluates a restricted JavaScript-shaped language over an
+  explicit catalog of schema-described tools, and encodes the values a program declares. It has no
+  Session, database, authorization, or delivery knowledge.
+- OpenCode Core supplies the authorized tool catalog, fixed safety limits, name admission and
+  reservation, durable storage, Session lifecycle integration, and model-facing delivery.
 
 ```mermaid
 flowchart LR
-    Model[Model] -->|execute input| Core[OpenCode Core host]
+    Model[Model] -->|execute code| Core[OpenCode Core host]
     Core -->|source| Compiler[Compiler]
-    Compiler -->|versioned IR| Store[(Durable store)]
-    Store --> Runtime[Confined interpreter]
+    Compiler -->|versioned IR + declared names| Admission[Admission]
+    Admission -->|reserve names, snapshot notebook| Store[(Durable notebook)]
+    Admission -->|execution ID| Model
+    Admission --> Runtime[Confined interpreter]
     Core -->|authorized catalog| Runtime
     Runtime -->|exact static call| Tools[Core tool registry]
     Tools -->|decoded result| Runtime
-    Runtime -->|result + exports + journal| Store
-    Store -->|settled result| Core
-    Core -->|bounded projection or result reference| Model
-    Model -->|execution_result| Core
-    Core -->|Session-scoped page read| Store
+    Runtime -->|declared values| Commit[Commit]
+    Commit -->|all or nothing| Store
+    Commit -->|bounded summary| Model
 ```
 
-The interpreter never reaches around the tool registry. Filesystem, network, process, and application effects are available only when the host exposes a named tool that performs them.
+The interpreter never reaches around the tool registry. Filesystem, network, process, and
+application effects are available only when the host exposes a named tool that performs them.
 
 ## Feature Summary
 
-| Feature              | Behavior                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Compiled activations | Source is transpiled, parsed, validated, and stored as versioned IR before execution.                      |
-| Blocking tool calls  | `tools.repository.read(input)` returns its decoded result directly. Promise syntax is not used.            |
-| Immutable data       | `const`, notebook bindings, arrays, objects, Maps, Sets, Dates, and URLs cannot be mutated.                |
-| Local working state  | `let` supports activation-local scalar updates, including updates from synchronous closures and callbacks. |
-| Durable notebook     | Direct top-level `export const` declarations publish JSON-like values transactionally.                     |
-| Required execution   | The default mode waits for completion and returns a bounded result projection.                             |
-| Detached execution   | Returns an execution ID immediately and later delivers only a durable result reference.                    |
-| Result retrieval     | `execution_result` reads the structured durable result in UTF-8-safe pages.                                |
-| Scoped delegation    | `tool.define` creates same-activation opaque tool handles with frozen captures and enforced capabilities.  |
-| Durable lifecycle    | Activations, call journals, results, bindings, fork history, and revert state are persisted by Core.       |
-| Bounded delivery     | Results, logs, captures, progress, projections, and pages have explicit byte limits.                       |
-| Session UI           | The timeline renders source, progress events, terminal status, and bounded execution details.              |
+| Feature                | Behavior                                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| Automatic publication  | Direct top-level `const` and `function` declarations are saved. No `export` syntax exists.         |
+| Immutable names        | A notebook name is written once and can never be redefined or reused.                              |
+| Admission              | Names are verified and reserved before an execution ID exists. Conflicts refuse immediately.       |
+| Fixed snapshots        | An execution sees exactly the completed notebook captured when it was admitted.                    |
+| All-or-nothing saving  | Success saves every declaration in one transaction; any failure saves none.                        |
+| Durable functions      | Closures are saved with their compiled body and exact captures, and re-authorize tools on call.    |
+| Plain durable data     | `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, functions.      |
+| Asynchronous execution | `execute` returns an execution ID; the outcome arrives as one later notification.                  |
+| Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.        |
+| Blocking tool calls    | `tools.repository.read(input)` returns its decoded result directly. Promise syntax does not exist. |
 
 ## Quick Start
 
-Tool paths are catalog-dependent. The examples below use an illustrative `repository` namespace; use `search` to find
-the paths and schemas exposed by the current host. An activation calls those exact static paths and composes returned
-values synchronously:
+Tool paths are catalog-dependent. The examples below use an illustrative `repository` namespace; use
+`search` to find the paths and schemas exposed by the current host.
 
 ```ts
 const matches = tools.repository.glob({ pattern: "src/**/*.ts" })
 const files = matches.slice(0, 20).map((item) => tools.repository.read({ path: item.path }))
-const totalLines = files.reduce((total, file) => total + file.content.split("\n").length, 0)
-
-export const lastScan = { files: matches.length, totalLines }
-return lastScan
+const lastScan = {
+  files: matches.length,
+  totalLines: files.reduce((total, file) => total + file.content.split("\n").length, 0),
+}
+return lastScan.totalLines
 ```
 
-The activation result is the value from:
+That program saves three notebook values: `matches`, `files`, and `lastScan`. A later execution reads
+them by name:
 
-1. An explicit top-level `return`.
-2. The final top-level expression when no explicit return is present.
-3. `null` when neither produces a value.
+```ts
+const largest = files.toSorted((left, right) => right.content.length - left.content.length)[0]
+```
 
-Tool schemas are the callable interface. Inputs, results, exports, tool arguments, and tool outputs cross bounded JSON-like copy boundaries.
+The `return` value is a small preview for display only. It may be truncated or omitted, and it is
+never the canonical output: publish real results as top-level declarations.
 
-If the exact catalog path or signature is unknown, discover it synchronously and then call the returned static path in a later activation:
+If the exact catalog path or signature is unknown, discover it and call the returned static path in a
+later execution:
 
 ```ts
 return search({ query: "read file", namespace: "repository" })
 ```
 
-Do not assign a discovered path to a variable and invoke it dynamically. Dynamic dispatch is intentionally rejected.
+Do not assign a discovered path to a variable and invoke it dynamically. Dynamic dispatch is
+intentionally rejected.
 
-## Execution Modes
+## What Is Saved
 
-The Core `execute` tool accepts:
+Only **direct** top-level declarations are durable:
 
 ```ts
+const kept = 1 // saved
+function alsoKept() {
+  const temporary = 2 // not saved
+  return temporary
+}
+let counter = 0 // not saved: let is local working state
 {
-  code: string
-  mode?: "required" | "detached"
-  timeoutMs?: number
+  const hidden = 3 // not saved
+}
+for (const item of [1, 2]) {
+  const looped = item // not saved
 }
 ```
 
-### Required
+Deterministic rules keep extraction precise:
 
-Required mode is the default. The tool call waits for the activation to settle, stores the complete structured result, and returns:
-
-- The execution ID.
-- Terminal status.
-- Durable result byte count.
-- A bounded, explicitly untrusted head-and-tail projection of the structured result.
-
-Failures remain typed and model-visible. A required failure fails the outer tool call while preserving its durable result for later inspection.
-
-Example host-tool input:
+- A top-level `const` declarator must bind one identifier. Top-level destructuring is rejected;
+  destructure inside a block or function instead.
+- A top-level `const` declarator must have an initializer.
+- Top-level `function` declarations are saved under their own name.
+- `let`, nested declarations, and declarations inside control flow are activation-local.
+- `export` in any form is rejected: publication is automatic.
+- `const handle = tool.define(...)` is rejected before execution, because a live handle cannot be
+  saved. Bind it with `let`, or create it inside a function.
+- A durable name may not be a runtime global such as `time`, `url`, `search`, `console`, `JSON`,
+  `Object`, `Math`, `Array`, `String`, `Error`, `tools`, or `tool`. A notebook name is permanent, so
+  shadowing a builtin would hide it from every later execution in the Session. Nested bindings are
+  ordinary lexical scoping and may use any name.
+- A `return` outside a function is rejected when a later top-level statement declares a durable name,
+  because that name would be reserved and never initialized. The rule is syntactic rather than a
+  control-flow analysis: it does not ask which branch runs. A final preview `return` placed after
+  every declaration stays valid, and so does a `return` in a program that declares nothing after it.
 
 ```ts
-{
-  code: `const matches = tools.repository.grep({
-  pattern: "TODO|FIXME",
-  path: "src",
-  include: "*.ts",
-})
-
-const byFile = Object.groupBy(matches, (match) => match.entry.path)
-return Object.entries(byFile).map(([path, items]) => ({
-  path,
-  count: items.length,
-}))`,
-  mode: "required",
-  timeoutMs: 30_000,
+const first = tools.repository.read({ path: "a.ts" })
+if (first.content === "") {
+  return "nothing to do" // rejected: `later` below would never be saved
 }
+const later = first.content.length
 ```
+
+## Admission And Name Reservation
+
+Before returning an execution ID the host compiles the source, extracts every durable name, captures
+the current completed notebook, verifies and reserves all candidate names atomically, and persists
+the admitted execution with its compiled IR, its ownership identity, and its snapshot. Compilation is
+source in and versioned IR out: the compiler knows nothing about Sessions, tools, authorization, or
+storage, and the persisted IR keeps its canonical source so a later compiler can recompile it.
+
+A compiled program reaches the interpreter through exactly one boundary. `decodeProgram` checks the
+IR version and shape, and an unsupported or damaged program becomes a diagnostic instead of an
+interpreter defect. Saved notebook functions cross the same kind of boundary when they are decoded.
 
 ```mermaid
 sequenceDiagram
     participant M as Model
     participant C as Core host
-    participant I as Interpreter
-    participant T as Authorized tools
-    participant D as Durable store
+    participant N as Notebook
 
-    M->>C: execute(code, required)
-    C->>D: persist activation + base revision
-    C->>I: run compiled IR
-    loop each direct call
-        I->>T: call decoded tool input
-        T-->>I: decoded tool result
-        C->>D: journal call settlement
+    M->>C: execute(code)
+    C->>C: compile, extract declared names
+    C->>N: verify and reserve every name (atomic)
+    alt name already defined or reserved
+        N-->>C: conflict
+        C-->>M: admission error, no execution ID, no tool calls
+    else all names reserved
+        N-->>C: reservation + notebook snapshot
+        C-->>M: execution ID (running)
     end
-    I-->>C: result + exports
-    C->>D: atomically settle and publish
-    C-->>M: bounded result projection
 ```
 
-### Detached
+- An existing binding produces an immediate `NameAlreadyDefined` error.
+- An active reservation produces an immediate `NameReserved` error that names the owning execution.
+- A refused program receives **no execution ID** and performs **no tool calls**.
+- Reservations are all-or-none and owned by one execution ID.
+- Executions declaring disjoint names may reserve and run concurrently; their results merge because
+  the notebook has no global revision. Executions declaring the same name cannot.
+- Commit verifies that the execution still owns every reservation and that the assistant message it
+  was admitted from still exists.
+- Runtime failure, tool failure, cancellation, reverted ownership, and restart recovery save nothing
+  and release the reservations.
 
-Detached mode reserves a per-Session Job and returns an execution ID with `running` status. Execution starts only after the outer tool result commits, preventing detached side effects from racing ahead of tool-call settlement.
+## Execution Lifecycle
 
-When detached work settles:
-
-- The full structured result remains in durable result storage.
-- Session completion and failure events contain status, progress events, and the execution ID, not the full output.
-- The synthetic notification contains only a trusted result reference.
-- The model retrieves data explicitly with `execution_result`.
-
-At most four detached Code Mode executions may run concurrently per Session. Rejected admission removes the still-scheduled activation so it does not consume recovery or result state.
+Execution is durable and asynchronous. There is one flow: `execute` accepts source code, returns an
+execution ID once admission succeeds, and delivers the outcome later.
 
 ```mermaid
 sequenceDiagram
     participant M as Model
     participant C as Core host
     participant J as Session jobs
-    participant D as Durable store
-
-    M->>C: execute(code, detached)
-    C->>D: persist scheduled activation
-    C->>J: reserve execution slot
-    C-->>M: execution ID + running
-    Note over C,J: Work starts only after the outer tool result commits
-    J->>C: run activation
-    C->>D: store complete structured result
-    C-->>M: completion event with result reference
-    M->>C: execution_result(execution ID, offset)
-    C->>D: read bounded page
-    D-->>M: content + next offset
-```
-
-## Durable Results And Paging
-
-Every settled activation has one structured result keyed by execution ID. The result includes the success value or diagnostic, tool calls, warnings, logs, exports, and truncation state when applicable.
-
-`execution_result` accepts an execution ID, byte offset, and optional page limit. It:
-
-- Verifies that the execution belongs to the calling Session.
-- Serializes the stored structured result consistently.
-- Returns at most 16 KiB per page.
-- Aligns page boundaries to UTF-8 code points.
-- Returns a `next` offset until the complete result has been read.
-- Frames content as untrusted execution data and neutralizes framing markers and angle brackets.
-
-Large data is retained up to the durable result limit instead of being destroyed merely to fit model context. Normal delivery remains small; explicit retrieval pays the context cost only when needed.
-
-Retrieve every page by carrying `next` forward:
-
-```ts
-// First call to the host tool
-{ executionID: "exe_01...", offset: 0, limit: 16_384 }
-
-// Response
-{
-  executionID: "exe_01...",
-  status: "completed",
-  offset: 0,
-  totalBytes: 28_731,
-  next: 16_384,
-  content: "{\"ok\":true,...",
-}
-
-// Continue from the returned offset
-{ executionID: "exe_01...", offset: 16_384, limit: 16_384 }
-```
-
-Stop when `next` is `null`. The content is a page of one serialized structured result, so concatenate pages by byte order before parsing when machine reconstruction is required.
-
-## Durable Notebook And Publication
-
-Each Session owns a durable Code Mode notebook. Starting an activation snapshots:
-
-- Current immutable notebook bindings.
-- The notebook base revision.
-- Compiled versioned IR.
-- Session, assistant-message, and tool-call identity.
-- Required or detached delivery mode.
-
-Publication uses direct top-level declarations:
-
-```ts
-export const selectedFiles = ["src/a.ts", "src/b.ts"]
-export const summary = { count: selectedFiles.length }
-```
-
-Publication is all-or-fail:
-
-- Only unconditional direct top-level `export const name = value` declarations are accepted.
-- Every exported value must be valid JSON-like data.
-- All exports commit in one transaction.
-- The notebook revision must still equal the activation base revision.
-- A stale activation receives `RevisionConflict` and publishes nothing.
-- Missing or reverted assistant-message ownership also becomes a durable revision conflict instead of an unsettled defect.
-
-Default exports, re-exports, exported functions, exported `let`, destructured exports, and conditional exports are rejected.
-
-Concurrent activations use optimistic revisions:
-
-```mermaid
-sequenceDiagram
-    participant A as Activation A
-    participant B as Activation B
     participant N as Notebook
 
-    N-->>A: bindings at revision 7
-    N-->>B: bindings at revision 7
-    B->>N: publish summary
-    N-->>B: committed revision 8
-    A->>N: publish selectedFiles at base 7
-    N-->>A: RevisionConflict; nothing published
+    M->>C: execute(code)
+    C->>N: admit, reserve names, snapshot
+    C-->>M: execution ID (running)
+    Note over C,J: Work starts only after the outer tool result commits
+    J->>C: run compiled IR
+    C->>N: commit declarations, or release reservations
+    C-->>M: one completion notification with status and saved names
 ```
 
-The conflict is intentional. A stale activation may still have valid execution output, but it cannot overwrite notebook state derived from newer work. Rerun it against the current bindings when publication is still wanted.
+The Session drain stops after admission and resumes from the completion notification, so background
+work can never settle before the execution ID is durably visible. Coalesced wakeups are fine; the
+design does not depend on exactly one scheduler wake.
 
-## Fork, Revert, And Restart Semantics
+Terminal outcomes are:
 
-Binding history records publication revision and assistant-message sequence. This lets Session history operations preserve notebook meaning:
+| Outcome         | Meaning                                                                           |
+| --------------- | --------------------------------------------------------------------------------- |
+| `saved`         | The program succeeded and every declaration was committed.                        |
+| `failed`        | Compilation, execution, a tool, a limit, or the commit failed. Nothing was saved. |
+| `indeterminate` | The host could not determine whether in-flight work finished. Nothing was saved.  |
 
-- A fork copies binding history through the copied assistant-message sequence and rebuilds the child notebook from the newest included values.
-- A committed revert removes history at and after its message boundary and rebuilds current bindings from retained history.
-- Notebook revisions remain monotonic across revert, preventing an old activation from matching a reused revision number.
-- Reusing a Session continues its existing notebook rather than creating an unrelated one.
+Name collisions are admission errors, not asynchronous outcomes.
 
-Notebook state and settled results survive process restart. In-flight activations and scheduled tool calls are not replayed automatically because arbitrary tool side effects are not idempotent. Startup recovery marks unsettled activations, calls, and results `indeterminate`, making uncertainty explicit and retrievable.
+## Durable Value Model
 
-## Activation Language
+Every value admitted for notebook storage survives execution, restart, fork, and revert:
+
+- `null`, booleans, finite numbers, and strings
+- immutable arrays
+- immutable string-keyed plain records
+- durable functions and closures
+
+`Date`, `Map`, `Set`, `URL`, and `URLSearchParams` are not language values; the `time` and `url`
+helpers replace them with plain data. `RegExp` has no replacement at all. Native JavaScript objects
+still exist inside helper implementations, but they never cross into notebook values.
+
+A durable function keeps:
+
+- its versioned compiled body and its original source text,
+- its exact captures, frozen when the execution saves,
+- static tool paths, which are resolved and authorized again in the execution that invokes it.
+
+A saved closure never looks up a later notebook value by name: every free identifier is either a host
+global (`tools`, `search`, `console`, `Math`, `JSON`, `time`, `url`, …) or a captured value
+stored with the function. A function that reads an identifier which does not exist when the execution
+saves is rejected. Fixes use new names and new closures.
+
+```ts
+// First execution
+const factor = 3
+const scale = (value) => value * factor
+function total(values) {
+  return values.reduce((sum, value) => sum + scale(value), 0)
+}
+
+// A later execution, even after a restart
+return total([1, 2]) // 9
+```
+
+Recursive and mutually recursive declarations are saved as references to their immutable notebook
+names, so their capture graphs stay finite.
+
+Live activation-local tool handles are not durable: they carry the current execution's counters,
+deadline, and authorization, so they are rejected clearly instead of being weakened.
+
+Depth and size limits apply while values are constructed, so an invalid or oversized declaration
+fails during execution rather than surprising the host at commit. Intentionally large artifacts
+belong in files through host tools.
+
+Encoding normalizes the two shapes JSON cannot represent: an array hole becomes `null` and `-0`
+becomes `0`. A value therefore behaves the same in the execution that declared it and in every later
+execution that loads it from storage.
+
+A stored value that cannot be decoded — damaged data, or a function saved by an unsupported IR
+version — is quarantined in its own name rather than failing the whole activation. Unrelated code
+still runs; reading the name, or reading a stored value that references it, produces a precise
+diagnostic naming the value and its cause. The name stays permanent: recovery is a new name, or a
+revert of the message that saved it.
+
+## Runtime Helpers
+
+Helpers return plain durable data only.
+
+| Namespace | Members                                                            | Returns                   |
+| --------- | ------------------------------------------------------------------ | ------------------------- |
+| `time`    | `now`, `parse`, `format`, `parts`, `fromParts`, `add`, `diff`      | numbers, strings, records |
+| `url`     | `parse`, `format`, `parseQuery`, `formatQuery`, `encode`, `decode` | strings, records, arrays  |
+
+```ts
+const at = time.parse("2020-01-02T03:04:05Z") // epoch milliseconds, or null
+const tomorrow = time.format(time.add(at, { days: 1 }))
+const parsed = url.parse("https://example.dev/a?x=1&x=2#frag")
+```
+
+`time.now()` reads host authority and is the only impure member; it does not masquerade as a pure
+function. Collections use ordinary immutable arrays and records with the usual non-mutating methods.
+
+### Regular Expressions Are Unavailable
+
+There is no `regex` namespace, no `RegExp`, and no regular-expression literal. The only matcher
+available to this runtime is a backtracking one, and a pattern such as `^a*a*a*a*a*$` makes it run
+for effectively unbounded time inside the host's event loop, where the execution deadline cannot
+interrupt it. Restricting the accepted pattern syntax does not fix that: the rejected constructs are
+not the only way to build a pathological pattern. Pattern matching stays unavailable until the
+runtime has an engine whose cost is bounded by the length of the input.
+
+Match text with string operations instead:
+
+```ts
+const line = "id-42 ok"
+const id = line.startsWith("id-") ? line.slice(3, line.indexOf(" ")) : null
+const fields = line.split(" ")
+```
+
+`String.match`, `String.matchAll`, and `String.search` are removed; `String.split`, `String.replace`,
+and `String.replaceAll` accept string separators only.
+
+## Results
+
+Notebook bindings are the only canonical successful data output. The host keeps compact durable
+lifecycle information for status and recovery:
+
+- execution ID and terminal status,
+- saved names,
+- diagnostics,
+- bounded warnings, logs, and progress,
+- a bounded tool-call journal,
+- an optional small preview of the returned value.
+
+There is no `execution_result` tool, no result paging, no durable result blob, and no overflow file.
+An oversized declaration fails clearly instead of being truncated into the notebook.
+
+## Fork, Revert, And Restart
+
+Binding rows record the assistant-message sequence they were saved from, which is enough to rebuild
+notebook state without a global revision gate:
+
+- A fork copies completed values through the fork boundary. Active reservations are never copied, so
+  a forked Session may declare a name its parent is still holding.
+- An in-flight execution belongs to the Session and history lineage where it was admitted. Its
+  completion notification and the values it saves stay on the parent, so the fork rewrites the copied
+  tool result that announced it: the child sees an execution that stayed behind rather than one that
+  promises a notification it will never receive. This mirrors running shell and compaction messages,
+  which a fork leaves behind entirely.
+- A committed revert deletes values saved from its boundary onward and releases the reservations it
+  orphans. An execution whose initiating message is gone saves nothing.
+- Reusing a Session ID adopts its existing notebook.
+- Restart marks uncertain in-flight executions `indeterminate`, saves nothing, and releases their
+  reservations. Arbitrary tool side effects are never replayed.
+
+## Language
 
 ### Supported
 
 - Erasable TypeScript syntax that transpiles to supported JavaScript.
-- JSON-like literals, template literals, and regular-expression literals.
-- Object and array spread and destructuring.
-- Synchronous function declarations, function expressions, arrow functions, closures, recursion, parameters, and callbacks.
+- JSON-like literals and template literals.
+- Object and array spread and destructuring (outside top-level `const`).
+- Synchronous function declarations, function expressions, arrow functions, closures, recursion,
+  parameters, and callbacks.
 - Blocks, `if`, `switch`, `for`, `for...of`, `for...in`, `while`, and `do...while`.
 - `break`, `continue`, labels, `try`, `catch`, `finally`, and `throw`.
 - Arithmetic, comparison, logical, nullish, bitwise, and conditional expressions.
-- Assignment to activation-local scalar `let` bindings.
+- Assignment to local scalar `let` bindings.
 - Optional chaining and property reads.
-- Non-mutating Array, Object, String, Number, Math, JSON, Date, RegExp, Map, Set, URL, and URLSearchParams operations implemented by the evaluator.
-- Captured `console.log`, `console.info`, `console.warn`, `console.error`, `console.dir`, and `console.table` output.
+- Non-mutating Array, Object, String, Number, Math, and JSON operations implemented by the evaluator.
+- The `time` and `url` helper namespaces.
+- Captured `console.log`, `console.info`, `console.warn`, `console.error`, `console.dir`, and
+  `console.table` output.
 - Literal bracket notation for tool path segments that are not JavaScript identifiers.
 - Synchronous `search(input)` for bounded catalog discovery. Search counts as a tool call.
 
 ### Rejected
 
+- `export` in any form.
 - `Promise`, `async`, `await`, generators, `yield`, and `for await...of`.
-- Dynamic tool dispatch such as `tools[name](input)`.
-- Detached tool references and enumeration of tool namespaces.
+- `Date`, `RegExp`, `Map`, `Set`, `URL`, `URLSearchParams`, regular-expression literals, and the
+  `regex` namespace.
+- Dynamic tool dispatch such as `tools[name](input)`, detached tool references, and namespace
+  enumeration.
 - Imports, dynamic imports, re-exports, and ambient modules.
 - `var`.
-- Member assignment, member updates, `delete`, destructuring into members, and loop assignment into members.
-- Mutating Array, Object, Date, Map, Set, URL, and URLSearchParams methods.
+- Member assignment, member updates, `delete`, destructuring into members, and loop assignment into
+  members.
+- Mutating Array and Object methods.
 - Classes and evaluator syntax not explicitly implemented.
 - Ambient filesystem, process, network, timer, `fetch`, module-loading, or cryptographic authority.
 
-The compiler catches unsupported forms before execution. Runtime checks provide a second boundary for computed mutator names and evaluator references.
+The compiler catches unsupported forms before execution. Runtime checks provide a second boundary for
+computed mutator names and evaluator references.
 
 ## Immutability Model
 
-`let` exists for scalar control state:
+`let` exists for local scalar state:
 
 ```ts
-let total = (0)[(1, 2, 3)].forEach((value) => {
+let total = 0
+;[1, 2, 3].forEach((value) => {
   total += value
 })
-return total
+const sum = total
 ```
 
-Aggregate values are immutable. Derive replacements with `map`, `filter`, `slice`, spread, and object literals:
-
-```ts
-const original = [1, 2, 3]
-const updated = [...original, 4]
-return updated.map((value) => value * 2)
-```
-
-Notebook bindings are immutable even when their underlying values are arrays or objects. Compiler validation rejects assignment targets hidden in destructuring and loop forms so host-provided values cannot be mutated by reference.
+Aggregate values are immutable. Derive replacements with `map`, `filter`, `slice`, spread, and object
+literals. Notebook values are immutable even when they are arrays or records, and compiler validation
+rejects assignment targets hidden in destructuring and loop forms.
 
 ## Opaque Tool Handles
 
-`tool.define` creates a delegated tool that exists only for the current activation:
+`tool.define` creates a delegated tool that exists only for the current execution:
 
 ```ts
-const inspect = tool.define({
+let inspect = tool.define({
   name: "inspect",
   description: "Read one source file and return numbered matching lines",
   inputSchema: {
     type: "object",
-    properties: {
-      path: { type: "string" },
-      pattern: { type: "string" },
-    },
+    properties: { path: { type: "string" }, pattern: { type: "string" } },
     required: ["path", "pattern"],
   },
   outputSchema: {
     type: "array",
     items: {
       type: "object",
-      properties: {
-        line: { type: "number" },
-        text: { type: "string" },
-      },
+      properties: { line: { type: "number" }, text: { type: "string" } },
       required: ["line", "text"],
     },
   },
-  execute: (input) => {
-    const file = tools.repository.read({ path: input.path })
-    const expression = new RegExp(input.pattern, "i")
-    return file.content
-      .split("\n")
+  execute: (input) =>
+    tools.repository
+      .read({ path: input.path })
+      .content.split("\n")
       .map((text, index) => ({ line: index + 1, text }))
-      .filter((item) => expression.test(item.text))
-  },
+      .filter((item) => item.text.toLowerCase().includes(input.pattern.toLowerCase())),
 })
 
-return tools.subagent({
+const review = tools.subagent({
   agent: "build",
   description: "Review error handling",
   prompt: "Use inspect to find error-handling branches in src/worker.ts, then explain the gaps.",
   tools: [inspect],
-  outputSchema: {
-    type: "object",
-    properties: {
-      summary: { type: "string" },
-      riskyLines: { type: "array", items: { type: "number" } },
-    },
-    required: ["summary", "riskyLines"],
-  },
 })
 ```
-
-Of the parent activation's catalog, the subagent receives only the delegated `inspect` handle; it may still have tools configured independently for its own agent. The handle itself may call only `tools.repository.read`, because that direct static call is the capability derived by the compiler.
 
 Handle guarantees:
 
 - Captured bindings are snapshotted at definition time and made immutable.
-- Capture discovery follows nested functions through objects, symbol properties, arrays, Maps, and Sets.
-- Direct static tool calls in the execute function become enforced capabilities.
-- Calls hidden behind captured helper functions are rejected because they are not declared capabilities.
-- The handle uses the outer activation's filtered catalog, authorization, counters, hooks, and deadline.
+- Direct static tool calls in the execute function become enforced capabilities; calls hidden behind
+  captured helpers are rejected.
+- The handle uses the outer execution's filtered catalog, authorization, counters, hooks, and
+  deadline.
 - Only host tools with `acceptsToolHandles: true` may receive handles.
-- Handles are opaque, are not JSON data, cannot be exported or persisted, and become inactive when the activation settles.
-- Handles created in nested function invocations share the activation lifetime and are closed with top-level handles.
+- Handles are opaque, are not data, cannot be saved, and become inactive when the execution settles.
 
 ## Limits
 
-OpenCode Core applies these hosted activation limits:
+OpenCode Core applies these fixed host limits. A program cannot raise or lower them.
 
-| Resource                                   |       Limit |
-| ------------------------------------------ | ----------: |
-| Wall-clock execution                       | 120 seconds |
-| Tool calls                                 |         100 |
-| Durable structured result                  |       1 MiB |
-| Captured journal input or output           |     256 KiB |
-| Captured logs                              |     256 KiB |
-| Model-facing projection                    |      16 KiB |
-| Result page                                |      16 KiB |
-| Concurrent detached executions per Session |           4 |
+| Resource                          |       Limit |
+| --------------------------------- | ----------: |
+| Wall-clock execution              | 120 seconds |
+| Tool calls                        |         100 |
+| One durable notebook value        |     256 KiB |
+| Declarations per execution        |          64 |
+| Notebook values per Session       |         512 |
+| Notebook bytes per Session        |       8 MiB |
+| Captured journal input or output  |     256 KiB |
+| Captured logs                     |      64 KiB |
+| Model-facing preview              |       4 KiB |
+| Completion summary                |       8 KiB |
+| Concurrent executions per Session |           4 |
+| Durable value depth               |          32 |
+| Items in one array or record      |   1,000,000 |
+| Characters in one string          |   4,000,000 |
 
-The deadline includes in-flight tool calls. Timeout interrupts the tool fiber and waits for interruption cleanup before settlement. A caller may request a shorter positive timeout, but not one above 120 seconds.
+Notebook names are append-only, so a Session's notebook only ever grows. The per-execution
+declaration count is checked at admission, before any tool runs, and is refused with the same
+`NotebookLimitExceeded` kind as a name conflict: no execution ID, no tool calls, no reservation. The
+per-Session totals are checked at admission too, and checked again inside the commit transaction,
+because two executions can both pass admission and only collide when they save. A refused commit
+saves nothing and releases its reservations. Reverting the messages that saved values no longer
+needed is how a Session reclaims room.
 
-The standalone `@opencode-ai/codemode` package remains host-neutral. It applies only limits supplied by its host; Core provides the production defaults above.
+The deadline includes in-flight tool calls: a timeout interrupts the tool fiber and waits for
+interruption cleanup before settlement. If the program had already returned and its declarations were
+already encoded, the timeout only interrupts leftover background work: the encoded declarations are
+still reported, with the timeout recorded as a warning. The standalone `@opencode-ai/codemode`
+package remains host-neutral and applies only the limits its host supplies.
+
+The last two limits are the exception: they belong to the interpreter itself, not to the host, and no
+host can raise them. A deadline can only interrupt the interpreter between steps, so one operation
+that asks for four billion array slots or a gigabyte-long string would exhaust the process inside a
+single native call before any deadline is observed. Operations whose result size is known before the
+work starts check it first — array construction and `Array.from` lengths, `repeat`, `padStart`,
+`padEnd`, `concat`, `replaceAll`, `split`, `join`, `flat`, `flatMap`, spreads, and template literals —
+and the tool boundary refuses an oversized tool result, so every array a program can observe is
+already within the limit. Exceeding it fails the operation with an `InvalidDataValue` diagnostic that
+the program can catch as a `RangeError`:
+
+```ts
+const rows = Array.from({ length: 4_000_000_000 }) // InvalidDataValue, before any allocation
+const wide = "ab".repeat(3_000_000_000) // InvalidDataValue, before the native repeat
+```
 
 ## Diagnostics
 
-Compilation, execution, host tools, publication, and recovery return structured diagnostics. Stable categories include:
+| Kind                    | Meaning                                                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ParseError`            | Source is empty or cannot be parsed.                                                                                         |
+| `UnsupportedSyntax`     | Parsed JavaScript is outside the supported subset.                                                                           |
+| `UnknownTool`           | The program referenced an unavailable tool.                                                                                  |
+| `InvalidToolInput`      | Tool input failed schema decoding or safe-data copying.                                                                      |
+| `InvalidToolOutput`     | Tool output failed schema decoding or safe-data copying.                                                                     |
+| `InvalidDataValue`      | Program data violated the plain-data contract.                                                                               |
+| `InvalidDurableValue`   | A declared value cannot be saved durably, exceeds a value limit, or a stored value read by the program could not be decoded. |
+| `ToolCallLimitExceeded` | The program exceeded its tool-call limit.                                                                                    |
+| `TimeoutExceeded`       | Execution exceeded its wall-clock deadline.                                                                                  |
+| `ToolFailure`           | A tool refused or failed.                                                                                                    |
+| `ExecutionFailure`      | The program threw or another execution error occurred.                                                                       |
+| `Truncated`             | Warning only: output was cut by the output limit.                                                                            |
 
-- Parse and unsupported-syntax failures.
-- Unknown tools and invalid tool input or output.
-- Invalid data values.
-- Tool-call limit exhaustion.
-- Timeout.
-- Tool refusal or failure.
-- Execution failure.
-- Notebook revision conflict.
-- Truncation.
-
-Compiler diagnostics include source locations when available and recommend direct blocking calls and immutable transformations rather than legacy Promise syntax. Host failures preserve their useful messages while interruption remains interruption rather than a generic failure.
+Admission errors are reported by the host with a stable `kind` of `NameAlreadyDefined`,
+`NameReserved`, or `NotebookLimitExceeded`, plus the names involved. Compiler diagnostics include source locations when
+available. Host failures preserve their useful messages, and interruption remains interruption rather
+than a generic failure.
 
 ## Authorization And Trust Boundaries
 
-Code Mode does not invent a second permission system. The host controls authority by:
+Code Mode does not invent a second permission system. The host controls authority by exposing only
+the tools available to the current request, running normal domain authorization inside each tool,
+marking the few tools allowed to receive opaque handles, and applying the same hooks and permission
+flow used by native tool calls. Saved closures re-resolve and re-authorize their tool paths in the
+execution that invokes them, so authority is never captured.
 
-1. Exposing only tools available to the current request.
-2. Running normal domain authorization inside each tool.
-3. Marking the few tools allowed to receive opaque handles.
-4. Applying the same hooks and permission flow used by native tool calls.
-
-The evaluator has no ambient process, filesystem, network, timer, or module authority. All external effects must cross a named host tool boundary.
-
-Tool output and execution results are untrusted data, not instructions. Model projections and result pages use explicit framing and neutralize spoofable markers and tags. Detached notifications never embed the full result.
-
-## Session UI
-
-Session UI recognizes Code Mode lifecycle metadata and renders the production timeline components for:
-
-- Submitted activation source with syntax highlighting.
-- Running tool and trace events.
-- Required and detached status.
-- Completed, failed, cancelled, and indeterminate outcomes.
-- Result byte counts and retrieval guidance when output is truncated or detached.
-
-The UI consumes bounded progress metadata. Full durable data remains behind `execution_result` instead of being duplicated into every event, assistant metadata record, and synthetic message.
-
-## Compatibility
-
-This design is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. Existing programs must be updated as follows:
-
-```ts
-// Earlier runtime
-const results = await Promise.all(paths.map((path) => tools.repository.read({ path })))
-
-// Compiled activation runtime
-const results = paths.map((path) => tools.repository.read({ path }))
-```
-
-Other important changes:
-
-- Tool calls return values directly.
-- Required mode is now the default.
-- Detached work is explicit.
-- Full detached output is retrieved by execution ID.
-- Aggregate mutation is rejected.
-- Only direct top-level `export const` declarations publish notebook state.
-- In-flight work interrupted by restart becomes indeterminate and is not automatically replayed.
+Tool output and execution data are untrusted data, not instructions. Completion summaries frame
+previews and logs explicitly and neutralize spoofable markers and tags.
 
 ## Implementation Map
 
-- `src/compiler.ts`: transpilation, versioned IR, and incompatible-syntax validation.
-- `src/interpreter/execute.ts`: execution deadline and output/log budgets.
+- `src/ir.ts`: the versioned data-only program representation and the `decodeProgram` boundary.
+- `src/compiler.ts`: transpilation, versioned IR, declaration extraction, and rejected syntax.
+- `src/interpreter/captures.ts`: lexical free-variable analysis for durable closures.
+- `src/interpreter/durable.ts`: notebook value encoding, decoding, and limits.
 - `src/interpreter/runtime.ts`: evaluator, immutability, closures, handles, and capability enforcement.
+- `src/globals.ts`: the shared global-name lists the runtime binds and the compiler reserves.
+- `src/stdlib/time.ts`, `src/stdlib/url.ts`: plain-data helpers.
 - `src/tool-runtime.ts`: schema boundaries, catalog lookup, call accounting, and host hooks.
-- `../core/src/codemode/store.ts`: durable activations, journals, results, bindings, paging, fork, revert, and recovery settlement.
-- `../core/src/codemode/tool.ts`: required/detached hosting, progress, untrusted projections, Jobs, and `execution_result`.
+- `../core/src/codemode/store.ts`: admission, reservations, commit, journal, fork, revert, recovery.
+- `../core/src/codemode/tool.ts`: the asynchronous `execute` tool, progress, and bounded summaries.
 - `../session-ui/src/tools/tool-renderer.tsx`: Session timeline rendering.
 
-Direct contract tests live in `test/activation.test.ts`, with durable lifecycle integration tests in Core's `test/codemode-store.test.ts`, `test/tool-execute.test.ts`, and `test/tool-registry.test.ts`.
+Direct contract tests live in `test/notebook.test.ts`, with durable lifecycle tests in Core's
+`test/codemode-store.test.ts`, `test/tool-execute.test.ts`, and `test/tool-registry.test.ts`.

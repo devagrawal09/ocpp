@@ -6,17 +6,17 @@
 
 ### What This Fork Changes
 
-This branch redesigns Code Mode as a compiled, durable, and bounded execution system:
+This branch redesigns Code Mode as an append-only durable notebook that a Session writes to by running code:
 
-- **Compiled immutable activations:** JavaScript-shaped code is compiled to versioned IR. Tool calls are direct and blocking; unsupported asynchronous and dynamic forms are rejected before execution.
-- **Durable notebook state:** Top-level `export const` declarations publish immutable values transactionally, with revision conflicts preventing stale activations from overwriting newer state.
-- **Required and detached execution:** Required execution waits for a bounded result projection. Detached execution returns an ID, publishes result-reference-only notifications, and supports paginated retrieval through `execution_result`.
-- **Durable lifecycle and recovery:** Activations, tool-call journals, results, notebook bindings, fork boundaries, and committed reverts are persisted by Core. Interrupted unsettled work is marked indeterminate rather than reported as completed.
-- **Scoped tool handles:** `tool.define` creates same-activation opaque handles with frozen captures and compiler-derived tool capabilities. Handles cross only explicitly opted-in tool boundaries.
-- **Strict resource limits:** Activations enforce wall-clock, tool-call, result, capture, log, projection, and page limits, including interruption of in-flight calls.
-- **Session UI support:** The timeline renders Code Mode progress, execution code, terminal status, and bounded result information using production Session UI components.
+- **Automatic publication:** Every direct top-level `const` and `function` declaration is saved to the Session notebook and readable by name in later executions. There is no `export` syntax, and `return` is only a small preview.
+- **Immutable names with atomic admission:** A notebook name is written once and never reused. Names are verified and reserved before an execution ID exists, so conflicts are refused immediately and disjoint executions run concurrently without a global revision gate.
+- **All-or-nothing saving:** A successful program commits every declaration in one transaction; any failure, cancellation, revert, or restart saves nothing and releases its reservations.
+- **Durable values, including closures:** Values are `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, and functions saved with their compiled body and exact captures. `Date`, `RegExp`, `Map`, `Set`, and `URL` are replaced by `time`, `url`, and `regex` helpers that return plain data.
+- **One asynchronous flow:** `execute` takes source code only, returns an execution ID after admission, and delivers one bounded completion notification with status, saved names, diagnostics, and logs. Mode, model-supplied timeouts, durable result blobs, and `execution_result` paging are gone.
+- **Durable lifecycle and recovery:** Executions, tool-call journals, notebook values, fork boundaries, and committed reverts are persisted by Core. Uncertain in-flight work becomes `indeterminate` instead of being replayed.
+- **Scoped tool handles:** `tool.define` creates same-execution opaque handles with frozen captures and compiler-derived tool capabilities. Handles are never durable.
 
-The redesign is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. See the single [Code Mode guide](packages/codemode/interpreter-support.md) for architecture diagrams, examples, lifecycle semantics, limits, and migration notes.
+The redesign is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. See the single [Code Mode guide](packages/codemode/interpreter-support.md) for architecture diagrams, examples, lifecycle semantics, limits, and the full language contract.
 
 > [!NOTE]
 > The installation commands and release downloads in the upstream README below install upstream OpenCode, not this fork. Build the `codemode-fork` branch from source to run these changes.

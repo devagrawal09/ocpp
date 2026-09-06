@@ -7,6 +7,42 @@
 - State model-visible diagnostics, logs, tool descriptions, and instructions directly. The execution context is already clear; do not repeat `Code Mode` or `CodeMode` unless the distinction is necessary.
 - When interpreter behavior or support changes, update `interpreter-support.md` and direct tests in the same PR.
 
+## Compiler And IR
+
+- `src/ir.ts` owns the versioned data-only program representation. The compiler and the runtime both
+  depend on it; the compiler must not depend on the interpreter, the host, or persistence, so keep it
+  to source in and IR or a `CompileError` out.
+- Static language rules and compile-time metadata, such as rejected syntax and the durable names a
+  program declares, belong in the compiler. Runtime checks remain only where a rule cannot be decided
+  statically, such as computed mutator names.
+- Persisted IR enters execution through `decodeProgram` only. Extend that boundary when the IR
+  version changes rather than validating program shape inside the interpreter.
+
+## Durable Values
+
+- Every language value must be durable across execution, restart, fork, and revert: `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, durable functions, and explicitly modeled host references. Do not reintroduce `Date`, `RegExp`, `Map`, `Set`, `URL`, or `URLSearchParams` as language values; helpers may use them internally but must return plain data.
+- Durable functions keep their versioned compiled body, their exact captures bound when the execution saves, and static tool paths that are resolved and authorized again at call time. A saved closure must never resolve a notebook name later, so free identifiers are either host globals or captured values.
+- Enforce depth and size limits while values are built, not at the host's commit, so an invalid durable value fails the execution that produced it.
+- A value that cannot be represented durably, such as a live tool handle, is rejected with a direct diagnostic rather than weakened.
+- Encoding normalizes what JSON cannot represent, currently array holes and `-0`, so a fresh in-memory value and its persisted round trip behave identically.
+- A stored value that fails to decode is quarantined in its own binding, along with anything that references it, and reports a precise diagnostic when read. Never suggest redeclaring an append-only name: the fix is a new name or a revert.
+- Durable names are reserved against `src/globals.ts`, the one list the runtime builds its global scope from. Add a new global there rather than in the runtime alone, or a permanent notebook name could shadow it.
+
+## Materialized Values
+
+`src/limits.ts` owns the one ceiling on a single value: `MAX_COLLECTION_ITEMS` items in an array or
+record and `MAX_STRING_LENGTH` characters in a string. The execution deadline only interrupts the
+interpreter between steps, so any operation whose result size is implied by its arguments must check
+the size before the native allocation or the synchronous O(n) work, not after. Do not defend against
+this with yielding loops. Array methods may treat the item limit as an invariant only while every
+path that introduces an array — construction, `Array.from`, spreads, growing methods, and the tool
+boundary copy — keeps enforcing it. Report a violation as `InvalidDataValue` that a program catches
+as a `RangeError`.
+
+## Regular Expressions
+
+Pattern matching is unavailable, and no partial or heuristically restricted form of it is acceptable. The only engine reachable here backtracks, so a pattern such as `^a*a*a*a*a*$` blocks the host's event loop where the execution deadline cannot interrupt it, and restricting the accepted syntax does not enumerate the pathological cases. Reintroduce matching only with an engine whose cost is bounded by input length.
+
 ## OpenAPI
 
 - Generate an operation only when its transport semantics are supported; otherwise return a precise `skipped` reason.

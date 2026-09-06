@@ -289,7 +289,6 @@ const layer = Layer.effect(
                 { bus, jobs: runtime.job, sessions: runtime.session, store: codemodeStore, scope },
               )
             : undefined
-          const resultTool = codemodeEnabled ? CodeModeTool.result(codemodeStore) : undefined
           const codeModeCatalog = codemodeEnabled ? CodeModeTool.catalog(codemode) : undefined
           return {
             ...(codeModeCatalog === undefined ? {} : { codeModeCatalog }),
@@ -298,7 +297,6 @@ const layer = Layer.effect(
                 .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
                 .map(([, tool]) => definition(tool)),
               ...(codemodeTool ? [definition(codemodeTool)] : []),
-              ...(resultTool ? [definition(resultTool)] : []),
             ],
             execute: Effect.fnUntraced(function* (input: Parameters<Snapshot["execute"]>[0]) {
               const context: Tool.Context = {
@@ -316,8 +314,6 @@ const layer = Layer.effect(
               const name = requested?.name ?? event.tool
               if (name === "execute" && codemodeTool)
                 return yield* executeTool(codemodeTool, name, event.input, context)
-              if (name === "execution_result" && resultTool)
-                return yield* executeTool(resultTool, name, event.input, context)
               const tool = direct.get(name)
               if (tool) return yield* executeTool(tool, name, event.input, context)
               return yield* new Tool.Error({ message: `Unknown tool: ${name}` })
@@ -348,10 +344,7 @@ function registrationError(tool: Tool.Info) {
   const name = normalizedName(tool)
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) return new RegistrationError({ name, message: `Invalid tool name: ${name}` })
   const id = effectiveName(tool)
-  if (
-    (tool.options?.codemode === false || tool.options?.codemode === "both") &&
-    (id === "execute" || id === "execution_result")
-  )
+  if ((tool.options?.codemode === false || tool.options?.codemode === "both") && id === "execute")
     return new RegistrationError({ name: id, message: "Tool name is reserved for Code Mode: " + id })
   const result = Result.try({
     try: () => ToolDefinition.make(definition(tool)),

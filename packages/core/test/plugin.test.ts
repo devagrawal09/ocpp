@@ -416,13 +416,9 @@ describe("Plugin", () => {
         { id: Plugin.ID.make("partial-tools"), source: { type: "builtin" }, status: "active", tui: false },
       ])
       expect((yield* agents.get(Agent.ID.make("configured")))?.description).toBe("setup continued")
-      expect((yield* tools.snapshot()).definitions.map((tool) => tool.name)).toEqual([
-        "healthy",
-        "execute",
-        "execution_result",
-      ])
+      expect((yield* tools.snapshot()).definitions.map((tool) => tool.name)).toEqual(["healthy", "execute"])
       yield* plugins.activate([])
-      expect((yield* tools.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute", "execution_result"])
+      expect((yield* tools.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
     }),
   )
 
@@ -654,7 +650,6 @@ describe("Plugin", () => {
         "context7_look_up",
         "plain",
         "execute",
-        "execution_result",
       ])
     }),
   )

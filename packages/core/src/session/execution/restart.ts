@@ -186,6 +186,8 @@ export const layer = (options?: Options) =>
           id: background.id,
           status,
           notificationID: background.notificationID,
+          ...(background.output === undefined ? {} : { output: background.output }),
+          error,
           recovery,
           resume: suspended.has(recovery.parentSessionID) ? false : undefined,
         }).pipe(

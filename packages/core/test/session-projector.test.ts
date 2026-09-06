@@ -30,11 +30,7 @@ import {
 } from "@opencode-ai/core/session/sql"
 import { testEffect } from "./lib/effect"
 import { Snapshot } from "@opencode-ai/core/snapshot"
-import {
-  CodeModeBindingHistoryTable,
-  CodeModeBindingTable,
-  CodeModeNotebookTable,
-} from "@opencode-ai/core/codemode/sql"
+import { CodeModeBindingTable } from "@opencode-ai/core/codemode/sql"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionInbox.node]), [
@@ -63,6 +59,14 @@ const assistantRow = (
     SessionMessage.Assistant.make({ id, type: "assistant", agent: build, model, content: [], time, ...usage }),
   )
   return { id, session_id: sessionID, type, seq, time_created: DateTime.toEpochMillis(time.created), data }
+}
+
+const executeTool = (row: typeof SessionMessageTable.$inferSelect) => {
+  const message = Schema.decodeUnknownSync(SessionMessage.Info)({ ...row.data, id: row.id, type: row.type })
+  if (message.type !== "assistant") throw new Error("Expected an assistant message")
+  const part = message.content[0]
+  if (part?.type !== "tool" || part.state.status !== "completed") throw new Error("Expected a completed tool part")
+  return part.state
 }
 
 const seedSession = (overrides?: Partial<typeof SessionTable.$inferInsert>) =>
@@ -173,17 +177,12 @@ describe("SessionProjector", () => {
           current_values: {},
         })
         .run()
-      yield* db.insert(CodeModeNotebookTable).values({ session_id: sessionID, revision: 2 }).run()
-      yield* db
-        .insert(CodeModeBindingHistoryTable)
-        .values([
-          { session_id: sessionID, revision: 1, message_seq: 0, name: "value", value: 1 },
-          { session_id: sessionID, revision: 2, message_seq: 1, name: "value", value: 2 },
-        ])
-        .run()
       yield* db
         .insert(CodeModeBindingTable)
-        .values({ session_id: sessionID, name: "value", revision: 2, value: 2 })
+        .values([
+          { session_id: sessionID, name: "early", message_seq: 0, value: 1, execution_id: "exe_early" },
+          { session_id: sessionID, name: "late", message_seq: 1, value: 2, execution_id: "exe_late" },
+        ])
         .run()
       const bus = yield* Bus.Service
       yield* bus.publish(SessionEvent.RevertEvent.Staged, {
@@ -216,10 +215,8 @@ describe("SessionProjector", () => {
         tokens_cache_read: 3,
         tokens_cache_write: 1,
       })
-      // Revert advances the notebook generation while restoring the historical binding revision.
-      expect(yield* db.select().from(CodeModeNotebookTable).get()).toMatchObject({ revision: 3 })
-      expect(yield* db.select().from(CodeModeBindingTable).get()).toMatchObject({ revision: 1, value: 1 })
-      expect(yield* db.select().from(CodeModeBindingHistoryTable).all()).toHaveLength(1)
+      // A committed revert removes the notebook values saved from its boundary onward.
+      expect((yield* db.select().from(CodeModeBindingTable).all()).map((row) => row.name)).toEqual(["early"])
       // A committed revert resets the fold cache so the next boundary establishes a new epoch.
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toBeUndefined()
     }),
@@ -239,17 +236,12 @@ describe("SessionProjector", () => {
           assistantRow(later, 1, { created, completed: created }),
         ])
         .run()
-      yield* db.insert(CodeModeNotebookTable).values({ session_id: sessionID, revision: 2 }).run()
-      yield* db
-        .insert(CodeModeBindingHistoryTable)
-        .values([
-          { session_id: sessionID, revision: 1, message_seq: 0, name: "value", value: 1 },
-          { session_id: sessionID, revision: 2, message_seq: 1, name: "value", value: 2 },
-        ])
-        .run()
       yield* db
         .insert(CodeModeBindingTable)
-        .values({ session_id: sessionID, name: "value", revision: 2, value: 2 })
+        .values([
+          { session_id: sessionID, name: "early", message_seq: 0, value: 1, execution_id: "exe_early" },
+          { session_id: sessionID, name: "late", message_seq: 1, value: 2, execution_id: "exe_late" },
+        ])
         .run()
 
       yield* bus.publish(SessionEvent.Forked, {
@@ -259,11 +251,10 @@ describe("SessionProjector", () => {
       })
 
       expect(
-        yield* db.select().from(CodeModeNotebookTable).where(eq(CodeModeNotebookTable.session_id, child)).get(),
-      ).toMatchObject({ revision: 1 })
-      expect(
-        yield* db.select().from(CodeModeBindingTable).where(eq(CodeModeBindingTable.session_id, child)).get(),
-      ).toMatchObject({ revision: 1, value: 1 })
+        (yield* db.select().from(CodeModeBindingTable).where(eq(CodeModeBindingTable.session_id, child)).all()).map(
+          (row) => row.name,
+        ),
+      ).toEqual(["early"])
       expect(
         yield* db
           .select({ seq: SessionMessageTable.seq })
@@ -271,6 +262,67 @@ describe("SessionProjector", () => {
           .where(eq(SessionMessageTable.session_id, child))
           .all(),
       ).toEqual([{ seq: 0 }])
+    }),
+  )
+
+  it.effect("does not fork a tool result that promises a still-running execution", () =>
+    Effect.gen(function* () {
+      const db = yield* seedSession()
+      const bus = yield* Bus.Service
+      const boundary = SessionMessage.ID.make("msg_fork_codemode")
+      const child = Session.ID.make("ses_projector_fork_codemode")
+      const {
+        id: _,
+        type,
+        ...data
+      } = encodeMessage(
+        SessionMessage.Assistant.make({
+          id: boundary,
+          type: "assistant",
+          agent: build,
+          model,
+          time: { created, completed: created },
+          content: [
+            SessionMessage.AssistantTool.make({
+              type: "tool",
+              id: "call_execute",
+              name: "execute",
+              time: { created, completed: created },
+              state: SessionMessage.ToolStateCompleted.make({
+                status: "completed",
+                input: { code: "const value = 1" },
+                content: [{ type: "text", text: "Execution exe_inflight started. Its outcome arrives later." }],
+                metadata: { executionID: "exe_inflight", executionStatus: "running", events: [] },
+              }),
+            }),
+          ],
+        }),
+      )
+      yield* db
+        .insert(SessionMessageTable)
+        .values([{ id: boundary, session_id: sessionID, type, seq: 0, time_created: 0, data }])
+        .run()
+
+      yield* bus.publish(SessionEvent.Forked, {
+        sessionID: child,
+        parentID: sessionID,
+        boundary: { type: "through", messageID: boundary },
+      })
+
+      const copied = yield* db.select().from(SessionMessageTable).where(eq(SessionMessageTable.session_id, child)).get()
+      if (!copied) return yield* Effect.die("Expected the forked message")
+      const part = executeTool(copied)
+      expect(part.metadata?.executionStatus).toBe("cancelled")
+      expect(part.content[0]).toMatchObject({ type: "text", text: expect.stringContaining("stayed with the") })
+
+      // The parent keeps the in-flight result it still owns.
+      const original = yield* db
+        .select()
+        .from(SessionMessageTable)
+        .where(eq(SessionMessageTable.session_id, sessionID))
+        .get()
+      if (!original) return yield* Effect.die("Expected the original message")
+      expect(executeTool(original).metadata?.executionStatus).toBe("running")
     }),
   )
 

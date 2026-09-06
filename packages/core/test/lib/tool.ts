@@ -1,4 +1,6 @@
 import { Agent } from "@opencode-ai/core/agent"
+import { Model } from "@opencode-ai/core/model"
+import { Provider } from "@opencode-ai/core/provider"
 import { Bus } from "@opencode-ai/core/bus"
 import { CodeModeStore } from "@opencode-ai/core/codemode/store"
 import { Job } from "@opencode-ai/core/job"
@@ -6,18 +8,17 @@ import type { Permission } from "@opencode-ai/core/permission"
 import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
-import { CodeMode } from "@opencode-ai/codemode"
 import { toSessionError } from "@opencode-ai/core/session/to-session-error"
 import type { SessionError } from "@opencode-ai/schema/session-error"
 import { Tool } from "@opencode-ai/core/tool"
 import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { Effect, Option, Schema, type Scope } from "effect"
+import { DateTime, Effect, Option, Schema, type Scope } from "effect"
 import { host } from "../plugin/host"
 import { Database } from "@opencode-ai/core/database/database"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionTable } from "@opencode-ai/core/session/sql"
+import { SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
 
 export const toolIdentity = {
   agent: Agent.ID.make("build"),
@@ -69,26 +70,26 @@ export const waitForCodeModeExecution = (executionID: CodeModeExecution.ID) =>
     return info
   })
 
-export const readCodeModeResult = (executionID: CodeModeExecution.ID, sessionID: CodeModeContext["sessionID"]) =>
+/** Terminal lifecycle information a model sees after an execution settles. */
+export const readCodeModeOutcome = (executionID: CodeModeExecution.ID) =>
   Effect.gen(function* () {
     const store = yield* CodeModeStore.Service
-    const pages: Array<string> = []
-    let offset = 0
-    while (true) {
-      const page = yield* store.resultPage({ activationID: executionID, sessionID, offset })
-      if (!page) return yield* Effect.die("Code Mode result is unavailable")
-      pages.push(page.content)
-      if (page.next === null) break
-      offset = page.next
-    }
-    return Schema.decodeUnknownSync(CodeMode.Result)(JSON.parse(pages.join("")))
+    const execution = yield* store.get(executionID)
+    if (!execution) return yield* Effect.die("Code Mode execution is unavailable")
+    return execution
+  })
+
+export const readCodeModeNotebook = (sessionID: CodeModeContext["sessionID"]) =>
+  Effect.gen(function* () {
+    const store = yield* CodeModeStore.Service
+    return yield* store.bindings(sessionID)
   })
 
 export const waitForCodeMode = (output: unknown, context: CodeModeContext) =>
   Effect.gen(function* () {
     const executionID = yield* activateCodeMode(output, context)
-    yield* waitForCodeModeExecution(executionID)
-    return yield* readCodeModeResult(executionID, context.sessionID)
+    const info = yield* waitForCodeModeExecution(executionID)
+    return { ...(yield* readCodeModeOutcome(executionID)), summary: info.output ?? info.error ?? "" }
   })
 
 export function waitForCodeModeTool(
@@ -145,6 +146,7 @@ export interface ToolExecution {
 
 export const seedToolSession = Effect.fnUntraced(function* (
   sessionID: Parameters<Tool.Snapshot["execute"]>[0]["sessionID"],
+  messageID?: SessionMessage.ID,
 ) {
   const database = Option.getOrUndefined(yield* Effect.serviceOption(Database.Service))
   if (!database) return
@@ -164,6 +166,26 @@ export const seedToolSession = Effect.fnUntraced(function* (
       title: sessionID,
       version: "test",
     })
+    .onConflictDoNothing()
+    .run()
+    .pipe(Effect.orDie)
+  // Code Mode saves only into the history that admitted it, so tests that run an execution seed the
+  // assistant message it was admitted from.
+  if (!messageID) return
+  const encoded = Schema.encodeSync(SessionMessage.Info)(
+    SessionMessage.Assistant.make({
+      id: messageID,
+      type: "assistant",
+      agent: toolIdentity.agent,
+      model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+      content: [],
+      time: { created: DateTime.makeUnsafe(1), completed: DateTime.makeUnsafe(1) },
+    }),
+  )
+  const { id: _id, type, ...data } = encoded
+  yield* database.db
+    .insert(SessionMessageTable)
+    .values({ id: messageID, session_id: sessionID, type, seq: 1, time_created: 1, data })
     .onConflictDoNothing()
     .run()
     .pipe(Effect.orDie)

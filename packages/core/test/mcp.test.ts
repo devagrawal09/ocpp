@@ -51,6 +51,7 @@ import { hostEnvironmentLayer, recordingEnvironmentLayer } from "./fixture/envir
 import {
   activateCodeMode,
   executeTool,
+  readCodeModeNotebook,
   seedToolSession,
   toolDefinitions,
   toolIdentity,
@@ -1526,7 +1527,6 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
         "demo_search",
         "other_lookup",
         "execute",
-        "execution_result",
       ])
       const override = yield* registry.transform((draft) => {
         draft.add({
@@ -1553,7 +1553,6 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
         "demo_search",
         "other_lookup",
         "execute",
-        "execution_result",
       ])
       expect((yield* toolDefinitions(registry)).find((tool) => tool.name === "demo_search")?.description).toBe(
         "Override search",
@@ -1592,7 +1591,6 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
         "demo_status",
         "other_lookup",
         "execute",
-        "execution_result",
       ])
       expect((yield* toolDefinitions(registry)).find((tool) => tool.name === "demo_search")?.description).toBe(
         "Override search",
@@ -1618,7 +1616,6 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
         "demo_refreshed",
         "demo_search",
         "execute",
-        "execution_result",
       ])
       expect((yield* toolDefinitions(registry)).find((tool) => tool.name === "demo_search")?.description).toBe(
         "Latest search",
@@ -1666,22 +1663,14 @@ testEffect(Layer.empty).effect("coalesces queued MCP tool notifications after in
     const bus = yield* Bus.Service
     yield* registration.flush
     expect(reads).toBe(1)
-    expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual([
-      "demo_read_1",
-      "execute",
-      "execution_result",
-    ])
+    expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["demo_read_1", "execute"])
 
     yield* bus.publish(McpEvent.ToolsChanged, { server: "demo" })
     yield* TestClock.adjust("250 millis")
     yield* Effect.forEach(Array.from({ length: 20 }), () => bus.publish(McpEvent.ToolsChanged, { server: "demo" }))
     yield* TestClock.adjust("2 seconds")
     expect(reads).toBe(3)
-    expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual([
-      "demo_read_3",
-      "execute",
-      "execution_result",
-    ])
+    expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["demo_read_3", "execute"])
   }).pipe(
     Effect.provide(
       AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node, Bus.node]), [
@@ -1719,7 +1708,6 @@ it.effect("advertises MCP output schemas to Code Mode", () =>
       "direct_lookup",
       "direct_media",
       "execute",
-      "execution_result",
     ])
     expect(toolSet.codeModeCatalog?.find((tool) => tool.path === "demo.search")?.signature).toContain("ok: boolean")
     expect(execute?.description).not.toContain("tools.demo.search")
@@ -1755,7 +1743,7 @@ it.effect("forwards the invoking session through direct and Code Mode MCP tools"
     })
 
     const codeModeSessionID = Session.ID.make("ses_mcp_codemode")
-    yield* seedToolSession(codeModeSessionID)
+    yield* seedToolSession(codeModeSessionID, toolIdentity.messageID)
     const started = yield* toolSet.execute({
       sessionID: codeModeSessionID,
       ...toolIdentity,
@@ -1763,7 +1751,7 @@ it.effect("forwards the invoking session through direct and Code Mode MCP tools"
         type: "tool-call",
         id: "call_mcp_codemode",
         name: "execute",
-        input: { mode: "detached", code: "return tools.demo.search({})" },
+        input: { code: "const found = tools.demo.search({})" },
       },
     })
     yield* waitForCodeMode(started.output, {
@@ -1792,7 +1780,7 @@ it.effect("returns content-only MCP results through Code Mode", () =>
     expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.status")).toBe(true)
 
     const sessionID = Session.ID.make("ses_mcp_content_only")
-    yield* seedToolSession(sessionID)
+    yield* seedToolSession(sessionID, toolIdentity.messageID)
     const execution = yield* toolSet.execute({
       sessionID,
       ...toolIdentity,
@@ -1800,7 +1788,7 @@ it.effect("returns content-only MCP results through Code Mode", () =>
         type: "tool-call",
         id: "call_mcp_content_only",
         name: "execute",
-        input: { mode: "detached", code: "return tools.demo.status({})" },
+        input: { code: "const status = tools.demo.status({})" },
       },
     })
 
@@ -1810,7 +1798,8 @@ it.effect("returns content-only MCP results through Code Mode", () =>
         assistantMessageID: toolIdentity.messageID,
         id: "call_mcp_content_only",
       }),
-    ).toMatchObject({ ok: true, value: "hello" })
+    ).toMatchObject({ status: "saved", saved: ["status"] })
+    expect(yield* readCodeModeNotebook(sessionID)).toMatchObject({ status: "hello" })
   }),
 )
 
@@ -1883,7 +1872,7 @@ it.effect("waits for permission before calling an MCP tool", () =>
     expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.search")).toBe(true)
 
     const sessionID = Session.ID.make("ses_mcp_permission")
-    yield* seedToolSession(sessionID)
+    yield* seedToolSession(sessionID, toolIdentity.messageID)
     const started = yield* toolSet.execute({
       sessionID,
       ...toolIdentity,
@@ -1891,7 +1880,7 @@ it.effect("waits for permission before calling an MCP tool", () =>
         type: "tool-call",
         id: "call_mcp_permission",
         name: "execute",
-        input: { mode: "detached", code: "return tools.demo.search({})" },
+        input: { code: "const permitted = tools.demo.search({})" },
       },
     })
     const executionID = yield* activateCodeMode(started.output, {
@@ -1932,7 +1921,7 @@ it.effect("does not call MCP when permission is blocked", () =>
     expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.search")).toBe(true)
 
     const sessionID = Session.ID.make("ses_mcp_blocked")
-    yield* seedToolSession(sessionID)
+    yield* seedToolSession(sessionID, toolIdentity.messageID)
     const execution = yield* toolSet.execute({
       sessionID,
       ...toolIdentity,
@@ -1940,7 +1929,7 @@ it.effect("does not call MCP when permission is blocked", () =>
         type: "tool-call",
         id: "call_mcp_blocked",
         name: "execute",
-        input: { mode: "detached", code: "return tools.demo.search({})" },
+        input: { code: "const blocked = tools.demo.search({})" },
       },
     })
     expect(
@@ -1949,7 +1938,7 @@ it.effect("does not call MCP when permission is blocked", () =>
         assistantMessageID: toolIdentity.messageID,
         id: "call_mcp_blocked",
       }),
-    ).toMatchObject({ ok: false, error: { message: expect.stringContaining("Unable to execute demo_search") } })
+    ).toMatchObject({ status: "failed", saved: [], error: expect.stringContaining("Unable to execute demo_search") })
     expect(calls).toBe(0)
   }),
 )

@@ -13,9 +13,6 @@ export const ID = IDSchema.pipe(
 )
 export type ID = typeof ID.Type
 
-export const Status = Schema.Literals(["running", "completed", "error", "cancelled"])
-export type Status = typeof Status.Type
-
 const EventText = Schema.String.check(Schema.isMaxLength(4 * 1024))
 const EventRecord = Schema.Record(Schema.String, Schema.Json)
 

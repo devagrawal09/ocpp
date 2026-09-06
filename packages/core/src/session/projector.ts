@@ -213,7 +213,7 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
           seq: row.seq,
           time_created: row.time_created,
           time_updated: row.time_updated,
-          data: row.data,
+          data: row.type === "assistant" ? settledCodeMode(row) : row.data,
         })),
       )
       .run()
@@ -230,6 +230,49 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
   if (event.data.instructions)
     yield* InstructionState.initialize(db, event.data.sessionID, event.durable.seq, event.data.instructions)
 })
+
+/**
+ * An execution belongs to the Session that admitted it: its completion notification and the notebook
+ * values it saves stay on the parent. A fork copies the settled tool result that announced it, so
+ * that result is rewritten here to stop promising a notification the child will never receive. This
+ * mirrors how running shell and compaction messages are left behind entirely.
+ */
+function settledCodeMode(row: typeof SessionMessageTable.$inferSelect) {
+  const message = decodeMessage({ ...row.data, id: row.id, type: row.type })
+  if (message.type !== "assistant") return row.data
+  const inflight = message.content.some(
+    (part) => part.type === "tool" && part.state.status !== "streaming" && running(part.state.metadata),
+  )
+  if (!inflight) return row.data
+  const { id, type, ...data } = encodeMessage({
+    ...message,
+    content: message.content.map((part) => {
+      if (part.type !== "tool" || part.state.status === "streaming" || !running(part.state.metadata)) return part
+      const metadata = part.state.metadata ?? {}
+      const executionID = metadata.executionID
+      return {
+        ...part,
+        state: {
+          ...part.state,
+          status: "completed" as const,
+          content: [
+            {
+              type: "text" as const,
+              text:
+                "Execution " +
+                (typeof executionID === "string" ? executionID : "") +
+                " was still running when this Session was forked. It stayed with the original Session: no notification arrives here and it saves no notebook values here. Start a new execution if you still need its result.",
+            },
+          ],
+          metadata: { ...metadata, executionStatus: "cancelled" },
+        },
+      }
+    }),
+  })
+  return data
+}
+
+const running = (metadata: Record<string, Schema.Json> | undefined) => metadata?.executionStatus === "running"
 
 function run(db: DatabaseService, event: MessageEvent) {
   return Effect.gen(function* () {

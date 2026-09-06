@@ -519,7 +519,7 @@ describe("SessionRestart background recovery", () => {
         {
           type: "synthetic",
           payload: {
-            text: expect.stringContaining("Use execution_result with this execution ID"),
+            text: "Execution failed because the server restarted.",
             metadata: { source: "codemode", executionID, state: "failed" },
           },
         },
@@ -667,7 +667,7 @@ describe("SessionRestart background recovery", () => {
           id: background.notificationID,
           type: "synthetic",
           payload: {
-            text: expect.stringContaining("Use execution_result with this execution ID"),
+            text: "Execution failed because the server restarted.",
             metadata: { source: "codemode", executionID, state: "failed" },
           },
         },

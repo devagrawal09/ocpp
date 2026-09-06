@@ -4,7 +4,6 @@ import os from "os"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect"
-import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
 import { Money } from "@opencode-ai/schema/money"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
@@ -46,7 +45,15 @@ import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
 import { Expected } from "./lib/session-message"
-import { executeTool, readCodeModeResult, registerToolPlugin, toolDefinitions, toolIdentity } from "./lib/tool"
+import {
+  executeTool,
+  readCodeModeNotebook,
+  seedToolSession,
+  registerToolPlugin,
+  toolDefinitions,
+  toolIdentity,
+  waitForCodeMode,
+} from "./lib/tool"
 
 const sessionID = Session.ID.make("ses_shell_tool_test")
 const sessionModel = Model.Ref.make({ id: Model.ID.make("test"), providerID: Provider.ID.make("test") })
@@ -719,6 +726,7 @@ describe("ShellTool", () => {
                 tool.options = { ...tool.options, codemode: true }
               }),
             )
+            yield* seedToolSession(sessionID, toolIdentity.messageID)
             const command = isWindows ? helloCommand : `${helloCommand}; sleep 0.1`
             const inputs = ["one", "two"].map((text) => JSON.stringify({ command: command.replace("hello", text) }))
             const result = yield* executeTool(registry, {
@@ -728,16 +736,19 @@ describe("ShellTool", () => {
                 type: "tool-call",
                 id: "call-parallel-shells",
                 name: "execute",
-                input: { code: `return [tools.shell(${inputs[0]}), tools.shell(${inputs[1]})]` },
+                input: { code: `const shells = [tools.shell(${inputs[0]}), tools.shell(${inputs[1]})]` },
               },
             }).pipe(Effect.timeout("3 seconds"))
             expect(result.status).toBe("completed")
-            const output = Schema.decodeUnknownSync(
-              Schema.Struct({ executionID: CodeModeExecution.ID, status: Schema.Literal("completed") }),
-            )(result.output)
-            expect(yield* readCodeModeResult(output.executionID, sessionID)).toMatchObject({
-              ok: true,
-              value: [
+            expect(
+              yield* waitForCodeMode(result.output, {
+                sessionID,
+                assistantMessageID: toolIdentity.messageID,
+                id: "call-parallel-shells",
+              }),
+            ).toMatchObject({ status: "saved", saved: ["shells"] })
+            expect(yield* readCodeModeNotebook(sessionID)).toMatchObject({
+              shells: [
                 { output: "one", exit: 0, truncated: false, status: "completed" },
                 { output: "two", exit: 0, truncated: false, status: "completed" },
               ],

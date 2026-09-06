@@ -1,4 +1,5 @@
 import { Cause, Effect, Exit, Formatter, Schema } from "effect"
+import { collectionLimitMessage, MAX_COLLECTION_ITEMS, MAX_STRING_LENGTH, stringLimitMessage } from "./limits.js"
 import { toolError } from "./tool-error.js"
 import {
   decodeInput as decodeToolInput,
@@ -11,15 +12,7 @@ import {
 import { isTool, type Tool } from "./tool.js"
 import { ToolHandle } from "./tool-handle.js"
 import type { Tools } from "./tools.js"
-import {
-  CodeModeDate,
-  CodeModeMap,
-  CodeModePromise,
-  CodeModeRegExp,
-  CodeModeSet,
-  CodeModeURL,
-  CodeModeURLSearchParams,
-} from "./values.js"
+import { CodeModePromise } from "./values.js"
 
 const compareText = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0)
 
@@ -123,32 +116,28 @@ const blockedMemberNames = new Set(["__proto__", "constructor", "prototype"])
 
 export const isBlockedMember = (name: string): boolean => blockedMemberNames.has(name)
 
-// Checkpoint mode preserves CodeMode values; boundary mode JSON-normalizes them.
-export const copyIn = (
-  value: unknown,
-  label: string,
-  preserveCodeModeValues = false,
-  preserveToolHandles = false,
-): unknown => copyBounded(value, label, 0, new Set(), preserveCodeModeValues, preserveToolHandles)
+export const copyIn = (value: unknown, label: string, preserveToolHandles = false): unknown =>
+  copyBounded(value, label, 0, new Set(), preserveToolHandles)
 
 const copyBounded = (
   value: unknown,
   label: string,
   depth: number,
   seen: Set<object>,
-  preserveCodeModeValues: boolean,
   preserveToolHandles: boolean,
 ): unknown => {
   if (depth > MAX_VALUE_DEPTH) {
     throw new ToolRuntimeError("InvalidDataValue", `${label} exceeds the maximum value depth of ${MAX_VALUE_DEPTH}.`)
   }
-  if (
-    value === null ||
-    value === undefined ||
-    typeof value === "string" ||
-    typeof value === "boolean" ||
-    typeof value === "number"
-  ) {
+  // Strings arrive already built, so this is the backstop for growth that no single call could
+  // predict, such as a `+` chain the host kept as an unflattened rope.
+  if (typeof value === "string") {
+    if (value.length > MAX_STRING_LENGTH) {
+      throw new ToolRuntimeError("InvalidDataValue", stringLimitMessage(label, value.length))
+    }
+    return value
+  }
+  if (value === null || value === undefined || typeof value === "boolean" || typeof value === "number") {
     return value
   }
 
@@ -159,66 +148,12 @@ const copyBounded = (
   if (value instanceof CodeModePromise) {
     throw new ToolRuntimeError(
       "InvalidDataValue",
-      `${label} contains an un-awaited Promise; await tool calls (e.g. \`const result = await tools.ns.tool(...)\`) before using their results.`,
+      `${label} contains an un-awaited Promise; tool calls block and return their result directly.`,
     )
   }
   if (value instanceof ToolHandle) {
     if (preserveToolHandles) return value
     throw new ToolRuntimeError("InvalidDataValue", `${label} contains an opaque tool handle.`)
-  }
-
-  if (preserveCodeModeValues) {
-    if (
-      value instanceof CodeModeDate ||
-      value instanceof CodeModeRegExp ||
-      value instanceof CodeModeMap ||
-      value instanceof CodeModeSet ||
-      value instanceof CodeModeURL ||
-      value instanceof CodeModeURLSearchParams
-    ) {
-      return value
-    }
-    if (value instanceof Date) return new CodeModeDate(value.getTime())
-    if (value instanceof RegExp) return new CodeModeRegExp(value.source, value.flags)
-    if (value instanceof Map) {
-      const wrapped = new CodeModeMap()
-      for (const [key, item] of value.entries()) {
-        wrapped.map.set(
-          copyBounded(key, label, depth + 1, seen, true, preserveToolHandles),
-          copyBounded(item, label, depth + 1, seen, true, preserveToolHandles),
-        )
-      }
-      return wrapped
-    }
-    if (value instanceof Set) {
-      const wrapped = new CodeModeSet()
-      for (const item of value.values())
-        wrapped.set.add(copyBounded(item, label, depth + 1, seen, true, preserveToolHandles))
-      return wrapped
-    }
-    if (value instanceof URL) return new CodeModeURL(new URL(value.href))
-    if (value instanceof URLSearchParams) return new CodeModeURLSearchParams(new URLSearchParams(value))
-  }
-
-  if (value instanceof CodeModeDate) {
-    return Number.isFinite(value.time) ? new Date(value.time).toISOString() : null
-  }
-  if (value instanceof Date) {
-    return Number.isFinite(value.getTime()) ? value.toISOString() : null
-  }
-  if (value instanceof CodeModeURL) return value.url.href
-  if (value instanceof URL) return value.href
-  if (
-    value instanceof CodeModeRegExp ||
-    value instanceof CodeModeMap ||
-    value instanceof CodeModeSet ||
-    value instanceof CodeModeURLSearchParams ||
-    value instanceof RegExp ||
-    value instanceof Map ||
-    value instanceof Set ||
-    value instanceof URLSearchParams
-  ) {
-    return Object.create(null) as SafeObject
   }
 
   if (seen.has(value)) {
@@ -227,20 +162,13 @@ const copyBounded = (
 
   seen.add(value)
 
+  // Every value the interpreter builds crosses this copy, so refusing an oversized collection here
+  // is what lets the rest of the runtime treat the item limit as an invariant.
   if (Array.isArray(value)) {
-    const copied = value.map((item) =>
-      copyBounded(item, label, depth + 1, seen, preserveCodeModeValues, preserveToolHandles),
-    )
-    if (preserveCodeModeValues) {
-      // Checkpoint copies retain array metadata that boundary copies omit.
-      for (const [key, item] of Object.entries(value)) {
-        if (Object.hasOwn(copied, key)) continue
-        if (isBlockedMember(key)) {
-          throw new ToolRuntimeError("InvalidDataValue", `${label} contains blocked property '${key}'.`)
-        }
-        Reflect.set(copied, key, copyBounded(item, label, depth + 1, seen, true, preserveToolHandles))
-      }
+    if (value.length > MAX_COLLECTION_ITEMS) {
+      throw new ToolRuntimeError("InvalidDataValue", collectionLimitMessage(label, value.length))
     }
+    const copied = value.map((item) => copyBounded(item, label, depth + 1, seen, preserveToolHandles))
     seen.delete(value)
     return copied
   }
@@ -250,12 +178,16 @@ const copyBounded = (
     throw new ToolRuntimeError("InvalidDataValue", `${label} must contain plain objects only.`)
   }
 
+  const entries = Object.entries(value)
+  if (entries.length > MAX_COLLECTION_ITEMS) {
+    throw new ToolRuntimeError("InvalidDataValue", collectionLimitMessage(label, entries.length))
+  }
   const copied: SafeObject = Object.create(null) as SafeObject
-  for (const [key, item] of Object.entries(value)) {
+  for (const [key, item] of entries) {
     if (isBlockedMember(key)) {
       throw new ToolRuntimeError("InvalidDataValue", `${label} contains blocked property '${key}'.`)
     }
-    copied[key] = copyBounded(item, label, depth + 1, seen, preserveCodeModeValues, preserveToolHandles)
+    copied[key] = copyBounded(item, label, depth + 1, seen, preserveToolHandles)
   }
   seen.delete(value)
   return copied
@@ -590,7 +522,7 @@ export const make = <R>(
         const tool = resolve(root, path)
         const externalArgs = args.map((arg) =>
           copyOut(
-            copyIn(arg, `Arguments for tool '${name}'`, false, tool.acceptsToolHandles),
+            copyIn(arg, `Arguments for tool '${name}'`, tool.acceptsToolHandles),
             "json",
             tool.acceptsToolHandles,
           ),

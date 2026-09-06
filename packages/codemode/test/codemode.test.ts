@@ -369,6 +369,7 @@ describe("CodeMode console capture", () => {
     expect(result).toStrictEqual({
       ok: true,
       value: null,
+      declarations: { returned: null },
       logs: ['Thread info: {"name":"Demo","count":2}', "[warn] careful"],
       toolCalls: [],
     })
@@ -405,12 +406,12 @@ describe("CodeMode console capture", () => {
     expect(result.logs).toStrictEqual(["NaN", "Infinity -Infinity", '{"ratio":NaN,"bounds":[Infinity]}'])
   })
 
-  test("renders CodeMode values nested inside logged containers", async () => {
+  test("renders nested plain data inside logged containers", async () => {
     const result = await Effect.runPromise(
       CodeMode.execute({
         code: `
-        console.log({ m: new Map([["a", 1]]), when: new Date(0), r: /ab/g, s: new Set([1, 2]) })
-        console.log([new Date(0)])
+        console.log({ entries: [["a", 1]], when: time.format(0), pattern: "ab" })
+        console.log([time.format(0)])
         return null
       `,
       }),
@@ -418,8 +419,8 @@ describe("CodeMode console capture", () => {
 
     expect(result.ok).toBe(true)
     expect(result.logs).toStrictEqual([
-      '{"m":Map(1) [["a",1]],"when":1970-01-01T00:00:00.000Z,"r":/ab/g,"s":Set(2) [1,2]}',
-      "[1970-01-01T00:00:00.000Z]",
+      '{"entries":[["a",1]],"when":"1970-01-01T00:00:00.000Z","pattern":"ab"}',
+      '["1970-01-01T00:00:00.000Z"]',
     ])
   })
 
@@ -437,11 +438,11 @@ describe("CodeMode console capture", () => {
     expect(result.logs).toStrictEqual(['{"fn":[opaque reference],"ok":1}'])
   })
 
-  test("console.table renders CodeMode value cells", async () => {
+  test("console.table renders plain cells", async () => {
     const result = await Effect.runPromise(
       CodeMode.execute({
         code: `
-        console.table([{ when: new Date(0), n: NaN }])
+        console.table([{ when: time.format(0), n: NaN }])
         return null
       `,
       }),
@@ -468,6 +469,7 @@ describe("CodeMode console capture", () => {
     expect(result).toStrictEqual({
       ok: true,
       value: "done",
+      declarations: {},
       logs: ['{"nested":{"ok":true}}', "(index)\tname\tcount\n0\tKit\t1\n1\tOlive\t2"],
       toolCalls: [],
     })
@@ -540,6 +542,7 @@ describe("CodeMode output budget", () => {
     expect(result).toStrictEqual({
       ok: true,
       value: { fits: true },
+      declarations: {},
       logs: ["fits"],
       toolCalls: [],
     })
@@ -713,7 +716,13 @@ describe("CodeMode public contract", () => {
     // Per-execution state (tool-call budget and audit list, logs, timeout bookkeeping) must
     // bind at run time, so the second run neither exhausts the budget nor leaks run 1's logs.
     expect(first).toStrictEqual(second)
-    expect(second).toStrictEqual({ ok: true, value: 1, logs: ["hi"], toolCalls: [{ name: "host.echo" }] })
+    expect(second).toStrictEqual({
+      ok: true,
+      value: 1,
+      declarations: {},
+      logs: ["hi"],
+      toolCalls: [{ name: "host.echo" }],
+    })
   })
 
   test("describes the catalog and keeps the search built-in registered", async () => {
@@ -889,11 +898,13 @@ describe("CodeMode public contract", () => {
     expect(ended).toEqual(["search:success"])
   })
 
-  test("search is an opaque, shadowable global like other built-ins", async () => {
+  test("search is an opaque global that only nested scopes may shadow", async () => {
     const runtime = CodeMode.make({ tools })
     expect(await Effect.runPromise(runtime.execute(`return typeof search`))).toMatchObject({ value: "function" })
-    // A program-level declaration shadows the global, as JS module scope does.
-    const shadowed = await Effect.runPromise(runtime.execute(`const search = () => "local"; return search()`))
+    // A nested binding shadows the global, as ordinary lexical scoping does.
+    const shadowed = await Effect.runPromise(
+      runtime.execute(`function local() { const search = () => "local"; return search() }\nreturn local()`),
+    )
     expect(shadowed.ok).toBe(true)
     if (shadowed.ok) expect(shadowed.value).toBe("local")
     // The reference itself cannot cross the data boundary.
@@ -1127,7 +1138,12 @@ describe("CodeMode public contract", () => {
     })
 
     const success = await Effect.runPromise(runtime.execute(`return tools.math.double({ value: "21" })`))
-    expect(success).toStrictEqual({ ok: true, value: 42, toolCalls: [{ name: "math.double" }] })
+    expect(success).toStrictEqual({
+      ok: true,
+      value: 42,
+      declarations: {},
+      toolCalls: [{ name: "math.double" }],
+    })
     expect(observed).toStrictEqual([{ value: 21 }, 21])
 
     const invalid = await Effect.runPromise(runtime.execute(`return tools.math.double({ value: 21 })`))
@@ -1146,6 +1162,7 @@ describe("CodeMode public contract", () => {
     expect(result).toStrictEqual({
       ok: true,
       value: { top: null, nested: [1, null] },
+      declarations: {},
       toolCalls: [],
     })
     expect(Schema.decodeUnknownSync(CodeMode.Result)(JSON.parse(JSON.stringify(result)))).toStrictEqual(result)
@@ -1154,19 +1171,19 @@ describe("CodeMode public contract", () => {
   test("returns the final top-level expression when return is omitted", async () => {
     const result = await Effect.runPromise(CodeMode.execute({ code: `1; 2` }))
 
-    expect(result).toStrictEqual({ ok: true, value: 2, toolCalls: [] })
+    expect(result).toStrictEqual({ ok: true, value: 2, declarations: {}, toolCalls: [] })
   })
 
   test("does not implicitly return expressions nested in control flow", async () => {
     const result = await Effect.runPromise(CodeMode.execute({ code: `if (true) { 2 }` }))
 
-    expect(result).toStrictEqual({ ok: true, value: null, toolCalls: [] })
+    expect(result).toStrictEqual({ ok: true, value: null, declarations: {}, toolCalls: [] })
   })
 
   test("returns null when the final top-level statement is not an expression", async () => {
     const result = await Effect.runPromise(CodeMode.execute({ code: `1; const value = 2` }))
 
-    expect(result).toStrictEqual({ ok: true, value: null, toolCalls: [] })
+    expect(result).toStrictEqual({ ok: true, value: null, declarations: { value: 2 }, toolCalls: [] })
   })
 
   test("rejects invalid configuration and search limits", async () => {

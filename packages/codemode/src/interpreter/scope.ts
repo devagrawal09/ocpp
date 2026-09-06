@@ -1,4 +1,10 @@
-import { type AstNode, type Binding, InterpreterRuntimeError } from "./model.js"
+import {
+  type AstNode,
+  type Binding,
+  BrokenNotebookValue,
+  brokenNotebookSuggestions,
+  InterpreterRuntimeError,
+} from "./model.js"
 
 export class ScopeStack {
   private readonly scopes: Array<Map<string, Binding>>
@@ -43,6 +49,11 @@ export class ScopeStack {
 
     if (binding.initialized === false) {
       throw new InterpreterRuntimeError(`Cannot access '${name}' before initialization.`, node).as("ReferenceError")
+    }
+
+    // A stored value that failed to decode is quarantined until something actually reads it.
+    if (binding.value instanceof BrokenNotebookValue) {
+      throw new InterpreterRuntimeError(binding.value.message, node, "InvalidDurableValue", brokenNotebookSuggestions)
     }
 
     return binding.value

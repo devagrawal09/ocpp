@@ -23,9 +23,6 @@ export const stringMethods = new Set([
   "at",
   "concat",
   "toString",
-  "match",
-  "matchAll",
-  "search",
   "localeCompare",
   "normalize",
 ])

@@ -36,25 +36,3 @@ export const arrayMethods = new Set([
   "values",
   "entries",
 ])
-
-export const mapMethods = new Set(["get", "set", "has", "delete", "clear", "forEach", "keys", "values", "entries"])
-
-export const mapStatics = new Set(["groupBy"])
-
-export const setMethods = new Set([
-  "add",
-  "has",
-  "delete",
-  "clear",
-  "forEach",
-  "keys",
-  "values",
-  "entries",
-  "union",
-  "intersection",
-  "difference",
-  "symmetricDifference",
-  "isSubsetOf",
-  "isSupersetOf",
-  "isDisjointFrom",
-])

@@ -22,7 +22,7 @@ import {
 } from "./model.js"
 import { ToolHandle } from "../tool-handle.js"
 import { ToolReference } from "../tool-runtime.js"
-import { isCodeModeValue, CodeModePromise } from "../values.js"
+import { CodeModePromise } from "../values.js"
 
 export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof CodeModeFunction ||
@@ -45,8 +45,7 @@ export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof SearchFunction ||
   value instanceof PromiseCapabilityFunction ||
   value instanceof ErrorConstructorReference ||
-  value instanceof SymbolNamespace ||
-  isCodeModeValue(value)
+  value instanceof SymbolNamespace
 
 function* childValues(value: object): Generator<unknown> {
   if (Array.isArray(value)) {
@@ -86,7 +85,6 @@ export const containsOpaqueReference = (value: unknown): boolean => {
       continue
     }
     const current = next.value
-    if (isCodeModeValue(current)) continue
     if (isRuntimeReference(current)) return true
     if (current === null || typeof current !== "object" || seen.has(current)) continue
     seen.add(current)

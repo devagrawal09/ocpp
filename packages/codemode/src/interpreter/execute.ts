@@ -1,8 +1,10 @@
 import { Cause, Duration, Effect, Scope } from "effect"
-import { compile, IR_VERSION } from "../compiler.js"
+import { compile } from "../compiler.js"
+import { decodeProgram } from "../ir.js"
 import type { DataValue, Diagnostic, ExecuteOptions, ResolvedExecutionLimits, Result } from "../codemode.js"
 import { copyIn, copyOut, ToolRuntime, type Services } from "../tool-runtime.js"
 import type { Tools } from "../tools.js"
+import { defaultDurableLimits, encodeDeclarations } from "./durable.js"
 import { normalizeError } from "./errors.js"
 import { PromiseRuntime } from "./promises.js"
 import { Interpreter } from "./runtime.js"
@@ -19,13 +21,13 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
       toolCalls: [],
     })
   }
-  if (options.program !== undefined && options.program.version !== IR_VERSION) {
+  // A supplied program may have been persisted by an earlier host, so it is decoded before anything
+  // else: the interpreter only ever evaluates a program this boundary accepted.
+  const decoded = options.program === undefined ? undefined : decodeProgram(options.program)
+  if (decoded?.ok === false) {
     return Effect.succeed({
       ok: false,
-      error: {
-        kind: "ExecutionFailure",
-        message: `Compiled program version ${options.program.version} is unsupported; expected ${IR_VERSION}.`,
-      },
+      error: { kind: "ExecutionFailure", message: decoded.message },
       toolCalls: [],
     })
   }
@@ -43,14 +45,20 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
     )
     const logs: Array<string> = []
     const logged = () => (logs.length > 0 ? { logs: [...logs] } : {})
-    // Set only after copy-out so timeouts cannot report invalid values as completed.
-    let returned: { value: DataValue; promises: PromiseRuntime<Services<Provided>> } | undefined
+    // Set only after copy-out and encoding so timeouts cannot report invalid values as completed.
+    let returned:
+      | {
+          value: DataValue
+          declarations: Record<string, DataValue>
+          promises: PromiseRuntime<Services<Provided>>
+        }
+      | undefined
 
     const base: Effect.Effect<Result, unknown, Services<Provided>> = Effect.acquireUseRelease(
       Scope.make("parallel"),
       (scope) =>
         Effect.gen(function* () {
-          const parsed = options.program ?? compile(options.code)
+          const parsed = decoded?.program ?? compile(options.code)
           const promises = new PromiseRuntime<Services<Provided>>(scope)
           const interpreter = new Interpreter<Services<Provided>>(
             tools.execute,
@@ -62,17 +70,22 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             parsed.source,
             true,
             options.bindings,
-            parsed.exports,
+            parsed.declarations,
           )
           const executed = yield* interpreter.run(parsed.body)
-          const result = copyOut(copyIn(executed.value, "Execution result"), "nullify") as DataValue
-          const exports = copyOut(copyIn(executed.exports, "Execution exports"), "nullify") as Record<string, DataValue>
-          returned = { value: result, promises }
+          const result = copyOut(copyIn(executed.value, "Execution preview"), "nullify") as DataValue
+          // Saving happens before the execution reports success, so an invalid durable value fails
+          // the execution instead of surprising the host at commit.
+          const declarations = encodeDeclarations(executed.declarations, interpreter.notebook(), {
+            maxDepth: defaultDurableLimits.maxDepth,
+            maxBytes: limits.maxDeclarationBytes,
+          }) as Record<string, DataValue>
+          returned = { value: result, declarations, promises }
           const warnings = yield* promises.interrupt()
           return {
             ok: true,
             value: result,
-            ...(Object.keys(exports).length > 0 ? { exports } : {}),
+            declarations,
             ...(warnings.length > 0 ? { warnings } : {}),
             ...logged(),
             toolCalls: tools.calls,
@@ -91,10 +104,13 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             toolCalls: tools.calls,
           } satisfies Result
         }
-        // Keep the timeout warning first so truncation preserves it.
+        // The declarations were already encoded successfully, so only the interruption of leftover
+        // background work is new information. Keep the timeout warning first so truncation
+        // preserves it.
         return {
           ok: true,
           value: returned.value,
+          declarations: returned.declarations,
           warnings: [
             {
               kind: "TimeoutExceeded",
@@ -213,7 +229,7 @@ const boundOutput = (result: Result, maxOutputBytes: number, maxLogBytes: number
     ? {
         ok: true,
         value,
-        ...(result.exports ? { exports: result.exports } : {}),
+        declarations: result.declarations,
         ...warningsPart,
         ...logsPart,
         truncated: true,

@@ -15,24 +15,15 @@ import {
   UriFunction,
 } from "./model.js"
 import { containsOpaqueReference, isRuntimeReference, rejectCircularInsertion, typeofValue } from "./references.js"
+import { collectionLimitMessage, MAX_COLLECTION_ITEMS, MAX_STRING_LENGTH, stringLimitMessage } from "../limits.js"
 import { isBlockedMember, type SafeObject } from "../tool-runtime.js"
-import {
-  CodeModeDate,
-  CodeModeMap,
-  CodeModePromise,
-  CodeModeRegExp,
-  CodeModeSet,
-  CodeModeURL,
-  CodeModeURLSearchParams,
-  isCodeModeValue,
-} from "../values.js"
-import { dateSetterArgumentCount, invokeDateMethod, invokeDateStatic } from "../stdlib/date.js"
+import { CodeModePromise } from "../values.js"
 import { invokeMathMethod } from "../stdlib/math.js"
 import { invokeNumberMethod, invokeNumberStatic } from "../stdlib/number.js"
 import { invokeObjectMethod } from "../stdlib/object.js"
-import { invokeRegExpMethod, invokeRegExpStatic, matchToValue, toHostRegex } from "../stdlib/regexp.js"
 import { invokeStringStatic } from "../stdlib/string.js"
-import { invokeURLMethod, invokeURLStatic, uriArgument } from "../stdlib/url.js"
+import { invokeTimeMethod } from "../stdlib/time.js"
+import { invokeUrlMethod } from "../stdlib/url.js"
 import { boundedData, coerceToNumber, coerceToString, errorBrandName } from "../stdlib/value.js"
 import { preserveConsumerError, type SyncIteratorRunner } from "./iterator.js"
 
@@ -71,7 +62,7 @@ export const isSupportedCallback = (value: unknown): value is SupportedCallback 
   value instanceof JsonMethodReference ||
   value instanceof IntrinsicReference ||
   value instanceof ErrorConstructorReference ||
-  // Callable namespaces dispatch like JS: Array/Object/Date/RegExp construct,
+  // Callable namespaces dispatch like JS: Array and Object construct,
   // new-requiring constructors throw a TypeError. Math/JSON/console stay non-callable.
   (value instanceof GlobalNamespace && typeofValue(value) === "function") ||
   value instanceof PromiseNamespace
@@ -100,62 +91,7 @@ export const invokeIntrinsic = <R>(
   if (Array.isArray(ref.receiver)) {
     return invokeArrayMethod(runner, ref.receiver, ref.name, args, node)
   }
-  if (ref.receiver instanceof CodeModeDate) {
-    const target = ref.receiver
-    const argumentCount = dateSetterArgumentCount(ref.name)
-    if (argumentCount === undefined) return Effect.succeed(invokeDateMethod(target, ref.name, [], node))
-    // Native setters read the current time before argument coercion, whose callbacks may mutate the Date.
-    const initialTime = target.time
-    return Effect.map(
-      Effect.forEach(args.slice(0, argumentCount), (arg) => coerceNumericArgument(runner, arg, node), {
-        concurrency: 1,
-      }),
-      (values) => invokeDateMethod(target, ref.name, values, node, initialTime),
-    )
-  }
-  if (ref.receiver instanceof CodeModeRegExp) {
-    return Effect.succeed(invokeRegExpMethod(ref.receiver, ref.name, args, node))
-  }
-  if (ref.receiver instanceof CodeModeMap) {
-    return invokeMapMethod(runner, ref.receiver, ref.name, args, node)
-  }
-  if (ref.receiver instanceof CodeModeSet) {
-    return invokeSetMethod(runner, ref.receiver, ref.name, args, node)
-  }
-  if (ref.receiver instanceof CodeModeURL) {
-    return Effect.succeed(invokeURLMethod(ref.receiver, ref.name, node))
-  }
-  if (ref.receiver instanceof CodeModeURLSearchParams) {
-    return invokeURLSearchParamsMethod(runner, ref.receiver, ref.name, args, node)
-  }
   throw new InterpreterRuntimeError(`Method '${ref.name}' is not available.`, node)
-}
-
-const coerceNumericArgument = <R>(
-  runner: CallbackRunner<R>,
-  value: unknown,
-  node: AstNode,
-): Effect.Effect<number, unknown, R> => {
-  if (value === null || typeof value !== "object" || Array.isArray(value) || isCodeModeValue(value)) {
-    return Effect.succeed(coerceToNumber(value))
-  }
-  const object = value as Record<string, unknown>
-  return Effect.gen(function* () {
-    if (Object.hasOwn(object, "valueOf") && typeofValue(object.valueOf) === "function") {
-      const result = yield* runner.invokeCallable(object.valueOf, [], node)
-      if (result === null || (typeof result !== "object" && typeof result !== "function")) {
-        return coerceToNumber(result)
-      }
-    }
-    if (!Object.hasOwn(object, "toString")) return coerceToNumber(value)
-    if (typeofValue(object.toString) === "function") {
-      const result = yield* runner.invokeCallable(object.toString, [], node)
-      if (result === null || (typeof result !== "object" && typeof result !== "function")) {
-        return coerceToNumber(result)
-      }
-    }
-    throw new InterpreterRuntimeError("Cannot convert object to primitive value.", node).as("TypeError")
-  })
 }
 
 export const invokeGlobalMethod = (ref: GlobalMethodReference, args: Array<unknown>, node: AstNode): unknown => {
@@ -165,12 +101,8 @@ export const invokeGlobalMethod = (ref: GlobalMethodReference, args: Array<unkno
   if (ref.namespace === "Array") return invokeArrayStatic(ref.name, args, node)
   if (ref.namespace === "Number") return invokeNumberStatic(ref.name, args, node)
   if (ref.namespace === "String") return invokeStringStatic(ref.name, args, node)
-  if (ref.namespace === "URL") return invokeURLStatic(ref.name, args, node)
-  if (ref.namespace === "Date") return invokeDateStatic(ref.name, args, node)
-  if (ref.namespace === "RegExp") return invokeRegExpStatic(ref.name, args, node)
-  if (ref.namespace === "Map" || ref.namespace === "Set" || ref.namespace === "URLSearchParams") {
-    throw new InterpreterRuntimeError(`${ref.namespace}.${ref.name} is not available.`, node)
-  }
+  if (ref.namespace === "time") return invokeTimeMethod(ref.name, args, node)
+  if (ref.namespace === "url") return invokeUrlMethod(ref.name, args, node)
   throw new InterpreterRuntimeError(`${ref.namespace}.${ref.name} is not available.`, node)
 }
 
@@ -191,15 +123,17 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
   const num = (index: number): number => coerceToNumber(requireDataArgument(name, index, args[index], node))
   const optNum = (index: number): number | undefined => (args[index] === undefined ? undefined : num(index))
   const optStr = (index: number): string | undefined => (args[index] === undefined ? undefined : str(index))
-  const rejectRegex = (): void => {
-    if (args[0] instanceof CodeModeRegExp) {
+  // These operations build their whole result inside one native call, so a length the arguments
+  // already imply is checked before that call rather than after it.
+  const withinStringLimit = (characters: number): void => {
+    if (characters > MAX_STRING_LENGTH) {
       throw new InterpreterRuntimeError(
-        `String.${name} cannot take a regular expression; use regex.test(string) or String.search instead.`,
+        stringLimitMessage(`String.${name} result`, characters),
         node,
-      ).as("TypeError")
+        "InvalidDataValue",
+      ).as("RangeError")
     }
   }
-
   let result: unknown
   switch (name) {
     case "toLowerCase":
@@ -241,27 +175,36 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
         result = requestedLimit !== undefined && requestedLimit >>> 0 === 0 ? [] : [value]
         break
       }
-      if (args[0] instanceof CodeModeRegExp) {
-        result = value.split(args[0].regex, optNum(1))
-        break
-      }
       const requestedLimit = optNum(1)
-      result = value.split(str(0), requestedLimit === undefined ? undefined : requestedLimit >>> 0)
+      // Splitting one bounded string can ask for one piece per character, so the native limit stops
+      // the scan one piece past the ceiling instead of materializing them all and rejecting after.
+      const pieces = value.split(
+        str(0),
+        Math.min(
+          requestedLimit === undefined ? MAX_COLLECTION_ITEMS + 1 : requestedLimit >>> 0,
+          MAX_COLLECTION_ITEMS + 1,
+        ),
+      )
+      if (pieces.length > MAX_COLLECTION_ITEMS) {
+        throw new InterpreterRuntimeError(
+          collectionLimitMessage("String.split result", pieces.length),
+          node,
+          "InvalidDataValue",
+        ).as("RangeError")
+      }
+      result = pieces
       break
     }
     case "slice":
       result = value.slice(optNum(0), optNum(1))
       break
     case "includes":
-      rejectRegex()
       result = value.includes(str(0), optNum(1))
       break
     case "startsWith":
-      rejectRegex()
       result = value.startsWith(str(0), optNum(1))
       break
     case "endsWith":
-      rejectRegex()
       result = value.endsWith(str(0), optNum(1))
       break
     case "indexOf":
@@ -272,60 +215,40 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
       break
     case "replace":
     case "replaceAll": {
-      if (args[0] instanceof CodeModeRegExp) {
-        const pattern = args[0].regex
-        const replacement = str(1)
-        if (name === "replaceAll" && !pattern.global) {
-          throw new InterpreterRuntimeError(
-            `String.replaceAll requires a regular expression with the global (g) flag: write /${pattern.source}/${pattern.flags}g, or use String.replace to replace only the first match.`,
-            node,
-          )
-        }
-        result = name === "replace" ? value.replace(pattern, replacement) : value.replaceAll(pattern, replacement)
-        break
-      }
+      const search = str(0)
+      const replacement = str(1)
       if (name === "replace") {
-        result = value.replace(str(0), str(1))
+        withinStringLimit(value.length - search.length + replacement.length)
+        result = value.replace(search, replacement)
         break
       }
-      result = value.replaceAll(str(0), str(1))
-      break
-    }
-    case "match": {
-      const pattern = toHostRegex(args[0], name, node)
-      const matched = value.match(pattern)
-      if (matched === null) return null
-      // Preserve the own `index` and `groups` properties on non-global matches.
-      if (pattern.global) return boundedData(matched, "String.match result")
-      return matchToValue(matched)
-    }
-    case "matchAll": {
-      const pattern = toHostRegex(args[0], name, node, "g")
-      if (!pattern.global) {
-        throw new InterpreterRuntimeError(
-          `String.matchAll requires a regular expression with the global (g) flag: write /${pattern.source}/${pattern.flags}g, or use String.match for a single match.`,
-          node,
-        )
-      }
-      return Array.from(value.matchAll(pattern), matchToValue)
-    }
-    case "search": {
-      result = value.search(toHostRegex(args[0], name, node))
+      // Every occurrence grows by the same difference, and the occurrence count cannot exceed one
+      // per separator length, so the largest possible result is known without scanning.
+      const occurrences = search.length === 0 ? value.length + 1 : Math.floor(value.length / search.length)
+      withinStringLimit(value.length + occurrences * Math.max(0, replacement.length - search.length))
+      result = value.replaceAll(search, replacement)
       break
     }
     case "repeat": {
       const count = num(0)
       if (!Number.isFinite(count) || count < 0)
         throw new InterpreterRuntimeError("String.repeat expects a finite non-negative count.", node).as("RangeError")
+      withinStringLimit(count * value.length)
       result = value.repeat(count)
       break
     }
-    case "padStart":
-      result = value.padStart(num(0), optStr(1))
+    case "padStart": {
+      const target = num(0)
+      withinStringLimit(target)
+      result = value.padStart(target, optStr(1))
       break
-    case "padEnd":
-      result = value.padEnd(num(0), optStr(1))
+    }
+    case "padEnd": {
+      const target = num(0)
+      withinStringLimit(target)
+      result = value.padEnd(target, optStr(1))
       break
+    }
     case "charAt":
       result = value.charAt(optNum(0) ?? 0)
       break
@@ -345,7 +268,9 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
       result = value
       break
     case "concat": {
-      result = value.concat(...args.map((_, index) => str(index)))
+      const parts = args.map((_, index) => str(index))
+      withinStringLimit(parts.reduce((total, part) => total + part.length, value.length))
+      result = value.concat(...parts)
       break
     }
     default:
@@ -384,10 +309,19 @@ const arrayLikeSource = (source: unknown, node: AstNode): { readonly length: num
     const length = (source as { length: number }).length
     const normalized = Number.isNaN(length) || length <= 0 ? 0 : Math.trunc(length)
     if (normalized > 4_294_967_295) throw new RangeError("Invalid array length")
+    // `{ length: 4e9 }` costs the program nothing and would cost the host a densified array of that
+    // size, so the request is refused before the read loop starts.
+    if (normalized > MAX_COLLECTION_ITEMS) {
+      throw new InterpreterRuntimeError(
+        collectionLimitMessage("Array.from result", normalized),
+        node,
+        "InvalidDataValue",
+      ).as("RangeError")
+    }
     return { length: normalized, source }
   }
   throw new InterpreterRuntimeError(
-    "Array.from expects an array, string, Map, Set, or array-like value.",
+    "Array.from expects an array, string, or array-like value.",
     node,
     "InvalidDataValue",
   )
@@ -423,6 +357,13 @@ export const invokeArrayFrom = <R>(
       const step = yield* cursor.next
       if (step.done) return values
       values.push(apply === undefined ? step.value : yield* preserveConsumerError(cursor, apply([step.value, index])))
+      if (values.length > MAX_COLLECTION_ITEMS) {
+        throw new InterpreterRuntimeError(
+          collectionLimitMessage("Array.from result", values.length),
+          node,
+          "InvalidDataValue",
+        ).as("RangeError")
+      }
       index += 1
     }
   })
@@ -430,35 +371,19 @@ export const invokeArrayFrom = <R>(
 
 export const invokeGroupBy = <R>(
   runner: CallbackRunner<R> & SyncIteratorRunner<R>,
-  namespace: "Map" | "Object",
   args: Array<unknown>,
   node: AstNode,
 ): Effect.Effect<unknown, unknown, R> => {
   const source = args[0]
   if (source === null || source === undefined) {
-    throw new InterpreterRuntimeError(`${namespace}.groupBy expects an iterable collection.`, node).as("TypeError")
+    throw new InterpreterRuntimeError("Object.groupBy expects an iterable collection.", node).as("TypeError")
   }
-  const apply = applyCollectionCallback(runner, args[1], `${namespace}.groupBy`, node)
+  const apply = applyCollectionCallback(runner, args[1], "Object.groupBy", node)
   return Effect.gen(function* () {
     const cursor = yield* runner.syncIterator(source, node)
     if (cursor === undefined) {
-      throw new InterpreterRuntimeError(`${namespace}.groupBy expects an iterable collection.`, node).as("TypeError")
+      throw new InterpreterRuntimeError("Object.groupBy expects an iterable collection.", node).as("TypeError")
     }
-    if (namespace === "Map") {
-      const result = new CodeModeMap()
-      let index = 0
-      while (true) {
-        const step = yield* cursor.next
-        if (step.done) return result
-        const item = step.value
-        const key = yield* preserveConsumerError(cursor, apply([item, index]))
-        const group = result.map.get(key)
-        if (group === undefined) result.map.set(key, [item])
-        else (group as Array<unknown>).push(item)
-        index += 1
-      }
-    }
-
     const result: SafeObject = Object.create(null) as SafeObject
     let index = 0
     while (true) {
@@ -488,7 +413,7 @@ const coerceGroupByPropertyKey = <R>(
   value: unknown,
   node: AstNode,
 ): Effect.Effect<string, unknown, R> => {
-  if (value === null || typeof value !== "object" || Array.isArray(value) || isCodeModeValue(value)) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return Effect.succeed(coerceToString(value))
   }
   if (value instanceof CodeModePromise) return Effect.succeed("[object Promise]")
@@ -542,36 +467,34 @@ const invokeStringReplacer = <R>(
     return match
   }
 
-  const pattern = args[0]
-  if (pattern instanceof CodeModeRegExp) {
-    if (name === "replaceAll" && !pattern.regex.global) {
-      throw new InterpreterRuntimeError(
-        `String.replaceAll requires a regular expression with the global (g) flag: write /${pattern.regex.source}/${pattern.regex.flags}g, or use String.replace to replace only the first match.`,
-        node,
-      )
-    }
-    if (name === "replace") value.replace(pattern.regex, collect)
-    else value.replaceAll(pattern.regex, collect)
-  } else {
-    const search = coerceToString(requireDataArgument(name, 0, pattern, node))
-    if (name === "replace") value.replace(search, collect)
-    else value.replaceAll(search, collect)
-  }
+  const search = coerceToString(requireDataArgument(name, 0, args[0], node))
+  if (name === "replace") value.replace(search, collect)
+  else value.replaceAll(search, collect)
 
   return Effect.gen(function* () {
     const output: Array<string> = []
     let end = 0
+    let characters = 0
     for (const match of matches) {
       const replacement = yield* apply(match.args)
       // Error values are branded plain objects; boundedData would strip the brand before coercion.
-      output.push(
-        value.slice(end, match.offset),
+      const replaced =
         replacement instanceof CodeModePromise
           ? "[object Promise]"
           : errorBrandName(replacement)
             ? coerceToString(replacement)
-            : coerceToString(boundedData(replacement, `String.${name} replacer result`)),
-      )
+            : coerceToString(boundedData(replacement, `String.${name} replacer result`))
+      output.push(value.slice(end, match.offset), replaced)
+      // A replacer returns a whole string per match, so the result is measured as it accumulates
+      // rather than after the join has already built it.
+      characters += match.offset - end + replaced.length
+      if (characters > MAX_STRING_LENGTH) {
+        throw new InterpreterRuntimeError(
+          stringLimitMessage(`String.${name} result`, characters),
+          node,
+          "InvalidDataValue",
+        ).as("RangeError")
+      }
       end = match.offset + match.match.length
     }
     output.push(value.slice(end))
@@ -597,290 +520,6 @@ export const applyCollectionCallback = <R>(
   return (callbackArgs) => runner.invokeCallable(callback, callbackArgs, node)
 }
 
-const invokeMapMethod = <R>(
-  runner: CallbackRunner<R>,
-  target: CodeModeMap,
-  name: string,
-  args: Array<unknown>,
-  node: AstNode,
-): Effect.Effect<unknown, unknown, R> => {
-  switch (name) {
-    case "get":
-      return Effect.succeed(target.map.get(args[0]))
-    case "has":
-      return Effect.succeed(target.map.has(args[0]))
-    case "set":
-      return Effect.sync(() => {
-        target.map.set(args[0], args[1])
-        return target
-      })
-    case "delete":
-      return Effect.sync(() => target.map.delete(args[0]))
-    case "clear":
-      return Effect.sync(() => {
-        target.map.clear()
-        return undefined
-      })
-    case "keys":
-      return Effect.sync(() => Array.from(target.map.keys()))
-    case "values":
-      return Effect.sync(() => Array.from(target.map.values()))
-    case "entries":
-      return Effect.sync(() => Array.from(target.map.entries(), ([key, item]): Array<unknown> => [key, item]))
-    case "forEach": {
-      const apply = applyCollectionCallback(runner, args[0], "Map.forEach", node)
-      return Effect.gen(function* () {
-        for (const [key, item] of Array.from(target.map.entries())) yield* apply([item, key, target])
-        return undefined
-      })
-    }
-    default:
-      throw new InterpreterRuntimeError(`Map method '${name}' is not available.`, node)
-  }
-}
-
-const invokeSetMethod = <R>(
-  runner: CallbackRunner<R>,
-  target: CodeModeSet,
-  name: string,
-  args: Array<unknown>,
-  node: AstNode,
-): Effect.Effect<unknown, unknown, R> => {
-  switch (name) {
-    case "has":
-      return Effect.succeed(target.set.has(args[0]))
-    case "add":
-      return Effect.sync(() => {
-        target.set.add(args[0])
-        return target
-      })
-    case "delete":
-      return Effect.sync(() => target.set.delete(args[0]))
-    case "clear":
-      return Effect.sync(() => {
-        target.set.clear()
-        return undefined
-      })
-    case "keys":
-    case "values":
-      return Effect.sync(() => Array.from(target.set.values()))
-    case "entries":
-      return Effect.sync(() => Array.from(target.set.values(), (item): Array<unknown> => [item, item]))
-    case "forEach": {
-      const apply = applyCollectionCallback(runner, args[0], "Set.forEach", node)
-      return Effect.gen(function* () {
-        for (const item of Array.from(target.set.values())) yield* apply([item, item, target])
-        return undefined
-      })
-    }
-    case "union":
-    case "intersection":
-    case "difference":
-    case "symmetricDifference":
-    case "isSubsetOf":
-    case "isSupersetOf":
-    case "isDisjointFrom":
-      return invokeSetOperation(runner, target, name, args[0], node)
-    default:
-      throw new InterpreterRuntimeError(`Set method '${name}' is not available.`, node)
-  }
-}
-
-const invokeSetOperation = <R>(
-  runner: CallbackRunner<R>,
-  target: CodeModeSet,
-  name: string,
-  source: unknown,
-  node: AstNode,
-): Effect.Effect<unknown, unknown, R> =>
-  Effect.gen(function* () {
-    const other = yield* loadSetRecord(runner, source, name, node)
-    if (name === "union") {
-      const result = copySet(target)
-      for (const item of yield* other.keys()) result.set.add(item)
-      return result
-    }
-    if (name === "intersection") {
-      const result = new CodeModeSet()
-      if (target.set.size <= other.size) {
-        for (const item of target.set.values()) {
-          if (yield* other.has(item)) result.set.add(item)
-        }
-        return result
-      }
-      for (const item of yield* other.keys()) {
-        if (target.set.has(item)) result.set.add(item)
-      }
-      return result
-    }
-    if (name === "difference") {
-      const result = copySet(target)
-      if (target.set.size <= other.size) {
-        for (const item of result.set.values()) {
-          if (yield* other.has(item)) result.set.delete(item)
-        }
-        return result
-      }
-      for (const item of yield* other.keys()) result.set.delete(item)
-      return result
-    }
-    if (name === "symmetricDifference") {
-      const result = copySet(target)
-      for (const item of yield* other.keys()) {
-        if (target.set.has(item)) result.set.delete(item)
-        else result.set.add(item)
-      }
-      return result
-    }
-    if (name === "isSubsetOf") {
-      if (target.set.size > other.size) return false
-      for (const item of target.set.values()) {
-        if (!(yield* other.has(item))) return false
-      }
-      return true
-    }
-    if (name === "isSupersetOf") {
-      if (target.set.size < other.size) return false
-      for (const item of yield* other.keys()) {
-        if (!target.set.has(item)) return false
-      }
-      return true
-    }
-    if (target.set.size <= other.size) {
-      for (const item of target.set.values()) {
-        if (yield* other.has(item)) return false
-      }
-      return true
-    }
-    for (const item of yield* other.keys()) {
-      if (target.set.has(item)) return false
-    }
-    return true
-  })
-
-const copySet = (source: CodeModeSet): CodeModeSet => {
-  const result = new CodeModeSet()
-  for (const item of source.set.values()) result.set.add(item)
-  return result
-}
-
-const loadSetRecord = <R>(runner: CallbackRunner<R>, source: unknown, name: string, node: AstNode) => {
-  if (source instanceof CodeModeSet) {
-    return Effect.succeed({
-      size: source.set.size,
-      has: (item: unknown) => Effect.succeed(source.set.has(item)),
-      keys: () => Effect.succeed(source.set.values()),
-    })
-  }
-  if (source instanceof CodeModeMap) {
-    return Effect.succeed({
-      size: source.map.size,
-      has: (item: unknown) => Effect.succeed(source.map.has(item)),
-      keys: () => Effect.succeed(source.map.keys()),
-    })
-  }
-  if (source === null || typeof source !== "object" || isCodeModeValue(source)) {
-    throw new InterpreterRuntimeError(`Set.${name} expects a Set-like object.`, node).as("TypeError")
-  }
-  const object = source as Record<string, unknown>
-  return Effect.gen(function* () {
-    const size = yield* coerceNumericArgument(runner, object.size, node)
-    if (Number.isNaN(size)) {
-      throw new InterpreterRuntimeError(`Set.${name} received a Set-like object with an invalid size.`, node).as(
-        "TypeError",
-      )
-    }
-    if (!isSupportedCallback(object.has) || !isSupportedCallback(object.keys)) {
-      throw new InterpreterRuntimeError(`Set.${name} expects callable 'has' and 'keys' methods.`, node).as("TypeError")
-    }
-    const has = object.has
-    const keys = object.keys
-    return {
-      size: Math.max(Math.trunc(size), 0),
-      has: (item: unknown) => Effect.map(runner.invokeCallable(has, [item], node), Boolean),
-      keys: () =>
-        Effect.flatMap(runner.invokeCallable(keys, [], node), (result) => {
-          if (Array.isArray(result)) return Effect.succeed(result)
-          throw new InterpreterRuntimeError(`Set.${name} expected 'keys' to return an iterator.`, node).as("TypeError")
-        }),
-    }
-  })
-}
-
-const invokeURLSearchParamsMethod = <R>(
-  runner: CallbackRunner<R>,
-  target: CodeModeURLSearchParams,
-  name: string,
-  args: Array<unknown>,
-  node: AstNode,
-): Effect.Effect<unknown, unknown, R> => {
-  const arg = (index: number): string => uriArgument(args[index], `URLSearchParams.${name} argument ${index + 1}`)
-  const requireArgs = (count: number): void => {
-    if (args.length < count) {
-      throw new InterpreterRuntimeError(
-        `URLSearchParams.${name} requires ${count} argument${count === 1 ? "" : "s"}.`,
-        node,
-      ).as("TypeError")
-    }
-  }
-  switch (name) {
-    case "append": {
-      requireArgs(2)
-      return Effect.sync(() => {
-        target.params.append(arg(0), arg(1))
-        return undefined
-      })
-    }
-    case "delete": {
-      requireArgs(1)
-      return Effect.sync(() => {
-        if (args[1] !== undefined) target.params.delete(arg(0), arg(1))
-        else target.params.delete(arg(0))
-        return undefined
-      })
-    }
-    case "get":
-      requireArgs(1)
-      return Effect.sync(() => target.params.get(arg(0)))
-    case "getAll":
-      requireArgs(1)
-      return Effect.sync(() => target.params.getAll(arg(0)))
-    case "has":
-      requireArgs(1)
-      return Effect.sync(() => (args[1] !== undefined ? target.params.has(arg(0), arg(1)) : target.params.has(arg(0))))
-    case "set": {
-      requireArgs(2)
-      return Effect.sync(() => {
-        target.params.set(arg(0), arg(1))
-        return undefined
-      })
-    }
-    case "sort":
-      return Effect.sync(() => {
-        target.params.sort()
-        return undefined
-      })
-    case "keys":
-      return Effect.sync(() => Array.from(target.params.keys()))
-    case "values":
-      return Effect.sync(() => Array.from(target.params.values()))
-    case "entries":
-      return Effect.sync(() => Array.from(target.params.entries(), ([key, value]): Array<unknown> => [key, value]))
-    case "toString":
-      return Effect.sync(() => target.params.toString())
-    case "forEach": {
-      requireArgs(1)
-      const apply = applyCollectionCallback(runner, args[0], "URLSearchParams.forEach", node)
-      return Effect.gen(function* () {
-        for (const [key, value] of Array.from(target.params.entries())) yield* apply([value, key, target])
-        return undefined
-      })
-    }
-    default:
-      throw new InterpreterRuntimeError(`URLSearchParams method '${name}' is not available.`, node)
-  }
-}
-
 const invokeArrayMethod = <R>(
   runner: CallbackRunner<R>,
   target: Array<unknown>,
@@ -894,15 +533,36 @@ const invokeArrayMethod = <R>(
       throw new InterpreterRuntimeError(`Array.${name} expects ${label} to be a number.`, node)
     return value
   }
+  // Growing methods know their result length from their arguments, so they check it before the
+  // native call. Every other method may then rely on an array already holding at most the limit.
+  const withinCollectionLimit = (items: number): void => {
+    if (items > MAX_COLLECTION_ITEMS) {
+      throw new InterpreterRuntimeError(
+        collectionLimitMessage(`Array.${name} result`, items),
+        node,
+        "InvalidDataValue",
+      ).as("RangeError")
+    }
+  }
   switch (name) {
     case "join": {
       if (args.length > 1 || (args.length === 1 && typeof args[0] !== "string")) {
         throw new InterpreterRuntimeError("Array.join expects zero arguments or one string separator.", node)
       }
-      const input = boundedData(target, "Array.join input") as Array<unknown>
-      return Effect.succeed(
-        input.map((item) => coerceToString(item ?? "")).join(args.length === 0 ? "," : (args[0] as string)),
+      const separator = args.length === 0 ? "," : (args[0] as string)
+      const parts = (boundedData(target, "Array.join input") as Array<unknown>).map((item) =>
+        coerceToString(item ?? ""),
       )
+      // A long separator between many items is an amplifier, so the exact result length is summed
+      // from the parts before the native join builds it.
+      const joined =
+        parts.reduce((total, part) => total + part.length, 0) + Math.max(0, parts.length - 1) * separator.length
+      if (joined > MAX_STRING_LENGTH) {
+        throw new InterpreterRuntimeError(stringLimitMessage("Array.join result", joined), node, "InvalidDataValue").as(
+          "RangeError",
+        )
+      }
+      return Effect.succeed(parts.join(separator))
     }
     case "includes":
       if (args.length === 0 || args.length > 2)
@@ -921,9 +581,24 @@ const invokeArrayMethod = <R>(
     case "slice":
       return Effect.succeed(target.slice(optNumber(args[0], "start"), optNumber(args[1], "end")))
     case "concat":
+      withinCollectionLimit(
+        args.reduce<number>((total, arg) => total + (Array.isArray(arg) ? arg.length : 1), target.length),
+      )
       return Effect.succeed(target.concat(...args))
-    case "flat":
-      return Effect.succeed(target.flat(optNumber(args[0], "depth") ?? 1))
+    case "flat": {
+      const depth = optNumber(args[0], "depth") ?? 1
+      // A short array of repeated references names far more items than it holds, so the flattened
+      // count is measured first. Counting stops at the limit, so a rejected call stays cheap.
+      let items = 0
+      const measure = (level: Array<unknown>, remaining: number): void =>
+        level.forEach((item) => {
+          if (remaining > 0 && Array.isArray(item)) measure(item, remaining - 1)
+          else items += 1
+          withinCollectionLimit(items)
+        })
+      measure(target, depth)
+      return Effect.succeed(target.flat(depth))
+    }
     case "reverse":
       return Effect.succeed(target.reverse())
     case "sort": {
@@ -987,6 +662,7 @@ const invokeArrayMethod = <R>(
         return Effect.succeed(copied)
       }
       const deleteCount = optNumber(args[1], "delete count") ?? 0
+      withinCollectionLimit(target.length + args.length - 2)
       const copied = [...target]
       copied.splice(start, deleteCount, ...args.slice(2))
       return Effect.succeed(copied)
@@ -1032,6 +708,14 @@ const invokeArrayMethod = <R>(
           const mapped = yield* apply([target[index], index, target])
           if (Array.isArray(mapped)) values.push(...mapped)
           else values.push(mapped)
+          // One callback can return a whole array, so the total grows faster than the iteration.
+          if (values.length > MAX_COLLECTION_ITEMS) {
+            throw new InterpreterRuntimeError(
+              collectionLimitMessage("Array.flatMap result", values.length),
+              node,
+              "InvalidDataValue",
+            ).as("RangeError")
+          }
         }
         return values
       }

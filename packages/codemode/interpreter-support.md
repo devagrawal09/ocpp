@@ -45,12 +45,12 @@ application effects are available only when the host exposes a named tool that p
 | Plain durable data     | `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, functions.      |
 | Asynchronous execution | `execute` returns an execution ID; the outcome arrives as one later notification.                  |
 | Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.        |
-| Blocking tool calls    | `tools.repository.read(input)` returns its decoded result directly. Promise syntax does not exist. |
+| Blocking tool calls    | `tools.repository.read(input)` returns its decoded result directly. `await` and `Promise.all` are warning-producing compatibility no-ops. |
 
 ## Quick Start
 
 Tool paths are catalog-dependent. The examples below use an illustrative `repository` namespace; use
-`search` to find the paths and schemas exposed by the current host.
+`tools.search` to find the paths and schemas exposed by the current host.
 
 ```ts
 const matches = tools.repository.glob({ pattern: "src/**/*.ts" })
@@ -76,7 +76,7 @@ If the exact catalog path or signature is unknown, discover it and call the retu
 later execution:
 
 ```ts
-return search({ query: "read file", namespace: "repository" })
+return tools.search({ query: "read file", namespace: "repository" })
 ```
 
 Do not assign a discovered path to a variable and invoke it dynamically. Dynamic dispatch is
@@ -111,8 +111,8 @@ Deterministic rules keep extraction precise:
 - `export` in any form is rejected: publication is automatic.
 - `const handle = tool.define(...)` is rejected before execution, because a live handle cannot be
   saved. Bind it with `let`, or create it inside a function.
-- A durable name may not be a runtime global such as `time`, `url`, `search`, `console`, `JSON`,
-  `Object`, `Math`, `Array`, `String`, `Error`, `tools`, or `tool`. A notebook name is permanent, so
+- A durable name may not be a runtime global such as `time`, `url`, `console`, `JSON`, `Object`,
+  `Math`, `Array`, `String`, `Error`, `tools`, or `tool`. A notebook name is permanent, so
   shadowing a builtin would hide it from every later execution in the Session. Nested bindings are
   ordinary lexical scoping and may use any name.
 - A `return` outside a function is rejected when a later top-level statement declares a durable name,
@@ -224,9 +224,9 @@ A durable function keeps:
 - static tool paths, which are resolved and authorized again in the execution that invokes it.
 
 A saved closure never looks up a later notebook value by name: every free identifier is either a host
-global (`tools`, `search`, `console`, `Math`, `JSON`, `time`, `url`, …) or a captured value
-stored with the function. A function that reads an identifier which does not exist when the execution
-saves is rejected. Fixes use new names and new closures.
+global (`tools`, `console`, `Math`, `JSON`, `time`, `url`, …) or a captured value stored with the
+function. A function that reads an identifier which does not exist when the execution saves is
+rejected. Fixes use new names and new closures.
 
 ```ts
 // First execution
@@ -250,9 +250,10 @@ Depth and size limits apply while values are constructed, so an invalid or overs
 fails during execution rather than surprising the host at commit. Intentionally large artifacts
 belong in files through host tools.
 
-Encoding normalizes the two shapes JSON cannot represent: an array hole becomes `null` and `-0`
-becomes `0`. A value therefore behaves the same in the execution that declared it and in every later
-execution that loads it from storage.
+Encoding normalizes what JSON cannot represent: an array hole and an `undefined` value become
+`null`, `-0` becomes `0`, and a record key whose value is `undefined` is dropped. A value therefore
+behaves the same in the execution that declared it and in every later execution that loads it from
+storage.
 
 A stored value that cannot be decoded — damaged data, or a function saved by an unsupported IR
 version — is quarantined in its own name rather than failing the whole activation. Unrelated code
@@ -347,15 +348,15 @@ notebook state without a global revision gate:
 - Optional chaining and property reads.
 - Non-mutating Array, Object, String, Number, Math, and JSON operations implemented by the evaluator.
 - The `time` and `url` helper namespaces.
-- Captured `console.log`, `console.info`, `console.warn`, `console.error`, `console.dir`, and
-  `console.table` output.
+- Captured `console.log`, `console.info`, `console.debug`, `console.warn`, `console.error`,
+  `console.dir`, and `console.table` output.
 - Literal bracket notation for tool path segments that are not JavaScript identifiers.
-- Synchronous `search(input)` for bounded catalog discovery. Search counts as a tool call.
+- Synchronous `tools.search(input)` for bounded catalog discovery. Search counts as a tool call.
 
 ### Rejected
 
 - `export` in any form.
-- `Promise`, `async`, `await`, generators, `yield`, and `for await...of`.
+- `Promise` other than compatibility `Promise.all`, `async`, generators, `yield`, and `for await...of`.
 - `Date`, `RegExp`, `Map`, `Set`, `URL`, `URLSearchParams`, regular-expression literals, and the
   `regex` namespace.
 - Dynamic tool dispatch such as `tools[name](input)`, detached tool references, and namespace
@@ -438,22 +439,30 @@ Handle guarantees:
 
 OpenCode Core applies these fixed host limits. A program cannot raise or lower them.
 
-| Resource                          |       Limit |
-| --------------------------------- | ----------: |
-| Wall-clock execution              | 120 seconds |
-| Tool calls                        |         100 |
-| One durable notebook value        |     256 KiB |
-| Declarations per execution        |          64 |
-| Notebook values per Session       |         512 |
-| Notebook bytes per Session        |       8 MiB |
-| Captured journal input or output  |     256 KiB |
-| Captured logs                     |      64 KiB |
-| Model-facing preview              |       4 KiB |
-| Completion summary                |       8 KiB |
-| Concurrent executions per Session |           4 |
-| Durable value depth               |          32 |
-| Items in one array or record      |   1,000,000 |
-| Characters in one string          |   4,000,000 |
+| Resource                          |     Limit |
+| --------------------------------- | --------: |
+| Tool calls                        |       100 |
+| One durable notebook value        |   256 KiB |
+| Declarations per execution        |        64 |
+| Notebook values per Session       |       512 |
+| Notebook bytes per Session        |     8 MiB |
+| Captured journal input or output  |   256 KiB |
+| Model-facing preview              |     4 KiB |
+| Captured logs                     |     4 KiB |
+| Completion summary                |     8 KiB |
+| Captured tool and trace events    |  100 each |
+| One captured event value          |     4 KiB |
+| Concurrent executions per Session |        10 |
+| Durable value depth               |        32 |
+| Items in one array or record      | 1,000,000 |
+| Characters in one string          | 4,000,000 |
+
+There is no wall-clock limit. Core supplies no execution deadline, so a program runs until it
+settles, is cancelled, or the host restarts.
+
+Logs share the preview budget rather than owning an independent one: retained console output is
+whatever remains of the 4 KiB model-facing preview after the returned value is counted. Core also
+sets a 64 KiB log ceiling, but that sharing keeps it out of reach.
 
 Notebook names are append-only, so a Session's notebook only ever grows. The per-execution
 declaration count is checked at admission, before any tool runs, and is refused with the same
@@ -463,11 +472,12 @@ because two executions can both pass admission and only collide when they save. 
 saves nothing and releases its reservations. Reverting the messages that saved values no longer
 needed is how a Session reclaims room.
 
-The deadline includes in-flight tool calls: a timeout interrupts the tool fiber and waits for
-interruption cleanup before settlement. If the program had already returned and its declarations were
-already encoded, the timeout only interrupts leftover background work: the encoded declarations are
-still reported, with the timeout recorded as a warning. The standalone `@opencode-ai/codemode`
-package remains host-neutral and applies only the limits its host supplies.
+The standalone `@opencode-ai/codemode` package remains host-neutral and applies only the limits its
+host supplies, including the optional `timeoutMs` deadline Core currently leaves unset. When a host
+does supply one, the deadline includes in-flight tool calls: a timeout interrupts the tool fiber and
+waits for interruption cleanup before settlement. If the program had already returned and its
+declarations were already encoded, the timeout only interrupts leftover background work: the encoded
+declarations are still reported, with the timeout recorded as a warning.
 
 The last two limits are the exception: they belong to the interpreter itself, not to the host, and no
 host can raise them. A deadline can only interrupt the interpreter between steps, so one operation
@@ -499,6 +509,7 @@ const wide = "ab".repeat(3_000_000_000) // InvalidDataValue, before the native r
 | `TimeoutExceeded`       | Execution exceeded its wall-clock deadline.                                                                                  |
 | `ToolFailure`           | A tool refused or failed.                                                                                                    |
 | `ExecutionFailure`      | The program threw or another execution error occurred.                                                                       |
+| `Compatibility`         | Warning only: `await` or `Promise.all` was accepted as an ignored no-op.                                                     |
 | `Truncated`             | Warning only: output was cut by the output limit.                                                                            |
 
 Admission errors are reported by the host with a stable `kind` of `NameAlreadyDefined`,

@@ -52,7 +52,7 @@ test("execute describes invariant Code Mode behavior", () => {
   expect(createCodeMode(new Map()).description).toBe(
     [
       "Run a JavaScript-shaped program that calls tools and composes their results.",
-      "Tool calls block and return values directly. Promise, async, await, generators, dynamic tool dispatch, imports, filesystem access, fetch, and timers are unavailable.",
+      "Tool calls block and return values directly. await and Promise.all are accepted only as ignored compatibility no-ops that produce a warning; do not use them. Other Promise forms, async, generators, dynamic tool dispatch, imports, filesystem access, fetch, and timers are unavailable.",
       "Call only exact static paths from the catalog, for example tools.fs.read(input).",
       "Use local let for scalar working state. Arrays and objects are immutable; use map, filter, slice, spread, and object literals to derive values.",
       "Every direct top-level const and function declaration is saved to the durable notebook automatically and is visible to later executions. Declarations inside blocks and functions are temporary.",

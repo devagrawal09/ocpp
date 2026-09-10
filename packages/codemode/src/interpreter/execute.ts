@@ -81,7 +81,7 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             maxBytes: limits.maxDeclarationBytes,
           }) as Record<string, DataValue>
           returned = { value: result, declarations, promises }
-          const warnings = yield* promises.interrupt()
+          const warnings = [...(parsed.warnings ?? []), ...(yield* promises.interrupt())]
           return {
             ok: true,
             value: result,

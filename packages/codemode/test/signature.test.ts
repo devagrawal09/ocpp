@@ -345,7 +345,7 @@ describe("JSDoc signatures in catalogs and search results", () => {
   const runtime = CodeMode.make({ tools: { github: { list_issues: listIssues }, orders: { lookup: lookupOrder } } })
 
   const search = async (query: string) => {
-    const result = await Effect.runPromise(runtime.execute(`return search({ query: ${JSON.stringify(query)} })`))
+    const result = await Effect.runPromise(runtime.execute(`return tools.search({ query: ${JSON.stringify(query)} })`))
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error("search failed")
     return result.value as { items: Array<{ path: string; signature: string }>; remaining: number }
@@ -432,7 +432,7 @@ describe("non-identifier tool paths", () => {
   })
 
   test("search results return callable bracket-notation paths and signatures", async () => {
-    const result = await Effect.runPromise(runtime.execute(`return search({ query: "resolve library" })`))
+    const result = await Effect.runPromise(runtime.execute(`return tools.search({ query: "resolve library" })`))
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error("search failed")
 

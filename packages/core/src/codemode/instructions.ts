@@ -8,11 +8,11 @@ import { CodeModeCatalog } from "./catalog.js"
 // prettier-ignore
 const prompt = (hasMoreTools: boolean) => `The Code Mode tool catalog below is ${hasMoreTools ? "partial" : "complete"}.
 
-${hasMoreTools ? "The Code Mode catalog and `search` results are" : "This catalog is"} the complete set of tools available within Code Mode. Tools presented elsewhere are not available in this runtime.${hasMoreTools ? `
+${hasMoreTools ? "The Code Mode catalog and `tools.search` results are" : "This catalog is"} the complete set of tools available within Code Mode. Tools presented elsewhere are not available in this runtime.${hasMoreTools ? `
 
 ## Search
 
-Use \`search\` to discover exact paths and signatures for additional tools:
+Use \`tools.search\` to discover exact paths and signatures for additional tools:
 
 - ${searchSignature}` : ""}
 

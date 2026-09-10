@@ -963,7 +963,7 @@ describe("OpenAPI.fromSpec", () => {
       runtime
         .execute(
           `
-        return search({ query: "global health", namespace: "opencode", limit: 1 })
+        return tools.search({ query: "global health", namespace: "opencode", limit: 1 })
       `,
         )
         .pipe(Effect.provide(layer)),

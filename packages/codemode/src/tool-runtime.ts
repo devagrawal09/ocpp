@@ -246,6 +246,8 @@ const toolTrie = <R>(tools: Tools<R>): ToolNode<R> => {
     }
   }
   insert(root, tools)
+  if (root.children.get("search")?.tool !== undefined)
+    throw new TypeError("Tool path 'search' is reserved for the built-in tools.search function.")
   return root
 }
 
@@ -365,10 +367,10 @@ const makeSearchTool = (searchIndex: ReadonlyArray<SearchEntry>): Tool => ({
     }),
 })
 
-/** Exact callable signature of the built-in `search` function, for host-owned instructions. */
+/** Exact callable signature of the built-in `tools.search` function, for host-owned instructions. */
 export const searchSignature = (() => {
   const tool = makeSearchTool([])
-  return `search(input: ${inputTypeScript(tool, true)}): ${outputTypeScript(tool, true)}`
+  return `tools.search(input: ${inputTypeScript(tool, true)}): ${outputTypeScript(tool, true)}`
 })()
 
 const toSearchEntry = <R>(path: string, tool: Tool<R>, description: ToolDescription): SearchEntry => ({
@@ -412,7 +414,7 @@ const resolve = <R>(root: ToolNode<R>, path: ReadonlyArray<string>): Tool<R> => 
   const node = lookup(root, segments)
   if (node === undefined) {
     throw new ToolRuntimeError("UnknownTool", `Unknown tool '${segments.join(".")}'.`, [
-      "The tool may have been removed or renamed. Use search to find available tools.",
+      "The tool may have been removed or renamed. Use tools.search to find available tools.",
     ])
   }
   if (node.tool === undefined) {
@@ -438,6 +440,9 @@ export const make = <R>(
   const calls: Array<ToolCall> = []
   const root = toolTrie(tools)
   const searchTool = makeSearchTool(searchIndex)
+  const searchNode: ToolNode<R> = root.children.get("search") ?? { children: new Map() }
+  searchNode.tool = searchTool
+  root.children.set("search", searchNode)
 
   const observeEnd = <A, E>(effect: Effect.Effect<A, E, R>, call: ToolCallStarted): Effect.Effect<A, E, R> => {
     const onEnd = hooks?.onToolCallEnd
@@ -472,7 +477,7 @@ export const make = <R>(
           new ToolRuntimeError(
             "InvalidToolInput",
             `Invalid input for tool '${name}': ${String(cause)}`,
-            name === "search" ? [] : ["The signature may have changed. Use search to get the current signature."],
+            name === "search" ? [] : ["The signature may have changed. Use tools.search to get the current signature."],
           ),
       })
       const index = yield* Effect.sync(() => {

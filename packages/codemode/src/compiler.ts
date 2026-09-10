@@ -1,7 +1,7 @@
 import { parse } from "acorn"
 import { transpile } from "#transpile"
 import { reservedNames } from "./globals.js"
-import { IR_VERSION, isRecord, type AstNode, type Program, type ProgramNode } from "./ir.js"
+import { IR_VERSION, isPromiseAllCall, isRecord, type AstNode, type Program, type ProgramNode } from "./ir.js"
 
 /**
  * A compile-time diagnostic. Compilation is source in, versioned IR out or this error, so the
@@ -20,7 +20,6 @@ export class CompileError extends Error {
 }
 
 const forbidden = new Map([
-  ["AwaitExpression", "await is not supported; tool calls block and return their result directly"],
   ["YieldExpression", "generators are not supported"],
   ["ImportDeclaration", "imports are not supported"],
   ["ImportExpression", "dynamic imports are not supported"],
@@ -88,7 +87,45 @@ export function compile(code: string): Program {
   const names = declarations(program)
   validate(program)
   rejectEarlyReturns(program)
-  return { version: IR_VERSION, source: transpiled.outputText, body: program, declarations: names }
+  const warnings = [
+    ...(containsNode(program, (node) => node.type === "AwaitExpression")
+      ? [
+          {
+            kind: "Compatibility" as const,
+            message:
+              "await was ignored for compatibility. Do not use it: operations within a script are semantically synchronous. Only execution of the script as a whole is asynchronous to the model.",
+          },
+        ]
+      : []),
+    ...(containsNode(program, isPromiseAllCall)
+      ? [
+          {
+            kind: "Compatibility" as const,
+            message:
+              "Promise.all was serialized for compatibility. Do not use it: operations within a script are semantically synchronous, so array entries already run in order.",
+          },
+        ]
+      : []),
+  ]
+  return {
+    version: IR_VERSION,
+    source: transpiled.outputText,
+    body: program,
+    declarations: names,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  }
+}
+
+function containsNode(node: AstNode, predicate: (node: AstNode) => boolean): boolean {
+  if (predicate(node)) return true
+  return Object.entries(node).some(([key, value]) => {
+    if (key === "loc") return false
+    if (Array.isArray(value))
+      return value.some(
+        (item) => isRecord(item) && typeof item.type === "string" && containsNode(item as AstNode, predicate),
+      )
+    return isRecord(value) && typeof value.type === "string" && containsNode(value as AstNode, predicate)
+  })
 }
 
 /**
@@ -226,6 +263,15 @@ function validate(node: AstNode): void {
   }
   if (node.type === "CallExpression") {
     const callee = requireNode(node.callee)
+    if (isPromiseAllCall(node)) {
+      const args = requireArray(node.arguments, node)
+      if (args.length !== 1) throw unsupported("Promise.all compatibility expects exactly one array argument.", node)
+      const argument = requireNode(args[0])
+      if (argument.type === "SpreadElement")
+        throw unsupported("Promise.all compatibility does not support spread arguments; pass one array directly.", argument)
+      validate(argument)
+      return
+    }
     const path = toolPath(callee)
     if (path !== undefined) {
       if (path.length === 0) throw unsupported("The tools root is not callable.", callee)

@@ -208,8 +208,8 @@ return tools.delegate({ handle: decorate, input: { value: "ok" } })`,
   })
 
   test.each([
-    ["await", "return await tools.echo({ value: 'x' })"],
-    ["Promise", "return Promise.all([])"],
+    ["other Promise APIs", "return Promise.race([])"],
+    ["spread Promise.all", "const items = []; return Promise.all(...items)"],
     ["async", "const run = async () => 1; return run()"],
     ["generator", "function* values() { yield 1 }; return values()"],
     ["dynamic tools", "const name = 'echo'; return tools[name]({ value: 'x' })"],
@@ -243,7 +243,6 @@ return tools.delegate({ handle: decorate, input: { value: "ok" } })`,
   test.each([
     "time",
     "url",
-    "search",
     "console",
     "JSON",
     "Object",
@@ -466,5 +465,14 @@ const zero = -0`)
     expect(saved).toEqual({ sparse: [1, null, 3], zero: 0 })
     expect(saved).toEqual(restarted(saved))
     expect(Object.is(saved.zero, 0)).toBe(true)
+  })
+
+  test("normalizes undefined to null and drops undefined record keys", async () => {
+    const saved = await declarations(`function nothing() {}
+const missing = nothing()
+const items = [1, nothing(), 3]
+const record = { kept: 1, gone: nothing() }`)
+    expect(saved).toEqual({ nothing: expect.anything(), missing: null, items: [1, null, 3], record: { kept: 1 } })
+    expect(saved).toEqual(restarted(saved))
   })
 })

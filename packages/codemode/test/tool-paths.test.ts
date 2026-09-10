@@ -22,6 +22,14 @@ const failure = async (runtime: CodeMode.Runtime, code: string) => {
   return result.error
 }
 
+describe("reserved tool paths", () => {
+  test("rejects a host tool at the built-in search path", () => {
+    expect(() => CodeMode.make({ tools: { search: echo("Host search", "host") } })).toThrow(
+      "Tool path 'search' is reserved for the built-in tools.search function.",
+    )
+  })
+})
+
 describe("dotted tool names", () => {
   const runtime = CodeMode.make({ tools: { api: { "issues.list": echo("List issues", "listed") } } })
 
@@ -60,7 +68,7 @@ describe("dotted tool names", () => {
       },
     })
 
-    const result = await value(nested, `return search({ query: "", namespace: "slack.admin" })`)
+    const result = await value(nested, `return tools.search({ query: "", namespace: "slack.admin" })`)
     expect((result as { items: Array<{ path: string }> }).items.map((item) => item.path)).toEqual([
       "tools.slack.admin",
       "tools.slack.admin.invite",
@@ -81,12 +89,12 @@ describe("callable namespaces", () => {
   })
 
   test("search returns executable paths for both", async () => {
-    const result = await value(runtime, `return search({ query: "", namespace: "issues" })`)
+    const result = await value(runtime, `return tools.search({ query: "", namespace: "issues" })`)
     expect((result as { items: Array<{ path: string }> }).items.map((item) => item.path)).toEqual([
       "tools.issues",
       "tools.issues.list",
     ])
-    const exact = await value(runtime, `return search({ query: "tools.issues.list" })`)
+    const exact = await value(runtime, `return tools.search({ query: "tools.issues.list" })`)
     expect((exact as { items: Array<{ path: string }> }).items.map((item) => item.path)).toEqual(["tools.issues.list"])
   })
 
@@ -95,7 +103,7 @@ describe("callable namespaces", () => {
     expect(diagnostic.kind).toBe("UnknownTool")
     expect(diagnostic.message).toContain("Unknown tool 'issues.missing'")
     expect(diagnostic.suggestions).toEqual([
-      "The tool may have been removed or renamed. Use search to find available tools.",
+      "The tool may have been removed or renamed. Use tools.search to find available tools.",
     ])
   })
 
@@ -122,7 +130,7 @@ describe("tool input diagnostics", () => {
   test("a schema mismatch suggests searching for the current signature", async () => {
     const diagnostic = await failure(runtime, `return tools.notes.echo({ message: "hello" })`)
     expect(diagnostic.kind).toBe("InvalidToolInput")
-    expect(diagnostic.suggestions).toEqual(["The signature may have changed. Use search to get the current signature."])
+    expect(diagnostic.suggestions).toEqual(["The signature may have changed. Use tools.search to get the current signature."])
   })
 
   test("a wrong argument count keeps the existing error without a stale-signature hint", async () => {

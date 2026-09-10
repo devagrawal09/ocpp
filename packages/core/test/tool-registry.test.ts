@@ -582,6 +582,17 @@ describe("Tool", () => {
     }),
   )
 
+  it.effect("reserves the built-in Code Mode search path", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { search: make() })
+
+      const snapshot = yield* service.snapshot()
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(snapshot.codeModeCatalog).toEqual([])
+    }),
+  )
+
   it.effect("executes native tools without requiring letter-leading names or namespace segments", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
@@ -694,7 +705,7 @@ describe("Tool", () => {
       yield* seedToolSession(sessionID, identity.messageID)
       const service = yield* Tool.Service
       const snapshot = yield* service.snapshot()
-      const started = yield* Effect.forEach([0, 1, 2, 3], (index) =>
+      const started = yield* Effect.forEach(Array.from({ length: 10 }, (_, index) => index), (index) =>
         snapshot.execute({
           ...call("execute", "detached-" + index),
           call: {
@@ -716,10 +727,10 @@ describe("Tool", () => {
           },
         })
         .pipe(Effect.flip)
-      expect(rejected.message).toContain("At most 4 executions")
+      expect(rejected.message).toContain("At most 10 executions")
 
       const db = (yield* Database.Service).db
-      expect((yield* db.select({ id: CodeModeExecutionTable.id }).from(CodeModeExecutionTable).all()).length).toBe(4)
+      expect((yield* db.select({ id: CodeModeExecutionTable.id }).from(CodeModeExecutionTable).all()).length).toBe(10)
       const jobs = testJobs ?? (yield* Effect.die("Job test service is unavailable"))
       yield* Effect.forEach(
         started,

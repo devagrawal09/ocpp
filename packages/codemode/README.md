@@ -19,8 +19,9 @@ isolate-based approach.
 - **Only supported APIs are available.** Programs can use the provided tools and supported JavaScript
   built-ins. APIs such as `fetch`, timers, `process`, filesystem access, imports, and modules are
   unavailable.
-- **Tool calls are synchronous.** A direct call returns its decoded value. `Promise`, `async`, and
-  `await` are rejected before execution.
+- **Tool calls are synchronous.** A direct call returns its decoded value. `await` and `Promise.all`
+  are accepted only as compatibility no-ops and produce warnings; other `Promise` syntax and `async`
+  are rejected before execution.
 - **Values are durable data.** `null`, booleans, finite numbers, strings, immutable arrays,
   string-keyed records, and functions. `Date`, `Map`, `Set`, `URL`, and `URLSearchParams` are replaced
   by the `time` and `url` helpers, which return plain data. Regular expressions are unavailable.
@@ -73,6 +74,11 @@ uses `void`.
 Descriptions and schemas are model-visible contracts. Authorization belongs in `execute`. Tool calls
 return decoded values directly inside an execution.
 
+`acceptsToolHandles: true` lets a tool receive the opaque, activation-local handles a program creates
+with `tool.define(...)`; use `isToolHandle` to narrow one and `handle.invoke(input)` to call it. Every
+other tool rejects handles, which are never durable. See the
+[complete guide](./interpreter-support.md) for handle semantics.
+
 Dots in tool names create namespaces: `{ "issues.list": tool }` and `{ issues: { list: tool } }` both
 expose `tools.issues.list(...)`. Other characters use bracket notation, such as
 `tools.context7["resolve-library-id"](...)`.
@@ -87,12 +93,22 @@ const runtime = CodeMode.make({ tools, limits: { timeoutMs: 30_000 } })
 
 runtime.catalog() // structured tool descriptions
 runtime.execute(source) // Effect<CodeMode.Result, never, ToolServices>
+runtime.executeCompiled(program) // the same, from a precompiled program
 ```
 
 `bindings` supplies the notebook values a program can read, as saved by an earlier execution. The
 Effect environment is inferred from the supplied tools. `onToolCallStart` observes admitted calls with
-decoded input; `onToolCallEnd` observes settled outcomes and duration. Both hooks return Effects and
-must not fail.
+decoded input; `onToolCallEnd` observes settled outcomes and duration. `onTrace` observes semantic
+JavaScript steps in execution order as `assignment`, `branch`, `operation`, `log`, and `return`
+events. All three hooks return Effects and must not fail.
+
+### Compiling ahead of execution
+
+`compile(code)` returns the versioned data-only `Program` a host can persist; `executeCompiled` and
+the `program` option replay it without recompiling, which is how a host resumes an execution it
+admitted earlier. A persisted program enters execution through `decodeProgram`, which checks the
+`IR_VERSION` and shape so a damaged or unsupported program becomes a diagnostic instead of an
+interpreter defect. `compile` throws `CompileError` for empty, unparsable, or unsupported source.
 
 ### OpenAPI tools
 
@@ -159,6 +175,7 @@ Diagnostic kinds:
 | `TimeoutExceeded`       | Execution exceeded its wall-clock deadline.                         |
 | `ToolFailure`           | A tool refused or failed.                                           |
 | `ExecutionFailure`      | The program threw or another execution error occurred.              |
+| `Compatibility`         | Warning only: `await` or `Promise.all` was accepted as a no-op.     |
 | `Truncated`             | Warning only: additional warnings were omitted by `maxOutputBytes`. |
 
 Host failures and defects report their messages and underlying causes. Invalid outputs include the
@@ -171,7 +188,7 @@ signature — for every visible tool. Hosts render their own model-facing instru
 descriptors; `CodeMode.searchSignature` and `CodeMode.toolExpression(path)` supply the exact callable
 forms.
 
-The synchronous `search(...)` built-in is always available. It supports exact-path lookup,
+The synchronous `tools.search(...)` built-in is always available. It supports exact-path lookup,
 namespace-scoped search, empty-query browsing, and pagination, and returns callable paths with full
 signatures. Search counts toward `maxToolCalls`.
 
@@ -182,11 +199,13 @@ signatures. Search counts toward `maxToolCalls`.
 | `timeoutMs`           | unlimited        | Total wall-clock execution time.    |
 | `maxToolCalls`        | unlimited        | Admitted tool calls.                |
 | `maxOutputBytes`      | unlimited        | Retained preview value.             |
-| `maxLogBytes`         | `maxOutputBytes` | Retained console output.            |
+| `maxLogBytes`         | `maxOutputBytes` | Ceiling on retained console output. |
 | `maxDeclarationBytes` | unlimited        | Encoded size of one notebook value. |
 
 No limits are enabled by default. When `maxOutputBytes` is set without `maxLogBytes`, the log budget
-inherits it.
+inherits it. Logs share the output budget rather than owning an independent one: the retained amount
+is `min(maxLogBytes, maxOutputBytes - preview bytes)`, so a large preview leaves less room for logs
+and a `maxLogBytes` above `maxOutputBytes` is never reached.
 
 Invalid limit configuration throws `RangeError`. Warnings receive a separate budget equal to
 `maxOutputBytes`. Preview truncation does not fail execution; an oversized declaration does, with an

@@ -346,6 +346,8 @@ function registrationError(tool: Tool.Info) {
   const id = effectiveName(tool)
   if ((tool.options?.codemode === false || tool.options?.codemode === "both") && id === "execute")
     return new RegistrationError({ name: id, message: "Tool name is reserved for Code Mode: " + id })
+  if (tool.options?.codemode !== false && id === "search")
+    return new RegistrationError({ name: id, message: "Tool name is reserved for Code Mode: " + id })
   const result = Result.try({
     try: () => ToolDefinition.make(definition(tool)),
     catch: (error) =>

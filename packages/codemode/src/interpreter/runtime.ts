@@ -1,6 +1,7 @@
 import { Cause, Deferred, Effect, Exit } from "effect"
 import { coercionFunctions, errorConstructorNames, globalNamespaces, uriFunctions } from "../globals.js"
 import { ToolHandle } from "../tool-handle.js"
+import { isPromiseAllCall } from "../ir.js"
 import { isBlockedMember, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
 import {
   type AstNode,
@@ -312,7 +313,6 @@ export class Interpreter<R> {
       globalScope.set(name, { mutable: false, value: new ErrorConstructorReference(name) })
     globalScope.set("tools", { mutable: false, value: new ToolReference([]) })
     globalScope.set("tool", { mutable: false, value: new ToolNamespace() })
-    globalScope.set("search", { mutable: false, value: new SearchFunction() })
     globalScope.set("Symbol", { mutable: false, value: new SymbolNamespace() })
     globalScope.set("undefined", { mutable: false, value: undefined })
     globalScope.set("NaN", { mutable: false, value: NaN })
@@ -1026,7 +1026,7 @@ export class Interpreter<R> {
       const keys = self.enumerableKeys(right)
       if (keys === undefined) {
         throw new InterpreterRuntimeError(
-          "for...in requires a plain object, array, or tools reference. Use for...of for arrays/strings/Maps/Sets, or Object.keys(value) for a key list.",
+          "for...in requires a plain object or array. Use for...of for arrays and strings, or Object.keys(value) for a key list.",
           node,
         )
       }
@@ -1435,10 +1435,7 @@ export class Interpreter<R> {
       case "UpdateExpression":
         return this.evaluateUpdateExpression(node)
       case "AwaitExpression": {
-        // Await always suspends, including for plain values.
-        return Effect.flatMap(this.evaluateExpression(getNode(node, "argument")), (value) =>
-          this.awaitValue(value, node),
-        )
+        return this.evaluateExpression(getNode(node, "argument"))
       }
       case "YieldExpression":
         return this.evaluateYieldExpression(node)
@@ -1747,6 +1744,14 @@ export class Interpreter<R> {
   private evaluateCallExpression(node: AstNode): Effect.Effect<unknown, unknown, R> {
     const callee = getNode(node, "callee")
     const argNodes = getArray(node, "arguments")
+    if (isPromiseAllCall(node))
+      return Effect.flatMap(this.evaluateExpression(asNode(argNodes[0], "Promise.all argument")), (value) =>
+        Array.isArray(value)
+          ? Effect.succeed(value)
+          : Effect.fail(
+              new InterpreterRuntimeError("Promise.all compatibility expects an array argument.", node).as("TypeError"),
+            ),
+      )
 
     const self = this
     return Effect.gen(function* () {
@@ -1873,7 +1878,7 @@ export class Interpreter<R> {
       return boundedData(this.enumerableKeys(ref)!, "Object.keys result")
     }
     throw new InterpreterRuntimeError(
-      `Object.${name}(...) cannot read tool references: they are not plain data. Use Object.keys(tools) for names, or search({ query }) for signatures.`,
+      `Object.${name}(...) cannot read tool references: they are not plain data. Use tools.search({ query }) to discover tool paths and signatures.`,
       node,
       "InvalidDataValue",
     )

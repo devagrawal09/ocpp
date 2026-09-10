@@ -84,6 +84,7 @@ export const DiagnosticKind = Schema.Literals([
   "TimeoutExceeded",
   "ToolFailure",
   "ExecutionFailure",
+  "Compatibility",
   "Truncated",
 ])
 /** Stable categories produced by program, schema, tool, limit, and truncation diagnostics. */

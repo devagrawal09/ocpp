@@ -100,10 +100,10 @@ describe("CodeModeInstructions.render", () => {
     expect(partial).toContain("## Search")
     expect(partial).toContain("The Code Mode tool catalog below is partial.")
     expect(partial).toContain(
-      "The Code Mode catalog and `search` results are the complete set of tools available within Code Mode.",
+      "The Code Mode catalog and `tools.search` results are the complete set of tools available within Code Mode.",
     )
     expect(partial).not.toContain("surrounding top-level agent tools")
-    expect(partial).toContain("- search(input: {")
+    expect(partial).toContain("- tools.search(input: {")
     expect(partial).toContain("  limit?: number,\n  offset?: number,")
     expect(partial).not.toContain("tools.orders.lookup(input:")
   })

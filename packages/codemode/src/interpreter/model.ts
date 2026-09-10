@@ -182,7 +182,7 @@ export type DiagnosticKind =
 export const OptionalShortCircuit: unique symbol = Symbol("codemode.optional-short-circuit")
 
 export const supportedSyntaxMessage =
-  "Supported syntax: direct blocking tools.* calls, immutable data literals and transformations, local let bindings, synchronous functions and callbacks, control flow, and captured console output. Direct top-level const and function declarations are saved to the notebook automatically. Promise, async, await, generators, dynamic tool dispatch, export, and aggregate mutation are not supported."
+  "Supported syntax: direct blocking tools.* calls, immutable data literals and transformations, local let bindings, synchronous functions and callbacks, control flow, and captured console output. Direct top-level const and function declarations are saved to the notebook automatically. await and Promise.all are warning-producing compatibility no-ops; other Promise forms, async, generators, dynamic tool dispatch, export, and aggregate mutation are not supported."
 
 export class InterpreterRuntimeError extends Error {
   readonly node?: AstNode

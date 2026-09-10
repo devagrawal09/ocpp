@@ -24,7 +24,7 @@
 - Durable functions keep their versioned compiled body, their exact captures bound when the execution saves, and static tool paths that are resolved and authorized again at call time. A saved closure must never resolve a notebook name later, so free identifiers are either host globals or captured values.
 - Enforce depth and size limits while values are built, not at the host's commit, so an invalid durable value fails the execution that produced it.
 - A value that cannot be represented durably, such as a live tool handle, is rejected with a direct diagnostic rather than weakened.
-- Encoding normalizes what JSON cannot represent, currently array holes and `-0`, so a fresh in-memory value and its persisted round trip behave identically.
+- Encoding normalizes what JSON cannot represent, currently array holes and `undefined` values to `null`, `-0` to `0`, and record keys whose value is `undefined` by dropping them, so a fresh in-memory value and its persisted round trip behave identically.
 - A stored value that fails to decode is quarantined in its own binding, along with anything that references it, and reports a precise diagnostic when read. Never suggest redeclaring an append-only name: the fix is a new name or a revert.
 - Durable names are reserved against `src/globals.ts`, the one list the runtime builds its global scope from. Add a new global there rather than in the runtime alone, or a permanent notebook name could shadow it.
 

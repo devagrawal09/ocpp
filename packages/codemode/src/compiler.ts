@@ -13,10 +13,41 @@ export class CompileError extends Error {
     readonly kind: "ParseError" | "UnsupportedSyntax",
     readonly node?: AstNode,
     readonly suggestions?: ReadonlyArray<string>,
+    /** One-based source position for diagnostics that have no AST node, such as parse failures. */
+    readonly location?: { readonly line: number; readonly column: number },
+    /** The trimmed source line at `location`, so a host can show what failed without the program. */
+    readonly excerpt?: string,
   ) {
     super(message)
     this.name = "CompileError"
   }
+}
+
+const MAX_EXCERPT_LENGTH = 200
+
+/** The trimmed source line at a one-based position, bounded so a diagnostic stays small. */
+export function excerptAt(source: string, location: { readonly line: number }): string | undefined {
+  const line = source.split("\n")[location.line - 1]?.trim()
+  if (line === undefined || line === "") return undefined
+  return line.length > MAX_EXCERPT_LENGTH ? line.slice(0, MAX_EXCERPT_LENGTH) + "..." : line
+}
+
+// acorn reports positions as a one-based line with a zero-based column and appends "(line:column)"
+// to its message. The location is kept separately, so the suffix is dropped from the message.
+function parseError(source: string, error: unknown): CompileError {
+  const position =
+    error instanceof SyntaxError && isRecord(error) && isRecord(error.loc)
+      ? { line: Number(error.loc.line), column: Number(error.loc.column) + 1 }
+      : undefined
+  const message = error instanceof Error ? error.message.replace(/ \(\d+:\d+\)$/, "") : String(error)
+  return new CompileError(
+    "Failed to parse: " + message,
+    "ParseError",
+    undefined,
+    undefined,
+    position,
+    position && excerptAt(source, position),
+  )
 }
 
 const forbidden = new Map([
@@ -70,14 +101,16 @@ export function compile(code: string): Program {
   if (code.trim().length === 0) throw new CompileError("Code cannot be empty.", "ParseError")
   const transpiled = transpile(code)
   if (transpiled.error !== undefined)
-    throw new CompileError("Failed to parse TypeScript: " + transpiled.error, "ParseError")
+    throw new CompileError(
+      "Failed to parse TypeScript: " + transpiled.error,
+      "ParseError",
+      undefined,
+      undefined,
+      transpiled.location,
+      transpiled.location && excerptAt(code, transpiled.location),
+    )
 
-  const parsed = parse(transpiled.outputText, {
-    ecmaVersion: "latest",
-    sourceType: "module",
-    allowReturnOutsideFunction: true,
-    locations: true,
-  }) as unknown
+  const parsed = parseSource(transpiled.outputText, code)
   if (!isRecord(parsed) || parsed.type !== "Program" || !Array.isArray(parsed.body))
     throw new CompileError("Failed to compile script as a Program.", "ParseError")
 
@@ -113,6 +146,22 @@ export function compile(code: string): Program {
     body: program,
     declarations: names,
     ...(warnings.length > 0 ? { warnings } : {}),
+  }
+}
+
+// acorn throws a bare SyntaxError, which is the only reason the compiler catches anything: the
+// failure is re-thrown as a positioned ParseError so hosts never see an unstructured throw. The
+// excerpt comes from the original source because transpilation preserves lines but not their text.
+function parseSource(transpiled: string, source: string): unknown {
+  try {
+    return parse(transpiled, {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      allowReturnOutsideFunction: true,
+      locations: true,
+    })
+  } catch (error) {
+    throw parseError(source, error)
   }
 }
 

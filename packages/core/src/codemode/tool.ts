@@ -1,6 +1,6 @@
 export * as CodeModeTool from "./tool.js"
 
-import { CodeMode, Tool as CodeModeDefinition, toolError } from "@opencode-ai/codemode"
+import { CodeMode, CompileError, Tool as CodeModeDefinition, toolError } from "@opencode-ai/codemode"
 import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
 import { ascending } from "@opencode-ai/schema/identifier"
 import { Tool } from "@opencode-ai/schema/tool"
@@ -37,7 +37,7 @@ type ExecutionServices = {
   readonly bus: Pick<Bus.Interface, "publish" | "listen">
   readonly jobs: Pick<
     Job.Interface,
-    "startLimited" | "wait" | "background" | "cancel" | "markBackgroundTerminal" | "completeBackground"
+    "startLimited" | "active" | "wait" | "background" | "cancel" | "markBackgroundTerminal" | "completeBackground"
   >
   readonly sessions: Pick<Session.Interface, "message" | "synthetic">
   readonly store: Pick<
@@ -50,12 +50,16 @@ type ExecutionServices = {
 const description = [
   "Run a JavaScript-shaped program that calls tools and composes their results.",
   "Tool calls block and return values directly. await and Promise.all are accepted only as ignored compatibility no-ops that produce a warning; do not use them. Other Promise forms, async, generators, dynamic tool dispatch, imports, filesystem access, fetch, and timers are unavailable.",
+  "Calls within one execution always run serially, including subagent calls. To run independent subagents concurrently, issue one execute call per subagent; never put parallel subagent work in the same execution.",
   "Call only exact static paths from the catalog, for example tools.fs.read(input).",
   "Use local let for scalar working state. Arrays and objects are immutable; use map, filter, slice, spread, and object literals to derive values.",
   "Every direct top-level const and function declaration is saved to the durable notebook automatically and is visible to later executions. Declarations inside blocks and functions are temporary.",
   "Notebook names are immutable: a name can never be redefined or reused. Saving is all-or-nothing, so a failed program saves nothing.",
   "return is only a small preview for display and may be truncated; publish real output as top-level declarations.",
   "Execution is asynchronous: this call returns an execution ID immediately and the result arrives as a later notification.",
+  "At most " +
+    MAX_CONCURRENT_EXECUTIONS +
+    " executions may run at once per Session, including executions that are waiting on subagents. A refused call names the running executions; wait for one of their completion notifications before starting another instead of retrying immediately.",
 ].join("\n")
 
 export const create = (
@@ -67,6 +71,7 @@ export const create = (
     context: Tool.Context,
   ) => Effect.Effect<Tool.Result, Tool.Error>,
   services: ExecutionServices,
+  input?: CodeMode.DataValue,
 ) =>
   ({
     name: "execute",
@@ -75,9 +80,22 @@ export const create = (
     output: ExecuteOutput,
     execute: ({ code }, context) =>
       Effect.gen(function* () {
+        // A compile failure keeps its diagnostic kind and position as metadata, so the failure is
+        // classifiable without parsing the message the model sees.
         const program = yield* Effect.try({
           try: () => CodeMode.compile(code),
-          catch: (error) => new Tool.Error({ message: error instanceof Error ? error.message : String(error) }),
+          catch: (error) =>
+            error instanceof CompileError
+              ? new Tool.Error({
+                  message: compileFailureText(error),
+                  metadata: {
+                    executionStatus: "refused",
+                    kind: error.kind,
+                    ...(error.location ? { location: error.location } : {}),
+                    ...(error.excerpt ? { excerpt: error.excerpt } : {}),
+                  },
+                })
+              : new Tool.Error({ message: error instanceof Error ? error.message : String(error) }),
         })
         const executionID = decodeExecutionID("exe_" + ascending())
         // Admission compiles, reserves every declared name, and captures the notebook snapshot
@@ -101,6 +119,9 @@ export const create = (
           })
         const execution = admission.execution
         const events = yield* Ref.make<Array<ExecuteEvent>>([])
+        // Why the execution failed, as a stable category the completion notification carries
+        // alongside its prose summary.
+        const failureKind = yield* Ref.make<string | undefined>(undefined)
         const slots = yield* Ref.make<Array<number>>([])
         const toolCount = yield* Ref.make(0)
         const traceCount = yield* Ref.make(0)
@@ -218,6 +239,7 @@ export const create = (
                 }),
               {
                 bindings: execution.bindings,
+                input,
                 onToolCallStart: (call) =>
                   Effect.all(
                     [
@@ -270,6 +292,7 @@ export const create = (
             ).executeCompiled(execution.program)
             // Completion is decided only after the declaration commit succeeds or fails.
             if (!result.ok) {
+              yield* Ref.set(failureKind, result.error.kind)
               yield* services.store.fail(execution, result.error.message)
               return { saved: false, summary: failureSummary(executionID, result) }
             }
@@ -277,12 +300,10 @@ export const create = (
               execution,
               result.declarations as Readonly<Record<string, CodeMode.NotebookValue>>,
             )
-            return settlement.status === "saved"
-              ? { saved: true, summary: savedSummary(executionID, settlement.saved, result) }
-              : {
-                  saved: false,
-                  summary: failureSummary(executionID, result, settlement.error),
-                }
+            if (settlement.status === "saved")
+              return { saved: true, summary: savedSummary(executionID, settlement.saved, result) }
+            yield* Ref.set(failureKind, "CommitFailure")
+            return { saved: false, summary: failureSummary(executionID, result, settlement.error) }
           })
 
           const gate = yield* Deferred.make<void>()
@@ -315,8 +336,26 @@ export const create = (
           })
           if (!job) {
             yield* services.store.discard(executionID)
+            // Name the executions holding the slots so the model can wait for one of their
+            // completion notifications instead of retrying blind.
+            const active = (yield* services.jobs.active({ ownerSessionID: context.sessionID, type: "codemode" })).map(
+              (item) => item.id,
+            )
             return yield* new Tool.Error({
-              message: "At most " + MAX_CONCURRENT_EXECUTIONS + " executions may run per Session.",
+              message:
+                "At most " +
+                MAX_CONCURRENT_EXECUTIONS +
+                " executions may run per Session, and " +
+                active.length +
+                " are running: " +
+                active.join(", ") +
+                ". Wait for one of their completion notifications before starting another execution; do not retry immediately.",
+              metadata: {
+                executionStatus: "refused",
+                kind: "ConcurrencyLimit",
+                limit: MAX_CONCURRENT_EXECUTIONS,
+                active,
+              },
             })
           }
           return yield* Effect.gen(function* () {
@@ -362,9 +401,19 @@ export const create = (
                       { ...base, status: info.status, error: info.error ?? "Execution failed" },
                       { commit: () => services.jobs.markBackgroundTerminal(notificationID) },
                     )
+                  const kind =
+                    info.status === "cancelled"
+                      ? "Cancelled"
+                      : info.status === "error"
+                        ? ((yield* Ref.get(failureKind)) ?? "ExecutionFailure")
+                        : undefined
                   // The Session can be deleted while the execution runs. Restart recovery already
                   // tolerates that, so finish the background bookkeeping instead of dying here.
-                  yield* CodeModeCompletion.deliver(services.sessions, services.jobs, { ...info, recovery }).pipe(
+                  yield* CodeModeCompletion.deliver(services.sessions, services.jobs, {
+                    ...info,
+                    recovery,
+                    ...(kind === undefined ? {} : { kind }),
+                  }).pipe(
                     Effect.catchTag("Session.NotFoundError", () =>
                       info.notificationID ? services.jobs.completeBackground(info.notificationID) : Effect.void,
                     ),
@@ -413,6 +462,7 @@ function runtime(
   executeTool: (name: string, tool: Tool.Info, input: unknown, index: number) => Effect.Effect<unknown, unknown>,
   options?: CodeMode.ToolCallHooks & {
     readonly bindings?: Readonly<Record<string, CodeMode.NotebookValue>>
+    readonly input?: CodeMode.DataValue
     readonly onTrace?: CodeMode.TraceHook
   },
 ) {
@@ -540,10 +590,20 @@ function failureSummary(executionID: string, result: CodeMode.Result, commitErro
         executionID +
         " failed and saved nothing: " +
         (commitError ?? (result.ok ? "the program did not settle" : result.error.kind + ": " + result.error.message)),
+      ...(!result.ok && result.error.excerpt ? ["Source: " + result.error.excerpt] : []),
       ...(!result.ok && result.error.suggestions ? result.error.suggestions : []),
       ...untrusted("Logs", result.logs?.join("\n")),
     ].join("\n"),
   )
+}
+
+/** The compile diagnostic the model sees: its message, then position and the failing line. */
+function compileFailureText(error: CompileError) {
+  return [
+    error.message + (error.location ? " (line " + error.location.line + ", col " + error.location.column + ")" : ""),
+    ...(error.excerpt ? ["Source: " + error.excerpt] : []),
+    ...(error.suggestions ?? []),
+  ].join("\n")
 }
 
 function previewText(value: CodeMode.DataValue) {

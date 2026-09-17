@@ -23,7 +23,7 @@ export const errorConstructorNames = [
 ] as const
 
 /** Globals with their own runtime representation: tool access, discovery, and language constants. */
-export const intrinsicGlobals = ["tools", "tool", "Symbol", "undefined", "NaN", "Infinity"] as const
+export const intrinsicGlobals = ["tools", "tool", "input", "Symbol", "undefined", "NaN", "Infinity"] as const
 
 /**
  * A durable notebook name may never be one of these. A notebook name is permanent, so a declaration

@@ -472,6 +472,10 @@ function projectIdle(
         // Unread uses a strict timestamp comparison, so every terminal must advance even within one millisecond.
         time_idle: sql`max(${time}, coalesce(${SessionTable.time_idle} + 1, ${time}))`,
         idle_outcome: outcome,
+        // Only a failure carries an error; the other terminals clear the previous one so the row
+        // always describes the outcome recorded at time_idle.
+        idle_error_type: event.type === SessionEvent.Execution.Failed.type ? event.data.error.type : null,
+        idle_error_message: event.type === SessionEvent.Execution.Failed.type ? event.data.error.message : null,
         time_updated: sql`${SessionTable.time_updated}`,
       })
       .where(eq(SessionTable.id, event.data.sessionID))

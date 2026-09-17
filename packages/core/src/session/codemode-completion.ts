@@ -10,6 +10,8 @@ export const deliver = Effect.fnUntraced(function* (
   input: Pick<Job.Info, "id" | "status" | "notificationID" | "output" | "error"> & {
     recovery: Extract<Job.Recovery, { kind: "codemode" }>
     resume?: boolean
+    /** Stable failure category for a failed execution, so consumers never parse the summary text. */
+    kind?: string
   },
 ) {
   if (input.status === "running") return
@@ -31,7 +33,12 @@ export const deliver = Effect.fnUntraced(function* (
     text:
       (input.status === "completed" ? input.output : input.error) ??
       "Execution " + input.id + " is " + state + " and saved nothing.",
-    metadata: { source: "codemode", executionID: input.id, state },
+    metadata: {
+      source: "codemode",
+      executionID: input.id,
+      state,
+      ...(state === "completed" || input.kind === undefined ? {} : { kind: input.kind }),
+    },
   })
   if (input.notificationID) yield* jobs.completeBackground(input.notificationID)
 })

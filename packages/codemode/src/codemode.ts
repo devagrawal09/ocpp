@@ -48,6 +48,8 @@ export type ExecuteOptions<Provided extends Record<string, unknown> = {}> = {
   tools?: Provided & Tools<Services<Provided>>
   /** Immutable notebook values visible to this execution, as saved by earlier executions. */
   bindings?: Readonly<Record<string, NotebookValue>>
+  /** Invocation-local machine input exposed directly as `input` without becoming a notebook binding. */
+  input?: DataValue
   /** Precompiled program. Hosts persist this with its version for resumable activations. */
   program?: Program
   /** Per-execution overrides for the default resource limits. */
@@ -94,6 +96,8 @@ export const Diagnostic = Schema.Struct({
   kind: DiagnosticKind,
   message: Schema.String,
   location: Schema.optionalKey(Schema.Struct({ line: Schema.Number, column: Schema.Number })),
+  /** The trimmed source line at `location`, present for parse failures. */
+  excerpt: Schema.optionalKey(Schema.String),
   suggestions: Schema.optionalKey(Schema.Array(Schema.String)),
 })
 /** A normalized program diagnostic safe to return across an agent tool boundary. */

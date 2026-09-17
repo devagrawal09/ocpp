@@ -47,6 +47,10 @@ application effects are available only when the host exposes a named tool that p
 | Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.        |
 | Blocking tool calls    | `tools.repository.read(input)` returns its decoded result directly. `await` and `Promise.all` are warning-producing compatibility no-ops. |
 
+Calls within one execution always run serially, including subagent calls. To run independent
+subagents concurrently, issue one `execute` invocation per subagent; never put parallel subagent
+work in the same execution.
+
 ## Quick Start
 
 Tool paths are catalog-dependent. The examples below use an illustrative `repository` namespace; use
@@ -420,7 +424,7 @@ let inspect = tool.define({
 const review = tools.subagent({
   agent: "build",
   description: "Review error handling",
-  prompt: "Use inspect to find error-handling branches in src/worker.ts, then explain the gaps.",
+  message: "Use inspect to find error-handling branches in src/worker.ts, then explain the gaps.",
   tools: [inspect],
 })
 ```
@@ -434,6 +438,39 @@ Handle guarantees:
   deadline.
 - Only host tools with `acceptsToolHandles: true` may receive handles.
 - Handles are opaque, are not data, cannot be saved, and become inactive when the execution settles.
+
+## Subagent Data Plane
+
+A subagent call carries two planes. `message` is shown to the child in full. `input` is never
+rendered into either model's context: it is available directly as `input` in the child's Code Mode
+executions, so a notebook value travels by reference in source instead of being pasted into a prompt:
+
+```ts
+const review = tools.subagent({
+  agent: "build",
+  description: "Summarize the dataset",
+  message: "Read the machine input, summarize its dataset, and submit the totals.",
+  input: { dataset },
+  inputSchema: { type: "object", required: ["dataset"] },
+  outputSchema: {
+    type: "object",
+    properties: { total: { type: "number" } },
+    required: ["total"],
+  },
+})
+```
+
+The child's prompt says only that machine input is available and describes its shape and size. The
+child can use it directly, for example `const total = input.dataset.length`. The value is
+invocation-local rather than a notebook binding; declarations derived from it follow the ordinary
+durable rules, and saved functions capture the exact input value they used. Each continuation may
+provide fresh input. When `inputSchema` is given, the host validates `input` against it before any
+child session exists.
+
+A structured child finishes with `tools.submit_result({ message, output })`. The parent's tool
+result renders `message` in full and only a short summary of `output` in metadata; the complete
+`output` stays in the returned value, so `review.output.total` is available to later computation
+through the notebook without ever entering the parent's context as text.
 
 ## Limits
 
@@ -513,9 +550,10 @@ const wide = "ab".repeat(3_000_000_000) // InvalidDataValue, before the native r
 | `Truncated`             | Warning only: output was cut by the output limit.                                                                            |
 
 Admission errors are reported by the host with a stable `kind` of `NameAlreadyDefined`,
-`NameReserved`, or `NotebookLimitExceeded`, plus the names involved. Compiler diagnostics include source locations when
-available. Host failures preserve their useful messages, and interruption remains interruption rather
-than a generic failure.
+`NameReserved`, or `NotebookLimitExceeded`, plus the names involved. Compiler diagnostics include a one-based
+`location` when available, and a `ParseError` also carries an `excerpt` of the failing source line
+so the failure can be understood without the whole program. Host failures preserve their useful
+messages, and interruption remains interruption rather than a generic failure.
 
 ## Authorization And Trust Boundaries
 

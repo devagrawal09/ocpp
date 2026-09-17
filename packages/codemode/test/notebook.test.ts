@@ -39,6 +39,30 @@ return describe(answer)`)
     expect(result.declarations.answer).toEqual({ value: "ok" })
   })
 
+  test("exposes invocation input directly and captures its exact value", async () => {
+    const first = await Effect.runPromise(
+      CodeMode.execute({
+        code: `const value = input.value
+const read = () => input.value`,
+        input: { value: 1 },
+      }),
+    )
+    expect(first).toMatchObject({ ok: true })
+    if (!first.ok) return
+    expect(Object.keys(first.declarations)).toEqual(["value", "read"])
+    expect(first.declarations.value).toBe(1)
+    expect(first.declarations.read).toBeDefined()
+
+    const later = await Effect.runPromise(
+      CodeMode.execute({
+        code: "return { captured: read(), current: input.value }",
+        bindings: restarted(first.declarations),
+        input: { value: 2 },
+      }),
+    )
+    expect(later).toMatchObject({ ok: true, value: { captured: 1, current: 2 } })
+  })
+
   test("keeps declarations nested in blocks, loops, and functions activation-local", async () => {
     expect(
       await declarations(`const kept = 1
@@ -250,6 +274,7 @@ return tools.delegate({ handle: decorate, input: { value: "ok" } })`,
     "Array",
     "tools",
     "tool",
+    "input",
     "String",
     "Error",
     "Infinity",

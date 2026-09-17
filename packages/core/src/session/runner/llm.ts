@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 export * as SessionRunnerLLM from "./llm.js"
 
 import { Message } from "@opencode-ai/ai"
@@ -271,7 +272,7 @@ const layer = Layer.effect(
           if (tool.type !== "tool" || (tool.state.status !== "streaming" && tool.state.status !== "running")) continue
           const metadata = tool.state.status === "running" ? tool.state.metadata : undefined
           const childID =
-            tool.name === "subagent" && typeof metadata?.sessionID === "string" ? metadata.sessionID : undefined
+            Delegation.isTool(tool.name) && typeof metadata?.sessionID === "string" ? metadata.sessionID : undefined
           yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID,
             assistantMessageID: message.id,

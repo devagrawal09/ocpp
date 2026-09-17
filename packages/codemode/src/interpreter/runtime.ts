@@ -284,6 +284,7 @@ export class Interpreter<R> {
     source = "",
     traceStatements = true,
     bindings: Readonly<Record<string, NotebookValue>> = {},
+    activationInput: unknown = undefined,
     declarationNames: ReadonlyArray<string> = [],
     bindingOverrides: ReadonlyMap<Binding, Binding> = new Map(),
     allowedTools?: ReadonlySet<string>,
@@ -313,6 +314,7 @@ export class Interpreter<R> {
       globalScope.set(name, { mutable: false, value: new ErrorConstructorReference(name) })
     globalScope.set("tools", { mutable: false, value: new ToolReference([]) })
     globalScope.set("tool", { mutable: false, value: new ToolNamespace() })
+    globalScope.set("input", { mutable: false, value: undefined })
     globalScope.set("Symbol", { mutable: false, value: new SymbolNamespace() })
     globalScope.set("undefined", { mutable: false, value: undefined })
     globalScope.set("NaN", { mutable: false, value: NaN })
@@ -335,6 +337,10 @@ export class Interpreter<R> {
         ),
     )
     this.scopes.push(this.notebookScope)
+    // Invocation input shadows an older notebook binding but remains a separate scope, so saved
+    // functions capture its exact value rather than resolving a later invocation's input.
+    if (activationInput !== undefined)
+      this.scopes.push(new Map([["input", { mutable: false, value: activationInput }]]))
   }
 
   /** Values visible to this activation from the notebook snapshot captured at admission. */
@@ -1982,6 +1988,7 @@ export class Interpreter<R> {
       this.source,
       traceStatements,
       {},
+      undefined,
       [],
       bindingOverrides,
       allowedTools,

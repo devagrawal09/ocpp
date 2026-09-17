@@ -60,6 +60,7 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
         Effect.gen(function* () {
           const parsed = decoded?.program ?? compile(options.code)
           const promises = new PromiseRuntime<Services<Provided>>(scope)
+          const input = options.input === undefined ? undefined : copyIn(options.input, "Execution input")
           const interpreter = new Interpreter<Services<Provided>>(
             tools.execute,
             tools.search,
@@ -70,6 +71,7 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             parsed.source,
             true,
             options.bindings,
+            input,
             parsed.declarations,
           )
           const executed = yield* interpreter.run(parsed.body)

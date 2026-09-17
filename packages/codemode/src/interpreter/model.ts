@@ -246,9 +246,10 @@ export const getOptionalNode = (node: AstNode, key: string): AstNode | undefined
 
 export const getNode = (node: AstNode, key: string): AstNode => asNode(node[key], key)
 
+// acorn positions are a one-based line and a zero-based column; diagnostics report both one-based.
 export const sourceLocation = (node: AstNode): { readonly line: number; readonly column: number } => ({
-  line: Math.max(1, (node.loc?.start.line ?? 2) - 1),
-  column: Math.max(1, (node.loc?.start.column ?? 4) - 3),
+  line: Math.max(1, node.loc?.start.line ?? 1),
+  column: Math.max(1, (node.loc?.start.column ?? 0) + 1),
 })
 
 export const formatLocation = (node?: AstNode): string => {

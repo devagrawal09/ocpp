@@ -43,6 +43,7 @@ export interface Interface extends State.Transformable<Draft> {
   readonly registerSession: (
     sessionID: SessionSchema.ID,
     tools: ReadonlyArray<Tool.Info>,
+    options?: { readonly input?: Schema.Json },
   ) => Effect.Effect<State.Registration, RegistrationError>
   readonly registrations: (
     permissions?: Permission.Ruleset,
@@ -78,7 +79,7 @@ const layer = Layer.effect(
     const scope = yield* Scope.Scope
     const sessionTools = new Map<
       SessionSchema.ID,
-      Array<{ readonly token: symbol; readonly tools: ReadonlyMap<string, Tool.Info> }>
+      Array<{ readonly token: symbol; readonly tools: ReadonlyMap<string, Tool.Info>; readonly input?: Schema.Json }>
     >()
 
     type NormalizedItem = Tool.Content | "decode" | "size"
@@ -234,9 +235,15 @@ const layer = Layer.effect(
       return tools
     }
 
+    const activeInput = (sessionID?: SessionSchema.ID) =>
+      sessionID === undefined
+        ? undefined
+        : (sessionTools.get(sessionID) ?? []).findLast((registration) => registration.input !== undefined)?.input
+
     const registerSession = Effect.fn("Tool.registerSession")(function* (
       sessionID: SessionSchema.ID,
       tools: ReadonlyArray<Tool.Info>,
+      options?: { readonly input?: Schema.Json },
     ) {
       const registered = new Map<string, Tool.Info>()
       for (const tool of tools) {
@@ -247,8 +254,19 @@ const layer = Layer.effect(
           return yield* new RegistrationError({ name: id, message: `Duplicate Session tool: ${id}` })
         registered.set(id, tool)
       }
+      // Machine input is resolved for the Session by taking the single live registration that
+      // carries it, so two concurrent input-bearing registrations for one Session would silently
+      // cross-wire the wrong value into a child. Refuse the second one instead.
+      if (options?.input !== undefined && (sessionTools.get(sessionID) ?? []).some((item) => item.input !== undefined))
+        return yield* new RegistrationError({
+          name: sessionID,
+          message: `Machine input is already registered for Session: ${sessionID}`,
+        })
       const token = Symbol(sessionID)
-      sessionTools.set(sessionID, [...(sessionTools.get(sessionID) ?? []), { token, tools: registered }])
+      sessionTools.set(sessionID, [
+        ...(sessionTools.get(sessionID) ?? []),
+        { token, tools: registered, ...(options?.input === undefined ? {} : { input: options.input }) },
+      ])
       let disposed = false
       return {
         dispose: Effect.sync(() => {
@@ -287,6 +305,7 @@ const layer = Layer.effect(
                     Effect.flatMap((event) => executeTool(tool, name, event.input, context)),
                   ),
                 { bus, jobs: runtime.job, sessions: runtime.session, store: codemodeStore, scope },
+                activeInput(sessionID),
               )
             : undefined
           const codeModeCatalog = codemodeEnabled ? CodeModeTool.catalog(codemode) : undefined

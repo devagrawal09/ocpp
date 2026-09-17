@@ -60,6 +60,7 @@ const runtimeLayer = Layer.unwrap(
       job: {
         start: jobs.start,
         startLimited: jobs.startLimited,
+        active: jobs.active,
         wait: jobs.wait,
         block: jobs.block,
         background: jobs.background,
@@ -195,6 +196,32 @@ describe("Tool", () => {
       yield* first.dispose
       expect((yield* service.snapshot(undefined, sessionID)).codeModeCatalog).toEqual([])
       expect((yield* service.registrations(undefined, sessionID)).map((tool) => tool.name)).toEqual(["echo"])
+    }),
+  )
+
+  it.effect("refuses a second machine-input registration for one Session", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      const first = yield* service.registerSession(sessionID, [{ ...constant("first"), name: "temporary_one" }], {
+        input: { dataset: [1] },
+      })
+      // A concurrent second input-bearing registration would silently cross-wire which value the
+      // child reads as `input`, so it is refused with a typed error rather than accepted.
+      const error = yield* service
+        .registerSession(sessionID, [{ ...constant("second"), name: "temporary_two" }], { input: { dataset: [2] } })
+        .pipe(Effect.flip)
+      expect(error).toBeInstanceOf(Tool.RegistrationError)
+      expect(error.message).toContain("Machine input is already registered")
+      // The refused registration left nothing behind, and an input-free registration is still allowed.
+      expect((yield* service.registrations(undefined, sessionID)).map((tool) => tool.name)).toEqual(["temporary_one"])
+      const third = yield* service.registerSession(sessionID, [{ ...constant("third"), name: "temporary_three" }])
+      yield* first.dispose
+      // The first input registration is gone, so a fresh input registration is accepted again.
+      const fourth = yield* service.registerSession(sessionID, [{ ...constant("fourth"), name: "temporary_four" }], {
+        input: { dataset: [4] },
+      })
+      yield* third.dispose
+      yield* fourth.dispose
     }),
   )
 
@@ -705,16 +732,18 @@ describe("Tool", () => {
       yield* seedToolSession(sessionID, identity.messageID)
       const service = yield* Tool.Service
       const snapshot = yield* service.snapshot()
-      const started = yield* Effect.forEach(Array.from({ length: 10 }, (_, index) => index), (index) =>
-        snapshot.execute({
-          ...call("execute", "detached-" + index),
-          call: {
-            type: "tool-call",
-            id: "detached-" + index,
-            name: "execute",
-            input: { code: "return null" },
-          },
-        }),
+      const started = yield* Effect.forEach(
+        Array.from({ length: 10 }, (_, index) => index),
+        (index) =>
+          snapshot.execute({
+            ...call("execute", "detached-" + index),
+            call: {
+              type: "tool-call",
+              id: "detached-" + index,
+              name: "execute",
+              input: { code: "return null" },
+            },
+          }),
       )
       const rejected = yield* snapshot
         .execute({

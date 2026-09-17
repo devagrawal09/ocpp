@@ -17,14 +17,19 @@ export const validate = Effect.fn("SubagentCustomTool.validate")(function* (valu
     if (names.has(value.definition.name))
       return yield* new Tool.Error({ message: "Duplicate custom tool: " + value.definition.name })
     names.add(value.definition.name)
-    yield* compile(value.definition.name, "inputSchema", value.definition.inputSchema)
-    yield* compile(value.definition.name, "outputSchema", value.definition.outputSchema)
+    yield* compile("custom tool " + value.definition.name, "inputSchema", value.definition.inputSchema)
+    yield* compile("custom tool " + value.definition.name, "outputSchema", value.definition.outputSchema)
     handles.push(value)
   }
   return handles
 })
 
-export const validateSchema = (name: string, schema: typeof JSONSchema.Type) => compile(name, "outputSchema", schema)
+/** Compiles a caller-supplied JSON Schema into the codec that validates values against it. */
+export const validateSchema = (
+  name: string,
+  schema: typeof JSONSchema.Type,
+  field: "inputSchema" | "outputSchema" = "outputSchema",
+) => compile(name, field, schema)
 
 export function make(handles: ReadonlyArray<ToolHandle>): ReadonlyArray<Tool.Info> {
   return handles.map((handle) => ({
@@ -69,6 +74,6 @@ function codec(schema: JsonSchema.JsonSchema) {
 function compile(name: string, field: "inputSchema" | "outputSchema", schema: JsonSchema.JsonSchema) {
   return Effect.try({
     try: () => codec(schema),
-    catch: (error) => new Tool.Error({ message: "Invalid " + field + " for custom tool " + name, error }),
+    catch: (error) => new Tool.Error({ message: "Invalid " + field + " for " + name, error }),
   })
 }

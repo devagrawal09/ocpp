@@ -25,6 +25,7 @@ const createCodeMode = (tools: ReadonlyMap<string, Info>) =>
     },
     jobs: {
       startLimited: () => Effect.die("Unavailable in catalog-only tests"),
+      active: () => Effect.die("Unavailable in catalog-only tests"),
       wait: () => Effect.die("Unavailable in catalog-only tests"),
       background: () => Effect.die("Unavailable in catalog-only tests"),
       cancel: () => Effect.die("Unavailable in catalog-only tests"),
@@ -53,14 +54,149 @@ test("execute describes invariant Code Mode behavior", () => {
     [
       "Run a JavaScript-shaped program that calls tools and composes their results.",
       "Tool calls block and return values directly. await and Promise.all are accepted only as ignored compatibility no-ops that produce a warning; do not use them. Other Promise forms, async, generators, dynamic tool dispatch, imports, filesystem access, fetch, and timers are unavailable.",
+      "Calls within one execution always run serially, including subagent calls. To run independent subagents concurrently, issue one execute call per subagent; never put parallel subagent work in the same execution.",
       "Call only exact static paths from the catalog, for example tools.fs.read(input).",
       "Use local let for scalar working state. Arrays and objects are immutable; use map, filter, slice, spread, and object literals to derive values.",
       "Every direct top-level const and function declaration is saved to the durable notebook automatically and is visible to later executions. Declarations inside blocks and functions are temporary.",
       "Notebook names are immutable: a name can never be redefined or reused. Saving is all-or-nothing, so a failed program saves nothing.",
       "return is only a small preview for display and may be truncated; publish real output as top-level declarations.",
       "Execution is asynchronous: this call returns an execution ID immediately and the result arrives as a later notification.",
+      "At most 10 executions may run at once per Session, including executions that are waiting on subagents. A refused call names the running executions; wait for one of their completion notifications before starting another instead of retrying immediately.",
     ].join("\n"),
   )
+})
+
+test("a compile failure is refused with its diagnostic kind, position, and excerpt as metadata", async () => {
+  const error = await Effect.runPromise(
+    createCodeMode(new Map())
+      .execute({ code: ["const a = 1", "const b = {,}", "return b"].join("\n") }, context)
+      .pipe(Effect.flip),
+  )
+  expect(error).toBeInstanceOf(Tool.Error)
+  expect(error.metadata).toEqual({
+    executionStatus: "refused",
+    kind: "ParseError",
+    location: { line: 2, column: 12 },
+    excerpt: "const b = {,}",
+  })
+  expect(error.message).toBe(
+    ["Failed to parse TypeScript: Property assignment expected. (line 2, col 12)", "Source: const b = {,}"].join("\n"),
+  )
+})
+
+test("a refused execution names the running executions instead of only the cap", async () => {
+  const discarded: string[] = []
+  const codemode = CodeModeTool.create(new Map(), () => Effect.die("No tools are exposed"), {
+    bus: {
+      publish: () => Effect.succeed(undefined as never),
+      listen: () => Effect.succeed(Effect.void),
+    },
+    jobs: {
+      // The Session already holds every slot, so admission is refused.
+      startLimited: () => Effect.succeed(undefined),
+      active: (input) =>
+        Effect.succeed(
+          ["exe_first", "exe_second"].map((id) => ({
+            id,
+            type: input.type ?? "codemode",
+            status: "running" as const,
+            started_at: 0,
+          })),
+        ),
+      wait: () => Effect.die("Unreached: the execution was refused"),
+      background: () => Effect.die("Unreached: the execution was refused"),
+      cancel: () => Effect.succeed(undefined),
+      markBackgroundTerminal: () => Effect.void,
+      completeBackground: () => Effect.void,
+    },
+    sessions: {
+      message: () => Effect.succeed(undefined),
+      synthetic: () => Effect.die("Unreached: the execution was refused"),
+    },
+    store: {
+      admit: (input) => Effect.succeed({ ok: true, execution: { ...input, bindings: {} } }),
+      running: () => Effect.void,
+      scheduleCall: () => Effect.void,
+      settleCall: () => Effect.void,
+      commit: () => Effect.die("Unreached: the execution was refused"),
+      fail: () => Effect.void,
+      discard: (id) => Effect.sync(() => void discarded.push(id)),
+      indeterminate: () => Effect.void,
+    },
+    scope: Effect.runSync(Scope.make()),
+  })
+
+  const error = await Effect.runPromise(codemode.execute({ code: "return 1" }, context).pipe(Effect.flip))
+  expect(error).toBeInstanceOf(Tool.Error)
+  expect(error.message).toBe(
+    "At most 10 executions may run per Session, and 2 are running: exe_first, exe_second. Wait for one of their completion notifications before starting another execution; do not retry immediately.",
+  )
+  expect(error.metadata).toEqual({
+    executionStatus: "refused",
+    kind: "ConcurrencyLimit",
+    limit: 10,
+    active: ["exe_first", "exe_second"],
+  })
+  // The reserved names are released, so the refused program holds nothing.
+  expect(discarded).toHaveLength(1)
+})
+
+test("a failed execution's completion carries a stable failure kind in its metadata", async () => {
+  const notificationID = SessionMessage.ID.create()
+  const delivered: unknown[] = []
+  let finish: () => void = () => {}
+  const finished = new Promise<void>((resolve) => (finish = resolve))
+  const codemode = CodeModeTool.create(new Map(), () => Effect.die("No tools are exposed"), {
+    bus: {
+      publish: () => Effect.succeed(undefined as never),
+      listen: () => Effect.succeed(Effect.void),
+    },
+    jobs: {
+      startLimited: (input) =>
+        Effect.succeed({ id: input.id ?? "exe", type: "codemode", status: "running", started_at: 0 }),
+      active: () => Effect.succeed([]),
+      // The job settled as an error before the program ran, as a restart or cancellation would.
+      wait: () =>
+        Effect.succeed({
+          info: {
+            id: "exe",
+            type: "codemode",
+            status: "error",
+            started_at: 0,
+            notificationID,
+            error: "Execution failed",
+          },
+          timedOut: false,
+        }),
+      background: () => Effect.succeed(undefined),
+      cancel: () => Effect.succeed(undefined),
+      markBackgroundTerminal: () => Effect.void,
+      completeBackground: () => Effect.sync(finish),
+    },
+    sessions: {
+      message: () => Effect.succeed(undefined),
+      synthetic: (input) =>
+        Effect.sync(() => {
+          delivered.push(input.metadata)
+          return { id: notificationID } as never
+        }),
+    },
+    store: {
+      admit: (input) => Effect.succeed({ ok: true, execution: { ...input, bindings: {} } }),
+      running: () => Effect.void,
+      scheduleCall: () => Effect.void,
+      settleCall: () => Effect.void,
+      commit: () => Effect.die("Unreached: the job never runs the program here"),
+      fail: () => Effect.void,
+      discard: () => Effect.void,
+      indeterminate: () => Effect.void,
+    },
+    scope: Effect.runSync(Scope.make()),
+  })
+
+  await Effect.runPromise(codemode.execute({ code: "const saved = 1" }, context))
+  await finished
+  expect(delivered).toEqual([{ source: "codemode", executionID: "exe", state: "failed", kind: "ExecutionFailure" }])
 })
 
 test("execute accepts source code only", () => {
@@ -147,6 +283,7 @@ test("a Session deleted mid-execution still finishes the background notification
     jobs: {
       startLimited: (input) =>
         Effect.succeed({ id: input.id ?? "exe", type: "codemode", status: "running", started_at: 0 }),
+      active: () => Effect.succeed([]),
       wait: () =>
         Effect.succeed({
           info: { id: "exe", type: "codemode", status: "completed", started_at: 0, notificationID },

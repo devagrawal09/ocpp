@@ -154,10 +154,17 @@ export type CancelAllInput = {
   discardBackground?: boolean
 }
 
+export type ActiveInput = {
+  ownerSessionID: SessionSchema.ID
+  type?: string
+}
+
 export interface Interface {
   readonly get: (id: string) => Effect.Effect<Info | undefined>
   readonly start: (input: StartInput) => Effect.Effect<Info>
   readonly startLimited: (input: StartLimitedInput) => Effect.Effect<Info | undefined>
+  /** Running work owned by a Session, in start order; the population `startLimited` counts against. */
+  readonly active: (input: ActiveInput) => Effect.Effect<readonly Info[]>
   readonly wait: (input: WaitInput) => Effect.Effect<WaitResult>
   readonly block: (input: BlockInput) => Effect.Effect<BlockResult | undefined>
   readonly background: (id: string) => Effect.Effect<Info | undefined>
@@ -327,6 +334,18 @@ export const make = Effect.gen(function* () {
   )
 
   const startLimited: Interface["startLimited"] = Effect.fn("Job.startLimited")((input) => startJob(input, input))
+
+  const active: Interface["active"] = Effect.fn("Job.active")(function* (input) {
+    return [...(yield* SynchronizedRef.get(state.jobs)).values()]
+      .filter(
+        (job) =>
+          job.info.status === "running" &&
+          job.ownerSessionID === input.ownerSessionID &&
+          (input.type === undefined || job.info.type === input.type),
+      )
+      .toSorted((left, right) => left.info.started_at - right.info.started_at)
+      .map(snapshot)
+  })
 
   const wait: Interface["wait"] = Effect.fn("Job.wait")(function* (input) {
     const job = (yield* SynchronizedRef.get(state.jobs)).get(input.id)
@@ -530,6 +549,7 @@ export const make = Effect.gen(function* () {
     get,
     start,
     startLimited,
+    active,
     wait,
     block,
     background,

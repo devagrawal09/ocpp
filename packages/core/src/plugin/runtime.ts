@@ -34,6 +34,7 @@ export interface Interface {
     Job.Interface,
     | "start"
     | "startLimited"
+    | "active"
     | "wait"
     | "block"
     | "background"
@@ -99,6 +100,7 @@ export const layerWithCell = (cell: Cell) =>
       job: {
         start: (input) => require(cell, (runtime) => runtime.job.start(input)),
         startLimited: (input) => require(cell, (runtime) => runtime.job.startLimited(input)),
+        active: (input) => require(cell, (runtime) => runtime.job.active(input)),
         wait: (input) => require(cell, (runtime) => runtime.job.wait(input)),
         block: (input) => require(cell, (runtime) => runtime.job.block(input)),
         background: (id) => require(cell, (runtime) => runtime.job.background(id)),

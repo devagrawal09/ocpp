@@ -2009,6 +2009,11 @@ export type ConfigEntry =
         websearch?: false | { provider: "random" | (string & {}) }
         plugins?: Array<string | { package: string; options?: { [x: string]: JsonValue } }>
         warming?: boolean | { prompt?: string; interval?: string; duration?: string }
+        external_agents?: {
+          claude?: { enabled?: boolean; model?: string; effort?: string }
+          codex?: { enabled?: boolean; model?: string; effort?: string }
+          pi?: { enabled?: boolean; model?: string; effort?: string }
+        }
         subagent?: { models?: Array<string> }
         providers?: {
           [x: string]: {

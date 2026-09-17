@@ -1,6 +1,7 @@
 export * as SessionExecution from "./execution.js"
 
 import { Cause, Context, Effect, Exit, Layer } from "effect"
+import { ExternalAgentSession } from "../external-agent/session.js"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { Job } from "../job.js"
@@ -52,6 +53,7 @@ export function terminal(exit: Exit.Exit<void, SessionRunner.RunError>, reason?:
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
+    const external = yield* ExternalAgentSession.Service
     const store = yield* SessionStore.Service
     const locations = yield* LocationServiceMap.Service
     const bus = yield* Bus.Service
@@ -87,6 +89,7 @@ export const layer = Layer.effect(
     ): Effect.fn.Return<void, SessionRunner.RunError> {
       const session = yield* store.get(sessionID)
       if (!session) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
+      if (yield* external.get(sessionID)) return yield* external.drain(sessionID)
       const result = yield* SessionRunner.Service.use((runner) =>
         runner.drain({ sessionID, force, continuation, promotable }),
       ).pipe(
@@ -176,7 +179,7 @@ export const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
-  deps: [SessionStore.node, LocationServiceMap.node, Bus.node, Database.node, Job.node],
+  deps: [ExternalAgentSession.node, SessionStore.node, LocationServiceMap.node, Bus.node, Database.node, Job.node],
 })
 
 /** Low-level compatibility layer for callers that only need durable Session recording. */

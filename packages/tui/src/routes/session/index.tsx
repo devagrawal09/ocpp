@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 import {
   batch,
   createContext,
@@ -1736,7 +1737,7 @@ function BackgroundToolHint(props: { messages: SessionMessageInfo[] }) {
     const part = current?.content.find((part): part is SessionMessageAssistantTool => {
       if (part.type !== "tool" || part.state.status !== "running") return false
       const name = canonicalToolName(part.name)
-      return name === "shell" || name === "subagent"
+      return name === "shell" || Delegation.isTool(name)
     })
     if (!current || !part) return
     return { key: `${current.id}:${part.id}`, started: part.time.ran ?? part.time.created }
@@ -2727,7 +2728,7 @@ function ToolPart(props: { part: SessionMessageAssistantTool; images?: boolean }
       <Match when={display() === "edit"}>
         <Edit {...toolprops} />
       </Match>
-      <Match when={display() === "subagent"}>
+      <Match when={Delegation.isTool(display())}>
         <Subagent {...toolprops} />
       </Match>
       <Match when={display() === "execute"}>

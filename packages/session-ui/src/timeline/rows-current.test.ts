@@ -194,14 +194,12 @@ describe("current session timeline rows", () => {
       rows.flatMap((row) =>
         row._tag === "AssistantPart" && row.group.type === "context" ? [row.group.refs.map((ref) => ref.partID)] : [],
       ),
-    ).toEqual([["execute_a"], ["read_between"], ["execute_b", "execute_c"]])
-    expect(rows.map((row) => row._tag)).toEqual([
-      "UserMessage",
-      "AssistantPart",
-      "AssistantPart",
-      "AssistantPart",
-      "AssistantPart",
+    ).toEqual([
+      ["msg_assistant:reasoning:0", "execute_a"],
+      ["read_between"],
+      ["execute_b", "execute_c"],
     ])
+    expect(rows.map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart", "AssistantPart", "AssistantPart"])
   })
 
   test("isolates custom tool executions from adjacent context tools", () => {
@@ -422,10 +420,13 @@ describe("current session timeline rows", () => {
       },
       { type: "part", ref: { partID: "msg_assistant_2:text:0" } },
       {
-        type: "reasoning",
-        refs: [{ partID: "msg_assistant_2:reasoning:1" }, { partID: "msg_assistant_2:reasoning:2" }],
+        type: "context",
+        refs: [
+          { partID: "msg_assistant_2:reasoning:1" },
+          { partID: "msg_assistant_2:reasoning:2" },
+          { partID: "execute_boundary" },
+        ],
       },
-      { type: "context", refs: [{ partID: "execute_boundary" }] },
       {
         type: "reasoning",
         refs: [{ partID: "msg_assistant_2:reasoning:3" }, { partID: "msg_assistant_2:reasoning:4" }],
@@ -454,10 +455,9 @@ describe("current session timeline rows", () => {
       true,
     )
     const result = Timeline.constructSessionMessageRows(document.messages, true, document.status)
-    expect(result.rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group.type] : []))).toEqual([
-      "part",
-      name === "execute" ? "context" : "part",
-    ])
+    expect(result.rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group.type] : []))).toEqual(
+      name === "execute" ? ["context"] : ["part", "part"],
+    )
   })
 
   test("keeps assistant errors and retries before later notices", () => {
@@ -991,6 +991,31 @@ describe("current session timeline rows", () => {
       if (index > 0) expect(groups[0]).toBe(previousRows.find((row) => row._tag === "AssistantPart")!)
       return result.rows
     }, initial.rows)
+  })
+
+  test("groups contiguous reasoning and execute pairs in one disclosure", () => {
+    const rows = Timeline.constructSessionMessageRows(
+      storyDocument([
+        { type: "reasoning", text: "first thought", time: { created: 1, completed: 2 } },
+        storyTool("execute-1", "execute", "completed", {}),
+        { type: "reasoning", text: "second thought", time: { created: 3, completed: 4 } },
+        storyTool("execute-2", "execute", "completed", {}),
+      ]).messages,
+      true,
+      { type: "idle" },
+    ).rows
+
+    expect(rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group] : []))).toMatchObject([
+      {
+        type: "context",
+        refs: [
+          { partID: "msg_tool_projection_assistant:reasoning:0" },
+          { partID: "execute-1" },
+          { partID: "msg_tool_projection_assistant:reasoning:1" },
+          { partID: "execute-2" },
+        ],
+      },
+    ])
   })
 
   test("keeps execute in its own stable group throughout execution", () => {

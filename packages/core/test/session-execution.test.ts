@@ -13,6 +13,7 @@ import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { Session } from "@opencode-ai/core/session"
+import { ExternalAgentSession } from "@opencode-ai/core/external-agent/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { UserInterruptedError } from "@opencode-ai/core/session/error"
@@ -1595,6 +1596,7 @@ function buildExecution(
       SessionRestart.layer(options).pipe(
         Layer.provideMerge(sessionLayer),
         Layer.provideMerge(Layer.fresh(SessionExecution.layer)),
+        Layer.provide(ExternalAgentSession.layer),
         Layer.provide(Layer.succeed(Database.Service, database)),
         Layer.provide(Layer.succeed(Bus.Service, bus)),
         Layer.provide(Layer.succeed(SessionStore.Service, store)),

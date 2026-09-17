@@ -112,6 +112,9 @@ describe("public event manifest", () => {
     expect(Array.from(EventManifest.Durable.keys()).toSorted()).toEqual(
       [
         "session.created.1",
+        "session.external.bound.1",
+        "session.external.linked.1",
+        "session.external.checkpointed.1",
         "session.deleted.2",
         "session.agent.selected.1",
         "session.model.selected.1",

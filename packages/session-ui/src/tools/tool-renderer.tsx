@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 // Current Session tool presentation grouped by visual family.
 import {
   Component,
@@ -329,8 +330,11 @@ export function getToolInfo(
         title: webSearchProviderLabel(metadata?.provider, i18n),
         subtitle: typeof input.query === "string" ? input.query : undefined,
       }
+    case "claude":
+    case "codex":
+    case "pi":
     case "subagent": {
-      const raw = input.agent
+      const raw = input.agent ?? (tool === "subagent" ? undefined : tool)
       const type = typeof raw === "string" && raw ? raw[0].toUpperCase() + raw.slice(1) : undefined
       return {
         icon: "task",
@@ -782,7 +786,7 @@ export function CurrentContextToolGroup(props: {
         tools().map((tool) => {
           const input = currentToolInput(tool)
           if (tool.name === "skill") return i18n.t("ui.tool.skill")
-          if (tool.name === "subagent") return i18n.t("ui.tool.agent.default")
+          if (Delegation.isTool(tool.name)) return i18n.t("ui.tool.agent.default")
           return getToolInfo(tool.name, input, currentToolMetadata(tool)).title
         }),
       ),
@@ -796,7 +800,8 @@ export function CurrentContextToolGroup(props: {
     }
     if (codemode()) {
       const title = i18n.t(executing() ? "ui.codemode.executing" : "ui.codemode.executed")
-      const steps = parts().length === 0 ? "" : i18n.plural("ui.codemode.steps", parts().length)
+      const count = parts().filter((part) => part.type !== "reasoning").length
+      const steps = count === 0 ? "" : i18n.plural("ui.codemode.steps", count)
       return { text: [title, steps].filter(Boolean).join(" "), title, before: "", after: steps }
     }
     const title = tools().length + " " + names()
@@ -1243,7 +1248,7 @@ export function registerTool(input: { name: string; render?: ToolComponent }) {
 }
 
 export function getTool(name: string) {
-  return state[name]?.render
+  return state[Delegation.isTool(name) ? "subagent" : name]?.render
 }
 
 export const ToolRegistry = {
@@ -1303,14 +1308,14 @@ export function ToolDisplay(
   if (props.tool === "todowrite") return null
   const hideQuestion = () => props.tool === "question" && (props.status === "streaming" || props.status === "running")
   const taskId = createMemo(() => {
-    if (props.tool !== "subagent") return undefined
+    if (!Delegation.isTool(props.tool)) return undefined
     const value = props.metadata.sessionID
     if (typeof value === "string" && value) return value
     return undefined
   })
   const taskHref = createMemo(() => sessionLink(taskId(), data.sessionHref))
   const taskSubtitle = createMemo(() => {
-    if (props.tool !== "subagent") return undefined
+    if (!Delegation.isTool(props.tool)) return undefined
     const value = props.input.description
     if (typeof value === "string" && value) return value
     return taskId()
@@ -1643,7 +1648,9 @@ ToolRegistry.register({
       if (typeof value === "string" && value) return value
       return taskSession(props.input, data.sessionID, data.store.session)
     })
-    const agent = createMemo(() => taskAgent(props.input.agent, data.store.agent))
+    const agent = createMemo(() =>
+      taskAgent(props.input.agent ?? (props.tool === "subagent" ? undefined : props.tool), data.store.agent),
+    )
     const title = createMemo(() => agent().name ?? i18n.t("ui.tool.agent.default"))
     const tone = createMemo(() => agent().color)
     const v2Tone = createMemo(() => agent().v2Color)

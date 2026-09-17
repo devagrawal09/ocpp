@@ -124,6 +124,18 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`session_external\` (
+          \`session_id\` text PRIMARY KEY,
+          \`provider\` text NOT NULL,
+          \`directory\` text NOT NULL,
+          \`vendor_session_id\` text,
+          \`checkpoint\` text,
+          \`history_hash\` text,
+          \`status\` text NOT NULL,
+          CONSTRAINT \`fk_session_external_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`kv\` (
           \`key\` text PRIMARY KEY,
           \`value\` text NOT NULL,
@@ -267,6 +279,8 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`time_idle\` integer,
           \`time_viewed\` integer,
           \`idle_outcome\` text,
+          \`idle_error_type\` text,
+          \`idle_error_message\` text,
           \`time_compacting\` integer,
           \`time_archived\` integer,
           \`time_suspended\` integer,

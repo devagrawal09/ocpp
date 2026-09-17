@@ -201,6 +201,7 @@ export function normalize(input: unknown): Result {
     websearch: Info.fields.websearch,
     warming: Info.fields.warming,
     subagent: Info.fields.subagent,
+    external_agents: Info.fields.external_agents,
   }
   Object.entries(nativeAtomic).forEach(([key, schema]) => {
     if (!own(input, key)) return

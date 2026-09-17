@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 // Per-tool display rules shared across `opencode run` output paths.
 //
 // Each known tool (shell, edit, write, subagent, etc.) has a ToolRule that controls
@@ -189,11 +190,14 @@ export function readDisplayText(text: string): string | undefined {
 function normalizeInput(name: string, value: unknown) {
   const input = dict(value)
   const path = typeof input.path === "string" ? input.path : text(input.filePath)
-  const agent = typeof input.agent === "string" ? input.agent : text(input.subagent_type)
+  const agent =
+    typeof input.agent === "string"
+      ? input.agent
+      : text(input.subagent_type) || (name !== "subagent" && Delegation.isTool(name) ? name : "")
   return {
     ...input,
     ...(["read", "write", "edit", "lsp"].includes(name) && path ? { path } : {}),
-    ...(name === "subagent" && agent ? { agent } : {}),
+    ...(Delegation.isTool(name) && agent ? { agent } : {}),
   }
 }
 
@@ -235,7 +239,7 @@ function normalizeMetadata(name: string, value: unknown) {
   return {
     ...metadata,
     ...(["edit", "patch"].includes(name) && Array.isArray(metadata.files) ? { files } : {}),
-    ...(name === "subagent" && sessionID ? { sessionID } : {}),
+    ...(Delegation.isTool(name) && sessionID ? { sessionID } : {}),
   }
 }
 
@@ -1071,6 +1075,7 @@ function key(name: string): name is ToolName {
 }
 
 function rule(name?: string): AnyToolRule | undefined {
+  if (name && Delegation.isTool(name)) return TOOL_RULES.subagent
   if (!name || !key(name)) {
     return undefined
   }
@@ -1301,7 +1306,7 @@ export function toolEntryBody(
 
   if (ctx.name === "shell" && commit.phase === "progress" && options?.shellOutput === false) return undefined
 
-  if (ctx.name === "subagent") {
+  if (Delegation.isTool(ctx.name)) {
     if (commit.phase === "start") {
       return undefined
     }

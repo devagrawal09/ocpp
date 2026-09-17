@@ -105,7 +105,7 @@ type CreateBaseInput = {
   metadata?: SessionSchema.Metadata
 }
 type CreateInput = CreateBaseInput &
-  ({ location: Location.Ref; parentID?: never } | { parentID: SessionSchema.ID; location?: never })
+  ({ location: Location.Ref; parentID?: SessionSchema.ID } | { parentID: SessionSchema.ID; location?: Location.Ref })
 
 type CompactInput = Parameters<Session.Handle["compact"]>[0] & { sessionID: SessionSchema.ID }
 
@@ -301,7 +301,7 @@ const layer = Layer.effect(
         if (recorded) return recorded
         const parent = input.parentID ? yield* store.get(input.parentID) : undefined
         if (input.parentID && parent === undefined) return yield* new NotFoundError({ sessionID: input.parentID })
-        const location = parent?.location ?? input.location
+        const location = input.location ?? parent?.location
         if (location === undefined)
           return yield* Effect.die(new Error("Session.create requires either location or an existing parentID"))
         const project = yield* projects.resolve(location.directory)

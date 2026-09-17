@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "846b5034-3f91-4682-8f50-6df6df15a661",
-  "prevIds": ["49e6caa1-6ff6-47d2-bc5f-b47ec12b1635"],
+  "id": "bca615cf-0e17-4f00-bddb-feb72a5b7bcb",
+  "prevIds": ["81c089f3-43e4-414b-bc9b-0c0e4454e001"],
   "ddl": [
     {
       "name": "account_state",
@@ -42,6 +42,10 @@
     },
     {
       "name": "event",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_external",
       "entityType": "tables"
     },
     {
@@ -785,6 +789,76 @@
       "name": "data",
       "entityType": "columns",
       "table": "event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_external"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider",
+      "entityType": "columns",
+      "table": "session_external"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "directory",
+      "entityType": "columns",
+      "table": "session_external"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "vendor_session_id",
+      "entityType": "columns",
+      "table": "session_external"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "checkpoint",
+      "entityType": "columns",
+      "table": "session_external"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "history_hash",
+      "entityType": "columns",
+      "table": "session_external"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "session_external"
     },
     {
       "type": "text",
@@ -1717,6 +1791,26 @@
       "table": "session_v2"
     },
     {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "idle_error_type",
+      "entityType": "columns",
+      "table": "session_v2"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "idle_error_message",
+      "entityType": "columns",
+      "table": "session_v2"
+    },
+    {
       "type": "integer",
       "notNull": false,
       "autoincrement": false,
@@ -1913,6 +2007,17 @@
       "table": "event"
     },
     {
+      "columns": ["session_id"],
+      "tableTo": "session_v2",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_external_session_id_session_v2_id_fk",
+      "entityType": "fks",
+      "table": "session_external"
+    },
+    {
       "columns": ["project_id"],
       "tableTo": "project",
       "columnsTo": ["id"],
@@ -2100,6 +2205,13 @@
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["session_id"],
+      "nameExplicit": false,
+      "name": "session_external_pk",
+      "table": "session_external",
       "entityType": "pks"
     },
     {

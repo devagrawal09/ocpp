@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 // Current-native subagent (child Session) tracking for the mini transport.
 //
 // Discovers child Sessions of the active parent from four current sources:
@@ -926,7 +927,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
 
   const mainTool = (item: SessionMessageAssistantTool, active?: Record<string, unknown>) => {
     const tool = normalizeTool(item)
-    if (tool.name !== "subagent" || tool.state.status === "streaming") return
+    if (!Delegation.isTool(tool.name) || tool.state.status === "streaming") return
     const found = childSessionID(record(tool.state.metadata))
     if (!found) return
     const child = admitChild(found.sessionID)
@@ -955,7 +956,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
     main(sdk, event, signal = input.signal) {
       if (!active(signal)) return
       if (event.type === "session.tool.input.started") {
-        if (canonicalToolName(event.data.name) === "subagent")
+        if (Delegation.isTool(canonicalToolName(event.data.name)))
           pendingCalls.set(sourceKey(event.data.assistantMessageID, event.data.id), {})
         return
       }

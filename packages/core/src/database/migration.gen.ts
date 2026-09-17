@@ -47,6 +47,9 @@ import m44 from "./migration/20260819222447_session_viewed_state.js"
 import m45 from "./migration/20260823191254_nullable_workspace_binding.js"
 import m46 from "./migration/20260901061131_codemode_notebook.js"
 import m47 from "./migration/20260901214416_codemode_append_only_notebook.js"
+import m48 from "./migration/20260911051239_session_idle_error.js"
+import m49 from "./migration/20260912065059_session_external.js"
+import m50 from "./migration/20260912070828_external_history.js"
 
 export const migrations = [
   m00,
@@ -97,4 +100,7 @@ export const migrations = [
   m45,
   m46,
   m47,
+  m48,
+  m49,
+  m50,
 ] satisfies DatabaseMigration.Migration[]

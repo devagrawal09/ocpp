@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 import type {
   ModelRef,
   SessionMessageAssistant,
@@ -520,7 +521,7 @@ function groupContent(
     adjacent = undefined
   }
 
-  items.forEach((item) => {
+  items.forEach((item, index) => {
     const type =
       item.content.type === "tool"
         ? toolGroupType(
@@ -538,9 +539,24 @@ function groupContent(
         item.content.type === "tool" &&
         "metadata" in item.content.state &&
         item.content.state.metadata?.executionKind === "custom-tool"
-      if (adjacent && (adjacent.type !== type || adjacent.execute !== execute || isolated || adjacent.isolated)) flush()
+      const next =
+        item.content.type === "reasoning"
+          ? items.slice(index + 1).find((candidate) => candidate.content.type !== "reasoning")
+          : undefined
+      const followedByExecute = next?.content.type === "tool" && next.content.name === "execute"
+      // Keep contiguous Code Mode thought/execution pairs together, but stop at unrelated tools or trailing thought.
+      if (
+        adjacent &&
+        (adjacent.type !== type ||
+          (execute && adjacent.tools && !adjacent.execute) ||
+          (!execute && adjacent.execute && (item.content.type === "tool" || !followedByExecute)) ||
+          isolated ||
+          adjacent.isolated)
+      )
+        flush()
       adjacent ??= { type, refs: [], tools: false, execute, isolated: false }
       adjacent.tools ||= item.content.type === "tool"
+      adjacent.execute ||= execute
       adjacent.isolated ||= isolated
       adjacent.refs.push({ messageID: item.messageID, partID: item.partID })
       return
@@ -573,7 +589,7 @@ function toolGroupType(
     !hasContextGroup &&
     (content.state.status !== "completed" ||
       ("metadata" in content.state && content.state.metadata?.status === "running")) &&
-    (content.name === "shell" || content.name === "subagent")
+    (content.name === "shell" || Delegation.isTool(content.name))
   )
     return undefined
   if (currentContentDefaultOpen(content, shellExpanded, editExpanded) !== true) return "context"

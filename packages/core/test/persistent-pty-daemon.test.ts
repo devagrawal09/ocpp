@@ -172,7 +172,7 @@ it.live("rejects incompatible daemons without replacing or killing them", () =>
 
 function temporaryDirectory() {
   return Effect.acquireRelease(
-    Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "opencode-pty-test-"))),
+    Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "ocpp-pty-test-"))),
     (directory) => Effect.promise(() => rm(directory, { recursive: true, force: true })),
   )
 }

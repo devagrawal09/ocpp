@@ -5,10 +5,10 @@ import type {
   ProjectCurrentInput,
   ProjectCurrentOutput,
   ProjectListOutput,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import { showToast } from "@/shell/notifications/toast"
-import { getFilename } from "@opencode-ai/util/path"
-import { retry } from "@opencode-ai/util/retry"
+import { getFilename } from "@ocpp/util/path"
+import { retry } from "@ocpp/util/retry"
 import { reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type { State } from "./types"
 import { cmp, normalizeProjectInfo } from "./utils"
@@ -96,7 +96,7 @@ export const loadProjectsQuery = (scope: ServerScope, projects: ProjectApi, work
                 }),
             )
           )
-            .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
+            .filter((p) => !!p.worktree && !p.worktree.includes("ocpp-test"))
             .slice()
             .sort((a, b) => cmp(a.id, b.id))
         }),

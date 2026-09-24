@@ -1,8 +1,8 @@
 import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, Prompt, SkillPart } from "@/composer/state"
 import { createLegacyBlobReference } from "@/runtime/persistence/drafts"
-import type { SessionMessageUser } from "@opencode-ai/client/promise"
+import type { SessionMessageUser } from "@ocpp/client/promise"
 import { readPromptPresentation } from "./comment-note"
-import { Skill } from "@opencode-ai/schema/skill"
+import { Skill } from "@ocpp/schema/skill"
 
 type Inline =
   | {

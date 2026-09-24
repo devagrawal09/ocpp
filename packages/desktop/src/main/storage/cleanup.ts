@@ -83,8 +83,8 @@ export const deleteStoreFileIfEmpty = Effect.fn("Storage.deleteStoreFileIfEmpty"
 })
 
 function storeKind(name: string): StoreKind | undefined {
-  if (/^opencode\.draft\..+\.dat$/.test(name)) return "draft"
-  if (/^opencode\.workspace\..+\.dat$/.test(name)) return "workspace"
+  if (/^ocpp\.draft\..+\.dat$/.test(name)) return "draft"
+  if (/^ocpp\.workspace\..+\.dat$/.test(name)) return "workspace"
 }
 
 const isEmptyStore = Effect.fn("Storage.isEmptyStore")(function* (file: string, size: FileSystem.Size) {

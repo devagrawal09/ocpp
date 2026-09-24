@@ -1,10 +1,10 @@
 export * as ConfigFormatterPlugin from "./formatter.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
-import { Npm } from "@opencode-ai/util/npm"
-import { AppProcess } from "@opencode-ai/util/process"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
+import { Npm } from "@ocpp/util/npm"
+import { AppProcess } from "@ocpp/util/process"
 import { Effect } from "effect"
 import { Config } from "../../config.js"
 import { Formatter } from "../../formatter.js"
@@ -13,7 +13,7 @@ import { Location } from "../../location.js"
 import { ConfigEntryObserver } from "./entry-observer.js"
 
 export const Plugin = define({
-  id: "opencode.config.formatter",
+  id: "ocpp.config.formatter",
   effect: Effect.fn(function* (ctx) {
     const config = yield* Config.Service
     const formatter = yield* Formatter.Service

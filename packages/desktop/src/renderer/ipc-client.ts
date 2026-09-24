@@ -4,7 +4,7 @@ import { DesktopRpcs, type DesktopRpcClient } from "../shared/ipc-rpc"
 import type { DesktopEvent } from "../shared/ipc-rpc/events"
 import { IpcTransportPort } from "../shared/ipc-transport"
 
-class DesktopClient extends Context.Service<DesktopClient, DesktopRpcClient>()("opencode/desktop/DesktopClient") {}
+class DesktopClient extends Context.Service<DesktopClient, DesktopRpcClient>()("ocpp/desktop/DesktopClient") {}
 
 type EventTag = DesktopEvent["_tag"]
 type InvokeTag = Exclude<keyof DesktopRpcClient, "DesktopEvents">

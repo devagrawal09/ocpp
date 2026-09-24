@@ -1,87 +1,87 @@
 import { NodeFileSystem } from "@effect/platform-node"
-import { compile, emitEffectImported, emitEffectShape, emitPromise, write } from "@opencode-ai/httpapi-codegen"
-import { ClientApi, effectOmitEndpoints, groupNames, promiseOmitEndpoints } from "@opencode-ai/protocol/client"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Command } from "@opencode-ai/schema/command"
-import { Config } from "@opencode-ai/schema/config"
-import { Credential } from "@opencode-ai/schema/credential"
-import { Event } from "@opencode-ai/schema/event"
-import { EventLog } from "@opencode-ai/schema/event-log"
-import { FileDiff } from "@opencode-ai/schema/file-diff"
-import { FileSystem } from "@opencode-ai/schema/filesystem"
-import { Form } from "@opencode-ai/schema/form"
-import { InstructionEntry } from "@opencode-ai/schema/instruction-entry"
-import { Integration } from "@opencode-ai/schema/integration"
-import { Location } from "@opencode-ai/schema/location"
-import { Mcp } from "@opencode-ai/schema/mcp"
-import { Model } from "@opencode-ai/schema/model"
-import { Permission } from "@opencode-ai/schema/permission"
-import { PermissionSaved } from "@opencode-ai/schema/permission-saved"
-import { Plugin } from "@opencode-ai/schema/plugin"
-import { Project } from "@opencode-ai/schema/project"
-import { Worktree } from "@opencode-ai/schema/worktree"
-import { AgentAttachment, FileAttachment, Prompt, PromptMention } from "@opencode-ai/schema/prompt"
-import { PromptInput } from "@opencode-ai/schema/prompt-input"
-import { Provider } from "@opencode-ai/schema/provider"
-import { Pty } from "@opencode-ai/schema/pty"
-import { PtyTicket } from "@opencode-ai/schema/pty-ticket"
-import { Question } from "@opencode-ai/schema/question"
-import { Reference } from "@opencode-ai/schema/reference"
-import { AbsolutePath, PositiveInt, RelativePath } from "@opencode-ai/schema/schema"
-import { Session } from "@opencode-ai/schema/session"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
-import { SessionInbox } from "@opencode-ai/schema/session-inbox"
-import { Shell } from "@opencode-ai/schema/shell"
-import { Skill } from "@opencode-ai/schema/skill"
-import { Vcs } from "@opencode-ai/schema/vcs"
-import { WebSearch } from "@opencode-ai/schema/websearch"
-import { Workspace } from "@opencode-ai/schema/workspace"
+import { compile, emitEffectImported, emitEffectShape, emitPromise, write } from "@ocpp/httpapi-codegen"
+import { ClientApi, effectOmitEndpoints, groupNames, promiseOmitEndpoints } from "@ocpp/protocol/client"
+import { Agent } from "@ocpp/schema/agent"
+import { Command } from "@ocpp/schema/command"
+import { Config } from "@ocpp/schema/config"
+import { Credential } from "@ocpp/schema/credential"
+import { Event } from "@ocpp/schema/event"
+import { EventLog } from "@ocpp/schema/event-log"
+import { FileDiff } from "@ocpp/schema/file-diff"
+import { FileSystem } from "@ocpp/schema/filesystem"
+import { Form } from "@ocpp/schema/form"
+import { InstructionEntry } from "@ocpp/schema/instruction-entry"
+import { Integration } from "@ocpp/schema/integration"
+import { Location } from "@ocpp/schema/location"
+import { Mcp } from "@ocpp/schema/mcp"
+import { Model } from "@ocpp/schema/model"
+import { Permission } from "@ocpp/schema/permission"
+import { PermissionSaved } from "@ocpp/schema/permission-saved"
+import { Plugin } from "@ocpp/schema/plugin"
+import { Project } from "@ocpp/schema/project"
+import { Worktree } from "@ocpp/schema/worktree"
+import { AgentAttachment, FileAttachment, Prompt, PromptMention } from "@ocpp/schema/prompt"
+import { PromptInput } from "@ocpp/schema/prompt-input"
+import { Provider } from "@ocpp/schema/provider"
+import { Pty } from "@ocpp/schema/pty"
+import { PtyTicket } from "@ocpp/schema/pty-ticket"
+import { Question } from "@ocpp/schema/question"
+import { Reference } from "@ocpp/schema/reference"
+import { AbsolutePath, PositiveInt, RelativePath } from "@ocpp/schema/schema"
+import { Session } from "@ocpp/schema/session"
+import { SessionMessage } from "@ocpp/schema/session-message"
+import { SessionInbox } from "@ocpp/schema/session-inbox"
+import { Shell } from "@ocpp/schema/shell"
+import { Skill } from "@ocpp/schema/skill"
+import { Vcs } from "@ocpp/schema/vcs"
+import { WebSearch } from "@ocpp/schema/websearch"
+import { Workspace } from "@ocpp/schema/workspace"
 import { Effect, Schema } from "effect"
 import { fileURLToPath } from "url"
 
 const promiseContract = compile(ClientApi, { groupNames, omitEndpoints: promiseOmitEndpoints })
 const effectContract = compile(ClientApi, { groupNames, omitEndpoints: effectOmitEndpoints })
 const effectTypeReferences = [
-  ...namespaceTypes("Agent", "@opencode-ai/schema/agent", Agent),
-  ...namespaceTypes("Command", "@opencode-ai/schema/command", Command),
-  ...namespaceTypes("Config", "@opencode-ai/schema/config", Config),
-  ...namespaceTypes("Credential", "@opencode-ai/schema/credential", Credential),
-  ...namespaceTypes("Event", "@opencode-ai/schema/event", Event),
-  ...namespaceTypes("EventLog", "@opencode-ai/schema/event-log", EventLog),
-  ...namespaceTypes("FileDiff", "@opencode-ai/schema/file-diff", FileDiff),
-  ...namespaceTypes("FileSystem", "@opencode-ai/schema/filesystem", FileSystem),
-  ...namespaceTypes("Form", "@opencode-ai/schema/form", Form),
-  ...namespaceTypes("InstructionEntry", "@opencode-ai/schema/instruction-entry", InstructionEntry),
-  ...namespaceTypes("Integration", "@opencode-ai/schema/integration", Integration),
-  ...namespaceTypes("Location", "@opencode-ai/schema/location", Location),
-  ...namespaceTypes("Mcp", "@opencode-ai/schema/mcp", Mcp),
-  ...namespaceTypes("Model", "@opencode-ai/schema/model", Model),
-  ...namespaceTypes("Permission", "@opencode-ai/schema/permission", Permission),
-  ...namespaceTypes("PermissionSaved", "@opencode-ai/schema/permission-saved", PermissionSaved),
-  ...namespaceTypes("Plugin", "@opencode-ai/schema/plugin", Plugin),
-  ...namespaceTypes("Project", "@opencode-ai/schema/project", Project),
-  ...namespaceTypes("Worktree", "@opencode-ai/schema/worktree", Worktree),
-  ...namespaceTypes("PromptInput", "@opencode-ai/schema/prompt-input", PromptInput),
-  ...namespaceTypes("Provider", "@opencode-ai/schema/provider", Provider),
-  ...namespaceTypes("Pty", "@opencode-ai/schema/pty", Pty),
-  ...namespaceTypes("PtyTicket", "@opencode-ai/schema/pty-ticket", PtyTicket),
-  ...namespaceTypes("Question", "@opencode-ai/schema/question", Question),
-  ...namespaceTypes("Reference", "@opencode-ai/schema/reference", Reference),
-  ...namespaceTypes("Session", "@opencode-ai/schema/session", Session),
-  ...namespaceTypes("SessionMessage", "@opencode-ai/schema/session-message", SessionMessage),
-  ...namespaceTypes("SessionInbox", "@opencode-ai/schema/session-inbox", SessionInbox),
-  ...namespaceTypes("Shell", "@opencode-ai/schema/shell", Shell),
-  ...namespaceTypes("Skill", "@opencode-ai/schema/skill", Skill),
-  ...namespaceTypes("Vcs", "@opencode-ai/schema/vcs", Vcs),
-  ...namespaceTypes("WebSearch", "@opencode-ai/schema/websearch", WebSearch),
-  ...namespaceTypes("Workspace", "@opencode-ai/schema/workspace", Workspace),
-  typeReference("Prompt", "@opencode-ai/schema/prompt", Prompt),
-  typeReference("PromptMention", "@opencode-ai/schema/prompt", PromptMention),
-  typeReference("FileAttachment", "@opencode-ai/schema/prompt", FileAttachment),
-  typeReference("AgentAttachment", "@opencode-ai/schema/prompt", AgentAttachment),
-  typeReference("AbsolutePath", "@opencode-ai/schema/schema", AbsolutePath),
-  typeReference("PositiveInt", "@opencode-ai/schema/schema", PositiveInt),
-  typeReference("RelativePath", "@opencode-ai/schema/schema", RelativePath),
+  ...namespaceTypes("Agent", "@ocpp/schema/agent", Agent),
+  ...namespaceTypes("Command", "@ocpp/schema/command", Command),
+  ...namespaceTypes("Config", "@ocpp/schema/config", Config),
+  ...namespaceTypes("Credential", "@ocpp/schema/credential", Credential),
+  ...namespaceTypes("Event", "@ocpp/schema/event", Event),
+  ...namespaceTypes("EventLog", "@ocpp/schema/event-log", EventLog),
+  ...namespaceTypes("FileDiff", "@ocpp/schema/file-diff", FileDiff),
+  ...namespaceTypes("FileSystem", "@ocpp/schema/filesystem", FileSystem),
+  ...namespaceTypes("Form", "@ocpp/schema/form", Form),
+  ...namespaceTypes("InstructionEntry", "@ocpp/schema/instruction-entry", InstructionEntry),
+  ...namespaceTypes("Integration", "@ocpp/schema/integration", Integration),
+  ...namespaceTypes("Location", "@ocpp/schema/location", Location),
+  ...namespaceTypes("Mcp", "@ocpp/schema/mcp", Mcp),
+  ...namespaceTypes("Model", "@ocpp/schema/model", Model),
+  ...namespaceTypes("Permission", "@ocpp/schema/permission", Permission),
+  ...namespaceTypes("PermissionSaved", "@ocpp/schema/permission-saved", PermissionSaved),
+  ...namespaceTypes("Plugin", "@ocpp/schema/plugin", Plugin),
+  ...namespaceTypes("Project", "@ocpp/schema/project", Project),
+  ...namespaceTypes("Worktree", "@ocpp/schema/worktree", Worktree),
+  ...namespaceTypes("PromptInput", "@ocpp/schema/prompt-input", PromptInput),
+  ...namespaceTypes("Provider", "@ocpp/schema/provider", Provider),
+  ...namespaceTypes("Pty", "@ocpp/schema/pty", Pty),
+  ...namespaceTypes("PtyTicket", "@ocpp/schema/pty-ticket", PtyTicket),
+  ...namespaceTypes("Question", "@ocpp/schema/question", Question),
+  ...namespaceTypes("Reference", "@ocpp/schema/reference", Reference),
+  ...namespaceTypes("Session", "@ocpp/schema/session", Session),
+  ...namespaceTypes("SessionMessage", "@ocpp/schema/session-message", SessionMessage),
+  ...namespaceTypes("SessionInbox", "@ocpp/schema/session-inbox", SessionInbox),
+  ...namespaceTypes("Shell", "@ocpp/schema/shell", Shell),
+  ...namespaceTypes("Skill", "@ocpp/schema/skill", Skill),
+  ...namespaceTypes("Vcs", "@ocpp/schema/vcs", Vcs),
+  ...namespaceTypes("WebSearch", "@ocpp/schema/websearch", WebSearch),
+  ...namespaceTypes("Workspace", "@ocpp/schema/workspace", Workspace),
+  typeReference("Prompt", "@ocpp/schema/prompt", Prompt),
+  typeReference("PromptMention", "@ocpp/schema/prompt", PromptMention),
+  typeReference("FileAttachment", "@ocpp/schema/prompt", FileAttachment),
+  typeReference("AgentAttachment", "@ocpp/schema/prompt", AgentAttachment),
+  typeReference("AbsolutePath", "@ocpp/schema/schema", AbsolutePath),
+  typeReference("PositiveInt", "@ocpp/schema/schema", PositiveInt),
+  typeReference("RelativePath", "@ocpp/schema/schema", RelativePath),
 ]
 
 await Effect.runPromise(
@@ -106,8 +106,8 @@ await Effect.runPromise(
           typeReferences: effectTypeReferences,
           outputTypes: {
             "event.subscribe": {
-              name: "OpenCodeEvent",
-              import: 'import type { OpenCodeEvent } from "@opencode-ai/protocol/groups/event"',
+              name: "OcppEvent",
+              import: 'import type { OcppEvent } from "@ocpp/protocol/groups/event"',
             },
           },
         }),

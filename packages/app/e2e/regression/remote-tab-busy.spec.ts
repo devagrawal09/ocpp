@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test"
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { currentSession } from "../utils/mock-server"
 
 const serverA = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
@@ -11,9 +11,9 @@ test("tab busy indicator reflects the tab server's own session status", async ({
   await mockServers(page)
   await page.addInitScript(
     ({ serverA, serverB, sessionA, sessionB }) => {
-      localStorage.setItem("opencode.global.dat:server", JSON.stringify({ list: [serverB] }))
+      localStorage.setItem("ocpp.global.dat:server", JSON.stringify({ list: [serverB] }))
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([
           { type: "session", server: serverA, sessionId: sessionA },
           { type: "session", server: serverB, sessionId: sessionB },

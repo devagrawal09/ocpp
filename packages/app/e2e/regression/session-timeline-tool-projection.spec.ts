@@ -146,7 +146,7 @@ test("groups only consecutive successful skill tools", async ({ page }) => {
     toolPart("prt_skill_second", "skill", "completed", { id: "effect" }),
     toolPart("prt_skill_third", "skill", "completed", { id: "ui-pr-screenshots" }),
     toolPart("prt_skill_break", "read", "completed", { path: "src/a.ts" }),
-    toolPart("prt_skill_last", "skill", "completed", { id: "opencode" }),
+    toolPart("prt_skill_last", "skill", "completed", { id: "ocpp" }),
   ]
   await setupTimeline(page, { messages: [userMessage(), assistantMessage(parts)] })
 
@@ -156,7 +156,7 @@ test("groups only consecutive successful skill tools", async ({ page }) => {
   const loaded = group.locator('[data-component="tool-loaded-item"]')
   await expect(loaded).toHaveCount(2)
   await expect(loaded.nth(0)).toHaveAttribute("aria-label", "Loaded ocpr, effect, ui-pr-screenshots skills")
-  await expect(loaded.nth(1)).toHaveAttribute("aria-label", "Loaded opencode skill")
+  await expect(loaded.nth(1)).toHaveAttribute("aria-label", "Loaded ocpp skill")
 })
 
 function questionInput() {

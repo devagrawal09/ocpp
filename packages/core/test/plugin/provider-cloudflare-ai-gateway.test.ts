@@ -1,14 +1,14 @@
-import { AISDK } from "@opencode-ai/core/aisdk"
+import { AISDK } from "@ocpp/core/aisdk"
 import { describe, expect, mock } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Model } from "@opencode-ai/core/model"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { CloudflareAIGatewayPlugin } from "@opencode-ai/core/plugin/provider/cloudflare-ai-gateway"
-import { Provider } from "@opencode-ai/core/provider"
+import { Catalog } from "@ocpp/core/catalog"
+import { Model } from "@ocpp/core/model"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { CloudflareAIGatewayPlugin } from "@ocpp/core/plugin/provider/cloudflare-ai-gateway"
+import { Provider } from "@ocpp/core/provider"
 import { withEnv } from "../fixture/env"
-import { Integration } from "@opencode-ai/core/integration"
+import { Integration } from "@ocpp/core/integration"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -142,7 +142,7 @@ describe("CloudflareAIGatewayPlugin", () => {
           package: "ai-gateway-provider",
           options: {
             name: "cloudflare-ai-gateway",
-            metadata: { invoked_by: "test", project: "opencode" },
+            metadata: { invoked_by: "test", project: "ocpp" },
             cacheTtl: 300,
             cacheKey: "cache-key",
             skipCache: true,
@@ -156,13 +156,13 @@ describe("CloudflareAIGatewayPlugin", () => {
           gateway: "env-gateway",
           apiKey: "env-token",
           options: {
-            metadata: { invoked_by: "test", project: "opencode" },
+            metadata: { invoked_by: "test", project: "ocpp" },
             cacheTtl: 300,
             cacheKey: "cache-key",
             skipCache: true,
             collectLog: false,
             headers: {
-              "User-Agent": expect.stringContaining("opencode/"),
+              "User-Agent": expect.stringContaining("ocpp/"),
             },
           },
         })
@@ -187,13 +187,13 @@ describe("CloudflareAIGatewayPlugin", () => {
           options: {
             name: "cloudflare-ai-gateway",
             headers: {
-              "cf-aig-metadata": JSON.stringify({ invoked_by: "header", project: "opencode" }),
+              "cf-aig-metadata": JSON.stringify({ invoked_by: "header", project: "ocpp" }),
             },
           },
         })
 
         expect(aiGatewayCalls[0]?.options).toMatchObject({
-          metadata: { invoked_by: "header", project: "opencode" },
+          metadata: { invoked_by: "header", project: "ocpp" },
         })
       }),
     ),

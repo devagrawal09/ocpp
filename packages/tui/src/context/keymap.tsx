@@ -1,4 +1,4 @@
-import type { KeymapActive, KeymapCommand, KeymapLayer, KeymapPending } from "@opencode-ai/plugin/tui/context"
+import type { KeymapActive, KeymapCommand, KeymapLayer, KeymapPending } from "@ocpp/plugin/tui/context"
 import { InputRenderable, TextareaRenderable, type KeyEvent, type Renderable } from "@opentui/core"
 import { stringifyKeyStroke, type Binding, type CommandContext } from "@opentui/keymap"
 import {
@@ -19,7 +19,7 @@ import { TuiKeybind } from "../config/keybind"
 
 declare module "@opentui/keymap" {
   interface Command {
-    opencode?: KeymapCommand
+    ocpp?: KeymapCommand
     slash?: {
       name: string
       aliases?: string[]
@@ -28,7 +28,7 @@ declare module "@opentui/keymap" {
   }
 }
 
-const MODE = { key: "opencode.mode", base: "base" } as const
+const MODE = { key: "ocpp.mode", base: "base" } as const
 
 type OpenTuiKeymap = Parameters<typeof KeymapProvider>[0]["keymap"]
 type Mode = ReturnType<typeof createMode>
@@ -155,12 +155,12 @@ function Provider(props: ParentProps<{ config?: KeymapConfig }>) {
   )
 }
 
-export type { KeymapCommand, KeymapLayer } from "@opencode-ai/plugin/tui/context"
+export type { KeymapCommand, KeymapLayer } from "@ocpp/plugin/tui/context"
 
 export interface Keymap {
   /** Dispatches a reachable command by ID. */
   dispatch(id: string, input?: string): void
-  /** Controls mutually exclusive OpenCode input modes. */
+  /** Controls mutually exclusive OC++ input modes. */
   readonly mode: {
     /** Returns the active mode. */
     current(): string
@@ -221,7 +221,7 @@ function createLayer(input: () => KeymapLayer) {
         return {
           ...definition,
           name: id,
-          opencode: command,
+          ocpp: command,
           run: (context: CommandContext<Renderable, KeyEvent>) => run(value.input(id), context.event),
           ...(description === undefined ? {} : { desc: description }),
           ...(group === undefined ? {} : { category: group }),
@@ -306,7 +306,7 @@ function useCommands(): Accessor<readonly KeymapCommand[]> {
         visibility: "reachable",
       })
       .map((entry) => {
-        const command = entry.command.opencode ?? {
+        const command = entry.command.ocpp ?? {
           id: entry.command.name,
           title: typeof entry.command.title === "string" ? entry.command.title : undefined,
           description: typeof entry.command.desc === "string" ? entry.command.desc : undefined,

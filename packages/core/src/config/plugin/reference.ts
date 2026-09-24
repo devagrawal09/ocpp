@@ -1,19 +1,19 @@
 export * as ConfigReferencePlugin from "./reference.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Document } from "@opencode-ai/schema/config"
-import { ConfigReference } from "@opencode-ai/schema/config/reference"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Document } from "@ocpp/schema/config"
+import { ConfigReference } from "@ocpp/schema/config/reference"
 import path from "path"
 import { Effect } from "effect"
 import { Config } from "../../config.js"
 import { Reference } from "../../reference.js"
 import { AbsolutePath } from "../../schema.js"
-import { Global } from "@opencode-ai/util/global"
+import { Global } from "@ocpp/util/global"
 import { Location } from "../../location.js"
 import { ConfigEntryObserver } from "./entry-observer.js"
 
 export const Plugin = define({
-  id: "opencode.config.reference",
+  id: "ocpp.config.reference",
   effect: Effect.fn(function* (ctx) {
     const config = yield* Config.Service
     const location = yield* Location.Service

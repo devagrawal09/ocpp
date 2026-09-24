@@ -1,7 +1,7 @@
 import { Show, createMemo, type ComponentProps, type JSX } from "solid-js"
-import { ProgressCircle } from "@opencode-ai/ui/progress-circle"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { ProgressCircle } from "@ocpp/ui/progress-circle"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { Tooltip } from "@ocpp/ui/tooltip"
 import { createMediaQuery } from "@solid-primitives/media"
 
 import { useFile } from "@/workspaces/files/model"

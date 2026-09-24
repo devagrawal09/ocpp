@@ -1,10 +1,10 @@
 import { Component, Show, createMemo, createResource } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
-import { Button } from "@opencode-ai/ui/button"
-import { Select } from "@opencode-ai/ui/select"
-import { Switch } from "@opencode-ai/ui/switch"
-import { TextInput } from "@opencode-ai/ui/text-input"
-import type { ReasoningMode } from "@opencode-ai/session-ui/timeline/projection"
+import { Button } from "@ocpp/ui/button"
+import { Select } from "@ocpp/ui/select"
+import { Switch } from "@ocpp/ui/switch"
+import { TextInput } from "@ocpp/ui/text-input"
+import type { ReasoningMode } from "@ocpp/session-ui/timeline/projection"
 import { useLanguage } from "@/runtime/i18n/language"
 import { usePlatform } from "@/runtime/platform/platform"
 import { useUpdaterAction } from "@/shell/updates/action"
@@ -242,7 +242,7 @@ const AppearanceSection: Component<{ controller: AppearanceSettingsController }>
           description={
             <>
               {language.t("settings.general.row.theme.description")}{" "}
-              <ExternalLink class="settings-link" href="https://opencode.ai/docs/themes/">
+              <ExternalLink class="settings-link" href="https://ocpp.ai/docs/themes/">
                 {language.t("common.learnMore")}
               </ExternalLink>
             </>
@@ -386,7 +386,7 @@ export const SettingsGeneral: Component<{
           </div>
         </SettingsRow>
 
-        <Show when={import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"}>
+        <Show when={import.meta.env.VITE_OCPP_CHANNEL !== "prod"}>
           <SettingsRow
             title={language.t("settings.general.row.showProjectIcon.title")}
             description={language.t("settings.general.row.showProjectIcon.description")}
@@ -400,7 +400,7 @@ export const SettingsGeneral: Component<{
           </SettingsRow>
         </Show>
 
-        <Show when={mobile() && import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"}>
+        <Show when={mobile() && import.meta.env.VITE_OCPP_CHANNEL !== "prod"}>
           <SettingsRow
             title={language.t("settings.general.row.mobileTitlebarBottom.title")}
             description={language.t("settings.general.row.mobileTitlebarBottom.description")}

@@ -18,20 +18,18 @@ describe("acp initialize/auth subprocess", () => {
     expect(initialized.agentCapabilities?.sessionCapabilities?.fork).toEqual({})
     expect(initialized.agentCapabilities?.sessionCapabilities?.list).toEqual({})
     expect(initialized.agentCapabilities?.sessionCapabilities?.resume).toEqual({})
-    expect(initialized.agentInfo?.name).toBe("OpenCode")
+    expect(initialized.agentInfo?.name).toBe("OC++")
   }, 60_000)
 
   test("auth negotiation is explicit and safe", async () => {
     await using fixture = await createAcpFixture()
     const secret = "subprocess-auth-secret"
-    const acp = fixture.spawn({ OPENCODE_AUTH_CONTENT: secret })
+    const acp = fixture.spawn({ OCPP_AUTH_CONTENT: secret })
     const initialized = await initialize(acp)
 
-    expect(initialized.authMethods?.[0]?.id).toBe("opencode-login")
+    expect(initialized.authMethods?.[0]?.id).toBe("ocpp-login")
     expect(initialized.authMethods?.[0]?._meta?.["terminal-auth"]).toBeDefined()
-    expect(expectOk(await acp.request<AuthenticateResponse>("authenticate", { methodId: "opencode-login" }))).toEqual(
-      {},
-    )
+    expect(expectOk(await acp.request<AuthenticateResponse>("authenticate", { methodId: "ocpp-login" }))).toEqual({})
 
     const rejected = await acp.request<AuthenticateResponse>("authenticate", { methodId: "missing-auth-method" })
     expect(rejected.error?.code).toBe(-32602)
@@ -44,7 +42,7 @@ describe("acp initialize/auth subprocess", () => {
       await fixture.spawn().request<InitializeResponse>("initialize", { protocolVersion: 1 }),
     )
 
-    expect(initialized.authMethods?.[0]?.id).toBe("opencode-login")
+    expect(initialized.authMethods?.[0]?.id).toBe("ocpp-login")
     expect(initialized.authMethods?.[0]?._meta?.["terminal-auth"]).toBeUndefined()
   }, 60_000)
 })

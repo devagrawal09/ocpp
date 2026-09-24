@@ -3,15 +3,15 @@ import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
 import { Effect, Stream } from "effect"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { Database } from "@opencode-ai/core/database/database"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectSchema } from "@opencode-ai/core/project/schema"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Hash } from "@opencode-ai/util/hash"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { Database } from "@ocpp/core/database/database"
+import { Project } from "@ocpp/core/project"
+import { ProjectSchema } from "@ocpp/core/project/schema"
+import { ProjectTable } from "@ocpp/core/project/sql"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Hash } from "@ocpp/util/hash"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
@@ -134,7 +134,7 @@ async function initRepo(dir: string, opts?: { commit?: boolean; remote?: string 
   await $`git init`.cwd(dir).quiet()
   await $`git config core.fsmonitor false`.cwd(dir).quiet()
   await $`git config commit.gpgsign false`.cwd(dir).quiet()
-  await $`git config user.email test@opencode.test`.cwd(dir).quiet()
+  await $`git config user.email test@ocpp.test`.cwd(dir).quiet()
   await $`git config user.name Test`.cwd(dir).quiet()
   if (opts?.commit) await $`git commit --allow-empty -m root`.cwd(dir).quiet()
   if (opts?.remote) await $`git remote add origin ${opts.remote}`.cwd(dir).quiet()
@@ -177,11 +177,11 @@ describe("Project.resolve", () => {
         (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
       )
       yield* Effect.promise(async () => {
-        await fs.mkdir(path.join(tmp.path, ".opencode", "plugins"), { recursive: true })
+        await fs.mkdir(path.join(tmp.path, ".ocpp", "plugins"), { recursive: true })
         await fs.mkdir(path.join(tmp.path, ".svn"))
         await fs.mkdir(path.join(tmp.path, "nested", "directory"), { recursive: true })
         await Bun.write(
-          path.join(tmp.path, ".opencode", "plugins", "svn.ts"),
+          path.join(tmp.path, ".ocpp", "plugins", "svn.ts"),
           'export default { id: "svn", vcs: { markers: [".svn"] }, setup() {} }',
         )
       })
@@ -205,7 +205,7 @@ describe("Project.resolve", () => {
       )
       yield* Effect.promise(async () => {
         await fs.mkdir(path.join(tmp.path, ".pijul"))
-        await Bun.write(path.join(tmp.path, "opencode.jsonc"), '{ "plugins": ["./pijul.ts"] }')
+        await Bun.write(path.join(tmp.path, "ocpp.jsonc"), '{ "plugins": ["./pijul.ts"] }')
         await Bun.write(
           path.join(tmp.path, "pijul.ts"),
           'export default { id: "custom.pijul", vcs: { id: "pijul", markers: [".pijul"] }, setup() {} }',
@@ -229,10 +229,10 @@ describe("Project.resolve", () => {
       const nested = path.join(tmp.path, "nested")
       yield* Effect.promise(async () => {
         await initRepo(tmp.path, { commit: true })
-        await fs.mkdir(path.join(tmp.path, ".opencode", "plugins"), { recursive: true })
+        await fs.mkdir(path.join(tmp.path, ".ocpp", "plugins"), { recursive: true })
         await fs.mkdir(path.join(nested, ".svn"), { recursive: true })
         await Bun.write(
-          path.join(tmp.path, ".opencode", "plugins", "svn.ts"),
+          path.join(tmp.path, ".ocpp", "plugins", "svn.ts"),
           'export default { id: "svn", vcs: { markers: [".svn"] }, setup() {} }',
         )
       })
@@ -253,10 +253,10 @@ describe("Project.resolve", () => {
       )
       yield* Effect.promise(async () => {
         await initRepo(tmp.path, { commit: true })
-        await fs.mkdir(path.join(tmp.path, ".opencode", "plugins"), { recursive: true })
+        await fs.mkdir(path.join(tmp.path, ".ocpp", "plugins"), { recursive: true })
         await fs.mkdir(path.join(tmp.path, ".jj"))
         await Bun.write(
-          path.join(tmp.path, ".opencode", "plugins", "jj.ts"),
+          path.join(tmp.path, ".ocpp", "plugins", "jj.ts"),
           'export default { id: "jj", vcs: { markers: [".jj"] }, setup() {} }',
         )
       })
@@ -490,7 +490,7 @@ describe("Project.resolve", () => {
         (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
       )
       yield* Effect.promise(() => initRepo(tmp.path, { commit: true, remote: "git@github.com:owner/repo.git" }))
-      yield* Effect.promise(() => Bun.write(path.join(tmp.path, ".git", "opencode"), "old-id"))
+      yield* Effect.promise(() => Bun.write(path.join(tmp.path, ".git", "ocpp"), "old-id"))
       const project = yield* Project.Service
 
       const result = yield* project.resolve(abs(tmp.path))
@@ -511,7 +511,7 @@ describe("Project.resolve", () => {
 
       yield* project.resolve(abs(tmp.path))
 
-      expect(yield* Effect.promise(() => Bun.file(path.join(tmp.path, ".git", "opencode")).exists())).toBe(false)
+      expect(yield* Effect.promise(() => Bun.file(path.join(tmp.path, ".git", "ocpp")).exists())).toBe(false)
     }),
   )
 
@@ -648,7 +648,7 @@ describe("Project.resolve", () => {
         Effect.promise(() => $`rm -rf ${worktree}`.quiet().nothrow()).pipe(Effect.ignore),
       )
       yield* Effect.promise(() => initRepo(tmp.path, { commit: true, remote: "git@github.com:owner/repo.git" }))
-      yield* Effect.promise(() => Bun.write(path.join(tmp.path, ".git", "opencode"), "old-id"))
+      yield* Effect.promise(() => Bun.write(path.join(tmp.path, ".git", "ocpp"), "old-id"))
       yield* Effect.promise(() => $`git worktree add ${worktree} -b test-${Date.now()}`.cwd(tmp.path).quiet())
       const project = yield* Project.Service
       const db = (yield* Database.Service).db

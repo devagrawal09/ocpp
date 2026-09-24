@@ -6,14 +6,14 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { Effect, Exit, Fiber, Stream } from "effect"
 import { ChildProcess } from "effect/unstable/process"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { AppProcess } from "@opencode-ai/util/process"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { AppProcess } from "@ocpp/util/process"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(LayerNode.compile(AppProcess.node))
 
 const NODE = process.execPath
-const MISSING_CWD = path.join(tmpdir(), `opencode-missing-cwd-${randomUUID()}`)
+const MISSING_CWD = path.join(tmpdir(), `ocpp-missing-cwd-${randomUUID()}`)
 const cmd = (...args: string[]) => ChildProcess.make(NODE, args)
 
 const waitForFile = (file: string) =>
@@ -155,7 +155,7 @@ describe("AppProcess", () => {
       it.live(
         "timeout cleans up the scoped child process",
         Effect.acquireUseRelease(
-          Effect.promise(() => fs.mkdtemp(path.join(tmpdir(), "opencode-process-timeout-"))),
+          Effect.promise(() => fs.mkdtemp(path.join(tmpdir(), "ocpp-process-timeout-"))),
           (directory) => {
             const ready = path.join(directory, "ready")
             const settled = path.join(directory, "settled")
@@ -176,7 +176,7 @@ describe("AppProcess", () => {
       it.live(
         "fiber interruption cleans up the scoped child process after readiness",
         Effect.acquireUseRelease(
-          Effect.promise(() => fs.mkdtemp(path.join(tmpdir(), "opencode-process-interrupt-"))),
+          Effect.promise(() => fs.mkdtemp(path.join(tmpdir(), "ocpp-process-interrupt-"))),
           (directory) => {
             const ready = path.join(directory, "ready")
             const settled = path.join(directory, "settled")

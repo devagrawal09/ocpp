@@ -20,7 +20,7 @@ type Site = {
 const fixture = test.extend<{ site: Site }, { builds: Record<string, Record<string, Buffer>> }>({
   builds: [
     async ({}, use) => {
-      const directory = await mkdtemp(join(tmpdir(), "opencode-precache-"))
+      const directory = await mkdtemp(join(tmpdir(), "ocpp-precache-"))
       const builds: Record<string, Record<string, Buffer>> = {}
       try {
         for (const version of ["old", "new"]) {
@@ -309,7 +309,7 @@ fixture("upgrades the legacy shared precache only after old tabs close", async (
   expect(entry).toBeDefined()
   await page.evaluate(async (entry) => {
     await (
-      await caches.open("opencode-assets")
+      await caches.open("ocpp-assets")
     ).put(entry!, new Response("<html>stale fallback</html>", { headers: { "content-type": "text/html" } }))
   }, entry)
   site.deploy()

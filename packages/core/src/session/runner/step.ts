@@ -8,10 +8,10 @@ import {
   isContextOverflowFailure,
   type ProviderErrorEvent,
   type ToolCall,
-} from "@opencode-ai/ai"
-import type { Agent } from "@opencode-ai/schema/agent"
+} from "@ocpp/ai"
+import type { Agent } from "@ocpp/schema/agent"
 import { Cause, Data, Effect, Exit, Fiber, Option, Stream } from "effect"
-import { SessionError } from "@opencode-ai/schema/session-error"
+import { SessionError } from "@ocpp/schema/session-error"
 import { Bus } from "../../bus.js"
 import { Permission } from "../../permission.js"
 import { Snapshot } from "../../snapshot.js"

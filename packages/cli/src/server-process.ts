@@ -1,14 +1,14 @@
 export * as ServerProcess from "./server-process"
 
 import { NodeServices } from "@effect/platform-node"
-import { Service, type DiscoverOptions } from "@opencode-ai/client/effect/service"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
-import { OPENCODE_CHANNEL, OPENCODE_VERSION } from "./version"
-import { AppProcess } from "@opencode-ai/util/process"
+import { Service, type DiscoverOptions } from "@ocpp/client/effect/service"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
+import { OCPP_CHANNEL, OCPP_VERSION } from "./version"
+import { AppProcess } from "@ocpp/util/process"
 import { randomBytes, randomUUID } from "node:crypto"
 import { Effect, Option, Redacted, Schedule, Schema } from "effect"
-import { PersistentPty } from "@opencode-ai/schema/persistent-pty"
+import { PersistentPty } from "@ocpp/schema/persistent-pty"
 import { HttpServer } from "effect/unstable/http"
 import { Env } from "./env"
 import { ServiceConfig } from "./services/service-config"
@@ -31,10 +31,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     Effect.provide(Updater.layer),
     Effect.provide(
       LayerNode.compile(LayerNode.group([Global.node, AppProcess.node]), [
-        [
-          Global.node,
-          Global.layerWith(process.env.OPENCODE_CONFIG_DIR ? { config: process.env.OPENCODE_CONFIG_DIR } : {}),
-        ],
+        [Global.node, Global.layerWith(process.env.OCPP_CONFIG_DIR ? { config: process.env.OCPP_CONFIG_DIR } : {})],
       ]),
     ),
     Effect.provide(NodeServices.layer),
@@ -42,8 +39,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 })
 
 const processEffect = Effect.fnUntraced(function* (options: Options) {
-  const inherited = process.env.OPENCODE_PTY_HANDOFF
-  delete process.env.OPENCODE_PTY_HANDOFF
+  const inherited = process.env.OCPP_PTY_HANDOFF
+  delete process.env.OCPP_PTY_HANDOFF
   const handoff =
     inherited === undefined
       ? undefined
@@ -64,12 +61,12 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           ? yield* Service.incumbent({ ...serviceOptions, url: serviceURL(hostname, port) })
           : undefined
       if (incumbent !== undefined) return
-      const { start } = yield* Effect.promise(() => import("@opencode-ai/server/process"))
+      const { start } = yield* Effect.promise(() => import("@ocpp/server/process"))
       const environmentPassword = yield* Env.password
       // Keep the lease credential out of the environment inherited by tools.
       if (options.mode === "stdio") {
-        delete process.env.OPENCODE_PASSWORD
-        delete process.env.OPENCODE_SERVER_PASSWORD
+        delete process.env.OCPP_PASSWORD
+        delete process.env.OCPP_SERVER_PASSWORD
       }
       const password =
         options.mode === "service"
@@ -83,47 +80,45 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
       const server = yield* start(
         {
           app: {
-            name: process.env.OPENCODE_CLIENT ?? "cli",
-            version: OPENCODE_VERSION,
-            channel: OPENCODE_CHANNEL,
+            name: process.env.OCPP_CLIENT ?? "cli",
+            version: OCPP_VERSION,
+            channel: OCPP_CHANNEL,
           },
           hostname,
           port,
           cors: options.cors ?? config.cors,
           password,
           pty: { handoff },
-          simulation: truthy(process.env.OPENCODE_SIMULATE),
+          simulation: truthy(process.env.OCPP_SIMULATE),
           database: {
             path:
-              process.env.OPENCODE_DB ??
-              (["latest", "dev", "beta", "next", "prod"].includes(OPENCODE_CHANNEL) ||
-              process.env.OPENCODE_DISABLE_CHANNEL_DB === "1" ||
-              process.env.OPENCODE_DISABLE_CHANNEL_DB === "true"
-                ? "opencode.db"
-                : `opencode-${OPENCODE_CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`),
+              process.env.OCPP_DB ??
+              (["latest", "dev", "beta", "next", "prod"].includes(OCPP_CHANNEL) ||
+              process.env.OCPP_DISABLE_CHANNEL_DB === "1" ||
+              process.env.OCPP_DISABLE_CHANNEL_DB === "true"
+                ? "ocpp.db"
+                : `ocpp-${OCPP_CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`),
           },
           models: {
-            url: process.env.OPENCODE_MODELS_URL,
-            file: process.env.OPENCODE_MODELS_PATH,
-            fetch: !truthy(process.env.OPENCODE_DISABLE_MODELS_FETCH),
+            url: process.env.OCPP_MODELS_URL,
+            file: process.env.OCPP_MODELS_PATH,
+            fetch: !truthy(process.env.OCPP_DISABLE_MODELS_FETCH),
           },
           config: {
-            directory: process.env.OPENCODE_CONFIG_DIR,
-            project: !truthy(
-              process.env.OPENCODE_CONFIG_PROJECT_DISABLE ?? process.env.OPENCODE_DISABLE_PROJECT_CONFIG,
-            ),
-            file: process.env.OPENCODE_CONFIG,
-            content: process.env.OPENCODE_CONFIG_CONTENT,
+            directory: process.env.OCPP_CONFIG_DIR,
+            project: !truthy(process.env.OCPP_CONFIG_PROJECT_DISABLE ?? process.env.OCPP_DISABLE_PROJECT_CONFIG),
+            file: process.env.OCPP_CONFIG,
+            content: process.env.OCPP_CONFIG_CONTENT,
           },
           windows: {
-            gitbash: process.env.OPENCODE_GIT_BASH_PATH,
+            gitbash: process.env.OCPP_GIT_BASH_PATH,
           },
           fs: {
-            filewatcher: !truthy(process.env.OPENCODE_FILEWATCHER_DISABLE ?? process.env.OPENCODE_DISABLE_FILEWATCHER),
+            filewatcher: !truthy(process.env.OCPP_FILEWATCHER_DISABLE ?? process.env.OCPP_DISABLE_FILEWATCHER),
             fff:
-              process.env.OPENCODE_DISABLE_FFF === undefined
+              process.env.OCPP_DISABLE_FFF === undefined
                 ? process.platform !== "win32"
-                : !truthy(process.env.OPENCODE_DISABLE_FFF),
+                : !truthy(process.env.OCPP_DISABLE_FFF),
           },
         },
         serviceOptions === undefined
@@ -152,7 +147,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
                 : Effect.fail(
                     new Error(
                       `Managed service port ${port} on ${hostname} is already in use by another process. ` +
-                        "Configure another port with `opencode service set port <port>` and start the service again.",
+                        "Configure another port with `ocpp service set port <port>` and start the service again.",
                       { cause: error },
                     ),
                   ),

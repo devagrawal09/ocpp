@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { base64Encode } from "@ocpp/util/encode"
+import { mockOcppServer } from "../utils/mock-server"
 
 const directory = "C:/Projects/extensions-demo"
 const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
@@ -15,7 +15,7 @@ const session = {
 test.use({ viewport: { width: 1440, height: 1000 }, colorScheme: "dark" })
 
 test("project Extensions stays inside settings while plugins load", async ({ page }) => {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: session.projectID,
@@ -32,11 +32,11 @@ test("project Extensions stays inside settings while plugins load", async ({ pag
   await page.addInitScript(
     ({ server, sessionID, directory }) => {
       localStorage.setItem(
-        "opencode.global.dat:server",
+        "ocpp.global.dat:server",
         JSON.stringify({ projects: { local: [{ worktree: directory, expanded: true }] } }),
       )
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([{ type: "session", server, sessionId: sessionID }]),
       )
     },

@@ -1,9 +1,9 @@
-import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Badge } from "@opencode-ai/ui/badge"
-import { Button } from "@opencode-ai/ui/button"
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Menu } from "@opencode-ai/ui/menu"
+import { useDialog } from "@ocpp/ui/context/dialog"
+import { Badge } from "@ocpp/ui/badge"
+import { Button } from "@ocpp/ui/button"
+import { Icon } from "@ocpp/ui/icon"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { Menu } from "@ocpp/ui/menu"
 import { useMutation } from "@tanstack/solid-query"
 import fuzzysort from "fuzzysort"
 import { type Accessor, For, Show, createMemo } from "solid-js"
@@ -15,7 +15,7 @@ import { ServerConnection } from "@/runtime/server/registry"
 import { showToast } from "@/shell/notifications/toast"
 import { DialogAddWslServer } from "./dialog"
 import { useWslServers } from "./context"
-import { wslOpencodeAction, wslRuntimeRetryable } from "./model"
+import { wslOcppAction, wslRuntimeRetryable } from "./model"
 
 export function isWslServer(server: ServerConnection.Any) {
   return server.type === "sidecar" && server.variant === "wsl"
@@ -92,9 +92,9 @@ export function WslServerSettings(props: {
       <For each={props.servers()}>
         {(item) => {
           const key = ServerConnection.Key.make(item.config.id)
-          const check = () => wsl.data?.opencodeChecks[item.config.distro]
-          const opencodeAction = () => wslOpencodeAction(check())
-          const busy = () => wsl.data?.job?.kind === "install-opencode" && wsl.data.job.distro === item.config.distro
+          const check = () => wsl.data?.ocppChecks[item.config.distro]
+          const ocppAction = () => wslOcppAction(check())
+          const busy = () => wsl.data?.job?.kind === "install-ocpp" && wsl.data.job.distro === item.config.distro
           return (
             <div class="settings-servers-row">
               <div class="settings-servers-lead">
@@ -115,12 +115,12 @@ export function WslServerSettings(props: {
                 <Show when={props.domain.defaults.available() && props.domain.defaults.key() === key}>
                   <Badge>{language.t("dialog.server.status.default")}</Badge>
                 </Show>
-                <Show when={opencodeAction()}>
+                <Show when={ocppAction()}>
                   {(label) => (
                     <Button
                       size="small"
                       disabled={busy() || request.isPending}
-                      onClick={() => api && request.mutate(() => api.installOpencode(item.config.distro))}
+                      onClick={() => api && request.mutate(() => api.installOcpp(item.config.distro))}
                     >
                       {busy() ? language.t("wsl.server.updating") : language.t(label())}
                     </Button>

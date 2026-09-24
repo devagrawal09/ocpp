@@ -1,14 +1,14 @@
-# OpenCode V2 Effect Plugin API
+# OC++ V2 Effect Plugin API
 
 The Effect plugin API grants plugins two in-process capabilities:
 
-- `hook` installs behavior at an OpenCode extension point.
+- `hook` installs behavior at an OC++ extension point.
 - `reload` reruns every transform hook for a stateful domain.
 
 ## Defining A Plugin
 
 ```ts
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Effect } from "effect"
 
 export default Plugin.define({
@@ -45,7 +45,7 @@ yield *
   })
 ```
 
-OpenCode rebuilds the domain when a transform is registered or disposed. A rebuild starts from fresh domain state and runs every active transform in registration order.
+OC++ rebuilds the domain when a transform is registered or disposed. A rebuild starts from fresh domain state and runs every active transform in registration order.
 
 Available transform hooks are namespaced by domain:
 

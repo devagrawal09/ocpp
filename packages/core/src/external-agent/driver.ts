@@ -1,7 +1,7 @@
 export * as ExternalAgentDriver from "./driver.js"
 
 import { Effect, Schema } from "effect"
-import type { ExternalSession } from "@opencode-ai/schema/external-session"
+import type { ExternalSession } from "@ocpp/schema/external-session"
 import type { ExternalAgentGateway } from "./gateway.js"
 
 export type Event =
@@ -61,7 +61,7 @@ export function replay(history: ReadonlyArray<History>) {
 
 export function check(expected: string | undefined, actual: string) {
   if (expected === undefined || expected !== actual)
-    throw new Error({ message: "Vendor history diverged from the last OpenCode checkpoint. Resume was refused." })
+    throw new Error({ message: "Vendor history diverged from the last OC++ checkpoint. Resume was refused." })
 }
 
 /** Interruption waits for the SDK to relinquish its tools and subprocesses. */

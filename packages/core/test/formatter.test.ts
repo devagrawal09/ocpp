@@ -2,16 +2,16 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber } from "effect"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Bus } from "@opencode-ai/core/bus"
-import { Database } from "@opencode-ai/core/database/database"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Info } from "@opencode-ai/schema/config"
-import { Global } from "@opencode-ai/util/global"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Bus } from "@ocpp/core/bus"
+import { Database } from "@ocpp/core/database/database"
+import { LocationServiceMap } from "@ocpp/core/location-services"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Info } from "@ocpp/schema/config"
+import { Global } from "@ocpp/util/global"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Formatter } from "../src/formatter"
 import { Location } from "../src/location"
 import { tempGlobalLayer } from "./fixture/global"
@@ -39,7 +39,7 @@ function withFormatter<A, E, R>(
 ) {
   return withTemp((directory) =>
     Effect.promise(() =>
-      fs.writeFile(path.join(directory, "opencode.json"), JSON.stringify({ formatter: configured })),
+      fs.writeFile(path.join(directory, "ocpp.json"), JSON.stringify({ formatter: configured })),
     ).pipe(
       Effect.andThen(
         Effect.gen(function* () {

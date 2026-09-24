@@ -9,8 +9,8 @@ import type {
   McpResource,
   McpServer,
   ModelInfo,
-  OpenCodeClient,
-  OpenCodeEvent,
+  OcppClient,
+  OcppEvent,
   PermissionSavedInfo,
   PermissionRequest,
   Project,
@@ -22,8 +22,8 @@ import type {
   ShellInfo,
   SkillInfo,
   VcsInfo,
-} from "@opencode-ai/client"
-import type { ResolvedTheme } from "@opencode-ai/theme/tui"
+} from "@ocpp/client"
+import type { ResolvedTheme } from "@ocpp/theme/tui"
 import type { CliRenderer, KeyEvent, MarkdownCodeBlockRenderer, Renderable } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import type { Store } from "solid-js/store"
@@ -59,11 +59,11 @@ interface LocationCollection<Value> {
 }
 
 export interface Data {
-  readonly on: <Type extends OpenCodeEvent["type"]>(
+  readonly on: <Type extends OcppEvent["type"]>(
     type: Type,
-    handler: (event: Extract<OpenCodeEvent, { type: Type }>) => void,
+    handler: (event: Extract<OcppEvent, { type: Type }>) => void,
   ) => () => void
-  readonly listen: (handler: (event: { details: OpenCodeEvent }) => void) => () => void
+  readonly listen: (handler: (event: { details: OcppEvent }) => void) => () => void
   readonly session: {
     list(): SessionInfo[]
     get(sessionID: string): SessionInfo | undefined
@@ -384,7 +384,7 @@ export interface KeymapCommand {
 }
 
 export interface KeymapLayer {
-  /** Limits the layer to one OpenCode input mode. Use global to opt out; defaults to base. */
+  /** Limits the layer to one OC++ input mode. Use global to opt out; defaults to base. */
   readonly mode?: string
   /** Enables or disables the complete layer. */
   readonly enabled?: boolean | (() => boolean)
@@ -424,7 +424,7 @@ export interface Keymap {
   pending(): readonly KeymapPending[]
   /** Returns bindings reachable from the pending key sequence. Reactive when read in a Solid computation. */
   active(): readonly KeymapActive[]
-  /** Controls mutually exclusive OpenCode input modes. */
+  /** Controls mutually exclusive OC++ input modes. */
   readonly mode: {
     /** Returns the active mode. */
     current(): string
@@ -472,7 +472,7 @@ export interface Context {
   readonly location: LocationRef | undefined
   readonly app: App
   readonly renderer: CliRenderer
-  readonly client: OpenCodeClient
+  readonly client: OcppClient
   readonly data: Data
   readonly attention: Attention
   readonly theme: ResolvedTheme

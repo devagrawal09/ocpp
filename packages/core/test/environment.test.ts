@@ -2,8 +2,8 @@ import fs from "node:fs/promises"
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
-import { CrossSpawnSpawner } from "@opencode-ai/util/cross-spawn-spawner"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { EnvironmentUnavailable } from "../src/environment/unavailable"
 import {
   execDefaults,
@@ -61,7 +61,7 @@ environmentConformance("memory environment", () =>
 environmentConformance("local environment", () =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-    const tmp = yield* Effect.promise(() => tmpdir("opencode-local-environment-"))
+    const tmp = yield* Effect.promise(() => tmpdir("ocpp-local-environment-"))
     return {
       files: makeFiles(makeLocalDriver(spawner)),
       root: tmp.path,
@@ -84,7 +84,7 @@ environmentConformance(
   () =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-      const tmp = yield* Effect.promise(() => tmpdir("opencode-environment-"))
+      const tmp = yield* Effect.promise(() => tmpdir("ocpp-environment-"))
       return {
         files: execDefaults(spawner),
         root: tmp.path,

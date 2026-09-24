@@ -1,14 +1,14 @@
-import { Bus } from "@opencode-ai/core/bus"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Config } from "@opencode-ai/core/config"
-import { Integration } from "@opencode-ai/core/integration"
-import { Model } from "@opencode-ai/core/model"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { make, VLLMPlugin } from "@opencode-ai/core/plugin/provider/vllm"
-import { Provider } from "@opencode-ai/core/provider"
-import { Document, Event, Info } from "@opencode-ai/schema/config"
+import { Bus } from "@ocpp/core/bus"
+import { Catalog } from "@ocpp/core/catalog"
+import { Config } from "@ocpp/core/config"
+import { Integration } from "@ocpp/core/integration"
+import { Model } from "@ocpp/core/model"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { ProviderPlugins } from "@ocpp/core/plugin/provider"
+import { make, VLLMPlugin } from "@ocpp/core/plugin/provider/vllm"
+import { Provider } from "@ocpp/core/provider"
+import { Document, Event, Info } from "@ocpp/schema/config"
 import { describe, expect } from "bun:test"
 import { Duration, Effect, Layer, Schema } from "effect"
 import { testEffect } from "../lib/effect"
@@ -77,8 +77,8 @@ describe("VLLMPlugin", () => {
         Effect.gen(function* () {
           const catalog = yield* Catalog.Service
           const providerID = Provider.ID.make("vllm")
-          expect(VLLMPlugin.id).toBe("opencode.provider.vllm")
-          expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.vllm")
+          expect(VLLMPlugin.id).toBe("ocpp.provider.vllm")
+          expect(ProviderPlugins.map((item) => item.id)).toContain("ocpp.provider.vllm")
           yield* addPlugin(server.url.origin, "5 millis")
           yield* Effect.promise(() => Bun.sleep(20))
           expect(yield* catalog.provider.get(providerID)).toBeUndefined()
@@ -92,7 +92,7 @@ describe("VLLMPlugin", () => {
           expect(yield* catalog.provider.get(providerID)).toEqual({
             id: providerID,
             name: "vLLM",
-            package: "@opencode-ai/ai/providers/openai-compatible",
+            package: "@ocpp/ai/providers/openai-compatible",
             settings: { baseURL: `${server.url.origin}/v1`, provider: "vllm", apiKey: "" },
             activation: "enabled",
           })

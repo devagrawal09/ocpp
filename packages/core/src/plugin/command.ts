@@ -1,6 +1,6 @@
 export * as CommandPlugin from "./command.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { Effect, Stream } from "effect"
 import { Bus } from "../bus.js"
 import { Location } from "../location.js"
@@ -9,7 +9,7 @@ import PROMPT_INITIALIZE from "./command/initialize.txt"
 import PROMPT_REVIEW from "./command/review.txt"
 
 export const Plugin = define({
-  id: "opencode.command",
+  id: "ocpp.command",
   effect: Effect.fn(function* (ctx) {
     const location = yield* Location.Service
     const mcp = yield* Mcp.Service

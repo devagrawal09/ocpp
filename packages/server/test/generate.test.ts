@@ -1,9 +1,9 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { expect } from "bun:test"
-import { Config } from "@opencode-ai/core/config"
-import { Generate } from "@opencode-ai/core/generate"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { Config } from "@ocpp/core/config"
+import { Generate } from "@ocpp/core/generate"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Effect, Layer, Predicate } from "effect"
 import { tmpdir } from "../../core/test/fixture/tmpdir"
 import { it } from "../../core/test/lib/effect"
@@ -32,14 +32,14 @@ const generate = makeLocationNode({
 
 it.live("uses base configuration without depending on process.cwd()", () =>
   Effect.gen(function* () {
-    const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-generate-endpoint-")))
+    const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("ocpp-generate-endpoint-")))
     const global = path.join(tmp.path, "global")
     const project = path.join(tmp.path, "project")
     yield* Effect.promise(() => Promise.all([fs.mkdir(global), fs.mkdir(project)]))
     yield* Effect.promise(() =>
       Promise.all([
-        fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ model: "base/default" })),
-        fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ model: "project/default" })),
+        fs.writeFile(path.join(global, "ocpp.json"), JSON.stringify({ model: "base/default" })),
+        fs.writeFile(path.join(project, "ocpp.json"), JSON.stringify({ model: "project/default" })),
       ]),
     )
     const handler = yield* ServerFetch.make(
@@ -52,11 +52,11 @@ it.live("uses base configuration without depending on process.cwd()", () =>
     )
 
     expect(global).not.toBe(process.cwd())
-    expect(yield* request(handler, new URL("http://opencode.local/api/generate"))).toEqual({
+    expect(yield* request(handler, new URL("http://ocpp.local/api/generate"))).toEqual({
       model: { providerID: "base", model: "default" },
     })
 
-    const legacy = new URL("http://opencode.local/api/generate")
+    const legacy = new URL("http://ocpp.local/api/generate")
     legacy.searchParams.set("location[directory]", project)
     expect(yield* request(handler, legacy)).toEqual({
       model: { providerID: "base", model: "default" },

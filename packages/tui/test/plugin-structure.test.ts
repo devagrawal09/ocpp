@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import type { SlotClaim } from "@opencode-ai/plugin/tui/context"
+import type { SlotClaim } from "@ocpp/plugin/tui/context"
 import { resolveSlots, type Claim, type PlacementKind } from "../src/plugin/structure"
 
 // Type-level canaries, checked by `bun typecheck`: exactly one placement key,

@@ -52,7 +52,7 @@ export namespace FSUtil {
     readonly globMatch: (pattern: string, filepath: string) => boolean
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/FSUtil") {}
+  export class Service extends Context.Service<Service, Interface>()("@ocpp/FSUtil") {}
 
   export const use = serviceUse(Service)
 

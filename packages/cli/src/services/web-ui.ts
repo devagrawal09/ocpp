@@ -1,4 +1,4 @@
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Effect, FileSystem } from "effect"
 import { HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { createHash } from "node:crypto"
@@ -60,7 +60,7 @@ function csp(hash = "") {
 
 function cspForHtml(body: string) {
   const match = body.match(
-    /<script\b(?![^>]*\bsrc\s*=)[^>]*\bid=(["'])oc-theme-preload-script\1[^>]*>([\s\S]*?)<\/script>/i,
+    /<script\b(?![^>]*\bsrc\s*=)[^>]*\bid=(["'])ocpp-theme-preload-script\1[^>]*>([\s\S]*?)<\/script>/i,
   )
   return csp(match ? createHash("sha256").update(match[2]).digest("base64") : "")
 }

@@ -1,25 +1,25 @@
-import { Money } from "@opencode-ai/schema/money"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Session } from "@opencode-ai/schema/session"
-import { OpenAIResponses } from "@opencode-ai/ai/protocols/openai-responses"
+import { Money } from "@ocpp/schema/money"
+import { Agent } from "@ocpp/schema/agent"
+import { Session } from "@ocpp/schema/session"
+import { OpenAIResponses } from "@ocpp/ai/protocols/openai-responses"
 import { describe, expect } from "bun:test"
 import { ConfigProvider, DateTime, Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Credential } from "@opencode-ai/core/credential"
-import { Integration } from "@opencode-ai/core/integration"
-import { Location } from "@opencode-ai/core/location"
-import { Model } from "@opencode-ai/core/model"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { GithubCopilotPlugin } from "@opencode-ai/core/plugin/provider/github-copilot"
-import { OpenAIPlugin } from "@opencode-ai/core/plugin/provider/openai"
-import { Project } from "@opencode-ai/core/project"
-import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionModelRequest } from "@opencode-ai/core/session/model-request"
-import { SessionModelTransport } from "@opencode-ai/core/session/model-transport"
-import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
+import { Catalog } from "@ocpp/core/catalog"
+import { Credential } from "@ocpp/core/credential"
+import { Integration } from "@ocpp/core/integration"
+import { Location } from "@ocpp/core/location"
+import { Model } from "@ocpp/core/model"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { GithubCopilotPlugin } from "@ocpp/core/plugin/provider/github-copilot"
+import { OpenAIPlugin } from "@ocpp/core/plugin/provider/openai"
+import { Project } from "@ocpp/core/project"
+import { Provider } from "@ocpp/core/provider"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { SessionModelRequest } from "@ocpp/core/session/model-request"
+import { SessionModelTransport } from "@ocpp/core/session/model-transport"
+import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -135,16 +135,16 @@ describe("OpenAIPlugin", () => {
       const provider = required(yield* catalog.provider.get(Provider.ID.openai))
       expect(provider.package).toBe(Provider.aisdk("@ai-sdk/openai"))
       expect(provider.settings).toMatchObject({ baseURL: "https://chatgpt.com/backend-api/codex" })
-      expect(provider.headers).toMatchObject({ originator: "opencode", "chatgpt-account-id": "acct_123" })
+      expect(provider.headers).toMatchObject({ originator: "ocpp", "chatgpt-account-id": "acct_123" })
       expect(direct.baseURL).toBe("https://chatgpt.com/backend-api/codex")
-      expect(direct.headers).toMatchObject({ originator: "opencode", "session-id": "ses_test" })
+      expect(direct.headers).toMatchObject({ originator: "ocpp", "session-id": "ses_test" })
       expect(direct.hasHttpHooks).toBe(false)
       expect(custom.headers).not.toHaveProperty("originator")
       expect(proxy.baseURL).toBe("https://proxy.example/v1?region=us")
-      expect(proxy.headers).toMatchObject({ originator: "opencode", "session-id": "ses_test" })
+      expect(proxy.headers).toMatchObject({ originator: "ocpp", "session-id": "ses_test" })
       const eligible = required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.5")))
       expect(eligible.package).toBe(Provider.aisdk("@ai-sdk/openai"))
-      expect(eligible.headers).toMatchObject({ originator: "opencode", "chatgpt-account-id": "acct_123" })
+      expect(eligible.headers).toMatchObject({ originator: "ocpp", "chatgpt-account-id": "acct_123" })
       expect(eligible.cost).toEqual([])
       expect(eligible.limit).toEqual({ context: 400_000, input: 272_000, output: 128_000 })
       expect(eligible.enabled).toBe(true)
@@ -250,14 +250,14 @@ describe("OpenAIPlugin", () => {
       const prepared = yield* program.pipe(
         Effect.provide(
           ConfigProvider.layer(
-            ConfigProvider.fromEnv({ env: { OPENCODE_EXPERIMENTAL_AZURE_RESPONSES_WEBSOCKET: "true" } }),
+            ConfigProvider.fromEnv({ env: { OCPP_EXPERIMENTAL_AZURE_RESPONSES_WEBSOCKET: "true" } }),
           ),
         ),
       )
       const otherProvider = yield* program.pipe(
         Effect.provide(
           ConfigProvider.layer(
-            ConfigProvider.fromEnv({ env: { OPENCODE_EXPERIMENTAL_OPENAI_RESPONSES_WEBSOCKET: "true" } }),
+            ConfigProvider.fromEnv({ env: { OCPP_EXPERIMENTAL_OPENAI_RESPONSES_WEBSOCKET: "true" } }),
           ),
         ),
       )

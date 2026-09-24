@@ -1,7 +1,7 @@
 import { homedir } from "node:os"
 import { isAbsolute, join } from "node:path"
 import { Config, Effect, FileSystem, Schema } from "effect"
-import { PositiveInt } from "@opencode-ai/core/schema"
+import { PositiveInt } from "@ocpp/core/schema"
 
 const InstanceName = Schema.String.check(
   Schema.makeFilter((value) =>
@@ -67,7 +67,7 @@ const configError = (cause: unknown) =>
   })
 
 export const resolve = Effect.fn("DriveManifest.resolve")(function* () {
-  const name = yield* Config.schema(InstanceName, "OPENCODE_DRIVE").pipe(Effect.mapError(configError))
+  const name = yield* Config.schema(InstanceName, "OCPP_DRIVE").pipe(Effect.mapError(configError))
   if (name === "1") return defaults
 
   const state = yield* Config.string("XDG_STATE_HOME").pipe(
@@ -75,7 +75,7 @@ export const resolve = Effect.fn("DriveManifest.resolve")(function* () {
     Effect.mapError(configError),
   )
   const directory = yield* Config.string("DRIVE_REGISTRY_DIR").pipe(
-    Config.withDefault(join(state, "opencode-drive", "instances")),
+    Config.withDefault(join(state, "ocpp-drive", "instances")),
     Effect.mapError(configError),
   )
   const file = join(directory, `${name}.json`)

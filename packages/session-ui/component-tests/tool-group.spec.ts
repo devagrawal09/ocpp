@@ -24,7 +24,7 @@ for (const { width, direction } of [
       /Called `search`.*package metadata/,
       /Assignedreader= tools.read/,
       /Read.*package.json/,
-      /LoggedLoaded package opencode/,
+      /LoggedLoaded package ocpp/,
       /Final result\{ total: 1482 \}/,
     ])
     await expect(root.locator('[data-timeline-part-id="codemode_execute"]')).toHaveCount(0)
@@ -79,7 +79,7 @@ for (const reasoningDefaultOpen of [false, true]) {
       await expect(group.locator('[data-slot="context-tool-group-item"]')).toHaveText([
         /Read.*group\.ts/,
         /Thought/,
-        /Loaded.*opencode.*frontend-design.*skills/,
+        /Loaded.*ocpp.*frontend-design.*skills/,
         /Thought/,
         /Loaded.*rtl-aware-development.*skill/,
       ])
@@ -103,7 +103,7 @@ for (const reasoningDefaultOpen of [false, true]) {
       await expect(group.locator('[data-slot="context-tool-group-item"]')).toHaveText([
         /Read.*group\.ts/,
         /Thought/,
-        /Loaded.*opencode.*frontend-design.*skills/,
+        /Loaded.*ocpp.*frontend-design.*skills/,
         /Thought/,
         /Loaded.*rtl-aware-development.*skill/,
         /Read.*group\.test\.ts/,

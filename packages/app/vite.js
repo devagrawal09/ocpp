@@ -3,7 +3,7 @@ import solidPlugin from "vite-plugin-solid"
 import tailwindcss from "@tailwindcss/vite"
 import { fileURLToPath } from "url"
 
-const theme = fileURLToPath(new URL("./public/oc-theme-preload.js", import.meta.url))
+const theme = fileURLToPath(new URL("./public/ocpp-theme-preload.js", import.meta.url))
 const themeScript = readFileSync(theme, "utf8")
 const tailwind = tailwindcss()
 const tailwindGenerate = tailwind.find((plugin) => plugin.name === "@tailwindcss/vite:generate:serve")
@@ -18,9 +18,9 @@ if (tailwindGenerate && typeof tailwindHotUpdate === "function") {
 }
 
 export const channel = (() => {
-  const raw = process.env.OPENCODE_CHANNEL
+  const raw = process.env.OCPP_CHANNEL
   if (raw === "local" || raw === "dev" || raw === "beta" || raw === "prod") return raw
-  if (process.env.OPENCODE_CHANNEL === "latest") return "prod"
+  if (process.env.OCPP_CHANNEL === "latest") return "prod"
   return "dev"
 })()
 
@@ -29,7 +29,7 @@ export const channel = (() => {
  */
 export default [
   {
-    name: "opencode-desktop:config",
+    name: "ocpp-desktop:config",
     config() {
       return {
         resolve: {
@@ -38,20 +38,20 @@ export default [
           },
         },
         define: {
-          "import.meta.env.VITE_OPENCODE_CHANNEL": JSON.stringify(channel),
+          "import.meta.env.VITE_OCPP_CHANNEL": JSON.stringify(channel),
         },
         worker: {
           format: "es",
         },
         optimizeDeps: {
           exclude: ["@shikijs/stream", "marked", "marked-shiki", "remend"],
-          include: ["@opencode-ai/session-ui > mermaid", "@opencode-ai/session-ui > mermaid > katex"],
+          include: ["@ocpp/session-ui > mermaid", "@ocpp/session-ui > mermaid > katex"],
         },
       }
     },
   },
   {
-    name: "opencode-desktop:theme-preload",
+    name: "ocpp-desktop:theme-preload",
     transformIndexHtml: {
       order: "pre",
       handler: inlineThemePreload,
@@ -63,7 +63,7 @@ export default [
 
 export function inlineThemePreload(html) {
   return html.replace(
-    /<script id="oc-theme-preload-script" src="(?:\.\/|\/)oc-theme-preload\.js"><\/script>/,
-    `<script id="oc-theme-preload-script">${themeScript}</script>`,
+    /<script id="ocpp-theme-preload-script" src="(?:\.\/|\/)ocpp-theme-preload\.js"><\/script>/,
+    `<script id="ocpp-theme-preload-script">${themeScript}</script>`,
   )
 }

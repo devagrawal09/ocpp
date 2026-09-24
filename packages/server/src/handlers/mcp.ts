@@ -1,5 +1,5 @@
-import { Mcp } from "@opencode-ai/core/mcp/index"
-import { McpServerNotFoundError } from "@opencode-ai/protocol/errors"
+import { Mcp } from "@ocpp/core/mcp/index"
+import { McpServerNotFoundError } from "@ocpp/protocol/errors"
 import { Effect } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"

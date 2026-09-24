@@ -4,21 +4,21 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { and, asc, desc, eq, isNotNull, isNull, ne, or } from "drizzle-orm"
 import path from "path"
 import { AbsolutePath } from "./schema.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Git } from "./git.js"
-import { makeGlobalNode, makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import { ProjectSchema } from "./project/schema.js"
 import { Slug } from "./util/slug.js"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { Location } from "./location.js"
-import { Worktree } from "@opencode-ai/schema/worktree"
+import { Worktree } from "@ocpp/schema/worktree"
 import { WorktreeTable } from "./worktree/sql.js"
 import { canonical, DirectoryUnavailableError } from "./worktree/directory.js"
 import { WorktreeGit } from "./worktree/git.js"
 import type { EffectDrizzleSqlite } from "./database/drizzle.js"
 import { ProjectTable } from "./project/sql.js"
-import { AppProcess } from "@opencode-ai/util/process"
+import { AppProcess } from "@ocpp/util/process"
 import { ChildProcess } from "effect/unstable/process"
 
 export { DirectoryUnavailableError } from "./worktree/directory.js"
@@ -125,7 +125,7 @@ export interface Interface {
   readonly refresh: (input: RefreshInput) => Effect.Effect<RefreshResult, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Worktree") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/v2/Worktree") {}
 
 export const refreshAfterBoot = Effect.gen(function* () {
   const location = yield* Location.Service
@@ -280,8 +280,8 @@ const layer = Layer.effect(
             ChildProcess.make(windows ? command : "bash", windows ? [] : ["-lc", command], {
               cwd: result.directory,
               env: {
-                OPENCODE_WORKTREE_BASE: sourceDirectory,
-                OPENCODE_WORKTREE_PATH: result.directory,
+                OCPP_WORKTREE_BASE: sourceDirectory,
+                OCPP_WORKTREE_PATH: result.directory,
               },
               extendEnv: true,
               stdin: "ignore",

@@ -11,4 +11,4 @@ export interface Interface {
   readonly flush: Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/PluginSupervisor") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/PluginSupervisor") {}

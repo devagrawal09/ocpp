@@ -245,7 +245,7 @@ export function nativePickerPath(path: string) {
   if (/^[A-Za-z]:\//.test(value) || value.startsWith("//")) return value.replaceAll("/", "\\")
   return value
 }
-import { getFilename } from "@opencode-ai/util/path"
+import { getFilename } from "@ocpp/util/path"
 import fuzzysort from "fuzzysort"
 import { ServerSDK } from "@/runtime/server/client"
 

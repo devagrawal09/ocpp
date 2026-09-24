@@ -1,9 +1,9 @@
 export * as InstructionBuiltIns from "./builtins.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, DateTime, Effect, Layer, Schema } from "effect"
-import type { Session } from "@opencode-ai/schema/session"
-import { Global } from "@opencode-ai/util/global"
+import type { Session } from "@ocpp/schema/session"
+import { Global } from "@ocpp/util/global"
 import { Location } from "../location.js"
 import { Instructions } from "./index.js"
 
@@ -11,7 +11,7 @@ export interface Interface {
   readonly load: (sessionID: Session.ID) => Effect.Effect<Instructions.List>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/InstructionBuiltIns") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/InstructionBuiltIns") {}
 
 const layer = Layer.effect(
   Service,

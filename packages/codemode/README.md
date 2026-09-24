@@ -1,4 +1,4 @@
-# @opencode-ai/codemode
+# @ocpp/codemode
 
 This is our take on code mode: a lightweight, pure interpreter for a compiled JavaScript-shaped
 language built around direct, blocking tool calls and a durable notebook. See the
@@ -36,7 +36,7 @@ rejected forms are listed in the [complete guide](./interpreter-support.md).
 ## Quick Start
 
 ```ts
-import { CodeMode, Tool } from "@opencode-ai/codemode"
+import { CodeMode, Tool } from "@ocpp/codemode"
 import { Effect, Schema } from "effect"
 
 const lookupOrder = Tool.make({
@@ -117,7 +117,7 @@ interpreter defect. `compile` throws `CompileError` for empty, unparsable, or un
 
 ```ts
 const api = OpenAPI.fromSpec({ spec, auth: { resolve } })
-const runtime = CodeMode.make({ tools: { opencode: api.tools } })
+const runtime = CodeMode.make({ tools: { ocpp: api.tools } })
 ```
 
 The synchronous result is `{ tools, skipped }`. Operations with unsupported parameter encodings,

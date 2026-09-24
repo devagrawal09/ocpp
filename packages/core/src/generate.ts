@@ -1,8 +1,8 @@
 export * as Generate from "./generate.js"
 
-import { LLM, LLMClient, AIError } from "@opencode-ai/ai"
+import { LLM, LLMClient, AIError } from "@ocpp/ai"
 import { Context, Effect, Layer, Schema } from "effect"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { llmClient } from "./effect/app-node-platform.js"
 import { ModelResolver } from "./model-resolver.js"
 import { Model } from "./model.js"
@@ -27,7 +27,7 @@ export interface Interface {
   readonly text: (input: TextInput) => Effect.Effect<string, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Generate") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Generate") {}
 
 export const layer = Layer.effect(
   Service,

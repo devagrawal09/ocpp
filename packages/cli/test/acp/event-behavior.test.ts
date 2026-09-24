@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { SessionMessageInfo } from "@ocpp/client/promise"
 import { resolve } from "node:path"
 import { replayMessages, streamTurn, type ChildSessionUpdate, type TurnControl } from "../../src/acp/event"
 import { createSseFixture, durableEvent, ephemeralEvent, withTimeout } from "./sse-fixture"
@@ -256,7 +256,7 @@ describe("acp event behavior", () => {
       expect(updates[0]?.update).toMatchObject({
         title: "Explore code: read",
         _meta: {
-          "opencode/child-session": {
+          "ocpp/child-session": {
             id: "ses_child",
             parentID: "ses_parent",
             depth: 1,

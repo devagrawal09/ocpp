@@ -1295,7 +1295,7 @@
         "unrecoveredRate": 0.2
       }
     },
-    "schema": "opencode.codemode-diagnostics/4",
+    "schema": "ocpp.codemode-diagnostics/4",
     "sessions": 4,
     "taxonomy": {
       "failureRules": [

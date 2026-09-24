@@ -1,24 +1,24 @@
-# @opencode-ai/sdk
+# @ocpp/sdk
 
-In-process OpenCode host for Promise and Effect applications. The SDK executes Server's assembled HTTP router in memory, opening no listener and adding no network hop.
+In-process OC++ host for Promise and Effect applications. The SDK executes Server's assembled HTTP router in memory, opening no listener and adding no network hop.
 
 ```ts
-import { OpenCode } from "@opencode-ai/sdk"
+import { OC++ } from "@ocpp/sdk"
 
-await using opencode = await OpenCode.create()
-const session = await opencode.sessions.create({
+await using ocpp = await OC++.create()
+const session = await ocpp.sessions.create({
   location: { directory: "/workspace" },
 })
 ```
 
-Pass imported Promise plugins in `plugins`, or register one later with `await opencode.plugin(plugin)`.
+Pass imported Promise plugins in `plugins`, or register one later with `await ocpp.plugin(plugin)`.
 
-The Promise API uses the same values, errors, request options, and `AsyncIterable` streams as `@opencode-ai/client`.
+The Promise API uses the same values, errors, request options, and `AsyncIterable` streams as `@ocpp/client`.
 
 Embedded hosts are silent by default. Set `log` to receive structured log entries:
 
 ```ts
-await using opencode = await OpenCode.create({
+await using ocpp = await OC++.create({
   log: {
     level: "warn",
     emit: (entry) => console.error(entry.message, entry.attributes, entry.cause),
@@ -33,15 +33,15 @@ await using opencode = await OpenCode.create({
 Use the Workerd entrypoint inside a Cloudflare Durable Object. Hold one host for the lifetime of the object instance rather than creating one per request.
 
 ```ts
-import { OpenCodeWorkerd } from "@opencode-ai/sdk/workerd"
+import { OcppWorkerd } from "@ocpp/sdk/workerd"
 import myPlugin from "./my-plugin"
 
-export class OpenCodeDO {
-  private readonly opencode: Promise<OpenCodeWorkerd.Interface>
+export class OcppDO {
+  private readonly ocpp: Promise<OcppWorkerd.Interface>
 
   constructor(state: DurableObjectState) {
-    this.opencode = state.blockConcurrencyWhile(() =>
-      OpenCodeWorkerd.create({
+    this.ocpp = state.blockConcurrencyWhile(() =>
+      OcppWorkerd.create({
         storage: state.storage,
         config: { default_agent: "build" },
         plugins: [myPlugin],
@@ -50,8 +50,8 @@ export class OpenCodeDO {
   }
 
   async fetch() {
-    const opencode = await this.opencode
-    return Response.json(await opencode.health.get())
+    const ocpp = await this.ocpp
+    return Response.json(await ocpp.health.get())
   }
 }
 ```
@@ -60,13 +60,13 @@ export class OpenCodeDO {
 
 ## Effect
 
-The Effect-native API remains available from `@opencode-ai/sdk/effect`:
+The Effect-native API remains available from `@ocpp/sdk/effect`:
 
 ```ts
-import { OpenCode } from "@opencode-ai/sdk/effect"
+import { OC++ } from "@ocpp/sdk/effect"
 
-const opencode = yield * OpenCode.create()
-const session = yield * opencode.sessions.get({ sessionID })
+const ocpp = yield * OC++.create()
+const session = yield * ocpp.sessions.get({ sessionID })
 ```
 
-The Effect Workerd entrypoint is `@opencode-ai/sdk/workerd/effect`.
+The Effect Workerd entrypoint is `@ocpp/sdk/workerd/effect`.

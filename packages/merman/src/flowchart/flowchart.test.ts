@@ -892,7 +892,7 @@ describe("FlowchartDiagram", () => {
       `flowchart LR
   C[ReceiveInput] --> P[Persist ActivityRequested]
   P --> S[Self RunPendingActivity]
-  S --> O[OpenCode async task]
+  S --> O[OC++ async task]
   O --> M[Self OutputObserved]
   M --> E[Persist OutputObserved]`,
       { layoutMaxWidth: 120 },
@@ -920,9 +920,9 @@ describe("FlowchartDiagram", () => {
                     │
                     │
                     ▼
-         ╭─────────────────────╮
-         │ OpenCode async task │
-         ╰──────────┬──────────╯
+           ╭─────────────────╮
+           │ OC++ async task │
+           ╰────────┬────────╯
                     │
                     │
                     │
@@ -945,7 +945,7 @@ describe("FlowchartDiagram", () => {
       `flowchart LR
   C[Commands] --> A[AgentThread activation]
   A -->|persist facts| J[(AgentThread journal)]
-  A -->|resume / steer / abort| O[OpenCode session]
+  A -->|resume / steer / abort| O[OC++ session]
   O -->|observed output| A
   J -->|visible output requested| R[Reactor]
   R --> D[Discord]`,
@@ -953,45 +953,45 @@ describe("FlowchartDiagram", () => {
     )
 
     expectDiagram(output).toEqualDiagram(`
-                                      ╭──────────╮
-                                      │ Commands │
-                                      ╰─────┬────╯
-                                            │
-                                            │
-                                            │
-                                            ▼
-                               ╭────────────────────────╮
-                               │ AgentThread activation │◀───── observed output ─────╮
-                               ╰────────────┬───────────╯                            │
-                                            │                                        │
-                 ╭───── persist facts ──────┴── resume / steer / abort ──╮           │
-                 │                                                       │           │
-                 ▼                                                       │           │
-      ╭─────────────────────╮                                            ▼           │
-      ├─────────────────────┤                                  ╭──────────────────╮  │
-      │ AgentThread journal │                                  │ OpenCode session ├──╯
-      ├─────────────────────┤                                  ╰──────────────────╯
+                                    ╭──────────╮
+                                    │ Commands │
+                                    ╰─────┬────╯
+                                          │
+                                          │
+                                          │
+                                          ▼
+                             ╭────────────────────────╮
+                             │ AgentThread activation │◀──── observed output ────╮
+                             ╰────────────┬───────────╯                          │
+                                          │                                      │
+                 ╭──── persist facts ─────┴── resume / steer / abort ──╮         │
+                 │                                                     │         │
+                 ▼                                                     │         │
+      ╭─────────────────────╮                                          ▼         │
+      ├─────────────────────┤                                  ╭──────────────╮  │
+      │ AgentThread journal │                                  │ OC++ session ├──╯
+      ├─────────────────────┤                                  ╰──────────────╯
       ╰──────────┬──────────╯
                  │
-                 ╰ visible output requested ╮
-                                            │
-                                            ▼
-                                       ╭─────────╮
-                                       │ Reactor │
-                                       ╰────┬────╯
-                                            │
-                                            │
-                                            │
-                                            ▼
-                                       ╭─────────╮
-                                       │ Discord │
-                                       ╰─────────╯
+                 ╰ visible output requested
+                                          │
+                                          ▼
+                                     ╭─────────╮
+                                     │ Reactor │
+                                     ╰────┬────╯
+                                          │
+                                          │
+                                          │
+                                          ▼
+                                     ╭─────────╮
+                                     │ Discord │
+                                     ╰─────────╯
     `)
   })
 
   test("wraps the real deployment chart responsively without losing content or geometry", () => {
     const expected = new Map([
-      [60, { width: 82, height: 108 }],
+      [60, { width: 82, height: 101 }],
       [80, { width: 97, height: 85 }],
       [120, { width: 143, height: 77 }],
       [160, { width: 163, height: 69 }],

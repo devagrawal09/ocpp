@@ -2,21 +2,21 @@ export * as Session from "./session.js"
 export * from "./session/schema.js"
 
 import { Cause, Effect, Layer, Schema, Context, RcMap, Stream, Scope } from "effect"
-import { ListAnchor } from "@opencode-ai/schema/session"
+import { ListAnchor } from "@ocpp/schema/session"
 import { and, asc, desc, eq, gt, isNull, like, lt, or, type SQL } from "drizzle-orm"
 import { Project } from "./project.js"
-import { Workspace } from "@opencode-ai/schema/workspace"
-import { Model } from "@opencode-ai/schema/model"
+import { Workspace } from "@ocpp/schema/workspace"
+import { Model } from "@ocpp/schema/model"
 import { Location } from "./location.js"
 import { SessionMessage } from "./session/message.js"
-import { PromptInput } from "@opencode-ai/schema/prompt-input"
+import { PromptInput } from "@ocpp/schema/prompt-input"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { SessionProjector } from "./session/projector.js"
 import { SessionMessageTable, SessionTable } from "./session/sql.js"
 import { SessionSchema } from "./session/schema.js"
 import { AbsolutePath, PositiveInt, RelativePath } from "./schema.js"
-import { Agent } from "@opencode-ai/schema/agent"
+import { Agent } from "@ocpp/schema/agent"
 import { App } from "./app.js"
 import { Slug } from "./util/slug.js"
 import path from "path"
@@ -41,7 +41,7 @@ import {
   SkillNotFoundError,
   SyntheticConflictError,
 } from "./session/error.js"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { LocationServiceMap } from "./location-service-map.js"
 import { SessionEvent } from "./session/event.js"
 import { SessionInbox } from "./session/inbox.js"
@@ -49,14 +49,14 @@ import { InstructionState } from "./session/instruction-state.js"
 import { SessionGenerate } from "./session/generate.js"
 import { Snapshot } from "./snapshot.js"
 import { Session } from "./session/session.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { PluginSupervisor } from "./plugin/supervisor-service.js"
-import type { EventLog } from "@opencode-ai/schema/event-log"
-import { Event } from "@opencode-ai/schema/event"
+import type { EventLog } from "@ocpp/schema/event-log"
+import { Event } from "@ocpp/schema/event"
 import { Skill } from "./skill.js"
 import { Job } from "./job.js"
 import { Command } from "./command.js"
-import { Global } from "@opencode-ai/util/global"
+import { Global } from "@ocpp/util/global"
 import { SessionEnvironment } from "./session/environment.js"
 import { SessionHistory } from "./session/history.js"
 import { InstructionEntry } from "./session/instruction-entry.js"
@@ -261,7 +261,7 @@ export interface Interface {
   }
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Session") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Session") {}
 
 const layer = Layer.effect(
   Service,

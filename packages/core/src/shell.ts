@@ -4,17 +4,17 @@ import path from "path"
 import { Context, Deferred, Duration, Effect, Fiber, Latch, Layer, Schema, Schedule, Stream } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { produce } from "immer"
-import { Shell } from "@opencode-ai/schema/shell"
-import { AppProcess } from "@opencode-ai/util/process"
-import { makeGlobalNode, makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Shell } from "@ocpp/schema/shell"
+import { AppProcess } from "@ocpp/util/process"
+import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Bus } from "./bus.js"
 import { Environment } from "./environment/index.js"
 import { FileRetention } from "./file-retention.js"
 import { Location } from "./location.js"
-import { Global } from "@opencode-ai/util/global"
+import { Global } from "@ocpp/util/global"
 import { ShellSelect } from "./shell/select.js"
-import type { ShellCreateBefore } from "@opencode-ai/plugin/effect/shell"
+import type { ShellCreateBefore } from "@ocpp/plugin/effect/shell"
 import { PluginHooks } from "./plugin/hooks.js"
 import { SessionEnvironment } from "./session/environment.js"
 import { SessionSchema } from "./session/schema.js"
@@ -76,7 +76,7 @@ export interface Interface {
   readonly remove: (id: Shell.ID) => Effect.Effect<void, NotFoundError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Shell") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Shell") {}
 
 export const cleanup = Effect.fn("Shell.cleanup")(function* () {
   const fs = yield* FSUtil.Service
@@ -262,7 +262,7 @@ const layer = () =>
           env: {
             ...(sessionEnvironment ?? process.env),
             TERM: "xterm-256color",
-            OPENCODE_TERMINAL: "1",
+            OCPP_TERMINAL: "1",
           },
         }
         yield* hooks.trigger("shell", "create.before", invocation)

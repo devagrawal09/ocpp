@@ -2,10 +2,10 @@ import { createEffect, createMemo, createResource, Match, Show, Switch, untrack 
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
 import { useLocation, useNavigate } from "@solidjs/router"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Icon } from "@opencode-ai/ui/icon"
-import { Keybind } from "@opencode-ai/ui/keybind"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { Icon } from "@ocpp/ui/icon"
+import { Keybind } from "@ocpp/ui/keybind"
+import { Tooltip } from "@ocpp/ui/tooltip"
 
 import { LayoutRoute, useLayout } from "@/shell/state/layout"
 import { usePlatform } from "@/runtime/platform/platform"
@@ -510,7 +510,7 @@ function TitlebarUpdateIconButton(props: { state: TitlebarUpdatePillState }) {
 }
 
 function ChannelIndicator(props: { debugTools?: { visible: boolean; toggle: () => void } }) {
-  const channel = import.meta.env.VITE_OPENCODE_CHANNEL
+  const channel = import.meta.env.VITE_OCPP_CHANNEL
   if (channel === "dev" && props.debugTools) {
     return (
       <button

@@ -1,6 +1,6 @@
 export * as PtyHandoff from "./pty-handoff.js"
 
-import type { PersistentPty } from "@opencode-ai/schema/persistent-pty"
+import type { PersistentPty } from "@ocpp/schema/persistent-pty"
 import { readFile, rename, rm, writeFile } from "node:fs/promises"
 import type { Info } from "./service.js"
 
@@ -14,13 +14,13 @@ type Sidecar = {
 export async function prepare(file: string, info: Info, timeout: number) {
   const existing = await read(file)
   if (existing !== undefined && existing.expiresAt > Date.now() && same(existing.source, info)) return
-  const { ClientError, OpenCode } = await import("./promise/index.js")
-  const client = OpenCode.make({
+  const { ClientError, Ocpp } = await import("./promise/index.js")
+  const client = Ocpp.make({
     baseUrl: info.url,
     headers:
       info.password === undefined
         ? undefined
-        : { authorization: "Basic " + Buffer.from(`opencode:${info.password}`).toString("base64") },
+        : { authorization: "Basic " + Buffer.from(`ocpp:${info.password}`).toString("base64") },
   })
   const missing = (error: unknown) =>
     error instanceof ClientError &&
@@ -84,7 +84,7 @@ export async function environment(file: string, env?: Readonly<Record<string, st
     record !== undefined && record.expiresAt > Date.now() && (current === undefined || same(record.source, current))
       ? record.handoff
       : undefined
-  return { ...env, OPENCODE_PTY_HANDOFF: handoff == null ? undefined : JSON.stringify(handoff) }
+  return { ...env, OCPP_PTY_HANDOFF: handoff == null ? undefined : JSON.stringify(handoff) }
 }
 
 export async function complete(file: string, info: Info) {

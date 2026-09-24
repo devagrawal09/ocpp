@@ -1,9 +1,9 @@
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { expect, test, type Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/FileBrowserSidebar"
+const directory = "C:/OC++/FileBrowserSidebar"
 const projectID = "proj_file_browser_sidebar"
 const sessionID = "ses_file_browser_sidebar"
 const title = "File browser sidebar"
@@ -75,7 +75,7 @@ async function readProbe(page: Page) {
 }
 
 async function setup(page: Page) {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -89,7 +89,7 @@ async function setup(page: Page) {
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: { test: { id: "test", name: "Test", limit: { context: 200_000 } } },
         },
       ],
@@ -125,22 +125,22 @@ async function setup(page: Page) {
   await page.addInitScript(
     ({ directory, server, sessionID }) => {
       localStorage.setItem(
-        "opencode.global.dat:server",
+        "ocpp.global.dat:server",
         JSON.stringify({
           projects: { local: [{ worktree: directory, expanded: true }] },
           lastProject: { local: directory },
         }),
       )
       localStorage.setItem(
-        "opencode.global.dat:layout",
+        "ocpp.global.dat:layout",
         JSON.stringify({ review: { diffStyle: "split", panelOpened: true } }),
       )
       localStorage.setItem(
-        "opencode.global.dat:review-panel-v2",
+        "ocpp.global.dat:review-panel-v2",
         JSON.stringify({ sidebarOpened: true, sidebarWidth: 240, expandMode: "collapse" }),
       )
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([{ type: "session", server, sessionId: sessionID }]),
       )
     },

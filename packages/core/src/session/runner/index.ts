@@ -1,6 +1,6 @@
 export * as SessionRunner from "./index.js"
 
-import type { AIError } from "@opencode-ai/ai"
+import type { AIError } from "@ocpp/ai"
 import { Context, Data, Effect } from "effect"
 import { SessionSchema } from "../schema.js"
 import type { Promotable } from "../inbox.js"
@@ -37,4 +37,4 @@ export interface Interface {
   }) => Effect.Effect<DrainResult, RunError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRunner") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionRunner") {}

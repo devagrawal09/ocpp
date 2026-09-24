@@ -1,19 +1,19 @@
 import { describe, expect, test } from "bun:test"
-import { LanguageModel, Message, ToolResultPart } from "@opencode-ai/ai"
-import { Gemini } from "@opencode-ai/ai/protocols/gemini"
-import { OpenAIResponses } from "@opencode-ai/ai/protocols/openai-responses"
-import { compileRequest } from "@opencode-ai/ai/route/client"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { SessionModelRequest, boundImages, unsupportedParts } from "@opencode-ai/core/session/model-request"
-import { SessionModelTransport } from "@opencode-ai/core/session/model-transport"
-import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Location } from "@opencode-ai/schema/location"
-import { Money } from "@opencode-ai/schema/money"
-import { Project } from "@opencode-ai/schema/project"
-import { AbsolutePath } from "@opencode-ai/schema/schema"
-import { Session } from "@opencode-ai/schema/session"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { LanguageModel, Message, ToolResultPart } from "@ocpp/ai"
+import { Gemini } from "@ocpp/ai/protocols/gemini"
+import { OpenAIResponses } from "@ocpp/ai/protocols/openai-responses"
+import { compileRequest } from "@ocpp/ai/route/client"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { SessionModelRequest, boundImages, unsupportedParts } from "@ocpp/core/session/model-request"
+import { SessionModelTransport } from "@ocpp/core/session/model-transport"
+import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
+import { Agent } from "@ocpp/schema/agent"
+import { Location } from "@ocpp/schema/location"
+import { Money } from "@ocpp/schema/money"
+import { Project } from "@ocpp/schema/project"
+import { AbsolutePath } from "@ocpp/schema/schema"
+import { Session } from "@ocpp/schema/session"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { ConfigProvider, DateTime, Effect } from "effect"
 import { testEffect } from "./lib/effect"
 
@@ -152,9 +152,7 @@ describe("SessionModelRequest.context options", () => {
       expect(excluded.request.providerOptions).toBeUndefined()
     }).pipe(
       Effect.provide(
-        ConfigProvider.layer(
-          ConfigProvider.fromEnv({ env: { OPENCODE_EXPERIMENTAL_OPENAI_RESPONSES_WEBSOCKET: "true" } }),
-        ),
+        ConfigProvider.layer(ConfigProvider.fromEnv({ env: { OCPP_EXPERIMENTAL_OPENAI_RESPONSES_WEBSOCKET: "true" } })),
       ),
     ),
   )

@@ -9,10 +9,10 @@ import {
   Provider,
   Reference,
   Skill,
-} from "@opencode-ai/plugin/effect"
-import { Tool } from "@opencode-ai/schema/tool"
+} from "@ocpp/plugin/effect"
+import { Tool } from "@ocpp/schema/tool"
 
-const key = Symbol.for("opencode.plugin.v2.effect")
+const key = Symbol.for("ocpp.plugin.v2.effect")
 ;(globalThis as typeof globalThis & { [key]?: unknown })[key] = {
   Agent,
   Command,

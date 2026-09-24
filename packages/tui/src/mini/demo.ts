@@ -15,7 +15,7 @@
 // Demo mode handles permission and Form replies locally, completing or failing
 // the synthetic tool parts through the same callbacks used by the live footer.
 import path from "path"
-import type { JsonValue, SessionMessageAssistantTool } from "@opencode-ai/client/promise"
+import type { JsonValue, SessionMessageAssistantTool } from "@ocpp/client/promise"
 import { parseSlashHead } from "../prompt/parse"
 import { writeSessionOutput } from "./stream"
 import { toolCommit, toolFinalPhase } from "./stream-v2.subagent"
@@ -635,7 +635,7 @@ function emitPermission(state: State, kind: PermissionKind = "edit"): void {
       patterns: [target],
       always: [target],
       done: {
-        output: ["1: {", '2:   "name": "opencode",', '3:   "private": true', "4: }"].join("\n"),
+        output: ["1: {", '2:   "name": "ocpp",', '3:   "private": true', "4: }"].join("\n"),
         metadata: {},
       },
     })
@@ -784,7 +784,7 @@ function demoForm(kind: FormKind): { title: string; fields: MiniFormRequest["fie
       {
         key: "authorization",
         type: "external",
-        url: "https://example.com/opencode-demo",
+        url: "https://example.com/ocpp-demo",
         title: "Authorize demo MCP server",
         description: "Complete authorization in your browser",
       },

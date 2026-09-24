@@ -16,7 +16,7 @@ Run the desktop development startup benchmark from the repository root:
 bun run bench:devex
 ```
 
-It runs five serial samples of the exact `bun dev:desktop` command. Each sample uses a fresh desktop profile, database, service configuration, service registration, and service process; the desktop selects an isolated ephemeral loopback endpoint. It removes desktop build output and the desktop Vite cache before every run; dependencies, Bun's package cache, and Electron remain installed. The harness stops only that sample's service; it does not stop or change the elected global OpenCode service. The measured endpoint is a visible Home page whose empty-state controls pass Playwright actionability checks. The command's Electron installation check remains inside the measured interval.
+It runs five serial samples of the exact `bun dev:desktop` command. Each sample uses a fresh desktop profile, database, service configuration, service registration, and service process; the desktop selects an isolated ephemeral loopback endpoint. It removes desktop build output and the desktop Vite cache before every run; dependencies, Bun's package cache, and Electron remain installed. The harness stops only that sample's service; it does not stop or change the elected global OC++ service. The measured endpoint is a visible Home page whose empty-state controls pass Playwright actionability checks. The command's Electron installation check remains inside the measured interval.
 
 Set `DESKTOP_STARTUP_RUNS` only for focused diagnostics:
 
@@ -24,10 +24,10 @@ Set `DESKTOP_STARTUP_RUNS` only for focused diagnostics:
 DESKTOP_STARTUP_RUNS=1 bun run bench:devex
 ```
 
-Set `OPENCODE_PERFORMANCE_TRACE_DIR` to capture the renderer's CDP trace from attachment through actionable Home:
+Set `OCPP_PERFORMANCE_TRACE_DIR` to capture the renderer's CDP trace from attachment through actionable Home:
 
 ```sh
-DESKTOP_STARTUP_RUNS=1 OPENCODE_PERFORMANCE_TRACE_DIR=/tmp/opencode-desktop-traces bun run bench:devex
+DESKTOP_STARTUP_RUNS=1 OCPP_PERFORMANCE_TRACE_DIR=/tmp/ocpp-desktop-traces bun run bench:devex
 ```
 
 PowerShell:
@@ -46,7 +46,7 @@ The suite contains:
 - streaming timeline throughput, RAF-gap, long-task, geometry, and remount diagnostics
 - retained renderer heap with a large model catalog across repeated session navigation
 
-All benchmarks import the shared `benchmark` fixture. Pages created through Playwright's `page` fixture automatically capture main-frame navigation history and emit a Chrome trace when `OPENCODE_PERFORMANCE_TRACE_DIR` is set. Benchmarks that need isolated browser contexts use `withBenchmarkPage`, which owns the context and the same diagnostics lifecycle.
+All benchmarks import the shared `benchmark` fixture. Pages created through Playwright's `page` fixture automatically capture main-frame navigation history and emit a Chrome trace when `OCPP_PERFORMANCE_TRACE_DIR` is set. Benchmarks that need isolated browser contexts use `withBenchmarkPage`, which owns the context and the same diagnostics lifecycle.
 
 New benchmarks should look like normal Playwright tests:
 
@@ -114,7 +114,7 @@ Complete original `BENCHMARK` JSON records, including samples, context, and fail
 bun run bench:tabs --repeat-each=3 --output=e2e/test-results/tabs-smoke
 ```
 
-Set `OPENCODE_PERFORMANCE_MEMORY=1` for an opt-in renderer-main-isolate heap and DOM sample after mounted content is ready and an explicit GC completes. Probe DOM references are released before collection. This is not total desktop memory; do not mix these diagnostic runs with unprofiled latency samples. Set `OPENCODE_PERFORMANCE_TRACE_DIR` for a separate Chrome trace of each tab interaction, starting after preparation, with `session-switch:start`, `session-switch:ready`, and `session-switch:stable` markers.
+Set `OCPP_PERFORMANCE_MEMORY=1` for an opt-in renderer-main-isolate heap and DOM sample after mounted content is ready and an explicit GC completes. Probe DOM references are released before collection. This is not total desktop memory; do not mix these diagnostic runs with unprofiled latency samples. Set `OCPP_PERFORMANCE_TRACE_DIR` for a separate Chrome trace of each tab interaction, starting after preparation, with `session-switch:start`, `session-switch:ready`, and `session-switch:stable` markers.
 
 ### Cache-Enabled HTTP Fixture
 
@@ -129,11 +129,11 @@ With that fixture running, run the benchmark in a separate terminal from `packag
 
 ```powershell
 $env:PLAYWRIGHT_BASE_URL = "http://127.0.0.1:4639"
-$env:OPENCODE_PERFORMANCE_HTTP_FIXTURE = "1"
+$env:OCPP_PERFORMANCE_HTTP_FIXTURE = "1"
 bun run bench:tabs
 ```
 
-Use `--dist` to select a frozen production bundle when comparing revisions. An explicit `PLAYWRIGHT_BASE_URL` means the benchmark does not rebuild or start another preview. The fixture gives hashed assets immutable cache headers; it serves the deterministic read workload, not the live OpenCode service. Each test still gets a fresh browser context, and source-session setup still occurs before the measured switch. API responses use `no-store`, service workers remain blocked, and no destination Markdown is rendered before a cold switch. Records identify the transport as `http` or `playwright-route`; keep these series separate. Unset `OPENCODE_PERFORMANCE_HTTP_FIXTURE` when returning to the default routed harness.
+Use `--dist` to select a frozen production bundle when comparing revisions. An explicit `PLAYWRIGHT_BASE_URL` means the benchmark does not rebuild or start another preview. The fixture gives hashed assets immutable cache headers; it serves the deterministic read workload, not the live OC++ service. Each test still gets a fresh browser context, and source-session setup still occurs before the measured switch. API responses use `no-store`, service workers remain blocked, and no destination Markdown is rendered before a cold switch. Records identify the transport as `http` or `playwright-route`; keep these series separate. Unset `OCPP_PERFORMANCE_HTTP_FIXTURE` when returning to the default routed harness.
 
 ## Retained renderer memory
 
@@ -144,26 +144,26 @@ bunx playwright test --config e2e/performance/playwright.config.ts \
   timeline/provider-memory-benchmark.spec.ts --repeat-each=3
 ```
 
-`PROVIDER_MEMORY_MODELS` defaults to 1,200 and `PROVIDER_MEMORY_SWITCHES` defaults to 10. Each sample records Chromium's `Runtime.getHeapUsage` and `Memory.getDOMCounters` after an explicit garbage collection. This measures retained state, not allocation peaks or normal GC timing. It does not include worker heaps, the Electron main/GPU processes, or the OpenCode server, and must not be reported as total desktop RAM. Use identical model counts and navigation sequences for before/after comparisons.
+`PROVIDER_MEMORY_MODELS` defaults to 1,200 and `PROVIDER_MEMORY_SWITCHES` defaults to 10. Each sample records Chromium's `Runtime.getHeapUsage` and `Memory.getDOMCounters` after an explicit garbage collection. This measures retained state, not allocation peaks or normal GC timing. It does not include worker heaps, the Electron main/GPU processes, or the OC++ server, and must not be reported as total desktop RAM. Use identical model counts and navigation sequences for before/after comparisons.
 
 ## Chrome traces
 
-Set `OPENCODE_PERFORMANCE_TRACE_DIR` to emit a standard Chrome DevTools trace for every benchmark page automatically:
+Set `OCPP_PERFORMANCE_TRACE_DIR` to emit a standard Chrome DevTools trace for every benchmark page automatically:
 
 ```sh
-OPENCODE_PERFORMANCE_TRACE_DIR=/tmp/opencode-performance-traces \
+OCPP_PERFORMANCE_TRACE_DIR=/tmp/ocpp-performance-traces \
 bunx playwright test --config e2e/performance/playwright.config.ts \
   timeline/session-tab-switch-benchmark.spec.ts
 ```
 
 The emitted JSON is a standard Chrome trace and can be loaded directly into the Chrome DevTools Performance panel. `devtools-tracing` can optionally inspect it from the command line without adding package scripts or dependencies:
 
-Trace capture follows [Puppeteer's tracing lifecycle](https://pptr.dev/api/puppeteer.tracing), using Chrome's `ReturnAsStream` transfer mode and failing when Chromium reports trace data loss. V8 CPU sample stacks support attribution through the frozen build's source maps. Set `OPENCODE_PERFORMANCE_STACK_TRACE=1` only when per-event timeline stacks are needed; they add substantial overhead. Keep profiled runs separate from latency distributions, including when comparing the stack-capture modes.
+Trace capture follows [Puppeteer's tracing lifecycle](https://pptr.dev/api/puppeteer.tracing), using Chrome's `ReturnAsStream` transfer mode and failing when Chromium reports trace data loss. V8 CPU sample stacks support attribution through the frozen build's source maps. Set `OCPP_PERFORMANCE_STACK_TRACE=1` only when per-event timeline stacks are needed; they add substantial overhead. Keep profiled runs separate from latency distributions, including when comparing the stack-capture modes.
 
 ```sh
 bunx devtools-tracing stats <trace-path-from-BENCHMARK_PAGE>
 ```
 
-INP analysis requires a trace with a supported navigation/interaction insight. Selector statistics require a trace captured with `OPENCODE_PERFORMANCE_SELECTOR_TRACE=1`.
+INP analysis requires a trace with a supported navigation/interaction insight. Selector statistics require a trace captured with `OCPP_PERFORMANCE_SELECTOR_TRACE=1`.
 
 `e2e/performance/playwright.uncapped.config.ts` disables Chromium frame-rate limiting for explicit uncapped diagnostics. Native product benchmarks should use the default Playwright configuration.

@@ -5,7 +5,7 @@ title: "CLI"
 CLI plugins extend the terminal with commands, routes, slots, Markdown renderers, notifications, and local state.
 
 ```ts title="src/tui.ts"
-import { Plugin } from "@opencode-ai/plugin/tui"
+import { Plugin } from "@ocpp/plugin/tui"
 
 export default Plugin.define({
   id: "acme.cli",
@@ -15,12 +15,12 @@ export default Plugin.define({
 })
 ```
 
-Import `@opencode-ai/plugin/tui` directly. OpenCode resolves this import at runtime, so local CLI plugins do not need an
-absolute path to an OpenCode checkout.
+Import `@ocpp/plugin/tui` directly. OC++ resolves this import at runtime, so local CLI plugins do not need an
+absolute path to an OC++ checkout.
 
 ## Context
 
-`setup` receives configuration, app metadata, the current location, the OpenCode client, cached data, theme tokens, the
+`setup` receives configuration, app metadata, the current location, the OC++ client, cached data, theme tokens, the
 OpenTUI renderer, and the UI APIs documented below.
 
 ```ts
@@ -46,7 +46,7 @@ setup(context) {
 
 ## Client
 
-`context.client` is the generated OpenCode client and can call the connected server, including a remote server.
+`context.client` is the generated OC++ client and can call the connected server, including a remote server.
 
 ```ts
 const response = await context.client.plugin.list({
@@ -110,7 +110,7 @@ context.data.session.permission.invalidate(sessionID)
 Forms can be listed, refreshed, replied to, or cancelled at a location.
 
 ```ts
-import type { FormCancelInput, FormReplyInput } from "@opencode-ai/client"
+import type { FormCancelInput, FormReplyInput } from "@ocpp/client"
 
 async function handleForm(reply: FormReplyInput, cancel: FormCancelInput) {
   const location = context.location
@@ -201,7 +201,7 @@ Attention requests can show a system notification, play a configured sound, or d
 
 ```ts
 const result = await context.attention.notify({
-  title: "OpenCode",
+  title: "OC++",
   message: "Session done",
   notification: { when: "blurred" },
   sound: { name: "done", volume: 0.5, when: "always" },
@@ -223,7 +223,7 @@ const renderer = context.renderer
 Use `usePlugin` to access the current context inside JSX rendered by a route, dialog, or slot.
 
 ```tsx
-import { usePlugin } from "@opencode-ai/plugin/tui"
+import { usePlugin } from "@ocpp/plugin/tui"
 
 function Status() {
   const context = usePlugin()
@@ -236,10 +236,7 @@ function Status() {
 Register a fenced-code renderer by language; the returned function unregisters it.
 
 ```ts
-const unregister = context.markdown.registerCodeBlockRenderer(
-  "acme",
-  (_token, render) => render.defaultRender(),
-)
+const unregister = context.markdown.registerCodeBlockRenderer("acme", (_token, render) => render.defaultRender())
 return unregister
 ```
 
@@ -340,7 +337,14 @@ Custom JSX dialogs can set their size and close themselves.
 
 ```tsx
 context.ui.dialog.set({ size: "large", centered: true })
-context.ui.dialog.show(() => <box><text>Acme</text></box>, () => console.log("closed"))
+context.ui.dialog.show(
+  () => (
+    <box>
+      <text>Acme</text>
+    </box>
+  ),
+  () => console.log("closed"),
+)
 context.ui.dialog.clear()
 ```
 
@@ -419,14 +423,14 @@ Expose the CLI plugin through `./tui`; add OpenTUI peers when the plugin renders
 
 ```json title="package.json"
 {
-  "name": "opencode-acme-plugin",
+  "name": "ocpp-acme-plugin",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./tui": "./src/tui.tsx"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "beta"
+    "@ocpp/plugin": "beta"
   },
   "peerDependencies": {
     "@opentui/core": ">=0.5.8",
@@ -439,7 +443,7 @@ Expose the CLI plugin through `./tui`; add OpenTUI peers when the plugin renders
 Set `tui: true` on the [main plugin](/build/plugins) for automatic loading.
 
 ```ts title="src/index.ts"
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "acme.server",
@@ -452,6 +456,6 @@ Configure a CLI-only package in [`cli.json`](/cli/plugins) so it remains active 
 
 ```json title="cli.json"
 {
-  "plugins": ["opencode-acme-plugin"]
+  "plugins": ["ocpp-acme-plugin"]
 }
 ```

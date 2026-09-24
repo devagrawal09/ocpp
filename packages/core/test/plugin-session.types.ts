@@ -1,7 +1,7 @@
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import type { SessionDomain } from "@opencode-ai/plugin/promise/session"
-import { Session } from "@opencode-ai/schema/session"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import type { SessionDomain } from "@ocpp/plugin/promise/session"
+import { Session } from "@ocpp/schema/session"
+import { SessionMessage } from "@ocpp/schema/session-message"
 import { Effect } from "effect"
 
 export function effectPrompt(context: Context) {

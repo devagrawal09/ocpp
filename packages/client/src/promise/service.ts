@@ -15,7 +15,7 @@ import type { ServiceHealth } from "./generated/types.js"
 
 export * from "../service.js"
 
-// Find, start, and stop the local opencode background service.
+// Find, start, and stop the local ocpp background service.
 //
 // The registration file is the complete discovery contract. This module is
 // intentionally implemented with Node APIs so Promise clients do not need
@@ -45,7 +45,7 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
     options.onStart?.(reason, previousVersion)
   }
   const spawnContender = async () => {
-    const [command, ...args] = options.command ?? ["opencode", "serve", "--service"]
+    const [command, ...args] = options.command ?? ["ocpp", "serve", "--service"]
     if (command === undefined) throw new Error("Missing service command")
     try {
       return spawnServiceContender(command, args, await PtyHandoff.environment(options.file ?? fallback(), options.env))
@@ -125,7 +125,7 @@ export async function stop(options: StopOptions = {}) {
 }
 
 function fallback() {
-  return join(process.env["XDG_STATE_HOME"] ?? join(homedir(), ".local", "state"), "opencode", "service.json")
+  return join(process.env["XDG_STATE_HOME"] ?? join(homedir(), ".local", "state"), "ocpp", "service.json")
 }
 
 /** Create HTTP authentication headers for a service endpoint. */
@@ -158,9 +158,7 @@ async function probeResult(info: Info, allowLegacy = false, timeout = defaultEns
   const endpoint = {
     url: info.url,
     auth:
-      info.password === undefined
-        ? undefined
-        : { type: "basic" as const, username: "opencode", password: info.password },
+      info.password === undefined ? undefined : { type: "basic" as const, username: "ocpp", password: info.password },
   } satisfies Endpoint
   const signal = AbortSignal.timeout(timeout)
   const result = await fetch(new URL("/api/health", info.url), {

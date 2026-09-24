@@ -1,5 +1,5 @@
-import { base64Encode } from "@opencode-ai/util/encode"
-import type { SessionMessageAssistant } from "@opencode-ai/client/promise"
+import { base64Encode } from "@ocpp/util/encode"
+import type { SessionMessageAssistant } from "@ocpp/client/promise"
 import { expect, test, type Page } from "@playwright/test"
 import {
   assistantMessage,
@@ -13,7 +13,7 @@ import {
   title,
   userMessage,
 } from "../performance/timeline-stability/fixture"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { installSseTransport } from "../utils/sse-transport"
 import { expectSessionTitle } from "../utils/waits"
 
@@ -62,14 +62,14 @@ for (const scenario of scenarios) {
       server,
       retry: 20,
     })
-    await mockOpenCodeServer(page, {
+    await mockOcppServer(page, {
       directory,
       project: project(),
       provider: {
         all: [
           {
             id: "opencode",
-            name: "OpenCode",
+            name: "OC++",
             models: {
               "claude-opus-4-6": {
                 id: "claude-opus-4-6",

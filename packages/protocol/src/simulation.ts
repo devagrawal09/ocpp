@@ -283,7 +283,7 @@ export namespace Frontend {
   export interface SemanticNode extends Schema.Schema.Type<typeof SemanticNode> {}
 
   export const SemanticSnapshot = Schema.Struct({
-    format: Schema.Literal("opencode-ui-snapshot-v1"),
+    format: Schema.Literal("ocpp-ui-snapshot-v1"),
     nodes: Schema.Array(SemanticNode).check(
       Schema.makeFilter((nodes) => {
         const ids = new Set(nodes.map((node) => node.id))

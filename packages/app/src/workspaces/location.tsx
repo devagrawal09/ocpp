@@ -1,5 +1,5 @@
-import { createSimpleContext } from "@opencode-ai/ui/context"
-import type { LocationGetOutput, LocationRef } from "@opencode-ai/client/promise"
+import { createSimpleContext } from "@ocpp/ui/context"
+import type { LocationGetOutput, LocationRef } from "@ocpp/client/promise"
 import { type Accessor, createEffect, createMemo, createSignal } from "solid-js"
 import { type LocationContext, useServerSDK } from "@/runtime/server/client"
 import { useData } from "@/runtime/server/current"

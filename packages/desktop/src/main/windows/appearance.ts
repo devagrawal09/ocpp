@@ -1,6 +1,6 @@
-import { resolveThemeVariant } from "@opencode-ai/ui/theme/resolve"
-import type { DesktopTheme } from "@opencode-ai/ui/theme/types"
-import oc2ThemeJson from "../../../../ui/src/theme/themes/oc-2.json"
+import { resolveThemeVariant } from "@ocpp/ui/theme/resolve"
+import type { DesktopTheme } from "@ocpp/ui/theme/types"
+import ocppV2ThemeJson from "../../../../ui/src/theme/themes/ocpp-v2.json"
 import { app, BrowserWindow, nativeImage, nativeTheme } from "electron"
 import type { Path } from "effect"
 import { type TitlebarTheme } from "../../shared/ipc-contract"
@@ -10,10 +10,10 @@ import type { DesktopPaths } from "../paths"
 import { BACKGROUND_COLOR_KEY, PINCH_ZOOM_ENABLED_KEY } from "../storage/keys"
 import { getStore } from "../storage/store"
 
-const oc2Theme = oc2ThemeJson as DesktopTheme
-const oc2Background = {
-  light: resolveThemeVariant(oc2Theme.light, false)["background-base"],
-  dark: resolveThemeVariant(oc2Theme.dark, true)["background-base"],
+const ocppV2Theme = ocppV2ThemeJson as DesktopTheme
+const ocppV2Background = {
+  light: resolveThemeVariant(ocppV2Theme.light, false)["background-base"],
+  dark: resolveThemeVariant(ocppV2Theme.dark, true)["background-base"],
 }
 const titlebarThemes = new WeakMap<BrowserWindow, Partial<TitlebarTheme>>()
 const pinchZoomEnabled = new WeakMap<BrowserWindow, boolean>()
@@ -26,9 +26,9 @@ let backgroundColor: string | undefined
 export function windowAppearance(path: Path.Path, paths: DesktopPaths.Resolved) {
   const mode = tone()
   return {
-    title: "OpenCode",
+    title: "OC++",
     icon: iconPath(path, paths),
-    backgroundColor: getBackgroundColor() ?? oc2Background[mode],
+    backgroundColor: getBackgroundColor() ?? ocppV2Background[mode],
     ...(process.platform === "darwin"
       ? {
           titleBarStyle: "hidden" as const,

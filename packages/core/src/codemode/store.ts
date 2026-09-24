@@ -1,7 +1,7 @@
 export * as CodeModeStore from "./store.js"
 
-import type { CodeMode } from "@opencode-ai/codemode"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import type { CodeMode } from "@ocpp/codemode"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { and, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database } from "../database/database.js"
@@ -82,7 +82,7 @@ export interface Interface {
   readonly revert: (input: { sessionID: SessionSchema.ID; beforeSeq: number }) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/CodeModeStore") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/CodeModeStore") {}
 
 const RESTART_MESSAGE = "Execution became indeterminate because the host restarted before it settled."
 

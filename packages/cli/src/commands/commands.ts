@@ -10,7 +10,7 @@ export const PrintLogs = GlobalFlag.setting("print-logs")({
   ),
 })
 
-declare const OPENCODE_CLI_NAME: string | undefined
+declare const OCPP_CLI_NAME: string | undefined
 
 const ServerParams = {
   standalone: Flag.boolean("standalone").pipe(
@@ -35,13 +35,13 @@ const PermissionParams = {
   ),
 }
 
-const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "opencode", {
-  description: "OpenCode 2.0 preview command line interface",
+const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp", {
+  description: "OC++ 2.0 preview command line interface",
   params: {
     ...ServerParams,
     ...PermissionParams,
     directory: Argument.string("directory").pipe(
-      Argument.withDescription("Directory to start OpenCode in"),
+      Argument.withDescription("Directory to start OC++ in"),
       Argument.optional,
     ),
     continue: Flag.boolean("continue").pipe(
@@ -58,7 +58,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
   },
   commands: [
     Spec.make("upgrade", {
-      description: "Upgrade OpenCode to the latest or a specific version",
+      description: "Upgrade OC++ to the latest or a specific version",
       params: {
         target: Argument.string("target").pipe(
           Argument.withDescription("Version to upgrade to (with or without a leading v)"),
@@ -98,10 +98,10 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       ],
     }),
     Spec.make("console", {
-      description: "Manage OpenCode Console access",
+      description: "Manage OC++ Console access",
       commands: [
         Spec.make("login", {
-          description: "Log in to OpenCode Console",
+          description: "Log in to OC++ Console",
           params: {
             url: Argument.string("url").pipe(Argument.withDescription("Console server URL"), Argument.optional),
           },
@@ -301,7 +301,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       },
     }),
     Spec.make("run", {
-      description: "Run OpenCode with a message",
+      description: "Run OC++ with a message",
       params: {
         ...ServerParams,
         message: Argument.string("message").pipe(

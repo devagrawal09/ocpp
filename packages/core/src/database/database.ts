@@ -4,10 +4,10 @@ import { EffectDrizzleSqlite } from "./drizzle.js"
 import { sqliteLayer, supportsForeignKeyToggle, supportsTuningPragmas } from "#sqlite"
 import { Context, Effect, Layer, Schema } from "effect"
 import type { SqlClient } from "effect/unstable/sql"
-import { Global } from "@opencode-ai/util/global"
+import { Global } from "@ocpp/util/global"
 import { isAbsolute, join } from "path"
 import { DatabaseMigration } from "./migration.js"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 
 const makeDatabase = EffectDrizzleSqlite.makeWithDefaults()
 type DatabaseShape = Effect.Success<typeof makeDatabase>
@@ -21,7 +21,7 @@ export const Options = Schema.Struct({
 })
 export type Options = typeof Options.Type
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/storage/Database") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/storage/Database") {}
 
 const databaseLayer = Layer.effect(
   Service,

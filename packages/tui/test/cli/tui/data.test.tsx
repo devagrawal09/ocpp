@@ -1,10 +1,10 @@
 /** @jsxImportSource @opentui/solid */
 import { expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
-import type { OpenCodeEvent } from "@opencode-ai/client"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Bus } from "@opencode-ai/core/bus"
-import { Event } from "@opencode-ai/schema/event"
+import type { OcppEvent } from "@ocpp/client"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { Bus } from "@ocpp/core/bus"
+import { Event } from "@ocpp/schema/event"
 import { Expected } from "../../../../core/test/lib/session-message"
 import { createEffect, onMount, type ParentProps } from "solid-js"
 import { ConfigProvider } from "../../../src/config"
@@ -37,7 +37,7 @@ async function wait(fn: () => boolean, timeout = 2000) {
   }
 }
 
-function emitEvent(events: ReturnType<typeof createEventStream>, event: OpenCodeEvent) {
+function emitEvent(events: ReturnType<typeof createEventStream>, event: OcppEvent) {
   events.emit({ ...event, location: { directory } })
 }
 
@@ -166,7 +166,7 @@ test("proactively syncs project metadata newest first", async () => {
       {
         id: "proj_test",
         canonical: worktree,
-        name: "OpenCode",
+        name: "OC++",
         time: { created: 1, updated: 2 },
         sandboxes: [],
       },
@@ -197,7 +197,7 @@ test("proactively syncs project metadata newest first", async () => {
       {
         id: "proj_test",
         canonical: worktree,
-        name: "OpenCode",
+        name: "OC++",
         time: { created: 1, updated: 2 },
         sandboxes: [],
       },
@@ -599,7 +599,7 @@ test("truncates committed revert messages without changing lifetime usage", asyn
 
 test("updates session location when moved", async () => {
   const events = createEventStream()
-  const destination = "/tmp/opencode-moved"
+  const destination = "/tmp/ocpp-moved"
   const calls = createFetch((url) => {
     if (url.pathname === "/api/session/ses_test")
       return json({
@@ -1978,7 +1978,7 @@ test("refreshes references after updates", async () => {
 
 test("keeps shell state scoped to location", async () => {
   const events = createEventStream()
-  const other = "/tmp/opencode/other"
+  const other = "/tmp/ocpp/other"
   const workspace = "ws_other"
   let removed: URL | undefined
   const calls = createFetch((url, request) => {
@@ -2001,7 +2001,7 @@ test("keeps shell state scoped to location", async () => {
           command: requestDirectory === other ? "pnpm dev" : "bun test",
           cwd: requestDirectory ?? directory,
           shell: "/bin/sh",
-          file: "/tmp/opencode-shell",
+          file: "/tmp/ocpp-shell",
           metadata: { sessionID: "ses_shared" },
           time: { started: 1 },
         },
@@ -2066,7 +2066,7 @@ test("keeps shell state scoped to location", async () => {
           command: "npm run watch",
           cwd: other,
           shell: "/bin/sh",
-          file: "/tmp/opencode-shell-live",
+          file: "/tmp/ocpp-shell-live",
           metadata: { sessionID: "ses_shared" },
           time: { started: 2 },
         },
@@ -2344,7 +2344,7 @@ test("adds, dismisses, and refreshes form requests", async () => {
 test("tracks global forms by location", async () => {
   const events = createEventStream()
   const calls = createFetch(undefined, events)
-  const other = { directory: "/tmp/opencode-other", workspaceID: "wrk_other" }
+  const other = { directory: "/tmp/ocpp-other", workspaceID: "wrk_other" }
   let data!: ReturnType<typeof useData>
   let client!: ReturnType<typeof useClient>
 
@@ -2409,7 +2409,7 @@ test("tracks global forms by location", async () => {
 test("syncs global forms once for each requested location", async () => {
   const events = createEventStream()
   const requests: URL[] = []
-  const other = { directory: "/tmp/opencode-other", workspaceID: "wrk_other" }
+  const other = { directory: "/tmp/ocpp-other", workspaceID: "wrk_other" }
   const calls = createFetch((url) => {
     if (url.pathname !== "/api/form/request") return
     requests.push(url)
@@ -2478,7 +2478,7 @@ test("resyncs global forms only for the active location after reconnect", async 
   const requests: URL[] = []
   const counts = new Map<string, number>()
   const home = { directory: process.cwd() }
-  const other = { directory: "/tmp/opencode-other", workspaceID: "wrk_other" }
+  const other = { directory: "/tmp/ocpp-other", workspaceID: "wrk_other" }
   const calls = createFetch((url) => {
     if (url.pathname === "/api/location")
       return json({ ...home, project: { id: "proj_test", directory: home.directory } })

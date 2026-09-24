@@ -2,18 +2,18 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Duration, Effect, Layer, LayerMap } from "effect"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
-import { Config } from "@opencode-ai/core/config"
-import { Instance } from "@opencode-ai/core/instance"
-import { InstructionDiscovery } from "@opencode-ai/core/instruction-discovery"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
-import { Location } from "@opencode-ai/core/location"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Tool } from "@opencode-ai/core/tool"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
+import { Config } from "@ocpp/core/config"
+import { Instance } from "@ocpp/core/instance"
+import { InstructionDiscovery } from "@ocpp/core/instruction-discovery"
+import { LocationServiceMap } from "@ocpp/core/location-services"
+import { Location } from "@ocpp/core/location"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Tool } from "@ocpp/core/tool"
 import { tmpdir } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
@@ -28,7 +28,7 @@ const hostConfig: LayerNode.Replacements = [
     Config.configured({
       project: false,
       global: false,
-      content: JSON.stringify({ shell: "vanilla-host", plugins: ["-opencode.tool.shell"] }),
+      content: JSON.stringify({ shell: "vanilla-host", plugins: ["-ocpp.tool.shell"] }),
     }),
   ],
 ]
@@ -70,7 +70,7 @@ describe("Instance vanilla", () => {
             Effect.promise(async () => {
               const directory = path.join(dir.path, name)
               await fs.mkdir(directory)
-              await fs.writeFile(path.join(directory, "opencode.json"), "{}")
+              await fs.writeFile(path.join(directory, "ocpp.json"), "{}")
               await fs.writeFile(path.join(directory, "AGENTS.md"), "planted instructions")
               return Location.Ref.make({ directory: AbsolutePath.make(directory) })
             })
@@ -133,9 +133,9 @@ describe("Instance vanilla", () => {
           // A plugin module whose import writes a sentinel: project-marker
           // discovery used to import it during vanilla boot.
           yield* Effect.promise(async () => {
-            await fs.mkdir(path.join(directory, ".opencode", "plugins"), { recursive: true })
+            await fs.mkdir(path.join(directory, ".ocpp", "plugins"), { recursive: true })
             await fs.writeFile(
-              path.join(directory, ".opencode", "plugins", "ambient.ts"),
+              path.join(directory, ".ocpp", "plugins", "ambient.ts"),
               [
                 'import { writeFile } from "node:fs/promises"',
                 `await writeFile(${JSON.stringify(marker)}, "loaded")`,

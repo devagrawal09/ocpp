@@ -1,9 +1,9 @@
-import { base64Encode, checksum } from "@opencode-ai/util/encode"
+import { base64Encode, checksum } from "@ocpp/util/encode"
 import { expect, test, type Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/TerminalComposerFocus"
+const directory = "C:/OC++/TerminalComposerFocus"
 const projectID = "proj_terminal_composer_focus"
 const sessionID = "ses_terminal_composer_focus"
 const ptyID = "pty_terminal_composer_focus"
@@ -17,7 +17,7 @@ test.use({ viewport: { width: 1440, height: 900 } })
 test.beforeEach(async ({ page }) => {
   ptyInput.length = 0
   sendPtyOutput = undefined
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -31,7 +31,7 @@ test.beforeEach(async ({ page }) => {
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: { test: { id: "test", name: "Test", limit: { context: 200_000 } } },
         },
       ],
@@ -253,7 +253,7 @@ test("focuses a terminal created from the new-terminal button", async ({ page })
 function seedCachedTerminal(page: Page) {
   return page.addInitScript(
     ({ terminalKey, ptyID }) => {
-      localStorage.setItem("opencode.global.dat:layout", JSON.stringify({ terminal: { height: 320, opened: true } }))
+      localStorage.setItem("ocpp.global.dat:layout", JSON.stringify({ terminal: { height: 320, opened: true } }))
       localStorage.setItem(
         terminalKey,
         JSON.stringify({
@@ -269,7 +269,7 @@ function seedCachedTerminal(page: Page) {
 function terminalStorageKey() {
   const dir = base64Encode(directory)
   const head = dir.slice(0, 12).replace(/[^a-zA-Z0-9._-]/g, "-")
-  return `opencode.workspace.${head}.${checksum(dir) ?? "0"}.dat:workspace:terminal`
+  return `ocpp.workspace.${head}.${checksum(dir) ?? "0"}.dat:workspace:terminal`
 }
 
 function ptyLocation() {

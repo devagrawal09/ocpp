@@ -1,12 +1,12 @@
 import { describe, expect } from "bun:test"
 import { Cause, Clock, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
-import { Credential } from "@opencode-ai/core/credential"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { Integration } from "@opencode-ai/core/integration"
+import { Credential } from "@ocpp/core/credential"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { Integration } from "@ocpp/core/integration"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Integration.node, Credential.node, Bus.node])))

@@ -2,14 +2,14 @@ import type {
   EventSubscribeOutput,
   FormInfo,
   LocationRef,
-  OpenCodeClient,
+  OcppClient,
   PermissionRequest,
   SessionMessageAssistantTool,
   SessionMessageInfo,
   SessionInboxInfo,
-} from "@opencode-ai/client/promise"
-import { Event } from "@opencode-ai/schema/event"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
+} from "@ocpp/client/promise"
+import { Event } from "@ocpp/schema/event"
+import { SessionMessage } from "@ocpp/schema/session-message"
 import { formatContextUsage } from "../util/session"
 import { blockerStatus, pickBlockerView } from "./session-data"
 import { writeSessionOutput } from "./stream"
@@ -37,9 +37,9 @@ type Trace = {
 }
 
 type StreamInput = {
-  sdk: OpenCodeClient
-  reconnect?: (signal: AbortSignal) => Promise<OpenCodeClient>
-  onClient?: (sdk: OpenCodeClient) => void
+  sdk: OcppClient
+  reconnect?: (signal: AbortSignal) => Promise<OcppClient>
+  onClient?: (sdk: OcppClient) => void
   readTextFile?: (url: string) => Promise<string>
   location?: LocationRef
   sessionID: string
@@ -106,7 +106,7 @@ type RunV2Event = EventSubscribeOutput
 type PromptFilePart = Extract<RunPromptPart, { type: "file" }>
 
 type Attempt = {
-  client: OpenCodeClient
+  client: OcppClient
   signal: AbortSignal
   generation: number
 }
@@ -433,7 +433,7 @@ function compactionError(messageID: string, text: string): StreamCommit {
 
 async function resolveSelectedModel(
   input: StreamInput,
-  sdk: OpenCodeClient,
+  sdk: OcppClient,
   next: Pick<SessionTurnInput, "model" | "variant" | "signal">,
 ) {
   if (next.model) return { providerID: next.model.providerID, id: next.model.modelID, variant: next.variant }
@@ -466,7 +466,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
   let sdk = input.sdk
   let generation = 0
   let activeAttempt: Attempt | undefined
-  let settlementClient: OpenCodeClient | undefined
+  let settlementClient: OcppClient | undefined
   input.signal?.addEventListener("abort", () => controller.abort(), { once: true })
   const state: State = {
     permissions: [],
@@ -799,7 +799,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
     }
   }
 
-  const projectedMessages = async (client: OpenCodeClient, signal: AbortSignal) =>
+  const projectedMessages = async (client: OcppClient, signal: AbortSignal) =>
     (
       await client.message.list(
         { sessionID: input.sessionID, limit: input.replayLimit ?? 200, order: "desc" },
@@ -807,18 +807,14 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
       )
     ).data.toReversed()
 
-  const settleSession = async (client: OpenCodeClient) => {
+  const settleSession = async (client: OcppClient) => {
     await client.session.wait({ sessionID: input.sessionID }, { signal: controller.signal })
     for (const message of await projectedMessages(client, controller.signal)) renderMessage(message, true, true)
     paintIdle(blockerStatus(state.view))
     await input.footer.idle()
   }
 
-  const resolvePermissionSources = async (
-    client: OpenCodeClient,
-    permissions: PermissionRequest[],
-    attempt: Attempt,
-  ) => {
+  const resolvePermissionSources = async (client: OcppClient, permissions: PermissionRequest[], attempt: Attempt) => {
     const pending = new Set(
       permissions.flatMap((request) =>
         request.source?.type === "tool" ? [permissionSourceKey(request.source.messageID, request.source.id)] : [],
@@ -1526,7 +1522,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
   const runTurnWait = async (
     next: SessionTurnInput,
     messageID: string,
-    client: OpenCodeClient,
+    client: OcppClient,
     send: () => Promise<SessionInboxInfo | void>,
     onAdmitted?: () => void,
   ) => {
@@ -1643,7 +1639,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
   let queuedResizeReplay: SessionResizeReplayInput | undefined
   let closing: Promise<void> | undefined
 
-  const admitPrompt = async (next: SessionTurnInput, client: OpenCodeClient, delivery: RunDelivery) => {
+  const admitPrompt = async (next: SessionTurnInput, client: OcppClient, delivery: RunDelivery) => {
     const messageID = next.prompt.messageID
     if (!messageID) throw new Error("Prompt message ID is required")
     const command = next.prompt.command

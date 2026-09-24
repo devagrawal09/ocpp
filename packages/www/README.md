@@ -1,13 +1,13 @@
-# OpenCode website
+# OC++ website
 
-The standard Astro website for OpenCode. The only deployment-specific path is the `base` setting in `astro.config.ts`; application code uses `import.meta.env.BASE_URL`.
+The standard Astro website for OC++. The only deployment-specific path is the `base` setting in `astro.config.ts`; application code uses `import.meta.env.BASE_URL`.
 
 - `src/pages/` owns website routes.
 - `src/docs/` is the self-contained documentation feature rendered under `/docs`.
 - `/install` proxies the current installer.
 - `/openapi.json` serves the generated OpenAPI specification.
 
-The deployment currently sets `base: "/v2"`. The `v2.opencode.ai` alias is handled by a Cloudflare Redirect Rule outside this project.
+The deployment currently sets `base: "/v2"`. The `v2.ocpp.ai` alias is handled by a Cloudflare Redirect Rule outside this project.
 
 ## Development
 

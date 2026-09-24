@@ -9,9 +9,9 @@ import {
   type ComponentProps,
 } from "solid-js"
 import { createStore } from "solid-js/store"
-import { Menu } from "@opencode-ai/ui/menu"
-import { Icon } from "@opencode-ai/ui/icon"
-import { ProjectAvatar } from "@opencode-ai/ui/project-avatar"
+import { Menu } from "@ocpp/ui/menu"
+import { Icon } from "@ocpp/ui/icon"
+import { ProjectAvatar } from "@ocpp/ui/project-avatar"
 import { getProjectAvatarVariant } from "@/shell/state/layout"
 import { useLanguage } from "@/runtime/i18n/language"
 import { displayName, getProjectAvatarSource } from "@/shell/layout/helpers"

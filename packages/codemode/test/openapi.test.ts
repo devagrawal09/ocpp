@@ -14,8 +14,8 @@ type Recorded = {
   readonly body: unknown
 }
 
-const opencodeSpec = async (): Promise<Document> => {
-  return Bun.file(new URL("./fixtures/opencode-v2-openapi.json", import.meta.url)).json() as Promise<Document>
+const ocppSpec = async (): Promise<Document> => {
+  return Bun.file(new URL("./fixtures/ocpp-v2-openapi.json", import.meta.url)).json() as Promise<Document>
 }
 
 const happyPathSpec = async (): Promise<Document> => {
@@ -215,8 +215,8 @@ describe("OpenAPI.fromSpec", () => {
     expect(client.requests[3]!.headers.authorization).toBe("Bearer bearer-secret")
   })
 
-  test("converts representative opencode operations into the expected tool shape", async () => {
-    const spec = await opencodeSpec()
+  test("converts representative ocpp operations into the expected tool shape", async () => {
+    const spec = await ocppSpec()
     const result = OpenAPI.fromSpec({ spec, baseUrl })
 
     expect(result.skipped).toHaveLength(4)
@@ -940,8 +940,8 @@ describe("OpenAPI.fromSpec", () => {
     expect(result).toMatchObject({ password: "returned-by-server", profile: { secret: "returned-secret" } })
   })
 
-  test("documents that the opencode fixture is unauthenticated", async () => {
-    const spec = await opencodeSpec()
+  test("documents that the ocpp fixture is unauthenticated", async () => {
+    const spec = await ocppSpec()
     const components = isRecord(spec.components) ? spec.components : {}
     const result = OpenAPI.fromSpec({ spec, baseUrl })
 
@@ -954,16 +954,16 @@ describe("OpenAPI.fromSpec", () => {
     expect(Object.keys(isRecord(input.properties) ? input.properties : {})).toStrictEqual([])
   })
 
-  test("exposes real opencode operations through CodeMode discovery", async () => {
+  test("exposes real ocpp operations through CodeMode discovery", async () => {
     const { layer } = recordingClient(() => json({}))
     const runtime = CodeMode.make({
-      tools: { opencode: OpenAPI.fromSpec({ spec: await opencodeSpec(), baseUrl }).tools },
+      tools: { ocpp: OpenAPI.fromSpec({ spec: await ocppSpec(), baseUrl }).tools },
     })
     const result = await Effect.runPromise(
       runtime
         .execute(
           `
-        return tools.search({ query: "global health", namespace: "opencode", limit: 1 })
+        return tools.search({ query: "global health", namespace: "ocpp", limit: 1 })
       `,
         )
         .pipe(Effect.provide(layer)),
@@ -974,7 +974,7 @@ describe("OpenAPI.fromSpec", () => {
     expect(result.value).toMatchObject({
       items: [
         {
-          path: "tools.opencode.v2.health.get",
+          path: "tools.ocpp.v2.health.get",
           description: "Check whether the API server is ready to accept requests.",
         },
       ],
@@ -982,21 +982,21 @@ describe("OpenAPI.fromSpec", () => {
     expect(JSON.stringify(result.value)).toContain("healthy: true")
   })
 
-  test("invokes real opencode path parameters and JSON request bodies", async () => {
+  test("invokes real ocpp path parameters and JSON request bodies", async () => {
     const { requests, layer } = recordingClient((request) => {
       if (request.method === "GET") return json({ id: "ses_123" })
       return json({ id: "ses_456" })
     })
     const runtime = CodeMode.make({
-      tools: { opencode: OpenAPI.fromSpec({ spec: await opencodeSpec(), baseUrl }).tools },
+      tools: { ocpp: OpenAPI.fromSpec({ spec: await ocppSpec(), baseUrl }).tools },
     })
 
     const result = await Effect.runPromise(
       runtime
         .execute(
           `
-          const existing = tools.opencode.v2.session.get({ sessionID: "ses_123" })
-          const created = tools.opencode.v2.session.create({ id: "ses_456" })
+          const existing = tools.ocpp.v2.session.get({ sessionID: "ses_123" })
+          const created = tools.ocpp.v2.session.create({ id: "ses_456" })
           return { existing, created }
         `,
         )
@@ -1014,9 +1014,9 @@ describe("OpenAPI.fromSpec", () => {
     })
   })
 
-  test("serializes deep-object query parameters from the opencode fixture", async () => {
+  test("serializes deep-object query parameters from the ocpp fixture", async () => {
     const client = recordingClient(() => json({ directory: "/tmp" }))
-    const location = toolAt(OpenAPI.fromSpec({ spec: await opencodeSpec(), baseUrl }).tools, "v2.location.get")
+    const location = toolAt(OpenAPI.fromSpec({ spec: await ocppSpec(), baseUrl }).tools, "v2.location.get")
     if (!Tool.isTool(location)) throw new Error("v2.location.get was not generated")
 
     await Effect.runPromise(
@@ -1435,11 +1435,11 @@ describe("OpenAPI.fromSpec", () => {
   test("fails missing required parameters before auth and network", async () => {
     const { requests, layer } = recordingClient(() => json({}))
     const runtime = CodeMode.make({
-      tools: { opencode: OpenAPI.fromSpec({ spec: await opencodeSpec(), baseUrl }).tools },
+      tools: { ocpp: OpenAPI.fromSpec({ spec: await ocppSpec(), baseUrl }).tools },
     })
 
     const result = await Effect.runPromise(
-      runtime.execute("return tools.opencode.v2.session.get({})").pipe(Effect.provide(layer)),
+      runtime.execute("return tools.ocpp.v2.session.get({})").pipe(Effect.provide(layer)),
     )
 
     expect(result).toMatchObject({ ok: false })

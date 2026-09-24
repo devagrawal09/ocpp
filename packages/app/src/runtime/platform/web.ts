@@ -2,7 +2,7 @@ import { createBrowserDraftStore } from "@/runtime/persistence/drafts"
 import { ServerConnection } from "@/runtime/server/registry"
 import type { Platform } from "./platform"
 
-const DEFAULT_SERVER_URL_KEY = "opencode.settings.dat:defaultServerUrl"
+const DEFAULT_SERVER_URL_KEY = "ocpp.settings.dat:defaultServerUrl"
 
 export function createWebPlatform(version: string) {
   const currentServerUrl = getCurrentServerUrl()
@@ -30,7 +30,7 @@ export function createWebPlatform(version: string) {
 
       const notification = new Notification(title, {
         body: description ?? "",
-        icon: "https://opencode.ai/favicon-96x96-v3.png",
+        icon: "https://ocpp.ai/favicon-96x96-v3.png",
       })
       notification.onclick = () => {
         window.focus()
@@ -53,9 +53,9 @@ export function createWebPlatform(version: string) {
 }
 
 function getCurrentServerUrl() {
-  if (location.hostname.includes("opencode.ai")) return "http://localhost:4096"
+  if (location.hostname.includes("ocpp.ai")) return "http://localhost:4096"
   if (import.meta.env.DEV)
-    return `http://${import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"}`
+    return `http://${import.meta.env.VITE_OCPP_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OCPP_SERVER_PORT ?? "4096"}`
   return location.origin
 }
 

@@ -1,10 +1,10 @@
 import { Effect } from "effect"
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { Integration } from "../../integration.js"
 import { Provider } from "../../provider.js"
 
 export const LLMGatewayPlugin = define({
-  id: "opencode.provider.llmgateway",
+  id: "ocpp.provider.llmgateway",
   effect: Effect.fn(function* (ctx) {
     const integrations = yield* Integration.Service
     const configured = new Set((yield* integrations.list()).map((integration) => integration.id))
@@ -18,9 +18,9 @@ export const LLMGatewayPlugin = define({
         evt.provider.update(item.provider.id, (provider) => {
           provider.headers = {
             ...provider.headers,
-            "HTTP-Referer": "https://opencode.ai/",
-            "X-Title": "opencode",
-            "X-Source": "opencode",
+            "HTTP-Referer": "https://ocpp.ai/",
+            "X-Title": "ocpp",
+            "X-Source": "ocpp",
           }
         })
       }

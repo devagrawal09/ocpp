@@ -8,7 +8,7 @@ import {
   selectTheme,
   type Mode,
   type ThemeDefinition,
-} from "@opencode-ai/theme/tui"
+} from "@ocpp/theme/tui"
 import { parseTheme, type ThemeDocumentSource } from "../../../src/theme"
 
 const light = selectTheme(DEFAULT_THEME, "light")
@@ -136,7 +136,7 @@ test("steps by hue source when adjacent colors have equal values", () => {
   expect(theme.increase(theme.hue.neutral[300])).toBe(theme.hue.neutral[400])
 })
 
-test("merges partial documents with the selected OpenCode defaults", () => {
+test("merges partial documents with the selected OC++ defaults", () => {
   const theme = resolveSource(
     {
       version: 2,
@@ -202,7 +202,7 @@ test("expands user structural fallbacks before merging defaults", () => {
   )
 })
 
-test("standalone themes skip OpenCode defaults and use the red core fallback", () => {
+test("standalone themes skip OC++ defaults and use the red core fallback", () => {
   const document = { version: 2, standalone: true, light: { hue: light.hue }, dark: { hue: dark.hue } } as const
   const lightTheme = resolveSource(document, "light")
   const darkTheme = resolveSource(document, "dark")

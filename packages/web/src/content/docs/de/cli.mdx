@@ -1,30 +1,30 @@
 ---
 title: CLI
-description: OpenCode CLI Optionen und Befehle.
+description: OC++ CLI Optionen und Befehle.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-Der OpenCode CLI startet standardmäßig das [TUI](/docs/tui), wenn er ohne Argumente ausgeführt wird.
+Der OC++ CLI startet standardmäßig das [TUI](/docs/tui), wenn er ohne Argumente ausgeführt wird.
 
 ```bash
-opencode
+ocpp
 ```
 
-Es akzeptiert aber auch Befehle, wie auf dieser Seite dokumentiert. Dadurch können Sie programmgesteuert mit OpenCode interagieren.
+Es akzeptiert aber auch Befehle, wie auf dieser Seite dokumentiert. Dadurch können Sie programmgesteuert mit OC++ interagieren.
 
 ```bash
-opencode run "Explain how closures work in JavaScript"
+ocpp run "Explain how closures work in JavaScript"
 ```
 
 ---
 
 ### tui
 
-Starten Sie die Terminalbenutzeroberfläche OpenCode.
+Starten Sie die Terminalbenutzeroberfläche OC++.
 
 ```bash
-opencode [project]
+ocpp [project]
 ```
 
 #### Optionen
@@ -44,48 +44,48 @@ opencode [project]
 
 ## Befehle
 
-Der OpenCode CLI verfügt außerdem über die folgenden Befehle.
+Der OC++ CLI verfügt außerdem über die folgenden Befehle.
 
 ---
 
 ### agent
 
-Agenten für OpenCode verwalten.
+Agenten für OC++ verwalten.
 
 ```bash
-opencode agent [command]
+ocpp agent [command]
 ```
 
 ---
 
 ### attach
 
-Schließen Sie ein Terminal an einen bereits laufenden OpenCode-Backend-Server an, der über die Befehle `serve` oder `web` gestartet wurde.
+Schließen Sie ein Terminal an einen bereits laufenden OC++-Backend-Server an, der über die Befehle `serve` oder `web` gestartet wurde.
 
 ```bash
-opencode attach [url]
+ocpp attach [url]
 ```
 
-Dies ermöglicht die Verwendung von TUI mit einem Remote-Backend OpenCode. Zum Beispiel:
+Dies ermöglicht die Verwendung von TUI mit einem Remote-Backend OC++. Zum Beispiel:
 
 ```bash
 # Start the backend server for web/mobile access
-opencode web --port 4096 --hostname 0.0.0.0
+ocpp web --port 4096 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-opencode attach http://10.20.30.40:4096
+ocpp attach http://10.20.30.40:4096
 ```
 
 #### Optionen
 
-| Flag                                     | Kurz | Beschreibung                                                                       |
-| ---------------------------------------- | ---- | ---------------------------------------------------------------------------------- |
-| <nobr><code>{"--dir"}</code></nobr>      |      | Arbeitsverzeichnis zum Starten von TUI in                                          |
-| <nobr><code>{"--continue"}</code></nobr> | `-c` | Letzte Sitzung fortsetzen                                                          |
-| <nobr><code>{"--session"}</code></nobr>  | `-s` | Session-ID zum Fortfahren                                                          |
-| <nobr><code>{"--fork"}</code></nobr>     |      | Sitzung beim Fortsetzen abzweigen (mit `--continue` oder `--session` verwenden)    |
-| <nobr><code>{"--password"}</code></nobr> | `-p` | Basic-Auth-Passwort (standardmäßig `OPENCODE_SERVER_PASSWORD`)                     |
-| <nobr><code>{"--username"}</code></nobr> | `-u` | Basic-Auth-Benutzername (standardmäßig `OPENCODE_SERVER_USERNAME` oder `opencode`) |
+| Flag                                     | Kurz | Beschreibung                                                                    |
+| ---------------------------------------- | ---- | ------------------------------------------------------------------------------- |
+| <nobr><code>{"--dir"}</code></nobr>      |      | Arbeitsverzeichnis zum Starten von TUI in                                       |
+| <nobr><code>{"--continue"}</code></nobr> | `-c` | Letzte Sitzung fortsetzen                                                       |
+| <nobr><code>{"--session"}</code></nobr>  | `-s` | Session-ID zum Fortfahren                                                       |
+| <nobr><code>{"--fork"}</code></nobr>     |      | Sitzung beim Fortsetzen abzweigen (mit `--continue` oder `--session` verwenden) |
+| <nobr><code>{"--password"}</code></nobr> | `-p` | Basic-Auth-Passwort (standardmäßig `OCPP_SERVER_PASSWORD`)                      |
+| <nobr><code>{"--username"}</code></nobr> | `-u` | Basic-Auth-Benutzername (standardmäßig `OCPP_SERVER_USERNAME` oder `ocpp`)      |
 
 ---
 
@@ -94,7 +94,7 @@ opencode attach http://10.20.30.40:4096
 Erstellen Sie einen neuen Agenten mit benutzerdefinierter Konfiguration.
 
 ```bash
-opencode agent create
+ocpp agent create
 ```
 
 Dieser Befehl führt Sie durch die Erstellung eines neuen Agenten mit einer benutzerdefinierten Systemeingabeaufforderung und Toolkonfiguration.
@@ -106,7 +106,7 @@ Dieser Befehl führt Sie durch die Erstellung eines neuen Agenten mit einer benu
 Listen Sie alle verfügbaren Agenten auf.
 
 ```bash
-opencode agent list
+ocpp agent list
 ```
 
 ---
@@ -116,20 +116,20 @@ opencode agent list
 Befehl zum Verwalten von Anmeldeinformationen und Anmelden für Anbieter.
 
 ```bash
-opencode auth [command]
+ocpp auth [command]
 ```
 
 ---
 
 #### login
 
-OpenCode wird von der Anbieterliste bei [Models.dev](https://models.dev) unterstützt, sodass Sie `opencode auth login` verwenden können, um API-Schlüssel für jeden Anbieter zu konfigurieren, den Sie verwenden möchten. Dies wird in `~/.local/share/opencode/auth.json` gespeichert.
+OC++ wird von der Anbieterliste bei [Models.dev](https://models.dev) unterstützt, sodass Sie `ocpp auth login` verwenden können, um API-Schlüssel für jeden Anbieter zu konfigurieren, den Sie verwenden möchten. Dies wird in `~/.local/share/ocpp/auth.json` gespeichert.
 
 ```bash
-opencode auth login
+ocpp auth login
 ```
 
-Wenn OpenCode startet, lädt es den Anbieter aus der Anmeldeinformationsdatei. Und ob in Ihren Umgebungen Schlüssel sind oder in Ihrem Projekt eine `.env`-Datei vorhanden ist.
+Wenn OC++ startet, lädt es den Anbieter aus der Anmeldeinformationsdatei. Und ob in Ihren Umgebungen Schlüssel sind oder in Ihrem Projekt eine `.env`-Datei vorhanden ist.
 
 ---
 
@@ -138,13 +138,13 @@ Wenn OpenCode startet, lädt es den Anbieter aus der Anmeldeinformationsdatei. U
 Listet alle authentifizierten Anbieter auf, wie in der Anmeldeinformationsdatei gespeichert.
 
 ```bash
-opencode auth list
+ocpp auth list
 ```
 
 Oder die Kurzversion.
 
 ```bash
-opencode auth ls
+ocpp auth ls
 ```
 
 ---
@@ -154,7 +154,7 @@ opencode auth ls
 Melden Sie sich von einem Anbieter ab, indem Sie ihn aus der Anmeldeinformationsdatei löschen.
 
 ```bash
-opencode auth logout
+ocpp auth logout
 ```
 
 ---
@@ -164,7 +164,7 @@ opencode auth logout
 Verwalten Sie den GitHub-Agenten für die Repository-Automatisierung.
 
 ```bash
-opencode github [command]
+ocpp github [command]
 ```
 
 ---
@@ -174,7 +174,7 @@ opencode github [command]
 Installieren Sie den GitHub-Agenten in Ihrem Repository.
 
 ```bash
-opencode github install
+ocpp github install
 ```
 
 Dadurch wird der erforderliche GitHub-Aktionsworkflow eingerichtet und Sie durch den Konfigurationsprozess geführt. [Learn more](/docs/github).
@@ -186,7 +186,7 @@ Dadurch wird der erforderliche GitHub-Aktionsworkflow eingerichtet und Sie durch
 Führen Sie den GitHub-Agenten aus. Dies wird normalerweise in GitHub-Aktionen verwendet.
 
 ```bash
-opencode github run
+ocpp github run
 ```
 
 ##### Optionen
@@ -203,7 +203,7 @@ opencode github run
 Verwalten Sie Model Context Protocol-Server.
 
 ```bash
-opencode mcp [command]
+ocpp mcp [command]
 ```
 
 ---
@@ -213,7 +213,7 @@ opencode mcp [command]
 Fügen Sie Ihrer Konfiguration einen MCP-Server hinzu.
 
 ```bash
-opencode mcp add
+ocpp mcp add
 ```
 
 Dieser Befehl führt Sie durch das Hinzufügen eines lokalen oder Remote-MCP-Servers.
@@ -225,13 +225,13 @@ Dieser Befehl führt Sie durch das Hinzufügen eines lokalen oder Remote-MCP-Ser
 Listen Sie alle konfigurierten MCP-Server und deren Verbindungsstatus auf.
 
 ```bash
-opencode mcp list
+ocpp mcp list
 ```
 
 Oder nutzen Sie die Kurzversion.
 
 ```bash
-opencode mcp ls
+ocpp mcp ls
 ```
 
 ---
@@ -241,7 +241,7 @@ opencode mcp ls
 Authentifizieren Sie sich mit einem OAuth-fähigen MCP-Server.
 
 ```bash
-opencode mcp auth [name]
+ocpp mcp auth [name]
 ```
 
 Wenn Sie keinen Servernamen angeben, werden Sie aufgefordert, einen der verfügbaren OAuth-fähigen Server auszuwählen.
@@ -249,13 +249,13 @@ Wenn Sie keinen Servernamen angeben, werden Sie aufgefordert, einen der verfügb
 Sie können auch OAuth-fähige Server und deren Authentifizierungsstatus auflisten.
 
 ```bash
-opencode mcp auth list
+ocpp mcp auth list
 ```
 
 Oder nutzen Sie die Kurzversion.
 
 ```bash
-opencode mcp auth ls
+ocpp mcp auth ls
 ```
 
 ---
@@ -265,7 +265,7 @@ opencode mcp auth ls
 Entfernen Sie OAuth-Anmeldeinformationen für einen MCP-Server.
 
 ```bash
-opencode mcp logout [name]
+ocpp mcp logout [name]
 ```
 
 ---
@@ -275,7 +275,7 @@ opencode mcp logout [name]
 Beheben Sie OAuth-Verbindungsprobleme für einen MCP-Server.
 
 ```bash
-opencode mcp debug <name>
+ocpp mcp debug <name>
 ```
 
 ---
@@ -285,7 +285,7 @@ opencode mcp debug <name>
 Listen Sie alle verfügbaren Modelle der konfigurierten Anbieter auf.
 
 ```bash
-opencode models [provider]
+ocpp models [provider]
 ```
 
 Dieser Befehl zeigt alle bei Ihren konfigurierten Anbietern verfügbaren Modelle im Format `provider/model` an.
@@ -295,7 +295,7 @@ Dies ist nützlich, um die genauen Modellnamen herauszufinden, die in [Ihrer Kon
 Sie können optional eine Anbieter-ID übergeben, um Modelle nach diesem Anbieter zu filtern.
 
 ```bash
-opencode models anthropic
+ocpp models anthropic
 ```
 
 #### Optionen
@@ -305,36 +305,36 @@ opencode models anthropic
 | <nobr><code>{"--refresh"}</code></nobr> | Aktualisieren Sie den Modellcache von models.dev                                      |
 | <nobr><code>{"--verbose"}</code></nobr> | Verwenden Sie eine ausführlichere Modellausgabe (einschließlich Metadaten wie Kosten) |
 
-Verwenden Sie das Flag `--refresh`, um die zwischengespeicherte Modellliste zu aktualisieren. Dies ist nützlich, wenn einem Anbieter neue Modelle hinzugefügt wurden und Sie diese in OpenCode sehen möchten.
+Verwenden Sie das Flag `--refresh`, um die zwischengespeicherte Modellliste zu aktualisieren. Dies ist nützlich, wenn einem Anbieter neue Modelle hinzugefügt wurden und Sie diese in OC++ sehen möchten.
 
 ```bash
-opencode models --refresh
+ocpp models --refresh
 ```
 
 ---
 
 ### run
 
-Führen Sie OpenCode im nicht interaktiven Modus aus, indem Sie direkt eine Eingabeaufforderung übergeben.
+Führen Sie OC++ im nicht interaktiven Modus aus, indem Sie direkt eine Eingabeaufforderung übergeben.
 
 ```bash
-opencode run [message..]
+ocpp run [message..]
 ```
 
 Dies ist nützlich für die Skripterstellung, die Automatisierung oder wenn Sie eine schnelle Antwort wünschen, ohne das vollständige TUI zu starten. Zum Beispiel:
 
-```bash "opencode run"
-opencode run Explain the use of context in Go
+```bash "ocpp run"
+ocpp run Explain the use of context in Go
 ```
 
-Sie können auch eine Verbindung zu einer laufenden `opencode serve`-Instanz herstellen, um bei jedem Lauf Kaltstartzeiten für den MCP-Server zu vermeiden:
+Sie können auch eine Verbindung zu einer laufenden `ocpp serve`-Instanz herstellen, um bei jedem Lauf Kaltstartzeiten für den MCP-Server zu vermeiden:
 
 ```bash
 # Start a headless server in one terminal
-opencode serve
+ocpp serve
 
 # In another terminal, run commands that attach to it
-opencode run --attach http://localhost:4096 "Explain async/await in JavaScript"
+ocpp run --attach http://localhost:4096 "Explain async/await in JavaScript"
 ```
 
 #### Optionen
@@ -351,9 +351,9 @@ opencode run --attach http://localhost:4096 "Explain async/await in JavaScript"
 | <nobr><code>{"--file"}</code></nobr>     | `-f` | Datei(en) zum Anhängen an die Nachricht                                                             |
 | <nobr><code>{"--format"}</code></nobr>   |      | Format: default (formatiert) oder json (rohe JSON-Ereignisse)                                       |
 | <nobr><code>{"--title"}</code></nobr>    |      | Titel für die Sitzung (verwendet eine verkürzte Eingabeaufforderung, wenn kein Wert angegeben wird) |
-| <nobr><code>{"--attach"}</code></nobr>   |      | An einen laufenden OpenCode-Server anschließen (z.B. http://localhost:4096)                         |
-| <nobr><code>{"--password"}</code></nobr> | `-p` | Basic-Auth-Passwort (standardmäßig `OPENCODE_SERVER_PASSWORD`)                                      |
-| <nobr><code>{"--username"}</code></nobr> | `-u` | Basic-Auth-Benutzername (standardmäßig `OPENCODE_SERVER_USERNAME` oder `opencode`)                  |
+| <nobr><code>{"--attach"}</code></nobr>   |      | An einen laufenden OC++-Server anschließen (z.B. http://localhost:4096)                             |
+| <nobr><code>{"--password"}</code></nobr> | `-p` | Basic-Auth-Passwort (standardmäßig `OCPP_SERVER_PASSWORD`)                                          |
+| <nobr><code>{"--username"}</code></nobr> | `-u` | Basic-Auth-Benutzername (standardmäßig `OCPP_SERVER_USERNAME` oder `ocpp`)                          |
 | <nobr><code>{"--dir"}</code></nobr>      |      | Verzeichnis für die Ausführung, oder Pfad auf dem Remote-Server beim Anhängen                       |
 | <nobr><code>{"--variant"}</code></nobr>  |      | Modellvariante (anbieterspezifischer Reasoning-Aufwand)                                             |
 | <nobr><code>{"--thinking"}</code></nobr> |      | Denkblöcke anzeigen                                                                                 |
@@ -363,13 +363,13 @@ opencode run --attach http://localhost:4096 "Explain async/await in JavaScript"
 
 ### serve
 
-Starten Sie einen Headless-OpenCode-Server für den API-Zugriff. Sehen Sie sich die [Server-Dokumentation](/docs/server) für die vollständige HTTP-Schnittstelle an.
+Starten Sie einen Headless-OC++-Server für den API-Zugriff. Sehen Sie sich die [Server-Dokumentation](/docs/server) für die vollständige HTTP-Schnittstelle an.
 
 ```bash
-opencode serve
+ocpp serve
 ```
 
-Dadurch wird ein HTTP-Server gestartet, der API-Zugriff auf OpenCode-Funktionalität ohne die TUI-Schnittstelle bietet. Legen Sie `OPENCODE_SERVER_PASSWORD` fest, um die HTTP-Basisauthentifizierung zu aktivieren (Benutzername ist standardmäßig `opencode`).
+Dadurch wird ein HTTP-Server gestartet, der API-Zugriff auf OC++-Funktionalität ohne die TUI-Schnittstelle bietet. Legen Sie `OCPP_SERVER_PASSWORD` fest, um die HTTP-Basisauthentifizierung zu aktivieren (Benutzername ist standardmäßig `ocpp`).
 
 #### Optionen
 
@@ -384,20 +384,20 @@ Dadurch wird ein HTTP-Server gestartet, der API-Zugriff auf OpenCode-Funktionali
 
 ### session
 
-OpenCode-Sitzungen verwalten.
+OC++-Sitzungen verwalten.
 
 ```bash
-opencode session [command]
+ocpp session [command]
 ```
 
 ---
 
 #### list
 
-Listen Sie alle OpenCode-Sitzungen auf.
+Listen Sie alle OC++-Sitzungen auf.
 
 ```bash
-opencode session list
+ocpp session list
 ```
 
 ##### Optionen
@@ -411,10 +411,10 @@ opencode session list
 
 ### stats
 
-Zeigen Sie Token-Nutzungs- und Kostenstatistiken für Ihre OpenCode-Sitzungen an.
+Zeigen Sie Token-Nutzungs- und Kostenstatistiken für Ihre OC++-Sitzungen an.
 
 ```bash
-opencode stats
+ocpp stats
 ```
 
 #### Optionen
@@ -433,7 +433,7 @@ opencode stats
 Sitzungsdaten als JSON exportieren.
 
 ```bash
-opencode export [sessionID]
+ocpp export [sessionID]
 ```
 
 Wenn Sie keine Sitzungs-ID angeben, werden Sie aufgefordert, eine der verfügbaren Sitzungen auszuwählen.
@@ -442,30 +442,30 @@ Wenn Sie keine Sitzungs-ID angeben, werden Sie aufgefordert, eine der verfügbar
 
 ### import
 
-Importieren Sie Sitzungsdaten aus einer JSON-Datei oder einer OpenCode-Freigabe-URL.
+Importieren Sie Sitzungsdaten aus einer JSON-Datei oder einer OC++-Freigabe-URL.
 
 ```bash
-opencode import <file>
+ocpp import <file>
 ```
 
-Sie können aus einer lokalen Datei oder einer OpenCode-Freigabe-URL importieren.
+Sie können aus einer lokalen Datei oder einer OC++-Freigabe-URL importieren.
 
 ```bash
-opencode import session.json
-opencode import https://opncd.ai/s/abc123
+ocpp import session.json
+ocpp import https://ocpp.ai/s/abc123
 ```
 
 ---
 
 ### web
 
-Starten Sie einen Headless-OpenCode-Server mit einer Weboberfläche.
+Starten Sie einen Headless-OC++-Server mit einer Weboberfläche.
 
 ```bash
-opencode web
+ocpp web
 ```
 
-Dadurch wird ein HTTP-Server gestartet und ein Webbrowser geöffnet, um über eine Webschnittstelle auf OpenCode zuzugreifen. Legen Sie `OPENCODE_SERVER_PASSWORD` fest, um die HTTP-Basisauthentifizierung zu aktivieren (Benutzername ist standardmäßig `opencode`).
+Dadurch wird ein HTTP-Server gestartet und ein Webbrowser geöffnet, um über eine Webschnittstelle auf OC++ zuzugreifen. Legen Sie `OCPP_SERVER_PASSWORD` fest, um die HTTP-Basisauthentifizierung zu aktivieren (Benutzername ist standardmäßig `ocpp`).
 
 #### Optionen
 
@@ -483,7 +483,7 @@ Dadurch wird ein HTTP-Server gestartet und ein Webbrowser geöffnet, um über ei
 Starten Sie einen ACP (Agent Client Protocol) Server.
 
 ```bash
-opencode acp
+ocpp acp
 ```
 
 Dieser Befehl startet einen ACP-Server, der über stdin/stdout unter Verwendung von nd-JSON kommuniziert.
@@ -500,10 +500,10 @@ Dieser Befehl startet einen ACP-Server, der über stdin/stdout unter Verwendung 
 
 ### uninstall
 
-Deinstallieren Sie OpenCode und entfernen Sie alle zugehörigen Dateien.
+Deinstallieren Sie OC++ und entfernen Sie alle zugehörigen Dateien.
 
 ```bash
-opencode uninstall
+ocpp uninstall
 ```
 
 #### Optionen
@@ -519,22 +519,22 @@ opencode uninstall
 
 ### upgrade
 
-Aktualisiert OpenCode auf die neueste Version oder eine bestimmte Version.
+Aktualisiert OC++ auf die neueste Version oder eine bestimmte Version.
 
 ```bash
-opencode upgrade [target]
+ocpp upgrade [target]
 ```
 
 Um auf die neueste Version zu aktualisieren:
 
 ```bash
-opencode upgrade
+ocpp upgrade
 ```
 
 Um auf eine bestimmte Version zu aktualisieren.
 
 ```bash
-opencode upgrade v0.1.48
+ocpp upgrade v0.1.48
 ```
 
 #### Optionen
@@ -547,7 +547,7 @@ opencode upgrade v0.1.48
 
 ## Globale Flags
 
-Der OpenCode CLI akzeptiert die folgenden globalen Flags.
+Der OC++ CLI akzeptiert die folgenden globalen Flags.
 
 | Flag                                       | Kurz | Beschreibung                              |
 | ------------------------------------------ | ---- | ----------------------------------------- |
@@ -560,33 +560,33 @@ Der OpenCode CLI akzeptiert die folgenden globalen Flags.
 
 ## Umgebungsvariablen
 
-OpenCode kann mithilfe von Umgebungsvariablen konfiguriert werden.
+OC++ kann mithilfe von Umgebungsvariablen konfiguriert werden.
 
-| Variable                              | Typ             | Beschreibung                                                                     |
-| ------------------------------------- | --------------- | -------------------------------------------------------------------------------- |
-| `OPENCODE_AUTO_SHARE`                 | boolescher Wert | Sitzungen automatisch teilen                                                     |
-| `OPENCODE_GIT_BASH_PATH`              | Zeichenfolge    | Pfad zur ausführbaren Git Bash-Datei unter Windows                               |
-| `OPENCODE_CONFIG`                     | Zeichenfolge    | Pfad zur Konfigurationsdatei                                                     |
-| `OPENCODE_CONFIG_DIR`                 | Zeichenfolge    | Pfad zum Konfigurationsverzeichnis                                               |
-| `OPENCODE_CONFIG_CONTENT`             | Zeichenfolge    | Inline-JSON-Konfigurationsinhalt                                                 |
-| `OPENCODE_DISABLE_AUTOUPDATE`         | boolescher Wert | Automatische Update-Prüfungen deaktivieren                                       |
-| `OPENCODE_DISABLE_PRUNE`              | boolescher Wert | Bereinigung alter Daten deaktivieren                                             |
-| `OPENCODE_DISABLE_TERMINAL_TITLE`     | boolescher Wert | Deaktivieren Sie die automatische Aktualisierung von Terminaltiteln              |
-| `OPENCODE_PERMISSION`                 | Zeichenfolge    | Inline-JSON-Berechtigungskonfiguration                                           |
-| `OPENCODE_DISABLE_DEFAULT_PLUGINS`    | boolescher Wert | Standard-Plugins deaktivieren                                                    |
-| `OPENCODE_DISABLE_LSP_DOWNLOAD`       | boolescher Wert | Automatische LSP-Server-Downloads deaktivieren                                   |
-| `OPENCODE_ENABLE_EXPERIMENTAL_MODELS` | boolescher Wert | Experimentelle Modelle aktivieren                                                |
-| `OPENCODE_DISABLE_AUTOCOMPACT`        | boolescher Wert | Automatische Kontextkomprimierung deaktivieren                                   |
-| `OPENCODE_DISABLE_CLAUDE_CODE`        | boolescher Wert | Deaktivieren Sie das Lesen von `.claude` (Prompt + Skills)                       |
-| `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT` | boolescher Wert | Deaktivieren Sie das Lesen von `~/.claude/CLAUDE.md`                             |
-| `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` | boolescher Wert | Deaktivieren Sie das Laden von `.claude/skills`                                  |
-| `OPENCODE_DISABLE_MODELS_FETCH`       | boolescher Wert | Deaktivieren Sie das Abrufen von Modellen aus Remote-Quellen                     |
-| `OPENCODE_FAKE_VCS`                   | Zeichenfolge    | Gefälschter VCS-Anbieter zu Testzwecken                                          |
-| `OPENCODE_CLIENT`                     | Zeichenfolge    | Client-ID (standardmäßig `cli`)                                                  |
-| `OPENCODE_ENABLE_EXA`                 | boolescher Wert | Exa-Websuchtools aktivieren                                                      |
-| `OPENCODE_SERVER_PASSWORD`            | Zeichenfolge    | Aktivieren Sie die Basisauthentifizierung für `serve`/`web`                      |
-| `OPENCODE_SERVER_USERNAME`            | Zeichenfolge    | Benutzernamen für die Basisauthentifizierung überschreiben (Standard `opencode`) |
-| `OPENCODE_MODELS_URL`                 | Zeichenfolge    | Benutzerdefinierte URL zum Abrufen der Modellkonfiguration                       |
+| Variable                          | Typ             | Beschreibung                                                                 |
+| --------------------------------- | --------------- | ---------------------------------------------------------------------------- |
+| `OCPP_AUTO_SHARE`                 | boolescher Wert | Sitzungen automatisch teilen                                                 |
+| `OCPP_GIT_BASH_PATH`              | Zeichenfolge    | Pfad zur ausführbaren Git Bash-Datei unter Windows                           |
+| `OCPP_CONFIG`                     | Zeichenfolge    | Pfad zur Konfigurationsdatei                                                 |
+| `OCPP_CONFIG_DIR`                 | Zeichenfolge    | Pfad zum Konfigurationsverzeichnis                                           |
+| `OCPP_CONFIG_CONTENT`             | Zeichenfolge    | Inline-JSON-Konfigurationsinhalt                                             |
+| `OCPP_DISABLE_AUTOUPDATE`         | boolescher Wert | Automatische Update-Prüfungen deaktivieren                                   |
+| `OCPP_DISABLE_PRUNE`              | boolescher Wert | Bereinigung alter Daten deaktivieren                                         |
+| `OCPP_DISABLE_TERMINAL_TITLE`     | boolescher Wert | Deaktivieren Sie die automatische Aktualisierung von Terminaltiteln          |
+| `OCPP_PERMISSION`                 | Zeichenfolge    | Inline-JSON-Berechtigungskonfiguration                                       |
+| `OCPP_DISABLE_DEFAULT_PLUGINS`    | boolescher Wert | Standard-Plugins deaktivieren                                                |
+| `OCPP_DISABLE_LSP_DOWNLOAD`       | boolescher Wert | Automatische LSP-Server-Downloads deaktivieren                               |
+| `OCPP_ENABLE_EXPERIMENTAL_MODELS` | boolescher Wert | Experimentelle Modelle aktivieren                                            |
+| `OCPP_DISABLE_AUTOCOMPACT`        | boolescher Wert | Automatische Kontextkomprimierung deaktivieren                               |
+| `OCPP_DISABLE_CLAUDE_CODE`        | boolescher Wert | Deaktivieren Sie das Lesen von `.claude` (Prompt + Skills)                   |
+| `OCPP_DISABLE_CLAUDE_CODE_PROMPT` | boolescher Wert | Deaktivieren Sie das Lesen von `~/.claude/CLAUDE.md`                         |
+| `OCPP_DISABLE_CLAUDE_CODE_SKILLS` | boolescher Wert | Deaktivieren Sie das Laden von `.claude/skills`                              |
+| `OCPP_DISABLE_MODELS_FETCH`       | boolescher Wert | Deaktivieren Sie das Abrufen von Modellen aus Remote-Quellen                 |
+| `OCPP_FAKE_VCS`                   | Zeichenfolge    | Gefälschter VCS-Anbieter zu Testzwecken                                      |
+| `OCPP_CLIENT`                     | Zeichenfolge    | Client-ID (standardmäßig `cli`)                                              |
+| `OCPP_ENABLE_EXA`                 | boolescher Wert | Exa-Websuchtools aktivieren                                                  |
+| `OCPP_SERVER_PASSWORD`            | Zeichenfolge    | Aktivieren Sie die Basisauthentifizierung für `serve`/`web`                  |
+| `OCPP_SERVER_USERNAME`            | Zeichenfolge    | Benutzernamen für die Basisauthentifizierung überschreiben (Standard `ocpp`) |
+| `OCPP_MODELS_URL`                 | Zeichenfolge    | Benutzerdefinierte URL zum Abrufen der Modellkonfiguration                   |
 
 ---
 
@@ -594,22 +594,22 @@ OpenCode kann mithilfe von Umgebungsvariablen konfiguriert werden.
 
 Diese Umgebungsvariablen ermöglichen experimentelle Funktionen, die sich ändern oder entfernt werden können.
 
-| Variable                                        | Typ             | Beschreibung                                              |
-| ----------------------------------------------- | --------------- | --------------------------------------------------------- |
-| `OPENCODE_EXPERIMENTAL`                         | boolescher Wert | Experimentelle Funktionen unter dem Sammelflag aktivieren |
-| `OPENCODE_EXPERIMENTAL_ICON_DISCOVERY`          | boolescher Wert | Symbolerkennung aktivieren                                |
-| `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolescher Wert | Kopieren bei Auswahl in TUI deaktivieren                  |
-| `OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | Zahl            | Standard-Timeout für Bash-Befehle in ms                   |
-| `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | Zahl            | Maximale Ausgabetokens für LLM-Antworten                  |
-| `OPENCODE_EXPERIMENTAL_FILEWATCHER`             | boolescher Wert | Dateiüberwachung für das gesamte Verzeichnis aktivieren   |
-| `OPENCODE_EXPERIMENTAL_OXFMT`                   | boolescher Wert | Oxfmt-Formatierer aktivieren                              |
-| `OPENCODE_EXPERIMENTAL_LSP_TOOL`                | boolescher Wert | Experimentelles LSP-Tool aktivieren                       |
-| `OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER`     | boolescher Wert | Dateiüberwachung deaktivieren                             |
-| `OPENCODE_EXPERIMENTAL_EXA`                     | boolescher Wert | Experimentelle Exa-Funktionen aktivieren                  |
-| `OPENCODE_EXPERIMENTAL_LSP_TY`                  | boolescher Wert | TY LSP für Python-Dateien aktivieren                      |
-| `OPENCODE_EXPERIMENTAL_PLAN_MODE`               | boolescher Wert | Planmodus aktivieren                                      |
-| `OPENCODE_EXPERIMENTAL_EVENT_SYSTEM`            | boolescher Wert | Experimentelles Ereignissystem aktivieren                 |
-| `OPENCODE_EXPERIMENTAL_NATIVE_LLM`              | boolescher Wert | Nativen LLM-Anfragepfad aktivieren                        |
-| `OPENCODE_EXPERIMENTAL_PARALLEL`                | boolescher Wert | Parallele Websuche aktivieren                             |
-| `OPENCODE_EXPERIMENTAL_SCOUT`                   | boolescher Wert | Scout-Subagent aktivieren                                 |
-| `OPENCODE_EXPERIMENTAL_WORKSPACES`              | boolescher Wert | Workspace-Unterstützung aktivieren                        |
+| Variable                                    | Typ             | Beschreibung                                              |
+| ------------------------------------------- | --------------- | --------------------------------------------------------- |
+| `OCPP_EXPERIMENTAL`                         | boolescher Wert | Experimentelle Funktionen unter dem Sammelflag aktivieren |
+| `OCPP_EXPERIMENTAL_ICON_DISCOVERY`          | boolescher Wert | Symbolerkennung aktivieren                                |
+| `OCPP_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolescher Wert | Kopieren bei Auswahl in TUI deaktivieren                  |
+| `OCPP_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | Zahl            | Standard-Timeout für Bash-Befehle in ms                   |
+| `OCPP_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | Zahl            | Maximale Ausgabetokens für LLM-Antworten                  |
+| `OCPP_EXPERIMENTAL_FILEWATCHER`             | boolescher Wert | Dateiüberwachung für das gesamte Verzeichnis aktivieren   |
+| `OCPP_EXPERIMENTAL_OXFMT`                   | boolescher Wert | Oxfmt-Formatierer aktivieren                              |
+| `OCPP_EXPERIMENTAL_LSP_TOOL`                | boolescher Wert | Experimentelles LSP-Tool aktivieren                       |
+| `OCPP_EXPERIMENTAL_DISABLE_FILEWATCHER`     | boolescher Wert | Dateiüberwachung deaktivieren                             |
+| `OCPP_EXPERIMENTAL_EXA`                     | boolescher Wert | Experimentelle Exa-Funktionen aktivieren                  |
+| `OCPP_EXPERIMENTAL_LSP_TY`                  | boolescher Wert | TY LSP für Python-Dateien aktivieren                      |
+| `OCPP_EXPERIMENTAL_PLAN_MODE`               | boolescher Wert | Planmodus aktivieren                                      |
+| `OCPP_EXPERIMENTAL_EVENT_SYSTEM`            | boolescher Wert | Experimentelles Ereignissystem aktivieren                 |
+| `OCPP_EXPERIMENTAL_NATIVE_LLM`              | boolescher Wert | Nativen LLM-Anfragepfad aktivieren                        |
+| `OCPP_EXPERIMENTAL_PARALLEL`                | boolescher Wert | Parallele Websuche aktivieren                             |
+| `OCPP_EXPERIMENTAL_SCOUT`                   | boolescher Wert | Scout-Subagent aktivieren                                 |
+| `OCPP_EXPERIMENTAL_WORKSPACES`              | boolescher Wert | Workspace-Unterstützung aktivieren                        |

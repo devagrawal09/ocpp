@@ -1,12 +1,12 @@
-import { Session } from "@opencode-ai/core/session"
-import { SessionStats } from "@opencode-ai/core/session/stats"
-import { SessionTitle } from "@opencode-ai/core/session/title"
-import { SessionTransfer } from "@opencode-ai/core/session/transfer"
-import { InstructionEntry } from "@opencode-ai/core/session/instruction-entry"
+import { Session } from "@ocpp/core/session"
+import { SessionStats } from "@ocpp/core/session/stats"
+import { SessionTitle } from "@ocpp/core/session/title"
+import { SessionTransfer } from "@ocpp/core/session/transfer"
+import { InstructionEntry } from "@ocpp/core/session/instruction-entry"
 import { DateTime, Effect, Stream } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
-import { SessionsCursor } from "@opencode-ai/protocol/groups/session"
+import { SessionsCursor } from "@ocpp/protocol/groups/session"
 import {
   ConflictError,
   CommandExecutionError,
@@ -18,8 +18,8 @@ import {
   SessionBusyError,
   SkillNotFoundError,
   UnknownError,
-} from "@opencode-ai/protocol/errors"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+} from "@ocpp/protocol/errors"
+import { AbsolutePath } from "@ocpp/core/schema"
 import { failedMessageDecode, missingSession } from "./session-error"
 
 const DefaultSessionsLimit = 50

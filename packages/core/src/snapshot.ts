@@ -1,16 +1,16 @@
 export * as Snapshot from "./snapshot.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import path from "path"
 import { Context, Effect, Fiber, Layer, Schema, Scope } from "effect"
 import { File } from "./file.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Git } from "./git.js"
-import { Global } from "@opencode-ai/util/global"
+import { Global } from "@ocpp/util/global"
 import { Location } from "./location.js"
 import { AbsolutePath, RelativePath } from "./schema.js"
-import { ID } from "@opencode-ai/schema/snapshot"
-import { Hash } from "@opencode-ai/util/hash"
+import { ID } from "@ocpp/schema/snapshot"
+import { Hash } from "@ocpp/util/hash"
 import { State } from "./state.js"
 
 export { ID }
@@ -67,7 +67,7 @@ export interface Interface extends State.Transformable<Draft> {
   readonly restore: (input: RestoreInput) => Effect.Effect<void, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Snapshot") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Snapshot") {}
 
 const layer = Layer.effect(
   Service,

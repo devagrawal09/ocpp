@@ -1,6 +1,6 @@
-import { Plugin } from "@opencode-ai/plugin/effect"
-import { Model } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
+import { Plugin } from "@ocpp/plugin/effect"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
 import { Effect } from "effect"
 
 export default Plugin.define({

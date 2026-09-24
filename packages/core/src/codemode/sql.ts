@@ -1,4 +1,4 @@
-import type { CodeMode } from "@opencode-ai/codemode"
+import type { CodeMode } from "@ocpp/codemode"
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core"
 import { Timestamps } from "../database/schema.sql.js"
 import { SessionTable } from "../session/sql.js"

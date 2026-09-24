@@ -1,11 +1,11 @@
 {
-  "name": "@opencode-ai/ui",
+  "name": "@ocpp/ui",
   "version": "1.18.15",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
+    "url": "git+https://github.com/devagrawal09/oc-plus-plus.git",
     "directory": "packages/ui"
   },
   "publishConfig": {
@@ -93,7 +93,7 @@
     "test": "bun test src --only-failures",
     "dev": "vite",
     "generate:tailwind": "bun run script/tailwind.ts",
-    "generate:v2-oc2": "bun run script/build-oc2-v2-overrides.ts"
+    "generate:v2-ocpp": "bun run script/build-ocpp-v2-overrides.ts"
   },
   "devDependencies": {
     "@solidjs/meta": "catalog:",

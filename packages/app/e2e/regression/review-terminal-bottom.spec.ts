@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectSessionReady } from "../utils/waits"
 
-const directory = "C:/OpenCode/ReviewTerminalStacked"
+const directory = "C:/OC++/ReviewTerminalStacked"
 const projectID = "proj_review_terminal_stacked"
 const sessionID = "ses_review_terminal_stacked"
 const title = "Review terminal stacked"
@@ -21,7 +21,7 @@ const branchDiffs = [
 test("uses side placement by default and supports the terminal across the bottom", async ({ page }) => {
   test.setTimeout(120_000)
   await page.setViewportSize({ width: 1400, height: 900 })
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -35,7 +35,7 @@ test("uses side placement by default and supports the terminal across the bottom
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: { test: { id: "test", name: "Test", limit: { context: 200_000 } } },
         },
       ],
@@ -125,7 +125,7 @@ test("uses side placement by default and supports the terminal across the bottom
   await page.routeWebSocket("**/api/pty/pty_review_terminal/connect", () => undefined)
   await page.addInitScript(() => {
     localStorage.setItem(
-      "opencode.global.dat:layout",
+      "ocpp.global.dat:layout",
       JSON.stringify({ review: { diffStyle: "split", panelOpened: true } }),
     )
   })

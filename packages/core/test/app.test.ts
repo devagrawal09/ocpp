@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { App } from "@opencode-ai/core/app"
+import { App } from "@ocpp/core/app"
 
 test("formats app metadata as a user agent", () => {
-  expect(App.useragent(App.make({ name: "sdk", version: "1.2.3", channel: "beta" }))).toBe("opencode/beta/1.2.3/sdk")
+  expect(App.useragent(App.make({ name: "sdk", version: "1.2.3", channel: "beta" }))).toBe("ocpp/beta/1.2.3/sdk")
 })

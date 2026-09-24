@@ -14,7 +14,7 @@ export const dict = {
   "nav.home": "Strona główna",
   "nav.openMenu": "Otwórz menu",
   "nav.getStartedFree": "Zacznij za darmo",
-  "nav.logoAlt": "OpenCode",
+  "nav.logoAlt": "OC++",
 
   "nav.context.copyLogo": "Skopiuj logo jako SVG",
   "nav.context.copyWordmark": "Skopiuj logotyp jako SVG",
@@ -36,14 +36,14 @@ export const dict = {
   "email.subscribe": "Subskrybuj",
   "email.success": "Prawie gotowe, sprawdź skrzynkę i potwierdź swój adres e-mail",
 
-  "notFound.title": "Nie znaleziono | opencode",
+  "notFound.title": "Nie znaleziono | ocpp",
   "notFound.heading": "404 - Nie znaleziono strony",
   "notFound.home": "Strona główna",
   "notFound.docs": "Dokumentacja",
   "notFound.github": "GitHub",
   "notFound.discord": "Discord",
-  "notFound.logoLightAlt": "jasne logo opencode",
-  "notFound.logoDarkAlt": "ciemne logo opencode",
+  "notFound.logoLightAlt": "jasne logo ocpp",
+  "notFound.logoDarkAlt": "ciemne logo ocpp",
 
   "user.logout": "Wyloguj się",
 
@@ -80,25 +80,25 @@ export const dict = {
   "error.reloadAmountMin": "Kwota doładowania musi wynosić co najmniej ${{amount}}",
   "error.reloadTriggerMin": "Próg salda musi wynosić co najmniej ${{amount}}",
 
-  "app.meta.description": "OpenCode - Otwartoźródłowy agent programistyczny.",
+  "app.meta.description": "OC++ - Otwartoźródłowy agent programistyczny.",
 
-  "home.title": "OpenCode | Open source'owy agent AI do kodowania",
+  "home.title": "OC++ | Open source'owy agent AI do kodowania",
 
-  "temp.title": "opencode | Agent AI do kodowania zbudowany dla terminala",
+  "temp.title": "ocpp | Agent AI do kodowania zbudowany dla terminala",
   "temp.hero.title": "Agent AI do kodowania zbudowany dla terminala",
-  "temp.zen": "opencode zen",
+  "temp.zen": "ocpp zen",
   "temp.getStarted": "Rozpocznij",
   "temp.feature.native.title": "Natywny TUI",
   "temp.feature.native.body": "Responsywny, natywny, tematyczny interfejs terminala",
   "temp.feature.zen.beforeLink": "A",
   "temp.feature.zen.link": "wyselekcjonowana lista modeli",
-  "temp.feature.zen.afterLink": "dostarczana przez opencode",
+  "temp.feature.zen.afterLink": "dostarczana przez ocpp",
   "temp.feature.models.beforeLink": "Obsługuje 75+ dostawców LLM przez",
   "temp.feature.models.afterLink": ", w tym modele lokalne",
-  "temp.screenshot.caption": "OpenCode TUI z motywem tokyonight",
-  "temp.screenshot.alt": "OpenCode TUI z motywem tokyonight",
-  "temp.logoLightAlt": "jasne logo opencode",
-  "temp.logoDarkAlt": "ciemne logo opencode",
+  "temp.screenshot.caption": "OC++ TUI z motywem tokyonight",
+  "temp.screenshot.alt": "OC++ TUI z motywem tokyonight",
+  "temp.logoLightAlt": "jasne logo ocpp",
+  "temp.logoDarkAlt": "ciemne logo ocpp",
 
   "home.banner.badge": "Nowość",
   "home.banner.text": "Przedstawiamy karty w aplikacji desktopowej.",
@@ -116,9 +116,8 @@ export const dict = {
 
   "home.install.ariaLabel": "Opcje instalacji",
 
-  "home.what.title": "Czym jest OpenCode?",
-  "home.what.body":
-    "OpenCode to open source'owy agent, który pomaga pisać kod w terminalu, IDE lub aplikacji desktopowej.",
+  "home.what.title": "Czym jest OC++?",
+  "home.what.body": "OC++ to open source'owy agent, który pomaga pisać kod w terminalu, IDE lub aplikacji desktopowej.",
   "home.what.lsp.title": "LSP włączone",
   "home.what.lsp.body": "Automatycznie ładuje odpowiednie LSP dla LLM",
   "home.what.multiSession.title": "Wielosesyjność",
@@ -137,43 +136,43 @@ export const dict = {
 
   "home.growth.title": "Open source'owy agent AI do kodowania",
   "home.growth.body":
-    "Z ponad <strong>{{stars}}</strong> gwiazdkami na GitHubie, <strong>{{contributors}}</strong> współtwórcami i ponad <strong>{{commits}}</strong> commitami, OpenCode jest używany i ceniony przez ponad <strong>{{monthlyUsers}}</strong> deweloperów każdego miesiąca.",
+    "Z ponad <strong>{{stars}}</strong> gwiazdkami na GitHubie, <strong>{{contributors}}</strong> współtwórcami i ponad <strong>{{commits}}</strong> commitami, OC++ jest używany i ceniony przez ponad <strong>{{monthlyUsers}}</strong> deweloperów każdego miesiąca.",
   "home.growth.githubStars": "Gwiazdki GitHub",
   "home.growth.contributors": "Współtwórcy",
   "home.growth.monthlyDevs": "Miesięczni użytkownicy",
 
   "home.privacy.title": "Zbudowany z myślą o prywatności",
   "home.privacy.body":
-    "OpenCode nie przechowuje Twojego kodu ani danych kontekstowych, dzięki czemu może działać w środowiskach wrażliwych na prywatność.",
+    "OC++ nie przechowuje Twojego kodu ani danych kontekstowych, dzięki czemu może działać w środowiskach wrażliwych na prywatność.",
   "home.privacy.learnMore": "Dowiedz się więcej o",
   "home.privacy.link": "prywatności",
 
-  "home.faq.q1": "Czym jest OpenCode?",
+  "home.faq.q1": "Czym jest OC++?",
   "home.faq.a1":
-    "OpenCode to open source'owy agent, który pomaga pisać i uruchamiać kod z dowolnym modelem AI. Jest dostępny jako interfejs terminalowy, aplikacja desktopowa lub rozszerzenie IDE.",
-  "home.faq.q2": "Jak korzystać z OpenCode?",
+    "OC++ to open source'owy agent, który pomaga pisać i uruchamiać kod z dowolnym modelem AI. Jest dostępny jako interfejs terminalowy, aplikacja desktopowa lub rozszerzenie IDE.",
+  "home.faq.q2": "Jak korzystać z OC++?",
   "home.faq.a2.before": "Najłatwiej zacząć od przeczytania",
   "home.faq.a2.link": "wprowadzenia",
-  "home.faq.q3": "Czy potrzebuję dodatkowych subskrypcji AI, aby używać OpenCode?",
+  "home.faq.q3": "Czy potrzebuję dodatkowych subskrypcji AI, aby używać OC++?",
   "home.faq.a3.p1":
-    "Niekoniecznie. OpenCode posiada zestaw darmowych modeli, z których możesz korzystać bez zakładania konta.",
+    "Niekoniecznie. OC++ posiada zestaw darmowych modeli, z których możesz korzystać bez zakładania konta.",
   "home.faq.a3.p2.beforeZen": "Poza tym możesz używać dowolnych popularnych modeli do kodowania, tworząc konto",
   "home.faq.a3.p2.afterZen": ".",
   "home.faq.a3.p3":
-    "Chociaż zachęcamy do korzystania z Zen, OpenCode działa również ze wszystkimi popularnymi dostawcami, takimi jak OpenAI, Anthropic, xAI itp.",
+    "Chociaż zachęcamy do korzystania z Zen, OC++ działa również ze wszystkimi popularnymi dostawcami, takimi jak OpenAI, Anthropic, xAI itp.",
   "home.faq.a3.p4.beforeLocal": "Możesz nawet podłączyć swoje",
   "home.faq.a3.p4.localLink": "lokalne modele",
-  "home.faq.q4": "Czy mogę używać moich istniejących subskrypcji AI z OpenCode?",
+  "home.faq.q4": "Czy mogę używać moich istniejących subskrypcji AI z OC++?",
   "home.faq.a4.p1":
-    "Tak, OpenCode obsługuje plany subskrypcyjne od wszystkich głównych dostawców. Możesz używać swoich subskrypcji Claude Pro/Max, ChatGPT Plus/Pro lub GitHub Copilot.",
-  "home.faq.q5": "Czy mogę używać OpenCode tylko w terminalu?",
-  "home.faq.a5.beforeDesktop": "Już nie! OpenCode jest teraz dostępny jako aplikacja na",
+    "Tak, OC++ obsługuje plany subskrypcyjne od wszystkich głównych dostawców. Możesz używać swoich subskrypcji Claude Pro/Max, ChatGPT Plus/Pro lub GitHub Copilot.",
+  "home.faq.q5": "Czy mogę używać OC++ tylko w terminalu?",
+  "home.faq.a5.beforeDesktop": "Już nie! OC++ jest teraz dostępny jako aplikacja na",
   "home.faq.a5.desktop": "pulpit (desktop)",
   "home.faq.a5.and": "i",
   "home.faq.a5.web": "web",
-  "home.faq.q6": "Ile kosztuje OpenCode?",
+  "home.faq.q6": "Ile kosztuje OC++?",
   "home.faq.a6":
-    "OpenCode jest w 100% darmowy. Zawiera również zestaw darmowych modeli. Mogą pojawić się dodatkowe koszty, jeśli podłączysz innego dostawcę.",
+    "OC++ jest w 100% darmowy. Zawiera również zestaw darmowych modeli. Mogą pojawić się dodatkowe koszty, jeśli podłączysz innego dostawcę.",
   "home.faq.q7": "A co z danymi i prywatnością?",
   "home.faq.a7.p1":
     "Twoje dane i informacje są przechowywane tylko wtedy, gdy używasz naszych darmowych modeli lub tworzysz linki do udostępniania.",
@@ -181,8 +180,8 @@ export const dict = {
   "home.faq.a7.p2.modelsLink": "naszych modelach",
   "home.faq.a7.p2.and": "i",
   "home.faq.a7.p2.shareLink": "stronach udostępniania",
-  "home.faq.q8": "Czy OpenCode jest open source?",
-  "home.faq.a8.p1": "Tak, OpenCode jest w pełni open source. Kod źródłowy jest publicznie dostępny na",
+  "home.faq.q8": "Czy OC++ jest open source?",
+  "home.faq.a8.p1": "Tak, OC++ jest w pełni open source. Kod źródłowy jest publicznie dostępny na",
   "home.faq.a8.p2": "na licencji",
   "home.faq.a8.mitLicense": "MIT License",
   "home.faq.a8.p3":
@@ -190,23 +189,23 @@ export const dict = {
 
   "home.zenCta.title": "Uzyskaj dostęp do niezawodnych, zoptymalizowanych modeli dla agentów kodujących",
   "home.zenCta.body":
-    "Zen daje dostęp do wyselekcjonowanego zestawu modeli AI, które OpenCode przetestował i sprawdził (benchmark) specjalnie dla agentów kodujących. Nie musisz martwić się o niespójną wydajność i jakość u różnych dostawców, używaj sprawdzonych modeli, które działają.",
+    "Zen daje dostęp do wyselekcjonowanego zestawu modeli AI, które OC++ przetestował i sprawdził (benchmark) specjalnie dla agentów kodujących. Nie musisz martwić się o niespójną wydajność i jakość u różnych dostawców, używaj sprawdzonych modeli, które działają.",
   "home.zenCta.link": "Dowiedz się więcej o Zen",
 
   "zen.title": "OpenCode Zen | Wyselekcjonowany zestaw niezawodnych, zoptymalizowanych modeli dla agentów kodujących",
   "zen.hero.title": "Niezawodne, zoptymalizowane modele dla agentów kodujących",
   "zen.hero.body":
-    "Zen daje dostęp do wyselekcjonowanego zestawu modeli AI, które OpenCode przetestował i sprawdził (benchmark) specjalnie dla agentów kodujących. Nie musisz martwić się o niespójną wydajność i jakość, używaj sprawdzonych modeli, które działają.",
+    "Zen daje dostęp do wyselekcjonowanego zestawu modeli AI, które OC++ przetestował i sprawdził (benchmark) specjalnie dla agentów kodujących. Nie musisz martwić się o niespójną wydajność i jakość, używaj sprawdzonych modeli, które działają.",
 
   "zen.faq.q1": "Czym jest OpenCode Zen?",
   "zen.faq.a1":
-    "Zen to wyselekcjonowany zestaw modeli AI przetestowanych i sprawdzonych pod kątem agentów kodujących, stworzony przez zespół stojący za OpenCode.",
+    "Zen to wyselekcjonowany zestaw modeli AI przetestowanych i sprawdzonych pod kątem agentów kodujących, stworzony przez zespół stojący za OC++.",
   "zen.faq.q2": "Co sprawia, że Zen jest bardziej precyzyjny?",
   "zen.faq.a2":
     "Zen oferuje tylko modele, które zostały specjalnie przetestowane i sprawdzone dla agentów kodujących. Nie używasz noża do masła do krojenia steku, więc nie używaj słabych modeli do kodowania.",
   "zen.faq.q3": "Czy Zen jest tańszy?",
   "zen.faq.a3":
-    "Zen nie jest nastawiony na zysk. Zen przekazuje koszty od dostawców modeli bezpośrednio do Ciebie. Im większe użycie Zen, tym lepsze stawki OpenCode może wynegocjować i przekazać Tobie.",
+    "Zen nie jest nastawiony na zysk. Zen przekazuje koszty od dostawców modeli bezpośrednio do Ciebie. Im większe użycie Zen, tym lepsze stawki OC++ może wynegocjować i przekazać Tobie.",
   "zen.faq.q4": "Ile kosztuje Zen?",
   "zen.faq.a4.p1.beforePricing": "Zen",
   "zen.faq.a4.p1.pricingLink": "pobiera opłaty za żądanie",
@@ -215,7 +214,7 @@ export const dict = {
     "Twój całkowity koszt zależy od użycia, i możesz ustawić miesięczne limity wydatków na swoim",
   "zen.faq.a4.p2.accountLink": "koncie",
   "zen.faq.a4.p3":
-    "Aby pokryć koszty, OpenCode dolicza jedynie niewielką opłatę za przetwarzanie płatności w wysokości $1.23 przy każdym doładowaniu salda o $20.",
+    "Aby pokryć koszty, OC++ dolicza jedynie niewielką opłatę za przetwarzanie płatności w wysokości $1.23 przy każdym doładowaniu salda o $20.",
   "zen.faq.q5": "A co z danymi i prywatnością?",
   "zen.faq.a5.beforeExceptions":
     "Wszystkie modele Zen są hostowane w USA. Dostawcy stosują politykę zerowej retencji i nie używają Twoich danych do trenowania modeli, z",
@@ -226,7 +225,7 @@ export const dict = {
   "zen.faq.a7": "Tak, możesz wyłączyć rozliczenia w dowolnym momencie i wykorzystać pozostałe saldo.",
   "zen.faq.q8": "Czy mogę używać Zen z innymi agentami kodującymi?",
   "zen.faq.a8":
-    "Chociaż Zen świetnie działa z OpenCode, możesz używać Zen z dowolnym agentem. Postępuj zgodnie z instrukcjami konfiguracji w swoim preferowanym agencie.",
+    "Chociaż Zen świetnie działa z OC++, możesz używać Zen z dowolnym agentem. Postępuj zgodnie z instrukcjami konfiguracji w swoim preferowanym agencie.",
 
   "zen.cta.start": "Zacznij korzystać z Zen",
   "zen.pricing.title": "Dodaj 20$ salda Pay as you go",
@@ -235,12 +234,12 @@ export const dict = {
   "zen.problem.title": "Jaki problem rozwiązuje Zen?",
   "zen.problem.body":
     "Dostępnych jest wiele modeli, ale tylko nieliczne dobrze współpracują z agentami kodującymi. Większość dostawców konfiguruje je inaczej, co daje różne wyniki.",
-  "zen.problem.subtitle": "Naprawiamy to dla wszystkich, nie tylko dla użytkowników OpenCode.",
+  "zen.problem.subtitle": "Naprawiamy to dla wszystkich, nie tylko dla użytkowników OC++.",
   "zen.problem.item1": "Testowanie wybranych modeli i konsultacje z ich zespołami",
   "zen.problem.item2": "Współpraca z dostawcami w celu zapewnienia ich prawidłowego dostarczania",
   "zen.problem.item3": "Benchmark wszystkich rekomendowanych przez nas kombinacji modeli i dostawców",
   "zen.how.title": "Jak działa Zen",
-  "zen.how.body": "Chociaż sugerujemy używanie Zen z OpenCode, możesz używać Zen z dowolnym agentem.",
+  "zen.how.body": "Chociaż sugerujemy używanie Zen z OC++, możesz używać Zen z dowolnym agentem.",
   "zen.how.step1.title": "Zarejestruj się i doładuj saldo 20$",
   "zen.how.step1.beforeLink": "postępuj zgodnie z",
   "zen.how.step1.link": "instrukcją konfiguracji",
@@ -278,7 +277,7 @@ export const dict = {
 
   "go.testimonials.brand.zen": "Zen",
   "go.testimonials.brand.go": "Go",
-  "go.testimonials.handle": "@OpenCode",
+  "go.testimonials.handle": "@OC++",
   "go.testimonials.dax.name": "Dax Raad",
   "go.testimonials.dax.title": "ex-CEO, Terminal Products",
   "go.testimonials.dax.quoteAfter": "zmieniło moje życie, to naprawdę oczywisty wybór.",
@@ -299,7 +298,7 @@ export const dict = {
   "go.testimonials.frank.quote": "Chciałbym wciąż być w Nvidia.",
   "go.problem.title": "Jaki problem rozwiązuje Go?",
   "go.problem.body":
-    "Skupiamy się na udostępnieniu doświadczenia OpenCode jak największej liczbie osób. OpenCode Go to tania subskrypcja: $5 za pierwszy miesiąc, potem $10/miesiąc. Zapewnia hojne limity i niezawodny dostęp do najbardziej wydajnych modeli open source.",
+    "Skupiamy się na udostępnieniu doświadczenia OC++ jak największej liczbie osób. OpenCode Go to tania subskrypcja: $5 za pierwszy miesiąc, potem $10/miesiąc. Zapewnia hojne limity i niezawodny dostęp do najbardziej wydajnych modeli open source.",
   "go.problem.subtitle": " ",
   "go.problem.item1": "Niskokosztowa cena subskrypcji",
   "go.problem.item2": "Hojne limity i niezawodny dostęp",
@@ -307,7 +306,7 @@ export const dict = {
   "go.problem.item4": "Starannie dobrany zestaw modeli przetestowanych pod kątem kodowania z agentami",
   "go.how.title": "Jak działa Go",
   "go.how.body":
-    "Go zaczyna się od $5 za pierwszy miesiąc, potem $10/miesiąc. Możesz go używać z OpenCode lub dowolnym agentem.",
+    "Go zaczyna się od $5 za pierwszy miesiąc, potem $10/miesiąc. Możesz go używać z OC++ lub dowolnym agentem.",
   "go.how.step1.title": "Załóż konto",
   "go.how.step1.beforeLink": "postępuj zgodnie z",
   "go.how.step1.link": "instrukcją konfiguracji",
@@ -396,11 +395,11 @@ export const dict = {
   "zen.api.error.trialEnded":
     "Bezpłatna promocja {{model}} dobiegła końca. Możesz dalej korzystać z modelu, subskrybując OpenCode Go - {{link}}",
 
-  "black.meta.title": "OpenCode Black | Dostęp do najlepszych na świecie modeli kodujących",
-  "black.meta.description": "Uzyskaj dostęp do Claude, GPT, Gemini i innych dzięki planom subskrypcji OpenCode Black.",
+  "black.meta.title": "OC++ Black | Dostęp do najlepszych na świecie modeli kodujących",
+  "black.meta.description": "Uzyskaj dostęp do Claude, GPT, Gemini i innych dzięki planom subskrypcji OC++ Black.",
   "black.hero.title": "Dostęp do najlepszych na świecie modeli kodujących",
   "black.hero.subtitle": "W tym Claude, GPT, Gemini i inne",
-  "black.title": "OpenCode Black | Cennik",
+  "black.title": "OC++ Black | Cennik",
   "black.paused": "Rejestracja planu Black jest tymczasowo wstrzymana.",
   "black.plan.icon20": "Plan Black 20",
   "black.plan.icon100": "Plan Black 100",
@@ -419,10 +418,10 @@ export const dict = {
   "black.action.continue": "Kontynuuj",
   "black.finePrint.beforeTerms": "Podane ceny nie zawierają stosownego podatku",
   "black.finePrint.terms": "Warunki świadczenia usług",
-  "black.workspace.title": "OpenCode Black | Wybierz obszar roboczy",
+  "black.workspace.title": "OC++ Black | Wybierz obszar roboczy",
   "black.workspace.selectPlan": "Wybierz obszar roboczy dla tego planu",
   "black.workspace.name": "Obszar roboczy {{n}}",
-  "black.subscribe.title": "Subskrybuj OpenCode Black",
+  "black.subscribe.title": "Subskrybuj OC++ Black",
   "black.subscribe.paymentMethod": "Metoda płatności",
   "black.subscribe.loadingPaymentForm": "Ładowanie formularza płatności...",
   "black.subscribe.selectWorkspaceToContinue": "Wybierz obszar roboczy, aby kontynuować",
@@ -434,9 +433,9 @@ export const dict = {
   "black.subscribe.processing": "Przetwarzanie...",
   "black.subscribe.submit": "Subskrybuj ${{plan}}",
   "black.subscribe.form.chargeNotice": "Zostaniesz obciążony dopiero po aktywacji subskrypcji",
-  "black.subscribe.success.title": "Jesteś na liście oczekujących OpenCode Black",
+  "black.subscribe.success.title": "Jesteś na liście oczekujących OC++ Black",
   "black.subscribe.success.subscriptionPlan": "Plan subskrypcji",
-  "black.subscribe.success.planName": "OpenCode Black {{plan}}",
+  "black.subscribe.success.planName": "OC++ Black {{plan}}",
   "black.subscribe.success.amount": "Kwota",
   "black.subscribe.success.amountValue": "${{plan}} miesięcznie",
   "black.subscribe.success.paymentMethod": "Metoda płatności",
@@ -465,15 +464,15 @@ export const dict = {
     "Dostęp do modeli skonfigurowanych pod kątem optymalnej wydajności - bez degradacji jakości czy przekierowywania do tańszych dostawców.",
   "workspace.newUser.feature.lockin.title": "Brak blokady (Lock-in)",
   "workspace.newUser.feature.lockin.body":
-    "Używaj Zen z dowolnym agentem kodującym i kontynuuj korzystanie z innych dostawców z OpenCode, kiedy tylko chcesz.",
+    "Używaj Zen z dowolnym agentem kodującym i kontynuuj korzystanie z innych dostawców z OC++, kiedy tylko chcesz.",
   "workspace.newUser.copyApiKey": "Skopiuj klucz API",
   "workspace.newUser.copyKey": "Skopiuj klucz",
   "workspace.newUser.copied": "Skopiowano!",
   "workspace.newUser.step.enableBilling": "Włącz rozliczenia",
   "workspace.newUser.step.login.before": "Uruchom",
-  "workspace.newUser.step.login.after": "i wybierz opencode",
+  "workspace.newUser.step.login.after": "i wybierz ocpp",
   "workspace.newUser.step.pasteKey": "Wklej swój klucz API",
-  "workspace.newUser.step.models.before": "Uruchom opencode i wpisz",
+  "workspace.newUser.step.models.before": "Uruchom ocpp i wpisz",
   "workspace.newUser.step.models.after": "aby wybrać model",
 
   "workspace.models.title": "Modele",
@@ -519,10 +518,10 @@ export const dict = {
   "workspace.cost.subscriptionShort": "sub",
 
   "workspace.keys.title": "Klucze API",
-  "workspace.keys.subtitle": "Zarządzaj kluczami API do usług opencode.",
+  "workspace.keys.subtitle": "Zarządzaj kluczami API do usług ocpp.",
   "workspace.keys.create": "Utwórz klucz API",
   "workspace.keys.placeholder": "Wpisz nazwę klucza",
-  "workspace.keys.empty": "Utwórz klucz API bramy opencode",
+  "workspace.keys.empty": "Utwórz klucz API bramy ocpp",
   "workspace.keys.table.name": "Nazwa",
   "workspace.keys.table.key": "Klucz",
   "workspace.keys.table.createdBy": "Utworzony przez",
@@ -637,15 +636,15 @@ export const dict = {
   "workspace.black.time.minutes": "minut(y)",
   "workspace.black.time.fewSeconds": "kilka sekund",
   "workspace.black.subscription.title": "Subskrypcja",
-  "workspace.black.subscription.message": "Subskrybujesz OpenCode Black za ${{plan}} miesięcznie.",
+  "workspace.black.subscription.message": "Subskrybujesz OC++ Black za ${{plan}} miesięcznie.",
   "workspace.black.subscription.manage": "Zarządzaj subskrypcją",
   "workspace.black.subscription.rollingUsage": "Użycie (okno 5h)",
   "workspace.black.subscription.weeklyUsage": "Użycie tygodniowe",
   "workspace.black.subscription.resetsIn": "Resetuje się za",
   "workspace.black.subscription.useBalance": "Użyj dostępnego salda po osiągnięciu limitów użycia",
   "workspace.black.waitlist.title": "Lista oczekujących",
-  "workspace.black.waitlist.joined": "Jesteś na liście oczekujących na plan OpenCode Black za ${{plan}} miesięcznie.",
-  "workspace.black.waitlist.ready": "Jesteśmy gotowi zapisać Cię do planu OpenCode Black za ${{plan}} miesięcznie.",
+  "workspace.black.waitlist.joined": "Jesteś na liście oczekujących na plan OC++ Black za ${{plan}} miesięcznie.",
+  "workspace.black.waitlist.ready": "Jesteśmy gotowi zapisać Cię do planu OC++ Black za ${{plan}} miesięcznie.",
   "workspace.black.waitlist.leave": "Opuść listę oczekujących",
   "workspace.black.waitlist.leaving": "Opuszczanie...",
   "workspace.black.waitlist.left": "Opuszczono",
@@ -671,12 +670,12 @@ export const dict = {
   "workspace.lite.subscription.resetsIn": "Resetuje się za",
   "workspace.lite.subscription.useBalance": "Użyj dostępnego salda po osiągnięciu limitów użycia",
   "workspace.lite.subscription.selectProvider":
-    'Wybierz "OpenCode Go" jako dostawcę w konfiguracji opencode, aby używać modeli Go.',
+    'Wybierz "OpenCode Go" jako dostawcę w konfiguracji ocpp, aby używać modeli Go.',
   "workspace.lite.providers.title": "Dostawcy",
   "workspace.lite.providers.description": "Kontroluj, którzy dostawcy są używani do routingu.",
   "workspace.lite.providers.useChina": "Włącz modele hostowane w Chinach",
   "workspace.lite.black.message":
-    "Obecnie subskrybujesz OpenCode Black lub jesteś na liście oczekujących. Jeśli chcesz przejść na Go, najpierw anuluj subskrypcję.",
+    "Obecnie subskrybujesz OC++ Black lub jesteś na liście oczekujących. Jeśli chcesz przejść na Go, najpierw anuluj subskrypcję.",
   "workspace.lite.other.message":
     "Inny członek tego obszaru roboczego już subskrybuje OpenCode Go. Tylko jeden członek na obszar roboczy może subskrybować.",
   "workspace.lite.promo.description":
@@ -723,15 +722,15 @@ export const dict = {
   "workspace.referral.apply.confirmBody": "Wykorzystaj {{amount}}, aby zmniejszyć aktualne użycie w tym workspace.",
   "workspace.referral.apply.confirmAction": "Wykorzystaj",
 
-  "download.title": "OpenCode | Pobierz",
-  "download.meta.description": "Pobierz OpenCode na macOS, Windows i Linux",
-  "download.hero.title": "Pobierz OpenCode Desktop",
+  "download.title": "OC++ | Pobierz",
+  "download.meta.description": "Pobierz OC++ na macOS, Windows i Linux",
+  "download.hero.title": "Pobierz OC++ Desktop",
   "download.hero.subtitle": "Dostępne w wersji Beta na macOS, Windows i Linux",
   "download.hero.button": "Pobierz na {{os}}",
-  "download.section.terminal": "Terminal OpenCode",
-  "download.section.desktop": "Pulpit OpenCode",
-  "download.section.extensions": "Rozszerzenia OpenCode",
-  "download.section.integrations": "Integracje OpenCode",
+  "download.section.terminal": "Terminal OC++",
+  "download.section.desktop": "Pulpit OC++",
+  "download.section.extensions": "Rozszerzenia OC++",
+  "download.section.integrations": "Integracje OC++",
   "download.action.download": "Pobierz",
   "download.action.install": "Zainstaluj",
 
@@ -742,27 +741,27 @@ export const dict = {
   "download.platform.linuxRpm": "Linux (.rpm)",
 
   "download.faq.a3.beforeLocal":
-    "Niekoniecznie, ale prawdopodobnie. Będziesz potrzebować subskrypcji AI, jeśli chcesz połączyć OpenCode z płatnym dostawcą, chociaż możesz pracować z",
+    "Niekoniecznie, ale prawdopodobnie. Będziesz potrzebować subskrypcji AI, jeśli chcesz połączyć OC++ z płatnym dostawcą, chociaż możesz pracować z",
   "download.faq.a3.localLink": "modelami lokalnymi",
   "download.faq.a3.afterLocal.beforeZen": "za darmo. Chociaż zachęcamy użytkowników do korzystania z",
   "download.faq.a3.afterZen":
-    ", OpenCode współpracuje ze wszystkimi popularnymi dostawcami, takimi jak OpenAI, Anthropic, xAI itp.",
+    ", OC++ współpracuje ze wszystkimi popularnymi dostawcami, takimi jak OpenAI, Anthropic, xAI itp.",
 
-  "download.faq.a5.p1": "OpenCode jest w 100% darmowy.",
+  "download.faq.a5.p1": "OC++ jest w 100% darmowy.",
   "download.faq.a5.p2.beforeZen":
-    "Wszelkie dodatkowe koszty będą pochodzić z Twojej subskrypcji u dostawcy modelu. Chociaż OpenCode współpracuje z dowolnym dostawcą modeli, zalecamy korzystanie z",
+    "Wszelkie dodatkowe koszty będą pochodzić z Twojej subskrypcji u dostawcy modelu. Chociaż OC++ współpracuje z dowolnym dostawcą modeli, zalecamy korzystanie z",
   "download.faq.a5.p2.afterZen": ".",
 
   "download.faq.a6.p1":
-    "Twoje dane i informacje są przechowywane tylko wtedy, gdy tworzysz linki do udostępniania w OpenCode.",
+    "Twoje dane i informacje są przechowywane tylko wtedy, gdy tworzysz linki do udostępniania w OC++.",
   "download.faq.a6.p2.beforeShare": "Dowiedz się więcej o",
   "download.faq.a6.shareLink": "stronach udostępniania",
 
-  "enterprise.title": "OpenCode | Rozwiązania Enterprise dla Twojej organizacji",
-  "enterprise.meta.description": "Skontaktuj się z OpenCode w sprawie rozwiązań dla przedsiębiorstw",
+  "enterprise.title": "OC++ | Rozwiązania Enterprise dla Twojej organizacji",
+  "enterprise.meta.description": "Skontaktuj się z OC++ w sprawie rozwiązań dla przedsiębiorstw",
   "enterprise.hero.title": "Twój kod jest Twój",
   "enterprise.hero.body1":
-    "OpenCode działa bezpiecznie wewnątrz Twojej organizacji bez przechowywania danych czy kontekstu, oraz bez ograniczeń licencyjnych czy roszczeń własnościowych. Rozpocznij okres próbny ze swoim zespołem, a następnie wdróż go w całej organizacji, integrując z SSO i wewnętrzną bramą AI.",
+    "OC++ działa bezpiecznie wewnątrz Twojej organizacji bez przechowywania danych czy kontekstu, oraz bez ograniczeń licencyjnych czy roszczeń własnościowych. Rozpocznij okres próbny ze swoim zespołem, a następnie wdróż go w całej organizacji, integrując z SSO i wewnętrzną bramą AI.",
   "enterprise.hero.body2": "Daj nam znać, jak możemy pomóc.",
   "enterprise.form.name.label": "Imię i nazwisko",
   "enterprise.form.name.placeholder": "Jeff Bezos",
@@ -784,29 +783,29 @@ export const dict = {
   "enterprise.form.error.invalidEmailFormat": "Nieprawidłowy format adresu e-mail.",
   "enterprise.form.error.internalServer": "Wewnętrzny błąd serwera.",
   "enterprise.faq.title": "FAQ",
-  "enterprise.faq.q1": "Czym jest OpenCode Enterprise?",
+  "enterprise.faq.q1": "Czym jest OC++ Enterprise?",
   "enterprise.faq.a1":
-    "OpenCode Enterprise jest dla organizacji, które chcą mieć pewność, że ich kod i dane nigdy nie opuszczą ich infrastruktury. Można to osiągnąć dzięki scentralizowanej konfiguracji, która integruje się z Twoim SSO i wewnętrzną bramą AI.",
-  "enterprise.faq.q2": "Jak zacząć z OpenCode Enterprise?",
+    "OC++ Enterprise jest dla organizacji, które chcą mieć pewność, że ich kod i dane nigdy nie opuszczą ich infrastruktury. Można to osiągnąć dzięki scentralizowanej konfiguracji, która integruje się z Twoim SSO i wewnętrzną bramą AI.",
+  "enterprise.faq.q2": "Jak zacząć z OC++ Enterprise?",
   "enterprise.faq.a2":
-    "Po prostu rozpocznij wewnętrzny okres próbny ze swoim zespołem. OpenCode domyślnie nie przechowuje Twojego kodu ani danych kontekstowych, co ułatwia start. Następnie skontaktuj się z nami, aby omówić opcje cenowe i wdrożeniowe.",
+    "Po prostu rozpocznij wewnętrzny okres próbny ze swoim zespołem. OC++ domyślnie nie przechowuje Twojego kodu ani danych kontekstowych, co ułatwia start. Następnie skontaktuj się z nami, aby omówić opcje cenowe i wdrożeniowe.",
   "enterprise.faq.q3": "Jak działa cennik enterprise?",
   "enterprise.faq.a3":
     "Oferujemy cennik enterprise za stanowisko (per-seat). Jeśli masz własną bramę LLM, nie pobieramy opłat za wykorzystane tokeny. Aby uzyskać więcej szczegółów, skontaktuj się z nami w celu uzyskania wyceny dostosowanej do potrzeb Twojej organizacji.",
-  "enterprise.faq.q4": "Czy moje dane są bezpieczne z OpenCode Enterprise?",
+  "enterprise.faq.q4": "Czy moje dane są bezpieczne z OC++ Enterprise?",
   "enterprise.faq.a4":
-    "Tak. OpenCode nie przechowuje Twojego kodu ani danych kontekstowych. Całe przetwarzanie odbywa się lokalnie lub poprzez bezpośrednie wywołania API do Twojego dostawcy AI. Dzięki centralnej konfiguracji i integracji SSO, Twoje dane pozostają bezpieczne w infrastrukturze Twojej organizacji.",
+    "Tak. OC++ nie przechowuje Twojego kodu ani danych kontekstowych. Całe przetwarzanie odbywa się lokalnie lub poprzez bezpośrednie wywołania API do Twojego dostawcy AI. Dzięki centralnej konfiguracji i integracji SSO, Twoje dane pozostają bezpieczne w infrastrukturze Twojej organizacji.",
 
-  "brand.title": "OpenCode | Marka",
-  "brand.meta.description": "Wytyczne marki OpenCode",
+  "brand.title": "OC++ | Marka",
+  "brand.meta.description": "Wytyczne marki OC++",
   "brand.heading": "Wytyczne marki",
-  "brand.subtitle": "Zasoby i aktywa, które pomogą Ci pracować z marką OpenCode.",
+  "brand.subtitle": "Zasoby i aktywa, które pomogą Ci pracować z marką OC++.",
   "brand.downloadAll": "Pobierz wszystkie zasoby",
 
-  "changelog.title": "OpenCode | Dziennik zmian",
-  "changelog.meta.description": "Notatki o wydaniu i dziennik zmian OpenCode",
+  "changelog.title": "OC++ | Dziennik zmian",
+  "changelog.meta.description": "Notatki o wydaniu i dziennik zmian OC++",
   "changelog.hero.title": "Dziennik zmian",
-  "changelog.hero.subtitle": "Nowe aktualizacje i ulepszenia OpenCode",
+  "changelog.hero.subtitle": "Nowe aktualizacje i ulepszenia OC++",
   "changelog.empty": "Nie znaleziono wpisów w dzienniku zmian.",
   "changelog.viewJson": "Zobacz JSON",
 

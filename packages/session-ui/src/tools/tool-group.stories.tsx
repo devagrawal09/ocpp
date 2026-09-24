@@ -6,7 +6,7 @@ import { storyDocument, storyTool } from "../storybook/current-session-scenarios
 import { type ContextGroupPart, CurrentContextToolGroup } from "./tool-renderer"
 
 export default {
-  title: "OpenCode/Work/Tool group",
+  title: "OC++/Work/Tool group",
   id: "current-tool-group",
   component: CurrentContextToolGroup,
 }
@@ -64,9 +64,9 @@ export const CodeModeTrace = {
               tool: "read",
               status: "completed",
               input: { path: "package.json" },
-              output: '{ "name": "opencode" }',
+              output: '{ "name": "ocpp" }',
             },
-            { type: "trace", kind: "log", method: "log", message: "Loaded package opencode" },
+            { type: "trace", kind: "log", method: "log", message: "Loaded package ocpp" },
             { type: "trace", kind: "return", value: "{ total: 1482 }" },
           ],
         },
@@ -142,7 +142,7 @@ export const MixedReasoning = {
         id: "reasoning_first",
         text: "The renderer groups adjacent tools. Check the relevant skills before changing it.",
       },
-      storyTool("reasoning_skill_first", "skill", "completed", { id: "opencode" }),
+      storyTool("reasoning_skill_first", "skill", "completed", { id: "ocpp" }),
       storyTool("reasoning_skill_second", "skill", "completed", { id: "frontend-design" }),
       {
         type: "reasoning",

@@ -1,10 +1,10 @@
 import { benchmark, expect } from "../benchmark"
-import { mockOpenCodeServer } from "../../utils/mock-server"
+import { mockOcppServer } from "../../utils/mock-server"
 import { expectSessionTitle } from "../../utils/waits"
 import { fixture, pageMessages } from "./session-timeline-stress.fixture"
 import { installStressSessionTabs, installTimelineSettings, stressSessionHref } from "./timeline-test-helpers"
 import { waitForStableTimeline } from "./session-tab-switch-probe"
-import type { CatalogUpdated } from "@opencode-ai/client/promise"
+import type { CatalogUpdated } from "@ocpp/client/promise"
 
 benchmark("measures retained renderer memory with a large model catalog", async ({ page, report }) => {
   benchmark.setTimeout(120_000)
@@ -12,7 +12,7 @@ benchmark("measures retained renderer memory with a large model catalog", async 
   const switches = Number(process.env.PROVIDER_MEMORY_SWITCHES ?? 10)
   const provider = fixture.provider.all[0]
   const selected = { ...provider.models["claude-opus-4-6"] }
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory: fixture.directory,
     project: fixture.project,
     sessions: fixture.sessions,

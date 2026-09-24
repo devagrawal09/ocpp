@@ -1,14 +1,9 @@
 import { EOL } from "node:os"
 import { Effect } from "effect"
-import {
-  OpenCode,
-  type IntegrationAttemptStatus,
-  type IntegrationOAuthMethod,
-  type OpenCodeClient,
-} from "@opencode-ai/client"
+import { Ocpp, type IntegrationAttemptStatus, type IntegrationOAuthMethod, type OcppClient } from "@ocpp/client"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
-import { Service } from "@opencode-ai/client/effect/service"
+import { Service } from "@ocpp/client/effect/service"
 import { ServiceConfig } from "../../../services/service-config"
 import { resolveIntegration } from "./resolve"
 
@@ -18,7 +13,7 @@ export default Runtime.handler(
   Commands.commands.mcp.commands.auth,
   Effect.fn("cli.mcp.auth")(function* (input) {
     const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
-    const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+    const client = Ocpp.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
 
     const integration = yield* resolveIntegration(client, input.name, location)
     if (!integration)
@@ -49,7 +44,7 @@ export default Runtime.handler(
 )
 
 const poll = (
-  client: OpenCodeClient,
+  client: OcppClient,
   integrationID: string,
   attemptID: string,
 ): Effect.Effect<Exclude<IntegrationAttemptStatus, { status: "pending" }>> =>

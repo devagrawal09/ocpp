@@ -5,10 +5,10 @@ import { AutoScroller, Feedback, PointerActivationConstraints } from "@dnd-kit/d
 import { RestrictToVerticalAxis } from "@dnd-kit/abstract/modifiers"
 import { RestrictToElement } from "@dnd-kit/dom/modifiers"
 import { arrayMove } from "@dnd-kit/helpers"
-import { Button } from "@opencode-ai/ui/button"
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Button } from "@ocpp/ui/button"
+import { Icon } from "@ocpp/ui/icon"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { Tooltip } from "@ocpp/ui/tooltip"
 import { useLanguage } from "@/runtime/i18n/language"
 import type { SessionQueueView } from "./queue"
 
@@ -58,11 +58,7 @@ export function SessionQueuePanel(props: { queue: SessionQueueView }) {
         >
           {/* Keyed on row IDs so store updates move row elements instead of
               remounting them, which would kill an in-flight drag. */}
-          <div
-            ref={listRef}
-            class="flex flex-col gap-px"
-            classList={{ "max-h-[131px] overflow-y-auto": count() > 3 }}
-          >
+          <div ref={listRef} class="flex flex-col gap-px" classList={{ "max-h-[131px] overflow-y-auto": count() > 3 }}>
             <For each={props.queue.rows().map((row) => row.id)}>
               {(id, index) => <SessionQueueRow queue={props.queue} id={id} index={index()} />}
             </For>

@@ -1,21 +1,21 @@
 import { describe, expect } from "bun:test"
-import { Message, ToolFailure } from "@opencode-ai/ai"
+import { Message, ToolFailure } from "@ocpp/ai"
 import { DateTime, Effect, Option, Stream, Types } from "effect"
-import type { SessionContext } from "@opencode-ai/plugin/effect/session"
-import type { ToolHooks } from "@opencode-ai/plugin/effect/tool"
-import { Agent } from "@opencode-ai/core/agent"
-import { Environment } from "@opencode-ai/core/environment/index"
-import { Event } from "@opencode-ai/schema/event"
-import { Model } from "@opencode-ai/core/model"
-import { PlanPlugin } from "@opencode-ai/core/plugin/plan"
-import { Permission } from "@opencode-ai/core/permission"
-import { Provider } from "@opencode-ai/core/provider"
-import { Session } from "@opencode-ai/core/session"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionInbox } from "@opencode-ai/core/session/inbox"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Tool } from "@opencode-ai/schema/tool"
-import { Global } from "@opencode-ai/util/global"
+import type { SessionContext } from "@ocpp/plugin/effect/session"
+import type { ToolHooks } from "@ocpp/plugin/effect/tool"
+import { Agent } from "@ocpp/core/agent"
+import { Environment } from "@ocpp/core/environment/index"
+import { Event } from "@ocpp/schema/event"
+import { Model } from "@ocpp/core/model"
+import { PlanPlugin } from "@ocpp/core/plugin/plan"
+import { Permission } from "@ocpp/core/permission"
+import { Provider } from "@ocpp/core/provider"
+import { Session } from "@ocpp/core/session"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionInbox } from "@ocpp/core/session/inbox"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { Tool } from "@ocpp/schema/tool"
+import { Global } from "@ocpp/util/global"
 import path from "path"
 import { it } from "../lib/effect"
 import { host } from "./host"
@@ -24,7 +24,7 @@ const sessionID = Session.ID.make("ses_plan_test")
 const plan = Agent.ID.make("plan")
 const build = Agent.ID.make("build")
 const home = "/home/plan-test"
-const planDirectory = path.join(home, ".opencode", "plan")
+const planDirectory = path.join(home, ".ocpp", "plan")
 
 const agentSelected = (agent: Agent.ID, previous: Agent.ID): SessionEvent.AgentSelected => ({
   id: Event.ID.create(),

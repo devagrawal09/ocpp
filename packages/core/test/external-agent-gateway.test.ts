@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { CodeMode, Tool, ToolHandle } from "@opencode-ai/codemode"
+import { CodeMode, Tool, ToolHandle } from "@ocpp/codemode"
 import { Effect, Schema } from "effect"
 import { ExternalAgentGateway } from "../src/external-agent/gateway"
 import { ExternalAgentBridge } from "../src/external-agent/bridge.node"

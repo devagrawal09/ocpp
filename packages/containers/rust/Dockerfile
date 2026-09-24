@@ -1,4 +1,4 @@
-ARG REGISTRY=ghcr.io/anomalyco
+ARG REGISTRY=ghcr.io/devagrawal09
 FROM ${REGISTRY}/build/bun-node:24.04
 
 ARG RUST_TOOLCHAIN=stable

@@ -1,10 +1,10 @@
 export * as FileMutation from "./file-mutation.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer } from "effect"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Bom } from "@opencode-ai/util/bom"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Bom } from "@ocpp/util/bom"
 import { Environment } from "./environment/index.js"
 import type { Files } from "./environment/index.js"
 
@@ -42,7 +42,7 @@ export interface Interface {
   ) => Effect.Effect<WriteResult, Environment.WrongKind | Environment.Failed>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/FileMutation") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/FileMutation") {}
 
 export const readText = Effect.fn("FileMutation.readText")(function* (files: Files, target: string) {
   return Bom.decodeBytes((yield* files.read(target)).bytes)
@@ -62,7 +62,7 @@ export const syncTextBom = Effect.fn("FileMutation.syncTextBom")(function* (
 const transactionLocks = KeyedMutex.makeUnsafe<string>()
 
 /**
- * Mutation locking is process-local and serializes cooperating OpenCode
+ * Mutation locking is process-local and serializes cooperating OC++
  * changes; external writes can still race.
  */
 const layer = Layer.effect(

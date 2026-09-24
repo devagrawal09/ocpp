@@ -90,7 +90,7 @@
   color-scheme: light;
   --text-mix-blend-mode: multiply;
 
-  /* OC-2 fallback variables (light) */
+  /* OC++ V2 fallback variables (light) */
   --background-base: #f8f8f8;
   --background-weak: #f3f3f3;
   --background-strong: #fcfcfc;
@@ -361,7 +361,7 @@
     color-scheme: dark;
     --text-mix-blend-mode: plus-lighter;
 
-    /* OC-2 fallback variables (dark) */
+    /* OC++ V2 fallback variables (dark) */
     --background-base: #101010;
     --background-weak: #1e1e1e;
     --background-strong: #121212;

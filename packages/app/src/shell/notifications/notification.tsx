@@ -1,9 +1,9 @@
 import { createStore, reconcile } from "solid-js/store"
 import { type Accessor, batch, createEffect, createMemo, createRoot, getOwner, onCleanup } from "solid-js"
-import { createSimpleContext } from "@opencode-ai/ui/context"
+import { createSimpleContext } from "@ocpp/ui/context"
 import type { ServerSDK } from "@/runtime/server/client"
-import type { Data } from "@opencode-ai/client/solid"
-import type { OpenCodeEvent } from "@opencode-ai/client/promise"
+import type { Data } from "@ocpp/client/solid"
+import type { OcppEvent } from "@ocpp/client/promise"
 import { usePlatform } from "@/runtime/platform/platform"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useSettings } from "@/settings/model"
@@ -31,7 +31,7 @@ type TurnCompleteNotification = NotificationBase & {
 
 type ErrorNotification = NotificationBase & {
   type: "error"
-  error: Extract<OpenCodeEvent, { type: "session.execution.failed" }>["data"]["error"]
+  error: Extract<OcppEvent, { type: "session.execution.failed" }>["data"]["error"]
 }
 
 export type Notification = TurnCompleteNotification | ErrorNotification
@@ -53,11 +53,7 @@ type NotificationIndex = {
 
 type NotificationTabs = Pick<ReturnType<typeof useTabs>, "addSessionTab" | "rememberSessionRoute" | "select">
 
-export function openNotificationSession(
-  tabs: NotificationTabs,
-  server: ServerConnection.Key,
-  sessionID: string,
-) {
+export function openNotificationSession(tabs: NotificationTabs, server: ServerConnection.Key, sessionID: string) {
   const tab = tabs.addSessionTab({ server, sessionId: sessionID })
   if (tab.type !== "session") return
   tabs.rememberSessionRoute(tab, sessionID)
@@ -230,10 +226,7 @@ export function createServerNotificationState(input: { sdk: ServerSDK; data: Dat
       if (!session) return
       if (session.parentID) return
 
-      if (
-        sessionIDHasOpenTab(tabs.store, input.key, sessionID) &&
-        settings.sounds.agentEnabled()
-      ) {
+      if (sessionIDHasOpenTab(tabs.store, input.key, sessionID) && settings.sounds.agentEnabled()) {
         void playSoundByIdOnce(settings.sounds.agent(), `${input.key}\0${eventID}`)
       }
 
@@ -253,20 +246,12 @@ export function createServerNotificationState(input: { sdk: ServerSDK; data: Dat
     })
   }
 
-  const handleSessionError = (
-    sessionID: string,
-    error: ErrorNotification["error"],
-    eventID: string,
-    time: number,
-  ) => {
+  const handleSessionError = (sessionID: string, error: ErrorNotification["error"], eventID: string, time: number) => {
     void lookup(sessionID).then((session) => {
       if (meta.disposed) return
       if (session?.parentID) return
 
-      if (
-        sessionIDHasOpenTab(tabs.store, input.key, sessionID) &&
-        settings.sounds.errorsEnabled()
-      ) {
+      if (sessionIDHasOpenTab(tabs.store, input.key, sessionID) && settings.sounds.errorsEnabled()) {
         void playSoundByIdOnce(settings.sounds.errors(), `${input.key}\0${eventID}`)
       }
 

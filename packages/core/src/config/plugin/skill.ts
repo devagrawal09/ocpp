@@ -1,9 +1,9 @@
 export * as ConfigSkillPlugin from "./skill.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import type { Entry } from "@opencode-ai/schema/config"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
+import { define } from "@ocpp/plugin/effect/plugin"
+import type { Entry } from "@ocpp/schema/config"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
 import path from "path"
 import { Effect, FiberMap, PubSub, Semaphore, Stream } from "effect"
 import { Config } from "../../config.js"
@@ -17,7 +17,7 @@ import { SkillFile } from "./skill-file.js"
 type Source = Skill.DirectorySource | Skill.UrlSource
 
 export const Plugin = define({
-  id: "opencode.config.skill",
+  id: "ocpp.config.skill",
   effect: Effect.fn(function* (ctx) {
     const config = yield* Config.Service
     const discovery = yield* SkillDiscovery.Service

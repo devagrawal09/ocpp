@@ -5,13 +5,13 @@ title: "Intro"
 Run the CLI in a project to open the full-screen terminal interface:
 
 ```bash
-opencode2
+ocpp
 ```
 
 Pass a directory to work in a different project:
 
 ```bash
-opencode2 ~/code/my-project
+ocpp ~/code/my-project
 ```
 
 Suggested terminals:
@@ -26,33 +26,33 @@ palette.
 
 ## Automation
 
-Use `opencode2 run` to submit a prompt without opening the interactive interface. It is designed for scripts, CI jobs, and
+Use `ocpp run` to submit a prompt without opening the interactive interface. It is designed for scripts, CI jobs, and
 other workflows that need model output directly in the terminal.
 
 ```bash
-opencode2 run "Explain this repository"
+ocpp run "Explain this repository"
 ```
 
 ## Mini
 
-Use `opencode2 mini` to start OpenCode's minimal interactive interface instead of the full-screen TUI.
+Use `ocpp mini` to start OC++'s minimal interactive interface instead of the full-screen TUI.
 
 ```bash
-opencode2 mini
+ocpp mini
 ```
 
-Run `opencode2 mini --help` to see its session, model, agent, prompt, and replay options.
+Run `ocpp mini --help` to see its session, model, agent, prompt, and replay options.
 
 ## Background service
 
-By default, OpenCode discovers or starts one shared background server for your user account. Every local OpenCode client
+By default, OC++ discovers or starts one shared background server for your user account. Every local OC++ client
 connects to that server, which owns sessions, configuration, integrations, permissions, and tool execution.
 
 Use `--standalone` to run with a private server, or `--server` to connect to a specific server URL:
 
 ```bash
-opencode2 --standalone
-opencode2 --server http://localhost:4096
+ocpp --standalone
+ocpp --server http://localhost:4096
 ```
 
 See [Troubleshooting](/troubleshooting) for shared service diagnostics and the [API reference](/api) for server endpoints.

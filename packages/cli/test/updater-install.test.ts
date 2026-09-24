@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
-import { Global } from "@opencode-ai/util/global"
-import { AppProcess } from "@opencode-ai/util/process"
+import { Global } from "@ocpp/util/global"
+import { AppProcess } from "@ocpp/util/process"
 import { expect, test } from "bun:test"
 import { Effect, FileSystem, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
@@ -11,7 +11,7 @@ import { testEffect } from "../../core/test/lib/effect"
 
 const it = testEffect(NodeServices.layer)
 
-declare const OPENCODE_CLI_NAME: string | undefined
+declare const OCPP_CLI_NAME: string | undefined
 
 function fixture(
   respond: (command: ChildProcess.StandardCommand) => Partial<AppProcess.RunResult> & {
@@ -21,7 +21,7 @@ function fixture(
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-    const root = yield* fs.makeTempDirectoryScoped({ prefix: "opencode-updater-" })
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "ocpp-updater-" })
     const global = Global.make({
       home: path.join(root, "home"),
       data: path.join(root, "data"),
@@ -66,12 +66,12 @@ function fixture(
 }
 
 const installs = [
-  { method: "npm", command: ["npm", "install", "--global", "@opencode-ai/cli@2.3.4-beta.1"] },
+  { method: "npm", command: ["npm", "install", "--global", "@ocpp/cli@2.3.4-beta.1"] },
   {
     method: "pnpm",
-    command: ["pnpm", "add", "--global", "--allow-build=@opencode-ai/cli", "@opencode-ai/cli@2.3.4-beta.1"],
+    command: ["pnpm", "add", "--global", "--allow-build=@ocpp/cli", "@ocpp/cli@2.3.4-beta.1"],
   },
-  { method: "yarn", command: ["yarn", "global", "add", "@opencode-ai/cli@2.3.4-beta.1"] },
+  { method: "yarn", command: ["yarn", "global", "add", "@ocpp/cli@2.3.4-beta.1"] },
 ] as const
 
 installs.forEach(({ method, command }) => {
@@ -95,7 +95,7 @@ installs.forEach(({ method, command }) => {
       const cache = test.commands[0]?.[5]
       expect(cache).toStartWith(path.join(test.global.cache, "update-"))
       expect(test.commands).toEqual([
-        ["bun", "install", "--global", "--trust", "--cache-dir", cache, "@opencode-ai/cli@2.3.4-beta.1"],
+        ["bun", "install", "--global", "--trust", "--cache-dir", cache, "@ocpp/cli@2.3.4-beta.1"],
       ])
       expect(yield* test.fs.readDirectory(test.global.cache)).toEqual([])
       expect(result._tag).toBe(exitCode === 0 ? "None" : "Some")
@@ -118,7 +118,7 @@ installs.forEach(({ method, command }) => {
       const installer = test.commands[0]?.[3]
       expect(installer).toStartWith(path.join(test.global.cache, "update-"))
       expect(test.commands).toEqual([
-        ["curl", "-fsSL", "-o", installer, "https://opencode.ai/v2/install"],
+        ["curl", "-fsSL", "-o", installer, "https://ocpp.ai/v2/install"],
         ...(failure === "download" ? [] : [["bash", installer, "--version", "2.3.4-beta.1", "--no-modify-path"]]),
       ])
       expect(yield* test.fs.readDirectory(test.global.cache)).toEqual([])
@@ -162,12 +162,12 @@ it.live("install failures expose stderr and process errors do not report success
   it.live(`method detection identifies ${method ?? "an unknown installation"} using the V2 package`, () =>
     Effect.gen(function* () {
       const test = yield* fixture((command) => ({
-        stdout: Buffer.from(command.command === method ? "@opencode-ai/cli@2.3.4" : "opencode-ai@1.0.0"),
+        stdout: Buffer.from(command.command === method ? "@ocpp/cli@2.3.4" : "ocpp@1.0.0"),
       }))
       expect(yield* test.updater.method()).toBe(method)
       expect(test.commands).toEqual([
-        ["npm", "list", "-g", "--depth=0", "@opencode-ai/cli"],
-        ["pnpm", "list", "-g", "--depth=0", "@opencode-ai/cli"],
+        ["npm", "list", "-g", "--depth=0", "@ocpp/cli"],
+        ["pnpm", "list", "-g", "--depth=0", "@ocpp/cli"],
         ["bun", "pm", "ls", "-g"],
         ["yarn", "global", "list"],
       ])
@@ -179,7 +179,7 @@ it.live("method detection tolerates unavailable package managers", () =>
   Effect.gen(function* () {
     const test = yield* fixture((command) =>
       command.command === "yarn"
-        ? { stdout: Buffer.from("@opencode-ai/cli@2.3.4") }
+        ? { stdout: Buffer.from("@ocpp/cli@2.3.4") }
         : { error: new AppProcess.AppProcessError({ command: command.command }) },
     )
     expect(yield* test.updater.method()).toBe("yarn")
@@ -194,7 +194,7 @@ test("Node distribution honors the compile-time CLI name", async () => {
       "test",
       import.meta.path,
       "--define",
-      'OPENCODE_CLI_NAME="opencode2-node"',
+      'OCPP_CLI_NAME="ocpp-node"',
       "--test-name-pattern",
       "^Node distribution resolves the published npm package$",
     ],
@@ -205,22 +205,22 @@ test("Node distribution honors the compile-time CLI name", async () => {
   expect(stderr).toContain("1 pass")
 })
 
-if (typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "opencode2-node") {
+if (typeof OCPP_CLI_NAME === "string" && OCPP_CLI_NAME === "ocpp-node") {
   it.live("Node distribution resolves the published npm package", () =>
     Effect.gen(function* () {
       const test = yield* fixture((command) => ({
-        stdout: Buffer.from(command.command === "npm" ? "opencode-node@2.3.4" : ""),
+        stdout: Buffer.from(command.command === "npm" ? "ocpp-node@2.3.4" : ""),
       }))
       expect(yield* test.updater.method()).toBe("npm")
       yield* test.updater.upgrade("npm", "v2.3.4")
       yield* test.updater.upgrade("pnpm", "v2.3.4")
       expect(test.commands).toEqual([
-        ["npm", "list", "-g", "--depth=0", "opencode-node"],
-        ["pnpm", "list", "-g", "--depth=0", "opencode-node"],
+        ["npm", "list", "-g", "--depth=0", "ocpp-node"],
+        ["pnpm", "list", "-g", "--depth=0", "ocpp-node"],
         ["bun", "pm", "ls", "-g"],
         ["yarn", "global", "list"],
-        ["npm", "install", "--global", "opencode-node@2.3.4"],
-        ["pnpm", "add", "--global", "--allow-build=opencode-node", "opencode-node@2.3.4"],
+        ["npm", "install", "--global", "ocpp-node@2.3.4"],
+        ["pnpm", "add", "--global", "--allow-build=ocpp-node", "ocpp-node@2.3.4"],
       ])
     }),
   )

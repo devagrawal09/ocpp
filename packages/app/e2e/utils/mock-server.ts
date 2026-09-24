@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test"
-import type { JsonValue, OpenCodeEvent, SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { JsonValue, OcppEvent, SessionMessageInfo } from "@ocpp/client/promise"
 import { Duration, Effect, Layer } from "effect"
 import { HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
@@ -28,7 +28,7 @@ export interface MockServerConfig {
   message?: (sessionID: string, messageID: string) => SessionMessageInfo | undefined
   onMessage?: (input: { sessionID: string; messageID: string }) => void
   onRevertStage?: (input: { sessionID: string; messageID: string }) => void
-  events?: () => OpenCodeEvent[]
+  events?: () => OcppEvent[]
   eventRetry?: number
   permissions?: unknown[] | (() => unknown[])
   forms?: unknown[] | (() => unknown[])
@@ -46,7 +46,7 @@ type MockStreamWindow = Window & {
   __mockServerStream?: { push: (payloads: unknown[]) => void }
 }
 
-export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
+export async function mockOcppServer(page: Page, config: MockServerConfig) {
   const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
 
   await page.addInitScript(

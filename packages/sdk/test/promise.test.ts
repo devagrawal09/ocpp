@@ -2,16 +2,16 @@ import { expect, test } from "bun:test"
 import { mkdir } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "../../core/test/fixture/tmpdir"
-import { OpenCode, Session } from "../src"
+import { Ocpp, Session } from "../src"
 
 test("Promise host uses the embedded router and releases plugins", async () => {
-  await using directory = await tmpdir("opencode-promise-sdk-")
+  await using directory = await tmpdir("ocpp-promise-sdk-")
   const config = join(directory.path, "config")
   await mkdir(config)
   const ready = Promise.withResolvers<void>()
   let setup = false
   let cleanup = false
-  const opencode = await OpenCode.create({
+  const ocpp = await Ocpp.create({
     events: { persist: true },
     config: { directory: config, project: false, content: "{}" },
     plugins: [
@@ -30,17 +30,17 @@ test("Promise host uses the embedded router and releases plugins", async () => {
 
   try {
     const location = { directory: directory.path }
-    const session = await opencode.sessions.create({ location })
-    await opencode.plugin.list({ location })
+    const session = await ocpp.sessions.create({ location })
+    await ocpp.plugin.list({ location })
     await Promise.race([
       ready.promise,
       Bun.sleep(4_000).then(() => {
         throw new Error("Promise plugin did not start")
       }),
     ])
-    const selected = await opencode.sessions.get({ sessionID: session.id })
-    const page = await opencode.sessions.list({ directory: directory.path })
-    const events = Array.fromAsync(opencode.sessions.log({ sessionID: session.id }))
+    const selected = await ocpp.sessions.get({ sessionID: session.id })
+    const page = await ocpp.sessions.list({ directory: directory.path })
+    const events = Array.fromAsync(ocpp.sessions.log({ sessionID: session.id }))
 
     expect(selected.id).toBe(session.id)
     expect(page.data.some((item) => item.id === session.id)).toBe(true)
@@ -48,24 +48,24 @@ test("Promise host uses the embedded router and releases plugins", async () => {
     expect(setup).toBe(true)
 
     const missingSessionID = Session.ID.create()
-    const missing = await opencode.sessions.get({ sessionID: missingSessionID }).catch((error: unknown) => error)
+    const missing = await ocpp.sessions.get({ sessionID: missingSessionID }).catch((error: unknown) => error)
     expect(missing).toMatchObject({ _tag: "SessionNotFoundError", sessionID: missingSessionID })
   } finally {
-    await opencode.close()
-    await opencode.close()
+    await ocpp.close()
+    await ocpp.close()
   }
 
   expect(cleanup).toBe(true)
 })
 
 test("Promise event streams support cancellation", async () => {
-  await using directory = await tmpdir("opencode-promise-stream-")
+  await using directory = await tmpdir("ocpp-promise-stream-")
   const config = join(directory.path, "config")
   await mkdir(config)
   {
-    await using opencode = await OpenCode.create({ config: { directory: config, project: false, content: "{}" } })
+    await using ocpp = await Ocpp.create({ config: { directory: config, project: false, content: "{}" } })
     const controller = new AbortController()
-    const events = opencode.events.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
+    const events = ocpp.events.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
     expect(await events.next()).toMatchObject({ value: { type: "server.connected" }, done: false })
     const pending = events.next()
     controller.abort()
@@ -76,39 +76,39 @@ test("Promise event streams support cancellation", async () => {
 })
 
 test("closing cancels active Promise event streams", async () => {
-  await using directory = await tmpdir("opencode-promise-stream-close-")
+  await using directory = await tmpdir("ocpp-promise-stream-close-")
   const config = join(directory.path, "config")
   await mkdir(config)
-  const opencode = await OpenCode.create({ config: { directory: config, project: false, content: "{}" } })
-  const events = opencode.events.subscribe()[Symbol.asyncIterator]()
+  const ocpp = await Ocpp.create({ config: { directory: config, project: false, content: "{}" } })
+  const events = ocpp.events.subscribe()[Symbol.asyncIterator]()
   expect(await events.next()).toMatchObject({ value: { type: "server.connected" }, done: false })
   const pending = events.next()
 
-  await opencode.close()
+  await ocpp.close()
   const error = await pending.catch((error: unknown) => error)
   expect(error).toMatchObject({ name: "ClientError", reason: "Transport" })
 })
 
 test("closing waits for pending Promise plugin setup and runs its cleanup", async () => {
-  await using directory = await tmpdir("opencode-promise-plugin-close-")
+  await using directory = await tmpdir("ocpp-promise-plugin-close-")
   const config = join(directory.path, "config")
   await mkdir(config)
-  await using opencode = await OpenCode.create({ config: { directory: config, project: false, content: "{}" } })
+  await using ocpp = await Ocpp.create({ config: { directory: config, project: false, content: "{}" } })
   const started = Promise.withResolvers<void>()
   const release = Promise.withResolvers<() => void>()
   let cleanup = false
 
-  await opencode.plugin({
+  await ocpp.plugin({
     id: `pending-${crypto.randomUUID()}`,
     setup() {
       started.resolve()
       return release.promise
     },
   })
-  const boot = opencode.plugin.list({ location: { directory: directory.path } })
+  const boot = ocpp.plugin.list({ location: { directory: directory.path } })
   await started.promise
-  const closing = opencode.close()
-  const concurrent = opencode.close()
+  const closing = ocpp.close()
+  const concurrent = ocpp.close()
 
   try {
     expect(concurrent).toBe(closing)

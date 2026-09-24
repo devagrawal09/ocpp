@@ -1,11 +1,11 @@
 export * as LocationWatcher from "./location-watcher.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Cause, Context, Effect, Exit, Layer, Scope, Semaphore, Stream } from "effect"
-import { FileSystem } from "@opencode-ai/schema/filesystem"
+import { FileSystem } from "@ocpp/schema/filesystem"
 import path from "path"
 import { Bus } from "../bus.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Git } from "../git.js"
 import { Location } from "../location.js"
 import { PluginSupervisor } from "../plugin/supervisor.js"
@@ -14,7 +14,7 @@ import { Watcher } from "./watcher.js"
 
 export interface Interface {}
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/LocationWatcher") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/LocationWatcher") {}
 
 const layer = Layer.effect(
   Service,

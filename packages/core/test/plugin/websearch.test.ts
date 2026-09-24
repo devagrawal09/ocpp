@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Integration } from "@opencode-ai/core/integration"
-import { WebSearch } from "@opencode-ai/core/websearch"
-import { WebSearchExa } from "@opencode-ai/core/plugin/websearch/exa"
-import { WebSearchFirecrawl } from "@opencode-ai/core/plugin/websearch/firecrawl"
-import { WebSearchParallel } from "@opencode-ai/core/plugin/websearch/parallel"
-import { WebSearchTavily } from "@opencode-ai/core/plugin/websearch/tavily"
+import { Integration } from "@ocpp/core/integration"
+import { WebSearch } from "@ocpp/core/websearch"
+import { WebSearchExa } from "@ocpp/core/plugin/websearch/exa"
+import { WebSearchFirecrawl } from "@ocpp/core/plugin/websearch/firecrawl"
+import { WebSearchParallel } from "@ocpp/core/plugin/websearch/parallel"
+import { WebSearchTavily } from "@ocpp/core/plugin/websearch/tavily"
 import { host, integrationHost, webSearchHost } from "./host"
 import { requests, resetWebSearchFixture, webSearchIntegrationTest } from "./websearch-fixture"
 
@@ -237,7 +237,7 @@ describe("built-in web search providers", () => {
       )
       expect(requests[0]).toMatchObject({
         url: WebSearchTavily.endpoint,
-        headers: { "x-client-name": "opencode2", "x-tavily-access-mode": "keyless" },
+        headers: { "x-client-name": "ocpp", "x-tavily-access-mode": "keyless" },
         body: {
           query: "effect typescript",
           search_depth: "basic",
@@ -253,7 +253,7 @@ describe("built-in web search providers", () => {
       })
       yield* websearch.query(query)
       expect(requests[1]).toMatchObject({
-        headers: { authorization: "Bearer tavily-secret", "x-client-name": "opencode2" },
+        headers: { authorization: "Bearer tavily-secret", "x-client-name": "ocpp" },
       })
       expect(requests[1]?.headers["x-tavily-access-mode"]).toBeUndefined()
     }),

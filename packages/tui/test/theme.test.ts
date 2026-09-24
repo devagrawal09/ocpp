@@ -19,14 +19,14 @@ import { tmpdir } from "./fixture/fixture"
 
 test("addTheme writes into module theme store", () => {
   const name = `plugin-theme-${Date.now()}`
-  expect(addTheme(name, DEFAULT_THEMES.opencode)).toBe(true)
-  expect(allThemes()[name]).toBe(DEFAULT_THEMES.opencode)
+  expect(addTheme(name, DEFAULT_THEMES.ocpp)).toBe(true)
+  expect(allThemes()[name]).toBe(DEFAULT_THEMES.ocpp)
 })
 
 test("addTheme keeps first theme for duplicate names", () => {
   const name = `plugin-theme-keep-${Date.now()}`
-  const one = structuredClone(DEFAULT_THEMES.opencode)
-  const two = structuredClone(DEFAULT_THEMES.opencode)
+  const one = structuredClone(DEFAULT_THEMES.ocpp)
+  const two = structuredClone(DEFAULT_THEMES.ocpp)
   one.theme.primary = "#101010"
   two.theme.primary = "#fefefe"
 
@@ -54,8 +54,8 @@ test("parseTheme delegates malformed V1 sources and rejects unknown versions", (
 })
 
 test("parses unversioned and explicit V1 themes lazily once", () => {
-  const unversioned = structuredClone(DEFAULT_THEMES.opencode)
-  const explicit = { ...structuredClone(DEFAULT_THEMES.opencode), version: 1 }
+  const unversioned = structuredClone(DEFAULT_THEMES.ocpp)
+  const explicit = { ...structuredClone(DEFAULT_THEMES.ocpp), version: 1 }
   const first = parseTheme(unversioned, "unversioned")
   const second = parseTheme(explicit, "explicit")
 
@@ -84,7 +84,7 @@ test("defers invalid V2 errors until parsing", () => {
 
 test("defers invalid V1 errors until parsing", () => {
   const name = `plugin-theme-invalid-v1-${Date.now()}`
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   source.defs = { ...source.defs, one: "two", two: "one" }
   source.theme.primary = "one"
 
@@ -94,8 +94,8 @@ test("defers invalid V1 errors until parsing", () => {
 
 test("replacement sources receive independent parse caches", () => {
   const name = `plugin-theme-replace-${Date.now()}`
-  const first = structuredClone(DEFAULT_THEMES.opencode)
-  const second = structuredClone(DEFAULT_THEMES.opencode)
+  const first = structuredClone(DEFAULT_THEMES.ocpp)
+  const second = structuredClone(DEFAULT_THEMES.ocpp)
   second.theme.primary = "#123456"
 
   expect(addTheme(name, first)).toBe(true)
@@ -108,8 +108,8 @@ test("replacement sources receive independent parse caches", () => {
 
 test("custom themes retain precedence over plugin themes", () => {
   const name = `plugin-theme-precedence-${Date.now()}`
-  const plugin = structuredClone(DEFAULT_THEMES.opencode)
-  const custom = structuredClone(DEFAULT_THEMES.opencode)
+  const plugin = structuredClone(DEFAULT_THEMES.ocpp)
+  const custom = structuredClone(DEFAULT_THEMES.ocpp)
 
   expect(addTheme(name, plugin)).toBe(true)
   setCustomThemes({ [name]: custom })
@@ -121,19 +121,19 @@ test("custom themes retain precedence over plugin themes", () => {
 test("hasTheme checks theme presence", () => {
   const name = `plugin-theme-has-${Date.now()}`
   expect(hasTheme(name)).toBe(false)
-  expect(addTheme(name, DEFAULT_THEMES.opencode)).toBe(true)
+  expect(addTheme(name, DEFAULT_THEMES.ocpp)).toBe(true)
   expect(hasTheme(name)).toBe(true)
 })
 
 test("resolveTheme rejects circular color refs", () => {
-  const item = structuredClone(DEFAULT_THEMES.opencode)
+  const item = structuredClone(DEFAULT_THEMES.ocpp)
   item.defs = { ...item.defs, one: "two", two: "one" }
   item.theme.primary = "one"
   expect(() => resolveTheme(item, "dark")).toThrow("Circular color reference")
 })
 
 test("resolveTheme preserves full theme numeric color and marker semantics", () => {
-  const item = structuredClone(DEFAULT_THEMES.opencode)
+  const item = structuredClone(DEFAULT_THEMES.ocpp)
   item.theme.primary = 6
   delete item.theme.selectedListItemText
 
@@ -184,9 +184,9 @@ test("theme directories include global config before project directories", async
   const global = path.join(tmp.path, "global")
   const project = path.join(tmp.path, "repo", "package")
   await mkdir(path.join(global, "themes"), { recursive: true })
-  await mkdir(path.join(project, ".opencode", "themes"), { recursive: true })
+  await mkdir(path.join(project, ".ocpp", "themes"), { recursive: true })
   await writeFile(path.join(global, "themes", "global.json"), JSON.stringify({ source: "global" }))
-  await writeFile(path.join(project, ".opencode", "themes", "project.json"), JSON.stringify({ source: "project" }))
+  await writeFile(path.join(project, ".ocpp", "themes", "project.json"), JSON.stringify({ source: "project" }))
 
   await expect(discoverThemes(configDirectories(global, project))).resolves.toEqual({
     global: { source: "global" },

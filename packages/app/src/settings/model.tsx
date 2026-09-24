@@ -1,7 +1,7 @@
 import { createStore, reconcile } from "solid-js/store"
 import { createEffect, createMemo } from "solid-js"
-import { createSimpleContext } from "@opencode-ai/ui/context"
-import type { ReasoningMode } from "@opencode-ai/session-ui/timeline/projection"
+import { createSimpleContext } from "@ocpp/ui/context"
+import type { ReasoningMode } from "@ocpp/session-ui/timeline/projection"
 import { persisted } from "@/runtime/persistence/storage"
 import { ScopedKey, type ServerScope } from "@/runtime/server/scope"
 

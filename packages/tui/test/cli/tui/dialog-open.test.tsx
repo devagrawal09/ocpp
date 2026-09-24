@@ -4,7 +4,7 @@ import { once } from "node:events"
 import { CliRenderEvents, TextAttributes } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { createSignal, onMount } from "solid-js"
-import type { SessionInfo } from "@opencode-ai/client"
+import type { SessionInfo } from "@ocpp/client"
 import { DialogOpen, DialogOpenKey } from "../../../src/component/dialog-open"
 import { ConfigProvider } from "../../../src/config"
 import { ClientProvider } from "../../../src/context/client"
@@ -25,7 +25,7 @@ import { tmpdir } from "../../fixture/fixture"
 import { createTuiResolvedConfig } from "../../fixture/tui-runtime"
 
 test("selecting an unhydrated session preserves its location", async () => {
-  const remote = { directory: "/tmp/opencode/remote", workspaceID: "ws_remote" }
+  const remote = { directory: "/tmp/ocpp/remote", workspaceID: "ws_remote" }
   const fixture = await renderOpen((url) => {
     if (url.pathname !== "/api/session") return undefined
     return json({
@@ -60,7 +60,7 @@ test("selecting an unhydrated session preserves its location", async () => {
 
 test("finds and opens an exact session ID outside the recent list", async () => {
   const sessionID = "ses_04a7a3d82ffeIphUJgd3SnEqiv"
-  const remote = { directory: "/tmp/opencode/archive", workspaceID: "ws_archive" }
+  const remote = { directory: "/tmp/ocpp/archive", workspaceID: "ws_archive" }
   const fixture = await renderOpen((url) => {
     if (url.pathname === "/api/session") return json({ data: [], cursor: {} })
     if (url.pathname !== `/api/session/${sessionID}`) return undefined
@@ -93,7 +93,7 @@ test("finds and opens an exact session ID outside the recent list", async () => 
 })
 
 test("shows the current project and opens its root", async () => {
-  const root = "/tmp/opencode/project"
+  const root = "/tmp/ocpp/project"
   const subfolder = `${root}/packages/tui`
   const fixture = await renderOpen(
     (url) => {
@@ -102,7 +102,7 @@ test("shows the current project and opens its root", async () => {
           {
             id: "proj_current",
             canonical: root,
-            name: "OpenCode",
+            name: "OC++",
             time: { created: 1, updated: 2 },
             sandboxes: [],
           },
@@ -121,7 +121,7 @@ test("shows the current project and opens its root", async () => {
   )
 
   try {
-    const frame = await fixture.app.waitForFrame((value) => value.includes("OpenCode") && value.includes("●"))
+    const frame = await fixture.app.waitForFrame((value) => value.includes("OC++") && value.includes("●"))
     expect(frame).toContain(root)
 
     fixture.app.mockInput.pressEnter()
@@ -143,14 +143,14 @@ test("shows projects while sessions refresh and preserves the selected project",
       return json([
         {
           id: "proj_first",
-          canonical: "/tmp/opencode/first",
+          canonical: "/tmp/ocpp/first",
           name: "First project",
           time: { created: 1, updated: 2 },
           sandboxes: [],
         },
         {
           id: "proj_second",
-          canonical: "/tmp/opencode/second",
+          canonical: "/tmp/ocpp/second",
           name: "Second project",
           time: { created: 1, updated: 1 },
           sandboxes: [],
@@ -174,7 +174,7 @@ test("shows projects while sessions refresh and preserves the selected project",
             tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
             time: { created: 2, updated: 3 },
             title: "Recent session",
-            location: { directory: "/tmp/opencode/first" },
+            location: { directory: "/tmp/ocpp/first" },
           },
         ],
         cursor: {},
@@ -184,7 +184,7 @@ test("shows projects while sessions refresh and preserves the selected project",
     fixture.app.mockInput.pressEnter()
     await fixture.app.waitFor(() => fixture.route.data.type === "home")
 
-    expect(fixture.route.data).toEqual({ type: "home", location: { directory: "/tmp/opencode/second" } })
+    expect(fixture.route.data).toEqual({ type: "home", location: { directory: "/tmp/ocpp/second" } })
   } finally {
     await fixture.dispose()
   }
@@ -198,14 +198,14 @@ test.each([false, true])("keeps a filtered selection visible after refresh with 
       return json([
         {
           id: "proj_first",
-          canonical: "/tmp/opencode/first",
+          canonical: "/tmp/ocpp/first",
           name: "First shared project",
           time: { created: 1, updated: 2 },
           sandboxes: [],
         },
         {
           id: "proj_second",
-          canonical: "/tmp/opencode/second",
+          canonical: "/tmp/ocpp/second",
           name: "Second shared project",
           time: { created: 1, updated: 1 },
           sandboxes: [],
@@ -256,7 +256,7 @@ test.each([false, true])("keeps a filtered selection visible after refresh with 
     await fixture.app.waitFor(() => fixture.route.data.type === "home")
     expect(fixture.route.data).toEqual({
       type: "home",
-      location: { directory: `/tmp/opencode/${reset ? "first" : "second"}` },
+      location: { directory: `/tmp/ocpp/${reset ? "first" : "second"}` },
     })
   } finally {
     sessions.resolve(json({ data: [], cursor: {} }))
@@ -436,7 +436,7 @@ test("option arrows jump between sections", async () => {
             tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
             time: { created: 1, updated: 2 },
             title: "Recent session",
-            location: { directory: "/tmp/opencode/recent" },
+            location: { directory: "/tmp/ocpp/recent" },
           },
         ],
         cursor: {},
@@ -445,7 +445,7 @@ test("option arrows jump between sections", async () => {
       return json([
         {
           id: "proj_recent",
-          canonical: "/tmp/opencode/recent",
+          canonical: "/tmp/ocpp/recent",
           name: "Recent project",
           time: { created: 1, updated: 2 },
           sandboxes: [],
@@ -460,7 +460,7 @@ test("option arrows jump between sections", async () => {
     next.app.mockInput.pressArrow("down", { meta: true })
     next.app.mockInput.pressEnter()
     await next.app.waitFor(() => next.route.data.type === "home")
-    expect(next.route.data).toEqual({ type: "home", location: { directory: "/tmp/opencode/recent" } })
+    expect(next.route.data).toEqual({ type: "home", location: { directory: "/tmp/ocpp/recent" } })
   } finally {
     await next.dispose()
   }
@@ -471,7 +471,7 @@ test("option arrows jump between sections", async () => {
     previous.app.mockInput.pressArrow("up", { meta: true })
     previous.app.mockInput.pressEnter()
     await previous.app.waitFor(() => previous.route.data.type === "home")
-    expect(previous.route.data).toEqual({ type: "home", location: { directory: "/tmp/opencode/recent" } })
+    expect(previous.route.data).toEqual({ type: "home", location: { directory: "/tmp/ocpp/recent" } })
   } finally {
     await previous.dispose()
   }
@@ -490,9 +490,9 @@ test("option arrows stay in the only visible section", async () => {
         sandboxes: [],
       },
       {
-        id: "proj_opencode",
-        canonical: "/tmp/opencode",
-        name: "OpenCode",
+        id: "proj_ocpp",
+        canonical: "/tmp/ocpp",
+        name: "OC++",
         time: { created: 1, updated: 1 },
         sandboxes: [],
       },
@@ -500,9 +500,9 @@ test("option arrows stay in the only visible section", async () => {
   })
 
   try {
-    await fixture.app.waitForFrame((frame) => frame.includes("Effect") && frame.includes("OpenCode"))
+    await fixture.app.waitForFrame((frame) => frame.includes("Effect") && frame.includes("OC++"))
     await fixture.app.mockInput.typeText("Effect")
-    await fixture.app.waitForFrame((frame) => frame.includes("Effect") && !frame.includes("OpenCode"))
+    await fixture.app.waitForFrame((frame) => frame.includes("Effect") && !frame.includes("OC++"))
     fixture.app.mockInput.pressArrow("down", { meta: true })
     fixture.app.mockInput.pressEnter()
     await fixture.app.waitFor(() => fixture.route.data.type === "home")

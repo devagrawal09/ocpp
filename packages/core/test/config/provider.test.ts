@@ -1,17 +1,17 @@
 import { describe, expect } from "bun:test"
-import { Money } from "@opencode-ai/schema/money"
-import { Document, Info, type Entry } from "@opencode-ai/schema/config"
+import { Money } from "@ocpp/schema/money"
+import { Document, Info, type Entry } from "@ocpp/schema/config"
 import { Effect, Schema } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigProviderPlugin } from "@opencode-ai/core/config/plugin/provider"
-import { ConfigNormalize } from "@opencode-ai/core/config/normalize"
-import { Integration } from "@opencode-ai/core/integration"
-import { Model } from "@opencode-ai/core/model"
-import { ModelResolver } from "@opencode-ai/core/model-resolver"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { Provider } from "@opencode-ai/core/provider"
+import { Catalog } from "@ocpp/core/catalog"
+import { Config } from "@ocpp/core/config"
+import { ConfigProviderPlugin } from "@ocpp/core/config/plugin/provider"
+import { ConfigNormalize } from "@ocpp/core/config/normalize"
+import { Integration } from "@ocpp/core/integration"
+import { Model } from "@ocpp/core/model"
+import { ModelResolver } from "@ocpp/core/model-resolver"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { Provider } from "@ocpp/core/provider"
 import { withEnv } from "../fixture/env"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "../plugin/fixture"
@@ -310,7 +310,7 @@ describe("ConfigProviderPlugin.Plugin", () => {
             providers: {
               opencode: {
                 package: "aisdk:@ai-sdk/openai",
-                settings: { baseURL: "https://opencode.test/v1" },
+                settings: { baseURL: "https://ocpp.test/v1" },
                 models: {
                   "alpha-gpt-next": {
                     variants: [
@@ -359,7 +359,7 @@ describe("ConfigProviderPlugin.Plugin", () => {
             providers: {
               opencode: {
                 package: "aisdk:@ai-sdk/openai",
-                settings: { baseURL: "https://opencode.test/v1" },
+                settings: { baseURL: "https://ocpp.test/v1" },
               },
             },
           }),

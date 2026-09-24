@@ -1,10 +1,10 @@
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { expect, test } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:\\OpenCode\\main"
-const workspace = "C:\\OpenCode\\worktree"
+const directory = "C:\\OC++\\main"
+const workspace = "C:\\OC++\\worktree"
 const projectID = "proj_mcp_workspace"
 const sessionID = "ses_mcp_workspace"
 const title = "Workspace MCP routing"
@@ -16,7 +16,7 @@ for (const shared of [true, false]) {
   }, testInfo) => {
     const connected = new Set<string>()
     const requests: { path: string; directory: string }[] = []
-    await mockOpenCodeServer(page, {
+    await mockOcppServer(page, {
       directory,
       project: {
         id: projectID,
@@ -94,7 +94,7 @@ for (const surface of ["popover", "dialog"] as const) {
     await page.addInitScript(() => {
       localStorage.setItem("settings.v3", JSON.stringify({ general: { showStatus: true } }))
     })
-    await mockOpenCodeServer(page, {
+    await mockOcppServer(page, {
       directory,
       project: {
         id: projectID,

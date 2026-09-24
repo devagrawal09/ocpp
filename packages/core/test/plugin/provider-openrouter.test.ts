@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Model } from "@opencode-ai/core/model"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { OpenRouterPlugin } from "@opencode-ai/core/plugin/provider/openrouter"
-import { Provider } from "@opencode-ai/core/provider"
+import { Catalog } from "@ocpp/core/catalog"
+import { Model } from "@ocpp/core/model"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { ProviderPlugins } from "@ocpp/core/plugin/provider"
+import { OpenRouterPlugin } from "@ocpp/core/plugin/provider/openrouter"
+import { Provider } from "@ocpp/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -20,7 +20,7 @@ const addPlugin = Effect.fn(function* () {
 
 describe("OpenRouterPlugin", () => {
   test("is registered so legacy OpenRouter behavior can be applied", () => {
-    expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.openrouter")
+    expect(ProviderPlugins.map((item) => item.id)).toContain("ocpp.provider.openrouter")
   })
 
   it.effect("applies legacy referer headers only to openrouter", () =>
@@ -37,8 +37,8 @@ describe("OpenRouterPlugin", () => {
 
       expect((yield* catalog.provider.get(Provider.ID.openrouter))?.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "HTTP-Referer": "https://ocpp.ai/",
+        "X-Title": "ocpp",
       })
       expect((yield* catalog.provider.get(Provider.ID.make("nvidia")))?.headers).toBeUndefined()
     }),

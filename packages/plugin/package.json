@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/plugin",
+  "name": "@ocpp/plugin",
   "version": "1.18.15",
   "type": "module",
   "license": "MIT",
@@ -20,22 +20,22 @@
   ],
   "dependencies": {
     "@ai-sdk/provider": "3.0.8",
-    "@opencode-ai/ai": "workspace:*",
-    "@opencode-ai/client": "workspace:*",
-    "@opencode-ai/protocol": "workspace:*",
-    "@opencode-ai/schema": "workspace:*",
+    "@ocpp/ai": "workspace:*",
+    "@ocpp/client": "workspace:*",
+    "@ocpp/protocol": "workspace:*",
+    "@ocpp/schema": "workspace:*",
     "@standard-schema/spec": "catalog:",
     "effect": "catalog:",
     "zod": "catalog:"
   },
   "peerDependencies": {
-    "@opencode-ai/theme": "workspace:*",
+    "@ocpp/theme": "workspace:*",
     "@opentui/core": ">=0.5.9",
     "@opentui/solid": ">=0.5.9",
     "solid-js": ">=1.9.0"
   },
   "peerDependenciesMeta": {
-    "@opencode-ai/theme": {
+    "@ocpp/theme": {
       "optional": true
     },
     "@opentui/core": {
@@ -49,7 +49,7 @@
     }
   },
   "devDependencies": {
-    "@opencode-ai/theme": "workspace:*",
+    "@ocpp/theme": "workspace:*",
     "@opentui/core": "catalog:",
     "@opentui/solid": "catalog:",
     "@tsconfig/bun": "catalog:",

@@ -1,4 +1,4 @@
-import type { FileDiffInfo } from "@opencode-ai/client/promise"
+import type { FileDiffInfo } from "@ocpp/client/promise"
 import { diffLines } from "diff"
 import { completePatchContents, normalize, type ViewDiff } from "./session-diff"
 

@@ -1,5 +1,5 @@
-import { Mcp } from "@opencode-ai/schema/mcp"
-import { Location } from "@opencode-ai/schema/location"
+import { Mcp } from "@ocpp/schema/mcp"
+import { Location } from "@ocpp/schema/location"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 import { McpServerNotFoundError } from "../errors.js"

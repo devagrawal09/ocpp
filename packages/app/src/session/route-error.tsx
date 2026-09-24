@@ -1,4 +1,4 @@
-import { Button } from "@opencode-ai/ui/button"
+import { Button } from "@ocpp/ui/button"
 import { createMemo, Show } from "solid-js"
 import { ErrorPage } from "@/shell/errors/error"
 import { useLanguage } from "@/runtime/i18n/language"

@@ -7,7 +7,7 @@ import { getStore, removeStoreFileIfEmpty } from "./store"
 
 export type Interface = ReturnType<typeof make>
 
-export class Service extends Context.Service<Service, Interface>()("opencode/desktop/DesktopStorage") {}
+export class Service extends Context.Service<Service, Interface>()("ocpp/desktop/DesktopStorage") {}
 
 export const layer = Layer.effect(
   Service,

@@ -1,7 +1,7 @@
 import { usePlatform } from "@/runtime/platform/platform"
 import { ServerConnection } from "@/runtime/server/registry"
 import { authTokenFromCredentials } from "./api"
-import { ClientError, OpenCode } from "@opencode-ai/client"
+import { ClientError, Ocpp } from "@ocpp/client"
 import { Accessor, createEffect, onCleanup } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 
@@ -90,7 +90,7 @@ export async function checkServerHealth(
       .catch(() => ({ healthy: false }))
   }
   const attempt = async (count: number): Promise<ServerHealth> => {
-    const current = await OpenCode.make({
+    const current = await Ocpp.make({
       baseUrl: server.url,
       fetch,
       headers,

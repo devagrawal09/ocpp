@@ -1,37 +1,37 @@
 import { describe, expect, test } from "bun:test"
-import { model } from "@opencode-ai/ai/providers/openai"
+import { model } from "@ocpp/ai/providers/openai"
 import { LLM } from "../src/index.js"
 import { Endpoint } from "../src/route/endpoint.js"
 
 describe("provider package entrypoints", () => {
   test("semantic API aliases expose the same contract", async () => {
     const modules = await Promise.all([
-      import("@opencode-ai/ai/providers/openai"),
-      import("@opencode-ai/ai/providers/openai/responses"),
-      import("@opencode-ai/ai/providers/openai/chat"),
-      import("@opencode-ai/ai/providers/anthropic"),
-      import("@opencode-ai/ai/providers/anthropic-compatible"),
-      import("@opencode-ai/ai/providers/openai-compatible"),
-      import("@opencode-ai/ai/providers/openai-compatible/responses"),
-      import("@opencode-ai/ai/providers/amazon-bedrock"),
-      import("@opencode-ai/ai/providers/azure"),
-      import("@opencode-ai/ai/providers/azure/responses"),
-      import("@opencode-ai/ai/providers/azure/chat"),
-      import("@opencode-ai/ai/providers/google"),
-      import("@opencode-ai/ai/providers/google-vertex"),
-      import("@opencode-ai/ai/providers/google-vertex/gemini"),
-      import("@opencode-ai/ai/providers/google-vertex/chat"),
-      import("@opencode-ai/ai/providers/google-vertex/responses"),
-      import("@opencode-ai/ai/providers/google-vertex/messages"),
-      import("@opencode-ai/ai/providers/openrouter"),
-      import("@opencode-ai/ai/providers/xai"),
-      import("@opencode-ai/ai/providers/amazon-bedrock/mantle"),
-      import("@opencode-ai/ai/providers/amazon-bedrock/mantle/chat"),
-      import("@opencode-ai/ai/providers/amazon-bedrock/mantle/responses"),
-      import("@opencode-ai/ai/providers/togetherai"),
-      import("@opencode-ai/ai/providers/cerebras"),
-      import("@opencode-ai/ai/providers/deepinfra"),
-      import("@opencode-ai/ai/providers/groq"),
+      import("@ocpp/ai/providers/openai"),
+      import("@ocpp/ai/providers/openai/responses"),
+      import("@ocpp/ai/providers/openai/chat"),
+      import("@ocpp/ai/providers/anthropic"),
+      import("@ocpp/ai/providers/anthropic-compatible"),
+      import("@ocpp/ai/providers/openai-compatible"),
+      import("@ocpp/ai/providers/openai-compatible/responses"),
+      import("@ocpp/ai/providers/amazon-bedrock"),
+      import("@ocpp/ai/providers/azure"),
+      import("@ocpp/ai/providers/azure/responses"),
+      import("@ocpp/ai/providers/azure/chat"),
+      import("@ocpp/ai/providers/google"),
+      import("@ocpp/ai/providers/google-vertex"),
+      import("@ocpp/ai/providers/google-vertex/gemini"),
+      import("@ocpp/ai/providers/google-vertex/chat"),
+      import("@ocpp/ai/providers/google-vertex/responses"),
+      import("@ocpp/ai/providers/google-vertex/messages"),
+      import("@ocpp/ai/providers/openrouter"),
+      import("@ocpp/ai/providers/xai"),
+      import("@ocpp/ai/providers/amazon-bedrock/mantle"),
+      import("@ocpp/ai/providers/amazon-bedrock/mantle/chat"),
+      import("@ocpp/ai/providers/amazon-bedrock/mantle/responses"),
+      import("@ocpp/ai/providers/togetherai"),
+      import("@ocpp/ai/providers/cerebras"),
+      import("@ocpp/ai/providers/deepinfra"),
+      import("@ocpp/ai/providers/groq"),
     ])
 
     for (const module of modules) expect(module.model).toBeFunction()
@@ -43,11 +43,11 @@ describe("provider package entrypoints", () => {
   })
 
   test("maps DeepInfra package settings onto its native executable model", async () => {
-    const DeepInfra = await import("@opencode-ai/ai/providers/deepinfra")
+    const DeepInfra = await import("@ocpp/ai/providers/deepinfra")
     const settings = {
       apiKey: "fixture",
       baseURL: "https://provider.example.test/v1/",
-      headers: { "x-application": "opencode" },
+      headers: { "x-application": "ocpp" },
       body: { service_tier: "priority" },
       providerOptions: { reasoningEffort: "high" as const },
     }
@@ -61,12 +61,12 @@ describe("provider package entrypoints", () => {
   })
 
   test("maps OpenRouter and xAI package settings onto executable models", async () => {
-    const OpenRouter = await import("@opencode-ai/ai/providers/openrouter")
-    const XAI = await import("@opencode-ai/ai/providers/xai")
+    const OpenRouter = await import("@ocpp/ai/providers/openrouter")
+    const XAI = await import("@ocpp/ai/providers/xai")
     const settings = {
       apiKey: "fixture",
       baseURL: "https://provider.example.test/v1",
-      headers: { "x-application": "opencode" },
+      headers: { "x-application": "ocpp" },
       body: { service_tier: "priority" },
     }
     const openrouter = OpenRouter.model("anthropic/claude-sonnet-4", {
@@ -91,23 +91,23 @@ describe("provider package entrypoints", () => {
     const selected = model("gpt-5", {
       apiKey: "fixture",
       baseURL: "https://api.openai.test/v1",
-      headers: { "x-application": "opencode" },
+      headers: { "x-application": "ocpp" },
       body: { service_tier: "priority" },
       unrelatedInheritedSetting: true,
     })
 
     expect(selected.route.id).toBe("openai-responses")
-    expect(selected.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(selected.route.defaults.headers).toEqual({ "x-application": "ocpp" })
     expect(selected.route.defaults.http?.body).toEqual({ service_tier: "priority" })
   })
 
   test("maps OpenAI-compatible Responses settings onto the executable model", async () => {
-    const OpenAICompatibleResponses = await import("@opencode-ai/ai/providers/openai-compatible/responses")
+    const OpenAICompatibleResponses = await import("@ocpp/ai/providers/openai-compatible/responses")
     const selected = OpenAICompatibleResponses.model("custom-model", {
       apiKey: "fixture",
       baseURL: "https://responses.example.test/v1",
       provider: "example",
-      headers: { "x-application": "opencode" },
+      headers: { "x-application": "ocpp" },
       body: { service_tier: "priority" },
       providerOptions: { reasoningEffort: "low", store: true },
     })
@@ -118,7 +118,7 @@ describe("provider package entrypoints", () => {
       baseURL: "https://responses.example.test/v1",
       path: "/responses",
     })
-    expect(selected.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(selected.route.defaults.headers).toEqual({ "x-application": "ocpp" })
     expect(selected.route.defaults.http?.body).toEqual({ service_tier: "priority" })
     expect(selected.route.defaults.providerOptions).toEqual({
       reasoningEffort: "low",
@@ -128,12 +128,12 @@ describe("provider package entrypoints", () => {
   })
 
   test("maps Anthropic-compatible settings onto the executable model", async () => {
-    const AnthropicCompatible = await import("@opencode-ai/ai/providers/anthropic-compatible")
+    const AnthropicCompatible = await import("@ocpp/ai/providers/anthropic-compatible")
     const selected = AnthropicCompatible.model("compatible-model", {
       apiKey: "fixture",
       baseURL: "https://messages.example.test/v1",
       provider: "example",
-      headers: { "x-application": "opencode" },
+      headers: { "x-application": "ocpp" },
       body: { metadata: { user_id: "user_1" } },
       providerOptions: { effort: "low" },
     })
@@ -146,13 +146,13 @@ describe("provider package entrypoints", () => {
     expect(
       Endpoint.render(selected.route.endpoint, { request: LLM.request({ model: selected }), body: {} }).toString(),
     ).toBe("https://messages.example.test/v1/messages")
-    expect(selected.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(selected.route.defaults.headers).toEqual({ "x-application": "ocpp" })
     expect(selected.route.defaults.http?.body).toEqual({ metadata: { user_id: "user_1" } })
     expect(selected.route.defaults.providerOptions).toEqual({ effort: "low" })
   })
 
   test("maps Anthropic provider options onto the executable model", async () => {
-    const Anthropic = await import("@opencode-ai/ai/providers/anthropic")
+    const Anthropic = await import("@ocpp/ai/providers/anthropic")
     const selected = Anthropic.model("claude-sonnet-4-6", {
       apiKey: "fixture",
       providerOptions: { thinking: { type: "adaptive" } },
@@ -162,15 +162,15 @@ describe("provider package entrypoints", () => {
   })
 
   test("requires an Anthropic-compatible base URL at runtime", async () => {
-    const AnthropicCompatible = await import("@opencode-ai/ai/providers/anthropic-compatible")
+    const AnthropicCompatible = await import("@ocpp/ai/providers/anthropic-compatible")
     expect(() =>
       Reflect.apply(AnthropicCompatible.model, undefined, ["compatible-model", { apiKey: "fixture" }]),
     ).toThrow("Anthropic-compatible providers require a baseURL")
   })
 
   test("rejects conflicting Anthropic-compatible auth settings at runtime", async () => {
-    const Anthropic = await import("@opencode-ai/ai/providers/anthropic")
-    const AnthropicCompatible = await import("@opencode-ai/ai/providers/anthropic-compatible")
+    const Anthropic = await import("@ocpp/ai/providers/anthropic")
+    const AnthropicCompatible = await import("@ocpp/ai/providers/anthropic-compatible")
     expect(() =>
       Reflect.apply(AnthropicCompatible.model, undefined, [
         "compatible-model",
@@ -200,13 +200,13 @@ describe("provider package entrypoints", () => {
   })
 
   test("selects Azure API entrypoints with the same model contract", async () => {
-    const Azure = await import("@opencode-ai/ai/providers/azure")
-    const AzureChat = await import("@opencode-ai/ai/providers/azure/chat")
-    const AzureResponses = await import("@opencode-ai/ai/providers/azure/responses")
+    const Azure = await import("@ocpp/ai/providers/azure")
+    const AzureChat = await import("@ocpp/ai/providers/azure/chat")
+    const AzureResponses = await import("@ocpp/ai/providers/azure/responses")
     const settings = {
       apiKey: "fixture",
-      resourceName: "opencode-test",
-      headers: { "x-application": "opencode" },
+      resourceName: "ocpp-test",
+      headers: { "x-application": "ocpp" },
       body: { service_tier: "priority" },
     }
 
@@ -215,17 +215,17 @@ describe("provider package entrypoints", () => {
 
     expect(Azure.model("deployment", settings).route.id).toBe("azure-openai-responses")
     expect(responses.route.id).toBe("azure-openai-responses")
-    expect(responses.route.endpoint.baseURL).toBe("https://opencode-test.openai.azure.com/openai/v1")
-    expect(responses.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(responses.route.endpoint.baseURL).toBe("https://ocpp-test.openai.azure.com/openai/v1")
+    expect(responses.route.defaults.headers).toEqual({ "x-application": "ocpp" })
     expect(responses.route.defaults.http?.body).toEqual({ service_tier: "priority" })
     expect(chat.route.id).toBe("azure-openai-chat")
   })
 
   test("constructs Azure deployment URLs and preserves custom gateway URLs", async () => {
-    const Azure = await import("@opencode-ai/ai/providers/azure")
+    const Azure = await import("@ocpp/ai/providers/azure")
     const deployment = Azure.model("custom-deployment", {
       apiKey: "fixture",
-      resourceName: "opencode-test",
+      resourceName: "ocpp-test",
       apiVersion: "2025-01-01-preview",
       useDeploymentBasedUrls: true,
     })
@@ -235,7 +235,7 @@ describe("provider package entrypoints", () => {
     })
 
     expect(deployment.route.endpoint).toMatchObject({
-      baseURL: "https://opencode-test.openai.azure.com/openai/deployments/custom-deployment",
+      baseURL: "https://ocpp-test.openai.azure.com/openai/deployments/custom-deployment",
       query: { "api-version": "2025-01-01-preview" },
     })
     expect(gateway.route.endpoint.baseURL).toBe("https://gateway.example/azure")
@@ -243,31 +243,31 @@ describe("provider package entrypoints", () => {
   })
 
   test("maps Google package settings onto the Gemini model", async () => {
-    const Google = await import("@opencode-ai/ai/providers/google")
+    const Google = await import("@ocpp/ai/providers/google")
     const selected = Google.model("gemini-2.5-flash", {
       apiKey: "fixture",
       baseURL: "https://generativelanguage.test/v1beta",
-      headers: { "x-application": "opencode" },
+      headers: { "x-application": "ocpp" },
       body: { safetySettings: [] },
       providerOptions: { thinkingConfig: { thinkingBudget: 1_024 } },
     })
 
     expect(selected.route.id).toBe("gemini")
     expect(selected.route.endpoint.baseURL).toBe("https://generativelanguage.test/v1beta")
-    expect(selected.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(selected.route.defaults.headers).toEqual({ "x-application": "ocpp" })
     expect(selected.route.defaults.http?.body).toEqual({ safetySettings: [] })
     expect(selected.route.defaults.providerOptions).toEqual({ thinkingConfig: { thinkingBudget: 1_024 } })
   })
 
   test("selects Vertex entrypoints with the same model contract", async () => {
-    const GoogleVertex = await import("@opencode-ai/ai/providers/google-vertex")
-    const GoogleVertexGemini = await import("@opencode-ai/ai/providers/google-vertex/gemini")
-    const GoogleVertexChat = await import("@opencode-ai/ai/providers/google-vertex/chat")
-    const GoogleVertexResponses = await import("@opencode-ai/ai/providers/google-vertex/responses")
-    const GoogleVertexMessages = await import("@opencode-ai/ai/providers/google-vertex/messages")
+    const GoogleVertex = await import("@ocpp/ai/providers/google-vertex")
+    const GoogleVertexGemini = await import("@ocpp/ai/providers/google-vertex/gemini")
+    const GoogleVertexChat = await import("@ocpp/ai/providers/google-vertex/chat")
+    const GoogleVertexResponses = await import("@ocpp/ai/providers/google-vertex/responses")
+    const GoogleVertexMessages = await import("@ocpp/ai/providers/google-vertex/messages")
     const gemini = GoogleVertex.model("gemini-3.5-flash", {
       apiKey: "fixture",
-      headers: { "x-application": "opencode" },
+      headers: { "x-application": "ocpp" },
       body: { safetySettings: [] },
     })
     const messages = GoogleVertexMessages.model("claude-sonnet-4-6", {
@@ -290,7 +290,7 @@ describe("provider package entrypoints", () => {
     expect(gemini.route.id).toBe("google-vertex-gemini")
     expect(gemini.route.protocol).toBe("gemini")
     expect(gemini.route.endpoint.baseURL).toBe("https://aiplatform.googleapis.com/v1/publishers/google")
-    expect(gemini.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(gemini.route.defaults.headers).toEqual({ "x-application": "ocpp" })
     expect(gemini.route.defaults.http?.body).toEqual({ safetySettings: [] })
     expect(
       GoogleVertex.model("gemini-3.5-flash", {
@@ -323,11 +323,11 @@ describe("provider package entrypoints", () => {
   })
 
   test("rejects conflicting Vertex auth settings at runtime", async () => {
-    const GoogleVertex = await import("@opencode-ai/ai/providers/google-vertex")
-    const GoogleVertexChat = await import("@opencode-ai/ai/providers/google-vertex/chat")
-    const GoogleVertexMessages = await import("@opencode-ai/ai/providers/google-vertex/messages")
-    const GoogleVertexResponses = await import("@opencode-ai/ai/providers/google-vertex/responses")
-    const Providers = await import("@opencode-ai/ai/providers")
+    const GoogleVertex = await import("@ocpp/ai/providers/google-vertex")
+    const GoogleVertexChat = await import("@ocpp/ai/providers/google-vertex/chat")
+    const GoogleVertexMessages = await import("@ocpp/ai/providers/google-vertex/messages")
+    const GoogleVertexResponses = await import("@ocpp/ai/providers/google-vertex/responses")
+    const Providers = await import("@ocpp/ai/providers")
     expect(() =>
       Reflect.apply(GoogleVertex.model, undefined, [
         "gemini-3.5-flash",

@@ -1,8 +1,8 @@
 export * as SubagentTool from "./subagent.js"
 
-import { ToolFailure } from "@opencode-ai/ai"
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { Model } from "@opencode-ai/schema/model"
+import { ToolFailure } from "@ocpp/ai"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import { Model } from "@ocpp/schema/model"
 import { Deferred, Effect, Schema } from "effect"
 import { Agent } from "../../agent.js"
 import { Bus } from "../../bus.js"
@@ -80,7 +80,7 @@ export const description = [
 ].join("\n")
 
 export const Plugin = {
-  id: "opencode.tool.subagent",
+  id: "ocpp.tool.subagent",
   effect: Effect.fn("SubagentTool.Plugin")(function* (ctx: Context) {
     const runtime = yield* PluginRuntime.Service
     const agents = yield* Agent.Service

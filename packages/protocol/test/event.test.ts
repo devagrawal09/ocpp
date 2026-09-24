@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { isOpenCodeEvent, type OpenCodeEvent, type OpenCodeEventEncoded } from "../src/groups/event.js"
+import { isOcppEvent, type OcppEvent, type OcppEventEncoded } from "../src/groups/event.js"
 
 type JsonShape<Value> = Value extends string | number | boolean | null
   ? Value
@@ -19,13 +19,13 @@ type JsonShape<Value> = Value extends string | number | boolean | null
 
 // JSON.stringify omits undefined object properties, so normalize them before
 // requiring every runtime event shape to fit its encoded wire contract.
-const wireReady: [JsonShape<OpenCodeEvent>] extends [JsonShape<OpenCodeEventEncoded>] ? true : false = true
+const wireReady: [JsonShape<OcppEvent>] extends [JsonShape<OcppEventEncoded>] ? true : false = true
 
 test("classifies public events by type", () => {
-  expect(isOpenCodeEvent({ type: "server.connected" })).toBe(true)
-  expect(isOpenCodeEvent({ type: "mcp.status.changed" })).toBe(true)
-  expect(isOpenCodeEvent({ type: "mcp.resources.changed" })).toBe(true)
-  expect(isOpenCodeEvent({ type: "mcp.tools.changed" })).toBe(false)
+  expect(isOcppEvent({ type: "server.connected" })).toBe(true)
+  expect(isOcppEvent({ type: "mcp.status.changed" })).toBe(true)
+  expect(isOcppEvent({ type: "mcp.resources.changed" })).toBe(true)
+  expect(isOcppEvent({ type: "mcp.tools.changed" })).toBe(false)
 })
 
 test("keeps public event runtime values within the encoded contract", () => {

@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { base64Encode } from "@ocpp/util/encode"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
 
-const directory = "C:/OpenCode/ComposerEditing"
+const directory = "C:/OC++/ComposerEditing"
 const projectID = "proj_composer_editing"
 const sessionID = "ses_composer_editing"
 const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
 
 test("preserves the draft when a populated command menu triggers a built-in", async ({ page }) => {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,

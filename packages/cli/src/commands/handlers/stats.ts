@@ -1,5 +1,5 @@
-import { ClientError, OpenCode, type SessionStatsInfo } from "@opencode-ai/client"
-import { Service } from "@opencode-ai/client/effect/service"
+import { ClientError, Ocpp, type SessionStatsInfo } from "@ocpp/client"
+import { Service } from "@ocpp/client/effect/service"
 import { Effect, Option } from "effect"
 import { EOL } from "node:os"
 import { Commands } from "../commands"
@@ -18,7 +18,7 @@ const handler = Effect.fn("cli.stats")(function* (input: Runtime.Input<typeof Co
     server: Option.getOrUndefined(input.server),
     standalone: input.standalone,
   })
-  const client = OpenCode.make({ baseUrl: server.endpoint.url, headers: Service.headers(server.endpoint) })
+  const client = Ocpp.make({ baseUrl: server.endpoint.url, headers: Service.headers(server.endpoint) })
   const range = statsRange({ days, year, all: input.all })
   const projectID =
     project === "."
@@ -109,17 +109,11 @@ export function renderStats(stats: SessionStatsInfo, options: RenderOptions) {
       : `${style(formatPercent(toolRate), primary, options.color)} tool success`
   const details = options.models || options.tools || options.cost
   const empty = stats.sessions === 0 && stats.prompts === 0 && stats.steps === 0
-  const heading = `${style("opencode stats", primary, options.color)} ${style(`· ${options.label} · ${options.scope}`, "2", options.color)}`
+  const heading = `${style("ocpp stats", primary, options.color)} ${style(`· ${options.label} · ${options.scope}`, "2", options.color)}`
   const lines = details
     ? [style(`${options.label} · ${options.scope}`, "2", options.color)]
     : empty
-      ? [
-          heading,
-          "",
-          style("no activity in this range", "2", options.color),
-          "",
-          style("opencode.ai", "2", options.color),
-        ]
+      ? [heading, "", style("no activity in this range", "2", options.color), "", style("ocpp.ai", "2", options.color)]
       : [
           heading,
           "",
@@ -129,7 +123,7 @@ export function renderStats(stats: SessionStatsInfo, options: RenderOptions) {
           `${metricCount(stats.prompts, "prompt", options.color)} · ${metricCount(stats.steps, "step", options.color)} · ${metricCount(totalTokens, "token", options.color)}`,
           `${toolSummary} · ${metricCount(stats.activeDays, "active day", options.color)} · best streak ${style(stats.streak.toString(), primary, options.color)} day${stats.streak === 1 ? "" : "s"}`,
           "",
-          style("opencode.ai", "2", options.color),
+          style("ocpp.ai", "2", options.color),
         ]
 
   if (options.cost) lines.push(...(lines.length > 0 ? [""] : []), ...renderCost(stats))

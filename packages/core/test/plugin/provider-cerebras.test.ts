@@ -1,10 +1,10 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { CerebrasPlugin } from "@opencode-ai/core/plugin/provider/cerebras"
-import { Provider } from "@opencode-ai/core/provider"
+import { Catalog } from "@ocpp/core/catalog"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { CerebrasPlugin } from "@ocpp/core/plugin/provider/cerebras"
+import { Provider } from "@ocpp/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -29,7 +29,7 @@ describe("CerebrasPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(Provider.ID.make("cerebras")))?.headers).toEqual({
         Existing: "1",
-        "X-Cerebras-3rd-Party-Integration": "opencode",
+        "X-Cerebras-3rd-Party-Integration": "ocpp",
       })
     }),
   )
@@ -49,14 +49,14 @@ describe("CerebrasPlugin", () => {
       const providerID = Provider.ID.make("custom-cerebras")
       yield* catalog.transform((catalog) => {
         catalog.provider.update(providerID, (item) => {
-          item.package = "@opencode-ai/ai/providers/cerebras"
+          item.package = "@ocpp/ai/providers/cerebras"
           item.headers = { Existing: "1" }
         })
       })
       yield* addPlugin()
       expect((yield* catalog.provider.get(providerID))?.headers).toEqual({
         Existing: "1",
-        "X-Cerebras-3rd-Party-Integration": "opencode",
+        "X-Cerebras-3rd-Party-Integration": "ocpp",
       })
     }),
   )

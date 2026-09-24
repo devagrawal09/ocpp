@@ -1,10 +1,10 @@
 /** @jsxImportSource @opentui/solid */
 import { createCliRenderer, RGBA, type CliRenderer, type ColorInput, type ScrollbackWriter } from "@opentui/core"
 import { createScrollbackWriter, render, useKeyboard } from "@opentui/solid"
-import { registerOpencodeSpinner } from "@opencode-ai/tui/component/register-spinner"
+import { registerOcppSpinner } from "@ocpp/tui/component/register-spinner"
 import { Show, createSignal } from "solid-js"
 
-registerOpencodeSpinner()
+registerOcppSpinner()
 
 export type TimelineHost = {
   readonly signal: AbortSignal

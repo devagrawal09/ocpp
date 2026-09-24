@@ -4,7 +4,7 @@ import { createEffect, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createSimpleContext } from "../context/helper"
-import oc2ThemeJson from "./themes/oc-2.json"
+import ocppV2ThemeJson from "./themes/ocpp-v2.json"
 import { resolveThemeVariant, themeToCss } from "./resolve"
 import { resolveThemeVariantV2, themeV2ToCss } from "./v2/resolve"
 import type { DesktopTheme } from "./types"
@@ -12,13 +12,13 @@ import type { DesktopTheme } from "./types"
 export type ColorScheme = "light" | "dark" | "system"
 
 const STORAGE_KEYS = {
-  THEME_ID: "opencode-theme-id",
-  COLOR_SCHEME: "opencode-color-scheme",
-  THEME_CSS_LIGHT: "opencode-theme-css-light",
-  THEME_CSS_DARK: "opencode-theme-css-dark",
+  THEME_ID: "ocpp-theme-id",
+  COLOR_SCHEME: "ocpp-color-scheme",
+  THEME_CSS_LIGHT: "ocpp-theme-css-light",
+  THEME_CSS_DARK: "ocpp-theme-css-dark",
 } as const
 
-const THEME_STYLE_ID = "oc-theme"
+const THEME_STYLE_ID = "ocpp-theme"
 let files: Record<string, () => Promise<{ default: DesktopTheme }>> | undefined
 let ids: string[] | undefined
 let known: Set<string> | undefined
@@ -44,7 +44,7 @@ function knownThemes() {
 }
 
 const names: Record<string, string> = {
-  "oc-2": "OC-2",
+  "ocpp-v2": "OC++ V2",
   amoled: "AMOLED",
   aura: "Aura",
   ayu: "Ayu",
@@ -69,7 +69,7 @@ const names: Record<string, string> = {
   nord: "Nord",
   "one-dark": "One Dark",
   onedarkpro: "One Dark Pro",
-  opencode: "OpenCode",
+  ocpp: "OC++",
   orng: "Orng",
   "osaka-jade": "Osaka Jade",
   palenight: "Palenight",
@@ -82,11 +82,11 @@ const names: Record<string, string> = {
   vesper: "Vesper",
   zenburn: "Zenburn",
 }
-const oc2Theme = oc2ThemeJson as DesktopTheme
+const ocppV2Theme = ocppV2ThemeJson as DesktopTheme
 
 function resolveStoredTheme(id: string | null | undefined, registered?: Record<string, DesktopTheme>) {
-  if (id === "oc-2" || (id && (knownThemes().has(id) || registered?.[id]))) return id
-  return "oc-2"
+  if (id === "ocpp-v2" || (id && (knownThemes().has(id) || registered?.[id]))) return id
+  return "ocpp-v2"
 }
 
 function read(key: string) {
@@ -138,7 +138,7 @@ function applyThemeCss(theme: DesktopTheme, themeId: string, mode: "light" | "da
   const css = themeToCss(tokens)
   const v2 = themeV2ToCss(resolveThemeVariantV2(variant, isDark))
 
-  if (themeId !== "oc-2") {
+  if (themeId !== "ocpp-v2") {
     write(isDark ? STORAGE_KEYS.THEME_CSS_DARK : STORAGE_KEYS.THEME_CSS_LIGHT, `${css}\n  ${v2}`)
   }
 
@@ -149,7 +149,7 @@ function applyThemeCss(theme: DesktopTheme, themeId: string, mode: "light" | "da
   ${v2}
 }`
 
-  document.getElementById("oc-theme-preload")?.remove()
+  document.getElementById("ocpp-theme-preload")?.remove()
   ensureThemeStyleElement().textContent = fullCss
   document.documentElement.dataset.theme = themeId
   document.documentElement.dataset.colorScheme = mode
@@ -161,7 +161,7 @@ function applyThemeCss(theme: DesktopTheme, themeId: string, mode: "light" | "da
 }
 
 function cacheThemeVariants(theme: DesktopTheme, themeId: string) {
-  if (themeId === "oc-2") return
+  if (themeId === "ocpp-v2") return
   for (const mode of ["light", "dark"] as const) {
     const isDark = mode === "dark"
     const variant = isDark ? theme.dark : theme.light
@@ -188,7 +188,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     const mode = colorScheme === "system" ? getSystemMode() : colorScheme
     const [store, setStore] = createStore({
       themes: {
-        "oc-2": oc2Theme,
+        "ocpp-v2": ocppV2Theme,
       } as Record<string, DesktopTheme>,
       themeId,
       colorScheme,
@@ -245,7 +245,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           clear()
         }
         setStore("themeId", next)
-        if (next === "oc-2") {
+        if (next === "ocpp-v2") {
           clear()
           return
         }
@@ -298,12 +298,12 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         console.warn(`Theme "${id}" not found`)
         return
       }
-      if (next !== "oc-2" && !knownThemes().has(next) && !store.themes[next]) {
+      if (next !== "ocpp-v2" && !knownThemes().has(next) && !store.themes[next]) {
         console.warn(`Theme "${id}" not found`)
         return
       }
       setStore("themeId", next)
-      if (next === "oc-2") {
+      if (next === "ocpp-v2") {
         write(STORAGE_KEYS.THEME_ID, next)
         clear()
         return
@@ -335,7 +335,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       previewTheme: (id: string) => {
         const next = id
         if (!next) return
-        if (next !== "oc-2" && !knownThemes().has(next) && !store.themes[next]) return
+        if (next !== "ocpp-v2" && !knownThemes().has(next) && !store.themes[next]) return
         setStore("previewThemeId", next)
         void load(next).then((theme) => {
           if (!theme || store.previewThemeId !== next) return

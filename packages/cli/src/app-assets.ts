@@ -1,15 +1,15 @@
 import { Effect, FileSystem, Option } from "effect"
 import path from "node:path"
 import { brotliDecompressSync } from "node:zlib"
-import { OPENCODE_LOCAL } from "./version"
+import { OCPP_LOCAL } from "./version"
 
 export type AssetMap = Readonly<Record<string, string | Uint8Array>>
 type EncodedAssetMap = Readonly<Record<string, { readonly content: string; readonly encoding: "utf8" | "base64" }>>
 
 export const load = Effect.fn("cli.app-assets.load")(function* () {
-  const embedded = yield* Effect.tryPromise(() => import("virtual:opencode-app-assets")).pipe(Effect.option)
+  const embedded = yield* Effect.tryPromise(() => import("virtual:ocpp-app-assets")).pipe(Effect.option)
   if (Option.isSome(embedded) && embedded.value.default.length > 0) return decodeArchive(embedded.value.default)
-  if (!OPENCODE_LOCAL) return yield* Effect.fail(new Error("Web UI assets are missing from the CLI build"))
+  if (!OCPP_LOCAL) return yield* Effect.fail(new Error("Web UI assets are missing from the CLI build"))
   return decode(yield* sourceAssets())
 })
 

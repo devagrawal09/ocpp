@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
-import type { JsonValue, OpenCodeEvent, SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client/promise"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import type { JsonValue, OcppEvent, SessionMessageAssistant, SessionMessageInfo } from "@ocpp/client/promise"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible, expectSessionTitle } from "../utils/waits"
 import {
   analyzeVisualObservations,
@@ -10,7 +10,7 @@ import {
   visualPlan,
 } from "../utils/visual-stability"
 
-const directory = "C:/OpenCode/ContextResizeRegression"
+const directory = "C:/OC++/ContextResizeRegression"
 const projectID = "proj_context_resize_regression"
 const sessionID = "ses_context_resize_regression"
 const title = "Context resize regression"
@@ -41,7 +41,7 @@ test.describe("regression: session timeline context group resize", () => {
   })
 
   test("keeps a grouped tool summary stable as its calls complete", async ({ page }) => {
-    const events: OpenCodeEvent[] = []
+    const events: OcppEvent[] = []
     await page.setViewportSize({ width: 1400, height: 900 })
     await mockServer(page, events, [
       ...Array.from({ length: 8 }, (_, index) => turn(index, false)).flat(),
@@ -305,7 +305,7 @@ function toolContent(part: ContextTool): SessionMessageAssistant["content"][numb
 
 let eventSequence = -1
 
-function toolEvents(part: ContextTool): OpenCodeEvent[] {
+function toolEvents(part: ContextTool): OcppEvent[] {
   return [
     eventValue(
       "session.tool.success",
@@ -322,11 +322,11 @@ function toolEvents(part: ContextTool): OpenCodeEvent[] {
   ]
 }
 
-function eventValue<Type extends OpenCodeEvent["type"]>(
+function eventValue<Type extends OcppEvent["type"]>(
   type: Type,
-  data: Extract<OpenCodeEvent, { type: Type }>["data"],
+  data: Extract<OcppEvent, { type: Type }>["data"],
   version: 1 | 2,
-): Extract<OpenCodeEvent, { type: Type }> {
+): Extract<OcppEvent, { type: Type }> {
   eventSequence++
   return {
     id: `evt_context_resize_${eventSequence}`,
@@ -335,12 +335,12 @@ function eventValue<Type extends OpenCodeEvent["type"]>(
     data,
     location: { directory },
     durable: { aggregateID: sessionID, seq: eventSequence, version },
-  } as unknown as Extract<OpenCodeEvent, { type: Type }>
+  } as unknown as Extract<OcppEvent, { type: Type }>
 }
 
-async function mockServer(page: Page, events: OpenCodeEvent[] = [], fixtureMessages = messages) {
+async function mockServer(page: Page, events: OcppEvent[] = [], fixtureMessages = messages) {
   eventSequence = -1
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: project(),
     provider: provider(),
@@ -387,7 +387,7 @@ function provider() {
     all: [
       {
         id: "opencode",
-        name: "OpenCode",
+        name: "OC++",
         models: { "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } } },
       },
     ],

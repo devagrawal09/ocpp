@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type {
-  SessionMessageAssistant,
-  SessionMessageAssistantTool,
-  SessionMessageInfo,
-} from "@opencode-ai/client/promise"
+import type { SessionMessageAssistant, SessionMessageAssistantTool, SessionMessageInfo } from "@ocpp/client/promise"
 import { storyDocument, storyTool } from "../storybook/current-session-scenarios"
 import { createTimelineProjection, Timeline, TimelineRow } from "./projection"
 
@@ -194,11 +190,7 @@ describe("current session timeline rows", () => {
       rows.flatMap((row) =>
         row._tag === "AssistantPart" && row.group.type === "context" ? [row.group.refs.map((ref) => ref.partID)] : [],
       ),
-    ).toEqual([
-      ["msg_assistant:reasoning:0", "execute_a"],
-      ["read_between"],
-      ["execute_b", "execute_c"],
-    ])
+    ).toEqual([["msg_assistant:reasoning:0", "execute_a"], ["read_between"], ["execute_b", "execute_c"]])
     expect(rows.map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart", "AssistantPart", "AssistantPart"])
   })
 

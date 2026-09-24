@@ -1,7 +1,7 @@
 export * as SubagentCustomTool from "./subagent-custom.js"
 
-import { isToolHandle, type ToolHandle } from "@opencode-ai/codemode"
-import { Tool } from "@opencode-ai/schema/tool"
+import { isToolHandle, type ToolHandle } from "@ocpp/codemode"
+import { Tool } from "@ocpp/schema/tool"
 import { Effect, JsonSchema, Schema, SchemaRepresentation } from "effect"
 
 export const JSONSchema = Schema.Record(Schema.String, Schema.Json)

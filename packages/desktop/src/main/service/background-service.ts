@@ -11,7 +11,7 @@ export interface Interface {
   readonly reconnect: Effect.Effect<ServerReadyData>
 }
 
-export class Service extends Context.Service<Service, Interface>()("opencode/desktop/BackgroundService") {}
+export class Service extends Context.Service<Service, Interface>()("ocpp/desktop/BackgroundService") {}
 
 export const layer = Layer.effect(
   Service,
@@ -31,16 +31,16 @@ const connect = Effect.fn("BackgroundService.connect")(function* (mode: "initial
   const path = yield* Path.Path
   const desktopCli = yield* DesktopCli.Service
   const runFork = Effect.runForkWith(yield* Effect.context())
-  const isolated = !app.isPackaged && process.env.OPENCODE_DESKTOP_ISOLATED_SERVER === "1"
+  const isolated = !app.isPackaged && process.env.OCPP_DESKTOP_ISOLATED_SERVER === "1"
   const cli = yield* desktopCli.resolve
   const version = mode === "initial" ? cli.version : undefined
   if (isolated) process.env.XDG_STATE_HOME = app.getPath("userData")
-  const client = yield* Effect.promise(() => import("@opencode-ai/client/service"))
+  const client = yield* Effect.promise(() => import("@ocpp/client/service"))
   const service = yield* Effect.tryPromise(() =>
     client.Service.ensure({
       file:
-        isolated && process.env.OPENCODE_DESKTOP_SERVER_CHANNEL === "local"
-          ? path.join(app.getPath("userData"), "opencode", "service-local.json")
+        isolated && process.env.OCPP_DESKTOP_SERVER_CHANNEL === "local"
+          ? path.join(app.getPath("userData"), "ocpp", "service-local.json")
           : undefined,
       version,
       command: [...cli.command, "serve", "--service", ...(isolated ? ["--port", "0"] : [])],

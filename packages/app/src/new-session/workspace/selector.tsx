@@ -1,9 +1,9 @@
 import { createMemo, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
-import { Menu } from "@opencode-ai/ui/menu"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { Icon } from "@opencode-ai/ui/icon"
-import { getFilename } from "@opencode-ai/util/path"
+import { Menu } from "@ocpp/ui/menu"
+import { Tooltip } from "@ocpp/ui/tooltip"
+import { Icon } from "@ocpp/ui/icon"
+import { getFilename } from "@ocpp/util/path"
 import { useLanguage } from "@/runtime/i18n/language"
 import { sameDirectory } from "@/workspaces/paths"
 

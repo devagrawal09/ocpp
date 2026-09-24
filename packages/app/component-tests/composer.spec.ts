@@ -9,7 +9,7 @@ story("renders a draft once and supports editing, caret restoration, and failure
       return replace.apply(this, nodes)
     }
   })
-  const component = await mount("opencode-composer-flow--failed-submission-restoration")
+  const component = await mount("ocpp-composer-flow--failed-submission-restoration")
   const input = component.getByRole("textbox", { name: "Prompt", exact: true })
   await expect(input).toHaveText("Preserve this draft on failure")
   await expect(input).toHaveAttribute("data-test-replacements", "1")
@@ -33,7 +33,7 @@ story("renders a draft once and supports editing, caret restoration, and failure
 
 // Moved from packages/app/e2e/regression/prompt-thinking-level.spec.ts
 story("shows the thinking level control while relevant", async ({ mount, page }) => {
-  const component = await mount("opencode-composer-flow--model-and-variant")
+  const component = await mount("ocpp-composer-flow--model-and-variant")
   const composer = component.locator('[data-component="composer"]')
   const input = composer.locator('[data-component="composer-editor"]')
   const control = composer.getByRole("button", { name: "Choose model variant" })

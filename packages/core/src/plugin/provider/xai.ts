@@ -1,5 +1,5 @@
-import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/effect/integration"
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import type { IntegrationOAuthMethodRegistration } from "@ocpp/plugin/effect/integration"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { Clock, Effect, Option, Schema } from "effect"
 import { App } from "../../app.js"
 import { Credential } from "../../credential.js"
@@ -51,7 +51,7 @@ const device = (app: App.Info) =>
         {
           method: "POST",
           headers: headers(app),
-          body: new URLSearchParams({ client_id: clientID, scope, referrer: "opencode" }).toString(),
+          body: new URLSearchParams({ client_id: clientID, scope, referrer: "ocpp" }).toString(),
         },
         Device,
       ).pipe(
@@ -74,7 +74,7 @@ const device = (app: App.Info) =>
   }) satisfies IntegrationOAuthMethodRegistration
 
 export const XAIPlugin = define({
-  id: "opencode.provider.xai",
+  id: "ocpp.provider.xai",
   effect: Effect.fn(function* (ctx) {
     const credentials = yield* Credential.Service
     yield* Effect.forEach(

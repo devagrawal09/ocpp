@@ -2,22 +2,22 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect, test } from "bun:test"
 import { Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect"
-import { Config } from "@opencode-ai/core/config"
-import { AgentsDirectory, ClaudeDirectory, Directory, Document, type Entry, Info } from "@opencode-ai/schema/config"
-import { ConfigSkillPlugin } from "@opencode-ai/core/config/plugin/skill"
-import { SkillFile } from "@opencode-ai/core/config/plugin/skill-file"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Watcher } from "@opencode-ai/core/filesystem/watcher"
-import { Bus } from "@opencode-ai/core/bus"
-import { Credential } from "@opencode-ai/core/credential"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Location } from "@opencode-ai/core/location"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Skill } from "@opencode-ai/core/skill"
-import { SkillDiscovery } from "@opencode-ai/core/skill/discovery"
-import { WellKnown } from "@opencode-ai/core/wellknown"
+import { Config } from "@ocpp/core/config"
+import { AgentsDirectory, ClaudeDirectory, Directory, Document, type Entry, Info } from "@ocpp/schema/config"
+import { ConfigSkillPlugin } from "@ocpp/core/config/plugin/skill"
+import { SkillFile } from "@ocpp/core/config/plugin/skill-file"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Watcher } from "@ocpp/core/filesystem/watcher"
+import { Bus } from "@ocpp/core/bus"
+import { Credential } from "@ocpp/core/credential"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Location } from "@ocpp/core/location"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Skill } from "@ocpp/core/skill"
+import { SkillDiscovery } from "@ocpp/core/skill/discovery"
+import { WellKnown } from "@ocpp/core/wellknown"
 import { emptyCredentialNode, emptyWellknownNode } from "../fixture/config-nodes"
 import { tmpdir } from "../fixture/tmpdir"
 import { location } from "../fixture/location"
@@ -125,8 +125,8 @@ describe("SkillFile.parse", () => {
 name: Manual
 description: Manual only
 metadata:
-  opencode/slash: "true"
-  opencode/autoinvoke: false
+  ocpp/slash: "true"
+  ocpp/autoinvoke: false
 ---
 # manual`,
       ),
@@ -168,14 +168,14 @@ describe("ConfigSkillPlugin.Plugin", () => {
         Effect.gen(function* () {
           const claude = path.join(tmp.path, "claude")
           const agents = path.join(tmp.path, "agents")
-          const opencode = path.join(tmp.path, "opencode")
+          const ocpp = path.join(tmp.path, "ocpp")
           const home = path.join(tmp.path, "home")
           const directory = path.join(tmp.path, "project")
           const expected = [
             path.join(claude, "skills"),
             path.join(agents, "skills"),
-            path.join(opencode, "skill"),
-            path.join(opencode, "skills"),
+            path.join(ocpp, "skill"),
+            path.join(ocpp, "skills"),
             path.join(home, "shared"),
             path.join(directory, "relative"),
           ]
@@ -185,7 +185,7 @@ describe("ConfigSkillPlugin.Plugin", () => {
             [
               new ClaudeDirectory({ type: "claude", path: AbsolutePath.make(claude) }),
               new AgentsDirectory({ type: "agents", path: AbsolutePath.make(agents) }),
-              new Directory({ type: "directory", path: AbsolutePath.make(opencode) }),
+              new Directory({ type: "directory", path: AbsolutePath.make(ocpp) }),
               new Document({ type: "document", info: decode({ skills: ["~/shared", "./relative"] }) }),
             ],
             directory,

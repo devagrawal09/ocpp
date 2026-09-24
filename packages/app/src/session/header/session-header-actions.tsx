@@ -1,8 +1,8 @@
 import { Show, type JSX } from "solid-js"
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Keybind } from "@opencode-ai/ui/keybind"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Icon } from "@ocpp/ui/icon"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { Keybind } from "@ocpp/ui/keybind"
+import { Tooltip } from "@ocpp/ui/tooltip"
 
 export type SessionHeaderActionsState = {
   status?: { label: string; content: () => JSX.Element }

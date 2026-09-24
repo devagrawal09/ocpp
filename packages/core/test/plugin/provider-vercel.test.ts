@@ -1,12 +1,12 @@
-import { AISDK } from "@opencode-ai/core/aisdk"
+import { AISDK } from "@ocpp/core/aisdk"
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Model } from "@opencode-ai/core/model"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { VercelPlugin } from "@opencode-ai/core/plugin/provider/vercel"
-import { Provider } from "@opencode-ai/core/provider"
+import { Catalog } from "@ocpp/core/catalog"
+import { Model } from "@ocpp/core/model"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { VercelPlugin } from "@ocpp/core/plugin/provider/vercel"
+import { Provider } from "@ocpp/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -31,8 +31,8 @@ describe("VercelPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(Provider.ID.make("vercel")))?.headers).toEqual({
         Existing: "1",
-        "http-referer": "https://opencode.ai/",
-        "x-title": "opencode",
+        "http-referer": "https://ocpp.ai/",
+        "x-title": "ocpp",
       })
     }),
   )

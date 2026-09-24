@@ -1,7 +1,7 @@
-import { OpenCode, type MigrationV1StatusOutput } from "@opencode-ai/client/promise"
-import { useLanguage } from "@opencode-ai/app/desktop"
-import { Loader } from "@opencode-ai/ui/loader"
-import { showToast, toaster, Toast } from "@opencode-ai/ui/toast"
+import { Ocpp, type MigrationV1StatusOutput } from "@ocpp/client/promise"
+import { useLanguage } from "@ocpp/app/desktop"
+import { Loader } from "@ocpp/ui/loader"
+import { showToast, toaster, Toast } from "@ocpp/ui/toast"
 import { createRoot, createSignal, onCleanup, onMount } from "solid-js"
 import type { ServerReadyData } from "../shared/ipc-contract"
 
@@ -49,10 +49,10 @@ export function MigrationStatus(props: { server: ServerReadyData }) {
     await wait(1_000, abort.signal)
     if (abort.signal.aborted) return
 
-    const client = OpenCode.make({
+    const client = Ocpp.make({
       baseUrl: props.server.url,
       headers: props.server.password
-        ? { Authorization: `Basic ${btoa(`${props.server.username ?? "opencode"}:${props.server.password}`)}` }
+        ? { Authorization: `Basic ${btoa(`${props.server.username ?? "ocpp"}:${props.server.password}`)}` }
         : undefined,
     })
 

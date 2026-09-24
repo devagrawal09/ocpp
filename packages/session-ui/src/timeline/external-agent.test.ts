@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { SessionMessageInfo } from "@ocpp/client/promise"
 import { Timeline } from "./projection"
 
 test.each(["claude", "codex", "pi"])("keeps %s in the child-task timeline while delegating", (name) => {

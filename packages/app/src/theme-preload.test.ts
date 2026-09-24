@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test"
 
-const src = await Bun.file(new URL("../public/oc-theme-preload.js", import.meta.url)).text()
+const src = await Bun.file(new URL("../public/ocpp-theme-preload.js", import.meta.url)).text()
 
 const run = () => Function(src)()
 const setSystemDark = (matches: boolean) =>
@@ -22,13 +22,13 @@ describe("theme preload", () => {
   test("uses default theme and system light mode when settings are absent", () => {
     run()
 
-    expect(document.documentElement.dataset.theme).toBe("oc-2")
+    expect(document.documentElement.dataset.theme).toBe("ocpp-v2")
     expect(document.documentElement.dataset.colorScheme).toBe("light")
     expect(document.documentElement.style.backgroundColor).toBe("#fafafa")
   })
 
   test("restores explicit dark mode on a light system", () => {
-    localStorage.setItem("opencode-color-scheme", "dark")
+    localStorage.setItem("ocpp-color-scheme", "dark")
     run()
 
     expect(document.documentElement.dataset.colorScheme).toBe("dark")
@@ -37,7 +37,7 @@ describe("theme preload", () => {
 
   test("restores explicit light mode on a dark system", () => {
     setSystemDark(true)
-    localStorage.setItem("opencode-color-scheme", "light")
+    localStorage.setItem("ocpp-color-scheme", "light")
     run()
 
     expect(document.documentElement.dataset.colorScheme).toBe("light")
@@ -46,7 +46,7 @@ describe("theme preload", () => {
 
   test("resolves persisted system mode before paint", () => {
     setSystemDark(true)
-    localStorage.setItem("opencode-color-scheme", "system")
+    localStorage.setItem("ocpp-color-scheme", "system")
     run()
 
     expect(document.documentElement.dataset.colorScheme).toBe("dark")
@@ -54,23 +54,23 @@ describe("theme preload", () => {
   })
 
   test("keeps cached css for non-default themes", () => {
-    localStorage.setItem("opencode-theme-id", "nightowl")
-    localStorage.setItem("opencode-theme-css-light", "--background-base:#fff;")
+    localStorage.setItem("ocpp-theme-id", "nightowl")
+    localStorage.setItem("ocpp-theme-css-light", "--background-base:#fff;")
 
     run()
 
     expect(document.documentElement.dataset.theme).toBe("nightowl")
-    expect(document.getElementById("oc-theme-preload")?.textContent).toContain("--background-base:#fff;")
+    expect(document.getElementById("ocpp-theme-preload")?.textContent).toContain("--background-base:#fff;")
   })
 
   test("restores the cached variant for a persisted custom dark theme", () => {
-    localStorage.setItem("opencode-theme-id", "nightowl")
-    localStorage.setItem("opencode-color-scheme", "dark")
-    localStorage.setItem("opencode-theme-css-dark", "--background-base:#010203;")
+    localStorage.setItem("ocpp-theme-id", "nightowl")
+    localStorage.setItem("ocpp-color-scheme", "dark")
+    localStorage.setItem("ocpp-theme-css-dark", "--background-base:#010203;")
     run()
 
     expect(document.documentElement.dataset.theme).toBe("nightowl")
     expect(document.documentElement.dataset.colorScheme).toBe("dark")
-    expect(document.getElementById("oc-theme-preload")?.textContent).toContain("--background-base:#010203;")
+    expect(document.getElementById("ocpp-theme-preload")?.textContent).toContain("--background-base:#010203;")
   })
 })

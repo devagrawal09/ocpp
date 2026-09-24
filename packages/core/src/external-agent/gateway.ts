@@ -1,6 +1,6 @@
 export * as ExternalAgentGateway from "./gateway.js"
 
-import { CodeMode, Tool } from "@opencode-ai/codemode"
+import { CodeMode, Tool } from "@ocpp/codemode"
 import { Effect, Schema, Semaphore } from "effect"
 import { SubagentCustomTool } from "../tool/plugin/subagent-custom.js"
 

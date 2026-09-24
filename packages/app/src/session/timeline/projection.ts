@@ -1,13 +1,8 @@
-import type { ModelRef, SessionMessageInfo, SessionStatus } from "@opencode-ai/client/promise"
-import {
-  reuseTimelineRows,
-  Timeline,
-  TimelineRow,
-  type ReasoningMode,
-} from "@opencode-ai/session-ui/timeline/projection"
+import type { ModelRef, SessionMessageInfo, SessionStatus } from "@ocpp/client/promise"
+import { reuseTimelineRows, Timeline, TimelineRow, type ReasoningMode } from "@ocpp/session-ui/timeline/projection"
 import { createMemo, type Accessor } from "solid-js"
 
-export { reuseTimelineRows } from "@opencode-ai/session-ui/timeline/projection"
+export { reuseTimelineRows } from "@ocpp/session-ui/timeline/projection"
 
 export function createTimelineProjection(input: {
   sessionMessages: Accessor<SessionMessageInfo[]>

@@ -6,10 +6,10 @@
  */
 export * as WriteTool from "./write.js"
 
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { ToolFailure } from "@opencode-ai/ai"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import { ToolFailure } from "@ocpp/ai"
 import { Effect, Schema } from "effect"
-import { Bom } from "@opencode-ai/util/bom"
+import { Bom } from "@ocpp/util/bom"
 import { Environment } from "../../environment/index.js"
 import { FileMutation } from "../../file-mutation.js"
 import { Formatter } from "../../formatter.js"
@@ -44,7 +44,7 @@ export const toModelContent = (output: Output) =>
 // TODO: Add LSP notification and diagnostics after LSP runtime exists.
 
 export const Plugin = {
-  id: "opencode.tool.write",
+  id: "ocpp.tool.write",
   effect: Effect.fn("WriteTool.Plugin")(function* (ctx: Context) {
     const mutation = yield* LocationMutation.Service
     const fileMutation = yield* FileMutation.Service

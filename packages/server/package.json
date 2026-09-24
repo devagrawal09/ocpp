@@ -1,12 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/server",
+  "name": "@ocpp/server",
   "version": "1.18.4",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
+    "url": "git+https://github.com/devagrawal09/oc-plus-plus.git",
     "directory": "packages/server"
   },
   "publishConfig": {
@@ -27,11 +27,11 @@
   "dependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/platform-node-shared": "catalog:",
-    "@opencode-ai/core": "workspace:*",
-    "@opencode-ai/protocol": "workspace:*",
-    "@opencode-ai/schema": "workspace:*",
-    "@opencode-ai/simulation": "workspace:*",
-    "@opencode-ai/util": "workspace:*",
+    "@ocpp/core": "workspace:*",
+    "@ocpp/protocol": "workspace:*",
+    "@ocpp/schema": "workspace:*",
+    "@ocpp/simulation": "workspace:*",
+    "@ocpp/util": "workspace:*",
     "drizzle-orm": "catalog:",
     "effect": "catalog:"
   },

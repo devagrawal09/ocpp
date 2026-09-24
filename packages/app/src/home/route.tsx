@@ -1,4 +1,4 @@
-import { ScrollView } from "@opencode-ai/ui/scroll-view"
+import { ScrollView } from "@ocpp/ui/scroll-view"
 import { createHomeController } from "./model"
 import { createHomeProjectsController } from "./projects/controller"
 import { HomeUtilityNav } from "./projects/view"

@@ -50,7 +50,7 @@ export declare namespace ModelStatRepo {
 }
 
 export class ModelStatRepo extends Context.Service<ModelStatRepo, ModelStatRepo.Service>()(
-  "@opencode/stats/ModelStatRepo",
+  "@ocpp/stats/ModelStatRepo",
 ) {
   static readonly layer: Layer.Layer<ModelStatRepo, never, DrizzleClient> = Layer.effect(
     ModelStatRepo,

@@ -1,11 +1,11 @@
-import { Database } from "@opencode-ai/core/database/database"
-import { Location } from "@opencode-ai/core/location"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Session } from "@opencode-ai/core/session"
-import { SessionTable } from "@opencode-ai/core/session/sql"
-import { Workspace } from "@opencode-ai/core/workspace"
-import { InvalidRequestError, SessionNotFoundError } from "@opencode-ai/protocol/errors"
+import { Database } from "@ocpp/core/database/database"
+import { Location } from "@ocpp/core/location"
+import { LocationServiceMap } from "@ocpp/core/location-services"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Session } from "@ocpp/core/session"
+import { SessionTable } from "@ocpp/core/session/sql"
+import { Workspace } from "@ocpp/core/workspace"
+import { InvalidRequestError, SessionNotFoundError } from "@ocpp/protocol/errors"
 import { eq } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { HttpServerRequest } from "effect/unstable/http"
@@ -14,7 +14,7 @@ import { HttpApiMiddleware } from "effect/unstable/httpapi"
 export type LocationServices = Layer.Success<ReturnType<(typeof LocationServiceMap.Service)["get"]>>
 
 export class LocationMiddleware extends HttpApiMiddleware.Service<LocationMiddleware, { provides: LocationServices }>()(
-  "@opencode/HttpApiLocation",
+  "@ocpp/HttpApiLocation",
 ) {}
 
 export function response<A, E, R>(data: Effect.Effect<A, E, R>) {
@@ -71,7 +71,7 @@ export function requestRef(request: HttpServerRequest.HttpServerRequest): Locati
   const workspaceID = query.get("location[workspace]") || request.headers["x-opencode-workspace"]
   const directory =
     query.get("location[directory]") ||
-    (request.headers["x-opencode-directory"] ? decode(request.headers["x-opencode-directory"]) : process.cwd())
+    (request.headers["x-ocpp-directory"] ? decode(request.headers["x-ocpp-directory"]) : process.cwd())
   return Location.Ref.make({
     directory: AbsolutePath.make(directory),
     workspaceID: workspaceID ? Workspace.ID.make(workspaceID) : undefined,

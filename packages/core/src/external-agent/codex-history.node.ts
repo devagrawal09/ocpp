@@ -50,7 +50,7 @@ export async function read(id: string, signal: AbortSignal): Promise<string | un
     })
   try {
     await request("initialize", {
-      clientInfo: { name: "opencode-external-history", version: "1" },
+      clientInfo: { name: "ocpp-external-history", version: "1" },
       capabilities: { experimentalApi: true },
     })
     child.stdin.write(JSON.stringify({ method: "initialized", params: {} }) + "\n")

@@ -6,7 +6,7 @@ import type {
   AttentionNotifySkipReason,
   AttentionWhen,
   AttentionSoundName,
-} from "@opencode-ai/plugin/tui/context"
+} from "@ocpp/plugin/tui/context"
 import { Config } from "./config"
 import { Schema } from "effect"
 import stripAnsi from "strip-ansi"
@@ -32,7 +32,7 @@ type AttentionHost = Attention & {
   dispose(): void
 }
 
-const DEFAULT_TITLE = "OpenCode"
+const DEFAULT_TITLE = "OC++"
 const TITLE_LIMIT = 80
 const MESSAGE_LIMIT = 240
 const BUILTIN_SOUNDS: Record<AttentionSoundName, string> = {

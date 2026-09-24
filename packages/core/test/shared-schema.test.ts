@@ -1,32 +1,32 @@
 import { expect, test } from "bun:test"
 import { Schema } from "effect"
-import { Agent } from "@opencode-ai/core/agent"
-import { Session } from "@opencode-ai/core/session"
-import { Location } from "@opencode-ai/schema/location"
-import { Model } from "@opencode-ai/schema/model"
-import { Provider } from "@opencode-ai/schema/provider"
-import { Project } from "@opencode-ai/schema/project"
-import { Worktree } from "@opencode-ai/schema/worktree"
-import { PermissionV1 } from "@opencode-ai/schema/permission-v1"
-import { Prompt } from "@opencode-ai/schema/prompt"
-import { SessionInbox } from "@opencode-ai/schema/session-inbox"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
-import { Workspace } from "@opencode-ai/schema/workspace"
-import { Command } from "@opencode-ai/schema/command"
-import { Connection } from "@opencode-ai/schema/connection"
-import { Credential } from "@opencode-ai/schema/credential"
-import { FileSystem } from "@opencode-ai/schema/filesystem"
-import { Integration } from "@opencode-ai/schema/integration"
-import { LLM } from "@opencode-ai/schema/llm"
-import { Permission } from "@opencode-ai/schema/permission"
-import { Pty } from "@opencode-ai/schema/pty"
-import { Reference } from "@opencode-ai/schema/reference"
-import { Skill } from "@opencode-ai/schema/skill"
-import { AbsolutePath, optional, statics } from "@opencode-ai/schema/schema"
+import { Agent } from "@ocpp/core/agent"
+import { Session } from "@ocpp/core/session"
+import { Location } from "@ocpp/schema/location"
+import { Model } from "@ocpp/schema/model"
+import { Provider } from "@ocpp/schema/provider"
+import { Project } from "@ocpp/schema/project"
+import { Worktree } from "@ocpp/schema/worktree"
+import { PermissionV1 } from "@ocpp/schema/permission-v1"
+import { Prompt } from "@ocpp/schema/prompt"
+import { SessionInbox } from "@ocpp/schema/session-inbox"
+import { SessionMessage } from "@ocpp/schema/session-message"
+import { Workspace } from "@ocpp/schema/workspace"
+import { Command } from "@ocpp/schema/command"
+import { Connection } from "@ocpp/schema/connection"
+import { Credential } from "@ocpp/schema/credential"
+import { FileSystem } from "@ocpp/schema/filesystem"
+import { Integration } from "@ocpp/schema/integration"
+import { LLM } from "@ocpp/schema/llm"
+import { Permission } from "@ocpp/schema/permission"
+import { Pty } from "@ocpp/schema/pty"
+import { Reference } from "@ocpp/schema/reference"
+import { Skill } from "@ocpp/schema/skill"
+import { AbsolutePath, optional, statics } from "@ocpp/schema/schema"
 
 test("Core reuses the canonical shared schemas", async () => {
-  const schemaAgent = await import("@opencode-ai/schema/agent")
-  const schemaSession = await import("@opencode-ai/schema/session")
+  const schemaAgent = await import("@ocpp/schema/agent")
+  const schemaSession = await import("@ocpp/schema/session")
   const [
     coreCommand,
     coreConnection,
@@ -49,26 +49,26 @@ test("Core reuses the canonical shared schemas", async () => {
     coreSchema,
     coreWorkspace,
   ] = await Promise.all([
-    import("@opencode-ai/core/command"),
-    import("@opencode-ai/core/integration/connection"),
-    import("@opencode-ai/core/credential"),
-    import("@opencode-ai/core/filesystem"),
-    import("@opencode-ai/core/integration"),
-    import("@opencode-ai/core/location"),
-    import("@opencode-ai/ai"),
-    import("@opencode-ai/core/model"),
-    import("@opencode-ai/core/permission"),
-    import("@opencode-ai/core/v1/permission"),
-    import("@opencode-ai/core/worktree"),
-    import("@opencode-ai/core/pty"),
-    import("@opencode-ai/core/project/schema"),
-    import("@opencode-ai/core/provider"),
-    import("@opencode-ai/core/reference"),
-    import("@opencode-ai/core/session/inbox"),
-    import("@opencode-ai/core/session/message"),
-    import("@opencode-ai/core/skill"),
-    import("@opencode-ai/core/schema"),
-    import("@opencode-ai/core/workspace"),
+    import("@ocpp/core/command"),
+    import("@ocpp/core/integration/connection"),
+    import("@ocpp/core/credential"),
+    import("@ocpp/core/filesystem"),
+    import("@ocpp/core/integration"),
+    import("@ocpp/core/location"),
+    import("@ocpp/ai"),
+    import("@ocpp/core/model"),
+    import("@ocpp/core/permission"),
+    import("@ocpp/core/v1/permission"),
+    import("@ocpp/core/worktree"),
+    import("@ocpp/core/pty"),
+    import("@ocpp/core/project/schema"),
+    import("@ocpp/core/provider"),
+    import("@ocpp/core/reference"),
+    import("@ocpp/core/session/inbox"),
+    import("@ocpp/core/session/message"),
+    import("@ocpp/core/skill"),
+    import("@ocpp/core/schema"),
+    import("@ocpp/core/workspace"),
   ])
 
   const schemas = [

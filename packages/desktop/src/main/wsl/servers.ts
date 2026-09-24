@@ -1,13 +1,13 @@
 import type {
   WslDistroProbe,
   WslJob,
-  WslOpencodeCheck,
+  WslOcppCheck,
   WslServerConfig,
   WslServerItem,
   WslServerRuntime,
   WslServersEvent,
   WslServersState,
-} from "@opencode-ai/app/wsl/types"
+} from "@ocpp/app/wsl/types"
 import { Effect } from "effect"
 import { nativeT } from "../native/translations"
 import { WSL_SERVERS_KEY } from "../storage/keys"
@@ -95,10 +95,10 @@ export const createWslServersController = Effect.fn("WslServers.make")(function*
     updateServer(id, (item) => ({ ...item, runtime }))
   }
 
-  const setCliCheck = (distro: string, check: WslOpencodeCheck) => {
+  const setCliCheck = (distro: string, check: WslOcppCheck) => {
     setState({
-      opencodeChecks: {
-        ...state.opencodeChecks,
+      ocppChecks: {
+        ...state.ocppChecks,
         [distro]: check,
       },
     })
@@ -127,14 +127,14 @@ export const createWslServersController = Effect.fn("WslServers.make")(function*
       setState({ distroProbes: { ...state.distroProbes, ...Object.fromEntries(distroProbes) } })
     }
 
-    const opencodeChecks = await Promise.all(
+    const ocppChecks = await Promise.all(
       unique
         .filter((distro) => distroProbeReady(state.distroProbes[distro]))
-        .filter((distro) => !state.opencodeChecks[distro])
+        .filter((distro) => !state.ocppChecks[distro])
         .map(async (distro) => [distro, await inspectCli(distro)] as const),
     )
-    if (opencodeChecks.length) {
-      setState({ opencodeChecks: { ...state.opencodeChecks, ...Object.fromEntries(opencodeChecks) } })
+    if (ocppChecks.length) {
+      setState({ ocppChecks: { ...state.ocppChecks, ...Object.fromEntries(ocppChecks) } })
     }
   }
 
@@ -270,8 +270,8 @@ export const createWslServersController = Effect.fn("WslServers.make")(function*
       await runJob({ kind: "probe-addable", distros, startedAt: Date.now() }, () => probeAddableDistros(distros))
     },
 
-    async installOpencode(distro: string) {
-      await runJob({ kind: "install-opencode", distro, startedAt: Date.now() }, async () => {
+    async installOcpp(distro: string) {
+      await runJob({ kind: "install-ocpp", distro, startedAt: Date.now() }, async () => {
         const id = state.servers.find((item) => item.config.distro === distro)?.config.id
         if (id) await stopServer(id)
         await options.installCli(distro, options.cli)
@@ -329,7 +329,7 @@ function initialState(): WslServersState {
     installed: [],
     online: [],
     distroProbes: {},
-    opencodeChecks: {},
+    ocppChecks: {},
     pendingRestart: false,
     servers: [],
     job: null,
@@ -370,7 +370,7 @@ function cliCheck(
   resolvedPath: string | null,
   version: string | null,
   expectedVersion: string,
-): WslOpencodeCheck {
+): WslOcppCheck {
   if (!resolvedPath) {
     return {
       distro,
@@ -378,7 +378,7 @@ function cliCheck(
       version: null,
       expectedVersion,
       matchesDesktop: null,
-      error: nativeT("desktop.wsl.error.opencodeMissing"),
+      error: nativeT("desktop.wsl.error.ocppMissing"),
     }
   }
   if (!version) {
@@ -388,7 +388,7 @@ function cliCheck(
       version: null,
       expectedVersion,
       matchesDesktop: null,
-      error: nativeT("desktop.wsl.error.opencodeCannotRun"),
+      error: nativeT("desktop.wsl.error.ocppCannotRun"),
     }
   }
   return {
@@ -401,7 +401,7 @@ function cliCheck(
   }
 }
 
-function requireMatchingCli(check: WslOpencodeCheck, expected: string) {
+function requireMatchingCli(check: WslOcppCheck, expected: string) {
   if (check.version === expected) return
   throw new Error(
     nativeT("desktop.wsl.error.updateVersion", {
@@ -414,10 +414,10 @@ function requireMatchingCli(check: WslOpencodeCheck, expected: string) {
 
 function removeDistroState(state: WslServersState, distro: string) {
   const distroProbes = { ...state.distroProbes }
-  const opencodeChecks = { ...state.opencodeChecks }
+  const ocppChecks = { ...state.ocppChecks }
   delete distroProbes[distro]
-  delete opencodeChecks[distro]
-  return { distroProbes, opencodeChecks }
+  delete ocppChecks[distro]
+  return { distroProbes, ocppChecks }
 }
 
 function distroProbeReady(probe: WslDistroProbe | undefined) {

@@ -1,6 +1,6 @@
 export * as CpuProfile from "./cpu-profile"
 
-import { Global } from "@opencode-ai/util/global"
+import { Global } from "@ocpp/util/global"
 import { Effect, FileSystem, Queue } from "effect"
 import { Session } from "node:inspector"
 import path from "node:path"
@@ -19,10 +19,7 @@ export const listen = Effect.gen(function* () {
   )
   yield* Effect.gen(function* () {
     yield* Queue.take(signals)
-    const file = path.join(
-      global.log,
-      `cpu-${process.pid}-${new Date().toISOString().replace(/[:.]/g, "")}.cpuprofile`,
-    )
+    const file = path.join(global.log, `cpu-${process.pid}-${new Date().toISOString().replace(/[:.]/g, "")}.cpuprofile`)
     yield* run(file, Effect.sleep("10 seconds")).pipe(
       Effect.catchCause((cause) => Effect.logError("Failed to capture CPU profile", { path: file, cause })),
     )

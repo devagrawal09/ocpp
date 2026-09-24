@@ -1,9 +1,9 @@
 export * as ServerProcess from "./process"
 
 import { NodeHttpServer } from "@effect/platform-node"
-import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
-import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
-import { hasPersistentPtyConnectTicketURL } from "@opencode-ai/protocol/groups/persistent-pty"
+import { SessionRestart } from "@ocpp/core/session/execution/restart"
+import { hasPtyConnectTicketURL } from "@ocpp/protocol/groups/pty"
+import { hasPersistentPtyConnectTicketURL } from "@ocpp/protocol/groups/persistent-pty"
 import { Cause, Context, Effect, Exit, Latch, Layer, Option, Ref, Scope } from "effect"
 import {
   HttpMiddleware,
@@ -170,7 +170,7 @@ function dispatch(
   application: Ref.Ref<Option.Option<App>>,
   version: string,
 ): App {
-  const auth = ServerAuth.Config.of({ password: Option.some(password), username: "opencode" })
+  const auth = ServerAuth.Config.of({ password: Option.some(password), username: "ocpp" })
   return Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const url = new URL(request.url, "http://localhost")
@@ -215,7 +215,7 @@ function unavailable(status: Status.State) {
       {
         code: "service_failed",
         message: "The background service could not start.",
-        action: "Run `opencode service restart` after checking the service logs.",
+        action: "Run `ocpp service restart` after checking the service logs.",
       },
       { status: 503 },
     )

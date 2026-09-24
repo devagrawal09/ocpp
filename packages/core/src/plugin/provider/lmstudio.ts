@@ -1,5 +1,5 @@
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import type { Entry } from "@opencode-ai/schema/config"
+import { define } from "@ocpp/plugin/effect/plugin"
+import type { Entry } from "@ocpp/schema/config"
 import { Duration, Effect, Schedule, Schema, Semaphore, Stream } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { Config } from "../../config.js"
@@ -32,7 +32,7 @@ const discoveryLock = Semaphore.makeUnsafe(1)
 
 export function make(origin = "http://127.0.0.1:1234", interval: Duration.Input = "30 seconds") {
   return define({
-    id: "opencode.provider.lmstudio",
+    id: "ocpp.provider.lmstudio",
     effect: Effect.fn(function* (ctx) {
       const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
       const config = yield* Config.Service
@@ -52,7 +52,7 @@ export function make(origin = "http://127.0.0.1:1234", interval: Duration.Input 
         catalog.provider.update(providerID, (provider) => {
           provider.name = "LM Studio"
           provider.activation = "enabled"
-          provider.package = "@opencode-ai/ai/providers/openai-compatible"
+          provider.package = "@ocpp/ai/providers/openai-compatible"
           provider.settings = {
             baseURL: source.current.baseURL,
             provider: providerID,

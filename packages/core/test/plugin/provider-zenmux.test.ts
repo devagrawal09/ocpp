@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { ZenmuxPlugin } from "@opencode-ai/core/plugin/provider/zenmux"
-import { Provider } from "@opencode-ai/core/provider"
+import { Catalog } from "@ocpp/core/catalog"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { ProviderPlugins } from "@ocpp/core/plugin/provider"
+import { ZenmuxPlugin } from "@ocpp/core/plugin/provider/zenmux"
+import { Provider } from "@ocpp/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -24,7 +24,7 @@ function required<T>(value: T | undefined): T {
 
 describe("ZenmuxPlugin", () => {
   test("is registered so legacy referer headers can be applied", () => {
-    expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.zenmux")
+    expect(ProviderPlugins.map((item) => item.id)).toContain("ocpp.provider.zenmux")
   })
 
   it.effect("applies the exact legacy Zenmux headers", () =>
@@ -38,7 +38,7 @@ describe("ZenmuxPlugin", () => {
       })
       yield* addPlugin()
       const result = required(yield* catalog.provider.get(Provider.ID.make("zenmux")))
-      expect(result.headers).toEqual({ "HTTP-Referer": "https://opencode.ai/", "X-Title": "opencode" })
+      expect(result.headers).toEqual({ "HTTP-Referer": "https://ocpp.ai/", "X-Title": "ocpp" })
       expect(Object.keys(required(result.headers)).sort()).toEqual(["HTTP-Referer", "X-Title"])
     }),
   )
@@ -57,8 +57,8 @@ describe("ZenmuxPlugin", () => {
 
       expect(required(yield* catalog.provider.get(Provider.ID.make("zenmux"))).headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "HTTP-Referer": "https://ocpp.ai/",
+        "X-Title": "ocpp",
       })
     }),
   )

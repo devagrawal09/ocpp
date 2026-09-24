@@ -3,8 +3,8 @@ export * as Watcher from "./watcher.js"
 // @ts-ignore
 import { createWrapper } from "@parcel/watcher/wrapper"
 import type ParcelWatcher from "@parcel/watcher"
-import { FileSystem } from "@opencode-ai/schema/filesystem"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { FileSystem } from "@ocpp/schema/filesystem"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Cause, Context, Effect, Layer, PubSub, RcMap, Schema, Stream } from "effect"
 import { lazy } from "../util/lazy.js"
 import { watch } from "node:fs"
@@ -56,7 +56,7 @@ export interface NativeInterface {
  * layer uses `node:fs.watch` for files and `@parcel/watcher` for directories;
  * tests provide implementations they can control.
  */
-export class Native extends Context.Service<Native, NativeInterface>()("@opencode/Watcher/Native") {}
+export class Native extends Context.Service<Native, NativeInterface>()("@ocpp/Watcher/Native") {}
 
 export interface Interface {
   readonly subscribe: (input: WatchInput) => Effect.Effect<Stream.Stream<Update>>
@@ -67,7 +67,7 @@ export const Options = Schema.Struct({
 })
 export type Options = typeof Options.Type
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Watcher") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Watcher") {}
 
 export interface TestInterface extends Interface {
   /** Broadcasts one update to every subscriber. */
@@ -76,7 +76,7 @@ export interface TestInterface extends Interface {
   readonly subscriptions: () => Effect.Effect<readonly WatchInput[]>
 }
 
-export class Test extends Context.Service<Test, TestInterface>()("@opencode/Watcher/Test") {}
+export class Test extends Context.Service<Test, TestInterface>()("@ocpp/Watcher/Test") {}
 
 export const layer = (options?: Options) =>
   Layer.effect(

@@ -1,8 +1,8 @@
 import { describe, expect } from "bun:test"
 import { Effect, Exit, Fiber, Scope } from "effect"
 import { TestClock } from "effect/testing"
-import { KV } from "@opencode-ai/core/kv"
-import { WebSearch } from "@opencode-ai/core/websearch"
+import { KV } from "@ocpp/core/kv"
+import { WebSearch } from "@ocpp/core/websearch"
 import { testEffect } from "./lib/effect"
 import { TestWebSearch } from "./lib/websearch"
 

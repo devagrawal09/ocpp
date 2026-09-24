@@ -20,11 +20,8 @@ export const make = Effect.gen(function* () {
       ? Effect.fail(new ResizerUnavailableError())
       : Effect.tryPromise({
           try: async () => {
-            ;(
-              globalThis as typeof globalThis & { __OPENCODE_PHOTON_WASM_PATH?: string }
-            ).__OPENCODE_PHOTON_WASM_PATH = path.isAbsolute(photonWasm)
-              ? photonWasm
-              : fileURLToPath(new URL(photonWasm, import.meta.url))
+            ;(globalThis as typeof globalThis & { __OCPP_PHOTON_WASM_PATH?: string }).__OCPP_PHOTON_WASM_PATH =
+              path.isAbsolute(photonWasm) ? photonWasm : fileURLToPath(new URL(photonWasm, import.meta.url))
             return await import("@silvia-odwyer/photon-node")
           },
           catch: () => new ResizerUnavailableError(),

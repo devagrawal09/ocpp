@@ -1,6 +1,6 @@
 export * as AISDK from "./aisdk.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { APICallError } from "@ai-sdk/provider"
 import type {
   JSONSchema7,
@@ -29,9 +29,9 @@ import {
   type LLMRequest,
   type ToolDefinition,
   type UsageInput,
-} from "@opencode-ai/ai"
-import { Auth, Endpoint, RequestExecutor, type AnyRoute } from "@opencode-ai/ai/route"
-import { ProviderShared } from "@opencode-ai/ai/protocols/shared"
+} from "@ocpp/ai"
+import { Auth, Endpoint, RequestExecutor, type AnyRoute } from "@ocpp/ai/route"
+import { ProviderShared } from "@ocpp/ai/protocols/shared"
 import { Cause, Context, Effect, Layer, Option, Schema, Scope, Stream } from "effect"
 import { makeParser } from "effect/unstable/encoding/Sse"
 import type { ID, Info } from "./model.js"
@@ -184,7 +184,7 @@ export interface Interface {
   readonly model: (model: Info) => Effect.Effect<LanguageModel, InitError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/AISDK") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/AISDK") {}
 
 export const locationLayer = Layer.effect(
   Service,

@@ -21,7 +21,7 @@ export interface Interface {
   readonly exportDebug: Effect.Effect<string>
 }
 
-export class Service extends Context.Service<Service, Interface>()("opencode/desktop/DesktopLogging") {}
+export class Service extends Context.Service<Service, Interface>()("ocpp/desktop/DesktopLogging") {}
 
 const serviceLayer = Layer.effect(
   Service,
@@ -33,7 +33,7 @@ const serviceLayer = Layer.effect(
     yield* Effect.logInfo("app starting", {
       version: VERSION,
       packaged: app.isPackaged,
-      onboardingTest: process.env.OPENCODE_TEST_ONBOARDING === "1",
+      onboardingTest: process.env.OCPP_TEST_ONBOARDING === "1",
     })
     const exportDebug = exportDebugLogsEffect(fs, path).pipe(Effect.orDie)
     return Service.of({
@@ -57,10 +57,9 @@ const nativeLogger = Logger.make((options) => {
       ...(entry.cause === undefined ? {} : { cause: entry.cause }),
     }
     const messages = Array.isArray(options.message) ? options.message : [options.message]
-    log.scope(safeLogName(scope))[methods[options.logLevel]](
-      ...messages,
-      ...(Object.keys(context).length === 0 ? [] : [context]),
-    )
+    log
+      .scope(safeLogName(scope))
+      [methods[options.logLevel]](...messages, ...(Object.keys(context).length === 0 ? [] : [context]))
   } catch {
     // Logging must not interrupt application work.
   }
@@ -117,9 +116,9 @@ function startNetLog(path: Path.Path) {
   if (netLog.currentlyLogging) return Effect.void
   const target = path.join(run, "network.netlog")
   netLogPath = target
-  return Effect.tryPromise(() => netLog.startLogging(target, { captureMode: "default", maxFileSize: NET_LOG_SIZE })).pipe(
-    Effect.tap(() => scoped("network", Effect.logInfo("net log started", { path: target }))),
-  )
+  return Effect.tryPromise(() =>
+    netLog.startLogging(target, { captureMode: "default", maxFileSize: NET_LOG_SIZE }),
+  ).pipe(Effect.tap(() => scoped("network", Effect.logInfo("net log started", { path: target }))))
 }
 
 function exportDebugLogsEffect(fs: FileSystem.FileSystem, path: Path.Path) {
@@ -131,7 +130,7 @@ function exportDebugLogsEffect(fs: FileSystem.FileSystem, path: Path.Path) {
       )
     }
 
-    const output = path.join(app.getPath("downloads"), `opencode-debug-${stamp()}.zip`)
+    const output = path.join(app.getPath("downloads"), `ocpp-debug-${stamp()}.zip`)
     return yield* Effect.gen(function* () {
       yield* Effect.logInfo("exporting debug logs", { output })
       yield* writeZip(fs, output, [
@@ -146,9 +145,7 @@ function exportDebugLogsEffect(fs: FileSystem.FileSystem, path: Path.Path) {
       Effect.ensuring(
         restartNetLog
           ? startNetLog(path).pipe(
-              Effect.catch((error) =>
-                scoped("network", Effect.logWarning("failed to restart net log", { error })),
-              ),
+              Effect.catch((error) => scoped("network", Effect.logWarning("failed to restart net log", { error }))),
             )
           : Effect.void,
       ),
@@ -224,9 +221,7 @@ function manifest(path: Path.Path) {
 
 function serverLogRoots(path: Path.Path) {
   const xdgData = process.env.XDG_DATA_HOME || path.join(homedir(), ".local", "share")
-  return [
-    ...new Set([path.join(xdgData, "opencode", "log"), path.join(app.getPath("userData"), "opencode", "log")]),
-  ]
+  return [...new Set([path.join(xdgData, "ocpp", "log"), path.join(app.getPath("userData"), "ocpp", "log")])]
 }
 
 type Entry = { name: string; path: string } | { name: string; data: Uint8Array }

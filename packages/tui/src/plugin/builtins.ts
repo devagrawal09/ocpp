@@ -7,8 +7,8 @@ import DiffViewer from "../feature-plugins/system/diff-viewer"
 import Notifications from "../feature-plugins/system/notifications"
 import Plugins from "../feature-plugins/system/plugins"
 import Storybook from "../feature-plugins/system/storybook"
-import Latex from "@opencode-ai/latex/plugin"
-import Merman from "@opencode-ai/merman/plugin"
+import Latex from "@ocpp/latex/plugin"
+import Merman from "@ocpp/merman/plugin"
 
 export const builtins = [
   HomeFooter,
@@ -21,7 +21,7 @@ export const builtins = [
   Merman,
   Latex,
   // The storybook is a development tool; keep its route and palette commands out of
-  // normal launches and register it only for OPENCODE_STORY runs.
-  ...(process.env.OPENCODE_STORY ? [Storybook] : []),
+  // normal launches and register it only for OCPP_STORY runs.
+  ...(process.env.OCPP_STORY ? [Storybook] : []),
   DiffViewer,
 ]

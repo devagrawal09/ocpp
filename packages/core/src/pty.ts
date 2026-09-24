@@ -1,9 +1,9 @@
 export * as Pty from "./pty.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import type { Disp, Proc } from "#pty"
 import { Context, Effect, Layer, Schema, Types } from "effect"
-import { Pty } from "@opencode-ai/schema/pty"
+import { Pty } from "@ocpp/schema/pty"
 import { Bus } from "./bus.js"
 import { Location } from "./location.js"
 import { PtyID } from "./pty/schema.js"
@@ -46,7 +46,7 @@ export const UpdateInput = Pty.UpdateInput
 
 export type UpdateInput = Types.DeepMutable<typeof UpdateInput.Type>
 
-export { Event } from "@opencode-ai/schema/pty"
+export { Event } from "@ocpp/schema/pty"
 
 export type AttachInput = {
   // Absolute output cursor to replay from. -1 tails from the current end; omitted replays the full retained buffer.
@@ -86,7 +86,7 @@ export interface Interface {
   readonly attach: (id: PtyID, input: AttachInput) => Effect.Effect<Attachment, NotFoundError | ExitedError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Pty") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Pty") {}
 
 const layer = Layer.effect(
   Service,
@@ -170,7 +170,7 @@ const layer = Layer.effect(
         ...process.env,
         ...input.env,
         TERM: "xterm-256color",
-        OPENCODE_TERMINAL: "1",
+        OCPP_TERMINAL: "1",
       } as Record<string, string>
       if (process.platform === "win32") {
         env.LC_ALL = "C.UTF-8"

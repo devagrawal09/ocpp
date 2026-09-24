@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { ToolHandle } from "@opencode-ai/codemode"
-import { Agent } from "@opencode-ai/core/agent"
-import { Session } from "@opencode-ai/core/session"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Tool } from "@opencode-ai/core/tool"
-import { SubagentCustomTool } from "@opencode-ai/core/tool/plugin/subagent-custom"
-import { execute } from "@opencode-ai/core/tool/runtime"
+import { ToolHandle } from "@ocpp/codemode"
+import { Agent } from "@ocpp/core/agent"
+import { Session } from "@ocpp/core/session"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { Tool } from "@ocpp/core/tool"
+import { SubagentCustomTool } from "@ocpp/core/tool/plugin/subagent-custom"
+import { execute } from "@ocpp/core/tool/runtime"
 import { Effect } from "effect"
 
 const context: Tool.Context = {

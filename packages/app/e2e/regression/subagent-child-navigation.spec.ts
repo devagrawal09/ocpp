@@ -1,10 +1,10 @@
-import { base64Encode } from "@opencode-ai/util/encode"
-import type { OpenCodeEvent, SessionMessageInfo } from "@opencode-ai/client/promise"
+import { base64Encode } from "@ocpp/util/encode"
+import type { OcppEvent, SessionMessageInfo } from "@ocpp/client/promise"
 import { expect, test, type Page } from "@playwright/test"
-import { currentSession, mockOpenCodeServer } from "../utils/mock-server"
+import { currentSession, mockOcppServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/SubagentNavigation"
+const directory = "C:/OC++/SubagentNavigation"
 const projectID = "proj_subagent_navigation"
 const parentID = "ses_subagent_parent"
 const childID = "ses_subagent_child"
@@ -22,7 +22,7 @@ test("navigates to a subagent child session missing from the session list", asyn
   await expectSessionTitle(page, taskDescription)
   await expect(page.getByRole("heading", { name: parentTitle })).toHaveCount(0)
 
-  const titlebarRight = page.locator("#opencode-titlebar-right")
+  const titlebarRight = page.locator("#ocpp-titlebar-right")
   await expect(titlebarRight.getByRole("button", { name: "Toggle review" })).toHaveCount(1)
 })
 
@@ -126,7 +126,7 @@ test("keeps the parent tab selected while a loaded child session resolves", asyn
 })
 
 test("shows the not found fallback when the viewed session is deleted", async ({ page }) => {
-  const events: OpenCodeEvent[] = []
+  const events: OcppEvent[] = []
   await setup(page, () => events.splice(0, 1))
   await openChildFromParent(page)
   await expectSessionTitle(page, taskDescription)
@@ -145,8 +145,8 @@ test("shows the not found fallback when the viewed session is deleted", async ({
   await expect(page.getByRole("heading", { name: taskDescription })).toHaveCount(0)
 })
 
-async function setup(page: Page, events?: () => OpenCodeEvent[]) {
-  await mockOpenCodeServer(page, {
+async function setup(page: Page, events?: () => OcppEvent[]) {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -160,7 +160,7 @@ async function setup(page: Page, events?: () => OpenCodeEvent[]) {
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: {
             "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } },
           },
@@ -263,13 +263,13 @@ async function configurePage(page: Page) {
   await page.addInitScript(
     ({ directory, server, sessionId }) => {
       localStorage.setItem(
-        "opencode.global.dat:server",
+        "ocpp.global.dat:server",
         JSON.stringify({
           projects: { local: [{ worktree: directory, expanded: true }] },
           lastProject: { local: directory },
         }),
       )
-      localStorage.setItem("opencode.window.browser.dat:tabs", JSON.stringify([{ type: "session", server, sessionId }]))
+      localStorage.setItem("ocpp.window.browser.dat:tabs", JSON.stringify([{ type: "session", server, sessionId }]))
     },
     { directory, server, sessionId: parentID },
   )

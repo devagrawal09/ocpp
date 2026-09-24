@@ -50,11 +50,11 @@ retry idempotent, but reusing an ID owned by another record returns a conflict.
 
 ## Configuration
 
-Add `compaction` to any [OpenCode configuration file](/config):
+Add `compaction` to any [OC++ configuration file](/config):
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "compaction": {
     "auto": true,
     "keep": {

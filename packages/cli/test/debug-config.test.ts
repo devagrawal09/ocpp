@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { OPENCODE_VERSION } from "../src/version"
+import { OCPP_VERSION } from "../src/version"
 
 describe("debug config command", () => {
   test("is included in troubleshooting help", async () => {
@@ -12,18 +12,18 @@ describe("debug config command", () => {
     expect(debug.stdout).toContain("config")
     expect(debug.stdout).toContain("List configuration sources")
     expect(config.exitCode).toBe(0)
-    expect(config.stdout).toContain("opencode debug config [flags]")
+    expect(config.stdout).toContain("ocpp debug config [flags]")
     expect(config.stdout).toContain("List configuration sources")
   })
 
   test("prints config entries from the invoking directory without reordering permissions", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-debug-config-"))
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-debug-config-"))
     const project = path.join(import.meta.dir, "..")
-    const registration = path.join(root, "state", "opencode", "service-local.json")
+    const registration = path.join(root, "state", "ocpp", "service-local.json")
     const entries = [
       {
         type: "document",
-        path: path.join(project, "opencode.json"),
+        path: path.join(project, "ocpp.json"),
         info: {
           permissions: [
             { action: "shell", resource: "*", effect: "ask" },
@@ -41,7 +41,7 @@ describe("debug config command", () => {
         const url = new URL(request.url)
         if (url.pathname === "/api/health") {
           healthProbes += 1
-          return Response.json({ healthy: true, version: OPENCODE_VERSION, pid: process.pid })
+          return Response.json({ healthy: true, version: OCPP_VERSION, pid: process.pid })
         }
         requested = url
         authorization.push(request.headers.get("authorization"))
@@ -53,7 +53,7 @@ describe("debug config command", () => {
       await fs.mkdir(path.dirname(registration), { recursive: true })
       await fs.writeFile(
         registration,
-        JSON.stringify({ version: OPENCODE_VERSION, url: server.url.toString(), pid: process.pid, password: "secret" }),
+        JSON.stringify({ version: OCPP_VERSION, url: server.url.toString(), pid: process.pid, password: "secret" }),
       )
       const result = await cli(["debug", "config"], project, { XDG_STATE_HOME: path.join(root, "state") })
 
@@ -61,7 +61,7 @@ describe("debug config command", () => {
       expect(JSON.parse(result.stdout)).toEqual(entries)
       expect(requested?.pathname).toBe("/api/config")
       expect(requested?.searchParams.get("location[directory]")).toBe(project)
-      expect(authorization).toEqual([`Basic ${btoa("opencode:secret")}`])
+      expect(authorization).toEqual([`Basic ${btoa("ocpp:secret")}`])
       expect(healthProbes).toBe(1)
     } finally {
       server.stop(true)

@@ -1,9 +1,9 @@
 export * as PluginHost from "./host.js"
 
-import { Plugin } from "@opencode-ai/plugin/effect"
-import type { IntegrationMethodRegistration } from "@opencode-ai/plugin/effect/integration"
-import { EventManifest } from "@opencode-ai/schema/event-manifest"
-import { ServerConfig } from "@opencode-ai/schema/mcp"
+import { Plugin } from "@ocpp/plugin/effect"
+import type { IntegrationMethodRegistration } from "@ocpp/plugin/effect/integration"
+import { EventManifest } from "@ocpp/schema/event-manifest"
+import { ServerConfig } from "@ocpp/schema/mcp"
 import { App } from "../app.js"
 import { Effect, Schema, Stream } from "effect"
 import { Agent } from "../agent.js"

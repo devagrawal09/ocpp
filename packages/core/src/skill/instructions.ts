@@ -1,6 +1,6 @@
 export * as SkillInstructions from "./instructions.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Agent } from "../agent.js"
 import { Skill } from "../skill.js"
@@ -60,7 +60,7 @@ export interface Interface {
   readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.List>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SkillInstructions") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SkillInstructions") {}
 
 const layer = Layer.effect(
   Service,

@@ -1,4 +1,4 @@
-import type { FormField, FormValue } from "@opencode-ai/client"
+import type { FormField, FormValue } from "@ocpp/client"
 
 export type FormAnswerField = Exclude<FormField, { type: "external" }>
 

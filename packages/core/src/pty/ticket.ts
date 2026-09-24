@@ -1,10 +1,10 @@
 export * as PtyTicket from "./ticket.js"
 
-import type { Workspace } from "@opencode-ai/schema/workspace"
-import { PtyTicket } from "@opencode-ai/schema/pty-ticket"
+import type { Workspace } from "@ocpp/schema/workspace"
+import { PtyTicket } from "@ocpp/schema/pty-ticket"
 import { PtyID } from "./schema.js"
 import { Cache, Context, Duration, Effect, Layer } from "effect"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 
 const DEFAULT_TTL = Duration.seconds(60)
 const CAPACITY = 10_000
@@ -22,7 +22,7 @@ export interface Interface {
   consume(input: Scope & { readonly ticket: string }): Effect.Effect<boolean>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/PtyTicket") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/PtyTicket") {}
 
 function matches(record: Scope, input: Scope) {
   return (

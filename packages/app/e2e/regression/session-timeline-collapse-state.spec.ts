@@ -1,10 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test"
-import type { JsonValue, OpenCodeEvent, SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client/promise"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import type { JsonValue, OcppEvent, SessionMessageAssistant, SessionMessageInfo } from "@ocpp/client/promise"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible, expectSessionTitle } from "../utils/waits"
 import { createTwoFilesPatch } from "diff"
 
-const directory = "C:/OpenCode/TimelineStateRegression"
+const directory = "C:/OC++/TimelineStateRegression"
 const projectID = "proj_timeline_state_regression"
 const sessionID = "ses_timeline_state_regression"
 const userMessageID = "msg_user_regression"
@@ -14,7 +14,7 @@ const textPartID = `${assistantMessageID}:text:0`
 const title = "Timeline collapse state regression"
 const model = { providerID: "opencode", modelID: "claude-opus-4-6", variant: "max" }
 
-type EventPayload = OpenCodeEvent
+type EventPayload = OcppEvent
 
 declare global {
   interface Window {
@@ -365,7 +365,7 @@ function toolContent(part: typeof editPart): SessionMessageAssistant["content"][
 
 let eventSequence = -1
 
-function textEvents(): OpenCodeEvent[] {
+function textEvents(): OcppEvent[] {
   return [
     eventValue("session.text.started", { sessionID, assistantMessageID, ordinal: 0 }, 1),
     eventValue(
@@ -381,7 +381,7 @@ function textEvents(): OpenCodeEvent[] {
   ]
 }
 
-function toolEvents(part: typeof editPart): OpenCodeEvent[] {
+function toolEvents(part: typeof editPart): OcppEvent[] {
   return [
     eventValue(
       "session.tool.input.started",
@@ -429,11 +429,11 @@ function toolEvents(part: typeof editPart): OpenCodeEvent[] {
   ]
 }
 
-function eventValue<Type extends OpenCodeEvent["type"]>(
+function eventValue<Type extends OcppEvent["type"]>(
   type: Type,
-  data: Extract<OpenCodeEvent, { type: Type }>["data"],
+  data: Extract<OcppEvent, { type: Type }>["data"],
   version: 1 | 2,
-): Extract<OpenCodeEvent, { type: Type }> {
+): Extract<OcppEvent, { type: Type }> {
   eventSequence++
   return {
     id: `evt_collapse_${eventSequence}`,
@@ -442,7 +442,7 @@ function eventValue<Type extends OpenCodeEvent["type"]>(
     data,
     location: { directory },
     durable: { aggregateID: sessionID, seq: eventSequence, version },
-  } as unknown as Extract<OpenCodeEvent, { type: Type }>
+  } as unknown as Extract<OcppEvent, { type: Type }>
 }
 
 function readExpanded(element: Element) {
@@ -467,7 +467,7 @@ async function mockServer(
   messages: SessionMessageInfo[] = [userMessage, assistantMessage],
 ) {
   eventSequence = -1
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: project(),
     provider: provider(),
@@ -506,7 +506,7 @@ function provider() {
     all: [
       {
         id: "opencode",
-        name: "OpenCode",
+        name: "OC++",
         models: { "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } } },
       },
     ],

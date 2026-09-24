@@ -15,13 +15,13 @@ it.live("boots the workerd profile over durable object storage", () =>
       config: { content: "{}" },
     })
 
-    const unauthorized = yield* Effect.promise(() => handler(new Request("http://opencode.local/api/health")))
+    const unauthorized = yield* Effect.promise(() => handler(new Request("http://ocpp.local/api/health")))
     expect(unauthorized.status).toBe(401)
 
     const health = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/health", {
-          headers: { authorization: `Basic ${btoa("opencode:secret")}` },
+        new Request("http://ocpp.local/api/health", {
+          headers: { authorization: `Basic ${btoa("ocpp:secret")}` },
         }),
       ),
     )

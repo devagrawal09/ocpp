@@ -1,11 +1,11 @@
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Stream } from "effect"
-import { Agent } from "@opencode-ai/core/agent"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Skill } from "@opencode-ai/core/skill"
+import { Agent } from "@ocpp/core/agent"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Skill } from "@ocpp/core/skill"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Skill.node, Agent.node, Bus.node])))

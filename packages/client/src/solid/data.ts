@@ -33,13 +33,13 @@ import type {
   ShellInfo,
   SkillInfo,
   VcsInfo,
-  OpenCodeEvent,
-  OpenCodeClient,
+  OcppEvent,
+  OcppClient,
   WebSearchProvider,
 } from "../promise"
-import { Worktree } from "@opencode-ai/schema/worktree"
-import { SessionID } from "@opencode-ai/schema/session-id"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
+import { Worktree } from "@ocpp/schema/worktree"
+import { SessionID } from "@ocpp/schema/session-id"
+import { SessionMessage } from "@ocpp/schema/session-message"
 import {
   isFormAlreadySettledError,
   isFormNotFoundError,
@@ -47,20 +47,20 @@ import {
   type SessionPromptInput,
 } from "../promise"
 import { createStore, produce, reconcile } from "solid-js/store"
-import type { SessionInbox } from "@opencode-ai/schema/session-inbox"
+import type { SessionInbox } from "@ocpp/schema/session-inbox"
 import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 
 export type DataSessionStatus = "idle" | "running"
 
 export type CreateDataInput = {
-  readonly api: () => OpenCodeClient
+  readonly api: () => OcppClient
   readonly directory: string
   readonly event: {
-    readonly on: <Type extends OpenCodeEvent["type"]>(
+    readonly on: <Type extends OcppEvent["type"]>(
       type: Type,
-      handler: (event: Extract<OpenCodeEvent, { type: Type }>) => void,
+      handler: (event: Extract<OcppEvent, { type: Type }>) => void,
     ) => () => void
-    readonly listen: (handler: (event: { name: OpenCodeEvent["type"]; details: OpenCodeEvent }) => void) => () => void
+    readonly listen: (handler: (event: { name: OcppEvent["type"]; details: OcppEvent }) => void) => () => void
   }
   readonly connection?: {
     readonly status: () => "connected" | "connecting" | "reconnecting"
@@ -132,7 +132,7 @@ function formRequestOptions(sessionID: string, ref?: LocationRef) {
   if (sessionID !== "global" || !ref) return undefined
   return {
     headers: {
-      "x-opencode-directory": encodeURIComponent(ref.directory),
+      "x-ocpp-directory": encodeURIComponent(ref.directory),
       ...(ref.workspaceID ? { "x-opencode-workspace": ref.workspaceID } : {}),
     },
   }
@@ -524,7 +524,7 @@ export function createData(config: CreateDataInput) {
     )
   }
 
-  function handleEvent(event: OpenCodeEvent) {
+  function handleEvent(event: OcppEvent) {
     switch (event.type) {
       case "server.connected": {
         if (streamConnected)

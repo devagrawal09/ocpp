@@ -1,17 +1,17 @@
 export * as ConfigAgentPlugin from "./agent.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Document, Info, type Entry } from "@opencode-ai/schema/config"
-import { ConfigAgent } from "@opencode-ai/schema/config/agent"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Document, Info, type Entry } from "@ocpp/schema/config"
+import { ConfigAgent } from "@ocpp/schema/config/agent"
 import path from "path"
 import { Effect, Option, Schema, Stream } from "effect"
 import { Agent } from "../../agent.js"
 import { Config } from "../../config.js"
 import { ConfigMarkdown } from "../markdown.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { ConfigAgentV1 } from "../../v1/config/agent.js"
 import { ConfigMigrateV1 } from "../../v1/config/migrate.js"
-import { Global } from "@opencode-ai/util/global"
+import { Global } from "@ocpp/util/global"
 import { Permission } from "../../permission.js"
 import type { LocationMutation } from "../../location-mutation.js"
 import type { ReadTool } from "../../tool/plugin/read.js"
@@ -35,7 +35,7 @@ const pathActions = ["external_directory", "read", "edit"] as const satisfies re
 const agentKeys = new Set(["variant", ...Object.keys(ConfigAgent.Info.fields)])
 
 export const Plugin = define({
-  id: "opencode.config.agent",
+  id: "ocpp.config.agent",
   effect: Effect.fn(function* (ctx) {
     const config = yield* Config.Service
     const fs = yield* FSUtil.Service

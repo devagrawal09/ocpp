@@ -1,5 +1,5 @@
 import { sqliteTable, text } from "drizzle-orm/sqlite-core"
-import type { ExternalSession } from "@opencode-ai/schema/external-session"
+import type { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionTable } from "../session/sql.js"
 import { directoryColumn } from "../database/path.js"
 

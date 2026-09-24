@@ -6,7 +6,7 @@ import { tmpdir } from "./fixture/tmpdir"
 
 test("removes string and object package entries without replacing unrelated settings", async () => {
   await using directory = await tmpdir()
-  const file = path.join(directory.path, "opencode.jsonc")
+  const file = path.join(directory.path, "ocpp.jsonc")
   await Bun.write(
     file,
     '{\n  // retained\n  "model": "provider/model",\n  "plugins": ["remove-me", { "package": "remove-me", "options": {} }, "keep-me"]\n}\n',

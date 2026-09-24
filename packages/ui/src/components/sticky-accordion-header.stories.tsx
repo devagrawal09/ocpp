@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { Accordion } from "@opencode-ai/ui/accordion"
+import { Accordion } from "@ocpp/ui/accordion"
 import * as mod from "./sticky-accordion-header"
 
 const docs = `### Overview

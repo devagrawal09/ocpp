@@ -3,26 +3,26 @@ import path from "path"
 import { describe, expect } from "bun:test"
 import { DateTime, Deferred, Effect, Fiber, Layer, Option, PubSub, Schema, Stream } from "effect"
 import { advance, drain } from "../lib/clock"
-import { Directory, Document, Event, Info } from "@opencode-ai/schema/config"
-import { Session } from "@opencode-ai/schema/session"
-import { SessionInbox } from "@opencode-ai/schema/session-inbox"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
-import { Command } from "@opencode-ai/core/command"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigCommandPlugin } from "@opencode-ai/core/config/plugin/command"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Bus } from "@opencode-ai/core/bus"
-import { Credential } from "@opencode-ai/core/credential"
-import { WellKnown } from "@opencode-ai/core/wellknown"
-import { Global } from "@opencode-ai/util/global"
-import { AppProcess } from "@opencode-ai/util/process"
-import { Location } from "@opencode-ai/core/location"
-import { Mcp } from "@opencode-ai/core/mcp/index"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { ShellSelect } from "@opencode-ai/core/shell/select"
-import { Watcher } from "@opencode-ai/core/filesystem/watcher"
+import { Directory, Document, Event, Info } from "@ocpp/schema/config"
+import { Session } from "@ocpp/schema/session"
+import { SessionInbox } from "@ocpp/schema/session-inbox"
+import { SessionMessage } from "@ocpp/schema/session-message"
+import { Command } from "@ocpp/core/command"
+import { Config } from "@ocpp/core/config"
+import { ConfigCommandPlugin } from "@ocpp/core/config/plugin/command"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Bus } from "@ocpp/core/bus"
+import { Credential } from "@ocpp/core/credential"
+import { WellKnown } from "@ocpp/core/wellknown"
+import { Global } from "@ocpp/util/global"
+import { AppProcess } from "@ocpp/util/process"
+import { Location } from "@ocpp/core/location"
+import { Mcp } from "@ocpp/core/mcp/index"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { ShellSelect } from "@ocpp/core/shell/select"
+import { Watcher } from "@ocpp/core/filesystem/watcher"
 import { emptyCredentialNode, emptyWellknownNode } from "../fixture/config-nodes"
 import { emptyConfigLayer, emptyMcpLayer, testLocationLayer } from "../fixture/mcp"
 import { location } from "../fixture/location"
@@ -265,7 +265,7 @@ Review files`,
           )
 
           yield* configTest.emitChange({ type: "create", path: path.join(tmp.path, "notes", "todo.md") })
-          yield* configTest.emitChange({ type: "update", path: path.join(tmp.path, "opencode.json") })
+          yield* configTest.emitChange({ type: "update", path: path.join(tmp.path, "ocpp.json") })
           yield* drain
           expect(reloads).toBe(0)
 
@@ -292,7 +292,7 @@ describeNative("ConfigCommandPlugin native watcher", () => {
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
       // Watcher events report real paths, so resolve the tempdir symlink up front.
-      const tmp = yield* fs.makeTempDirectoryScoped({ prefix: "opencode-core-test-" }).pipe(Effect.flatMap(fs.realPath))
+      const tmp = yield* fs.makeTempDirectoryScoped({ prefix: "ocpp-core-test-" }).pipe(Effect.flatMap(fs.realPath))
       const global = path.join(tmp, "global")
       yield* fs.makeDirectory(path.join(global, "commands"), { recursive: true })
       yield* fs.makeDirectory(path.join(tmp, "project"))

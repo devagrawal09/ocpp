@@ -1,15 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { AIError, ImageInput, LanguageModel, LLM, LLMClient, Provider } from "@opencode-ai/ai"
-import { Route, Protocol, WebSocketTransport } from "@opencode-ai/ai/route"
-import { Provider as ProviderSubpath } from "@opencode-ai/ai/provider"
-import {
-  CloudflareAIGateway,
-  CloudflareWorkersAI,
-  OpenAI,
-  OpenAICompatible,
-  OpenRouter,
-  XAI,
-} from "@opencode-ai/ai/providers"
+import { AIError, ImageInput, LanguageModel, LLM, LLMClient, Provider } from "@ocpp/ai"
+import { Route, Protocol, WebSocketTransport } from "@ocpp/ai/route"
+import { Provider as ProviderSubpath } from "@ocpp/ai/provider"
+import { CloudflareAIGateway, CloudflareWorkersAI, OpenAI, OpenAICompatible, OpenRouter, XAI } from "@ocpp/ai/providers"
 import {
   OpenAIChat,
   OpenAICompatibleChat,
@@ -17,9 +10,9 @@ import {
   OpenAIResponses,
   OpenResponses,
   OpenResponsesChannel,
-} from "@opencode-ai/ai/protocols"
-import * as AnthropicMessages from "@opencode-ai/ai/protocols/anthropic-messages"
-import { TestLLM } from "@opencode-ai/ai/testing"
+} from "@ocpp/ai/protocols"
+import * as AnthropicMessages from "@ocpp/ai/protocols/anthropic-messages"
+import { TestLLM } from "@ocpp/ai/testing"
 
 describe("public exports", () => {
   test("root exposes app-facing runtime APIs", () => {
@@ -43,7 +36,7 @@ describe("public exports", () => {
   })
 
   test("provider barrels expose user-facing facades", async () => {
-    const { OpenAICompatibleResponses } = await import("@opencode-ai/ai/providers")
+    const { OpenAICompatibleResponses } = await import("@ocpp/ai/providers")
 
     expect(OpenAI.model).toBeFunction()
     expect(OpenAI.provider.responses).toBe(OpenAI.responses)

@@ -3,10 +3,10 @@ import type {
   CommandListOutput,
   LocationRef,
   ModelListOutput,
-  OpenCodeClient,
+  OcppClient,
   ProviderListOutput,
   SkillListOutput,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import type { RunAgent, RunCommand, RunProvider, RunReference } from "./types"
 
 type CurrentAgent = AgentListOutput["data"][number]
@@ -86,16 +86,12 @@ export function runProviders(providers: CurrentProvider[], models: CurrentModel[
   return [...grouped.values()]
 }
 
-export async function loadRunAgents(sdk: OpenCodeClient, ref: LocationRef, signal?: AbortSignal): Promise<RunAgent[]> {
+export async function loadRunAgents(sdk: OcppClient, ref: LocationRef, signal?: AbortSignal): Promise<RunAgent[]> {
   const result = await sdk.agent.list(location(ref), ...requestOptions(signal))
   return result.data.map(runAgent)
 }
 
-export async function loadRunCommands(
-  sdk: OpenCodeClient,
-  ref: LocationRef,
-  signal?: AbortSignal,
-): Promise<RunCommand[]> {
+export async function loadRunCommands(sdk: OcppClient, ref: LocationRef, signal?: AbortSignal): Promise<RunCommand[]> {
   const [commands, skills] = await Promise.all([
     sdk.command.list(location(ref), ...requestOptions(signal)),
     sdk.skill.list(location(ref), ...requestOptions(signal)),
@@ -104,7 +100,7 @@ export async function loadRunCommands(
 }
 
 export async function loadRunReferences(
-  sdk: OpenCodeClient,
+  sdk: OcppClient,
   ref: LocationRef,
   signal?: AbortSignal,
 ): Promise<RunReference[]> {
@@ -113,7 +109,7 @@ export async function loadRunReferences(
 }
 
 export async function loadRunProviders(
-  sdk: OpenCodeClient,
+  sdk: OcppClient,
   ref: LocationRef,
   signal?: AbortSignal,
 ): Promise<RunProvider[]> {

@@ -1,11 +1,11 @@
 export * as VcsGitPlugin from "./git.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { Effect } from "effect"
 import { ChildProcess } from "effect/unstable/process"
-import { FileDiff } from "@opencode-ai/schema/file-diff"
-import { Base, BranchList, FileStatus, Info, Mode } from "@opencode-ai/schema/vcs"
-import { AppProcess } from "@opencode-ai/util/process"
+import { FileDiff } from "@ocpp/schema/file-diff"
+import { Base, BranchList, FileStatus, Info, Mode } from "@ocpp/schema/vcs"
+import { AppProcess } from "@ocpp/util/process"
 import { Location } from "../../location.js"
 import type { Adapter, BranchOptions, DiffOptions } from "../../vcs.js"
 import { DiffError } from "../../vcs.js"
@@ -19,7 +19,7 @@ import {
 import type { Patch } from "../../vcs/patch.js"
 
 export const Plugin = define({
-  id: "opencode.vcs.git",
+  id: "ocpp.vcs.git",
   vcs: { id: "git", markers: [".git"] },
   effect: Effect.fn("VcsGitPlugin")(function* (ctx) {
     const location = yield* Location.Service

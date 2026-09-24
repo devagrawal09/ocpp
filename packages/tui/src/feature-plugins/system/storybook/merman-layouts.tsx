@@ -1,4 +1,4 @@
-import type { Plugin } from "@opencode-ai/plugin/tui"
+import type { Plugin } from "@ocpp/plugin/tui"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal, Show } from "solid-js"
 import { useTheme, useThemes } from "../../../context/theme"
@@ -11,10 +11,10 @@ const fixtures = [
     id: "deployment",
     title: "Deployment architecture",
     source: `flowchart LR
-  Client[OpenCode client]
+  Client[OC++ client]
 
   subgraph CF[Cloudflare]
-    DNS[opencode.ai]
+    DNS[ocpp.ai]
     Web[Console frontend Worker]
     Proxy[Console API proxy Worker]
     Infer[inference-next Worker]

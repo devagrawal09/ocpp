@@ -1,5 +1,5 @@
-import type { ReferenceGitSource, ReferenceLocalSource } from "@opencode-ai/client"
-import type { ReferenceApi } from "@opencode-ai/client/effect/api"
+import type { ReferenceGitSource, ReferenceLocalSource } from "@ocpp/client"
+import type { ReferenceApi } from "@ocpp/client/effect/api"
 import type { Effect } from "effect"
 import type { Transform } from "./registration.js"
 

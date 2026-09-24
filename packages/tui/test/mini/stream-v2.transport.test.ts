@@ -3,13 +3,13 @@ import fs from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "node:url"
 import {
-  OpenCode,
+  Ocpp,
   type EventSubscribeOutput,
   type FormInfo,
   type MessageListOutput,
-  type OpenCodeClient,
+  type OcppClient,
   type PermissionRequest,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import { createSessionTransport } from "../../src/mini/stream-v2.transport"
 import { entryBody } from "../../src/mini/entry.body"
 import type { StreamCommit } from "../../src/mini/types"
@@ -76,7 +76,7 @@ function durable(sessionID: string, seq = 0, version: 1 | 2 = 1) {
   return { aggregateID: sessionID, seq, version }
 }
 
-function promptAdmission(input: Parameters<OpenCodeClient["session"]["prompt"]>[0], sessionID = "ses_1") {
+function promptAdmission(input: Parameters<OcppClient["session"]["prompt"]>[0], sessionID = "ses_1") {
   return {
     id: input.id ?? "msg_prompt",
     sessionID,
@@ -140,10 +140,10 @@ function sdk(input: {
   globals?: FormInfo[]
   globalLocation?: { directory: string; workspaceID?: string }
   permissions?: Record<string, PermissionRequest[]>
-  pending?: Record<string, Awaited<ReturnType<OpenCodeClient["session"]["inbox"]["list"]>>>
+  pending?: Record<string, Awaited<ReturnType<OcppClient["session"]["inbox"]["list"]>>>
   wait?: () => Promise<void>
 }) {
-  const client = OpenCode.make({ baseUrl: "https://opencode.test" })
+  const client = Ocpp.make({ baseUrl: "https://ocpp.test" })
   let subscription = 0
   spyOn(client.event, "subscribe").mockImplementation(() => input.streams[subscription++]?.stream ?? feed().stream)
   spyOn(client.message, "list").mockImplementation((request) =>
@@ -922,7 +922,7 @@ describe("V2 mini transport", () => {
       thinking: false,
       footer: ui.api,
     })
-    let request: Parameters<OpenCodeClient["session"]["prompt"]>[0] | undefined
+    let request: Parameters<OcppClient["session"]["prompt"]>[0] | undefined
     spyOn(client.session, "prompt").mockImplementation((input) => {
       request = input
       queueMicrotask(() => {
@@ -1009,7 +1009,7 @@ describe("V2 mini transport", () => {
       thinking: false,
       footer: ui.api,
     })
-    let request: Parameters<OpenCodeClient["session"]["prompt"]>[0] | undefined
+    let request: Parameters<OcppClient["session"]["prompt"]>[0] | undefined
     // The generated method has conditional return types for throwOnError; this mock represents the successful branch.
     // @ts-expect-error successful SDK response is valid for both modes at runtime
     spyOn(client.session, "prompt").mockImplementation((input) => {
@@ -1097,7 +1097,7 @@ describe("V2 mini transport", () => {
       thinking: false,
       footer: ui.api,
     })
-    let request: Parameters<OpenCodeClient["session"]["prompt"]>[0] | undefined
+    let request: Parameters<OcppClient["session"]["prompt"]>[0] | undefined
     // The generated method has conditional return types for throwOnError; this mock represents the successful branch.
     // @ts-expect-error successful SDK response is valid for both modes at runtime
     spyOn(client.session, "prompt").mockImplementation((input) => {
@@ -1394,7 +1394,7 @@ describe("V2 mini transport", () => {
         cursor: {},
       })
     })
-    const current: OpenCodeClient[] = []
+    const current: OcppClient[] = []
     const ui = footer()
     const transport = await createSessionTransport({
       sdk: first,
@@ -2412,7 +2412,7 @@ describe("V2 mini transport", () => {
       thinking: false,
       footer: ui.api,
     })
-    let request: Parameters<OpenCodeClient["session"]["shell"]>[0] | undefined
+    let request: Parameters<OcppClient["session"]["shell"]>[0] | undefined
     spyOn(client.session, "shell").mockImplementation((input) => {
       request = input
       queueMicrotask(() => {
@@ -2429,7 +2429,7 @@ describe("V2 mini transport", () => {
               command: "ls",
               cwd: "/tmp",
               shell: "/bin/sh",
-              file: "/tmp/opencode-shell",
+              file: "/tmp/ocpp-shell",
               metadata: {},
               time: { started: 0 },
             },
@@ -2448,7 +2448,7 @@ describe("V2 mini transport", () => {
               command: "ls",
               cwd: "/tmp",
               shell: "/bin/sh",
-              file: "/tmp/opencode-shell",
+              file: "/tmp/ocpp-shell",
               exit: 0,
               metadata: {},
               time: { started: 0, completed: 1 },
@@ -2537,7 +2537,7 @@ describe("V2 mini transport", () => {
       thinking: false,
       footer: ui.api,
     })
-    let request: Parameters<OpenCodeClient["session"]["shell"]>[0] | undefined
+    let request: Parameters<OcppClient["session"]["shell"]>[0] | undefined
     let complete!: () => void
     spyOn(client.session, "shell").mockImplementation((input) => {
       request = input
@@ -2693,7 +2693,7 @@ describe("V2 mini transport", () => {
           command: "ls",
           cwd: "/tmp",
           shell: "/bin/sh",
-          file: "/tmp/opencode-shell",
+          file: "/tmp/ocpp-shell",
           exit: 0,
           metadata: {},
           time: { started: 0, completed: 1 },
@@ -2799,7 +2799,7 @@ describe("V2 mini transport", () => {
       thinking: false,
       footer: ui.api,
     })
-    let request: Parameters<OpenCodeClient["session"]["command"]>[0] | undefined
+    let request: Parameters<OcppClient["session"]["command"]>[0] | undefined
     spyOn(client.session, "command").mockImplementation((input) => {
       request = input
       queueMicrotask(() => {
@@ -2881,7 +2881,7 @@ describe("V2 mini transport", () => {
       thinking: false,
       footer: ui.api,
     })
-    let request: Parameters<OpenCodeClient["session"]["skill"]>[0] | undefined
+    let request: Parameters<OcppClient["session"]["skill"]>[0] | undefined
     const command = spyOn(client.session, "command")
     const prompt = spyOn(client.session, "prompt")
     spyOn(client.session, "skill").mockImplementation((input) => {
@@ -2945,7 +2945,7 @@ describe("V2 mini transport", () => {
       thinking: false,
       footer: ui.api,
     })
-    let request: Parameters<OpenCodeClient["session"]["prompt"]>[0] | undefined
+    let request: Parameters<OcppClient["session"]["prompt"]>[0] | undefined
     spyOn(client.session, "prompt").mockImplementation((input) => {
       request = input
       queueMicrotask(() => {

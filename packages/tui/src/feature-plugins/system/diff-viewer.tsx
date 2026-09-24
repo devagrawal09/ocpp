@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/solid */
-import type { FileDiffInfo, LocationRef } from "@opencode-ai/client"
-import type { Vcs } from "@opencode-ai/schema/vcs"
-import { Plugin } from "@opencode-ai/plugin/tui"
-import type { KeymapCommand, Route } from "@opencode-ai/plugin/tui/context"
+import type { FileDiffInfo, LocationRef } from "@ocpp/client"
+import type { Vcs } from "@ocpp/schema/vcs"
+import { Plugin } from "@ocpp/plugin/tui"
+import type { KeymapCommand, Route } from "@ocpp/plugin/tui/context"
 import {
   MouseButton,
   TextAttributes,
@@ -1282,7 +1282,7 @@ function Commands(props: { context: Plugin.Context }) {
 }
 
 export default Plugin.define({
-  id: "opencode.diffs",
+  id: "ocpp.diffs",
   setup(context) {
     context.ui.router.register({
       name: ROUTE,

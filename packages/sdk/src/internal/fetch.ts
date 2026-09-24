@@ -3,7 +3,7 @@ export * as OwnedFetch from "./fetch"
 export function make(handler: (request: Request) => Promise<Response>, dispose: () => Promise<void>) {
   const requests = new Set<Promise<void>>()
   const shutdown = new AbortController()
-  const closed = new Error("OpenCode host is closed")
+  const closed = new Error("OC++ host is closed")
   let closePromise: Promise<void> | undefined
   const fetch = Object.assign(
     (input: RequestInfo | URL, init?: RequestInit) => {

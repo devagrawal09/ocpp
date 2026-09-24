@@ -2,15 +2,15 @@
 title: "Config"
 ---
 
-You shouldn't have to configure OpenCode manually. Ask OpenCode to update its configuration for you.
+You shouldn't have to configure OC++ manually. Ask OC++ to update its configuration for you.
 
 ## Format
 
-OpenCode supports both **JSON** and **JSONC** (JSON with Comments) configuration files.
+OC++ supports both **JSON** and **JSONC** (JSON with Comments) configuration files.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "model": "openai/gpt-5.2-custom",
   "providers": {
     "openai": {
@@ -27,48 +27,48 @@ OpenCode supports both **JSON** and **JSONC** (JSON with Comments) configuration
 
 ## Locations
 
-OpenCode loads global configuration from:
+OC++ loads global configuration from:
 
 ```text
-~/.config/opencode/opencode.json(c)
+~/.config/ocpp/ocpp.json(c)
 ```
 
 Project-specific configuration can use either form:
 
 ```text
-/home/user/projects/my-app/opencode.json(c)
-/home/user/projects/my-app/.opencode/opencode.json(c)
+/home/user/projects/my-app/ocpp.json(c)
+/home/user/projects/my-app/.ocpp/ocpp.json(c)
 ```
 
-During ordinary project discovery, OpenCode searches for configuration files
+During ordinary project discovery, OC++ searches for configuration files
 from the current Location directory through every ancestor to the filesystem
 root, including directories above the detected project or repository root. It
-merges direct `opencode.json(c)` files from the farthest ancestor toward the
-current directory, then does the same for files inside `.opencode` directories.
-A discovered `.opencode` config therefore overrides every discovered direct
+merges direct `ocpp.json(c)` files from the farthest ancestor toward the
+current directory, then does the same for files inside `.ocpp` directories.
+A discovered `.ocpp` config therefore overrides every discovered direct
 config, even when the direct config is closer to the current directory. Avoid
 mixing the two forms across one directory hierarchy unless this precedence is
 intentional.
 
-For example, consider a monorepo with OpenCode started from
+For example, consider a monorepo with OC++ started from
 `/home/user/projects/acme/packages/web`:
 
 ```text
-~/.config/opencode/opencode.json
+~/.config/ocpp/ocpp.json
 
 /home/user/projects/acme/
-├── opencode.json
+├── ocpp.json
 └── packages/
     └── web/
-        ├── opencode.json
+        ├── ocpp.json
         └── src/
 ```
 
-OpenCode applies these files from lowest to highest precedence:
+OC++ applies these files from lowest to highest precedence:
 
-1. `~/.config/opencode/opencode.json`
-2. `/home/user/projects/acme/opencode.json`
-3. `/home/user/projects/acme/packages/web/opencode.json`
+1. `~/.config/ocpp/ocpp.json`
+2. `/home/user/projects/acme/ocpp.json`
+3. `/home/user/projects/acme/packages/web/ocpp.json`
 
 In this direct-config example, the package config overrides matching settings
 from the repository config, which overrides matching settings from the global
@@ -76,15 +76,15 @@ config. Settings that do not conflict are preserved from every file.
 
 ## Schema
 
-The complete OpenCode configuration schema is available at
-[opencode.ai/config.json](https://opencode.ai/config.json).
+The complete OC++ configuration schema is available at
+[ocpp.ai/config.json](https://ocpp.ai/config.json).
 
 Add the `$schema` field to your configuration file to enable validation and
 autocomplete in editors that support JSON Schema:
 
-```json title="opencode.json"
+```json title="ocpp.json"
 {
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://ocpp.ai/config.json"
 }
 ```
 
@@ -355,7 +355,7 @@ and cost considerations.
 
 ### Skills
 
-Add directories or URLs that OpenCode should search for agent skills.
+Add directories or URLs that OC++ should search for agent skills.
 
 ```jsonc
 {
@@ -363,7 +363,7 @@ Add directories or URLs that OpenCode should search for agent skills.
 }
 ```
 
-See the [skills guide](/skills) for skill structure and automatic discovery under `.opencode/skills/`.
+See the [skills guide](/skills) for skill structure and automatic discovery under `.ocpp/skills/`.
 
 ### Commands
 
@@ -425,7 +425,7 @@ accepts options.
 ```jsonc
 {
   "plugins": [
-    "opencode-example-plugin",
+    "ocpp-example-plugin",
     {
       "package": "./plugins/local.ts",
       "options": {

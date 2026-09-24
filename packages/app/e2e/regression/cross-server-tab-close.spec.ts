@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test"
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { currentSession } from "../utils/mock-server"
 import { installSseTransport } from "../utils/sse-transport"
 
@@ -13,9 +13,9 @@ test("closing the active server's last tab opens the remaining server tab", asyn
   await mockServers(page, requests)
   await page.addInitScript(
     ({ serverA, serverB, sessionA, sessionB }) => {
-      localStorage.setItem("opencode.global.dat:server", JSON.stringify({ list: [serverB] }))
+      localStorage.setItem("ocpp.global.dat:server", JSON.stringify({ list: [serverB] }))
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([
           { type: "session", server: serverA, sessionId: sessionA },
           { type: "session", server: serverB, sessionId: sessionB },

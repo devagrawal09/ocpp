@@ -2,7 +2,7 @@ import fuzzysort from "fuzzysort"
 import type {
   WslInstalledDistro,
   WslOnlineDistro,
-  WslOpencodeCheck,
+  WslOcppCheck,
   WslServersPlatform,
   WslServerRuntime,
   WslServersState,
@@ -24,7 +24,7 @@ export type AddServerPrimaryButton = {
   variant: "neutral" | "contrast"
   label: AddServerText
   disabled: boolean
-  action: "install-opencode" | "add" | null
+  action: "install-ocpp" | "add" | null
   loading: boolean
   width: string | null
 }
@@ -51,10 +51,10 @@ function isHiddenDistro(name: string) {
 export const wslRuntimeRetryable = (runtime: WslServerRuntime) =>
   runtime.kind === "failed" || runtime.kind === "stopped"
 
-export function wslOpencodeAction(check?: WslOpencodeCheck) {
+export function wslOcppAction(check?: WslOcppCheck) {
   if (!check) return
-  if (!check.resolvedPath) return "wsl.onboarding.installOpencode"
-  if (check.matchesDesktop === false) return "wsl.onboarding.updateOpencode"
+  if (!check.resolvedPath) return "wsl.onboarding.installOcpp"
+  if (check.matchesDesktop === false) return "wsl.onboarding.updateOcpp"
 }
 
 export function wslDistroReady(state: WslServersState | undefined, name: string) {
@@ -80,7 +80,7 @@ export function addServerViewModel(input: {
   const existingServerDistros = new Set((state?.servers ?? []).map((item) => item.config.distro))
   const addableInstalledDistros = visibleInstalledDistros.filter((item) => !existingServerDistros.has(item.name))
   const selectedDistro = addServerSelectedDistro(input.selectedDistro, visibleInstalledDistros, addableInstalledDistros)
-  const opencodeCheck = selectedDistro ? (state?.opencodeChecks[selectedDistro] ?? null) : null
+  const ocppCheck = selectedDistro ? (state?.ocppChecks[selectedDistro] ?? null) : null
   const installableDistros = addServerInstallableDistros(visibleInstalledDistros, visibleOnlineDistros)
   const filteredInstallableDistros = addServerFilteredInstallableDistros(installableDistros, input.catalogSearch)
   const catalogTarget = addServerCatalogTarget(input.catalogTarget, filteredInstallableDistros)
@@ -93,7 +93,7 @@ export function addServerViewModel(input: {
     visibleOnlineDistros,
     addableInstalledDistros,
     selectedDistro,
-    opencodeCheck,
+    ocppCheck,
     wslReady: !!state?.runtime?.available && !state?.pendingRestart,
     distroStatuses: Object.fromEntries(
       addableInstalledDistros.flatMap((item) => {
@@ -105,7 +105,7 @@ export function addServerViewModel(input: {
     primaryButton: addServerPrimaryButton({
       state,
       selectedDistro,
-      opencodeCheck,
+      ocppCheck,
       adding: input.adding,
       probingAddable: input.probingAddable,
     }),
@@ -165,16 +165,16 @@ function addServerDistroStatus(input: {
   if (!probe.hasBash || !probe.hasCurl) {
     return { label: { key: "wsl.onboarding.distroStatus.missingTools" }, tone: "warning" }
   }
-  const check = input.state?.opencodeChecks[input.name]
+  const check = input.state?.ocppChecks[input.name]
   if (!check) {
     if (input.probingAddable || (job?.kind === "probe-addable" && job.distros.includes(input.name))) {
       return checkingStatus()
     }
     return
   }
-  if (check.matchesDesktop === false) return { label: { key: "wsl.onboarding.updateOpencode" }, tone: "warning" }
-  if (!check.resolvedPath) return { label: { key: "wsl.onboarding.distroStatus.opencodeMissing" }, tone: "warning" }
-  if (check.error) return { label: { key: "wsl.onboarding.installOpencode" }, tone: "warning" }
+  if (check.matchesDesktop === false) return { label: { key: "wsl.onboarding.updateOcpp" }, tone: "warning" }
+  if (!check.resolvedPath) return { label: { key: "wsl.onboarding.distroStatus.ocppMissing" }, tone: "warning" }
+  if (check.error) return { label: { key: "wsl.onboarding.installOcpp" }, tone: "warning" }
   return { label: { key: "wsl.onboarding.distroStatus.ready" }, tone: "success" }
 }
 
@@ -185,22 +185,21 @@ function checkingStatus(): DistroStatus {
 function addServerPrimaryButton(input: {
   state: WslServersState | undefined
   selectedDistro: string | null
-  opencodeCheck: WslOpencodeCheck | null
+  ocppCheck: WslOcppCheck | null
   adding: boolean
   probingAddable: boolean
 }): AddServerPrimaryButton {
   const ready = !!input.selectedDistro && wslDistroReady(input.state, input.selectedDistro)
   const probingSelected = input.probingAddable && !addServerSelectedDistroSettled(input.state, input.selectedDistro)
-  const probingOpencode =
+  const probingOcpp =
     probingSelected ||
     (ready &&
-      (!input.opencodeCheck ||
+      (!input.ocppCheck ||
         (!!input.selectedDistro &&
           input.state?.job?.kind === "probe-addable" &&
           input.state.job.distros.includes(input.selectedDistro))))
-  const installingOpencode =
-    input.state?.job?.kind === "install-opencode" && input.state.job.distro === input.selectedDistro
-  if (!ready || probingOpencode) {
+  const installingOcpp = input.state?.job?.kind === "install-ocpp" && input.state.job.distro === input.selectedDistro
+  if (!ready || probingOcpp) {
     return {
       variant: "contrast",
       label: probingSelected ? { key: "wsl.onboarding.distroStatus.checking" } : { key: "wsl.server.add" },
@@ -210,18 +209,18 @@ function addServerPrimaryButton(input: {
       width: null,
     }
   }
-  if (!addServerOpencodeReady(input.opencodeCheck)) {
-    const update = !!input.opencodeCheck?.resolvedPath && input.opencodeCheck.matchesDesktop === false
+  if (!addServerOcppReady(input.ocppCheck)) {
+    const update = !!input.ocppCheck?.resolvedPath && input.ocppCheck.matchesDesktop === false
     return {
       variant: "neutral",
-      label: installingOpencode
-        ? { key: "wsl.onboarding.updatingOpencode" }
+      label: installingOcpp
+        ? { key: "wsl.onboarding.updatingOcpp" }
         : update
-          ? { key: "wsl.onboarding.updateOpencode" }
-          : { key: "wsl.onboarding.installOpencode" },
+          ? { key: "wsl.onboarding.updateOcpp" }
+          : { key: "wsl.onboarding.installOcpp" },
       disabled: !!input.state?.job || input.adding,
-      action: "install-opencode",
-      loading: installingOpencode,
+      action: "install-ocpp",
+      loading: installingOcpp,
       width: update ? "138px" : "129px",
     }
   }
@@ -235,7 +234,7 @@ function addServerPrimaryButton(input: {
   }
 }
 
-function addServerOpencodeReady(check: WslOpencodeCheck | null) {
+function addServerOcppReady(check: WslOcppCheck | null) {
   return !!check?.resolvedPath && check.matchesDesktop !== false && !check.error
 }
 
@@ -245,7 +244,7 @@ function addServerSelectedDistroSettled(state: WslServersState | undefined, sele
   if (installed?.version === 1) return false
   if (!state?.distroProbes[selectedDistro]) return false
   if (!wslDistroReady(state, selectedDistro)) return true
-  return !!state.opencodeChecks[selectedDistro]
+  return !!state.ocppChecks[selectedDistro]
 }
 
 function addServerInstallableDistros(installedDistros: WslInstalledDistro[], onlineDistros: WslOnlineDistro[]) {
@@ -286,7 +285,7 @@ export function addableProbePlan(input: {
   const pending = ordered.flatMap((item) => {
     if (item.version === 1) return []
     if (!state.distroProbes[item.name]) return [`distro:${item.name}`]
-    if (wslDistroReady(state, item.name) && !state.opencodeChecks[item.name]) return [`opencode:${item.name}`]
+    if (wslDistroReady(state, item.name) && !state.ocppChecks[item.name]) return [`ocpp:${item.name}`]
     return []
   })
   if (!pending.length) return

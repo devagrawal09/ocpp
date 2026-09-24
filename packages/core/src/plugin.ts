@@ -1,9 +1,9 @@
 export * as Plugin from "./plugin.js"
-export { Event, ID, Info, Source } from "@opencode-ai/schema/plugin"
+export { Event, ID, Info, Source } from "@ocpp/schema/plugin"
 
-import { Plugin } from "@opencode-ai/schema/plugin"
-import type { Plugin as PluginDefinition } from "@opencode-ai/plugin/effect/plugin"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { Plugin } from "@ocpp/schema/plugin"
+import type { Plugin as PluginDefinition } from "@ocpp/plugin/effect/plugin"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { App } from "./app.js"
 import { Cause, Context, Effect, Exit, Layer, Logger, References, Scope, Semaphore } from "effect"
 import { Agent } from "./agent.js"
@@ -40,7 +40,7 @@ export type Versioned = PluginDefinition & {
   readonly source?: Plugin.Source
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Plugin") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Plugin") {}
 
 const layer = Layer.effect(
   Service,

@@ -1,10 +1,10 @@
 export * as ServiceRegistration from "./service-registration"
 
-import { Service, type Info } from "@opencode-ai/client/effect/service"
+import { Service, type Info } from "@ocpp/client/effect/service"
 import path from "node:path"
 import { Effect, FileSystem, Schedule, Schema } from "effect"
 import { HttpServer } from "effect/unstable/http"
-import { OPENCODE_VERSION } from "../version"
+import { OCPP_VERSION } from "../version"
 
 const infoJson = Schema.fromJsonString(Service.Info)
 const encodeInfo = Schema.encodeEffect(infoJson)
@@ -22,7 +22,7 @@ export const register = Effect.fnUntraced(function* (options: {
   yield* fs.makeDirectory(path.dirname(options.file), { recursive: true })
   const info = {
     id: options.id,
-    version: OPENCODE_VERSION,
+    version: OCPP_VERSION,
     url: HttpServer.formatAddress(options.address),
     pid: process.pid,
     password: options.password,

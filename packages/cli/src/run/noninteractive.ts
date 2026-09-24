@@ -2,15 +2,15 @@ import type {
   EventSubscribeOutput,
   JsonValue,
   LocationRef,
-  OpenCodeClient,
+  OcppClient,
   SessionMessageAssistantTool,
   SessionMessageInfo,
   ToolContent,
-} from "@opencode-ai/client/promise"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
+} from "@ocpp/client/promise"
+import { SessionMessage } from "@ocpp/schema/session-message"
 import { EOL } from "node:os"
 import { readFile } from "node:fs/promises"
-import { nonEmptyToolContent, toolOutputText, type MiniToolPart } from "@opencode-ai/tui/mini/tool"
+import { nonEmptyToolContent, toolOutputText, type MiniToolPart } from "@ocpp/tui/mini/tool"
 import { UI } from "./ui"
 
 type Model = {
@@ -25,7 +25,7 @@ type File = {
 }
 
 type Input = {
-  client: OpenCodeClient
+  client: OcppClient
   sessionID: string
   location: LocationRef
   message: string
@@ -753,7 +753,7 @@ function formRequestOptions(location: LocationRef | undefined): [] | [{ headers:
   return [
     {
       headers: {
-        "x-opencode-directory": encodeURIComponent(location.directory),
+        "x-ocpp-directory": encodeURIComponent(location.directory),
         ...(location.workspaceID ? { "x-opencode-workspace": location.workspaceID } : {}),
       },
     },

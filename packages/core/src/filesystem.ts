@@ -1,14 +1,14 @@
 export * as FileSystem from "./filesystem.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import path from "path"
 import { Context, Effect, Layer, Schema } from "effect"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Location } from "./location.js"
 import { PositiveInt, RelativePath } from "./schema.js"
 import { FileSystemSearch } from "./filesystem/search.js"
-import { Entry, FileSystem, FindInput } from "@opencode-ai/schema/filesystem"
-export { Entry, Match, Submatch } from "@opencode-ai/schema/filesystem"
+import { Entry, FileSystem, FindInput } from "@ocpp/schema/filesystem"
+export { Entry, Match, Submatch } from "@ocpp/schema/filesystem"
 
 export const ReadInput = Schema.Struct({
   path: RelativePath,
@@ -55,7 +55,7 @@ export interface Interface {
   readonly find: (input: FindInput) => Effect.Effect<Entry[]>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/FileSystem") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/FileSystem") {}
 
 const baseLayer = Layer.effect(
   Service,

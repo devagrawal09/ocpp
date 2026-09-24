@@ -100,7 +100,7 @@ export function NovelTokens() {
         {/* bottom block */}
         <div>
           <div style={{ fontSize: 23, fontWeight: 600, color: c.dim, letterSpacing: 2, marginBottom: 8 }}>
-            OPENCODE GO · LAST WEEK
+            OCPP GO · LAST WEEK
           </div>
           <div
             style={{
@@ -126,7 +126,7 @@ export function NovelTokens() {
             }}
           >
             <div style={{ color: c.dim }}>{nf.format(AVG)} tokens / request · last week</div>
-            <div style={{ color: c.white }}>opencode.ai/data</div>
+            <div style={{ color: c.white }}>ocpp.ai/data</div>
           </div>
         </div>
       </div>

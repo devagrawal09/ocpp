@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { base64Encode } from "@ocpp/util/encode"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible, expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/ReviewImageFlashRegression"
+const directory = "C:/OC++/ReviewImageFlashRegression"
 const sessionID = "ses_review_image_flash_regression"
 const title = "Review image flash regression"
 const imageFile = "assets/preview.png"
@@ -27,7 +27,7 @@ test("clicking an image file in the v2 review pane does not blank the panel", as
 
 async function openReview(page: Page) {
   await page.setViewportSize({ width: 960, height: 900 })
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: "proj_review_image_flash_regression",

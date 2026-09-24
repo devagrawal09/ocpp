@@ -1,5 +1,5 @@
 import { expect } from "bun:test"
-import { Session } from "@opencode-ai/schema/session"
+import { Session } from "@ocpp/schema/session"
 import { Effect, Schema } from "effect"
 import { it } from "../../core/test/lib/effect"
 import { ServerFetch } from "../src/fetch"
@@ -16,7 +16,7 @@ const setup = Effect.gen(function* () {
   return (path: string, body?: unknown, status = 200) =>
     Effect.promise(async () => {
       const response = await handler(
-        new Request(`http://opencode.local${path}`, {
+        new Request(`http://ocpp.local${path}`, {
           method: body === undefined ? "GET" : "POST",
           headers: { "content-type": "application/json" },
           body: body === undefined ? undefined : JSON.stringify(body),

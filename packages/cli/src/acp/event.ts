@@ -1,10 +1,10 @@
 import type { AgentSideConnection, PromptResponse, SessionUpdate } from "@agentclientprotocol/sdk"
 import type {
   EventSubscribeOutput,
-  OpenCodeClient,
+  OcppClient,
   SessionMessageAssistant,
   SessionMessageInfo,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import { partsToContentChunks, type ReplayPart } from "./content"
 import { ACPError } from "./error"
 import { replyPermission, syncEditedFiles } from "./permission"
@@ -37,8 +37,8 @@ export type TurnStart =
   | { readonly type: "skill"; readonly id: string }
   | { readonly type: "compaction"; readonly id: string }
 
-export const ChildSessionUpdatesCapability = "opencode/child-session-updates"
-export const ChildSessionUpdateMethod = "opencode/session/child_update"
+export const ChildSessionUpdatesCapability = "ocpp/child-session-updates"
+export const ChildSessionUpdateMethod = "ocpp/session/child_update"
 
 type ChildSessionUpdateBase = {
   readonly rootSessionId: string
@@ -70,7 +70,7 @@ function emptyToolState(): ToolState {
 }
 
 export async function streamTurn(input: {
-  readonly client: OpenCodeClient
+  readonly client: OcppClient
   readonly connection: Connection
   readonly sessionID: string
   readonly cwd: string
@@ -402,7 +402,7 @@ function projectChildUpdate(update: SessionUpdate, child: ChildSession) {
   const projected = { ...update }
   projected._meta = {
     ...projected._meta,
-    "opencode/child-session": {
+    "ocpp/child-session": {
       id: child.id,
       parentID: child.parentID,
       depth: child.depth,
@@ -560,7 +560,7 @@ function response(
   if (error?.type === "provider.auth") throw new ACPError.AuthRequiredError()
   if (error && error.type !== "aborted" && error.type !== "provider.content-filter") {
     throw new ACPError.ServiceFailureError({
-      safeMessage: error.message || "OpenCode prompt failed",
+      safeMessage: error.message || "OC++ prompt failed",
       service: "session",
       errorName: error.type,
     })

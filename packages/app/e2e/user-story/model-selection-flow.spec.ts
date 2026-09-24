@@ -1,17 +1,17 @@
 import { expect, test } from "@playwright/test"
 import { fixture } from "../performance/timeline/session-timeline-stress.fixture"
 import { installStressSessionTabs, stressSessionHref } from "../performance/timeline/timeline-test-helpers"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
 
-const directory = "C:/OpenCode/NewProject"
+const directory = "C:/OC++/NewProject"
 
 test("creates a session in a new project and selects its model", async ({ page }) => {
   // An empty draft must remain usable when the file viewer is unavailable.
   await page.route(/(?:\/_assets\/file-(?!icon-)[^/]+\.js|\/session-ui\/src\/components\/file\.tsx)(?:\?|$)/, (route) =>
     route.abort(),
   )
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: "proj_model_selection_flow",
@@ -25,7 +25,7 @@ test("creates a session in a new project and selects its model", async ({ page }
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: {
             "free-model": {
               id: "free-model",
@@ -58,9 +58,9 @@ test("creates a session in a new project and selects its model", async ({ page }
     findFiles: () => ["NewProject"],
   })
   await page.addInitScript(() => {
-    localStorage.setItem("opencode.global.dat:server", JSON.stringify({ projects: { local: [] } }))
+    localStorage.setItem("ocpp.global.dat:server", JSON.stringify({ projects: { local: [] } }))
     localStorage.setItem(
-      "opencode.global.dat:model",
+      "ocpp.global.dat:model",
       JSON.stringify({
         user: [
           { providerID: "opencode", modelID: "free-model", visibility: "show" },
@@ -89,7 +89,7 @@ test("creates a session in a new project and selects its model", async ({ page }
   const modelControl = page.locator('[data-action="composer-model"]')
   await expect(modelControl).toContainText("Go Model 1")
   await modelControl.click()
-  await page.locator('[data-option-key="opencode:free-model"]').click()
+  await page.locator('[data-option-key="ocpp:free-model"]').click()
   await expect(modelControl).toContainText("Free Model")
 
   await modelControl.click()
@@ -107,14 +107,14 @@ test("restores each existing session's model and variant when switching tabs", a
     title: `Model ${name}`,
     model: { id: `model-${name}`, providerID: "opencode", variant: "balanced" },
   }))
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     ...fixture,
     sessions,
     provider: {
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: Object.fromEntries(
             sessions.map((session) => [
               session.model.id,

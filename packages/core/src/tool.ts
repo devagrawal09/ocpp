@@ -1,11 +1,11 @@
 export * as Tool from "./tool.js"
-export { CallID, Content, Error, FileContent, TextContent } from "@opencode-ai/schema/tool"
-export type { Context, Info, Metadata, Options, Result } from "@opencode-ai/schema/tool"
+export { CallID, Content, Error, FileContent, TextContent } from "@ocpp/schema/tool"
+export type { Context, Info, Metadata, Options, Result } from "@ocpp/schema/tool"
 
-import { ToolDefinition, type ToolCall } from "@opencode-ai/ai"
-import { Tool } from "@opencode-ai/schema/tool"
+import { ToolDefinition, type ToolCall } from "@ocpp/ai"
+import { Tool } from "@ocpp/schema/tool"
 import { Context, Effect, Layer, Result, Schema, SchemaIssue, Scope, Types } from "effect"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import type { Agent } from "./agent.js"
 import { CodeModeCatalog } from "./codemode/catalog.js"
 import { CodeModeStore } from "./codemode/store.js"
@@ -66,7 +66,7 @@ export interface Snapshot {
   }) => Effect.Effect<Tool.Result & { readonly content: ReadonlyArray<Tool.Content> }, Tool.Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Tool") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Tool") {}
 
 const layer = Layer.effect(
   Service,

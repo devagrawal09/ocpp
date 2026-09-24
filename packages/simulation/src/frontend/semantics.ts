@@ -6,7 +6,7 @@ import type { SimulationProtocol } from "../protocol"
 // from the live render tree.
 export type Definition = Omit<SimulationProtocol.Frontend.SemanticNode, "id" | "element" | "parent">
 
-const key = Symbol.for("opencode.simulation.semantics")
+const key = Symbol.for("ocpp.simulation.semantics")
 
 const bind = (definition: () => Definition) => (renderable: Renderable) => {
   Object.defineProperty(renderable, key, { value: definition, configurable: true })

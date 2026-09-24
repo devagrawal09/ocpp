@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import * as pty from "@lydell/node-pty"
-import type { WslDistroProbe, WslInstalledDistro, WslOnlineDistro, WslRuntimeCheck } from "@opencode-ai/app/wsl/types"
+import type { WslDistroProbe, WslInstalledDistro, WslOnlineDistro, WslRuntimeCheck } from "@ocpp/app/wsl/types"
 import { Effect, FileSystem, Path } from "effect"
 import { nativeT } from "../native/translations"
 import { parseCliVersion } from "../service/cli-version"
@@ -287,11 +287,11 @@ export const installWslCli = Effect.fn("Wsl.installCli")(function* (
       DEFAULT_WSL_INSTALL_TIMEOUT_MS,
     ),
   )
-  requireSuccess(result, nativeT("desktop.wsl.error.installOpencode"))
+  requireSuccess(result, nativeT("desktop.wsl.error.installOcpp"))
 })
 
 export function wslCliInstallCommand(cli: WslCliBuild) {
-  const installer = "curl -fsSL https://raw.githubusercontent.com/anomalyco/opencode/v2/install | bash -s --"
+  const installer = "curl -fsSL https://raw.githubusercontent.com/devagrawal09/oc-plus-plus/v2/install | bash -s --"
   if (!cli.binary) return `${installer} --version ${shellEscape(cli.version)}`
   return `${installer} --binary "$(wslpath -a ${shellEscape(cli.binary)})"`
 }
@@ -329,13 +329,8 @@ export async function probeWslDistro(name: string, opts?: RunWslOptions): Promis
 
 export async function resolveWslCli(distro: string, opts?: RunWslOptions) {
   return firstLine(
-    (
-      await runWslSh(
-        'if [ -x "$HOME/.opencode/bin/opencode2" ]; then printf "%s\\n" "$HOME/.opencode/bin/opencode2"; fi',
-        distro,
-        opts,
-      )
-    ).stdout,
+    (await runWslSh('if [ -x "$HOME/.ocpp/bin/ocpp" ]; then printf "%s\\n" "$HOME/.ocpp/bin/ocpp"; fi', distro, opts))
+      .stdout,
   )
 }
 

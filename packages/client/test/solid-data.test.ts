@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { getEventListeners } from "node:events"
 import { createRoot } from "solid-js"
 import { createData, type CreateDataInput } from "../src/solid"
-import { OpenCode, type OpenCodeEvent, type Project, type SessionInfo } from "../src/promise"
+import { Ocpp, type OcppEvent, type Project, type SessionInfo } from "../src/promise"
 
 const session = (viewed: number): SessionInfo => ({
   id: "ses_refresh",
@@ -19,8 +19,8 @@ test("revalidates after an event overtakes an active session read", async () => 
   const gate = new Promise<void>((resolve) => (release = resolve))
   const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
   let requests = 0
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init)
       if (!request.url.endsWith("/api/session/ses_refresh")) throw new Error(`Unexpected request: ${request.url}`)
@@ -34,10 +34,7 @@ test("revalidates after an event overtakes an active session read", async () => 
   })
   const event: CreateDataInput["event"] = {
     on:
-      <Type extends OpenCodeEvent["type"]>(
-        _type: Type,
-        _handler: (event: Extract<OpenCodeEvent, { type: Type }>) => void,
-      ) =>
+      <Type extends OcppEvent["type"]>(_type: Type, _handler: (event: Extract<OcppEvent, { type: Type }>) => void) =>
       () => {},
     listen(handler) {
       listeners.add(handler)
@@ -55,7 +52,7 @@ test("revalidates after an event overtakes an active session read", async () => 
     const initial = setup.data.session.sync("ses_refresh")
     await wait(() => requests === 1)
 
-    const viewed: OpenCodeEvent = {
+    const viewed: OcppEvent = {
       id: "evt_viewed",
       created: 2,
       type: "session.viewed",
@@ -90,8 +87,8 @@ test("updates authoritative cached project metadata from live events", async () 
     sandboxes: [],
   }
   let requests = 0
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init)
       if (!request.url.endsWith("/api/project")) throw new Error(`Unexpected request: ${request.url}`)
@@ -115,7 +112,7 @@ test("updates authoritative cached project metadata from live events", async () 
     await setup.data.project.sync()
     expect(setup.data.project.get(original.id)).toEqual(original)
 
-    const updated: OpenCodeEvent = {
+    const updated: OcppEvent = {
       id: "evt_project_renamed",
       created: 2,
       type: "project.updated",
@@ -133,7 +130,7 @@ test("updates authoritative cached project metadata from live events", async () 
     expect(setup.data.project.get(unrelated.id)).toEqual(unrelated)
     expect(requests).toBe(1)
 
-    const reset: OpenCodeEvent = {
+    const reset: OcppEvent = {
       id: "evt_project_name_reset",
       created: 3,
       type: "project.updated",
@@ -164,8 +161,8 @@ test("adopts cached directory-project sessions when their repository is resolved
     location: { directory: "/unknown-alias" },
     subpath: "app",
   }
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init)
       if (!request.url.endsWith("/api/session/ses_uncached")) throw new Error(`Unexpected request: ${request.url}`)
@@ -215,7 +212,7 @@ test("adopts cached directory-project sessions when their repository is resolved
       { id: "directory-root", canonical: "/repo" },
       { id: "directory-nested", canonical: "/repo/app" },
     ]) {
-      const updated: OpenCodeEvent = {
+      const updated: OcppEvent = {
         id: `evt_${project.id}`,
         created: 0,
         type: "project.updated",
@@ -224,7 +221,7 @@ test("adopts cached directory-project sessions when their repository is resolved
       listeners.forEach((listener) => listener({ name: updated.type, details: updated }))
     }
 
-    const resolved: OpenCodeEvent = {
+    const resolved: OcppEvent = {
       id: "evt_repository_resolved",
       created: 1,
       type: "worktree.resolved",
@@ -258,8 +255,8 @@ test("adopts cached directory-project sessions when their repository is resolved
 test("refreshes global credential events across every loaded location and workspace", async () => {
   const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
   const requests: URL[] = []
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init)
       const url = new URL(request.url)
@@ -302,7 +299,7 @@ test("refreshes global credential events across every loaded location and worksp
     )
     requests.length = 0
 
-    const updated: OpenCodeEvent = {
+    const updated: OcppEvent = {
       id: "evt_credential.updated",
       created: 1,
       type: "credential.updated",
@@ -323,7 +320,7 @@ test("refreshes global credential events across every loaded location and worksp
     requests.length = 0
 
     for (const credentialID of ["credential", null]) {
-      const switched: OpenCodeEvent = {
+      const switched: OcppEvent = {
         id: `evt_credential.switched.${credentialID}`,
         created: 2,
         type: "credential.switched",
@@ -354,8 +351,8 @@ test("refreshes global credential events across every loaded location and worksp
 
 test("reports optimistic sessions as creating until the request settles", async () => {
   const release = Promise.withResolvers<void>()
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init)
       if (!request.url.endsWith("/api/session")) throw new Error(`Unexpected request: ${request.url}`)
@@ -401,8 +398,8 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
       },
     ],
   }
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async () => Response.json({ data: [assistant], cursor: {} }),
   })
   const event: CreateDataInput["event"] = {
@@ -419,8 +416,7 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
 
   try {
     await setup.data.session.message.sync("ses_codemode")
-    const publish = (details: OpenCodeEvent) =>
-      listeners.forEach((listener) => listener({ name: details.type, details }))
+    const publish = (details: OcppEvent) => listeners.forEach((listener) => listener({ name: details.type, details }))
     publish({
       id: "evt_codemode_completed",
       created: 2,
@@ -474,16 +470,15 @@ test("refreshes a loaded Code Mode terminal after reconnect misses its event", a
   const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
   let failed = false
   let requests = 0
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init)
       const path = new URL(request.url).pathname
       if (path === "/api/session/active") return Response.json({ data: {} })
       if (path === "/api/project") return Response.json([])
       if (path === "/api/location") return Response.json({ directory: "/project" })
-      if (path === "/api/vcs")
-        return Response.json({ location: { directory: "/project" }, data: { branch: "main" } })
+      if (path === "/api/vcs") return Response.json({ location: { directory: "/project" }, data: { branch: "main" } })
       if (path !== "/api/session/ses_codemode/message") throw new Error("Unexpected request: " + path)
       requests++
       return Response.json({
@@ -535,7 +530,7 @@ test("refreshes a loaded Code Mode terminal after reconnect misses its event", a
     }),
     dispose,
   }))
-  const connected = { type: "server.connected", data: {} } satisfies OpenCodeEvent
+  const connected = { type: "server.connected", data: {} } satisfies OcppEvent
   const executionStatus = () => {
     const message = setup.data.session.message.get("ses_codemode", "msg_codemode")
     if (message?.type !== "assistant") return
@@ -576,8 +571,8 @@ test("refreshes a loaded Code Mode terminal after reconnect misses its event", a
 
 test("loads bounded message pages", async () => {
   const requests: URL[] = []
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init)
       const url = new URL(request.url)
@@ -619,8 +614,8 @@ test.each(["success", "failure", "cancel", "cancel-retry", "cancel-page", "join-
     const controller = new AbortController()
     const requests: URL[] = []
     const publications: string[][] = []
-    const api = OpenCode.make({
-      baseUrl: "http://opencode.local",
+    const api = Ocpp.make({
+      baseUrl: "http://ocpp.local",
       fetch: async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : String(input))
         requests.push(url)
@@ -728,8 +723,8 @@ test("preserves assistant content replacement events across an active message re
     { type: "text" as const, text: "replacement" },
     { type: "reasoning" as const, text: "reasoning", time: { created: 3 } },
   ]
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async () => {
       const current = ++requests
       if (current === 2) await release.promise
@@ -768,7 +763,7 @@ test("preserves assistant content replacement events across an active message re
     setup.data.session.message.invalidate("ses_refresh")
     const stale = setup.data.session.message.sync("ses_refresh")
     await wait(() => requests === 2)
-    const updated: OpenCodeEvent = {
+    const updated: OcppEvent = {
       id: "evt_message_updated",
       created: 3,
       type: "session.message.content.updated",
@@ -889,8 +884,8 @@ test("projects background user shell metadata from durable shell data", () => {
 
 function activityFixture(read: () => Response | Promise<Response>) {
   const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
-  const api = OpenCode.make({
-    baseUrl: "http://opencode.local",
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init)
       const path = new URL(request.url).pathname
@@ -912,7 +907,7 @@ function activityFixture(read: () => Response | Promise<Response>) {
         },
       },
     }),
-    emit: (details: OpenCodeEvent) => listeners.forEach((listener) => listener({ name: details.type, details })),
+    emit: (details: OcppEvent) => listeners.forEach((listener) => listener({ name: details.type, details })),
     dispose,
   }))
 }

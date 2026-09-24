@@ -12,16 +12,16 @@ import { cleanupStoreFiles } from "../storage/cleanup"
 import { registerRendererProtocol, setDockIcon } from "../windows"
 
 const appNames: Record<string, string> = {
-  dev: "OpenCode Dev",
-  beta: "OpenCode Beta",
-  prod: "OpenCode",
+  dev: "OC++ Dev",
+  beta: "OC++ Beta",
+  prod: "OC++",
 }
 const appIDs: Record<string, string> = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
+  dev: "ai.ocpp.desktop.dev",
+  beta: "ai.ocpp.desktop.beta",
+  prod: "ai.ocpp.desktop",
 }
-const testOnboarding = process.env.OPENCODE_TEST_ONBOARDING === "1"
+const testOnboarding = process.env.OCPP_TEST_ONBOARDING === "1"
 const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
 
 export const configureApplication = Effect.fn("Application.configure")(function* () {
@@ -30,16 +30,16 @@ export const configureApplication = Effect.fn("Application.configure")(function*
   try {
     process.chdir(homedir())
   } catch {}
-  process.env.OPENCODE_DISABLE_EMBEDDED_WEB_UI = "true"
+  process.env.OCPP_DISABLE_EMBEDDED_WEB_UI = "true"
 
-  const appID = app.isPackaged ? appIDs[CHANNEL] : "ai.opencode.desktop.dev"
-  app.setName(app.isPackaged ? appNames[CHANNEL] : "OpenCode Dev")
+  const appID = app.isPackaged ? appIDs[CHANNEL] : "ai.ocpp.desktop.dev"
+  app.setName(app.isPackaged ? appNames[CHANNEL] : "OC++ Dev")
   app.setAppUserModelId(appID)
   app.commandLine.appendSwitch("proxy-bypass-list", "<-loopback>")
   const features = app.commandLine.getSwitchValue("enable-features")
   app.commandLine.appendSwitch("enable-features", features ? `${jsCallStackFeature},${features}` : jsCallStackFeature)
   if (!app.isPackaged)
-    app.commandLine.appendSwitch("remote-debugging-port", process.env.OPENCODE_DESKTOP_REMOTE_DEBUGGING_PORT ?? "9222")
+    app.commandLine.appendSwitch("remote-debugging-port", process.env.OCPP_DESKTOP_REMOTE_DEBUGGING_PORT ?? "9222")
 
   const testRoot = yield* createTestRoot()
   app.setPath("userData", testRoot ? path.join(testRoot, "desktop") : path.join(app.getPath("appData"), appID))
@@ -64,9 +64,9 @@ export const preferApplicationEnvironment = Effect.gen(function* () {
     if (!shellEnv?.XDG_STATE_HOME) delete process.env.XDG_STATE_HOME
     Object.assign(process.env, {
       ...shellEnv,
-      OPENCODE_EXPERIMENTAL_ICON_DISCOVERY: "true",
-      OPENCODE_EXPERIMENTAL_FILEWATCHER: "true",
-      OPENCODE_CLIENT: "desktop",
+      OCPP_EXPERIMENTAL_ICON_DISCOVERY: "true",
+      OCPP_EXPERIMENTAL_FILEWATCHER: "true",
+      OCPP_CLIENT: "desktop",
     })
   })
 })
@@ -82,8 +82,8 @@ export const prepareDesktop = Effect.gen(function* () {
     ),
     Effect.catch((error) => Effect.logWarning("failed to clean scoped store files", { error })),
   )
-  if (app.isPackaged || process.env.OPENCODE_DESKTOP_DISABLE_PROTOCOL_REGISTRATION !== "1")
-    app.setAsDefaultProtocolClient("opencode")
+  if (app.isPackaged || process.env.OCPP_DESKTOP_DISABLE_PROTOCOL_REGISTRATION !== "1")
+    app.setAsDefaultProtocolClient("ocpp")
   yield* registerRendererProtocol()
   setDockIcon(path, paths)
 })
@@ -101,10 +101,10 @@ const createTestRoot = Effect.fn("Application.createTestRoot")(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
   const root = testOnboarding
-    ? path.join(tmpdir(), `opencode-onboarding-${randomUUID()}`)
+    ? path.join(tmpdir(), `ocpp-onboarding-${randomUUID()}`)
     : app.isPackaged
       ? undefined
-      : process.env.OPENCODE_DESKTOP_TEST_ROOT
+      : process.env.OCPP_DESKTOP_TEST_ROOT
   if (!root) return undefined
   if (testOnboarding) yield* fs.remove(root, { recursive: true, force: true })
   yield* Effect.forEach(
@@ -112,7 +112,7 @@ const createTestRoot = Effect.fn("Application.createTestRoot")(function* () {
     (dir) => fs.makeDirectory(path.join(root, dir), { recursive: true }),
     { discard: true },
   )
-  if (testOnboarding) process.env.OPENCODE_DB = ":memory:"
+  if (testOnboarding) process.env.OCPP_DB = ":memory:"
   process.env.XDG_DATA_HOME = path.join(root, "data")
   process.env.XDG_CONFIG_HOME = path.join(root, "config")
   process.env.XDG_CACHE_HOME = path.join(root, "cache")

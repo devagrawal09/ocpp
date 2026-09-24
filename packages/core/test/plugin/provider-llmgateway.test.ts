@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Integration } from "@opencode-ai/core/integration"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { LLMGatewayPlugin } from "@opencode-ai/core/plugin/provider/llmgateway"
-import { Provider } from "@opencode-ai/core/provider"
+import { Catalog } from "@ocpp/core/catalog"
+import { Integration } from "@ocpp/core/integration"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { ProviderPlugins } from "@ocpp/core/plugin/provider"
+import { LLMGatewayPlugin } from "@ocpp/core/plugin/provider/llmgateway"
+import { Provider } from "@ocpp/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -20,7 +20,7 @@ const addPlugin = Effect.fn(function* () {
 
 describe("LLMGatewayPlugin", () => {
   test("is registered so legacy referer headers can be applied", () => {
-    expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.llmgateway")
+    expect(ProviderPlugins.map((item) => item.id)).toContain("ocpp.provider.llmgateway")
   })
 
   it.effect("applies legacy referer headers only to enabled llmgateway", () =>
@@ -42,9 +42,9 @@ describe("LLMGatewayPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(Provider.ID.make("llmgateway")))?.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
-        "X-Source": "opencode",
+        "HTTP-Referer": "https://ocpp.ai/",
+        "X-Title": "ocpp",
+        "X-Source": "ocpp",
       })
       expect((yield* catalog.provider.get(Provider.ID.openrouter))?.headers).toBeUndefined()
     }),

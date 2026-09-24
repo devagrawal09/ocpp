@@ -3,9 +3,9 @@ import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
 import { Effect } from "effect"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Git } from "@opencode-ai/core/git"
-import { AbsolutePath, RelativePath } from "@opencode-ai/core/schema"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Git } from "@ocpp/core/git"
+import { AbsolutePath, RelativePath } from "@ocpp/core/schema"
 import { branch, commit, initRepo, read, withRemote } from "./fixture/git"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
@@ -223,11 +223,11 @@ describe("Git trees", () => {
         yield* Effect.promise(() => $`git --git-dir ${storage} config --local --includes core.autocrlf`.text()),
       ).toBe("false\n")
       expect(
-        (yield* Effect.promise(() => fs.readFile(path.join(storage, "config"), "utf8"))).match(/opencode\.gitconfig/g),
+        (yield* Effect.promise(() => fs.readFile(path.join(storage, "config"), "utf8"))).match(/ocpp\.gitconfig/g),
       ).toHaveLength(1)
       expect(
         yield* Effect.promise(() => $`git --git-dir ${storage} config --local --get-all include.path`.text()),
-      ).toBe("opencode.gitconfig\nfirst.gitconfig\nsecond.gitconfig\n")
+      ).toBe("ocpp.gitconfig\nfirst.gitconfig\nsecond.gitconfig\n")
       yield* git.index.refresh({ repository, scope: RelativePath.make("scope") })
       const before = yield* git.tree.write(repository)
 

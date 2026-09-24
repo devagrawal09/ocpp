@@ -2,7 +2,7 @@
 title: "Formatters"
 ---
 
-OpenCode V2 accepts formatter configuration, but it does not yet include a
+OC++ V2 accepts formatter configuration, but it does not yet include a
 formatter runtime. File writes and edits are not automatically formatted.
 
 <Callout type="warning">
@@ -14,9 +14,9 @@ formatter runtime. File writes and edits are not automatically formatted.
 
 The `formatter` field accepts a boolean or an object keyed by formatter name:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "formatter": {
     "prettier": {
       "disabled": false,

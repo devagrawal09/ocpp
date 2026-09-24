@@ -33,7 +33,7 @@ export interface TestInterface extends ClientInterface {
   readonly gate: () => Effect.Effect<Gate, never, Scope.Scope>
 }
 
-export class Test extends Context.Service<Test, TestInterface>()("@opencode/ai/TestLLM/Test") {}
+export class Test extends Context.Service<Test, TestInterface>()("@ocpp/ai/TestLLM/Test") {}
 
 /** @deprecated Use TestInterface through Test and testLayer. */
 export interface Interface {
@@ -52,7 +52,7 @@ export interface LayerOptions {
 }
 
 /** @deprecated Use Test and testLayer for normal client methods and test controls. */
-export class Service extends Context.Service<Service, Interface>()("@opencode/ai/TestLLM") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ai/TestLLM") {}
 
 export const complete = (
   options: {

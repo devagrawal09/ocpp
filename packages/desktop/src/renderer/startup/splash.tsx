@@ -1,4 +1,4 @@
-import { Splash } from "@opencode-ai/ui/logo"
+import { Splash } from "@ocpp/ui/logo"
 
 export function LoadingSplash(props: { deep: boolean }) {
   return (

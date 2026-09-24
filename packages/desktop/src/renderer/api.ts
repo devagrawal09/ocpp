@@ -1,5 +1,5 @@
 import type { ElectronAPI } from "./api-types"
-import type { UpdaterState } from "@opencode-ai/app/updater"
+import type { UpdaterState } from "@ocpp/app/updater"
 import { invoke, listen, send } from "./ipc-client"
 
 type Mutable<Value> =
@@ -40,7 +40,7 @@ export const api: ElectronAPI = {
     installWsl: () => invoke("WslInstallWsl"),
     installDistro: (name) => invoke("WslInstallDistro", { name }),
     probeAddable: (distros) => invoke("WslProbeAddable", { distros }),
-    installOpencode: (name) => invoke("WslInstallOpencode", { name }),
+    installOcpp: (name) => invoke("WslInstallOcpp", { name }),
     openTerminal: (name) => invoke("WslOpenTerminal", { name }),
     addServer: (distro) => invoke("WslAddServer", { distro }),
     removeServer: (id) => invoke("WslRemoveServer", { id }),

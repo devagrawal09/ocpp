@@ -1,8 +1,8 @@
 export * as WebSearch from "./websearch.js"
 
-import { WebSearch } from "@opencode-ai/schema/websearch"
+import { WebSearch } from "@ocpp/schema/websearch"
 import { Context, Effect, Layer, Option, Schema } from "effect"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Bus } from "./bus.js"
 import { KV } from "./kv.js"
 import { State } from "./state.js"
@@ -13,7 +13,7 @@ export type ID = WebSearch.ID
 export const Provider = WebSearch.Provider
 export type Provider = WebSearch.Provider
 
-export { Event } from "@opencode-ai/schema/websearch"
+export { Event } from "@ocpp/schema/websearch"
 
 export const Input = WebSearch.Input
 export type Input = WebSearch.Input
@@ -58,7 +58,7 @@ export interface Interface extends State.Transformable<Draft> {
   readonly query: (input: Input) => Effect.Effect<Response, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/WebSearch") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/WebSearch") {}
 
 type Data = {
   readonly providers: Map<ID, ProviderImplementation>

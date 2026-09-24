@@ -3,7 +3,7 @@
 import { $ } from "bun"
 import { mkdir, rm } from "fs/promises"
 import path from "path"
-import { Script } from "@opencode-ai/script"
+import { Script } from "@ocpp/script"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import type { BunPlugin } from "bun"
 import pkg from "../package.json"
@@ -12,7 +12,7 @@ import { verifyArtifact, verifySimulationGraph } from "./verify-artifact"
 import { resolveOpencodePty } from "./opencode-pty"
 
 const dir = path.resolve(import.meta.dirname, "..")
-const binary = "opencode2"
+const binary = "ocpp"
 const outdir = path.resolve(
   dir,
   process.argv.find((arg) => arg.startsWith("--outdir="))?.slice("--outdir=".length) ?? "dist",
@@ -66,13 +66,13 @@ if (!skipInstall)
   await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]} @opencode-ai/pty@${pkg.dependencies["@opencode-ai/pty"]}`
 const appArchive = await buildAppArchive(Script.channel, { skipBuild: skipWebUi })
 const appAssetsPlugin: BunPlugin = {
-  name: "opencode-app-assets",
+  name: "ocpp-app-assets",
   setup(build) {
-    build.onResolve({ filter: /^virtual:opencode-app-assets$/ }, () => ({
-      path: "opencode-app-assets",
-      namespace: "opencode",
+    build.onResolve({ filter: /^virtual:ocpp-app-assets$/ }, () => ({
+      path: "ocpp-app-assets",
+      namespace: "ocpp",
     }))
-    build.onLoad({ filter: /^opencode-app-assets$/, namespace: "opencode" }, () => ({
+    build.onLoad({ filter: /^ocpp-app-assets$/, namespace: "ocpp" }, () => ({
       loader: "js",
       contents: `export default ${JSON.stringify(appArchive)}`,
     }))
@@ -86,7 +86,7 @@ for (const item of targets) {
     ...(item.os === "linux" ? { libc: item.abi ?? "glibc" } : {}),
   })
   const opencodePtyPlugin: BunPlugin = {
-    name: "opencode-pty-binary",
+    name: "ocpp-pty-binary",
     setup(build) {
       build.onLoad({ filter: /persistent-pty[/\\]pty-binding\.ts$/ }, () => ({
         loader: "js",
@@ -99,7 +99,7 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
   }
   const simulationInputs = new Set<string>()
   const simulationGraphPlugin: BunPlugin = {
-    name: "opencode-simulation-graph",
+    name: "ocpp-simulation-graph",
     setup(build) {
       build.onLoad(
         { filter: /packages[/\\]simulation[/\\]src[/\\](frontend[/\\](simulation|server)|control-server)\.ts$/ },
@@ -142,10 +142,10 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
       windows: {},
     },
     define: {
-      OPENCODE_VERSION: `'${Script.version}'`,
-      OPENCODE_CLI_NAME: `'${binary}'`,
-      OPENCODE_CHANNEL: `'${Script.channel}'`,
-      OPENCODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "undefined",
+      OCPP_VERSION: `'${Script.version}'`,
+      OCPP_CLI_NAME: `'${binary}'`,
+      OCPP_CHANNEL: `'${Script.channel}'`,
+      OCPP_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "undefined",
       // FFF_LIBC selects the fff native lib variant: "musl" or "gnu".
       FFF_LIBC: item.os === "linux" ? `'${item.abi ?? "gnu"}'` : "undefined",
       ...(item.os === "linux" ? { "process.env.OPENTUI_LIBC": JSON.stringify(item.abi ?? "glibc") } : {}),
@@ -162,10 +162,10 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
     path.join(outdir, name, "package.json"),
     JSON.stringify(
       {
-        name: `@opencode-ai/${name}`,
+        name: `@ocpp/${name}`,
         version: Script.version,
         license: "MIT",
-        repository: { type: "git", url: "git+https://github.com/anomalyco/opencode.git" },
+        repository: { type: "git", url: "git+https://github.com/devagrawal09/oc-plus-plus.git" },
         os: [item.os],
         cpu: [item.arch],
       },

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import type { SessionMessageInfo } from "@ocpp/client/promise"
+import { mockOcppServer } from "../utils/mock-server"
 import { fixture } from "../performance/timeline/session-timeline-stress.fixture"
 import { expected, messages } from "../performance/timeline/session-tab-switch.fixture"
 import { installTimelineSettings, stressSessionHref } from "../performance/timeline/timeline-test-helpers"
@@ -41,7 +41,7 @@ for (const width of [1440, 390]) {
       })
       observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] })
     }, expected[fixture.sourceID].answerID)
-    await mockOpenCodeServer(page, {
+    await mockOcppServer(page, {
       sessions: fixture.sessions,
       project: fixture.project,
       provider: fixture.provider,
@@ -110,7 +110,7 @@ test("fills a short cold transcript before revealing it", async ({ page }) => {
 })
 
 async function openTimeline(page: Page, history: SessionMessageInfo[]) {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     sessions: fixture.sessions,
     project: fixture.project,
     provider: fixture.provider,

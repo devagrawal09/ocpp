@@ -1,9 +1,9 @@
 import "@pierre/trees/web-components"
 import { FileTree } from "@pierre/trees"
-import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@opencode-ai/ui/dialog"
-import { Button } from "@opencode-ai/ui/button"
-import { TextInput } from "@opencode-ai/ui/text-input"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@ocpp/ui/dialog"
+import { Button } from "@ocpp/ui/button"
+import { TextInput } from "@ocpp/ui/text-input"
+import { useDialog } from "@ocpp/ui/context/dialog"
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { useGlobal } from "@/runtime/server/runtime"
 import { useLanguage } from "@/runtime/i18n/language"
@@ -28,8 +28,8 @@ import {
   pickerRoot,
 } from "./domain"
 import "./dialog.css"
-import { Divider } from "@opencode-ai/ui/divider"
-import { getFilename } from "@opencode-ai/util/path"
+import { Divider } from "@ocpp/ui/divider"
+import { getFilename } from "@ocpp/util/path"
 
 interface DirectoryPickerDialogProps {
   title?: string

@@ -1,4 +1,4 @@
-import type { SessionMessageAssistantTool } from "@opencode-ai/client/promise"
+import type { SessionMessageAssistantTool } from "@ocpp/client/promise"
 
 export function canonicalToolPart(
   name: string,

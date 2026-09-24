@@ -1,13 +1,13 @@
 export * as ExternalAgentTool from "./external-agent.js"
 
 import { available, driver } from "#external-agents"
-import { ToolFailure } from "@opencode-ai/ai"
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { ExternalSession } from "@opencode-ai/schema/external-session"
-import { Model } from "@opencode-ai/schema/model"
-import { Provider } from "@opencode-ai/schema/provider"
-import { Hash } from "@opencode-ai/util/hash"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { ToolFailure } from "@ocpp/ai"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import { ExternalSession } from "@ocpp/schema/external-session"
+import { Model } from "@ocpp/schema/model"
+import { Provider } from "@ocpp/schema/provider"
+import { Hash } from "@ocpp/util/hash"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Cause, Effect, Schema, Stream } from "effect"
 import path from "path"
 import { Agent } from "../../agent.js"
@@ -33,7 +33,7 @@ import { SubagentCustomTool } from "./subagent-custom.js"
 export const Input = Schema.Struct({
   root: Schema.String.annotate({
     description:
-      "Existing absolute root directory for this call, including an external git worktree. Requires OpenCode permission.",
+      "Existing absolute root directory for this call, including an external git worktree. Requires OC++ permission.",
   }),
   description: Schema.String,
   message: Schema.String,
@@ -63,7 +63,7 @@ const defaults = { claude: "sonnet", codex: "gpt-5.6-sol", pi: "anthropic/claude
 
 export function make(platform: { available: typeof available; driver: typeof driver } = { available, driver }) {
   return {
-    id: "opencode.tool.external-agent",
+    id: "ocpp.tool.external-agent",
     effect: Effect.fn("ExternalAgentTool.Plugin")(function* (ctx: Context) {
       const runtime = yield* PluginRuntime.Service
       const external = yield* ExternalAgentSession.Service
@@ -106,7 +106,7 @@ export function make(platform: { available: typeof available; driver: typeof dri
               input: Input,
               output: Output,
               options: { codemode: "both", acceptsToolHandles: true },
-              description: `Run ${provider} in an OpenCode child session. Use it when the user explicitly requests this provider, preserve any requested model and effort, and never silently substitute another provider or model; report availability and authentication failures directly. Supply an absolute root plus an exact objective, relevant paths or context, constraints, and expected output in the message. For reviews, request prioritized concrete findings rather than a general endorsement. Verify factual findings before presenting them and clearly attribute them to the worker. Never poll the spawned worker for status or results: launch it once in a separate execute invocation, continue other independent work, and let its completion notification deliver the result. Pass sessionID only for real follow-up work after completion, never to check whether it is done. Private input, custom tool.define handles and outputSchema use the same machine-only contract as subagent.`,
+              description: `Run ${provider} in an OC++ child session. Use it when the user explicitly requests this provider, preserve any requested model and effort, and never silently substitute another provider or model; report availability and authentication failures directly. Supply an absolute root plus an exact objective, relevant paths or context, constraints, and expected output in the message. For reviews, request prioritized concrete findings rather than a general endorsement. Verify factual findings before presenting them and clearly attribute them to the worker. Never poll the spawned worker for status or results: launch it once in a separate execute invocation, continue other independent work, and let its completion notification deliver the result. Pass sessionID only for real follow-up work after completion, never to check whether it is done. Private input, custom tool.define handles and outputSchema use the same machine-only contract as subagent.`,
               execute: (input, context) =>
                 Effect.scoped(
                   Effect.gen(function* () {
@@ -208,7 +208,7 @@ export function make(platform: { available: typeof available; driver: typeof dri
                       record.historyHash !== Hash.sha256(JSON.stringify(history))
                     )
                       return yield* new ToolFailure({
-                        message: "OpenCode child history changed after its vendor checkpoint. Resume was refused.",
+                        message: "OC++ child history changed after its vendor checkpoint. Resume was refused.",
                       })
                     const message = [
                       input.message,

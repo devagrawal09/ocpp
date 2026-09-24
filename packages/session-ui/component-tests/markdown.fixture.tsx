@@ -3,7 +3,7 @@ import { render } from "solid-js/web"
 import { Markdown } from "../src/components/markdown"
 import { preloadMarkdown } from "../src/components/markdown-cache"
 import { MarkdownProvider } from "../src/context/markdown"
-import { OpenCode } from "@opencode-ai/client/promise"
+import { Ocpp } from "@ocpp/client/promise"
 import { readLocalImage } from "../../app/src/runtime/server/image"
 
 export {
@@ -25,9 +25,9 @@ export async function mountMarkdown(options: {
   host.dataset.testid = "markdown-fixture"
   document.body.appendChild(host)
   render(() => {
-    const api = OpenCode.make({
+    const api = Ocpp.make({
       baseUrl: location.origin,
-      headers: { Authorization: `Basic ${btoa("opencode:fixture")}` },
+      headers: { Authorization: `Basic ${btoa("ocpp:fixture")}` },
     })
     const [text, setText] = createSignal(options.text)
     const [streaming, setStreaming] = createSignal(options.streaming ?? false)

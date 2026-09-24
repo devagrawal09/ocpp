@@ -25,7 +25,7 @@ export type HttpMiddleware = (
   handler: HttpHandler,
 ) => Effect.Effect<HttpClientResponse.HttpClientResponse, Error>
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/AI/RequestExecutor") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/AI/RequestExecutor") {}
 
 const headerDetails = (headers: Headers.Headers) =>
   Object.fromEntries(Object.entries(headers).map(([name, value]) => [name, String(value)]))

@@ -1,10 +1,10 @@
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
-import { base64Encode } from "@opencode-ai/util/encode"
+import type { SessionMessageInfo } from "@ocpp/client/promise"
+import { base64Encode } from "@ocpp/util/encode"
 import { expect, test } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/SessionMessageRevert"
+const directory = "C:/OC++/SessionMessageRevert"
 const projectID = "proj_session_message_revert"
 const sessionID = "ses_session_message_revert"
 const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
@@ -46,7 +46,7 @@ const fixture = {
     all: [
       {
         id: "opencode",
-        name: "OpenCode",
+        name: "OC++",
         models: { test: { id: "test", name: "Test", variants: {}, limit: { context: 200_000 } } },
       },
     ],
@@ -58,7 +58,7 @@ const fixture = {
 
 test("reverts directly to the selected user message", async ({ page }) => {
   const staged: { sessionID: string; messageID: string }[] = []
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     ...fixture,
     sessions: [session],
     onRevertStage: (input) => staged.push(input),
@@ -81,7 +81,7 @@ test("reverts directly to the selected user message", async ({ page }) => {
 })
 
 test("hides revert actions in a child session", async ({ page }) => {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     ...fixture,
     sessions: [
       { ...session, id: "ses_parent", slug: "parent", title: "Parent session" },

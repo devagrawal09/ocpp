@@ -1,8 +1,8 @@
 import { For, Show, createSignal, onMount, splitProps, type ComponentProps, type JSX } from "solid-js"
-import { FileIcon } from "@opencode-ai/ui/file-icon"
+import { FileIcon } from "@ocpp/ui/file-icon"
 import { useI18n } from "../../context/i18n"
 import { useFilteredList } from "../../hooks"
-import { Button } from "@opencode-ai/ui/button"
+import { Button } from "@ocpp/ui/button"
 import "./line-comment.css"
 
 /** Horizontal “more” glyph for the display-card overflow control (Figma outline-dots). */

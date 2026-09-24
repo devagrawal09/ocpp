@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-APP=opencode2
+APP=ocpp
 
 MUTED='\033[0;2m'
 RED='\033[0;31m'
@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 usage() {
     cat <<EOF
-OpenCode Installer
+OC++ Installer
 
 Usage: install.sh [options]
 
@@ -20,9 +20,9 @@ Options:
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
-    curl -fsSL https://opencode.ai/v2/install | bash
-    curl -fsSL https://opencode.ai/v2/install | bash -s -- --version 0.0.0-beta-17236
-    ./install --binary /path/to/opencode2
+    curl -fsSL https://ocpp.ai/v2/install | bash
+    curl -fsSL https://ocpp.ai/v2/install | bash -s -- --version 0.0.0-beta-17236
+    ./install --binary /path/to/ocpp
 EOF
 }
 
@@ -65,7 +65,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-INSTALL_DIR=$HOME/.opencode/bin
+INSTALL_DIR=$HOME/.ocpp/bin
 mkdir -p "$INSTALL_DIR"
 
 # If --binary is provided, skip all download/detection logic
@@ -166,7 +166,7 @@ else
     fi
 
     if [ -z "$requested_version" ]; then
-        metadata=$(curl -fsSL https://registry.npmjs.org/@opencode-ai%2fcli/beta || true)
+        metadata=$(curl -fsSL https://registry.npmjs.org/@ocpp%2fcli/beta || true)
         specific_version=$(echo "$metadata" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
 
         if [ -z "$specific_version" ]; then
@@ -179,8 +179,8 @@ else
         specific_version=$requested_version
     fi
 
-    package_name="@opencode-ai/cli-$target"
-    http_status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@opencode-ai%2fcli-$target/$specific_version" || true)
+    package_name="@ocpp/cli-$target"
+    http_status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@ocpp%2fcli-$target/$specific_version" || true)
     if [ "$http_status" = "404" ]; then
         echo -e "${RED}Error: Version ${specific_version} is not available for $target${NC}"
         echo -e "${MUTED}Available versions: https://www.npmjs.com/package/$package_name?activeTab=versions${NC}"
@@ -215,7 +215,7 @@ print_message() {
 
 check_version() {
     if command -v "$APP" >/dev/null 2>&1; then
-        opencode_path=$(which "$APP")
+        ocpp_path=$(which "$APP")
 
         ## Check the installed version
         installed_version=$("$APP" --version 2>/dev/null || echo "")
@@ -272,7 +272,7 @@ download_with_progress() {
     fi
 
     local tmp_dir=${TMPDIR:-/tmp}
-    local basename="${tmp_dir}/opencode_install_$$"
+    local basename="${tmp_dir}/ocpp_install_$$"
     local tracefile="${basename}.trace"
 
     rm -f "$tracefile"
@@ -323,7 +323,7 @@ download_with_progress() {
 
 download_and_install() {
     print_message info "\n${MUTED}Installing ${NC}$APP ${MUTED}version: ${NC}$specific_version"
-    local tmp_dir="${TMPDIR:-/tmp}/opencode_install_$$"
+    local tmp_dir="${TMPDIR:-/tmp}/ocpp_install_$$"
     mkdir -p "$tmp_dir"
 
     if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
@@ -358,9 +358,9 @@ add_to_path() {
     if grep -Fxq "$command" "$config_file"; then
         print_message info "Command already exists in $config_file, skipping write."
     elif [[ -w $config_file ]]; then
-        echo -e "\n# opencode" >> "$config_file"
+        echo -e "\n# ocpp" >> "$config_file"
         echo "$command" >> "$config_file"
-        print_message info "${MUTED}Successfully added ${NC}opencode ${MUTED}to \$PATH in ${NC}$config_file"
+        print_message info "${MUTED}Successfully added ${NC}ocpp ${MUTED}to \$PATH in ${NC}$config_file"
     else
         print_message warning "Manually add the directory to $config_file (or similar):"
         print_message info "  $command"
@@ -442,11 +442,11 @@ echo -e "${MUTED}█░░█ █░░█ █▀▀▀ █░░█ ${NC}█░
 echo -e "${MUTED}▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀ ${NC}▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀"
 echo -e ""
 echo -e ""
-echo -e "${MUTED}OpenCode includes free models, to start:${NC}"
+echo -e "${MUTED}OC++ includes free models, to start:${NC}"
 echo -e ""
 echo -e "cd <project>  ${MUTED}# Open directory${NC}"
-echo -e "opencode2     ${MUTED}# Run command${NC}"
+echo -e "ocpp     ${MUTED}# Run command${NC}"
 echo -e ""
-echo -e "${MUTED}For more information visit ${NC}https://opencode.ai/v2/docs"
+echo -e "${MUTED}For more information visit ${NC}https://ocpp.ai/v2/docs"
 echo -e ""
 echo -e ""

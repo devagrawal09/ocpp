@@ -10,7 +10,7 @@ import { SettingsSurfaceProvider } from "@/settings/surface"
 import Shell from "@/shell/shell"
 import { requireServerKey } from "./session"
 
-export const File = lazy(() => import("@opencode-ai/session-ui/file").then((module) => ({ default: module.File })))
+export const File = lazy(() => import("@ocpp/session-ui/file").then((module) => ({ default: module.File })))
 const loadSessionRoute = () => Promise.all([import("@/session/route"), File.preload()]).then(([module]) => module)
 const DraftRoute = lazy(() => import("@/new-session/route").then((module) => ({ default: module.DraftRoute })))
 const TargetSessionRouteContent = lazy(() =>

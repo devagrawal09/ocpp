@@ -23,10 +23,10 @@ describe("prioritizeFavorites", () => {
 })
 
 describe("sortModelOptions", () => {
-  test("orders opencode models before other providers", () => {
+  test("orders ocpp models before other providers", () => {
     const sorted = sortModelOptions([
       { providerID: "openai", providerName: "OpenAI", releaseDate: 3, title: "GPT 5" },
-      { providerID: "opencode", providerName: "OpenCode", releaseDate: 1, title: "Claude Sonnet 4" },
+      { providerID: "opencode", providerName: "OC++", releaseDate: 1, title: "Claude Sonnet 4" },
       { providerID: "anthropic", providerName: "Anthropic", releaseDate: 2, title: "Claude Opus 4" },
     ])
 

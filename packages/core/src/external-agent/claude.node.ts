@@ -17,7 +17,7 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
   },
   async run(options) {
     const { query, createSdkMcpServer, getSessionMessages } = await import("@anthropic-ai/claude-agent-sdk")
-    const mcp = createSdkMcpServer({ name: "opencode", version: "1", tools: [] })
+    const mcp = createSdkMcpServer({ name: "ocpp", version: "1", tools: [] })
     ExternalAgentBridge.handlers(mcp.instance.server, options.gateway, options.signal)
     const controller = new AbortController()
     const abort = () => controller.abort()
@@ -26,7 +26,7 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
     const stream = query({
       prompt: [
         options.vendorSessionID === undefined && options.history.length > 0
-          ? "Restored canonical OpenCode history:\n" + ExternalAgentDriver.replay(options.history)
+          ? "Restored canonical OC++ history:\n" + ExternalAgentDriver.replay(options.history)
           : "",
         options.message,
       ]
@@ -43,7 +43,7 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
         settingSources: ["user", "project", "local"],
         permissionMode: "default",
         sandbox: { enabled: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false },
-        mcpServers: { opencode: mcp },
+        mcpServers: { ocpp: mcp },
         ...permissionHooks(options.authorize),
       },
     })

@@ -1,7 +1,7 @@
 import { Duration, Effect, Schema, Semaphore, Stream } from "effect"
 import type { Scope } from "effect"
-import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/effect/integration"
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import type { IntegrationOAuthMethodRegistration } from "@ocpp/plugin/effect/integration"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { Bus } from "../../bus.js"
 import { Credential } from "../../credential.js"
@@ -9,7 +9,7 @@ import { Integration } from "../../integration.js"
 import { Model } from "../../model.js"
 import { Provider } from "../../provider.js"
 import { ConfigProviderV1 } from "../../v1/config/provider.js"
-import { Money } from "@opencode-ai/schema/money"
+import { Money } from "@ocpp/schema/money"
 import { ConfigProviderOptionsV1 } from "../../v1/config/provider-options.js"
 import { ConfigV1 } from "../../v1/config/config.js"
 
@@ -83,7 +83,7 @@ function oauth(http: HttpClient.HttpClient) {
 }
 
 export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Scope.Scope>({
-  id: "opencode.provider.opencode",
+  id: "ocpp.provider.opencode",
   effect: Effect.fn(function* (ctx) {
     const bus = yield* Bus.Service
     const http = yield* HttpClient.HttpClient

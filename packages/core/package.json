@@ -1,12 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "version": "1.18.4",
-  "name": "@opencode-ai/core",
+  "name": "@ocpp/core",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
+    "url": "git+https://github.com/devagrawal09/oc-plus-plus.git",
     "directory": "packages/core"
   },
   "publishConfig": {
@@ -101,7 +101,7 @@
     "@parcel/watcher-linux-x64-musl": "2.5.1",
     "@parcel/watcher-win32-arm64": "2.5.1",
     "@parcel/watcher-win32-x64": "2.5.1",
-    "@opencode-ai/http-recorder": "workspace:*",
+    "@ocpp/http-recorder": "workspace:*",
     "drizzle-kit": "catalog:"
   },
   "dependencies": {
@@ -123,12 +123,12 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "@ff-labs/fff-bun": "0.10.5",
     "@ff-labs/fff-node": "0.10.5",
-    "@opencode-ai/codemode": "workspace:*",
-    "@opencode-ai/ai": "workspace:*",
+    "@ocpp/codemode": "workspace:*",
+    "@ocpp/ai": "workspace:*",
     "@opencode-ai/pty": "0.1.13",
-    "@opencode-ai/schema": "workspace:*",
-    "@opencode-ai/plugin": "workspace:*",
-    "@opencode-ai/util": "workspace:*",
+    "@ocpp/schema": "workspace:*",
+    "@ocpp/plugin": "workspace:*",
+    "@ocpp/util": "workspace:*",
     "@standard-schema/spec": "catalog:",
     "@parcel/watcher": "2.5.1",
     "@silvia-odwyer/photon-node": "0.3.4",

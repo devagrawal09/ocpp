@@ -75,7 +75,7 @@ function getLoads() {
 
 const cache = new Map<SoundID, Promise<string | undefined>>()
 const claimed = new Set<string>()
-const CLAIMED_STORAGE_KEY = "opencode:notification-sounds"
+const CLAIMED_STORAGE_KEY = "ocpp:notification-sounds"
 const MAX_CLAIMED = 500
 
 export function soundSrc(id: string | undefined) {

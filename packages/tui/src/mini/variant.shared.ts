@@ -3,7 +3,7 @@
 // Variants are provider-specific reasoning effort levels (e.g., "high", "max").
 // Resolution priority: CLI --variant flag > valid session history > saved preference.
 //
-// The saved variant persists across sessions in ~/.local/state/opencode/model.json
+// The saved variant persists across sessions in ~/.local/state/ocpp/model.json
 // so your last-used variant sticks. Cycling (ctrl+t) updates both the active
 // variant and the persisted file.
 import { createSession, sessionVariant, type RunSession, type SessionMessages } from "./session.shared"

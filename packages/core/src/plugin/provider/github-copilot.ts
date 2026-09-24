@@ -1,4 +1,4 @@
-import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/effect/integration"
+import type { IntegrationOAuthMethodRegistration } from "@ocpp/plugin/effect/integration"
 import { Effect, Option, Schema, Semaphore, Stream } from "effect"
 import { Catalog } from "../../catalog.js"
 import { Credential } from "../../credential.js"
@@ -8,7 +8,7 @@ import { App } from "../../app.js"
 import { Agent } from "../../agent.js"
 import { Integration } from "../../integration.js"
 import { Model } from "../../model.js"
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { Provider } from "../../provider.js"
 import type { PluginInternal } from "../internal.js"
 
@@ -146,7 +146,7 @@ const oauth = (app: App.Info) =>
   }) satisfies IntegrationOAuthMethodRegistration
 
 export const GithubCopilotPlugin = define({
-  id: "opencode.provider.github.copilot",
+  id: "ocpp.provider.github.copilot",
   effect: Effect.fn(function* (ctx) {
     const catalog = yield* Catalog.Service
     const bus = yield* Bus.Service

@@ -1,5 +1,5 @@
-import { Delegation } from "@opencode-ai/schema/delegation"
-import type { SessionInboxEnqueued, SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client"
+import { Delegation } from "@ocpp/schema/delegation"
+import type { SessionInboxEnqueued, SessionMessageAssistant, SessionMessageInfo } from "@ocpp/client"
 import { createEffect, on, onCleanup, type Accessor } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useConfig } from "../../config"
@@ -359,9 +359,7 @@ export function turnDuration(message: SessionMessageAssistant, messages: Session
 export function turnTokensPerSecond(message: SessionMessageAssistant, messages: SessionMessageInfo[]) {
   const index = messages.findIndex((item) => item.id === message.id)
   const end = index === -1 ? messages.length : index + 1
-  const start = messages
-    .slice(0, end)
-    .findLastIndex((item) => item.type === "user" || item.type === "synthetic")
+  const start = messages.slice(0, end).findLastIndex((item) => item.type === "user" || item.type === "synthetic")
   const steps = messages
     .slice(start + 1, end)
     .filter((item): item is SessionMessageAssistant => item.type === "assistant")

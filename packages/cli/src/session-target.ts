@@ -1,5 +1,5 @@
-import type { LocationGetOutput, ModelRef, OpenCodeClient, SessionInfo } from "@opencode-ai/client/promise"
-import { Model } from "@opencode-ai/schema/model"
+import type { LocationGetOutput, ModelRef, OcppClient, SessionInfo } from "@ocpp/client/promise"
+import { Model } from "@ocpp/schema/model"
 
 const SESSION_PAGE_LIMIT = 50
 
@@ -12,7 +12,7 @@ export type SessionTarget = {
 }
 
 export type SessionTargetPreparation = (input: {
-  client: OpenCodeClient
+  client: OcppClient
   location: LocationGetOutput
   session: SessionInfo | undefined
   model: ModelRef | undefined
@@ -29,7 +29,7 @@ export class SessionTargetMutationError extends Error {
 }
 
 export async function resolveSessionTarget(input: {
-  client: OpenCodeClient
+  client: OcppClient
   location?: { directory?: string; workspace?: string }
   continue?: boolean
   session?: string
@@ -93,7 +93,7 @@ export function parseSessionTargetModel(value?: string): ModelRef | undefined {
 }
 
 async function selectSession(input: {
-  client: OpenCodeClient
+  client: OcppClient
   location?: { directory?: string; workspace?: string }
   continue?: boolean
   session?: string
@@ -135,7 +135,7 @@ async function selectSession(input: {
 }
 
 async function latestSession(
-  client: OpenCodeClient,
+  client: OcppClient,
   location: LocationGetOutput,
   cursor?: string,
   signal?: AbortSignal,
@@ -161,7 +161,7 @@ async function latestSession(
 }
 
 function resolveLocation(
-  client: OpenCodeClient,
+  client: OcppClient,
   location?: { directory?: string; workspace?: string },
   signal?: AbortSignal,
 ) {

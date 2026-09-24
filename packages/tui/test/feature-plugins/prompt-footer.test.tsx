@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test"
 import { RGBA, TextRenderable } from "@opentui/core"
 import { testRender } from "@opentui/solid"
-import type { Context } from "@opencode-ai/plugin/tui/context"
+import type { Context } from "@ocpp/plugin/tui/context"
 import { PromptFooter } from "../../src/feature-plugins/prompt/footer"
 
 test("prompt footer separates simultaneous subagent, shell, and usage status", async () => {

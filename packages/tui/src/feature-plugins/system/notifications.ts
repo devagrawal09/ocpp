@@ -1,5 +1,5 @@
-import { Plugin } from "@opencode-ai/plugin/tui"
-import type { AttentionSoundName } from "@opencode-ai/plugin/tui/context"
+import { Plugin } from "@ocpp/plugin/tui"
+import type { AttentionSoundName } from "@ocpp/plugin/tui/context"
 
 function notify(
   context: Plugin.Context,
@@ -19,7 +19,7 @@ function notify(
 }
 
 export default Plugin.define({
-  id: "opencode.notifications",
+  id: "ocpp.notifications",
   setup(context) {
     const errored = new Set<string>()
     const terminal = new Set<string>()

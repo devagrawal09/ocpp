@@ -1,17 +1,17 @@
 import { describe, expect } from "bun:test"
-import { LLM, LanguageModel, Message } from "@opencode-ai/ai"
-import { OpenAIChat } from "@opencode-ai/ai/protocols"
-import { compileRequest } from "@opencode-ai/ai/route/client"
+import { LLM, LanguageModel, Message } from "@ocpp/ai"
+import { OpenAIChat } from "@ocpp/ai/protocols"
+import { compileRequest } from "@ocpp/ai/route/client"
 import { ConfigProvider, Effect, Layer } from "effect"
 import { Headers } from "effect/unstable/http"
-import { Credential } from "@opencode-ai/core/credential"
-import { Integration } from "@opencode-ai/core/integration"
-import { Compatibility, ID, Info, VariantID } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
-import { ModelResolver } from "@opencode-ai/core/model-resolver"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { AISDK } from "@opencode-ai/core/aisdk"
-import { Npm } from "@opencode-ai/util/npm"
+import { Credential } from "@ocpp/core/credential"
+import { Integration } from "@ocpp/core/integration"
+import { Compatibility, ID, Info, VariantID } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
+import { ModelResolver } from "@ocpp/core/model-resolver"
+import { Catalog } from "@ocpp/core/catalog"
+import { AISDK } from "@ocpp/core/aisdk"
+import { Npm } from "@ocpp/util/npm"
 import { it } from "./lib/effect"
 
 interface ModelOptions {
@@ -293,7 +293,7 @@ describe("ModelResolver", () => {
         settings: { baseURL: "https://mistral.example.com/v1" },
         headers: { "cf-access-token": "access-token" },
       }),
-      model("@opencode-ai/ai/providers/mistral", {
+      model("@ocpp/ai/providers/mistral", {
         providerID: Provider.ID.make("gateway"),
         settings: { baseURL: "https://native-mistral.example.com/v1" },
         headers: { "cf-access-token": "access-token" },
@@ -681,7 +681,7 @@ describe("ModelResolver", () => {
   it.effect("applies plugin-projected OpenAI endpoint and headers", () =>
     Effect.gen(function* () {
       const resolved = yield* ModelResolver.fromCatalogModel(
-        model("@opencode-ai/ai/providers/openai", {
+        model("@ocpp/ai/providers/openai", {
           settings: { baseURL: "https://chatgpt.com/backend-api/codex" },
           headers: { "chatgpt-account-id": "acct_123" },
           body: {},
@@ -731,7 +731,7 @@ describe("ModelResolver", () => {
   it.effect("does not route native OpenAI-compatible packages to the codex backend", () =>
     Effect.gen(function* () {
       const resolved = yield* ModelResolver.fromCatalogModel(
-        model("@opencode-ai/ai/providers/openai-compatible", {
+        model("@ocpp/ai/providers/openai-compatible", {
           settings: { baseURL: "https://compatible.example/v1" },
         }),
         Credential.OAuth.make({
@@ -804,7 +804,7 @@ describe("ModelResolver", () => {
         }),
       )
       const resolved = yield* ModelResolver.fromCatalogModel(
-        model("@opencode-ai/ai/providers/custom", {
+        model("@ocpp/ai/providers/custom", {
           settings: { region: "test" },
           headers: { "x-package": "header" },
           body: { custom: true },
@@ -812,7 +812,7 @@ describe("ModelResolver", () => {
         undefined,
         {
           loadPackage: (specifier) => {
-            expect(specifier).toBe("@opencode-ai/ai/providers/custom")
+            expect(specifier).toBe("@ocpp/ai/providers/custom")
             return Effect.succeed({
               model: (modelID, settings) => {
                 expect(modelID).toBe("api-test-model")
@@ -847,13 +847,13 @@ describe("ModelResolver", () => {
         expires: Date.now() + 60_000,
       })
       const packages = [
-        ["@opencode-ai/ai/providers/google-vertex", "accessToken"],
-        ["@opencode-ai/ai/providers/google-vertex/gemini", "accessToken"],
-        ["@opencode-ai/ai/providers/google-vertex/chat", "accessToken"],
-        ["@opencode-ai/ai/providers/google-vertex/responses", "accessToken"],
-        ["@opencode-ai/ai/providers/google-vertex/messages", "accessToken"],
-        ["@opencode-ai/ai/providers/anthropic", "authToken"],
-        ["@opencode-ai/ai/providers/anthropic-compatible", "authToken"],
+        ["@ocpp/ai/providers/google-vertex", "accessToken"],
+        ["@ocpp/ai/providers/google-vertex/gemini", "accessToken"],
+        ["@ocpp/ai/providers/google-vertex/chat", "accessToken"],
+        ["@ocpp/ai/providers/google-vertex/responses", "accessToken"],
+        ["@ocpp/ai/providers/google-vertex/messages", "accessToken"],
+        ["@ocpp/ai/providers/anthropic", "authToken"],
+        ["@ocpp/ai/providers/anthropic-compatible", "authToken"],
       ] as const
 
       yield* Effect.forEach(packages, ([specifier, key]) =>
@@ -877,7 +877,7 @@ describe("ModelResolver", () => {
       const packages = [
         [
           "@ai-sdk/openai",
-          "@opencode-ai/ai/providers/openai",
+          "@ocpp/ai/providers/openai",
           {
             reasoningEffort: "xhigh",
             reasoningSummary: "auto",
@@ -891,55 +891,45 @@ describe("ModelResolver", () => {
         ],
         [
           "@ai-sdk/anthropic",
-          "@opencode-ai/ai/providers/anthropic",
+          "@ocpp/ai/providers/anthropic",
           { thinking: { type: "adaptive", display: "summarized" }, effort: "high" },
           { thinking: { type: "adaptive", display: "summarized" }, effort: "high" },
         ],
-        [
-          "@ai-sdk/cerebras",
-          "@opencode-ai/ai/providers/cerebras",
-          { reasoningEffort: "high" },
-          { reasoningEffort: "high" },
-        ],
-        [
-          "@ai-sdk/deepinfra",
-          "@opencode-ai/ai/providers/deepinfra",
-          { reasoningEffort: "none" },
-          { reasoningEffort: "none" },
-        ],
+        ["@ai-sdk/cerebras", "@ocpp/ai/providers/cerebras", { reasoningEffort: "high" }, { reasoningEffort: "high" }],
+        ["@ai-sdk/deepinfra", "@ocpp/ai/providers/deepinfra", { reasoningEffort: "none" }, { reasoningEffort: "none" }],
         [
           "@ai-sdk/openai-compatible",
-          "@opencode-ai/ai/providers/openai-compatible",
+          "@ocpp/ai/providers/openai-compatible",
           { reasoningEffort: "high" },
           { reasoningEffort: "high" },
         ],
         [
           "@ai-sdk/google",
-          "@opencode-ai/ai/providers/google",
+          "@ocpp/ai/providers/google",
           { thinkingConfig: { thinkingLevel: "high" } },
           { thinkingConfig: { thinkingLevel: "high" } },
         ],
         [
           "@ai-sdk/google-vertex",
-          "@opencode-ai/ai/providers/google-vertex",
+          "@ocpp/ai/providers/google-vertex",
           { thinkingConfig: { thinkingLevel: "high" } },
           { thinkingConfig: { thinkingLevel: "high" } },
         ],
         [
           "@openrouter/ai-sdk-provider",
-          "@opencode-ai/ai/providers/openrouter",
+          "@ocpp/ai/providers/openrouter",
           { reasoning: { effort: "high" } },
           { reasoning: { effort: "high" } },
         ],
         [
           "@ai-sdk/groq",
-          "@opencode-ai/ai/providers/groq",
+          "@ocpp/ai/providers/groq",
           { reasoningEffort: "high", parallelToolCalls: false },
           { reasoningEffort: "high", parallelToolCalls: false },
         ],
         [
           "@ai-sdk/mistral",
-          "@opencode-ai/ai/providers/mistral",
+          "@ocpp/ai/providers/mistral",
           {
             safePrompt: true,
             documentImageLimit: 4,
@@ -957,11 +947,11 @@ describe("ModelResolver", () => {
         ],
         [
           "@ai-sdk/togetherai",
-          "@opencode-ai/ai/providers/togetherai",
+          "@ocpp/ai/providers/togetherai",
           { reasoningEffort: "high" },
           { reasoningEffort: "high" },
         ],
-        ["@ai-sdk/xai", "@opencode-ai/ai/providers/xai", { reasoningEffort: "high" }, { reasoningEffort: "high" }],
+        ["@ai-sdk/xai", "@ocpp/ai/providers/xai", { reasoningEffort: "high" }, { reasoningEffort: "high" }],
       ] as const
 
       yield* Effect.forEach(packages, ([catalogPackage, nativePackage, sourceOptions, providerOptions]) =>
@@ -1000,26 +990,22 @@ describe("ModelResolver", () => {
   it.effect("never loads the AI SDK for packages with native implementations", () =>
     Effect.gen(function* () {
       const packages = [
-        ["@ai-sdk/anthropic", "@opencode-ai/ai/providers/anthropic", "api-model"],
-        ["@ai-sdk/amazon-bedrock", "@opencode-ai/ai/providers/amazon-bedrock", "api-model"],
-        [
-          "@ai-sdk/amazon-bedrock/mantle",
-          "@opencode-ai/ai/providers/amazon-bedrock/mantle/responses",
-          "openai.gpt-oss-120b",
-        ],
-        ["@ai-sdk/azure", "@opencode-ai/ai/providers/azure/responses", "api-model"],
-        ["@ai-sdk/cerebras", "@opencode-ai/ai/providers/cerebras", "api-model"],
-        ["@ai-sdk/deepinfra", "@opencode-ai/ai/providers/deepinfra", "api-model"],
-        ["@ai-sdk/google", "@opencode-ai/ai/providers/google", "api-model"],
-        ["@ai-sdk/google-vertex", "@opencode-ai/ai/providers/google-vertex", "api-model"],
-        ["@ai-sdk/google-vertex/anthropic", "@opencode-ai/ai/providers/google-vertex/messages", "claude-sonnet-4-6"],
-        ["@ai-sdk/groq", "@opencode-ai/ai/providers/groq", "api-model"],
-        ["@ai-sdk/mistral", "@opencode-ai/ai/providers/mistral", "api-model"],
-        ["@ai-sdk/openai", "@opencode-ai/ai/providers/openai", "api-model"],
-        ["@ai-sdk/openai-compatible", "@opencode-ai/ai/providers/openai-compatible", "api-model"],
-        ["@openrouter/ai-sdk-provider", "@opencode-ai/ai/providers/openrouter", "api-model"],
-        ["@ai-sdk/togetherai", "@opencode-ai/ai/providers/togetherai", "api-model"],
-        ["@ai-sdk/xai", "@opencode-ai/ai/providers/xai", "api-model"],
+        ["@ai-sdk/anthropic", "@ocpp/ai/providers/anthropic", "api-model"],
+        ["@ai-sdk/amazon-bedrock", "@ocpp/ai/providers/amazon-bedrock", "api-model"],
+        ["@ai-sdk/amazon-bedrock/mantle", "@ocpp/ai/providers/amazon-bedrock/mantle/responses", "openai.gpt-oss-120b"],
+        ["@ai-sdk/azure", "@ocpp/ai/providers/azure/responses", "api-model"],
+        ["@ai-sdk/cerebras", "@ocpp/ai/providers/cerebras", "api-model"],
+        ["@ai-sdk/deepinfra", "@ocpp/ai/providers/deepinfra", "api-model"],
+        ["@ai-sdk/google", "@ocpp/ai/providers/google", "api-model"],
+        ["@ai-sdk/google-vertex", "@ocpp/ai/providers/google-vertex", "api-model"],
+        ["@ai-sdk/google-vertex/anthropic", "@ocpp/ai/providers/google-vertex/messages", "claude-sonnet-4-6"],
+        ["@ai-sdk/groq", "@ocpp/ai/providers/groq", "api-model"],
+        ["@ai-sdk/mistral", "@ocpp/ai/providers/mistral", "api-model"],
+        ["@ai-sdk/openai", "@ocpp/ai/providers/openai", "api-model"],
+        ["@ai-sdk/openai-compatible", "@ocpp/ai/providers/openai-compatible", "api-model"],
+        ["@openrouter/ai-sdk-provider", "@ocpp/ai/providers/openrouter", "api-model"],
+        ["@ai-sdk/togetherai", "@ocpp/ai/providers/togetherai", "api-model"],
+        ["@ai-sdk/xai", "@ocpp/ai/providers/xai", "api-model"],
       ] as const
 
       yield* Effect.forEach(packages, ([catalogPackage, nativePackage, modelID]) =>
@@ -1067,7 +1053,7 @@ describe("ModelResolver", () => {
         credential,
         {
           loadPackage: (specifier) => {
-            expect(specifier).toBe("@opencode-ai/ai/providers/google-vertex/messages")
+            expect(specifier).toBe("@ocpp/ai/providers/google-vertex/messages")
             return Effect.succeed({
               model: (modelID, settings) => {
                 expect(modelID).toBe("claude-sonnet-4-6")
@@ -1096,8 +1082,8 @@ describe("ModelResolver", () => {
     ModelResolver.fromCatalogModel(
       model(Provider.aisdk("@openrouter/ai-sdk-provider"), {
         settings: {
-          appName: "OpenCode",
-          appUrl: "https://opencode.ai",
+          appName: "OC++",
+          appUrl: "https://ocpp.ai",
           extraBody: { transforms: ["middle-out"], provider: { sort: "price" } },
         },
         headers: { "X-OpenRouter-Title": "Custom" },
@@ -1109,7 +1095,7 @@ describe("ModelResolver", () => {
           Effect.succeed({
             model: (modelID, settings) => {
               expect(settings.headers).toEqual({
-                "HTTP-Referer": "https://opencode.ai",
+                "HTTP-Referer": "https://ocpp.ai",
                 "X-OpenRouter-Title": "Custom",
               })
               expect(settings.body).toEqual({
@@ -1384,7 +1370,7 @@ describe("ModelResolver", () => {
   it.effect("reports whether a catalog model declares a provider package", () =>
     Effect.sync(() => {
       expect(ModelResolver.hasPackage(model(Provider.aisdk("@ai-sdk/openai")))).toBe(true)
-      expect(ModelResolver.hasPackage(model("@opencode-ai/ai/providers/custom"))).toBe(true)
+      expect(ModelResolver.hasPackage(model("@ocpp/ai/providers/custom"))).toBe(true)
       expect(ModelResolver.hasPackage(model(undefined))).toBe(false)
     }),
   )

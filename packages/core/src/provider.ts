@@ -1,12 +1,12 @@
 export * as Provider from "./provider.js"
 
 import { Effect, Schema } from "effect"
-import { Provider } from "@opencode-ai/schema/provider"
-import type { ProviderPackageDefinition } from "@opencode-ai/ai"
-import { isRecord } from "@opencode-ai/ai/utils/record"
-import { Npm } from "@opencode-ai/util/npm"
+import { Provider } from "@ocpp/schema/provider"
+import type { ProviderPackageDefinition } from "@ocpp/ai"
+import { isRecord } from "@ocpp/ai/utils/record"
+import { Npm } from "@ocpp/util/npm"
 import type { DeepMutable } from "./schema.js"
-import { importModule, resolveModule } from "@opencode-ai/util/runtime-import"
+import { importModule, resolveModule } from "@ocpp/util/runtime-import"
 
 export const ID = Provider.ID
 export type ID = typeof ID.Type
@@ -34,50 +34,41 @@ export type ProviderPackage = ProviderPackageDefinition
 
 const packages = new Map<string, Promise<unknown>>()
 const builtins = new Map<string, () => Promise<unknown>>([
-  ["@opencode-ai/ai/providers/amazon-bedrock", () => import("@opencode-ai/ai/providers/amazon-bedrock")],
-  ["@opencode-ai/ai/providers/amazon-bedrock/mantle", () => import("@opencode-ai/ai/providers/amazon-bedrock/mantle")],
+  ["@ocpp/ai/providers/amazon-bedrock", () => import("@ocpp/ai/providers/amazon-bedrock")],
+  ["@ocpp/ai/providers/amazon-bedrock/mantle", () => import("@ocpp/ai/providers/amazon-bedrock/mantle")],
+  ["@ocpp/ai/providers/amazon-bedrock/mantle/chat", () => import("@ocpp/ai/providers/amazon-bedrock/mantle/chat")],
   [
-    "@opencode-ai/ai/providers/amazon-bedrock/mantle/chat",
-    () => import("@opencode-ai/ai/providers/amazon-bedrock/mantle/chat"),
+    "@ocpp/ai/providers/amazon-bedrock/mantle/responses",
+    () => import("@ocpp/ai/providers/amazon-bedrock/mantle/responses"),
   ],
-  [
-    "@opencode-ai/ai/providers/amazon-bedrock/mantle/responses",
-    () => import("@opencode-ai/ai/providers/amazon-bedrock/mantle/responses"),
-  ],
-  ["@opencode-ai/ai/providers/anthropic", () => import("@opencode-ai/ai/providers/anthropic")],
-  ["@opencode-ai/ai/providers/azure", () => import("@opencode-ai/ai/providers/azure")],
-  ["@opencode-ai/ai/providers/azure/chat", () => import("@opencode-ai/ai/providers/azure/chat")],
-  ["@opencode-ai/ai/providers/azure/responses", () => import("@opencode-ai/ai/providers/azure/responses")],
-  ["@opencode-ai/ai/providers/cerebras", () => import("@opencode-ai/ai/providers/cerebras")],
-  ["@opencode-ai/ai/providers/deepinfra", () => import("@opencode-ai/ai/providers/deepinfra")],
-  ["@opencode-ai/ai/providers/google", () => import("@opencode-ai/ai/providers/google")],
-  ["@opencode-ai/ai/providers/google-vertex", () => import("@opencode-ai/ai/providers/google-vertex")],
-  ["@opencode-ai/ai/providers/google-vertex/gemini", () => import("@opencode-ai/ai/providers/google-vertex/gemini")],
-  ["@opencode-ai/ai/providers/google-vertex/chat", () => import("@opencode-ai/ai/providers/google-vertex/chat")],
-  [
-    "@opencode-ai/ai/providers/google-vertex/responses",
-    () => import("@opencode-ai/ai/providers/google-vertex/responses"),
-  ],
-  [
-    "@opencode-ai/ai/providers/google-vertex/messages",
-    () => import("@opencode-ai/ai/providers/google-vertex/messages"),
-  ],
-  ["@opencode-ai/ai/providers/groq", () => import("@opencode-ai/ai/providers/groq")],
-  ["@opencode-ai/ai/providers/mistral", () => import("@opencode-ai/ai/providers/mistral")],
-  ["@opencode-ai/ai/providers/openai", () => import("@opencode-ai/ai/providers/openai")],
-  ["@opencode-ai/ai/providers/openai/chat", () => import("@opencode-ai/ai/providers/openai/chat")],
-  ["@opencode-ai/ai/providers/openai/responses", () => import("@opencode-ai/ai/providers/openai/responses")],
-  ["@opencode-ai/ai/providers/openai-compatible", () => import("@opencode-ai/ai/providers/openai-compatible")],
-  ["@opencode-ai/ai/providers/openrouter", () => import("@opencode-ai/ai/providers/openrouter")],
-  ["@opencode-ai/ai/providers/togetherai", () => import("@opencode-ai/ai/providers/togetherai")],
-  ["@opencode-ai/ai/providers/xai", () => import("@opencode-ai/ai/providers/xai")],
+  ["@ocpp/ai/providers/anthropic", () => import("@ocpp/ai/providers/anthropic")],
+  ["@ocpp/ai/providers/azure", () => import("@ocpp/ai/providers/azure")],
+  ["@ocpp/ai/providers/azure/chat", () => import("@ocpp/ai/providers/azure/chat")],
+  ["@ocpp/ai/providers/azure/responses", () => import("@ocpp/ai/providers/azure/responses")],
+  ["@ocpp/ai/providers/cerebras", () => import("@ocpp/ai/providers/cerebras")],
+  ["@ocpp/ai/providers/deepinfra", () => import("@ocpp/ai/providers/deepinfra")],
+  ["@ocpp/ai/providers/google", () => import("@ocpp/ai/providers/google")],
+  ["@ocpp/ai/providers/google-vertex", () => import("@ocpp/ai/providers/google-vertex")],
+  ["@ocpp/ai/providers/google-vertex/gemini", () => import("@ocpp/ai/providers/google-vertex/gemini")],
+  ["@ocpp/ai/providers/google-vertex/chat", () => import("@ocpp/ai/providers/google-vertex/chat")],
+  ["@ocpp/ai/providers/google-vertex/responses", () => import("@ocpp/ai/providers/google-vertex/responses")],
+  ["@ocpp/ai/providers/google-vertex/messages", () => import("@ocpp/ai/providers/google-vertex/messages")],
+  ["@ocpp/ai/providers/groq", () => import("@ocpp/ai/providers/groq")],
+  ["@ocpp/ai/providers/mistral", () => import("@ocpp/ai/providers/mistral")],
+  ["@ocpp/ai/providers/openai", () => import("@ocpp/ai/providers/openai")],
+  ["@ocpp/ai/providers/openai/chat", () => import("@ocpp/ai/providers/openai/chat")],
+  ["@ocpp/ai/providers/openai/responses", () => import("@ocpp/ai/providers/openai/responses")],
+  ["@ocpp/ai/providers/openai-compatible", () => import("@ocpp/ai/providers/openai-compatible")],
+  ["@ocpp/ai/providers/openrouter", () => import("@ocpp/ai/providers/openrouter")],
+  ["@ocpp/ai/providers/togetherai", () => import("@ocpp/ai/providers/togetherai")],
+  ["@ocpp/ai/providers/xai", () => import("@ocpp/ai/providers/xai")],
 ])
 
 export const loadPackage = Effect.fn("Provider.loadPackage")(function* (specifier: string, npm?: Npm.Interface) {
   const builtin = builtins.get(specifier)
   if (builtin) return yield* importPackage(specifier, specifier, builtin)
   const resolved = yield* Effect.sync(() => {
-    if (specifier.startsWith("file://") || specifier.startsWith("@opencode-ai/ai/")) return specifier
+    if (specifier.startsWith("file://") || specifier.startsWith("@ocpp/ai/")) return specifier
     try {
       return import.meta.resolve(specifier)
     } catch {

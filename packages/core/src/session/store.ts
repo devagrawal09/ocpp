@@ -3,11 +3,11 @@ export * as SessionStore from "./store.js"
 import { and, eq, isNotNull, isNull, notInArray, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database } from "../database/database.js"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { SessionHistory } from "./history.js"
 import { MessageDecodeError } from "./error.js"
 import { SessionMessage } from "./message.js"
-import { Session } from "@opencode-ai/schema/session"
+import { Session } from "@ocpp/schema/session"
 import { SessionMessageTable, SessionTable } from "./sql.js"
 import { fromRow } from "./info.js"
 
@@ -43,7 +43,7 @@ export interface Interface {
   readonly countResume: (sessionID: Session.ID) => Effect.Effect<number | undefined>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionStore") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionStore") {}
 
 const layer = Layer.effect(
   Service,

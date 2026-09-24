@@ -12,9 +12,9 @@ export type Info = {
   readonly username: string
 }
 
-export class Config extends Context.Service<Config, Info>()("@opencode/ServerAuthConfig") {
+export class Config extends Context.Service<Config, Info>()("@ocpp/ServerAuthConfig") {
   static configLayer(input: Pick<Info, "password">) {
-    return Layer.succeed(this, this.of({ ...input, username: "opencode" }))
+    return Layer.succeed(this, this.of({ ...input, username: "ocpp" }))
   }
 
   static get layer() {

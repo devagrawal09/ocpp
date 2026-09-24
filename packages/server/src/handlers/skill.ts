@@ -1,4 +1,4 @@
-import { Skill } from "@opencode-ai/core/skill"
+import { Skill } from "@ocpp/core/skill"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Api } from "../api"
 import { response } from "../location"

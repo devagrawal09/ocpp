@@ -1,5 +1,5 @@
-import { Session } from "@opencode-ai/core/session"
-import { SessionNotFoundError, UnknownError } from "@opencode-ai/protocol/errors"
+import { Session } from "@ocpp/core/session"
+import { SessionNotFoundError, UnknownError } from "@ocpp/protocol/errors"
 import { Effect } from "effect"
 
 export function missingSession(error: Session.NotFoundError) {

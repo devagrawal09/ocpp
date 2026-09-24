@@ -1,21 +1,21 @@
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Money } from "@opencode-ai/schema/money"
+import { Money } from "@ocpp/schema/money"
 import { Effect, Exit, Layer, Scope } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Integration } from "@opencode-ai/core/integration"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { Location } from "@opencode-ai/core/location"
-import { Model } from "@opencode-ai/core/model"
-import { ModelsDev } from "@opencode-ai/core/models-dev"
-import { ModelsDevPlugin } from "@opencode-ai/core/plugin/models-dev"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+import { Catalog } from "@ocpp/core/catalog"
+import { Integration } from "@ocpp/core/integration"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { Location } from "@ocpp/core/location"
+import { Model } from "@ocpp/core/model"
+import { ModelsDev } from "@ocpp/core/models-dev"
+import { ModelsDevPlugin } from "@ocpp/core/plugin/models-dev"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { ProviderPlugins } from "@ocpp/core/plugin/provider"
+import { Provider } from "@ocpp/core/provider"
+import { AbsolutePath } from "@ocpp/core/schema"
 import { withEnv } from "../fixture/env"
 import { location } from "../fixture/location"
 import { testEffect } from "../lib/effect"
@@ -462,8 +462,8 @@ describe("ModelsDevPlugin", () => {
       expect(yield* integrations.get(Integration.ID.make("google-vertex"))).toBeDefined()
       expect(yield* integrations.get(Integration.ID.make("azure-cognitive-services"))).toBeUndefined()
       expect(yield* integrations.get(Integration.ID.make("google-vertex-anthropic"))).toBeUndefined()
-      expect(ProviderPlugins.map((plugin) => plugin.id)).not.toContain("opencode.provider.azure.cognitive.services")
-      expect(ProviderPlugins.map((plugin) => plugin.id)).not.toContain("opencode.provider.google.vertex.anthropic")
+      expect(ProviderPlugins.map((plugin) => plugin.id)).not.toContain("ocpp.provider.azure.cognitive.services")
+      expect(ProviderPlugins.map((plugin) => plugin.id)).not.toContain("ocpp.provider.google.vertex.anthropic")
     }),
   )
 

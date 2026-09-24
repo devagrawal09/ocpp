@@ -25,8 +25,8 @@ import {
   ToolSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { Cause, Effect, Exit, Schema } from "effect"
-import { ConfigMCP } from "@opencode-ai/schema/config/mcp"
-import type { Session } from "@opencode-ai/schema/session"
+import { ConfigMCP } from "@ocpp/schema/config/mcp"
+import type { Session } from "@ocpp/schema/session"
 import { McpStdio } from "./stdio.js"
 
 const DEFAULT_STARTUP_TIMEOUT = 30_000
@@ -184,13 +184,13 @@ export const connect = Effect.fnUntraced(function* (
   // stored token (and a no-op redirect) surfaces an UnauthorizedError, which we map to needs_auth.
   authProvider?: OAuthClientProvider,
   elicitation?: ElicitationHandler,
-  clientInfo: Implementation = { name: "opencode", version: "unknown" },
+  clientInfo: Implementation = { name: "ocpp", version: "unknown" },
 ) {
   const initialize = Effect.fnUntraced(function* (transport: Transport) {
     const client = new Client(clientInfo, {
       capabilities: {
         ...(elicitation ? { elicitation: { form: { applyDefaults: true }, url: {} } } : {}),
-        // https://github.com/anomalyco/opencode/issues/2308
+        // https://github.com/devagrawal09/oc-plus-plus/issues/2308
         roots: {},
       },
     })
@@ -223,7 +223,7 @@ export const connect = Effect.fnUntraced(function* (
         args,
         cwd: config.cwd ? path.resolve(directory, config.cwd) : directory,
         environment: {
-          ...(command === "opencode" ? { BUN_BE_BUN: "1" } : {}),
+          ...(command === "ocpp" ? { BUN_BE_BUN: "1" } : {}),
           ...config.environment,
         },
       })

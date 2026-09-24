@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Script } from "@opencode-ai/script"
+import { Script } from "@ocpp/script"
 import { $ } from "bun"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -50,7 +50,7 @@ try {
   await Bun.write("package.json", JSON.stringify(pkg, null, 2) + "\n")
   await rm(tarball, { force: true })
   await $`bun pm pack`
-  const consumer = await mkdtemp(join(tmpdir(), "opencode-codemode-"))
+  const consumer = await mkdtemp(join(tmpdir(), "ocpp-codemode-"))
   try {
     await Bun.write(
       join(consumer, "package.json"),

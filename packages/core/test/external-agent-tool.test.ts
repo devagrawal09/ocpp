@@ -1,15 +1,15 @@
 import { describe, expect } from "bun:test"
-import { ToolHandle } from "@opencode-ai/codemode"
-import { Model } from "@opencode-ai/schema/model"
-import { Provider } from "@opencode-ai/schema/provider"
+import { ToolHandle } from "@ocpp/codemode"
+import { Model } from "@ocpp/schema/model"
+import { Provider } from "@ocpp/schema/provider"
 import { ExternalAgentStream } from "../src/external-agent/stream"
-import { ExternalSession } from "@opencode-ai/schema/external-session"
+import { ExternalSession } from "@ocpp/schema/external-session"
 import { Effect, Fiber, Layer, Schema, Stream } from "effect"
 import { AppNodeBuilder } from "../src/effect/app-node-builder"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Agent } from "../src/agent"
 import { Bus } from "../src/bus"
 import { Config } from "../src/config"
@@ -375,7 +375,7 @@ describe("external-agent tools", () => {
   )
 
   for (const provider of ExternalSession.Provider.literals)
-    it.live(`${provider}: native SDK tools cannot bypass an OpenCode edit denial`, () =>
+    it.live(`${provider}: native SDK tools cannot bypass an OC++ edit denial`, () =>
       Effect.gen(function* () {
         const env = yield* setup
         yield* env.agents.transform((draft) =>

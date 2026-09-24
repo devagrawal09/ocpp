@@ -1,8 +1,8 @@
-import { Button } from "@opencode-ai/ui/button"
-import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@opencode-ai/ui/dialog"
-import { Divider } from "@opencode-ai/ui/divider"
-import { TextInput } from "@opencode-ai/ui/text-input"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { Button } from "@ocpp/ui/button"
+import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@ocpp/ui/dialog"
+import { Divider } from "@ocpp/ui/divider"
+import { TextInput } from "@ocpp/ui/text-input"
+import { useDialog } from "@ocpp/ui/context/dialog"
 import { useMutation } from "@tanstack/solid-query"
 import { type Component, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -18,7 +18,7 @@ import { useTabs } from "@/shell/tabs/tabs"
 import { useCheckServerHealth } from "@/runtime/server/health"
 import "@/settings/settings.css"
 
-const DEFAULT_USERNAME = "opencode"
+const DEFAULT_USERNAME = "ocpp"
 
 type FormMode = "list" | "add" | "edit"
 

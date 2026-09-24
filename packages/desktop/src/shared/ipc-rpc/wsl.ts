@@ -23,7 +23,7 @@ const WslJob = Schema.Union([
     distros: Schema.Array(Schema.String),
     startedAt: Schema.Number,
   }),
-  Schema.Struct({ kind: Schema.Literal("install-opencode"), distro: Schema.String, startedAt: Schema.Number }),
+  Schema.Struct({ kind: Schema.Literal("install-ocpp"), distro: Schema.String, startedAt: Schema.Number }),
 ])
 const WslServersState = Schema.Struct({
   runtime: Schema.NullOr(
@@ -47,7 +47,7 @@ const WslServersState = Schema.Struct({
       error: Schema.NullOr(Schema.String),
     }),
   ),
-  opencodeChecks: Schema.Record(
+  ocppChecks: Schema.Record(
     Schema.String,
     Schema.Struct({
       distro: Schema.String,
@@ -76,7 +76,7 @@ export const WslInstallDistro = Rpc.make("WslInstallDistro", {
 export const WslProbeAddable = Rpc.make("WslProbeAddable", {
   payload: { distros: Schema.Array(Schema.String) },
 })
-export const WslInstallOpencode = Rpc.make("WslInstallOpencode", {
+export const WslInstallOcpp = Rpc.make("WslInstallOcpp", {
   payload: { name: Schema.String },
 })
 export const WslOpenTerminal = Rpc.make("WslOpenTerminal", {
@@ -101,7 +101,7 @@ export const WslRpcs = RpcGroup.make(
   WslInstallWsl,
   WslInstallDistro,
   WslProbeAddable,
-  WslInstallOpencode,
+  WslInstallOcpp,
   WslOpenTerminal,
   WslAddServer,
   WslRemoveServer,

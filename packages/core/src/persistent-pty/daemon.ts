@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises"
 import net from "node:net"
 import path from "node:path"
 import { Data, Duration, Effect, Schema, Semaphore } from "effect"
-import type { Handoff } from "@opencode-ai/schema/persistent-pty"
+import type { Handoff } from "@ocpp/schema/persistent-pty"
 
 const ProtocolVersion = 7
 const MaxFrameBytes = 8 * 1024 * 1024
@@ -157,7 +157,7 @@ export interface DaemonTransport {
 
 export const makeDaemonTransport = Effect.fn("PersistentPty.makeDaemonTransport")(function* (
   directory: string,
-  binary: () => Promise<string> = () => Promise.resolve(process.env.OPENCODE_PTY_BIN || "opencode-pty"),
+  binary: () => Promise<string> = () => Promise.resolve(process.env.OCPP_PTY_BIN || "opencode-pty"),
   inherited?: Handoff,
 ) {
   const startup = Semaphore.makeUnsafe(1)
@@ -230,7 +230,7 @@ export const makeDaemonTransport = Effect.fn("PersistentPty.makeDaemonTransport"
           const child = spawn(executable, ["daemon"], {
             detached: true,
             stdio: "ignore",
-            env: { ...process.env, OPENCODE_PTY_RUNTIME_DIR: directory },
+            env: { ...process.env, OCPP_PTY_RUNTIME_DIR: directory },
           })
           child.once("spawn", () => {
             child.unref()

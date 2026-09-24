@@ -1,8 +1,8 @@
-import { loadLocaleDict, normalizeLocale, type Locale, type Platform } from "@opencode-ai/app/desktop"
+import { loadLocaleDict, normalizeLocale, type Locale, type Platform } from "@ocpp/app/desktop"
 import { storedLocaleValue } from "./locale-value"
 
 export async function preloadStoredLocale(platform: Platform) {
-  const raw = await platform.storage?.("opencode.global.dat").getItem("language")
+  const raw = await platform.storage?.("ocpp.global.dat").getItem("language")
   const locale = storedLocale(raw)
   if (!locale) return
   if (locale !== "en") await loadLocaleDict(locale)

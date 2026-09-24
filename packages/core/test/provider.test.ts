@@ -1,20 +1,20 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { Provider } from "@opencode-ai/core/provider"
+import { Provider } from "@ocpp/core/provider"
 
 describe("Provider", () => {
   test("loads bundled native provider entrypoints", async () => {
     const packages = [
-      "@opencode-ai/ai/providers/cerebras",
-      "@opencode-ai/ai/providers/deepinfra",
-      "@opencode-ai/ai/providers/google-vertex",
-      "@opencode-ai/ai/providers/google-vertex/gemini",
-      "@opencode-ai/ai/providers/google-vertex/chat",
-      "@opencode-ai/ai/providers/google-vertex/responses",
-      "@opencode-ai/ai/providers/google-vertex/messages",
-      "@opencode-ai/ai/providers/groq",
-      "@opencode-ai/ai/providers/mistral",
-      "@opencode-ai/ai/providers/togetherai",
+      "@ocpp/ai/providers/cerebras",
+      "@ocpp/ai/providers/deepinfra",
+      "@ocpp/ai/providers/google-vertex",
+      "@ocpp/ai/providers/google-vertex/gemini",
+      "@ocpp/ai/providers/google-vertex/chat",
+      "@ocpp/ai/providers/google-vertex/responses",
+      "@ocpp/ai/providers/google-vertex/messages",
+      "@ocpp/ai/providers/groq",
+      "@ocpp/ai/providers/mistral",
+      "@ocpp/ai/providers/togetherai",
     ]
 
     for (const specifier of packages) {

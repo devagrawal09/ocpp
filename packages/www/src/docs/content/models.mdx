@@ -2,7 +2,7 @@
 title: "Models"
 ---
 
-OpenCode builds its model catalog from [models.dev](https://models.dev), provider integrations, and your configuration.
+OC++ builds its model catalog from [models.dev](https://models.dev), provider integrations, and your configuration.
 Only enabled models whose provider is available for the current project are available for selection.
 
 Configure provider availability in [Providers](/providers).
@@ -29,11 +29,11 @@ are model-specific and are derived from current catalog metadata. Do not assume 
 
 ### Default model
 
-Set `model` in `opencode.json` or `opencode.jsonc`:
+Set `model` in `ocpp.json` or `ocpp.jsonc`:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "model": "anthropic/claude-sonnet-4-5",
 }
 ```
@@ -52,15 +52,15 @@ Provider and model entries can supply three kinds of request configuration:
 - `headers` adds HTTP request headers.
 - `body` adds provider-specific fields to the request body.
 
-These values are provider-specific JSON. OpenCode applies provider values first, then model values, then the selected
+These values are provider-specific JSON. OC++ applies provider values first, then model values, then the selected
 variant. Nested `settings` and `body` objects are merged; later array and scalar values replace earlier values. Header
 names are matched case-insensitively.
 
 You can also map a friendly catalog ID to a different API model ID with `modelID`:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "model": "openai/coding-default",
   "providers": {
     "openai": {
@@ -97,7 +97,7 @@ catalog.
 OpenAI-compatible models that stream reasoning through a custom assistant-message field can set
 `compatibility.reasoningField`:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
   "providers": {
     "local": {
@@ -113,16 +113,16 @@ OpenAI-compatible models that stream reasoning through a custom assistant-messag
 }
 ```
 
-OpenCode recognizes `reasoning`, `reasoning_content`, and `reasoning_text`, and accepts any provider-specific string. It
+OC++ recognizes `reasoning`, `reasoning_content`, and `reasoning_text`, and accepts any provider-specific string. It
 reads streamed reasoning from this field and includes the field when replaying assistant messages to the model.
 
 ### Custom variants
 
 Add a variant, or override a catalog variant with the same ID, under the model's `variants` array:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "openai": {
       "models": {
@@ -159,26 +159,26 @@ provider and model configuration. An unknown variant fails model resolution inst
 
 #### Ollama
 
-OpenCode automatically discovers language models from an Ollama server listening on its default address,
+OC++ automatically discovers language models from an Ollama server listening on its default address,
 `http://127.0.0.1:11434`. Discovered models use the `ollama` provider ID and Ollama's model name:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "model": "ollama/gemma3:4b",
 }
 ```
 
-OpenCode refreshes the inventory in the background and reads context, vision, and tool-use capabilities from Ollama.
+OC++ refreshes the inventory in the background and reads context, vision, and tool-use capabilities from Ollama.
 Embedding-only models are excluded because they cannot drive a session. Disable discovery with
-`"plugins": ["-opencode.provider.ollama"]`.
+`"plugins": ["-ocpp.provider.ollama"]`.
 
 For a different host or port, configure Ollama's OpenAI-compatible base URL. Models are still discovered through the
 native Ollama API at the same path prefix:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "ollama": {
       "settings": {
@@ -194,25 +194,25 @@ Omit `apiKey` when the Ollama endpoint does not require bearer authentication.
 
 #### LM Studio
 
-OpenCode automatically discovers language models from an unauthenticated LM Studio server listening on its default
+OC++ automatically discovers language models from an unauthenticated LM Studio server listening on its default
 address, `http://127.0.0.1:1234`. Discovered models use the `lmstudio` provider ID and LM Studio's model key:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "model": "lmstudio/google/gemma-4-26b-a4b",
 }
 ```
 
-OpenCode refreshes the inventory in the background and reads context, vision, and tool-use capabilities from LM
+OC++ refreshes the inventory in the background and reads context, vision, and tool-use capabilities from LM
 Studio. Embedding models are excluded because they cannot drive a session. Disable discovery with
-`"plugins": ["-opencode.provider.lmstudio"]`.
+`"plugins": ["-ocpp.provider.lmstudio"]`.
 
 For a different host or port, configure the OpenAI-compatible base URL. Models are still discovered automatically:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "lmstudio": {
       "settings": {
@@ -228,27 +228,27 @@ Omit `apiKey` when LM Studio authentication is disabled.
 
 #### vLLM
 
-OpenCode automatically discovers models from a vLLM server listening on its default address, `http://127.0.0.1:8000`.
+OC++ automatically discovers models from a vLLM server listening on its default address, `http://127.0.0.1:8000`.
 Discovered models use the `vllm` provider ID and the model ID reported by vLLM:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "model": "vllm/Qwen/Qwen3-Coder-30B-A3B-Instruct",
 }
 ```
 
-OpenCode checks vLLM's `/health` endpoint and refreshes `/v1/models` in the background. It uses the reported
+OC++ checks vLLM's `/health` endpoint and refreshes `/v1/models` in the background. It uses the reported
 `max_model_len` as the context limit and only includes model cards owned by `vllm`. Discovered vLLM models advertise
 text input and output, but not vision or tools. Tool calling is conservative because vLLM enables it with server-level
 flags such as `--enable-auto-tool-choice` and `--tool-call-parser`, which model discovery does not report. Disable
-discovery with `"plugins": ["-opencode.provider.vllm"]`.
+discovery with `"plugins": ["-ocpp.provider.vllm"]`.
 
 For a different endpoint or an authenticated server, configure its OpenAI-compatible base URL:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "vllm": {
       "settings": {
@@ -265,14 +265,14 @@ Omit `apiKey` when authentication is disabled. Path-prefixed proxy URLs are supp
 
 For an OpenAI-compatible server, define a provider package, endpoint, and at least one model:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "model": "local/coder",
   "providers": {
     "local": {
       "name": "Local server",
-      "package": "@opencode-ai/ai/providers/openai-compatible",
+      "package": "@ocpp/ai/providers/openai-compatible",
       "settings": {
         "baseURL": "http://127.0.0.1:1234/v1",
       },
@@ -295,7 +295,7 @@ For an OpenAI-compatible server, define a provider package, endpoint, and at lea
 }
 ```
 
-Use the server's real model name, limits, modalities, and tool support. OpenCode applies the custom-model capability
+Use the server's real model name, limits, modalities, and tool support. OC++ applies the custom-model capability
 defaults described above but cannot infer the server's actual limits or whether those defaults are accurate. If the
 endpoint requires a key, add `apiKey` to provider `settings` using an environment substitution such as
 `"apiKey": "{env:LOCAL_API_KEY}"`; do not commit secrets.
@@ -310,7 +310,7 @@ openai/gpt-5.2#high
 openrouter/anthropic/claude-sonnet-4.5#high
 ```
 
-OpenCode splits the reference at the first `/`, so model IDs may contain additional slashes. Provider and model IDs are
+OC++ splits the reference at the first `/`, so model IDs may contain additional slashes. Provider and model IDs are
 case-sensitive. Provider IDs cannot contain `/` or `#`, and model IDs cannot contain `#`.
 
 The expanded config form is equivalent when generated or programmatic configuration is more convenient:

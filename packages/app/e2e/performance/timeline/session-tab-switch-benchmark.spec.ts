@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../../utils/mock-server"
+import { mockOcppServer } from "../../utils/mock-server"
 import { expectSessionTitle } from "../../utils/waits"
 import { benchmark, benchmarkDiagnostics, expect } from "../benchmark"
 import { fixture } from "./session-timeline-stress.fixture"
@@ -55,8 +55,7 @@ scenarios.forEach((scenario) => {
       {
         ...result,
         messageRequestsDuringSwitch: requests.length - requestsBefore,
-        rendererMemory:
-          process.env.OPENCODE_PERFORMANCE_MEMORY === "1" ? await retainedRendererMemory(page) : undefined,
+        rendererMemory: process.env.OCPP_PERFORMANCE_MEMORY === "1" ? await retainedRendererMemory(page) : undefined,
       },
       {
         ...scenario,
@@ -66,7 +65,7 @@ scenarios.forEach((scenario) => {
         serviceWorkers: "blocked",
         reviewFiles: scenario.review === "closed" ? 0 : reviewDiffs.length,
         data: "prefetched",
-        transport: process.env.OPENCODE_PERFORMANCE_HTTP_FIXTURE === "1" ? "http" : "playwright-route",
+        transport: process.env.OCPP_PERFORMANCE_HTTP_FIXTURE === "1" ? "http" : "playwright-route",
         inputEvent: "mousedown",
         requireReadyAnswer: true,
       },
@@ -85,8 +84,8 @@ async function prepareSessionTabs(page: Page) {
     const match = new URL(request.url()).pathname.match(/^\/api\/session\/([^/]+)\/message$/)
     if (match) requests.push(decodeURIComponent(match[1]))
   })
-  if (process.env.OPENCODE_PERFORMANCE_HTTP_FIXTURE !== "1")
-    await mockOpenCodeServer(page, {
+  if (process.env.OCPP_PERFORMANCE_HTTP_FIXTURE !== "1")
+    await mockOcppServer(page, {
       sessions: fixture.sessions,
       provider: fixture.provider,
       directory: fixture.directory,

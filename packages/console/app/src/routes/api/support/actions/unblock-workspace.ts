@@ -1,7 +1,7 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { Workspace } from "@opencode-ai/console-core/workspace.js"
-import { safeEqual } from "@opencode-ai/console-core/util/crypto.js"
-import { Resource } from "@opencode-ai/console-resource"
+import { Workspace } from "@ocpp/console-core/workspace.js"
+import { safeEqual } from "@ocpp/console-core/util/crypto.js"
+import { Resource } from "@ocpp/console-resource"
 import z from "zod"
 
 const Body = z.object({ workspaceID: z.string().startsWith("wrk_") })

@@ -10,7 +10,7 @@ const dir = import.meta.dirname
 
 function rawTextPlugin(): Plugin {
   return {
-    name: "opencode:raw-text",
+    name: "ocpp:raw-text",
     // "pre" is load-bearing for .txt: Vite's built-in asset plugin claims
     // known asset types (.txt among them) ahead of normal-priority plugins,
     // replacing the import with an asset URL string instead of the content.
@@ -25,12 +25,12 @@ function rawTextPlugin(): Plugin {
 
 function appAssetsPlugin(archive: string): Plugin {
   return {
-    name: "opencode:app-assets",
+    name: "ocpp:app-assets",
     resolveId(id) {
-      if (id === "virtual:opencode-app-assets") return "\0virtual:opencode-app-assets"
+      if (id === "virtual:ocpp-app-assets") return "\0virtual:ocpp-app-assets"
     },
     load(id) {
-      if (id !== "\0virtual:opencode-app-assets") return
+      if (id !== "\0virtual:ocpp-app-assets") return
       return `export default ${JSON.stringify(archive)}`
     },
   }
@@ -38,7 +38,7 @@ function appAssetsPlugin(archive: string): Plugin {
 
 function runtimeRequirePlugin(): Plugin {
   return {
-    name: "opencode:runtime-require",
+    name: "ocpp:runtime-require",
     enforce: "pre",
     transform(code, id) {
       if (!id.endsWith("turndown/lib/turndown.es.js")) return
@@ -51,7 +51,7 @@ function runtimeRequirePlugin(): Plugin {
 
 function simulationGraphPlugin(): Plugin {
   return {
-    name: "opencode:simulation-graph",
+    name: "ocpp:simulation-graph",
     generateBundle() {
       verifySimulationGraph(this.getModuleIds())
     },
@@ -60,7 +60,7 @@ function simulationGraphPlugin(): Plugin {
 
 function fffNodePlugin(): Plugin {
   return {
-    name: "opencode:fff-node",
+    name: "ocpp:fff-node",
     enforce: "pre",
     transform(code, id) {
       const normalized = id.replaceAll("\\", "/")
@@ -68,7 +68,7 @@ function fffNodePlugin(): Plugin {
         const start = code.indexOf("if (!nativeBinding) {")
         if (start === -1) this.error("Failed to rewrite ffi-rs native binding loader")
         return `const unavailable = () => { throw new Error("ffi-rs native binding unavailable") }
-const nativeBinding = globalThis.__OPENCODE_FFF_FFI ?? {
+const nativeBinding = globalThis.__OCPP_FFF_FFI ?? {
   DataType: new Proxy({}, { get: (target, key) => target[key] ?? key }),
   PointerType: {},
   FFITypeTag: {},
@@ -121,8 +121,8 @@ function nodePrelude(input: NodeBuildInput) {
       ? `${input.target.nodePtyPackage}/prebuilds/darwin-${input.target.arch}/spawn-helper`
       : undefined
   const opencodePtyAsset = input.target.opencodePtyAsset
-  const promiseModule = `const sdk = globalThis[Symbol.for("opencode.plugin.v2.promise")]
-if (!sdk) throw new Error("OpenCode Promise plugin SDK is unavailable")
+  const promiseModule = `const sdk = globalThis[Symbol.for("ocpp.plugin.v2.promise")]
+if (!sdk) throw new Error("OC++ Promise plugin SDK is unavailable")
 export const Agent = sdk.Agent
 export const Command = sdk.Command
 export const Connection = sdk.Connection
@@ -134,107 +134,107 @@ export const Provider = sdk.Provider
 export const Reference = sdk.Reference
 export const Skill = sdk.Skill`
   const effectModule = promiseModule
-    .replace("opencode.plugin.v2.promise", "opencode.plugin.v2.effect")
+    .replace("ocpp.plugin.v2.promise", "ocpp.plugin.v2.effect")
     .replace("Promise plugin", "Effect plugin")
-  const promisePluginModule = `const sdk = globalThis[Symbol.for("opencode.plugin.v2.promise")]
-if (!sdk) throw new Error("OpenCode Promise plugin SDK is unavailable")
+  const promisePluginModule = `const sdk = globalThis[Symbol.for("ocpp.plugin.v2.promise")]
+if (!sdk) throw new Error("OC++ Promise plugin SDK is unavailable")
 export const define = sdk.Plugin.define`
   const effectPluginModule = promisePluginModule
-    .replace("opencode.plugin.v2.promise", "opencode.plugin.v2.effect")
+    .replace("ocpp.plugin.v2.promise", "ocpp.plugin.v2.effect")
     .replace("Promise plugin", "Effect plugin")
   const promiseToolModule = `export {}`
-  const effectToolModule = `const sdk = globalThis[Symbol.for("opencode.plugin.v2.effect")]
-if (!sdk) throw new Error("OpenCode Effect plugin SDK is unavailable")
+  const effectToolModule = `const sdk = globalThis[Symbol.for("ocpp.plugin.v2.effect")]
+if (!sdk) throw new Error("OC++ Effect plugin SDK is unavailable")
 export const Error = sdk.Tool.Error
 `
   return `#!/usr/bin/env -S node ${nodeExecArgv.join(" ")}
 import __cjs_mod__ from "node:module"
-import { chmodSync as __ocChmod, existsSync as __ocExists, lstatSync as __ocLstat, mkdirSync as __ocMkdir, renameSync as __ocRename, rmSync as __ocRm, writeFileSync as __ocWrite } from "node:fs"
-import { tmpdir as __ocTmpdir } from "node:os"
-import __ocPath from "node:path"
-import { getAssetKeys as __ocAssetKeys, getRawAsset as __ocRawAsset, isSea as __ocIsSea } from "node:sea"
-import { fileURLToPath as __ocFileURLToPath } from "node:url"
+import { chmodSync as __ocppChmod, existsSync as __ocppExists, lstatSync as __ocppLstat, mkdirSync as __ocppMkdir, renameSync as __ocppRename, rmSync as __ocppRm, writeFileSync as __ocppWrite } from "node:fs"
+import { tmpdir as __ocppTmpdir } from "node:os"
+import __ocppPath from "node:path"
+import { getAssetKeys as __ocppAssetKeys, getRawAsset as __ocppRawAsset, isSea as __ocppIsSea } from "node:sea"
+import { fileURLToPath as __ocppFileURLToPath } from "node:url"
 const __filename = import.meta.filename
 const __dirname = import.meta.dirname
 const require = __cjs_mod__.createRequire(import.meta.url)
-const __ocPluginModules = ${JSON.stringify({
-    "@opencode-ai/plugin": "opencode:plugin-v2",
-    "@opencode-ai/plugin/promise/plugin": "opencode:plugin-promise-plugin",
-    "@opencode-ai/plugin/promise/tool": "opencode:plugin-promise-tool",
-    "@opencode-ai/plugin/effect": "opencode:plugin-v2-effect",
-    "@opencode-ai/plugin/effect/plugin": "opencode:plugin-v2-effect-plugin",
-    "@opencode-ai/plugin/effect/tool": "opencode:plugin-v2-effect-tool",
+const __ocppPluginModules = ${JSON.stringify({
+    "@ocpp/plugin": "ocpp:plugin-v2",
+    "@ocpp/plugin/promise/plugin": "ocpp:plugin-promise-plugin",
+    "@ocpp/plugin/promise/tool": "ocpp:plugin-promise-tool",
+    "@ocpp/plugin/effect": "ocpp:plugin-v2-effect",
+    "@ocpp/plugin/effect/plugin": "ocpp:plugin-v2-effect-plugin",
+    "@ocpp/plugin/effect/tool": "ocpp:plugin-v2-effect-tool",
   })}
-const __ocPluginSources = ${JSON.stringify({
-    "opencode:plugin-v2": promiseModule,
-    "opencode:plugin-promise-plugin": promisePluginModule,
-    "opencode:plugin-promise-tool": promiseToolModule,
-    "opencode:plugin-v2-effect": effectModule,
-    "opencode:plugin-v2-effect-plugin": effectPluginModule,
-    "opencode:plugin-v2-effect-tool": effectToolModule,
+const __ocppPluginSources = ${JSON.stringify({
+    "ocpp:plugin-v2": promiseModule,
+    "ocpp:plugin-promise-plugin": promisePluginModule,
+    "ocpp:plugin-promise-tool": promiseToolModule,
+    "ocpp:plugin-v2-effect": effectModule,
+    "ocpp:plugin-v2-effect-plugin": effectPluginModule,
+    "ocpp:plugin-v2-effect-tool": effectToolModule,
   })}
 __cjs_mod__.registerHooks({
-  resolve(__ocSpecifier, __ocContext, __ocNextResolve) {
-    const __ocUrl = __ocPluginModules[__ocSpecifier]
-    return __ocUrl ? { url: __ocUrl, shortCircuit: true } : __ocNextResolve(__ocSpecifier, __ocContext)
+  resolve(__ocppSpecifier, __ocppContext, __ocppNextResolve) {
+    const __ocppUrl = __ocppPluginModules[__ocppSpecifier]
+    return __ocppUrl ? { url: __ocppUrl, shortCircuit: true } : __ocppNextResolve(__ocppSpecifier, __ocppContext)
   },
-  load(__ocUrl, __ocContext, __ocNextLoad) {
-    const __ocSource = __ocPluginSources[__ocUrl]
-    return __ocSource
-      ? { format: "module", source: __ocSource, shortCircuit: true }
-      : __ocNextLoad(__ocUrl, __ocContext)
+  load(__ocppUrl, __ocppContext, __ocppNextLoad) {
+    const __ocppSource = __ocppPluginSources[__ocppUrl]
+    return __ocppSource
+      ? { format: "module", source: __ocppSource, shortCircuit: true }
+      : __ocppNextLoad(__ocppUrl, __ocppContext)
   },
 })
-const __ocUid = typeof process.getuid === "function" ? process.getuid() : undefined
-const __ocCacheRoot = __ocPath.join(__ocTmpdir(), \`opencode-node-\${__ocUid ?? "user"}\`)
-if (__ocIsSea()) {
+const __ocppUid = typeof process.getuid === "function" ? process.getuid() : undefined
+const __ocppCacheRoot = __ocppPath.join(__ocppTmpdir(), \`ocpp-node-\${__ocppUid ?? "user"}\`)
+if (__ocppIsSea()) {
   try {
-    __ocMkdir(__ocCacheRoot, { mode: 0o700 })
-  } catch (__ocError) {
-    if (!__ocExists(__ocCacheRoot)) throw __ocError
+    __ocppMkdir(__ocppCacheRoot, { mode: 0o700 })
+  } catch (__ocppError) {
+    if (!__ocppExists(__ocppCacheRoot)) throw __ocppError
   }
-  const __ocCacheInfo = __ocLstat(__ocCacheRoot)
-  if (!__ocCacheInfo.isDirectory() || __ocCacheInfo.isSymbolicLink()) throw new Error("Unsafe Node asset cache path")
-  if (__ocUid !== undefined && __ocCacheInfo.uid !== __ocUid) throw new Error("Node asset cache is owned by another user")
-  if (__ocUid !== undefined) __ocChmod(__ocCacheRoot, 0o700)
+  const __ocppCacheInfo = __ocppLstat(__ocppCacheRoot)
+  if (!__ocppCacheInfo.isDirectory() || __ocppCacheInfo.isSymbolicLink()) throw new Error("Unsafe Node asset cache path")
+  if (__ocppUid !== undefined && __ocppCacheInfo.uid !== __ocppUid) throw new Error("Node asset cache is owned by another user")
+  if (__ocppUid !== undefined) __ocppChmod(__ocppCacheRoot, 0o700)
 }
-const __ocAssetRoot = __ocIsSea()
-  ? __ocPath.join(__ocCacheRoot, ${JSON.stringify(`${input.assetHash}-${input.target.platform}-${input.target.arch}`)})
-  : __ocFileURLToPath(new URL("./assets/", import.meta.url))
-const __ocPersistentPty = ${JSON.stringify(opencodePtyAsset)}
-if (__ocIsSea()) {
-  const __ocPtySpawnHelper = ${JSON.stringify(nodePtySpawnHelper)}
-  for (const __ocKey of __ocAssetKeys()) {
-    const __ocTarget = __ocPath.join(__ocAssetRoot, __ocKey)
-    if (__ocExists(__ocTarget)) continue
-    __ocMkdir(__ocPath.dirname(__ocTarget), { recursive: true })
-    const __ocTemporary = \`${"${__ocTarget}"}.${"${process.pid}"}.${"${crypto.randomUUID()}"}.tmp\`
-    __ocWrite(__ocTemporary, new Uint8Array(__ocRawAsset(__ocKey)))
-    if ((__ocKey === __ocPtySpawnHelper || __ocKey === __ocPersistentPty) && process.platform !== "win32")
-      __ocChmod(__ocTemporary, 0o755)
+const __ocppAssetRoot = __ocppIsSea()
+  ? __ocppPath.join(__ocppCacheRoot, ${JSON.stringify(`${input.assetHash}-${input.target.platform}-${input.target.arch}`)})
+  : __ocppFileURLToPath(new URL("./assets/", import.meta.url))
+const __ocppPersistentPty = ${JSON.stringify(opencodePtyAsset)}
+if (__ocppIsSea()) {
+  const __ocppPtySpawnHelper = ${JSON.stringify(nodePtySpawnHelper)}
+  for (const __ocppKey of __ocppAssetKeys()) {
+    const __ocppTarget = __ocppPath.join(__ocppAssetRoot, __ocppKey)
+    if (__ocppExists(__ocppTarget)) continue
+    __ocppMkdir(__ocppPath.dirname(__ocppTarget), { recursive: true })
+    const __ocppTemporary = \`${"${__ocppTarget}"}.${"${process.pid}"}.${"${crypto.randomUUID()}"}.tmp\`
+    __ocppWrite(__ocppTemporary, new Uint8Array(__ocppRawAsset(__ocppKey)))
+    if ((__ocppKey === __ocppPtySpawnHelper || __ocppKey === __ocppPersistentPty) && process.platform !== "win32")
+      __ocppChmod(__ocppTemporary, 0o755)
     try {
-      __ocRename(__ocTemporary, __ocTarget)
-    } catch (__ocError) {
-      __ocRm(__ocTemporary, { force: true })
-      if (!__ocExists(__ocTarget)) throw __ocError
+      __ocppRename(__ocppTemporary, __ocppTarget)
+    } catch (__ocppError) {
+      __ocppRm(__ocppTemporary, { force: true })
+      if (!__ocppExists(__ocppTarget)) throw __ocppError
     }
   }
 }
-process.env.OPENCODE_NODE_ASSETS_DIR = __ocAssetRoot
-process.env.OTUI_ASSET_ROOT = __ocAssetRoot
-process.env.OPENCODE_NODE_PTY_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(input.target.nodePtyEntryAsset)})
-process.env.OPENCODE_PARCEL_WATCHER_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(input.target.parcelWatcherAsset)})
-process.env.OPENCODE_PHOTON_WASM_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(photonWasmAsset)})
-process.env.OPENCODE_TREE_SITTER_WASM_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(shellParserWasmAssets.runtime)})
-process.env.OPENCODE_TREE_SITTER_BASH_WASM_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(shellParserWasmAssets.bash)})
-process.env.OPENCODE_TREE_SITTER_POWERSHELL_WASM_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(shellParserWasmAssets.powershell)})
-process.env.FFF_BINARY_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(input.target.fffAsset)})
-process.env.OPENCODE_FFF_FFI_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(input.target.fffFfiAsset)})
-if (__ocPersistentPty && !process.env.OPENCODE_PTY_BIN) process.env.OPENCODE_PTY_BIN = __ocPath.join(__ocAssetRoot, __ocPersistentPty)
+process.env.OCPP_NODE_ASSETS_DIR = __ocppAssetRoot
+process.env.OTUI_ASSET_ROOT = __ocppAssetRoot
+process.env.OCPP_NODE_PTY_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(input.target.nodePtyEntryAsset)})
+process.env.OCPP_PARCEL_WATCHER_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(input.target.parcelWatcherAsset)})
+process.env.OCPP_PHOTON_WASM_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(photonWasmAsset)})
+process.env.OCPP_TREE_SITTER_WASM_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(shellParserWasmAssets.runtime)})
+process.env.OCPP_TREE_SITTER_BASH_WASM_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(shellParserWasmAssets.bash)})
+process.env.OCPP_TREE_SITTER_POWERSHELL_WASM_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(shellParserWasmAssets.powershell)})
+process.env.FFF_BINARY_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(input.target.fffAsset)})
+process.env.OCPP_FFF_FFI_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(input.target.fffFfiAsset)})
+if (__ocppPersistentPty && !process.env.OCPP_PTY_BIN) process.env.OCPP_PTY_BIN = __ocppPath.join(__ocppAssetRoot, __ocppPersistentPty)
 try {
-  globalThis.__OPENCODE_FFF_FFI = require(process.env.OPENCODE_FFF_FFI_PATH)
+  globalThis.__OCPP_FFF_FFI = require(process.env.OCPP_FFF_FFI_PATH)
 } catch {}
-globalThis.__OPENCODE_PHOTON_WASM_PATH = process.env.OPENCODE_PHOTON_WASM_PATH
+globalThis.__OCPP_PHOTON_WASM_PATH = process.env.OCPP_PHOTON_WASM_PATH
 if (process.platform === "linux") process.env.OPENTUI_LIBC = "glibc"`
 }
 
@@ -265,10 +265,10 @@ export function mainConfig(input: NodeBuildInput): UserConfig {
     resolve,
     esbuild: { jsx: "automatic" },
     define: {
-      OPENCODE_VERSION: JSON.stringify(input.version),
-      OPENCODE_CLI_NAME: JSON.stringify("opencode2-node"),
-      OPENCODE_CHANNEL: JSON.stringify(input.channel),
-      OPENCODE_LIBC: input.target.platform === "linux" ? JSON.stringify("glibc") : "undefined",
+      OCPP_VERSION: JSON.stringify(input.version),
+      OCPP_CLI_NAME: JSON.stringify("ocpp-node"),
+      OCPP_CHANNEL: JSON.stringify(input.channel),
+      OCPP_LIBC: input.target.platform === "linux" ? JSON.stringify("glibc") : "undefined",
       FFF_LIBC: input.target.platform === "linux" ? JSON.stringify("gnu") : "undefined",
       "process.env.WS_NO_BUFFER_UTIL": JSON.stringify("1"),
     },
@@ -280,15 +280,15 @@ export function mainConfig(input: NodeBuildInput): UserConfig {
       emptyOutDir: false,
       minify: true,
       rollupOptions: {
-        output: output("opencode.mjs", nodePrelude(input)),
+        output: output("ocpp.mjs", nodePrelude(input)),
       },
     },
   })
 }
 
 export default mainConfig({
-  version: process.env.OPENCODE_VERSION ?? "local",
-  channel: process.env.OPENCODE_CHANNEL ?? "local",
+  version: process.env.OCPP_VERSION ?? "local",
+  channel: process.env.OCPP_CHANNEL ?? "local",
   assetHash: "local",
   target: nodeTarget(process.platform, process.arch),
   appArchive: "",

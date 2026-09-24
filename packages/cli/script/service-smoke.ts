@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
 import { NodeFileSystem } from "@effect/platform-node"
-import { Service } from "@opencode-ai/client/effect/service"
-import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
+import { Service } from "@ocpp/client/effect/service"
+import { ServiceStatus } from "@ocpp/protocol/groups/health"
 import { Effect, Schema } from "effect"
 import fs from "node:fs/promises"
 import os from "node:os"
@@ -11,16 +11,16 @@ import path from "node:path"
 const nodeBuild = process.argv.includes("--node")
 const target = `cli${nodeBuild ? "-node" : ""}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
 const directory = path.join(import.meta.dir, "..", "dist", ...(nodeBuild ? ["node"] : []), target, "bin")
-const binary = path.join(directory, `opencode2${nodeBuild ? "-node" : ""}${process.platform === "win32" ? ".exe" : ""}`)
+const binary = path.join(directory, `ocpp${nodeBuild ? "-node" : ""}${process.platform === "win32" ? ".exe" : ""}`)
 if (!(await Bun.file(binary).exists())) throw new Error(`Missing compiled CLI in ${directory}`)
 
-const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-smoke-")))
+const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-service-smoke-")))
 const env = {
   ...process.env,
   HOME: root,
   USERPROFILE: root,
-  OPENCODE_DB: path.join(root, "opencode.db"),
-  OPENCODE_TEST_HOME: root,
+  OCPP_DB: path.join(root, "ocpp.db"),
+  OCPP_TEST_HOME: root,
   XDG_CACHE_HOME: path.join(root, "cache"),
   XDG_CONFIG_HOME: path.join(root, "config"),
   XDG_DATA_HOME: path.join(root, "data"),
@@ -30,13 +30,13 @@ const processes: Array<ReturnType<typeof Bun.spawn>> = []
 const errors: Array<Promise<string>> = []
 let failure: unknown
 try {
-  await fs.mkdir(path.join(root, ".opencode"))
+  await fs.mkdir(path.join(root, ".ocpp"))
   spawnService()
   spawnService()
   const registration = await waitForRegistration()
   const info = await Schema.decodeUnknownPromise(Service.Info)(await Bun.file(registration).json())
   if (info.id === undefined || info.password === undefined) throw new Error("Registration is missing service identity")
-  const credential = btoa(`opencode:${info.password}`)
+  const credential = btoa(`ocpp:${info.password}`)
   const headers = { authorization: "Basic " + credential }
   const token = encodeURIComponent(credential)
   const health = await waitForReady(info.url, headers)
@@ -50,7 +50,7 @@ try {
   })
   if (tokenOpenApi.status !== 200) throw new Error("Compiled application rejected query authentication")
   if ((await pluginIDs(info.url, headers)).includes("smoke")) throw new Error("Smoke plugin existed before creation")
-  const plugin = path.join(root, ".opencode", "plugins", "smoke.ts")
+  const plugin = path.join(root, ".ocpp", "plugins", "smoke.ts")
   await fs.mkdir(path.dirname(plugin), { recursive: true })
   await fs.writeFile(plugin, pluginSource())
   await waitForPlugin(info.url, headers)
@@ -77,9 +77,7 @@ try {
   if (!winner || !loser) throw new Error("Compiled contenders did not elect one registered owner")
   if (!(await exitsWithin(loser, 10_000))) throw new Error("Losing compiled contender did not exit")
 
-  await Effect.runPromise(
-    Service.stop({ file: registration }).pipe(Effect.provide(NodeFileSystem.layer)),
-  )
+  await Effect.runPromise(Service.stop({ file: registration }).pipe(Effect.provide(NodeFileSystem.layer)))
   if (!(await exitsWithin(winner, 10_000))) throw new Error("Compiled service did not stop")
   for (let attempt = 0; attempt < 200 && (await Bun.file(registration).exists()); attempt++) await Bun.sleep(25)
   if (await Bun.file(registration).exists()) throw new Error("Compiled service registration was not removed")
@@ -88,8 +86,7 @@ try {
 } finally {
   processes.forEach((process) => process.kill())
   await Promise.all(processes.map((process) => process.exited))
-  if (failure)
-    errors.push(fs.readFile(path.join(root, "data", "opencode", "log", "opencode.log"), "utf8").catch(() => ""))
+  if (failure) errors.push(fs.readFile(path.join(root, "data", "ocpp", "log", "ocpp.log"), "utf8").catch(() => ""))
 }
 
 const output = await Promise.all(errors)
@@ -107,7 +104,7 @@ function spawnService() {
 }
 
 async function waitForRegistration() {
-  const directory = path.join(root, "state", "opencode")
+  const directory = path.join(root, "state", "ocpp")
   for (let attempt = 0; attempt < 400; attempt++) {
     const files = await fs.readdir(directory).catch(() => [])
     const file = files.find(

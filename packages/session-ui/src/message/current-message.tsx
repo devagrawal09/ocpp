@@ -1,8 +1,4 @@
-import type {
-  SessionMessageAssistant,
-  SessionMessageAssistantTool,
-  SessionMessageUser,
-} from "@opencode-ai/client/promise"
+import type { SessionMessageAssistant, SessionMessageAssistantTool, SessionMessageUser } from "@ocpp/client/promise"
 import { Match, Switch } from "solid-js"
 import type { SessionUserActions, SessionUserComment } from "../actions"
 import { AssistantReasoningContent, AssistantTextContent, CurrentUserMessageDisplay } from "./message-content"

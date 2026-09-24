@@ -1,6 +1,6 @@
-import { Service, type Endpoint } from "@opencode-ai/client/effect/service"
-import { CrossSpawnSpawner } from "@opencode-ai/util/cross-spawn-spawner"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { Service, type Endpoint } from "@ocpp/client/effect/service"
+import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Deferred, Effect, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { randomBytes } from "node:crypto"
@@ -21,13 +21,13 @@ function command(password: string, options: Options) {
   return ChildProcess.make(executable, [...args, "--stdio", "--port", "0"], {
     cwd: startupDirectory,
     // Explicit entry wins over anything inherited, so a user-exported
-    // OPENCODE_PASSWORD cannot shadow the child's lease credential.
-    env: { OPENCODE_PASSWORD: password },
+    // OCPP_PASSWORD cannot shadow the child's lease credential.
+    env: { OCPP_PASSWORD: password },
     extendEnv: true,
     // The server treats EOF on this pipe as the end of its ownership lease.
     // The OS closes it even when the TUI is killed before Effect finalizers run.
     stdin: "pipe",
-    stderr: process.env.OPENCODE_PRINT_LOGS === "1" ? "inherit" : "ignore",
+    stderr: process.env.OCPP_PRINT_LOGS === "1" ? "inherit" : "ignore",
     killSignal: "SIGTERM",
     forceKillAfter: "3 seconds",
   })
@@ -51,7 +51,7 @@ const makeEndpoint = Effect.fn("cli.standalone.endpoint")(
     const ready = yield* Effect.tryPromise(() => decodeReady(output))
     return {
       url: ready.url,
-      auth: { type: "basic" as const, username: "opencode", password },
+      auth: { type: "basic" as const, username: "ocpp", password },
       pid: proc.pid,
     } satisfies Endpoint & { readonly pid: number }
   },

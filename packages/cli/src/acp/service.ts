@@ -3,12 +3,12 @@ import {
   type CommandInfo,
   type ModelInfo,
   type ModelRef,
-  type OpenCodeClient,
+  type OcppClient,
   type SessionInfo,
   type SessionMessageInfo,
   type SkillInfo,
-} from "@opencode-ai/client/promise"
-import { withTimestampedFallback } from "@opencode-ai/util/session-title-fallback"
+} from "@ocpp/client/promise"
+import { withTimestampedFallback } from "@ocpp/util/session-title-fallback"
 import type {
   AgentSideConnection,
   AuthenticateRequest,
@@ -39,8 +39,8 @@ import type {
   SetSessionModeRequest,
   SetSessionModeResponse,
 } from "@agentclientprotocol/sdk"
-import { OPENCODE_VERSION } from "../version"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
+import { OCPP_VERSION } from "../version"
+import { SessionMessage } from "@ocpp/schema/session-message"
 import { buildConfigOptions, parseModelSelection, type ConfigOptionProvider } from "./config-option"
 import { promptContentToParts } from "./content"
 import {
@@ -54,7 +54,7 @@ import {
 } from "./event"
 import { ACPError } from "./error"
 
-export const AuthMethodID = "opencode-login"
+export const AuthMethodID = "ocpp-login"
 
 type Connection = Pick<AgentSideConnection, "sessionUpdate" | "requestPermission"> &
   Partial<Pick<AgentSideConnection, "writeTextFile" | "extNotification" | "signal">>
@@ -104,7 +104,7 @@ export interface Interface {
   cancel(input: CancelNotification): Promise<void>
 }
 
-export function make(input: { readonly client: OpenCodeClient; readonly connection: Connection }): Interface {
+export function make(input: { readonly client: OcppClient; readonly connection: Connection }): Interface {
   const sessions = new Map<string, Attached>()
   const catalogs = new Map<string, Promise<Catalog>>()
   const registeredMcp = new Map<string, Set<string>>()
@@ -180,13 +180,13 @@ export function make(input: { readonly client: OpenCodeClient; readonly connecti
       capabilities.writeTextFile = params.clientCapabilities?.fs?.writeTextFile === true
       capabilities.childSessionUpdates = params.clientCapabilities?._meta?.[ChildSessionUpdatesCapability] === true
       const authMethod: AuthMethod = {
-        description: "Run `opencode auth login` in the terminal",
-        name: "Login with opencode",
+        description: "Run `ocpp auth login` in the terminal",
+        name: "Login with ocpp",
         id: AuthMethodID,
       }
       if (params.clientCapabilities?._meta?.["terminal-auth"] === true) {
         authMethod._meta = {
-          "terminal-auth": { command: "opencode", args: ["auth", "login"], label: "OpenCode Login" },
+          "terminal-auth": { command: "ocpp", args: ["auth", "login"], label: "OC++ Login" },
         }
       }
       return {
@@ -199,7 +199,7 @@ export function make(input: { readonly client: OpenCodeClient; readonly connecti
           _meta: { [ChildSessionUpdatesCapability]: true },
         },
         authMethods: [authMethod],
-        agentInfo: { name: "OpenCode", version: OPENCODE_VERSION },
+        agentInfo: { name: "OC++", version: OCPP_VERSION },
       }
     },
     authenticate: async (params) => {
@@ -362,7 +362,7 @@ function preparePrompt(catalog: Catalog, prompt: PromptRequest["prompt"], messag
   return { start, text, files, synthetic, slash, command, skill }
 }
 
-async function submitPrompt(client: OpenCodeClient, session: Attached, prompt: PreparedPrompt, signal: AbortSignal) {
+async function submitPrompt(client: OcppClient, session: Attached, prompt: PreparedPrompt, signal: AbortSignal) {
   if (prompt.synthetic.length > 0) {
     await client.session.synthetic({
       sessionID: session.id,
@@ -398,7 +398,7 @@ function turnStart(messageID: string, slash: PreparedPrompt["slash"], skill: Ski
   return { type: "input", id: messageID }
 }
 
-async function loadCatalog(client: OpenCodeClient, cwd: string): Promise<Catalog> {
+async function loadCatalog(client: OcppClient, cwd: string): Promise<Catalog> {
   const location = { directory: cwd }
   // Location plugins initialize asynchronously, so the first ACP request may observe an empty catalog.
   const deadline = Date.now() + 5_000
@@ -459,20 +459,20 @@ function requireModel(catalog: Catalog, modelID: string): ModelRef {
   return { providerID: model.providerID, id: model.id, variant: selected.variant }
 }
 
-async function selectMode(client: OpenCodeClient, state: Attached, modeID: string) {
+async function selectMode(client: OcppClient, state: Attached, modeID: string) {
   if (!state.catalog.modes.some((mode) => mode.id === modeID)) throw new ACPError.InvalidModeError({ mode: modeID })
   state.modeID = modeID
   await client.session.switchAgent({ sessionID: state.id, agent: modeID })
 }
 
-async function getSession(client: OpenCodeClient, sessionID: string) {
+async function getSession(client: OcppClient, sessionID: string) {
   return client.session.get({ sessionID }).catch((error) => {
     if (isSessionNotFoundError(error)) throw new ACPError.SessionNotFoundError({ sessionId: sessionID })
     throw error
   })
 }
 
-async function messages(client: OpenCodeClient, sessionID: string) {
+async function messages(client: OcppClient, sessionID: string) {
   const result: SessionMessageInfo[] = []
   let cursor: string | undefined
   do {
@@ -486,7 +486,7 @@ async function messages(client: OpenCodeClient, sessionID: string) {
 }
 
 async function registerMcpServers(
-  client: OpenCodeClient,
+  client: OcppClient,
   registered: Map<string, Set<string>>,
   session: Attached,
   servers: readonly McpServer[],
@@ -535,7 +535,7 @@ function stableStringify(value: unknown): string {
     .join(",")}}`
 }
 
-async function sendUsageUpdate(client: OpenCodeClient, connection: Connection, session: Attached, used?: number) {
+async function sendUsageUpdate(client: OcppClient, connection: Connection, session: Attached, used?: number) {
   if (!used) return
   const model = session.catalog.models.find(
     (item) => item.providerID === session.model.providerID && item.id === session.model.id,

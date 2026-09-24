@@ -167,7 +167,7 @@ export interface GenerateMethod {
   (request: LLMRequest, options?: StreamOptions): Effect.Effect<LLMResponse, AIError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/LLMClient") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/LLMClient") {}
 
 const resolveRequestOptions = (request: LLMRequest) => {
   const messages = normalizeToolHistory(request.messages)

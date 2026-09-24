@@ -1,9 +1,9 @@
 export * as SessionGenerateNode from "./generate-node.js"
 
-import { LLMClient, Message } from "@opencode-ai/ai"
+import { LLMClient, Message } from "@ocpp/ai"
 import { Effect, Layer } from "effect"
 import { Database } from "../database/database.js"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { llmClient } from "../effect/app-node-platform.js"
 import { SessionContext } from "./context.js"
 import { SessionGenerate } from "./generate.js"

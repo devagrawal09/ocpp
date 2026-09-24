@@ -1,4 +1,4 @@
-import type { IntegrationMethod } from "@opencode-ai/client/promise"
+import type { IntegrationMethod } from "@ocpp/client/promise"
 
 type ProviderAuthMethod = Extract<IntegrationMethod, { type: "key" | "oauth" }>
 

@@ -84,21 +84,21 @@ export async function measureNavigationMilestones(
                 return
               }
               if (!marked.has(`${name}.first`)) {
-                performance.mark(`opencode.navigation.${name}.first`)
+                performance.mark(`ocpp.navigation.${name}.first`)
                 marked.add(`${name}.first`)
               }
               const streak = (streaks.get(name) ?? 0) + 1
               streaks.set(name, streak)
-              if (streak === 3) performance.mark(`opencode.navigation.${name}.stable`)
+              if (streak === 3) performance.mark(`ocpp.navigation.${name}.stable`)
             })
             const all = Object.values(current).every(Boolean)
             const allStreak = all ? (streaks.get("all") ?? 0) + 1 : 0
             streaks.set("all", allStreak)
             if (all && !marked.has("all.first")) {
-              performance.mark("opencode.navigation.all.first")
+              performance.mark("ocpp.navigation.all.first")
               marked.add("all.first")
             }
-            if (allStreak === 3) performance.mark("opencode.navigation.all.stable")
+            if (allStreak === 3) performance.mark("ocpp.navigation.all.stable")
             sample()
           }, 0)
         })
@@ -107,7 +107,7 @@ export async function measureNavigationMilestones(
         if (started !== undefined || event.button !== 0) return
         if (!(event.target instanceof Element) || !event.target.closest(triggerSelector)) return
         started = performance.now()
-        performance.mark("opencode.navigation.start")
+        performance.mark("ocpp.navigation.start")
         sample()
       }
       document.addEventListener("mousedown", start, true)

@@ -1,14 +1,14 @@
-import { Bus } from "@opencode-ai/core/bus"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Config } from "@opencode-ai/core/config"
-import { Integration } from "@opencode-ai/core/integration"
-import { Model } from "@opencode-ai/core/model"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { LMStudioPlugin, make } from "@opencode-ai/core/plugin/provider/lmstudio"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { Provider } from "@opencode-ai/core/provider"
-import { Document, Event, Info } from "@opencode-ai/schema/config"
+import { Bus } from "@ocpp/core/bus"
+import { Catalog } from "@ocpp/core/catalog"
+import { Config } from "@ocpp/core/config"
+import { Integration } from "@ocpp/core/integration"
+import { Model } from "@ocpp/core/model"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { LMStudioPlugin, make } from "@ocpp/core/plugin/provider/lmstudio"
+import { ProviderPlugins } from "@ocpp/core/plugin/provider"
+import { Provider } from "@ocpp/core/provider"
+import { Document, Event, Info } from "@ocpp/schema/config"
 import { describe, expect, test } from "bun:test"
 import { Duration, Effect, Layer, Schema } from "effect"
 import { testEffect } from "../lib/effect"
@@ -39,8 +39,8 @@ function eventually<A>(
 
 describe("LMStudioPlugin", () => {
   test("is registered as a built-in provider plugin", () => {
-    expect(LMStudioPlugin.id).toBe("opencode.provider.lmstudio")
-    expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.lmstudio")
+    expect(LMStudioPlugin.id).toBe("ocpp.provider.lmstudio")
+    expect(ProviderPlugins.map((item) => item.id)).toContain("ocpp.provider.lmstudio")
   })
 
   it.live("discovers local language models with their capabilities and effective context", () =>
@@ -101,7 +101,7 @@ describe("LMStudioPlugin", () => {
             id: providerID,
             name: "LM Studio",
             activation: "enabled",
-            package: "@opencode-ai/ai/providers/openai-compatible",
+            package: "@ocpp/ai/providers/openai-compatible",
             settings: { baseURL: `${server.url.origin}/v1`, provider: "lmstudio", apiKey: "" },
           })
           expect((yield* catalog.provider.available()).map((provider) => provider.id)).toContain(providerID)

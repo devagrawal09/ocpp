@@ -62,7 +62,7 @@ export function DialogErrorDetails(props: { title: string; error: string; contex
       location: location.ref,
       prompt: {
         ...emptyPrompt(),
-        text: `Investigate why this OpenCode component failed in the current project.\n\n${props.title}${props.context ? `\n${props.context}` : ""}\nError: ${props.error}\n\nInspect the relevant project and global OpenCode configuration, startup or loading behavior, required environment variables or credentials, dependencies, and logs. Identify the root cause and recommend a fix.`,
+        text: `Investigate why this OC++ component failed in the current project.\n\n${props.title}${props.context ? `\n${props.context}` : ""}\nError: ${props.error}\n\nInspect the relevant project and global OC++ configuration, startup or loading behavior, required environment variables or credentials, dependencies, and logs. Identify the root cause and recommend a fix.`,
       },
     })
     dialog.clear()

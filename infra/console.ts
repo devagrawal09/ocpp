@@ -9,7 +9,7 @@ const lake = deployAws ? await import("./lake") : undefined
 ////////////////
 
 const cluster = planetscale.getDatabaseOutput({
-  name: "opencode",
+  name: "ocpp",
   organization: "anomalyco",
 })
 
@@ -162,7 +162,7 @@ const ZEN_LITE_PRICE = new sst.Linkable("ZEN_LITE_PRICE", {
 })
 
 const zenBlackProduct = new stripe.Product("ZenBlack", {
-  name: "OpenCode Black",
+  name: "OC++ Black",
 })
 const zenBlackPriceProps = {
   product: zenBlackProduct.id,

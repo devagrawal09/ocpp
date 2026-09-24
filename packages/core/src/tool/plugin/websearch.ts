@@ -1,7 +1,7 @@
 export * as WebSearchTool from "./websearch.js"
 
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { ToolFailure } from "@opencode-ai/ai"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import { ToolFailure } from "@ocpp/ai"
 import { Effect, Schema, Semaphore } from "effect"
 import { HttpClientError } from "effect/unstable/http"
 import { Form } from "../../form.js"
@@ -25,7 +25,7 @@ const Output = Schema.Struct({
   results: Schema.Array(WebSearch.Result),
 })
 export const Plugin = {
-  id: "opencode.tool.websearch",
+  id: "ocpp.tool.websearch",
   effect: Effect.fn("WebSearchTool.Plugin")(function* (ctx: Context) {
     const permission = yield* Permission.Service
     const forms = yield* Form.Service
@@ -74,7 +74,7 @@ export const Plugin = {
                             fields: [
                               {
                                 key: "choice",
-                                description: "Allow OpenCode to search the web for up-to-date information?",
+                                description: "Allow OC++ to search the web for up-to-date information?",
                                 type: "string",
                                 required: true,
                                 custom: false,

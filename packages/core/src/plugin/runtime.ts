@@ -2,7 +2,7 @@ export * as PluginRuntime from "./runtime.js"
 
 import { Context, Effect, Layer } from "effect"
 import { Agent } from "../agent.js"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Job } from "../job.js"
 import { Location } from "../location.js"
 import { LocationServiceMap } from "../location-service-map.js"
@@ -58,7 +58,7 @@ export interface Interface {
   }
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/PluginRuntime") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/PluginRuntime") {}
 
 export interface Cell {
   runtime?: Interface

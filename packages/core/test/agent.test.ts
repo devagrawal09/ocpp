@@ -2,22 +2,22 @@ import path from "path"
 import { describe, expect } from "bun:test"
 import { Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
-import { Agent } from "@opencode-ai/core/agent"
-import { Bus } from "@opencode-ai/core/bus"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Location } from "@opencode-ai/core/location"
-import { Permission } from "@opencode-ai/core/permission"
-import { AgentPlugin } from "@opencode-ai/core/plugin/agent"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Global } from "@opencode-ai/util/global"
+import { Agent } from "@ocpp/core/agent"
+import { Bus } from "@ocpp/core/bus"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Location } from "@ocpp/core/location"
+import { Permission } from "@ocpp/core/permission"
+import { AgentPlugin } from "@ocpp/core/plugin/agent"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Global } from "@ocpp/util/global"
 import { location } from "./fixture/location"
 import { testEffect } from "./lib/effect"
 import { agentHost, host } from "./plugin/host"
 
 const testLocation = location({ directory: AbsolutePath.make("/project") })
 const locationLayer = Layer.succeed(Location.Service, Location.Service.of(testLocation))
-const global = Global.make({ data: "/data", config: "/config", tmp: "/tmp/opencode" })
+const global = Global.make({ data: "/data", config: "/config", tmp: "/tmp/ocpp" })
 const globalLayer = Layer.succeed(Global.Service, Global.Service.of(global))
 
 const it = testEffect(

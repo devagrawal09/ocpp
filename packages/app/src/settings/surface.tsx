@@ -1,7 +1,7 @@
 import { useLocation } from "@solidjs/router"
 import { createEffect, on } from "solid-js"
 import { createStore } from "solid-js/store"
-import { createSimpleContext } from "@opencode-ai/ui/context"
+import { createSimpleContext } from "@ocpp/ui/context"
 
 export const { use: useSettingsSurface, provider: SettingsSurfaceProvider } = createSimpleContext({
   name: "SettingsSurface",

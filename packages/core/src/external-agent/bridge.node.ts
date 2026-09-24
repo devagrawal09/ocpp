@@ -53,7 +53,7 @@ export async function open(gateway: ExternalAgentGateway.Gateway, signal: AbortS
       response.writeHead(401).end()
       return
     }
-    const server = new Server({ name: "opencode-external", version: "1" }, { capabilities: { tools: {} } })
+    const server = new Server({ name: "ocpp-external", version: "1" }, { capabilities: { tools: {} } })
     handlers(server, gateway, signal)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
     transports.add(transport)

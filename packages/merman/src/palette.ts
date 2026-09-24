@@ -1,7 +1,7 @@
 import { RGBA } from "@opentui/core"
 import { blendColor } from "./core/color/style.js"
 
-export interface OpenCodeDiagramPaletteInput {
+export interface OcppDiagramPaletteInput {
   readonly text: RGBA
   readonly subdued: RGBA
   readonly info: RGBA
@@ -14,9 +14,9 @@ export interface OpenCodeDiagramPaletteInput {
   }
 }
 
-export type OpenCodeDiagramPalette = ReturnType<typeof createOpenCodeDiagramPalette>
+export type OcppDiagramPalette = ReturnType<typeof createOcppDiagramPalette>
 
-export function createOpenCodeDiagramPalette(input: OpenCodeDiagramPaletteInput) {
+export function createOcppDiagramPalette(input: OcppDiagramPaletteInput) {
   const secondary = blendColor(input.text, input.subdued, 0.5)
   const muted = blendColor(input.text, input.subdued, 0.7)
   return {
@@ -43,7 +43,7 @@ export function createOpenCodeDiagramPalette(input: OpenCodeDiagramPaletteInput)
   }
 }
 
-export function resolveOpenCodeDiagramPalette(
+export function resolveOcppDiagramPalette(
   theme: {
     readonly text: {
       readonly default: RGBA
@@ -60,7 +60,7 @@ export function resolveOpenCodeDiagramPalette(
   mode: "dark" | "light",
 ) {
   const accent = theme.categorical[3] ?? theme.categorical[0]!
-  return createOpenCodeDiagramPalette({
+  return createOcppDiagramPalette({
     text: theme.text.default,
     subdued: theme.text.subdued,
     info: theme.text.feedback.info.default,

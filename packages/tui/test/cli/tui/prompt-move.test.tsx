@@ -18,10 +18,10 @@ import { createApi, createEventStream, createFetch, json } from "../../fixture/t
 import { TestTuiContexts } from "../../fixture/tui-environment"
 import { createTuiResolvedConfig } from "../../fixture/tui-runtime"
 
-const main = "/tmp/opencode/main"
-const clone = "/tmp/opencode/other-clone"
-const linked = "/tmp/opencode/linked"
-const created = "/tmp/opencode/proj_t/fresh"
+const main = "/tmp/ocpp/main"
+const clone = "/tmp/ocpp/other-clone"
+const linked = "/tmp/ocpp/linked"
+const created = "/tmp/ocpp/proj_t/fresh"
 
 test.each([
   { name: "a cached session in another clone", directory: clone, warm: true },
@@ -47,7 +47,7 @@ test.each([
     await fixture.create()
 
     expect(fixture.requests).toEqual([
-      { strategy: "git", from: clone, directory: path.join("/tmp/opencode", "proj_t"), name: "fresh" },
+      { strategy: "git", from: clone, directory: path.join("/tmp/ocpp", "proj_t"), name: "fresh" },
     ])
     expect(fixture.data.location.info({ directory: created })?.project.canonical).toBe(clone)
     expect(fixture.reads.locations.filter((directory) => directory === input.directory)).toHaveLength(1)
@@ -60,7 +60,7 @@ test.each([
 
 test.each([
   { name: "another clone", launch: main },
-  { name: "another project", launch: "/tmp/opencode/elsewhere", launchProjectID: "proj_launch" },
+  { name: "another project", launch: "/tmp/ocpp/elsewhere", launchProjectID: "proj_launch" },
   { name: "another workspace", launch: main, workspaceID: "wrk_clone" },
 ])("uses Home's selected location instead of launch in $name", async (input) => {
   const fixture = await renderMove({ ...input, directory: `${clone}/packages/tui`, home: true })
@@ -77,7 +77,7 @@ test.each([
     expect(frame).toContain(clone)
     expect(frame.indexOf(clone)).toBeLessThan(frame.indexOf(main))
     expect(fixture.requests).toEqual([
-      { strategy: "git", from: clone, directory: path.join("/tmp/opencode", "proj_t"), name: "fresh" },
+      { strategy: "git", from: clone, directory: path.join("/tmp/ocpp", "proj_t"), name: "fresh" },
     ])
     expect(fixture.data.location.info(selected)?.project.canonical).toBe(clone)
     expect(fixture.moves).toEqual([])

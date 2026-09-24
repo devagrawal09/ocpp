@@ -1,9 +1,9 @@
 export * as ConfigPluginSource from "./source.js"
 
-import { Directory, Document, type Entry } from "@opencode-ai/schema/config"
-import { ConfigPlugin } from "@opencode-ai/schema/config/plugin"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { Directory, Document, type Entry } from "@ocpp/schema/config"
+import { ConfigPlugin } from "@ocpp/schema/config/plugin"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Option, PubSub, Scope, Stream } from "effect"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -29,7 +29,7 @@ export interface Interface {
   readonly changes: () => Stream.Stream<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ConfigPluginSource") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ConfigPluginSource") {}
 
 export const layer = Layer.effect(
   Service,

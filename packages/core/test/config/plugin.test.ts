@@ -2,24 +2,24 @@ import fs from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
 import { describe, expect } from "bun:test"
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Agent } from "@opencode-ai/core/agent"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { ConfigPluginSource } from "@opencode-ai/core/config/plugin/source"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
-import { Npm } from "@opencode-ai/util/npm"
-import { Bus } from "@opencode-ai/core/bus"
-import { Location } from "@opencode-ai/core/location"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { Model } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Agent } from "@ocpp/core/agent"
+import { Catalog } from "@ocpp/core/catalog"
+import { ConfigPluginSource } from "@ocpp/core/config/plugin/source"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
+import { Npm } from "@ocpp/util/npm"
+import { Bus } from "@ocpp/core/bus"
+import { Location } from "@ocpp/core/location"
+import { LocationServiceMap } from "@ocpp/core/location-services"
+import { Plugin } from "@ocpp/core/plugin"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
+import { AbsolutePath } from "@ocpp/core/schema"
 import { Effect, Fiber, Layer, Logger, Schedule, Stream } from "effect"
 import { Database } from "../../src/database/database"
 import { tmpdir } from "../fixture/tmpdir"
@@ -75,15 +75,15 @@ const refreshIt = testEffect(
 describe("PluginSupervisor config", () => {
   it.live("applies selectors in order", () =>
     withLocation(
-      { plugins: ["-opencode.provider.*", "opencode.provider.openai"] },
+      { plugins: ["-ocpp.provider.*", "ocpp.provider.openai"] },
       Effect.gen(function* () {
         const plugins = yield* Plugin.Service
         yield* ready()
         expect(
           (yield* plugins.list())
             .flatMap((plugin) => (plugin.id ? [plugin.id] : []))
-            .filter((id) => id.startsWith("opencode.provider.")),
-        ).toEqual([Plugin.ID.make("opencode.provider.openai")])
+            .filter((id) => id.startsWith("ocpp.provider.")),
+        ).toEqual([Plugin.ID.make("ocpp.provider.openai")])
       }),
     ),
   )
@@ -280,8 +280,8 @@ describe("PluginSupervisor config", () => {
       }),
       false,
       async (directory) => {
-        await fs.mkdir(path.join(directory, ".opencode"), { recursive: true })
-        await fs.writeFile(path.join(directory, ".opencode", "escape.js"), discoveredPlugin("escaped-entrypoint"))
+        await fs.mkdir(path.join(directory, ".ocpp"), { recursive: true })
+        await fs.writeFile(path.join(directory, ".ocpp", "escape.js"), discoveredPlugin("escaped-entrypoint"))
         await writeDiscoveredPackage(
           directory,
           "contained",
@@ -295,8 +295,8 @@ describe("PluginSupervisor config", () => {
           { "index.js": "symlink-fallback" },
         )
         await fs.symlink(
-          path.join(directory, ".opencode", "escape.js"),
-          path.join(directory, ".opencode", "plugins", "symlink", "entry.js"),
+          path.join(directory, ".ocpp", "escape.js"),
+          path.join(directory, ".ocpp", "plugins", "symlink", "entry.js"),
         )
       },
     ),
@@ -313,7 +313,7 @@ describe("PluginSupervisor config", () => {
           const plugins = yield* Plugin.Service
           const inventory = yield* plugins.list()
           const ids = inventory.map((plugin) => String(plugin.id))
-          expect(ids).toContain("opencode.agent")
+          expect(ids).toContain("ocpp.agent")
           expect(ids).toContain("static-sdk")
           expect(ids).not.toContain("config-promise-plugin")
           expect(inventory.find((plugin) => plugin.id === "static-sdk")?.source).toEqual({ type: "sdk" })
@@ -336,7 +336,7 @@ describe("PluginSupervisor config", () => {
         const bus = yield* Bus.Service
         const location = yield* Location.Service
         const plugins = yield* Plugin.Service
-        const file = path.join(location.directory, ".opencode", "plugin", "mutable.ts")
+        const file = path.join(location.directory, ".ocpp", "plugin", "mutable.ts")
         const first = (yield* plugins.list()).find((plugin) => plugin.id === "mutable-plugin")?.id
 
         expect(first).toBeDefined()
@@ -358,7 +358,7 @@ describe("PluginSupervisor config", () => {
       }),
       false,
       async (directory) => {
-        const plugin = path.join(directory, ".opencode", "plugin")
+        const plugin = path.join(directory, ".ocpp", "plugin")
         await fs.mkdir(plugin, { recursive: true })
         await fs.writeFile(path.join(plugin, "mutable.ts"), mutablePlugin("first"))
       },
@@ -427,11 +427,11 @@ describe("PluginSupervisor config", () => {
           yield* ready()
           const registry = yield* Plugin.Service
           const ids = (yield* registry.list()).map((plugin) => String(plugin.id))
-          expect(ids.indexOf("opencode.agent")).toBeLessThan(ids.indexOf("sdk-order"))
+          expect(ids.indexOf("ocpp.agent")).toBeLessThan(ids.indexOf("sdk-order"))
           expect(ids.indexOf("sdk-order")).toBeLessThan(ids.indexOf("config-promise-plugin"))
           expect(ids.indexOf("config-promise-plugin")).toBeLessThan(ids.indexOf("variant-source"))
-          expect(ids.indexOf("variant-source")).toBeLessThan(ids.indexOf("opencode.config.provider"))
-          expect(ids.indexOf("opencode.config.provider")).toBeLessThan(ids.indexOf("opencode.variant"))
+          expect(ids.indexOf("variant-source")).toBeLessThan(ids.indexOf("ocpp.config.provider"))
+          expect(ids.indexOf("ocpp.config.provider")).toBeLessThan(ids.indexOf("ocpp.variant"))
 
           const catalog = yield* Catalog.Service
           expect(
@@ -448,12 +448,12 @@ describe("PluginSupervisor config", () => {
   it.live("allows variant generation to be disabled", () =>
     withLocation(
       {
-        plugins: [path.join(import.meta.dir, "../plugin/fixtures/variant-source-plugin.ts"), "-opencode.variant"],
+        plugins: [path.join(import.meta.dir, "../plugin/fixtures/variant-source-plugin.ts"), "-ocpp.variant"],
       },
       Effect.gen(function* () {
         yield* ready()
         const registry = yield* Plugin.Service
-        expect((yield* registry.list()).map((plugin) => String(plugin.id))).not.toContain("opencode.variant")
+        expect((yield* registry.list()).map((plugin) => String(plugin.id))).not.toContain("ocpp.variant")
 
         const catalog = yield* Catalog.Service
         expect((yield* catalog.model.get(Provider.ID.make("configured"), Model.ID.make("glm-5.2")))?.variants).toEqual([
@@ -542,7 +542,7 @@ function withLocation<A, E, R>(
       Effect.promise(async () => {
         await prepare?.(tmp.path)
         if (fixtures) {
-          const directory = path.join(tmp.path, ".opencode")
+          const directory = path.join(tmp.path, ".ocpp")
           await fs.mkdir(directory, { recursive: true })
           await Promise.all(
             ["plugin", "plugins"].map((name) =>
@@ -551,9 +551,9 @@ function withLocation<A, E, R>(
           )
         }
         if (config !== undefined) {
-          const directory = fixtures ? path.join(tmp.path, ".opencode") : tmp.path
+          const directory = fixtures ? path.join(tmp.path, ".ocpp") : tmp.path
           await fs.mkdir(directory, { recursive: true })
-          await fs.writeFile(path.join(directory, "opencode.json"), JSON.stringify(config))
+          await fs.writeFile(path.join(directory, "ocpp.json"), JSON.stringify(config))
         }
       }),
     ),
@@ -595,7 +595,7 @@ async function writeDiscoveredPackage(
   manifest: Record<string, unknown> | undefined,
   files: Record<string, string>,
 ) {
-  const plugin = path.join(directory, ".opencode", "plugins", name)
+  const plugin = path.join(directory, ".ocpp", "plugins", name)
   await fs.mkdir(plugin, { recursive: true })
   await Promise.all([
     ...(manifest ? [fs.writeFile(path.join(plugin, "package.json"), JSON.stringify(manifest))] : []),

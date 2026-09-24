@@ -1,4 +1,4 @@
-import type { Endpoint } from "@opencode-ai/client/effect/service"
+import type { Endpoint } from "@ocpp/client/effect/service"
 import { Effect } from "effect"
 import path from "node:path"
 import { Standalone } from "../services/standalone"
@@ -78,8 +78,6 @@ function explicitEndpoint(input: V1RunCommandInput): Endpoint {
   if (!url) throw new Error("Missing V1 server URL")
   return {
     url,
-    auth: input.password
-      ? { type: "basic", username: input.username ?? "opencode", password: input.password }
-      : undefined,
+    auth: input.password ? { type: "basic", username: input.username ?? "ocpp", password: input.password } : undefined,
   }
 }

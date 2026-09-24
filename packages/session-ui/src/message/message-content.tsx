@@ -1,23 +1,23 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, type ComponentProps, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useData } from "../context"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { useI18n } from "@opencode-ai/ui/context/i18n"
+import { useDialog } from "@ocpp/ui/context/dialog"
+import { useI18n } from "@ocpp/ui/context/i18n"
 import { Markdown } from "../components/markdown"
-import { ImagePreview } from "@opencode-ai/ui/image-preview"
-import { getFilename } from "@opencode-ai/util/path"
+import { ImagePreview } from "@ocpp/ui/image-preview"
+import { getFilename } from "@ocpp/util/path"
 import { AttachmentCard } from "./attachment-card"
 import { CommentCard } from "./comment-card"
 import { TimelineSeparator } from "../components/timeline-separator"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Icon } from "@opencode-ai/ui/icon"
-import { Button } from "@opencode-ai/ui/button"
-import { TextReveal } from "@opencode-ai/ui/text-reveal"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
+import { Tooltip } from "@ocpp/ui/tooltip"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { Icon } from "@ocpp/ui/icon"
+import { Button } from "@ocpp/ui/button"
+import { TextReveal } from "@ocpp/ui/text-reveal"
+import { TextShimmer } from "@ocpp/ui/text-shimmer"
 import { BasicTool } from "../components/basic-tool"
 import { reasoningHeading } from "../timeline/projection"
-import { Card } from "@opencode-ai/ui/card"
+import { Card } from "@ocpp/ui/card"
 import type {
   PromptAgentAttachment,
   PromptFileAttachment,
@@ -25,7 +25,7 @@ import type {
   SessionMessageAssistantReasoning,
   SessionMessageCompaction,
   SessionMessageUser,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import type { SessionUserActions, SessionUserComment } from "../actions"
 import { typeLabel } from "../components/message-file"
 

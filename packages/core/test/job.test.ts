@@ -1,10 +1,10 @@
 import { describe, expect } from "bun:test"
-import { Job } from "@opencode-ai/core/job"
-import { KV } from "@opencode-ai/core/kv"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { Job } from "@ocpp/core/job"
+import { KV } from "@ocpp/core/kv"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Deferred, Effect, Exit, Fiber, Scope } from "effect"
-import { SessionSchema } from "@opencode-ai/core/session/schema"
+import { SessionSchema } from "@ocpp/core/session/schema"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Job.node, KV.node])))

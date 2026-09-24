@@ -2,22 +2,22 @@ import { expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Agent } from "@opencode-ai/core/agent"
-import { Config } from "@opencode-ai/core/config"
-import { Database } from "@opencode-ai/core/database/database"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { Location } from "@opencode-ai/core/location"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Session } from "@opencode-ai/core/session"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Tool } from "@opencode-ai/core/tool"
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { Agent } from "@ocpp/core/agent"
+import { Config } from "@ocpp/core/config"
+import { Database } from "@ocpp/core/database/database"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { Location } from "@ocpp/core/location"
+import { LocationServiceMap } from "@ocpp/core/location-services"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Session } from "@ocpp/core/session"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { Tool } from "@ocpp/core/tool"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Deferred, Effect, Fiber, Layer, Queue, Stream } from "effect"
 import type { Scope } from "effect/Scope"
 import { SimulatedProvider } from "../src/backend/simulated-provider"
@@ -45,7 +45,7 @@ test("streams a Drive-controlled provider response and removes the finished invo
         result: {
           protocolVersion: 1,
           role: "backend",
-          server: { name: "opencode", version: expect.any(String) },
+          server: { name: "ocpp", version: expect.any(String) },
           capabilities: expect.arrayContaining(["llm.attach", "llm.request"]),
         },
       })
@@ -215,7 +215,7 @@ test("fails the provider stream when Drive disconnects the invocation", async ()
 
 test("controls arbitrary tools through scoped SDK overlays", async () => {
   const endpoint = availableEndpoint()
-  const directory = await mkdtemp(join(tmpdir(), "opencode-simulated-tools-"))
+  const directory = await mkdtemp(join(tmpdir(), "ocpp-simulated-tools-"))
   const secondDirectory = join(directory, "second")
   await mkdir(secondDirectory)
   try {
@@ -227,7 +227,7 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
         let activations = 0
         yield* plugins.register(
           Plugin.define({
-            id: "opencode.simulation.test.activation-count",
+            id: "ocpp.simulation.test.activation-count",
             effect: () => Effect.sync(() => void activations++),
           }),
         )

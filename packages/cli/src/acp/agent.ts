@@ -16,11 +16,11 @@ import {
   type SetSessionConfigOptionRequest,
   type SetSessionModeRequest,
 } from "@agentclientprotocol/sdk"
-import type { OpenCodeClient } from "@opencode-ai/client/promise"
+import type { OcppClient } from "@ocpp/client/promise"
 import { ACPError } from "./error"
 import { ACPService } from "./service"
 
-export function create(client: OpenCodeClient, connection: AgentSideConnection) {
+export function create(client: OcppClient, connection: AgentSideConnection) {
   const service = ACPService.make({ client, connection })
   return {
     initialize: (params: InitializeRequest) => run(service.initialize(params)),

@@ -1,8 +1,8 @@
 import os from "os"
 import { App } from "../../app.js"
 import { Effect } from "effect"
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Form } from "@opencode-ai/schema/form"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Form } from "@ocpp/schema/form"
 import { Provider } from "../../provider.js"
 import { iife } from "../../util/iife.js"
 import { configuredSettings } from "./configured.js"
@@ -10,7 +10,7 @@ import { configuredSettings } from "./configured.js"
 const providerID = Provider.ID.make("cloudflare-workers-ai")
 
 export const CloudflareWorkersAIPlugin = define({
-  id: "opencode.provider.cloudflare.workers.ai",
+  id: "ocpp.provider.cloudflare.workers.ai",
   effect: Effect.fn(function* (ctx) {
     const configured = yield* configuredSettings(providerID)
     const form = iife(() => {

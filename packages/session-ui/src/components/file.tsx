@@ -1,4 +1,4 @@
-import { sampledChecksum } from "@opencode-ai/util/encode"
+import { sampledChecksum } from "@ocpp/util/encode"
 import {
   areFilesEqual,
   areOptionsEqual,

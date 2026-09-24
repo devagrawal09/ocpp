@@ -9,7 +9,7 @@ const root = resolve(dir, "../..")
 const html = async (name: string) => Bun.file(join(dir, name)).text()
 
 /**
- * Packaged Electron windows load renderer HTML via the privileged `oc://`
+ * Packaged Electron windows load renderer HTML via the privileged `ocpp-renderer://`
  * protocol. Root-relative asset paths like `src="/foo.js"` would resolve from
  * the protocol origin root instead of relative to the current HTML entrypoint.
  *
@@ -49,7 +49,7 @@ describe("electron renderer html", () => {
  * after the renderer root is accounted for.
  */
 describe("electron vite publicDir", () => {
-  test("configured publicDir resolves to a directory with oc-theme-preload.js", async () => {
+  test("configured publicDir resolves to a directory with ocpp-theme-preload.js", async () => {
     const config = await Bun.file(join(root, "electron.vite.config.ts")).text()
     const pub = config.match(/publicDir:\s*["']([^"']+)["']/)
     const rendererRoot = config.match(/root:\s*["']([^"']+)["']/)
@@ -57,6 +57,6 @@ describe("electron vite publicDir", () => {
     expect(rendererRoot).not.toBeNull()
     const resolved = resolve(root, rendererRoot![1], pub![1])
     expect(existsSync(resolved)).toBe(true)
-    expect(existsSync(join(resolved, "oc-theme-preload.js"))).toBe(true)
+    expect(existsSync(join(resolved, "ocpp-theme-preload.js"))).toBe(true)
   })
 })

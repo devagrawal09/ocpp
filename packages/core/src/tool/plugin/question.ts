@@ -1,11 +1,11 @@
 export * as QuestionTool from "./question.js"
 
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { ToolFailure } from "@opencode-ai/ai"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import { ToolFailure } from "@ocpp/ai"
 import { Effect, Schema } from "effect"
 import { Form } from "../../form.js"
 import { Permission } from "../../permission.js"
-import { Question } from "@opencode-ai/schema/question"
+import { Question } from "@ocpp/schema/question"
 
 export const name = "question"
 
@@ -46,7 +46,7 @@ export const toModelContent = (questions: ReadonlyArray<Question.Prompt>, answer
 }
 
 export const Plugin = {
-  id: "opencode.tool.question",
+  id: "ocpp.tool.question",
   effect: Effect.fn("QuestionTool.Plugin")(function* (ctx: Context) {
     const forms = yield* Form.Service
     const permission = yield* Permission.Service

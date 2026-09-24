@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, mock, test } from "bun:test"
 import { ServerScope } from "@/runtime/server/scope"
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { Persist } from "@/runtime/persistence/storage"
 import type { Platform } from "@/runtime/platform/platform"
 
@@ -15,7 +15,7 @@ beforeAll(async () => {
     useLocation: () => ({}),
     useSearchParams: () => [{}, () => undefined],
   }))
-  mock.module("@opencode-ai/ui/context", () => ({
+  mock.module("@ocpp/ui/context", () => ({
     createSimpleContext: () => ({
       use: () => undefined,
       provider: () => undefined,

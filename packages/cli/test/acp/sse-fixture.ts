@@ -1,7 +1,7 @@
-import { OpenCode, type OpenCodeEvent, type SessionMessageInfo } from "@opencode-ai/client/promise"
+import { Ocpp, type OcppEvent, type SessionMessageInfo } from "@ocpp/client/promise"
 
-type DurableEvent = Extract<OpenCodeEvent, { durable: unknown }>
-type EphemeralEvent = Exclude<OpenCodeEvent, DurableEvent>
+type DurableEvent = Extract<OcppEvent, { durable: unknown }>
+type EphemeralEvent = Exclude<OcppEvent, DurableEvent>
 
 type RequestRecord = {
   readonly method: string
@@ -162,7 +162,7 @@ export function createSseFixture(options: FixtureOptions = {}) {
   })
 
   return {
-    client: OpenCode.make({ baseUrl: server.url.toString() }),
+    client: Ocpp.make({ baseUrl: server.url.toString() }),
     messages,
     requests,
     send,

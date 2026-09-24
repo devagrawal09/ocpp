@@ -4,9 +4,9 @@ import path from "path"
 import { readFile } from "fs/promises"
 import { statSync } from "fs"
 import { Context, Effect, Layer, Schema } from "effect"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
 import { State } from "../state.js"
 import { which } from "../util/which.js"
 
@@ -49,7 +49,7 @@ export interface Interface extends State.Transformable<Draft> {
   readonly resolve: (input: ResolveInput) => Effect.Effect<string>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ShellSelect") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ShellSelect") {}
 
 function stat(file: string) {
   return statSync(file, { throwIfNoEntry: false }) ?? undefined

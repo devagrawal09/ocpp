@@ -1,12 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/simulation",
+  "name": "@ocpp/simulation",
   "version": "1.17.13",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
+    "url": "git+https://github.com/devagrawal09/oc-plus-plus.git",
     "directory": "packages/simulation"
   },
   "publishConfig": {
@@ -29,11 +29,11 @@
     "typecheck": "tsgo -b"
   },
   "dependencies": {
-    "@opencode-ai/core": "workspace:*",
-    "@opencode-ai/ai": "workspace:*",
-    "@opencode-ai/plugin": "workspace:*",
-    "@opencode-ai/protocol": "workspace:*",
-    "@opencode-ai/util": "workspace:*",
+    "@ocpp/core": "workspace:*",
+    "@ocpp/ai": "workspace:*",
+    "@ocpp/plugin": "workspace:*",
+    "@ocpp/protocol": "workspace:*",
+    "@ocpp/util": "workspace:*",
     "@opentui/core": "catalog:",
     "effect": "catalog:",
     "ws": "8.21.0"

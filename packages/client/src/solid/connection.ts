@@ -1,6 +1,6 @@
 import { batch, onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
-import type { OpenCodeClient, OpenCodeEvent } from "../promise"
+import type { OcppClient, OcppEvent } from "../promise"
 
 export type ClientConnectionStatus = "connected" | "connecting" | "reconnecting"
 export type ClientConnectionEvent = {
@@ -14,8 +14,8 @@ export type ClientConnectionEvent = {
 }
 
 export type ClientConnectionOptions = {
-  readonly reconnect?: (signal: AbortSignal) => Promise<OpenCodeClient>
-  readonly onEvent: (event: OpenCodeEvent) => void
+  readonly reconnect?: (signal: AbortSignal) => Promise<OcppClient>
+  readonly onEvent: (event: OcppEvent) => void
   readonly flushInterval?: number
   readonly pageLifecycle?: boolean
   readonly log?: {
@@ -28,7 +28,7 @@ const connectTimeout = 2_000
 const reconnectDelay = 1_000
 const connectionHistoryLimit = 50
 
-export function createClientConnection(initialApi: OpenCodeClient, options: ClientConnectionOptions) {
+export function createClientConnection(initialApi: OcppClient, options: ClientConnectionOptions) {
   const abort = new AbortController()
   const history: ClientConnectionEvent[] = []
   const [connection, setConnection] = createStore<{
@@ -37,7 +37,7 @@ export function createClientConnection(initialApi: OpenCodeClient, options: Clie
     error?: string
   }>({ status: "connecting", attempt: 0 })
   let api = initialApi
-  let pending: OpenCodeEvent[] = []
+  let pending: OcppEvent[] = []
   let flushTimer: ReturnType<typeof setTimeout> | undefined
   let stream: AbortController | undefined
   let run: Promise<void> | undefined
@@ -49,7 +49,7 @@ export function createClientConnection(initialApi: OpenCodeClient, options: Clie
     if (history.length > connectionHistoryLimit) history.shift()
   }
 
-  function publish(event: OpenCodeEvent) {
+  function publish(event: OcppEvent) {
     pending.push(event)
     if (flushTimer) return
     flushTimer = setTimeout(() => {

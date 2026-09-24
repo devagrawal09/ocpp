@@ -1,4 +1,4 @@
-import type { ExperimentalPersistentPtyConnectTokenInput, OpenCodeClient, PtyConnectTokenInput } from "../promise"
+import type { ExperimentalPersistentPtyConnectTokenInput, OcppClient, PtyConnectTokenInput } from "../promise"
 
 export type PtyClientOptions = {
   readonly url: string
@@ -18,13 +18,13 @@ export type PersistentPtyConnectInput = {
   readonly takeover?: boolean
 }
 
-export function createPtyClient(api: OpenCodeClient, options: PtyClientOptions) {
+export function createPtyClient(api: OcppClient, options: PtyClientOptions) {
   return {
     async connect(input: PtyConnectInput) {
       const result = await api.pty.connect.token({
         ptyID: input.ptyID,
         location: input.location,
-        "x-opencode-ticket": "1",
+        "x-ocpp-ticket": "1",
       })
       const url = new URL(`/api/pty/${encodeURIComponent(input.ptyID)}/connect`, options.url)
       if (input.location?.directory) url.searchParams.set("location[directory]", input.location.directory)
@@ -40,12 +40,12 @@ export function createPtyClient(api: OpenCodeClient, options: PtyClientOptions) 
   }
 }
 
-export function createPersistentPtyClient(api: OpenCodeClient, options: PtyClientOptions) {
+export function createPersistentPtyClient(api: OcppClient, options: PtyClientOptions) {
   return {
     async connect(input: PersistentPtyConnectInput) {
       const token = await api.experimental.persistentPty.connectToken({
         ptyID: input.ptyID,
-        "x-opencode-ticket": "1",
+        "x-ocpp-ticket": "1",
       })
       const url = new URL(`/api/experimental/persistent-pty/${encodeURIComponent(input.ptyID)}/connect`, options.url)
       url.searchParams.set("ticket", token.ticket)

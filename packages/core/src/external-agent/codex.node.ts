@@ -17,7 +17,7 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
     const identity = { id: options.vendorSessionID, completed: false }
     try {
       options.signal.throwIfAborted()
-      // Codex exec has no approval callback: authorize the bounded workspace delegation in OpenCode and
+      // Codex exec has no approval callback: authorize the bounded workspace delegation in OC++ and
       // keep its sandbox enabled. On-request permits configured MCP tools while unsandboxed escalation still fails.
       await options.authorize("workspace", { directory: options.directory, sandbox: "workspace-write", network: false })
       const codex = new Codex({
@@ -25,7 +25,7 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
         codexPathOverride: "codex",
         config: {
           features: { multi_agent: true },
-          mcp_servers: { opencode: { url: bridge.url, http_headers: { Authorization: "Bearer " + bridge.token } } },
+          mcp_servers: { ocpp: { url: bridge.url, http_headers: { Authorization: "Bearer " + bridge.token } } },
         },
       })
       const settings = {
@@ -45,7 +45,7 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
       const stream = await thread.runStreamed(
         [
           options.vendorSessionID === undefined && options.history.length > 0
-            ? "Restored canonical OpenCode history:\n" + ExternalAgentDriver.replay(options.history)
+            ? "Restored canonical OC++ history:\n" + ExternalAgentDriver.replay(options.history)
             : "",
           options.message,
         ]

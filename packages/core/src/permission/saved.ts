@@ -2,11 +2,11 @@ export * as PermissionSaved from "./saved.js"
 
 import { eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
-import { Project } from "@opencode-ai/schema/project"
+import { Project } from "@ocpp/schema/project"
 import { Database } from "../database/database.js"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { PermissionTable } from "./sql.js"
-import { PermissionSaved } from "@opencode-ai/schema/permission-saved"
+import { PermissionSaved } from "@ocpp/schema/permission-saved"
 
 export const ID = PermissionSaved.ID
 export type ID = typeof ID.Type
@@ -32,7 +32,7 @@ export interface Interface {
   readonly remove: (id: ID) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/PermissionSaved") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/PermissionSaved") {}
 
 const layer = Layer.effect(
   Service,

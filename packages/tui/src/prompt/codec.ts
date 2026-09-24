@@ -1,5 +1,5 @@
-import type { Prompt, PromptInput } from "@opencode-ai/schema"
-import { Skill } from "@opencode-ai/schema/skill"
+import type { Prompt, PromptInput } from "@ocpp/schema"
+import { Skill } from "@ocpp/schema/skill"
 import type { Types } from "effect"
 
 export type EditablePromptInput = Types.DeepMutable<PromptInput.Prompt>

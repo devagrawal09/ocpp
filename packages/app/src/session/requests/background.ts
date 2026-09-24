@@ -1,4 +1,4 @@
-import type { SessionInfo, SessionMessageAssistant, SessionMessageInfo, ShellInfo } from "@opencode-ai/client/promise"
+import type { SessionInfo, SessionMessageAssistant, SessionMessageInfo, ShellInfo } from "@ocpp/client/promise"
 import { createMemo } from "solid-js"
 
 type Task =

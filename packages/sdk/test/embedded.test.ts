@@ -1,18 +1,18 @@
 import fs from "fs/promises"
 import path from "path"
 import { expect } from "bun:test"
-import { LanguageModel, LLMClient } from "@opencode-ai/ai"
-import { OpenAIChat } from "@opencode-ai/ai/protocols"
-import { TestLLM } from "@opencode-ai/ai/testing"
-import { llmClient } from "@opencode-ai/core/effect/app-node-platform"
-import { makeMemoryDriver } from "@opencode-ai/core/environment/index"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
-import { WorkspaceDriver } from "@opencode-ai/core/workspace/driver"
+import { LanguageModel, LLMClient } from "@ocpp/ai"
+import { OpenAIChat } from "@ocpp/ai/protocols"
+import { TestLLM } from "@ocpp/ai/testing"
+import { llmClient } from "@ocpp/core/effect/app-node-platform"
+import { makeMemoryDriver } from "@ocpp/core/environment/index"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
+import { WorkspaceDriver } from "@ocpp/core/workspace/driver"
 import { Deferred, Effect, Fiber, Latch, Layer, Option, Ref, Schema, Stream } from "effect"
 import { testEffect } from "../../core/test/lib/effect"
 import { tmpdir } from "../../core/test/fixture/tmpdir"
-import type { OpenCodeEvent } from "../src/effect"
+import type { OcppEvent } from "../src/effect"
 
 const it = testEffect(Layer.empty)
 type Sdk = typeof import("../src/effect")
@@ -37,7 +37,7 @@ const location = (fixture: Fixture) =>
 
 for (const selection of ["explicit", "default"] as const) {
   it.live(`first generate.text waits for inline providers with ${selection} model selection`, () =>
-    withEmbedded("opencode-embedded-generate-", (fixture) =>
+    withEmbedded("ocpp-embedded-generate-", (fixture) =>
       Effect.gen(function* () {
         const release = yield* Latch.make()
         const llm = yield* TestLLM.Test.pipe(
@@ -50,7 +50,7 @@ for (const selection of ["explicit", "default"] as const) {
             return { flush: release.open.pipe(Effect.andThen(plugins.flush)) }
           }),
         ).pipe(Layer.provide(PluginSupervisor.layer))
-        const opencode = yield* fixture.sdk.OpenCode.create(
+        const ocpp = yield* fixture.sdk.Ocpp.create(
           {
             config: {
               directory: fixture.directory,
@@ -77,9 +77,9 @@ for (const selection of ["explicit", "default"] as const) {
           },
         )
         // Hold provider activation until the request reaches readiness, regardless of startup speed.
-        yield* opencode.plugin({ id: "gate-catalog", effect: () => release.await })
+        yield* ocpp.plugin({ id: "gate-catalog", effect: () => release.await })
 
-        const result = yield* opencode.generate.text({
+        const result = yield* ocpp.generate.text({
           prompt: "Say ready",
           ...(selection === "explicit"
             ? {
@@ -101,17 +101,17 @@ for (const selection of ["explicit", "default"] as const) {
 }
 
 it.live("exposes app metadata to plugins", () =>
-  withEmbedded("opencode-embedded-app-", (fixture) =>
+  withEmbedded("ocpp-embedded-app-", (fixture) =>
     Effect.gen(function* () {
-      const opencode = yield* fixture.sdk.OpenCode.create({
+      const ocpp = yield* fixture.sdk.Ocpp.create({
         app: { name: "test", version: "1.2.3", channel: "beta" },
       })
       const app = yield* Deferred.make<{ readonly name: string; readonly version: string; readonly channel: string }>()
-      yield* opencode.plugin({
+      yield* ocpp.plugin({
         id: `app-${crypto.randomUUID()}`,
         effect: (ctx) => Deferred.succeed(app, ctx.app).pipe(Effect.asVoid),
       })
-      yield* opencode.plugin.list({ location: location(fixture) })
+      yield* ocpp.plugin.list({ location: location(fixture) })
       expect(yield* Deferred.await(app).pipe(Effect.timeout("4 seconds"))).toEqual({
         name: "test",
         version: "1.2.3",
@@ -124,9 +124,9 @@ it.live("exposes app metadata to plugins", () =>
 it.live(
   "reloads every booted Location after SDK plugin registration",
   () =>
-    withEmbedded("opencode-embedded-plugin-reload-", (fixture) =>
+    withEmbedded("ocpp-embedded-plugin-reload-", (fixture) =>
       Effect.gen(function* () {
-        const opencode = yield* fixture.sdk.OpenCode.create()
+        const ocpp = yield* fixture.sdk.Ocpp.create()
         const booted = yield* Deferred.make<void>()
         const activated = yield* Deferred.make<boolean>()
         const bootCount = yield* Ref.make(0)
@@ -140,7 +140,7 @@ it.live(
         const bootstrapID = `bootstrap-sdk-${crypto.randomUUID()}`
         const id = `late-sdk-${crypto.randomUUID()}`
 
-        yield* opencode.plugin({
+        yield* ocpp.plugin({
           id: bootstrapID,
           effect: (ctx) =>
             Effect.gen(function* () {
@@ -161,11 +161,11 @@ it.live(
             }),
         })
         yield* Effect.all(
-          refs.map((ref) => opencode.plugin.list({ location: ref })),
+          refs.map((ref) => ocpp.plugin.list({ location: ref })),
           { discard: true },
         )
         yield* Deferred.await(booted).pipe(Effect.timeout("4 seconds"))
-        yield* opencode.plugin({
+        yield* ocpp.plugin({
           id,
           effect: (ctx) =>
             Effect.gen(function* () {
@@ -197,9 +197,9 @@ it.live(
 it.live(
   "preserves SDK plugins across Location eviction",
   () =>
-    withEmbedded("opencode-embedded-plugin-eviction-", (fixture) =>
+    withEmbedded("ocpp-embedded-plugin-eviction-", (fixture) =>
       Effect.gen(function* () {
-        const opencode = yield* fixture.sdk.OpenCode.create()
+        const ocpp = yield* fixture.sdk.Ocpp.create()
         const ref = location(fixture)
         const connected = yield* Latch.make(false)
         const booted = yield* Deferred.make<void>()
@@ -208,7 +208,7 @@ it.live(
         const generations = yield* Ref.make(0)
         const id = `evicted-sdk-${crypto.randomUUID()}`
 
-        yield* opencode.events.subscribe().pipe(
+        yield* ocpp.events.subscribe().pipe(
           Stream.runForEach((event) => {
             if (event.type === "server.connected") return connected.open
             if (event.type !== "plugin.updated" || event.location?.directory !== fixture.directory) return Effect.void
@@ -224,15 +224,15 @@ it.live(
           Effect.forkScoped,
         )
         yield* connected.await
-        yield* opencode.plugin({ id, effect: () => Effect.void })
+        yield* ocpp.plugin({ id, effect: () => Effect.void })
 
-        yield* opencode.plugin.list({ location: ref })
+        yield* ocpp.plugin.list({ location: ref })
         yield* Deferred.await(booted).pipe(Effect.timeout("5 seconds"))
-        yield* opencode.debug.location.evict({ location: ref })
-        yield* opencode.plugin.list({ location: ref })
+        yield* ocpp.debug.location.evict({ location: ref })
+        yield* ocpp.plugin.list({ location: ref })
         yield* Deferred.await(recommitted).pipe(Effect.timeout("5 seconds"))
 
-        expect((yield* opencode.plugin.list({ location: ref })).data.map((plugin) => String(plugin.id))).toContain(id)
+        expect((yield* ocpp.plugin.list({ location: ref })).data.map((plugin) => String(plugin.id))).toContain(id)
       }),
     ),
   15_000,
@@ -241,9 +241,9 @@ it.live(
 it.live(
   "evicts a Location without triggering connected client refetches",
   () =>
-    withEmbedded("opencode-embedded-quiet-eviction-", (fixture) =>
+    withEmbedded("ocpp-embedded-quiet-eviction-", (fixture) =>
       Effect.gen(function* () {
-        const opencode = yield* fixture.sdk.OpenCode.create({
+        const ocpp = yield* fixture.sdk.Ocpp.create({
           config: { directory: fixture.directory, project: false, content: "{}" },
         })
         const ref = location(fixture)
@@ -252,7 +252,7 @@ it.live(
         const boots = yield* Ref.make(0)
         const updates = yield* Ref.make<string[]>([])
 
-        yield* opencode.plugin({
+        yield* ocpp.plugin({
           id: `quiet-eviction-${crypto.randomUUID()}`,
           effect: (ctx) =>
             Effect.gen(function* () {
@@ -264,7 +264,7 @@ it.live(
               )
             }),
         })
-        const subscriber = yield* opencode.events.subscribe().pipe(
+        const subscriber = yield* ocpp.events.subscribe().pipe(
           Stream.runForEach((event) =>
             Effect.gen(function* () {
               if (event.type === "server.connected") {
@@ -285,34 +285,34 @@ it.live(
               yield* Ref.update(updates, (types) => [...types, event.type])
               // A connected consumer re-reads invalidated resources through the real router.
               if (event.type === "catalog.updated") {
-                yield* opencode.model.list({ location: ref })
-                yield* opencode.provider.list({ location: ref })
+                yield* ocpp.model.list({ location: ref })
+                yield* ocpp.provider.list({ location: ref })
                 return
               }
               if (event.type === "agent.updated") {
-                yield* opencode.agent.list({ location: ref })
+                yield* ocpp.agent.list({ location: ref })
                 return
               }
-              yield* opencode.command.list({ location: ref })
+              yield* ocpp.command.list({ location: ref })
             }),
           ),
           Effect.forkScoped,
         )
         yield* connected.await
-        yield* opencode.plugin.list({ location: ref })
+        yield* ocpp.plugin.list({ location: ref })
         yield* Deferred.await(booted).pipe(Effect.timeout("5 seconds"))
         expect(yield* Ref.get(updates)).toEqual(
           expect.arrayContaining(["catalog.updated", "agent.updated", "command.updated"]),
         )
         yield* Ref.set(updates, [])
 
-        yield* opencode.debug.location.evict({ location: ref })
+        yield* ocpp.debug.location.evict({ location: ref })
         // Allow the live event stream to deliver teardown notifications and any refetches.
         yield* Effect.sleep("200 millis")
 
         expect(yield* Ref.get(updates)).toEqual([])
         expect(yield* Ref.get(boots)).toBe(1)
-        expect(yield* opencode.debug.location.list()).toEqual([])
+        expect(yield* ocpp.debug.location.list()).toEqual([])
         expect(subscriber.pollUnsafe()).toBeUndefined()
       }),
     ),
@@ -322,10 +322,10 @@ it.live(
 it.live(
   "keeps SDK plugin registration isolated between embedded hosts",
   () =>
-    withEmbedded("opencode-embedded-plugin-isolation-", (fixture) =>
+    withEmbedded("ocpp-embedded-plugin-isolation-", (fixture) =>
       Effect.gen(function* () {
-        const first = yield* fixture.sdk.OpenCode.create()
-        const second = yield* fixture.sdk.OpenCode.create()
+        const first = yield* fixture.sdk.Ocpp.create()
+        const second = yield* fixture.sdk.Ocpp.create()
         const firstReady = yield* Deferred.make<void>()
         const secondReady = yield* Deferred.make<void>()
         const activated = yield* Deferred.make<void>()
@@ -357,16 +357,16 @@ it.live(
 it.live(
   "embedded client uses the real router and handlers",
   () =>
-    withEmbedded("opencode-embedded-", (fixture) =>
+    withEmbedded("ocpp-embedded-", (fixture) =>
       Effect.gen(function* () {
-        const opencode = yield* fixture.sdk.OpenCode.create({ events: { persist: true } })
+        const ocpp = yield* fixture.sdk.Ocpp.create({ events: { persist: true } })
         const id = sessionID(fixture)
         const model = fixture.sdk.Model.Ref.make({
           id: fixture.sdk.Model.ID.make("embedded"),
           providerID: fixture.sdk.Provider.ID.make("test"),
         })
 
-        yield* opencode.plugin({
+        yield* ocpp.plugin({
           id: `embedded-tools-${crypto.randomUUID()}`,
           effect: (ctx) =>
             ctx.tool
@@ -382,40 +382,40 @@ it.live(
               .pipe(Effect.orDie),
         })
 
-        const created = yield* opencode.sessions.create({
+        const created = yield* ocpp.sessions.create({
           id,
           agent: fixture.sdk.Agent.ID.make("build"),
           location: location(fixture),
         })
-        yield* opencode.sessions.switchModel({ sessionID: id, model })
-        const selected = yield* opencode.sessions.get({ sessionID: id })
-        const page = yield* opencode.sessions.list({ directory: fixture.sdk.AbsolutePath.make(fixture.directory) })
-        const active = yield* opencode.sessions.active()
-        const admitted = yield* opencode.sessions.prompt({
+        yield* ocpp.sessions.switchModel({ sessionID: id, model })
+        const selected = yield* ocpp.sessions.get({ sessionID: id })
+        const page = yield* ocpp.sessions.list({ directory: fixture.sdk.AbsolutePath.make(fixture.directory) })
+        const active = yield* ocpp.sessions.active()
+        const admitted = yield* ocpp.sessions.prompt({
           sessionID: id,
           text: "Do not run",
           resume: false,
         })
-        const context = yield* opencode.sessions.context({ sessionID: id })
-        const pendingAfterAdmit = yield* opencode.sessions.inbox.list({ sessionID: id })
-        yield* opencode.sessions.instructions.entry.put({ sessionID: id, key: "deploy-target", value: "production" })
-        yield* opencode.sessions.instructions.entry.put({ sessionID: id, key: "flags", value: { beta: true } })
-        const contextEntries = yield* opencode.sessions.instructions.entry.list({ sessionID: id })
-        yield* opencode.sessions.instructions.entry.remove({ sessionID: id, key: "flags" })
-        const remainingContextEntries = yield* opencode.sessions.instructions.entry.list({ sessionID: id })
-        const wake = yield* opencode.sessions.prompt({
+        const context = yield* ocpp.sessions.context({ sessionID: id })
+        const pendingAfterAdmit = yield* ocpp.sessions.inbox.list({ sessionID: id })
+        yield* ocpp.sessions.instructions.entry.put({ sessionID: id, key: "deploy-target", value: "production" })
+        yield* ocpp.sessions.instructions.entry.put({ sessionID: id, key: "flags", value: { beta: true } })
+        const contextEntries = yield* ocpp.sessions.instructions.entry.list({ sessionID: id })
+        yield* ocpp.sessions.instructions.entry.remove({ sessionID: id, key: "flags" })
+        const remainingContextEntries = yield* ocpp.sessions.instructions.entry.list({ sessionID: id })
+        const wake = yield* ocpp.sessions.prompt({
           sessionID: id,
           text: "Promote this input",
         })
-        const prompted = yield* opencode.sessions.log({ sessionID: id, follow: true }).pipe(
+        const prompted = yield* ocpp.sessions.log({ sessionID: id, follow: true }).pipe(
           Stream.filter((event) => event.type === "session.inbox.delivered" && event.data.inboxID === wake.id),
           Stream.runHead,
           Effect.timeout("10 seconds"),
           Effect.map(Option.getOrThrow),
         )
-        const wakeContext = yield* opencode.sessions.context({ sessionID: id })
-        const pendingAfterPromote = yield* opencode.sessions.inbox.list({ sessionID: id })
-        const event = yield* opencode.sessions.log({ sessionID: id }).pipe(
+        const wakeContext = yield* ocpp.sessions.context({ sessionID: id })
+        const pendingAfterPromote = yield* ocpp.sessions.inbox.list({ sessionID: id })
+        const event = yield* ocpp.sessions.log({ sessionID: id }).pipe(
           Stream.filter((item) => item.type === "session.model.selected"),
           Stream.take(1),
           Stream.runHead,
@@ -424,22 +424,22 @@ it.live(
         const modelMessage = Option.fromNullishOr(context.find((message) => message.type === "model-switched")).pipe(
           Option.getOrThrow,
         )
-        const message = yield* opencode.sessions.message({ sessionID: id, messageID: modelMessage.id })
-        yield* opencode.sessions.interrupt({ sessionID: id })
-        const other = yield* opencode.sessions.create({ location: location(fixture) })
+        const message = yield* ocpp.sessions.message({ sessionID: id, messageID: modelMessage.id })
+        yield* ocpp.sessions.interrupt({ sessionID: id })
+        const other = yield* ocpp.sessions.create({ location: location(fixture) })
         const missingSessionID = fixture.sdk.Session.ID.create()
         const missing = yield* Effect.all(
           [
-            opencode.sessions.log({ sessionID: missingSessionID }).pipe(Stream.runHead, Effect.flip),
-            opencode.sessions.interrupt({ sessionID: missingSessionID }).pipe(Effect.flip),
-            opencode.sessions.message({ sessionID: missingSessionID, messageID: modelMessage.id }).pipe(Effect.flip),
-            opencode.sessions.instructions.entry.list({ sessionID: missingSessionID }).pipe(Effect.flip),
-            opencode.sessions.inbox.list({ sessionID: missingSessionID }).pipe(Effect.flip),
+            ocpp.sessions.log({ sessionID: missingSessionID }).pipe(Stream.runHead, Effect.flip),
+            ocpp.sessions.interrupt({ sessionID: missingSessionID }).pipe(Effect.flip),
+            ocpp.sessions.message({ sessionID: missingSessionID, messageID: modelMessage.id }).pipe(Effect.flip),
+            ocpp.sessions.instructions.entry.list({ sessionID: missingSessionID }).pipe(Effect.flip),
+            ocpp.sessions.inbox.list({ sessionID: missingSessionID }).pipe(Effect.flip),
           ],
           { concurrency: "unbounded" },
         )
         const missingMessage = yield* Effect.flip(
-          opencode.sessions.message({
+          ocpp.sessions.message({
             sessionID: other.id,
             messageID: modelMessage.id,
           }),
@@ -479,11 +479,11 @@ it.live(
 )
 
 it.live("embedded client exposes plugin-backed web search", () =>
-  withEmbedded("opencode-embedded-websearch-", (fixture) =>
+  withEmbedded("ocpp-embedded-websearch-", (fixture) =>
     Effect.gen(function* () {
-      const opencode = yield* fixture.sdk.OpenCode.create()
+      const ocpp = yield* fixture.sdk.Ocpp.create()
       const providerID = fixture.sdk.WebSearch.ID.make("embedded-websearch")
-      yield* opencode.plugin({
+      yield* ocpp.plugin({
         id: `embedded-websearch-${crypto.randomUUID()}`,
         effect: (ctx) =>
           ctx.websearch.transform((draft) => {
@@ -496,15 +496,15 @@ it.live("embedded client exposes plugin-backed web search", () =>
           }),
       })
 
-      const result = yield* opencode.websearch.query({
-        query: "opencode",
+      const result = yield* ocpp.websearch.query({
+        query: "ocpp",
         providerID,
         location: location(fixture),
       })
 
       expect(result.data).toEqual({
         providerID,
-        results: [{ url: "https://example.com", content: "Found opencode", time: {} }],
+        results: [{ url: "https://example.com", content: "Found ocpp", time: {} }],
       })
     }),
   ),
@@ -513,14 +513,14 @@ it.live("embedded client exposes plugin-backed web search", () =>
 it.live(
   "Location-owned runner events reach the ready global client",
   () =>
-    withEmbedded("opencode-embedded-events-", (fixture) =>
+    withEmbedded("ocpp-embedded-events-", (fixture) =>
       Effect.gen(function* () {
-        const opencode = yield* fixture.sdk.OpenCode.create()
+        const ocpp = yield* fixture.sdk.Ocpp.create()
         const id = sessionID(fixture)
         const connected = yield* Latch.make(false)
-        const prompted = yield* Deferred.make<Extract<OpenCodeEvent, { type: "session.inbox.delivered" }>>()
+        const prompted = yield* Deferred.make<Extract<OcppEvent, { type: "session.inbox.delivered" }>>()
 
-        yield* opencode.events.subscribe().pipe(
+        yield* ocpp.events.subscribe().pipe(
           Stream.runForEach((event) =>
             event.type === "server.connected"
               ? connected.open
@@ -531,8 +531,8 @@ it.live(
           Effect.forkScoped,
         )
         yield* connected.await
-        yield* opencode.sessions.create({ id, location: location(fixture) })
-        yield* opencode.sessions.prompt({
+        yield* ocpp.sessions.create({ id, location: location(fixture) })
+        yield* ocpp.sessions.prompt({
           sessionID: id,
           text: "Observe this input",
         })
@@ -547,17 +547,17 @@ it.live(
 it.live(
   "independent embedded hosts do not share live notifications",
   () =>
-    withEmbedded("opencode-embedded-hosts-", (fixture) =>
+    withEmbedded("ocpp-embedded-hosts-", (fixture) =>
       Effect.gen(function* () {
-        const first = yield* fixture.sdk.OpenCode.create()
-        const second = yield* fixture.sdk.OpenCode.create()
+        const first = yield* fixture.sdk.Ocpp.create()
+        const second = yield* fixture.sdk.Ocpp.create()
         const id = sessionID(fixture)
         const firstReady = yield* Latch.make(false)
         const secondReady = yield* Latch.make(false)
         const firstEvent = yield* Latch.make(false)
         const secondEvent = yield* Latch.make(false)
         const observe = (ready: Latch.Latch, event: Latch.Latch) =>
-          Stream.runForEach((notification: OpenCodeEvent) =>
+          Stream.runForEach((notification: OcppEvent) =>
             notification.type === "server.connected"
               ? ready.open
               : notification.type === "session.agent.selected" && notification.data.sessionID === id
@@ -579,18 +579,18 @@ it.live(
 )
 
 it.live("embedded client is available as a Layer service", () =>
-  withEmbedded("opencode-embedded-layer-", (fixture) => {
+  withEmbedded("ocpp-embedded-layer-", (fixture) => {
     const id = sessionID(fixture)
     return Effect.gen(function* () {
-      const opencode = yield* fixture.sdk.OpenCode.Service
-      const created = yield* opencode.sessions.create({ id, location: location(fixture) })
+      const ocpp = yield* fixture.sdk.Ocpp.Service
+      const created = yield* ocpp.sessions.create({ id, location: location(fixture) })
       expect(created.id).toBe(id)
-    }).pipe(Effect.provide(fixture.sdk.OpenCode.layer()))
+    }).pipe(Effect.provide(fixture.sdk.Ocpp.layer()))
   }),
 )
 
 it.live("configures workspace providers through the SDK facade", () =>
-  withEmbedded("opencode-embedded-workspace-", (fixture) =>
+  withEmbedded("ocpp-embedded-workspace-", (fixture) =>
     Effect.gen(function* () {
       const calls: Array<{ readonly operation: string; readonly workspaceID: string }> = []
       const driver = WorkspaceDriver.make({
@@ -608,15 +608,15 @@ it.live("configures workspace providers through the SDK facade", () =>
           return Effect.void
         },
       })
-      const opencode = yield* fixture.sdk.OpenCode.create({ workspaceProviders: { fake: driver } })
+      const ocpp = yield* fixture.sdk.Ocpp.create({ workspaceProviders: { fake: driver } })
       const requestedID = fixture.sdk.Workspace.ID.create()
-      const workspaceID = yield* opencode.workspace.create({ id: requestedID, provider: "fake" })
+      const workspaceID = yield* ocpp.workspace.create({ id: requestedID, provider: "fake" })
 
       expect(workspaceID).toBe(requestedID)
-      expect(yield* opencode.workspace.create({ id: requestedID, provider: "fake" })).toBe(requestedID)
+      expect(yield* ocpp.workspace.create({ id: requestedID, provider: "fake" })).toBe(requestedID)
       expect(calls).toEqual([])
 
-      const workspace = yield* opencode.workspace.provision({ workspaceID })
+      const workspace = yield* ocpp.workspace.provision({ workspaceID })
 
       expect(workspace.provider).toBe("fake")
       expect(workspace.binding).toEqual({ externalID: workspace.id })
@@ -626,12 +626,12 @@ it.live("configures workspace providers through the SDK facade", () =>
         directory: fixture.sdk.AbsolutePath.make("/"),
         workspaceID: workspace.id,
       })
-      const session = yield* opencode.sessions.create({ location: workspaceLocation })
+      const session = yield* ocpp.sessions.create({ location: workspaceLocation })
       expect(session.location.workspaceID).toBe(workspace.id)
 
-      expect(yield* opencode.workspace.destroy({ workspaceID: workspace.id })).toEqual({ destroyed: true })
+      expect(yield* ocpp.workspace.destroy({ workspaceID: workspace.id })).toEqual({ destroyed: true })
       expect(calls.map((call) => call.operation)).toEqual(["create", "destroy"])
-      expect(yield* opencode.workspace.destroy({ workspaceID: workspace.id })).toEqual({ destroyed: false })
+      expect(yield* ocpp.workspace.destroy({ workspaceID: workspace.id })).toEqual({ destroyed: false })
       expect(calls.map((call) => call.operation)).toEqual(["create", "destroy"])
     }),
   ),
@@ -679,7 +679,7 @@ const workspaceModelScenario = (fixture: Fixture, policy: "eager" | "lazy") =>
     })
     const configDirectory = path.join(fixture.directory, "config")
     yield* Effect.promise(() => fs.mkdir(configDirectory))
-    const opencode = yield* fixture.sdk.OpenCode.create(
+    const ocpp = yield* fixture.sdk.Ocpp.create(
       {
         config: { directory: configDirectory, project: false, content: "{}" },
         workspaceProviders: { fake: driver },
@@ -691,10 +691,10 @@ const workspaceModelScenario = (fixture: Fixture, policy: "eager" | "lazy") =>
         ],
       },
     )
-    const workspaceID = yield* opencode.workspace.create({ provider: "fake" })
+    const workspaceID = yield* ocpp.workspace.create({ provider: "fake" })
     const provisioning =
       policy === "eager"
-        ? yield* opencode.workspace.provision({ workspaceID }).pipe(Effect.forkScoped({ startImmediately: true }))
+        ? yield* ocpp.workspace.provision({ workspaceID }).pipe(Effect.forkScoped({ startImmediately: true }))
         : undefined
     if (provisioning) {
       yield* Deferred.await(createStarted).pipe(
@@ -702,13 +702,13 @@ const workspaceModelScenario = (fixture: Fixture, policy: "eager" | "lazy") =>
       )
     }
 
-    const session = yield* opencode.sessions.create({
+    const session = yield* ocpp.sessions.create({
       location: fixture.sdk.Location.Ref.make({
         directory: fixture.sdk.AbsolutePath.make(fixture.directory),
         workspaceID,
       }),
     })
-    yield* opencode.sessions.prompt({ sessionID: session.id, text: "Answer without using tools" })
+    yield* ocpp.sessions.prompt({ sessionID: session.id, text: "Answer without using tools" })
     yield* Deferred.await(modelStarted).pipe(
       Effect.timeoutOrElse({ duration: "8 seconds", orElse: () => Effect.die("model stream did not start") }),
     )
@@ -726,20 +726,20 @@ const workspaceModelScenario = (fixture: Fixture, policy: "eager" | "lazy") =>
 
 it.live(
   "starts model execution while eager workspace provisioning is blocked",
-  () => withEmbedded("opencode-embedded-workspace-eager-", (fixture) => workspaceModelScenario(fixture, "eager")),
+  () => withEmbedded("ocpp-embedded-workspace-eager-", (fixture) => workspaceModelScenario(fixture, "eager")),
   15_000,
 )
 
 it.live(
   "starts model execution without provisioning a lazy workspace",
-  () => withEmbedded("opencode-embedded-workspace-lazy-", (fixture) => workspaceModelScenario(fixture, "lazy")),
+  () => withEmbedded("ocpp-embedded-workspace-lazy-", (fixture) => workspaceModelScenario(fixture, "lazy")),
   15_000,
 )
 
 it.live(
   "blocks the model-selected first tool on lazy provisioning",
   () =>
-    withEmbedded("opencode-embedded-workspace-tool-", (fixture) =>
+    withEmbedded("ocpp-embedded-workspace-tool-", (fixture) =>
       Effect.gen(function* () {
         const calls: string[] = []
         const createStarted = yield* Deferred.make<void>()
@@ -783,7 +783,7 @@ it.live(
         })
         const configDirectory = path.join(fixture.directory, "config")
         yield* Effect.promise(() => fs.mkdir(configDirectory))
-        const opencode = yield* fixture.sdk.OpenCode.create(
+        const ocpp = yield* fixture.sdk.Ocpp.create(
           {
             config: { directory: configDirectory, project: false, content: "{}" },
             workspaceProviders: { fake: driver },
@@ -795,8 +795,8 @@ it.live(
             ],
           },
         )
-        const workspaceID = yield* opencode.workspace.create({ provider: "fake" })
-        const session = yield* opencode.sessions.create({
+        const workspaceID = yield* ocpp.workspace.create({ provider: "fake" })
+        const session = yield* ocpp.sessions.create({
           location: fixture.sdk.Location.Ref.make({
             directory: fixture.sdk.AbsolutePath.make(fixture.directory),
             workspaceID,
@@ -804,7 +804,7 @@ it.live(
         })
         expect(calls).toEqual([])
 
-        yield* opencode.sessions.prompt({ sessionID: session.id, text: "Run echo" })
+        yield* ocpp.sessions.prompt({ sessionID: session.id, text: "Run echo" })
         // The model-selected shell tool is the first execution-plane demand: it alone
         // starts provisioning and blocks inside the tool call until the provider is ready.
         yield* Deferred.await(createStarted).pipe(
@@ -813,7 +813,7 @@ it.live(
         expect(calls).toEqual(["create"])
 
         yield* Deferred.succeed(createRelease, undefined)
-        yield* opencode.sessions.wait({ sessionID: session.id })
+        yield* ocpp.sessions.wait({ sessionID: session.id })
         // Provisioning settled, the workspace connected, and the turn completed. The
         // memory driver rejects the actual spawn, which surfaces to the model as an
         // ordinary tool error before the final text response.
@@ -825,10 +825,10 @@ it.live(
 )
 
 it.live("preserves unknown workspace provider errors", () =>
-  withEmbedded("opencode-embedded-workspace-provider-", (fixture) =>
+  withEmbedded("ocpp-embedded-workspace-provider-", (fixture) =>
     Effect.gen(function* () {
-      const opencode = yield* fixture.sdk.OpenCode.create()
-      const error = yield* opencode.workspace.create({ provider: "missing" }).pipe(Effect.flip)
+      const ocpp = yield* fixture.sdk.Ocpp.create()
+      const error = yield* ocpp.workspace.create({ provider: "missing" }).pipe(Effect.flip)
       expect(error).toEqual(new WorkspaceDriver.ProviderNotFound({ provider: "missing" }))
     }),
   ),

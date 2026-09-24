@@ -1,7 +1,7 @@
 export * as SessionPromptNode from "./prompt-node.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Image } from "../image.js"
 import { PluginHooks } from "../plugin/hooks.js"
 import { PluginSupervisor } from "../plugin/supervisor.js"

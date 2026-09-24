@@ -5864,7 +5864,7 @@ export type PtyConnectTokenInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
-  readonly "x-opencode-ticket"?: { readonly "x-opencode-ticket"?: string | undefined }["x-opencode-ticket"]
+  readonly "x-ocpp-ticket"?: { readonly "x-ocpp-ticket"?: string | undefined }["x-ocpp-ticket"]
 }
 
 export type PtyConnectTokenOutput = {
@@ -5969,7 +5969,7 @@ export type ExperimentalPersistentPtyRemoveOutput = void
 
 export type ExperimentalPersistentPtyConnectTokenInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
-  readonly "x-opencode-ticket"?: { readonly "x-opencode-ticket"?: string | undefined }["x-opencode-ticket"]
+  readonly "x-ocpp-ticket"?: { readonly "x-ocpp-ticket"?: string | undefined }["x-ocpp-ticket"]
 }
 
 export type ExperimentalPersistentPtyConnectTokenOutput = { data: PtyTicketConnectToken }["data"]

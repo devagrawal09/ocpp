@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { fn } from "./util/fn"
-import { Resource } from "@opencode-ai/console-resource"
+import { Resource } from "@ocpp/console-resource"
 import { Subscription } from "./subscription"
 
 export namespace LiteData {

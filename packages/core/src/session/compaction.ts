@@ -1,11 +1,11 @@
 export * as SessionCompaction from "./compaction.js"
 
-import { LLMClient, LLMEvent, Message } from "@opencode-ai/ai"
-import { Agent } from "@opencode-ai/schema/agent"
-import { SessionError } from "@opencode-ai/schema/session-error"
+import { LLMClient, LLMEvent, Message } from "@ocpp/ai"
+import { Agent } from "@ocpp/schema/agent"
+import { SessionError } from "@ocpp/schema/session-error"
 import { Context, Effect, Layer, Stream } from "effect"
 import { Bus } from "../bus.js"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { llmClient } from "../effect/app-node-platform.js"
 import { SessionEvent } from "./event.js"
 import type { SessionContext } from "./context.js"
@@ -105,7 +105,7 @@ export interface Interface extends State.Transformable<Draft> {
   readonly compactManual: (input: ManualInput) => Effect.Effect<Outcome>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionCompaction") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionCompaction") {}
 
 export const truncateToolOutput = (value: string) => {
   if (value.length <= TOOL_OUTPUT_MAX_CHARS) return value

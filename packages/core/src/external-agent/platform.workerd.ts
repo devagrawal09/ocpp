@@ -1,4 +1,4 @@
-import type { ExternalSession } from "@opencode-ai/schema/external-session"
+import type { ExternalSession } from "@ocpp/schema/external-session"
 import type { ExternalAgentDriver } from "./driver.js"
 
 export async function available(_provider: ExternalSession.Provider) {

@@ -20,7 +20,7 @@ const names = [
   "server",
   "sdk",
 ]
-const temporary = await mkdtemp(join(tmpdir(), "opencode-sdk-package-"))
+const temporary = await mkdtemp(join(tmpdir(), "ocpp-sdk-package-"))
 const archives = new Map<string, string>()
 
 try {
@@ -84,28 +84,28 @@ try {
   const consumer = join(temporary, "consumer")
   await Bun.write(
     join(consumer, "package.json"),
-    JSON.stringify({ name: "opencode-sdk-consumer", private: true, type: "module" }),
+    JSON.stringify({ name: "ocpp-sdk-consumer", private: true, type: "module" }),
   )
   await Promise.all([
     Bun.write(
       join(consumer, "wrangler.jsonc"),
       JSON.stringify({
-        name: "opencode-sdk-packed-consumer",
+        name: "ocpp-sdk-packed-consumer",
         main: "worker.js",
         compatibility_date: "2026-07-15",
         compatibility_flags: ["nodejs_compat"],
-        durable_objects: { bindings: [{ name: "OPENCODE", class_name: "OpenCodeDO" }] },
-        migrations: [{ tag: "v1", new_sqlite_classes: ["OpenCodeDO"] }],
+        durable_objects: { bindings: [{ name: "OCPP", class_name: "OcppDO" }] },
+        migrations: [{ tag: "v1", new_sqlite_classes: ["OcppDO"] }],
       }),
     ),
     Bun.write(
       join(consumer, "worker.js"),
-      `import { bodyDigest } from "@opencode-ai/core/models-dev"
-import { OpenCodeWorkerd } from "@opencode-ai/sdk/workerd"
+      `import { bodyDigest } from "@ocpp/core/models-dev"
+import { OcppWorkerd } from "@ocpp/sdk/workerd"
 
-export class OpenCodeDO {
+export class OcppDO {
   constructor(state) {
-    this.opencode = state.blockConcurrencyWhile(() => OpenCodeWorkerd.create({
+    this.ocpp = state.blockConcurrencyWhile(() => OcppWorkerd.create({
       storage: state.storage,
       app: { version: "packed-workerd" },
     }))
@@ -115,14 +115,14 @@ export class OpenCodeDO {
     if (bodyDigest("packed-workerd") !== "5fc174bf63e8dd108ebb6c53d85e7bbc4525b2f4c1c43280364cdbfd9b37aaf5") {
       throw new Error("Packed workerd SHA-256 mismatch")
     }
-    const opencode = await this.opencode
-    return Response.json(await opencode.health.get())
+    const ocpp = await this.ocpp
+    return Response.json(await ocpp.health.get())
   }
 }
 
 export default {
   fetch(request, env) {
-    return env.OPENCODE.get(env.OPENCODE.idFromName("packed-consumer")).fetch(request)
+    return env.OCPP.get(env.OCPP.idFromName("packed-consumer")).fetch(request)
   },
 }
 `,
@@ -136,11 +136,11 @@ const miniflare = new Miniflare({
   compatibilityFlags: ["nodejs_compat"],
   modules: true,
   scriptPath: new URL("./dist/worker.js", import.meta.url).pathname,
-  durableObjects: { OPENCODE: { className: "OpenCodeDO", useSQLite: true } },
+  durableObjects: { OCPP: { className: "OcppDO", useSQLite: true } },
 })
 
 try {
-  const response = await miniflare.dispatchFetch("http://opencode.local/health")
+  const response = await miniflare.dispatchFetch("http://ocpp.local/health")
   if (response.status !== 200) throw new Error(
     "Packed workerd health returned " + response.status + ": " + await response.text(),
   )
@@ -156,21 +156,21 @@ try {
     Bun.write(
       join(consumer, "imports.mjs"),
       `const modules = await Promise.all([
-  import("@opencode-ai/sdk"),
-  import("@opencode-ai/sdk/effect"),
-  import("@opencode-ai/sdk/workerd"),
-  import("@opencode-ai/sdk/workerd/effect"),
+  import("@ocpp/sdk"),
+  import("@ocpp/sdk/effect"),
+  import("@ocpp/sdk/workerd"),
+  import("@ocpp/sdk/workerd/effect"),
 ])
 
 for (const module of modules) {
-  const api = module.OpenCode ?? module.OpenCodeWorkerd
+  const api = module.Ocpp ?? module.OcppWorkerd
   if (typeof api?.create !== "function") throw new Error("Packed SDK entrypoint is missing create()")
 }
 `,
     ),
   ])
 
-  const sdk = archives.get("@opencode-ai/sdk")
+  const sdk = archives.get("@ocpp/sdk")
   if (!sdk) throw new Error("Packed SDK archive was not created")
   await $`npm install --ignore-scripts --no-audit --no-fund --package-lock=false ${sdk} wrangler@4.110.0`.cwd(consumer)
   const runtimes = (await $`npm ls effect --all --parseable`.cwd(consumer).text()).trim().split("\n")

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
-import { OpenCode } from "@opencode-ai/client/promise"
+import { Ocpp } from "@ocpp/client/promise"
 import { ACPService } from "../../src/acp/service"
 import { ChildSessionUpdatesCapability } from "../../src/acp/event"
 
@@ -30,7 +30,7 @@ describe("acp service", () => {
       },
     })
     const service = ACPService.make({
-      client: OpenCode.make({ baseUrl: server.url.toString() }),
+      client: Ocpp.make({ baseUrl: server.url.toString() }),
       connection: {
         sessionUpdate: async (update) => {
           updates.push(update)

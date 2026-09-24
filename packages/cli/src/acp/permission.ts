@@ -1,6 +1,6 @@
 import type { AgentSideConnection, PermissionOption, ToolCallContent, ToolCallLocation } from "@agentclientprotocol/sdk"
-import type { EventSubscribeOutput, OpenCodeClient } from "@opencode-ai/client/promise"
-import { Patch } from "@opencode-ai/util/patch"
+import type { EventSubscribeOutput, OcppClient } from "@ocpp/client/promise"
+import { Patch } from "@ocpp/util/patch"
 import { Result } from "effect"
 import { isAbsolute, resolve } from "node:path"
 import { pendingToolCall, stringValue, toLocations, toToolKind, type ToolInput } from "./tool"
@@ -16,7 +16,7 @@ const options: PermissionOption[] = [
 ]
 
 export async function replyPermission(input: {
-  readonly client: OpenCodeClient
+  readonly client: OcppClient
   readonly connection: Connection
   readonly event: PermissionEvent
   readonly sessionID: string

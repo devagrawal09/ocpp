@@ -4,8 +4,8 @@ import os from "node:os"
 import path from "node:path"
 import { Effect, Exit, PlatformError, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
-import { CrossSpawnSpawner } from "@opencode-ai/util/cross-spawn-spawner"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { testEffect } from "../lib/effect"
 
 const live = LayerNode.compile(CrossSpawnSpawner.node)
@@ -29,7 +29,7 @@ function alive(pid: number) {
 }
 
 async function tmpdir() {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-core-test-"))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-core-test-"))
   return {
     path: dir,
     async [Symbol.asyncDispose]() {
@@ -408,14 +408,14 @@ describe("cross-spawn spawner", () => {
 
         const out = yield* ChildProcessSpawner.ChildProcessSpawner.use((svc) =>
           svc.string(
-            ChildProcess.make("set", ["OPENCODE_TEST_SHELL"], {
+            ChildProcess.make("set", ["OCPP_TEST_SHELL"], {
               shell: true,
               extendEnv: true,
-              env: { OPENCODE_TEST_SHELL: "ok" },
+              env: { OCPP_TEST_SHELL: "ok" },
             }),
           ),
         )
-        expect(out).toContain("OPENCODE_TEST_SHELL=ok")
+        expect(out).toContain("OCPP_TEST_SHELL=ok")
       }),
     )
 

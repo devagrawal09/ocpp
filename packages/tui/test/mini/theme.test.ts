@@ -81,7 +81,7 @@ test("falls back when palette lookup fails", async () => {
 })
 
 test("resolveTheme preserves Mini indexed color and result shape semantics", () => {
-  const item = structuredClone(DEFAULT_THEMES.opencode)
+  const item = structuredClone(DEFAULT_THEMES.ocpp)
   item.theme.primary = 6
   delete item.theme.selectedListItemText
 

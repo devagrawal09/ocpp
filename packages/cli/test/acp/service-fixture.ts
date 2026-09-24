@@ -1,6 +1,6 @@
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
 import {
-  OpenCode,
+  Ocpp,
   type AgentInfo,
   type CommandInfo,
   type ModelInfo,
@@ -8,7 +8,7 @@ import {
   type SessionInfo,
   type SkillInfo,
   type TokenUsageInfo,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import { ACPService } from "../../src/acp/service"
 
 export type FixtureRequest = {
@@ -185,7 +185,7 @@ export function makeACPFixture(options: FixtureOptions = {}) {
     },
   })
   const service = ACPService.make({
-    client: OpenCode.make({ baseUrl: server.url.toString() }),
+    client: Ocpp.make({ baseUrl: server.url.toString() }),
     connection: {
       sessionUpdate: async (update) => {
         updates.push(update)

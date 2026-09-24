@@ -1,25 +1,25 @@
 export * as ConfigCommandPlugin from "./command.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Info, type Entry } from "@opencode-ai/schema/config"
-import { ConfigCommand } from "@opencode-ai/schema/config/command"
-import { Model } from "@opencode-ai/schema/model"
-import { Provider } from "@opencode-ai/schema/provider"
-import { AppProcess } from "@opencode-ai/util/process"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Agent } from "@ocpp/schema/agent"
+import { Info, type Entry } from "@ocpp/schema/config"
+import { ConfigCommand } from "@ocpp/schema/config/command"
+import { Model } from "@ocpp/schema/model"
+import { Provider } from "@ocpp/schema/provider"
+import { AppProcess } from "@ocpp/util/process"
 import path from "path"
 import { Effect, Option, Schema, Stream } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { Config } from "../../config.js"
 import { Location } from "../../location.js"
 import { ShellSelect } from "../../shell/select.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { ConfigMarkdown } from "../markdown.js"
 
 const decodeCommand = Schema.decodeUnknownOption(ConfigCommand.Info)
 
 export const Plugin = define({
-  id: "opencode.config.command",
+  id: "ocpp.config.command",
   effect: Effect.fn(function* (ctx) {
     const config = yield* Config.Service
     const fs = yield* FSUtil.Service
@@ -189,8 +189,8 @@ function evaluateTemplate(
           )
           .pipe(
             Effect.map((result) => (result.output ?? Buffer.concat([result.stdout, result.stderr])).toString("utf8")),
-            Effect.mapError((error) =>
-              new Error(`Shell interpolation failed for ${JSON.stringify(source)}: ${error.message}`),
+            Effect.mapError(
+              (error) => new Error(`Shell interpolation failed for ${JSON.stringify(source)}: ${error.message}`),
             ),
           )
       },

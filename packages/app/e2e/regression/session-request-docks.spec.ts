@@ -1,10 +1,10 @@
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { expect, test, type Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { installSseTransport } from "../utils/sse-transport"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/RequestDocks"
+const directory = "C:/OC++/RequestDocks"
 const projectID = "proj_request_docks"
 const sessionID = "ses_request_docks"
 const title = "Request dock regression"
@@ -187,7 +187,7 @@ async function mockServer(
     sessionStatus?: Record<string, unknown>
   },
 ) {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -201,7 +201,7 @@ async function mockServer(
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: {
             "claude-opus-4-6": {
               id: "claude-opus-4-6",

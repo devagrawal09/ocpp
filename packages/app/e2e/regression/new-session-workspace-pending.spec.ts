@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { currentSession, mockOpenCodeServer } from "../utils/mock-server"
+import { base64Encode } from "@ocpp/util/encode"
+import { currentSession, mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
 
-const directory = "C:/OpenCode/WorkspacePending"
-const workspace = "C:/OpenCode/pending-workspace"
+const directory = "C:/OC++/WorkspacePending"
+const workspace = "C:/OC++/pending-workspace"
 const projectID = "proj_workspace_pending"
 const draftID = "draft_workspace_pending"
 const otherID = "ses_workspace_pending_other"
@@ -197,14 +197,14 @@ async function openDraft(page: Page, options?: { failSessionCreate?: boolean }) 
     sandboxes: [] as string[],
   }
   const sessions = [currentSession({ id: otherID, projectID, title: "Other session" }, directory)]
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project,
     provider: {
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: { "pending-model": { id: "pending-model", name: "Pending Model", limit: { context: 200_000 } } },
         },
       ],
@@ -257,14 +257,14 @@ async function openDraft(page: Page, options?: { failSessionCreate?: boolean }) 
   await page.addInitScript(
     ({ directory, draftID, otherID, server }) => {
       localStorage.setItem(
-        "opencode.global.dat:server",
+        "ocpp.global.dat:server",
         JSON.stringify({
           projects: { local: [{ worktree: directory, expanded: true }] },
           lastProject: { local: directory },
         }),
       )
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([
           { type: "draft", draftID, server, directory },
           { type: "session", sessionId: otherID, server },

@@ -2,15 +2,15 @@
 title: "MCP servers"
 ---
 
-OpenCode can connect to [Model Context Protocol](https://modelcontextprotocol.io/) servers and make their tools, prompts, and instructions available to agents. MCP tools consume model context, so enable only the servers you need.
+OC++ can connect to [Model Context Protocol](https://modelcontextprotocol.io/) servers and make their tools, prompts, and instructions available to agents. MCP tools consume model context, so enable only the servers you need.
 
 ## Configure servers
 
-Define each server by a unique name under `mcp.servers` in your [OpenCode configuration](/config). V2 does not place server names directly under `mcp`.
+Define each server by a unique name under `mcp.servers` in your [OC++ configuration](/config). V2 does not place server names directly under `mcp`.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "mcp": {
     "servers": {
       "my-server": {
@@ -42,11 +42,11 @@ As with other configuration, a server in a higher-precedence project config repl
 
 ## Local servers
 
-A local server is a command that OpenCode starts using the MCP stdio transport.
+A local server is a command that OC++ starts using the MCP stdio transport.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "mcp": {
     "servers": {
       "everything": {
@@ -68,7 +68,7 @@ A local server is a command that OpenCode starts using the MCP stdio transport.
 | `type`        | Yes      | Must be `"local"`.                                                                                                  |
 | `command`     | Yes      | Executable followed by its arguments.                                                                               |
 | `cwd`         | No       | Process working directory. Relative paths resolve from the workspace directory; the workspace is the default.       |
-| `environment` | No       | String environment variables added to the inherited OpenCode process environment.                                   |
+| `environment` | No       | String environment variables added to the inherited OC++ process environment.                                       |
 | `disabled`    | No       | Set to `true` to prevent the server from connecting. Defaults to `false`.                                           |
 | `codemode`    | No       | Set to `false` to expose the server's tools directly to the model instead of through Code Mode. Defaults to `true`. |
 | `timeout`     | No       | Per-server timeout overrides.                                                                                       |
@@ -79,9 +79,9 @@ Use `{env:NAME}` to substitute an environment variable while loading config. She
 
 A remote server uses the MCP Streamable HTTP transport. Its `url` must be a valid absolute URL.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "mcp": {
     "servers": {
       "context7": {
@@ -111,13 +111,13 @@ Use `oauth: false` for a server that exclusively uses an API key or another head
 
 ## OAuth
 
-OAuth support is enabled for remote servers unless `oauth` is `false`. OpenCode discovers the authorization server, uses PKCE, refreshes tokens, and attempts dynamic client registration when the server supports it. OAuth credentials are stored outside project configuration.
+OAuth support is enabled for remote servers unless `oauth` is `false`. OC++ discovers the authorization server, uses PKCE, refreshes tokens, and attempts dynamic client registration when the server supports it. OAuth credentials are stored outside project configuration.
 
 For a server that supports dynamic client registration, only the remote server is required:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "mcp": {
     "servers": {
       "sentry": {
@@ -134,9 +134,9 @@ an MCP management interface and complete authorization in the browser.
 
 If the provider issued client credentials, configure them using V2's snake_case field names:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "mcp": {
     "servers": {
       "company-tools": {
@@ -157,7 +157,7 @@ If the provider issued client credentials, configure them using V2's snake_case 
 
 | OAuth field     | Description                                                                                     |
 | --------------- | ----------------------------------------------------------------------------------------------- |
-| `client_id`     | Pre-registered OAuth client ID. If omitted, OpenCode attempts dynamic client registration.      |
+| `client_id`     | Pre-registered OAuth client ID. If omitted, OC++ attempts dynamic client registration.          |
 | `client_secret` | Client secret for a pre-registered client.                                                      |
 | `scope`         | Space-delimited scopes to request.                                                              |
 | `callback_port` | Local callback port, from `1` through `65535`. An available ephemeral port is used by default.  |
@@ -167,9 +167,9 @@ If the provider issued client credentials, configure them using V2's snake_case 
 
 Timeouts are positive integer milliseconds. Configure defaults under `mcp.timeout`; a server's `timeout` fields override matching defaults.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "mcp": {
     "timeout": {
       "startup": 45000,
@@ -197,7 +197,7 @@ Timeouts are positive integer milliseconds. Configure defaults under `mcp.timeou
 
 ## Names and permissions
 
-OpenCode combines the server name and MCP tool name as `<server>_<tool>`. Characters other than letters, numbers, `_`, and `-` are replaced with `_`; for example, server `context 7` and tool `resolve.library/id` become `context_7_resolve_library_id`. MCP prompts become available as commands named `<server>:<prompt>` using the same normalization.
+OC++ combines the server name and MCP tool name as `<server>_<tool>`. Characters other than letters, numbers, `_`, and `-` are replaced with `_`; for example, server `context 7` and tool `resolve.library/id` become `context_7_resolve_library_id`. MCP prompts become available as commands named `<server>:<prompt>` using the same normalization.
 
 Choose short server names that remain unique after normalization. Under the default Code Mode, MCP tools are grouped by the normalized server name.
 
@@ -233,19 +233,19 @@ Use permission actions to hide or deny a server's tools without stopping its con
 
 ## Session context
 
-When OpenCode invokes an MCP tool on behalf of a session, it includes the invoking
+When OC++ invokes an MCP tool on behalf of a session, it includes the invoking
 session's ID in `CallToolRequest.params._meta.sessionID`. This applies to direct tool
 calls and Code Mode over both stdio and Streamable HTTP.
 
 The ID is request metadata, not a tool argument, so it does not appear in the
 model-visible tool schema. Treat it as an opaque correlation value: it identifies the
-invoking OpenCode session rather than the MCP transport session, can be absent for
+invoking OC++ session rather than the MCP transport session, can be absent for
 calls without session context, and must not be used by itself for authentication or
 authorization. Remote MCP servers receive the raw ID and may log or retain it.
 
 ## Manage servers
 
-OpenCode interfaces can add servers to project or global configuration, list
+OC++ interfaces can add servers to project or global configuration, list
 configured servers and their connection status, authenticate remote servers,
 and remove stored OAuth credentials. Edit configuration directly for OAuth client settings, timeouts, working
 directories, or enablement.

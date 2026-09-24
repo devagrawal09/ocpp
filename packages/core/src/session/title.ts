@@ -1,13 +1,13 @@
 export * as SessionTitle from "./title.js"
 
 import { isDeepStrictEqual } from "node:util"
-import { LLMClient, LLMEvent, Message, SystemPart } from "@opencode-ai/ai"
-import type { Agent } from "@opencode-ai/schema/agent"
+import { LLMClient, LLMEvent, Message, SystemPart } from "@ocpp/ai"
+import type { Agent } from "@ocpp/schema/agent"
 import { Context, DateTime, Effect, Layer, Stream } from "effect"
 import { Database } from "../database/database.js"
 import { Bus } from "../bus.js"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { isExactRootFallback } from "@opencode-ai/util/session-title-fallback"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { isExactRootFallback } from "@ocpp/util/session-title-fallback"
 import { llmClient } from "../effect/app-node-platform.js"
 import { SessionContext } from "./context.js"
 import { SessionEvent } from "./event.js"
@@ -27,7 +27,7 @@ export interface Interface {
   readonly generate: (sessionID: SessionSchema.ID) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionTitle") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionTitle") {}
 
 const truncate = (value: string) => (value.length <= MAX_LENGTH ? value : `${value.slice(0, MAX_LENGTH - 3)}...`)
 export const isUntitled = (session: SessionSchema.Info) =>

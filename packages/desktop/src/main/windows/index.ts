@@ -161,7 +161,7 @@ function windowStateFile(id: string) {
 
 // Mirrors windowStorage() in packages/app/src/utils/persist.ts.
 function windowDataFile(id: string) {
-  return `opencode.window.${safeWindowID(id)}.dat`
+  return `ocpp.window.${safeWindowID(id)}.dat`
 }
 
 function safeWindowID(id: string) {

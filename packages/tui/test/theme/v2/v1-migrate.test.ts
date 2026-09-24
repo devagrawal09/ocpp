@@ -6,13 +6,13 @@ import {
   resolveThemeDocument,
   selectThemeMode,
   themeModes,
-} from "@opencode-ai/theme/tui"
+} from "@ocpp/theme/tui"
 import { DEFAULT_THEMES, resolveTheme as resolveV1 } from "../../../src/theme"
 
 test("migrates resolved V1 modes into V2 tokens", () => {
-  const migrated = migrateV1(DEFAULT_THEMES.opencode)
+  const migrated = migrateV1(DEFAULT_THEMES.ocpp)
   if (!migrated.light || !migrated.dark) throw new Error("Expected both modes")
-  const legacy = resolveV1(DEFAULT_THEMES.opencode, "light")
+  const legacy = resolveV1(DEFAULT_THEMES.ocpp, "light")
   const resolved = resolveThemeDocument(migrated, "light")
 
   expect(migrated.standalone).toBeTrue()
@@ -55,7 +55,7 @@ test("migrates resolved V1 modes into V2 tokens", () => {
 })
 
 test("references generated hues from matching token colors", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   source.theme.border = source.theme.primary
   source.theme.borderActive = source.theme.accent
   source.theme.syntaxKeyword = source.theme.error
@@ -71,7 +71,7 @@ test("references generated hues from matching token colors", () => {
 })
 
 test("infers chromatic hues, anchors light and dark colors, and aliases ambiguous hues to gray", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   const ambiguous = { light: "#808080", dark: "#808080" }
   source.theme.accent = ambiguous
   source.theme.warning = ambiguous
@@ -104,7 +104,7 @@ test("infers chromatic hues, anchors light and dark colors, and aliases ambiguou
 })
 
 test("orders categorical hues by V1 semantic color mapping", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   const mapped = (name: "red" | "orange" | "yellow" | "green" | "blue" | "purple") => ({
     light: DEFAULT_THEME.light.hue[name][700],
     dark: DEFAULT_THEME.dark.hue[name][300],
@@ -125,7 +125,7 @@ test("orders categorical hues by V1 semantic color mapping", () => {
 })
 
 test("gives accent and primary ownership of their inferred hues", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   source.theme.success = DEFAULT_THEME.light.hue.orange[300]
   source.theme.accent = DEFAULT_THEME.light.hue.orange[400]
   source.theme.info = DEFAULT_THEME.light.hue.blue[300]
@@ -152,7 +152,7 @@ test("gives accent and primary ownership of their inferred hues", () => {
 })
 
 test("uses default categorical hues when V1 semantic colors are ambiguous", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   source.theme.secondary = "transparent"
   source.theme.accent = "transparent"
   source.theme.success = "transparent"
@@ -166,7 +166,7 @@ test("uses default categorical hues when V1 semantic colors are ambiguous", () =
 })
 
 test("builds and extrapolates gray from V1 surfaces and text without using menus or borders", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   source.theme.background = { light: "#eeeeee", dark: "#111111" }
   source.theme.backgroundPanel = { light: "#dddddd", dark: "#222222" }
   source.theme.backgroundElement = { light: "#cccccc", dark: "#333333" }
@@ -205,7 +205,7 @@ test("builds and extrapolates gray from V1 surfaces and text without using menus
 })
 
 test("uses the default text reference for primary actions on transparent backgrounds", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   source.theme.background = "transparent"
   source.theme.primary = { light: "#ffffff", dark: "#000000" }
   delete source.theme.selectedListItemText
@@ -217,7 +217,7 @@ test("uses the default text reference for primary actions on transparent backgro
 })
 
 test("retains V1 circular reference errors", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   source.defs = { ...source.defs, one: "two", two: "one" }
   source.theme.primary = "one"
 
@@ -234,7 +234,7 @@ test("migrates every built-in V1 theme in its supported modes", () => {
 })
 
 test("collapses identical V1 backgrounds when both variants infer one mode", () => {
-  const dark = structuredClone(DEFAULT_THEMES.opencode)
+  const dark = structuredClone(DEFAULT_THEMES.ocpp)
   dark.theme.background = "#111111"
   dark.theme.text = "#eeeeee"
   const migratedDark = migrateV1(dark)
@@ -243,7 +243,7 @@ test("collapses identical V1 backgrounds when both variants infer one mode", () 
   expect(themeModes(migratedDark)).toEqual(["dark"])
   expect(selectThemeMode(migratedDark, "light").mode).toBe("dark")
 
-  const light = structuredClone(DEFAULT_THEMES.opencode)
+  const light = structuredClone(DEFAULT_THEMES.ocpp)
   light.theme.background = "#eeeeee"
   light.theme.text = "#111111"
   const migratedLight = migrateV1(light)
@@ -254,7 +254,7 @@ test("collapses identical V1 backgrounds when both variants infer one mode", () 
 })
 
 test("keeps both modes when a shared background has different contrast", () => {
-  const source = structuredClone(DEFAULT_THEMES.opencode)
+  const source = structuredClone(DEFAULT_THEMES.ocpp)
   source.theme.background = "#808080"
   source.theme.text = { light: "#111111", dark: "#eeeeee" }
   const migrated = migrateV1(source)

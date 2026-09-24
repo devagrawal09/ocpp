@@ -9,12 +9,12 @@ import { startServer } from "./fixture/server"
 
 it.live("lists, creates, and removes worktrees by project ID", () =>
   Effect.gen(function* () {
-    const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-worktree-endpoint-")))
+    const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("ocpp-worktree-endpoint-")))
     const project = path.join(tmp.path, "project")
     const destination = path.join(tmp.path, "worktrees")
     yield* Effect.promise(() => fs.mkdir(project, { recursive: true }))
     yield* Effect.promise(() => $`git init`.cwd(project).quiet())
-    yield* Effect.promise(() => $`git config user.email test@opencode.test`.cwd(project).quiet())
+    yield* Effect.promise(() => $`git config user.email test@ocpp.test`.cwd(project).quiet())
     yield* Effect.promise(() => $`git config user.name Test`.cwd(project).quiet())
     yield* Effect.promise(() => $`git commit --allow-empty -m root`.cwd(project).quiet())
     const server = yield* startServer(path.join(tmp.path, "config"))

@@ -1,7 +1,7 @@
-import type { ConnectionInfo } from "@opencode-ai/client"
-import type { IntegrationApi } from "@opencode-ai/client/promise/api"
-import { Credential } from "@opencode-ai/schema/credential"
-import { Form } from "@opencode-ai/schema/form"
+import type { ConnectionInfo } from "@ocpp/client"
+import type { IntegrationApi } from "@ocpp/client/promise/api"
+import { Credential } from "@ocpp/schema/credential"
+import { Form } from "@ocpp/schema/form"
 import type { Transform } from "./registration.js"
 
 type IntegrationRef = { id: string; name: string }

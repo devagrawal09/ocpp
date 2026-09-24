@@ -35,7 +35,7 @@ export function DialogPair(props: { credentials?: DialogPairCredentials }) {
     if (!current) return
     return {
       urls: current.urls,
-      username: props.credentials?.username ?? "opencode",
+      username: props.credentials?.username ?? "ocpp",
       password: props.credentials?.password ?? "",
     }
   })
@@ -79,7 +79,7 @@ export function DialogPair(props: { credentials?: DialogPairCredentials }) {
           </box>
           <Show when={value.urls.some((url) => ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname))}>
             <text fg={theme.text.subdued} wrapMode="word">
-              Run `opencode service set hostname 0.0.0.0` to access the service remotely.
+              Run `ocpp service set hostname 0.0.0.0` to access the service remotely.
             </text>
           </Show>
         </box>

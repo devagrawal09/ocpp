@@ -1,9 +1,9 @@
-import { markdown } from "@opencode-ai/ui/storybook/fixtures"
+import { markdown } from "@ocpp/ui/storybook/fixtures"
 import { createSignal, onCleanup } from "solid-js"
 import { Markdown } from "./markdown"
 
 export default {
-  title: "OpenCode/Conversation/Markdown response",
+  title: "OC++/Conversation/Markdown response",
   id: "components-markdown",
   component: Markdown,
   parameters: {

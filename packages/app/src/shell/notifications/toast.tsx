@@ -1,5 +1,5 @@
-import { Icon, type IconProps } from "@opencode-ai/ui/icon"
-import { Toast, showToast, toaster, type ToastOptions } from "@opencode-ai/ui/toast"
+import { Icon, type IconProps } from "@ocpp/ui/icon"
+import { Toast, showToast, toaster, type ToastOptions } from "@ocpp/ui/toast"
 
 type AppToastOptions = Omit<ToastOptions, "icon"> & {
   icon?: IconProps["name"]

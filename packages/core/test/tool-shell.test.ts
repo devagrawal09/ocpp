@@ -4,42 +4,42 @@ import os from "os"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect"
-import { Money } from "@opencode-ai/schema/money"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { makeGlobalNode, makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { filesystem } from "@opencode-ai/util/effect/app-node-platform"
-import { Database } from "@opencode-ai/core/database/database"
-import { CodeModeStore } from "@opencode-ai/core/codemode/store"
-import { Bus } from "@opencode-ai/core/bus"
-import { Config } from "@opencode-ai/core/config"
-import { Environment } from "@opencode-ai/core/environment/index"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
-import { Location } from "@opencode-ai/core/location"
-import { LocationMutation } from "@opencode-ai/core/location-mutation"
-import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
-import { Model } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Agent } from "@opencode-ai/core/agent"
-import { Job } from "@opencode-ai/core/job"
-import { Session } from "@opencode-ai/core/session"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { SessionStore } from "@opencode-ai/core/session/store"
-import { Permission } from "@opencode-ai/core/permission"
-import { PermissionSaved } from "@opencode-ai/core/permission/saved"
-import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { Shell } from "@opencode-ai/core/shell"
-import { ShellSelect } from "@opencode-ai/core/shell/select"
-import { Shell as ShellSchema } from "@opencode-ai/schema/shell"
-import { ShellTool } from "@opencode-ai/core/tool/plugin/shell"
-import { ToolOutput } from "@opencode-ai/core/tool-output"
-import { Tool } from "@opencode-ai/core/tool"
+import { Money } from "@ocpp/schema/money"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
+import { filesystem } from "@ocpp/util/effect/app-node-platform"
+import { Database } from "@ocpp/core/database/database"
+import { CodeModeStore } from "@ocpp/core/codemode/store"
+import { Bus } from "@ocpp/core/bus"
+import { Config } from "@ocpp/core/config"
+import { Environment } from "@ocpp/core/environment/index"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
+import { Location } from "@ocpp/core/location"
+import { LocationMutation } from "@ocpp/core/location-mutation"
+import { LocationServiceMap } from "@ocpp/core/location-service-map"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Agent } from "@ocpp/core/agent"
+import { Job } from "@ocpp/core/job"
+import { Session } from "@ocpp/core/session"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionExecution } from "@ocpp/core/session/execution"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { SessionStore } from "@ocpp/core/session/store"
+import { Permission } from "@ocpp/core/permission"
+import { PermissionSaved } from "@ocpp/core/permission/saved"
+import { PluginRuntime } from "@ocpp/core/plugin/runtime"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { Shell } from "@ocpp/core/shell"
+import { ShellSelect } from "@ocpp/core/shell/select"
+import { Shell as ShellSchema } from "@ocpp/schema/shell"
+import { ShellTool } from "@ocpp/core/tool/plugin/shell"
+import { ToolOutput } from "@ocpp/core/tool-output"
+import { Tool } from "@ocpp/core/tool"
 import { tmpdir } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
@@ -247,7 +247,7 @@ const withScanner = <A, E, R>(
         yield* Effect.promise(() => Promise.all([fs.mkdir(fixture.active), fs.mkdir(fixture.outside)]))
         yield* Effect.promise(() =>
           Bun.write(
-            path.join(fixture.active, "opencode.json"),
+            path.join(fixture.active, "ocpp.json"),
             JSON.stringify({ experimental: { portable_shell_scanner: portable } }),
           ),
         )
@@ -818,11 +818,11 @@ describe("ShellTool", () => {
               const sessions = yield* Session.Service
               yield* sessions.environment({
                 sessionID,
-                variables: { OPENCODE_SESSION_ENV_TEST: "from-session" },
+                variables: { OCPP_SESSION_ENV_TEST: "from-session" },
               })
               const command = isWindows
-                ? "[Console]::Out.Write($env:OPENCODE_SESSION_ENV_TEST)"
-                : 'printf %s "$OPENCODE_SESSION_ENV_TEST"'
+                ? "[Console]::Out.Write($env:OCPP_SESSION_ENV_TEST)"
+                : 'printf %s "$OCPP_SESSION_ENV_TEST"'
 
               const settled = yield* executeTool(registry, call({ command }))
 
@@ -1086,7 +1086,7 @@ describe("ShellTool", () => {
               reset()
               yield* Effect.promise(() =>
                 Bun.write(
-                  path.join(tmp.path, "opencode.json"),
+                  path.join(tmp.path, "ocpp.json"),
                   JSON.stringify({ experimental: { portable_shell_scanner: portable } }),
                 ),
               )
@@ -1134,7 +1134,7 @@ describe("ShellTool", () => {
                   reset()
                   yield* Effect.promise(() =>
                     Bun.write(
-                      path.join(tmp.path, "opencode.json"),
+                      path.join(tmp.path, "ocpp.json"),
                       JSON.stringify({ experimental: { portable_shell_scanner: portable } }),
                     ),
                   )
@@ -1238,7 +1238,7 @@ describe("ShellTool", () => {
         return Effect.gen(function* () {
           yield* Effect.promise(() =>
             Bun.write(
-              path.join(tmp.path, "opencode.json"),
+              path.join(tmp.path, "ocpp.json"),
               JSON.stringify({ tool_output: { max_lines: 2, max_bytes: 1_000 } }),
             ),
           )

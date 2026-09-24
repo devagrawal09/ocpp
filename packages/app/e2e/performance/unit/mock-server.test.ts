@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { Page, Route } from "@playwright/test"
-import { mockOpenCodeServer } from "../../utils/mock-server"
+import { mockOcppServer } from "../../utils/mock-server"
 
 test("applies message latency after a list response gate is released", async () => {
   const events: string[] = []
@@ -15,9 +15,9 @@ test("applies message latency after a list response gate is released", async () 
       return Promise.resolve()
     },
   } as unknown as Page
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     provider: {},
-    directory: "C:/OpenCode",
+    directory: "C:/OC++",
     project: {},
     sessions: [{ id: "session" }],
     messageDelay: 25,
@@ -66,9 +66,9 @@ test("routes requests through the HttpApi contract", async () => {
       return Promise.resolve()
     },
   } as unknown as Page
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     provider: {},
-    directory: "C:/OpenCode",
+    directory: "C:/OC++",
     project: {},
     sessions: [],
     pageMessages: () => ({ items: [] }),

@@ -2,21 +2,21 @@
 title: "Plugins"
 ---
 
-Load published packages, versioned packages, scoped packages, local files, or configured plugins from `opencode.json(c)`.
+Load published packages, versioned packages, scoped packages, local files, or configured plugins from `ocpp.json(c)`.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "plugins": [
-    "opencode-acme-plugin",
-    "opencode-acme-plugin@1.2.0",
-    "@acme/opencode-plugin",
+    "ocpp-acme-plugin",
+    "ocpp-acme-plugin@1.2.0",
+    "@acme/ocpp-plugin",
     "./plugins/local.ts",
     "../shared/plugin.ts",
     "/absolute/path/plugin.ts",
     "file:///home/me/plugins/local.ts",
     {
-      "package": "@acme/opencode-plugin",
+      "package": "@acme/ocpp-plugin",
       "options": {
         "agent": "reviewer",
         "strict": true,
@@ -30,53 +30,53 @@ Relative paths resolve from the config file containing the entry. Plugin arrays 
 from lowest to highest precedence instead of replacing one another.
 
 ```text
-~/.config/opencode/opencode.jsonc
-./opencode.jsonc
-./.opencode/opencode.jsonc
+~/.config/ocpp/ocpp.jsonc
+./ocpp.jsonc
+./.ocpp/ocpp.jsonc
 ```
 
-OpenCode also loads direct `.ts` and `.js` files and immediate plugin package directories from every discovered
-`.opencode/plugins/` directory.
+OC++ also loads direct `.ts` and `.js` files and immediate plugin package directories from every discovered
+`.ocpp/plugins/` directory.
 
 ```text
-.opencode/
+.ocpp/
 └── plugins/
     ├── concise.ts
     ├── reviewer.js
     └── acme-package/
 ```
 
-Global plugins use the same discovery layout under the OpenCode config directory.
+Global plugins use the same discovery layout under the OC++ config directory.
 
 ```text
-~/.config/opencode/plugins/
+~/.config/ocpp/plugins/
 ```
 
-A `plugins/` directory beside a project-root `opencode.json(c)` is not discovered automatically; configure its files
-explicitly or move it under `.opencode/`.
+A `plugins/` directory beside a project-root `ocpp.json(c)` is not discovered automatically; configure its files
+explicitly or move it under `.ocpp/`.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "plugins": ["./plugins/local.ts"]
+  "plugins": ["./plugins/local.ts"],
 }
 ```
 
 Plugin entries are processed in order. Prefix an ID or wildcard with `-` to disable it, use `*` for every plugin, and
 use `.*` to match an ID prefix. A later ID re-enables a plugin.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "plugins": ["*", "-opencode.provider.*", "opencode.provider.openai", "-acme.reviewer"]
+  "plugins": ["*", "-ocpp.provider.*", "ocpp.provider.openai", "-acme.reviewer"],
 }
 ```
 
 Install, inspect, list, or remove global package plugins with the CLI.
 
 ```sh
-opencode2 plugin add opencode-acme-plugin@1.2.0
-opencode2 plugin list
-opencode2 plugin list --builtin
-opencode2 plugin remove opencode-acme-plugin@1.2.0
+ocpp plugin add ocpp-acme-plugin@1.2.0
+ocpp plugin list
+ocpp plugin list --builtin
+ocpp plugin remove ocpp-acme-plugin@1.2.0
 ```
 
 Package installation accepts npm names with versions, tags, or ranges, plus npm-compatible Git package specifications.
@@ -84,10 +84,10 @@ Git repositories can use hosted shortcuts, HTTPS, or SSH, including private repo
 Git credentials.
 
 ```sh
-opencode2 plugin add @acme/opencode-plugin@beta
-opencode2 plugin add github:acme/opencode-plugin
-opencode2 plugin add git+ssh://git@github.com/acme/opencode-plugin.git#main
-opencode2 plugin add 'github:acme/plugins#main::path:packages/opencode-plugin'
+ocpp plugin add @acme/ocpp-plugin@beta
+ocpp plugin add github:acme/ocpp-plugin
+ocpp plugin add git+ssh://git@github.com/acme/opencode-plugin.git#main
+ocpp plugin add 'github:acme/plugins#main::path:packages/ocpp-plugin'
 ```
 
 Branches, tags, complete commit hashes, and npm's `::path:` repository-subdirectory selectors are supported. Configure
@@ -96,18 +96,18 @@ local paths directly; tarball and npm alias targets are not accepted by `plugin 
 Changes under watched config directories reload automatically. Server startup loads cached package plugins immediately,
 then refreshes unpinned npm and Git plugins in the background. A refreshed package becomes active the next time the server
 starts. Exact npm versions and full Git commit hashes stay pinned. Changes to unwatched local dependencies may still require
-restarting OpenCode.
+restarting OC++.
 
 ```sh
-touch .opencode/plugins/concise.ts
-opencode2 service restart
+touch .ocpp/plugins/concise.ts
+ocpp service restart
 ```
 
 CLI-only plugins are configured separately and remain active when connected to a remote server.
 
 ```json title="cli.json"
 {
-  "plugins": ["opencode-acme-cli"]
+  "plugins": ["ocpp-acme-cli"]
 }
 ```
 

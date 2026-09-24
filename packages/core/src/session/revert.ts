@@ -29,7 +29,7 @@ export interface Interface {
   readonly clear: (session: SessionSchema.Info) => Effect.Effect<void, Snapshot.Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRevert") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionRevert") {}
 
 export const make = Effect.fn("SessionRevert.make")(function* () {
   const database = yield* Database.Service

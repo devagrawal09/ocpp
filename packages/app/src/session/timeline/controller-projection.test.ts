@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { SessionInboxInfo, SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { SessionInboxInfo, SessionMessageInfo } from "@ocpp/client/promise"
 import { createRoot } from "solid-js"
 import { applyTimelineMessageHandoff, visibleTimelineMessages } from "./controller-projection"
 import { createTimelineProjection } from "./projection"

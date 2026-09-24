@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test"
 import { Schema } from "effect"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Config } from "@opencode-ai/schema/config"
-import { Model } from "@opencode-ai/schema/model"
-import { Prompt } from "@opencode-ai/schema/prompt"
-import { Session } from "@opencode-ai/schema/session"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
-import { Vcs } from "@opencode-ai/schema/vcs"
+import { Agent } from "@ocpp/schema/agent"
+import { Config } from "@ocpp/schema/config"
+import { Model } from "@ocpp/schema/model"
+import { Prompt } from "@ocpp/schema/prompt"
+import { Session } from "@ocpp/schema/session"
+import { SessionMessage } from "@ocpp/schema/session-message"
+import { Vcs } from "@ocpp/schema/vcs"
 
 const Client = await import("../src/effect")
 
@@ -22,7 +22,7 @@ test("generated Effect API names canonical and composed outputs", async () => {
   const source = await Bun.file(new URL("../src/effect/api/api.ts", import.meta.url)).text()
 
   expect(source).toContain("export type SessionGetOutput = Session.Info")
-  expect(source).toContain("export type EventSubscribeOutput = OpenCodeEvent")
+  expect(source).toContain("export type EventSubscribeOutput = OcppEvent")
   expect(source).not.toContain("HttpApiClient.ForApi")
 })
 

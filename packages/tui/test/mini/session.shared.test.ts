@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { OpenCode, type SessionMessageUser } from "@opencode-ai/client/promise"
+import { Ocpp, type SessionMessageUser } from "@ocpp/client/promise"
 import {
   createSession,
   resolveCurrentSession,
@@ -156,7 +156,7 @@ describe("run session shared", () => {
   })
 
   test("restores current prompt history from stored text and file references", async () => {
-    const client = OpenCode.make({ baseUrl: "https://opencode.test" })
+    const client = Ocpp.make({ baseUrl: "https://ocpp.test" })
     spyOn(client.message, "list").mockImplementation(() =>
       Promise.resolve({
         data: [

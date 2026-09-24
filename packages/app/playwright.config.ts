@@ -20,7 +20,7 @@ export default defineConfig({
   testDir: "./e2e",
   testIgnore: [
     "service-worker/**",
-    process.env.OPENCODE_PERFORMANCE === "1" ? "performance/**/*.test.ts" : "performance/**",
+    process.env.OCPP_PERFORMANCE === "1" ? "performance/**/*.test.ts" : "performance/**",
   ],
   outputDir: "./e2e/test-results",
   timeout: 60_000,
@@ -40,8 +40,8 @@ export default defineConfig({
         reuseExistingServer: !built,
         timeout: 120_000,
         env: {
-          VITE_OPENCODE_SERVER_HOST: serverHost,
-          VITE_OPENCODE_SERVER_PORT: serverPort,
+          VITE_OCPP_SERVER_HOST: serverHost,
+          VITE_OCPP_SERVER_PORT: serverPort,
         },
       },
   use: {

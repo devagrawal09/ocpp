@@ -1,9 +1,9 @@
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Session } from "@opencode-ai/core/session"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { Session } from "@ocpp/core/session"
 import { Effect, Schema } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Api } from "../api"
-import { InvalidCursorError } from "@opencode-ai/protocol/errors"
+import { InvalidCursorError } from "@ocpp/protocol/errors"
 import { failedMessageDecode, missingSession } from "./session-error"
 
 const DefaultMessagesLimit = 50

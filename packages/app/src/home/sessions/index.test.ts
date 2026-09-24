@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { SessionInfo } from "@opencode-ai/client/promise"
+import type { SessionInfo } from "@ocpp/client/promise"
 import { HOME_V2_SESSION_PAGE_LIMIT, loadHomeSessionIndex, parseHomeSessionIndex, retainHomeSessions } from "./index"
 
 const session = (id: string, input: Partial<SessionInfo> = {}) =>

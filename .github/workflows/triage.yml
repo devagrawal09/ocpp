@@ -36,9 +36,9 @@ jobs:
         if: steps.author.outputs.skip != 'true'
         uses: ./.github/actions/setup-bun
 
-      - name: Install opencode
+      - name: Install ocpp
         if: steps.author.outputs.skip != 'true'
-        run: curl -fsSL https://opencode.ai/install | bash
+        run: curl -fsSL https://ocpp.ai/install | bash
 
       - name: Triage issue
         if: steps.author.outputs.skip != 'true'
@@ -49,7 +49,7 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
-          opencode run --agent triage "The following issue was just opened, triage it:
+          ocpp run --agent triage "The following issue was just opened, triage it:
 
           Title: $ISSUE_TITLE
 

@@ -3,7 +3,7 @@ import { closeSync, mkdirSync, openSync } from "node:fs"
 import { connect, createServer, type Server, type Socket } from "node:net"
 import path from "node:path"
 import { Effect, Schema } from "effect"
-import { Hash } from "@opencode-ai/util/hash"
+import { Hash } from "@ocpp/util/hash"
 
 export namespace ProcessLock {
   export class HeldError extends Schema.TaggedError<HeldError>()("ProcessLockHeldError", {
@@ -84,7 +84,7 @@ function acquireWindows(file: string) {
   return Effect.callback<Server, ProcessLock.LockError>((resume) => {
     const server = createServer()
     let probe: Socket | undefined
-    const pipe = `\\\\.\\pipe\\opencode-process-lock-${Hash.sha256(path.resolve(file).toLowerCase())}`
+    const pipe = `\\\\.\\pipe\\ocpp-process-lock-${Hash.sha256(path.resolve(file).toLowerCase())}`
     const onError = (cause: NodeJS.ErrnoException) => {
       server.off("listening", onListening)
       probe = connect(pipe)

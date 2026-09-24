@@ -1,5 +1,5 @@
-import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/effect/integration"
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import type { IntegrationOAuthMethodRegistration } from "@ocpp/plugin/effect/integration"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { Deferred, Effect, Option, Schema, Semaphore, Stream } from "effect"
 import type { Server } from "node:http"
 import { App } from "../../app.js"
@@ -227,7 +227,7 @@ const headless = (app: App.Info) =>
   }) satisfies IntegrationOAuthMethodRegistration
 
 export const OpenAIPlugin = define({
-  id: "opencode.provider.openai",
+  id: "ocpp.provider.openai",
   effect: Effect.fn(function* (ctx) {
     const bus = yield* Bus.Service
     const loading = Semaphore.makeUnsafe(1)
@@ -262,7 +262,7 @@ export const OpenAIPlugin = define({
       item.provider.settings = Provider.mergeOverlay(item.provider.settings, { baseURL: codexBaseURL })
       const account = chatgpt.metadata?.accountID
       item.provider.headers = Provider.mergeHeaders(item.provider.headers, {
-        originator: "opencode",
+        originator: "ocpp",
         ...(typeof account === "string" ? { "chatgpt-account-id": account } : {}),
       })
       for (const model of item.models.values()) {
@@ -295,7 +295,7 @@ export const OpenAIPlugin = define({
           if (!chatgpt) return
           if (evt.baseURL && URL.canParse(evt.baseURL) && new URL(evt.baseURL).origin === "https://api.openai.com")
             evt.baseURL = codexBaseURL
-          evt.headers.originator = "opencode"
+          evt.headers.originator = "ocpp"
           evt.headers["session-id"] = evt.sessionID
         }),
       { providerID: Provider.ID.openai },
@@ -389,7 +389,7 @@ function authorizeURL(redirect: string, pkce: Pkce, state: string) {
     id_token_add_organizations: "true",
     codex_cli_simplified_flow: "true",
     state,
-    originator: "opencode",
+    originator: "ocpp",
   })}`
 }
 

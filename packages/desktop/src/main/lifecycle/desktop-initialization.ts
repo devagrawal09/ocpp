@@ -17,7 +17,7 @@ export interface Interface {
   readonly updaterStore: ReturnType<typeof getStore>
 }
 
-export class Service extends Context.Service<Service, Interface>()("opencode/desktop/DesktopInitialization") {}
+export class Service extends Context.Service<Service, Interface>()("ocpp/desktop/DesktopInitialization") {}
 
 export const layer = Layer.effect(
   Service,
@@ -32,7 +32,7 @@ export const layer = Layer.effect(
     yield* prepareDesktop
     return Service.of({
       version: app.getVersion(),
-      updaterStore: getStore("opencode.updater"),
+      updaterStore: getStore("ocpp.updater"),
     })
   }),
 )

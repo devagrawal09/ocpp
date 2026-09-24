@@ -1,6 +1,6 @@
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { Tool } from "@opencode-ai/core/tool"
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
+import { Tool } from "@ocpp/core/tool"
+import { Plugin } from "@ocpp/plugin/effect"
 import { createHash } from "node:crypto"
 import {
   Cause,
@@ -41,7 +41,7 @@ export interface Interface {
   readonly stream: (request: ProviderRequest) => Stream.Stream<ProviderResponseEvent, ProviderDisconnectedError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/simulation/SimulatedProvider") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/simulation/SimulatedProvider") {}
 
 interface ProviderInvocation extends ProviderRequest {
   readonly id: string
@@ -273,7 +273,7 @@ export const layerDrive = (options: { readonly endpoint: string; readonly versio
       yield* Effect.addFinalizer(() => tools.shutdown)
       yield* SimulationControlServer.start({
         endpoint: options.endpoint,
-        label: "opencode drive backend websocket",
+        label: "ocpp drive backend websocket",
         data: () => ({}),
         decode: SimulationProtocol.Backend.decodeRequestEffect,
         handle: (socket, request) =>
@@ -283,7 +283,7 @@ export const layerDrive = (options: { readonly endpoint: string; readonly versio
             discard: true,
           }),
       })
-      yield* Effect.sync(() => process.stderr.write(`opencode drive backend websocket: ${options.endpoint}\n`))
+      yield* Effect.sync(() => process.stderr.write(`ocpp drive backend websocket: ${options.endpoint}\n`))
 
       return Service.of({
         stream: (request) =>
@@ -313,7 +313,7 @@ function handle(
       return SimulationProtocol.Handshake.dispatch(
         {
           role: "backend",
-          server: { name: "opencode", version },
+          server: { name: "ocpp", version },
           capabilities: SimulationProtocol.Backend.Capabilities,
         },
         request.params,
@@ -538,7 +538,7 @@ const makeToolDriver = Effect.fn("SimulatedProvider.makeToolDriver")(function* (
 
   yield* plugins.register(
     Plugin.define({
-      id: "opencode.simulation.tools",
+      id: "ocpp.simulation.tools",
       effect: (ctx) =>
         Effect.gen(function* () {
           const scope = yield* Scope.Scope

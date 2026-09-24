@@ -62,7 +62,7 @@ export function layer(log?: LogOptions) {
         ...(entry.cause === undefined && detailCause === undefined ? {} : { cause: entry.cause ?? detailCause }),
       })
     } catch {
-      // A host logger must not break OpenCode operations.
+      // A host logger must not break OC++ operations.
     }
   })
   return Layer.merge(

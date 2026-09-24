@@ -1,13 +1,13 @@
 export * as SessionTransfer from "./transfer.js"
 
-import { SessionTransfer } from "@opencode-ai/schema/session-transfer"
-import { Tool } from "@opencode-ai/schema/tool"
-import { Skill } from "@opencode-ai/schema/skill"
+import { SessionTransfer } from "@ocpp/schema/session-transfer"
+import { Tool } from "@ocpp/schema/tool"
+import { Skill } from "@ocpp/schema/skill"
 import { eq } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { map } from "effect/Array"
 import path from "path"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { App } from "../app.js"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
@@ -41,7 +41,7 @@ export interface Interface {
   }) => Effect.Effect<Session.Info, ImportConflictError | Session.NotFoundError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionTransfer") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionTransfer") {}
 
 const layer = Layer.effect(
   Service,

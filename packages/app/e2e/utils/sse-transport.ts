@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test"
-import type { OpenCodeEvent } from "@opencode-ai/client/promise"
+import type { OcppEvent } from "@ocpp/client/promise"
 
 export type SseConnectionRecord = {
   id: number
@@ -28,7 +28,7 @@ export type SseEventOptions = {
   marker?: string
 }
 
-export type SseTransport<T extends OpenCodeEvent> = {
+export type SseTransport<T extends OcppEvent> = {
   server: string
   waitForConnection(options?: { after?: number; timeout?: number }): Promise<SseConnectionRecord>
   send(payload: T, options?: SseEventOptions): Promise<SseDeliveryAcknowledgement>
@@ -56,7 +56,7 @@ type BrowserTransport = Window & {
   }
 }
 
-export async function installSseTransport<T extends OpenCodeEvent = OpenCodeEvent>(
+export async function installSseTransport<T extends OcppEvent = OcppEvent>(
   page: Page,
   options: { server: string; retry?: number },
 ): Promise<SseTransport<T>> {

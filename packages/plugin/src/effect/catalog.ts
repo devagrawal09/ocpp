@@ -1,6 +1,6 @@
-import type { CatalogApi } from "@opencode-ai/client/effect/api"
-import { Model } from "@opencode-ai/schema/model"
-import { Provider } from "@opencode-ai/schema/provider"
+import type { CatalogApi } from "@ocpp/client/effect/api"
+import { Model } from "@ocpp/schema/model"
+import { Provider } from "@ocpp/schema/provider"
 import type { Effect, Types } from "effect"
 import type { Transform } from "./registration.js"
 

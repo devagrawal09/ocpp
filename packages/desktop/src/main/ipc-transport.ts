@@ -18,7 +18,7 @@ type Handoff = {
   readonly sender: (clientId: number) => WebContents | undefined
 }
 
-export class IpcPortHandoff extends Context.Service<IpcPortHandoff, Handoff>()("opencode/desktop/IpcPortHandoff") {}
+export class IpcPortHandoff extends Context.Service<IpcPortHandoff, Handoff>()("ocpp/desktop/IpcPortHandoff") {}
 
 export const IpcServerProtocolLive = Layer.unwrap(
   Effect.gen(function* () {

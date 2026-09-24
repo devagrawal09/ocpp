@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
-import { CodeModeDiagnostics } from "@opencode-ai/core/codemode/diagnostics"
-import { CodeModeDiagnosticsTaxonomy } from "@opencode-ai/core/codemode/diagnostics-taxonomy"
-import { CodeModeExecutionTable, CodeModeJournalTable } from "@opencode-ai/core/codemode/sql"
-import { Database } from "@opencode-ai/core/database/database"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
+import { CodeModeDiagnostics } from "@ocpp/core/codemode/diagnostics"
+import { CodeModeDiagnosticsTaxonomy } from "@ocpp/core/codemode/diagnostics-taxonomy"
+import { CodeModeExecutionTable, CodeModeJournalTable } from "@ocpp/core/codemode/sql"
+import { Database } from "@ocpp/core/database/database"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Project } from "@ocpp/core/project"
+import { ProjectTable } from "@ocpp/core/project/sql"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
 import { Effect } from "effect"
 import { sql } from "drizzle-orm"
 import { input } from "./fixture/codemode-diagnostics"
@@ -178,7 +178,7 @@ describe("CodeModeDiagnosticsTaxonomy", () => {
 describe("CodeModeDiagnostics", () => {
   test("keeps admission and completion separate and stratifies by version and mode", () => {
     expect(report.manifest).toMatchObject({
-      schema: "opencode.codemode-diagnostics/4",
+      schema: "ocpp.codemode-diagnostics/4",
       terminalSessions: 3,
       holdoutSessions: 1,
       executeCalls: 11,

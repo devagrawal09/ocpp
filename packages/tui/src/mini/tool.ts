@@ -1,5 +1,5 @@
-import { Delegation } from "@opencode-ai/schema/delegation"
-// Per-tool display rules shared across `opencode run` output paths.
+import { Delegation } from "@ocpp/schema/delegation"
+// Per-tool display rules shared across `ocpp run` output paths.
 //
 // Each known tool (shell, edit, write, subagent, etc.) has a ToolRule that controls
 // four display hooks:
@@ -15,7 +15,7 @@ import { Delegation } from "@opencode-ai/schema/delegation"
 import os from "os"
 import path from "path"
 import stripAnsi from "strip-ansi"
-import type { SessionMessageAssistantTool } from "@opencode-ai/client/promise"
+import type { SessionMessageAssistantTool } from "@ocpp/client/promise"
 import { LANGUAGE_EXTENSIONS } from "../util/filetype"
 import { Locale } from "../util/locale"
 import {

@@ -1,5 +1,5 @@
-import { useI18n } from "@opencode-ai/ui/context/i18n"
-import { checksum } from "@opencode-ai/util/encode"
+import { useI18n } from "@ocpp/ui/context/i18n"
+import { checksum } from "@ocpp/util/encode"
 import {
   type ComponentProps,
   createEffect,
@@ -11,9 +11,9 @@ import {
   splitProps,
 } from "solid-js"
 import { isServer, render } from "solid-js/web"
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Icon } from "@ocpp/ui/icon"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { Tooltip } from "@ocpp/ui/tooltip"
 import { canReusePendingBlock, completedProjection } from "./markdown-projection"
 import type { Block, Projection } from "./markdown-stream"
 import {
@@ -739,7 +739,7 @@ function updateCodeBlock(
   wrapper.setAttribute("data-component", "markdown-code")
   applyCodeMetadata(wrapper, block.language)
   const pre = document.createElement("pre")
-  pre.className = "shiki OpenCode"
+  pre.className = "shiki OC++"
   const codeElement = document.createElement("code")
   codeElement.className = `language-${block.language}`
   ;[...block.stable, ...block.unstable].map(createTokenSpan).forEach((span) => codeElement.appendChild(span))

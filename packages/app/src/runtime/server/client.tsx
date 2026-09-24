@@ -1,5 +1,5 @@
-import type { OpenCodeEvent } from "@opencode-ai/client/promise"
-import { createClientConnection, createPtyClient, type ClientConnectionStatus } from "@opencode-ai/client/solid"
+import type { OcppEvent } from "@ocpp/client/promise"
+import { createClientConnection, createPtyClient, type ClientConnectionStatus } from "@ocpp/client/solid"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { type Accessor, onCleanup } from "solid-js"
 import { createApiForServer, type ServerApi } from "@/runtime/server/api"
@@ -9,21 +9,21 @@ import { createRefCountMap } from "@/runtime/server/refcount"
 import { ServerScope } from "@/runtime/server/scope"
 import { useServer } from "./current"
 
-type OpenCodeEventMap = { [Type in OpenCodeEvent["type"]]: Extract<OpenCodeEvent, { type: Type }> }
+type OcppEventMap = { [Type in OcppEvent["type"]]: Extract<OcppEvent, { type: Type }> }
 
-export type OpenCodeEventStream = {
-  on<Type extends OpenCodeEvent["type"]>(type: Type, handler: (event: OpenCodeEventMap[Type]) => void): VoidFunction
-  listen(handler: (event: OpenCodeEvent) => void): VoidFunction
+export type OcppEventStream = {
+  on<Type extends OcppEvent["type"]>(type: Type, handler: (event: OcppEventMap[Type]) => void): VoidFunction
+  listen(handler: (event: OcppEvent) => void): VoidFunction
 }
 
-type OpenCodeEventSource = OpenCodeEventStream & {
-  location(directory: string): OpenCodeEventStream
+type OcppEventSource = OcppEventStream & {
+  location(directory: string): OcppEventStream
 }
 
-export function createOpenCodeEventSource() {
-  const emitter = createGlobalEmitter<OpenCodeEventMap>()
+export function createOcppEventSource() {
+  const emitter = createGlobalEmitter<OcppEventMap>()
 
-  function stream(directory?: string): OpenCodeEventStream {
+  function stream(directory?: string): OcppEventStream {
     return {
       on(type, handler) {
         return emitter.on(type, (event) => {
@@ -40,7 +40,7 @@ export function createOpenCodeEventSource() {
     }
   }
 
-  const event: OpenCodeEventSource = {
+  const event: OcppEventSource = {
     ...stream(),
     location: (directory) => stream(directory),
   }
@@ -49,7 +49,7 @@ export function createOpenCodeEventSource() {
 
   return {
     event,
-    publish(event: OpenCodeEvent) {
+    publish(event: OcppEvent) {
       emitter.emit(event.type, event)
     },
   }
@@ -67,13 +67,13 @@ type ServerSDKBase = {
     attempt: Accessor<number>
     error: Accessor<string | undefined>
   }
-  event: OpenCodeEventSource
+  event: OcppEventSource
 }
 
 function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerScope): ServerSDKBase {
   const platform = usePlatform()
   const transport = createServerTransport({ http: server.http, fetch: platform.fetch })
-  const events = createOpenCodeEventSource()
+  const events = createOcppEventSource()
   const reconnect = server.type === "sidecar" && server.variant === "base" ? server.reconnect : undefined
 
   const connection = createClientConnection(transport.api, {
@@ -154,7 +154,7 @@ export const useServerSDK = () => {
 
 export type LocationContext = {
   directory: string
-  event: OpenCodeEventStream
+  event: OcppEventStream
 }
 
 function createDirSdkContext(directory: string, serverSDK: ServerSDKBase): LocationContext {

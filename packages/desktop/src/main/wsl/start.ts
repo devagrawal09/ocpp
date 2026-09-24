@@ -9,7 +9,7 @@ export interface Interface extends WslIpc.Interface {
   readonly stop: Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("opencode/desktop/Wsl") {}
+export class Service extends Context.Service<Service, Interface>()("ocpp/desktop/Wsl") {}
 
 export const layer = Layer.effect(
   Service,

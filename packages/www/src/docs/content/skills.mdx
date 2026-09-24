@@ -2,7 +2,7 @@
 title: "Skills"
 ---
 
-Skills are Markdown instructions that OpenCode can advertise to an agent and
+Skills are Markdown instructions that OC++ can advertise to an agent and
 load when they are relevant. A skill can include supporting scripts,
 references, and other files in the same directory.
 
@@ -11,7 +11,7 @@ references, and other files in the same directory.
 Create one directory per skill with a `SKILL.md` file:
 
 ```text
-.opencode/skills/
+.ocpp/skills/
 └── git-release/
     ├── SKILL.md
     ├── scripts/
@@ -20,7 +20,7 @@ Create one directory per skill with a `SKILL.md` file:
         └── release-policy.md
 ```
 
-```markdown title=".opencode/skills/git-release/SKILL.md"
+```markdown title=".ocpp/skills/git-release/SKILL.md"
 ---
 name: Git Release
 description: Prepare release notes, version bumps, and GitHub releases
@@ -38,19 +38,19 @@ Paths in a skill are relative to the directory containing `SKILL.md`.
 
 ## Discovery
 
-OpenCode automatically adds the following source directories:
+OC++ automatically adds the following source directories:
 
 | Scope                 | Sources                                |
 | --------------------- | -------------------------------------- |
-| Global                | `~/.config/opencode/skills`            |
+| Global                | `~/.config/ocpp/skills`                |
 | Global compatibility  | `~/.claude/skills`, `~/.agents/skills` |
-| Project               | `.opencode/skills`                     |
+| Project               | `.ocpp/skills`                         |
 | Project compatibility | `.claude/skills`, `.agents/skills`     |
 
-For project sources, OpenCode searches from the current directory upward to
+For project sources, OC++ searches from the current directory upward to
 the project root and includes matching directories at every level.
 
-Within each source directory, OpenCode discovers:
+Within each source directory, OC++ discovers:
 
 - Markdown files at the source root, such as `skills/git-release.md`
 - `SKILL.md` files at any depth, such as `skills/git-release/SKILL.md`
@@ -60,22 +60,17 @@ directory for supporting files.
 
 ## Configure sources
 
-Use the `skills` array in any `opencode.json` or `opencode.jsonc` to add local
+Use the `skills` array in any `ocpp.json` or `ocpp.jsonc` to add local
 directories or HTTP catalogs:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
-  "skills": [
-    "./team-skills",
-    "~/shared/opencode-skills",
-    "/opt/company-skills",
-    "https://example.com/opencode/skills/",
-  ],
+  "$schema": "https://ocpp.ai/config.json",
+  "skills": ["./team-skills", "~/shared/ocpp-skills", "/opt/company-skills", "https://example.com/ocpp/skills/"],
 }
 ```
 
-Relative paths are resolved from the active OpenCode working directory, not
+Relative paths are resolved from the active OC++ working directory, not
 from the directory containing the config file. Paths beginning with `~/` use
 the current user's home directory. Only `http://` and `https://` values are
 treated as URL sources.
@@ -99,7 +94,7 @@ An HTTP source is a base URL containing an `index.json`:
 }
 ```
 
-OpenCode downloads those files from
+OC++ downloads those files from
 `<base-url>/git-release/<file>`. File paths must be safe, relative,
 same-origin paths. Each entry must include either `SKILL.md` or a Markdown file
 named after the index entry, such as `git-release.md`.
@@ -107,27 +102,27 @@ named after the index entry, such as `git-release.md`.
 Use the named Markdown form for HTTP catalogs. Each downloaded skill directory
 is itself a source root, so `git-release.md` produces the ID `git-release`; a
 root-level `SKILL.md` produces the literal ID `SKILL` in the current V2
-implementation. Increment `version` when files change so OpenCode refreshes
+implementation. Increment `version` when files change so OC++ refreshes
 the cached copy.
 
 ## Frontmatter
 
 V2 reads these fields:
 
-| Field                          | Purpose                                                            |
-| ------------------------------ | ------------------------------------------------------------------ |
-| `name`                         | Display name; defaults to the path-derived ID                      |
-| `description`                  | Summary used for model-facing discovery                            |
-| `slash`                        | Set to `false` to hide the skill from interactive command catalogs |
-| `metadata.opencode/slash`      | Boolean or `"true"`/`"false"`; overrides `slash`                   |
-| `metadata.opencode/autoinvoke` | Set to `false` to omit the skill from model-facing discovery       |
+| Field                      | Purpose                                                            |
+| -------------------------- | ------------------------------------------------------------------ |
+| `name`                     | Display name; defaults to the path-derived ID                      |
+| `description`              | Summary used for model-facing discovery                            |
+| `slash`                    | Set to `false` to hide the skill from interactive command catalogs |
+| `metadata.ocpp/slash`      | Boolean or `"true"`/`"false"`; overrides `slash`                   |
+| `metadata.ocpp/autoinvoke` | Set to `false` to omit the skill from model-facing discovery       |
 
 Frontmatter, `name`, and `description` are optional at runtime. However, a
 clear `description` is strongly recommended: skills without one are not
 advertised to the model. `license`, `compatibility`, and other metadata may be
 included for portability, but V2 does not interpret them.
 
-`opencode/autoinvoke: false` only removes the skill from the model's available
+`ocpp/autoinvoke: false` only removes the skill from the model's available
 skills list. The skill remains registered and can still be activated explicitly
 by its ID.
 
@@ -160,20 +155,20 @@ wins. Sources are registered in this order, from lower to higher precedence:
 1. Built-in skills
 2. `.claude/skills` sources, global first and then from the farthest ancestor toward the current directory
 3. `.agents/skills` sources, global first and then from the farthest ancestor toward the current directory
-4. `~/.config/opencode/skills`
-5. Project `.opencode/skills`, from the project root toward the current directory
+4. `~/.config/ocpp/skills`
+5. Project `.ocpp/skills`, from the project root toward the current directory
 6. Explicit `skills` config entries, in config priority and array order
 
 Avoid duplicate IDs unless an override is intentional.
 
 ## Runtime loading
 
-At each model step, OpenCode advertises permitted skills that have a
-description and do not set `opencode/autoinvoke` to `false`. The advertisement
+At each model step, OC++ advertises permitted skills that have a
+description and do not set `ocpp/autoinvoke` to `false`. The advertisement
 contains only each skill's ID, name, and description; it does not add every
 skill body to the prompt.
 
-When the model calls the `skill` tool with an exact ID, OpenCode:
+When the model calls the `skill` tool with an exact ID, OC++:
 
 1. Resolves the current winning definition for that ID
 2. Checks the `skill` permission for the selected agent
@@ -190,7 +185,7 @@ receive no neighboring file list.
 Permission rules use the `skill` action and the skill ID as the resource. Rules
 are evaluated in order, with the last matching rule winning:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
   "permissions": [
     { "action": "skill", "resource": "*", "effect": "allow" },
@@ -212,6 +207,6 @@ If a skill is missing or loads the wrong content:
 1. Confirm the file is either a root-level `*.md` or a nested file named exactly `SKILL.md`.
 2. Check the path-derived ID rather than the frontmatter `name`.
 3. Add a `description` if the skill should be advertised to the model.
-4. Check `opencode/autoinvoke` and the selected agent's `skill` permissions.
+4. Check `ocpp/autoinvoke` and the selected agent's `skill` permissions.
 5. Look for a later source defining the same ID.
 6. For HTTP catalogs, verify `index.json`, same-origin file paths, and a changed `version`.

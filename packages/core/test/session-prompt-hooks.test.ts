@@ -1,24 +1,24 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import path from "path"
 import { Deferred, Effect, Fiber, Stream } from "effect"
-import { Bus } from "@opencode-ai/core/bus"
-import { Database } from "@opencode-ai/core/database/database"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Watcher } from "@opencode-ai/core/filesystem/watcher"
-import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Session } from "@opencode-ai/core/session"
-import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionInbox } from "@opencode-ai/core/session/inbox"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { Skill } from "@opencode-ai/core/skill"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
+import { Bus } from "@ocpp/core/bus"
+import { Database } from "@ocpp/core/database/database"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Watcher } from "@ocpp/core/filesystem/watcher"
+import { LocationServiceMap } from "@ocpp/core/location-service-map"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { PluginRuntime } from "@ocpp/core/plugin/runtime"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Session } from "@ocpp/core/session"
+import { SessionExecution } from "@ocpp/core/session/execution"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionInbox } from "@ocpp/core/session/inbox"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { SessionProjector } from "@ocpp/core/session/projector"
+import { Skill } from "@ocpp/core/skill"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
@@ -72,7 +72,7 @@ describe("Session prompt hooks", () => {
       const tmp = yield* project
       yield* Effect.promise(() =>
         Bun.write(
-          path.join(tmp.path, ".opencode/plugins/prompt.ts"),
+          path.join(tmp.path, ".ocpp/plugins/prompt.ts"),
           `export default {
             id: "prompt-readiness",
             async setup(ctx) {
@@ -317,7 +317,7 @@ describe("Session prompt hooks", () => {
       const tmp = yield* project
       yield* Effect.promise(() =>
         Bun.write(
-          path.join(tmp.path, ".opencode/plugins/command.ts"),
+          path.join(tmp.path, ".ocpp/plugins/command.ts"),
           `export default {
         id: "prompt-command",
         async setup(ctx) {

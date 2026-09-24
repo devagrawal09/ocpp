@@ -1,18 +1,18 @@
-import { AISDK } from "@opencode-ai/core/aisdk"
-import { App } from "@opencode-ai/core/app"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Session } from "@opencode-ai/schema/session"
+import { AISDK } from "@ocpp/core/aisdk"
+import { App } from "@ocpp/core/app"
+import { Agent } from "@ocpp/schema/agent"
+import { Session } from "@ocpp/schema/session"
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Model } from "@opencode-ai/core/model"
-import { ModelResolver } from "@opencode-ai/core/model-resolver"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { copilotBaseURL, copilotFetch, GithubCopilotPlugin } from "@opencode-ai/core/plugin/provider/github-copilot"
-import { Provider } from "@opencode-ai/core/provider"
-import { Integration } from "@opencode-ai/core/integration"
+import { Catalog } from "@ocpp/core/catalog"
+import { Model } from "@ocpp/core/model"
+import { ModelResolver } from "@ocpp/core/model-resolver"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { copilotBaseURL, copilotFetch, GithubCopilotPlugin } from "@ocpp/core/plugin/provider/github-copilot"
+import { Provider } from "@ocpp/core/provider"
+import { Integration } from "@ocpp/core/integration"
 import { fakeSelectorSdk } from "../fixture/selector"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
@@ -104,7 +104,7 @@ describe("GithubCopilotPlugin", () => {
       expect(requests[0]?.get("x-initiator")).toBe("user")
       expect(requests[0]?.get("copilot-vision-request")).toBe("true")
       expect(requests[0]?.get("x-github-api-version")).toBe("2026-06-01")
-      expect(requests[0]?.get("user-agent")).toBe("opencode/beta/1.2.3/test")
+      expect(requests[0]?.get("user-agent")).toBe("ocpp/beta/1.2.3/test")
     }),
   )
 

@@ -1,7 +1,7 @@
 export async function checkHealth(url: string, password?: string | null): Promise<boolean> {
   const headers = new Headers()
   if (password) {
-    const auth = Buffer.from(`opencode:${password}`).toString("base64")
+    const auth = Buffer.from(`ocpp:${password}`).toString("base64")
     headers.set("authorization", `Basic ${auth}`)
   }
 

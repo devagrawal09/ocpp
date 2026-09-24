@@ -1,14 +1,14 @@
-import { SessionMessage } from "@opencode-ai/schema/session-message"
-import { SessionTransfer } from "@opencode-ai/schema/session-transfer"
-import { SessionInbox } from "@opencode-ai/schema/session-inbox"
-import { PromptInput } from "@opencode-ai/schema/prompt-input"
-import { Session } from "@opencode-ai/schema/session"
-import { SessionStats } from "@opencode-ai/schema/session-stats"
-import { InstructionEntry } from "@opencode-ai/schema/instruction-entry"
-import { Project } from "@opencode-ai/schema/project"
-import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, statics } from "@opencode-ai/schema/schema"
-import { Event } from "@opencode-ai/schema/event"
-import { Workspace } from "@opencode-ai/schema/workspace"
+import { SessionMessage } from "@ocpp/schema/session-message"
+import { SessionTransfer } from "@ocpp/schema/session-transfer"
+import { SessionInbox } from "@ocpp/schema/session-inbox"
+import { PromptInput } from "@ocpp/schema/prompt-input"
+import { Session } from "@ocpp/schema/session"
+import { SessionStats } from "@ocpp/schema/session-stats"
+import { InstructionEntry } from "@ocpp/schema/instruction-entry"
+import { Project } from "@ocpp/schema/project"
+import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, statics } from "@ocpp/schema/schema"
+import { Event } from "@ocpp/schema/event"
+import { Workspace } from "@ocpp/schema/workspace"
 import { Context, Effect, Encoding, Result, Schema, SchemaGetter, Struct } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 import {
@@ -24,12 +24,12 @@ import {
   SkillNotFoundError,
   UnknownError,
 } from "../errors.js"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Skill } from "@opencode-ai/schema/skill"
-import { Model } from "@opencode-ai/schema/model"
-import { Location } from "@opencode-ai/schema/location"
-import { SessionEvent } from "@opencode-ai/schema/session-event"
-import { EventLog } from "@opencode-ai/schema/event-log"
+import { Agent } from "@ocpp/schema/agent"
+import { Skill } from "@ocpp/schema/skill"
+import { Model } from "@ocpp/schema/model"
+import { Location } from "@ocpp/schema/location"
+import { SessionEvent } from "@ocpp/schema/session-event"
+import { EventLog } from "@ocpp/schema/event-log"
 
 const ParentIDFilter = Schema.Union([
   Session.ID,
@@ -224,7 +224,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           identifier: "v2.session.active",
           summary: "List active sessions",
           description:
-            "Retrieve foreground Session drains currently owned by this OpenCode process. Sessions absent from the result are inactive.",
+            "Retrieve foreground Session drains currently owned by this OC++ process. Sessions absent from the result are inactive.",
         }),
       ),
     )
@@ -668,7 +668,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         query: { continue: BooleanFromString.pipe(Schema.optional) },
         success: Schema.Struct({
           interrupted: Schema.Boolean.annotate({
-            description: "Whether an active execution owned by this OpenCode process was interrupted.",
+            description: "Whether an active execution owned by this OC++ process was interrupted.",
           }),
         }).annotate({ identifier: "SessionInterruptResponse" }),
         error: SessionNotFoundError,
@@ -679,7 +679,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
             identifier: "v2.session.interrupt",
             summary: "Interrupt session execution",
             description:
-              "Interrupt active execution owned by this OpenCode process. Returns interrupted=true when an active execution was interrupted and false for the idle no-op. When continue=true, execution resumes pending steering input and next-in-line control items (manual compaction, moves) while queued prompts remain parked.",
+              "Interrupt active execution owned by this OC++ process. Returns interrupted=true when an active execution was interrupted and false for the idle no-op. When continue=true, execution resumes pending steering input and next-in-line control items (manual compaction, moves) while queued prompts remain parked.",
           }),
         ),
     )

@@ -7,15 +7,15 @@ syntax, no revision negotiation, and no separate durable result payload.
 
 The implementation has two deliberate layers:
 
-- `@opencode-ai/codemode` compiles and evaluates a restricted JavaScript-shaped language over an
+- `@ocpp/codemode` compiles and evaluates a restricted JavaScript-shaped language over an
   explicit catalog of schema-described tools, and encodes the values a program declares. It has no
   Session, database, authorization, or delivery knowledge.
-- OpenCode Core supplies the authorized tool catalog, fixed safety limits, name admission and
+- OC++ Core supplies the authorized tool catalog, fixed safety limits, name admission and
   reservation, durable storage, Session lifecycle integration, and model-facing delivery.
 
 ```mermaid
 flowchart LR
-    Model[Model] -->|execute code| Core[OpenCode Core host]
+    Model[Model] -->|execute code| Core[OC++ Core host]
     Core -->|source| Compiler[Compiler]
     Compiler -->|versioned IR + declared names| Admission[Admission]
     Admission -->|reserve names, snapshot notebook| Store[(Durable notebook)]
@@ -34,17 +34,17 @@ application effects are available only when the host exposes a named tool that p
 
 ## Feature Summary
 
-| Feature                | Behavior                                                                                           |
-| ---------------------- | -------------------------------------------------------------------------------------------------- |
-| Automatic publication  | Direct top-level `const` and `function` declarations are saved. No `export` syntax exists.         |
-| Immutable names        | A notebook name is written once and can never be redefined or reused.                              |
-| Admission              | Names are verified and reserved before an execution ID exists. Conflicts refuse immediately.       |
-| Fixed snapshots        | An execution sees exactly the completed notebook captured when it was admitted.                    |
-| All-or-nothing saving  | Success saves every declaration in one transaction; any failure saves none.                        |
-| Durable functions      | Closures are saved with their compiled body and exact captures, and re-authorize tools on call.    |
-| Plain durable data     | `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, functions.      |
-| Asynchronous execution | `execute` returns an execution ID; the outcome arrives as one later notification.                  |
-| Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.        |
+| Feature                | Behavior                                                                                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Automatic publication  | Direct top-level `const` and `function` declarations are saved. No `export` syntax exists.                                                |
+| Immutable names        | A notebook name is written once and can never be redefined or reused.                                                                     |
+| Admission              | Names are verified and reserved before an execution ID exists. Conflicts refuse immediately.                                              |
+| Fixed snapshots        | An execution sees exactly the completed notebook captured when it was admitted.                                                           |
+| All-or-nothing saving  | Success saves every declaration in one transaction; any failure saves none.                                                               |
+| Durable functions      | Closures are saved with their compiled body and exact captures, and re-authorize tools on call.                                           |
+| Plain durable data     | `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, functions.                                             |
+| Asynchronous execution | `execute` returns an execution ID; the outcome arrives as one later notification.                                                         |
+| Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.                                               |
 | Blocking tool calls    | `tools.repository.read(input)` returns its decoded result directly. `await` and `Promise.all` are warning-producing compatibility no-ops. |
 
 Calls within one execution always run serially, including subagent calls. To run independent
@@ -474,7 +474,7 @@ through the notebook without ever entering the parent's context as text.
 
 ## Limits
 
-OpenCode Core applies these fixed host limits. A program cannot raise or lower them.
+OC++ Core applies these fixed host limits. A program cannot raise or lower them.
 
 | Resource                          |     Limit |
 | --------------------------------- | --------: |
@@ -509,7 +509,7 @@ because two executions can both pass admission and only collide when they save. 
 saves nothing and releases its reservations. Reverting the messages that saved values no longer
 needed is how a Session reclaims room.
 
-The standalone `@opencode-ai/codemode` package remains host-neutral and applies only the limits its
+The standalone `@ocpp/codemode` package remains host-neutral and applies only the limits its
 host supplies, including the optional `timeoutMs` deadline Core currently leaves unset. When a host
 does supply one, the deadline includes in-flight tool calls: a timeout interrupts the tool fiber and
 waits for interruption cleanup before settlement. If the program had already returned and its

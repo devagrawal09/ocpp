@@ -27,14 +27,14 @@ type ArtifactInput = Pick<ArtifactRow, "channel" | "name" | "distribution" | "ve
 const identifier = /^[a-zA-Z0-9._-]{1,64}$/
 const version = /^[a-zA-Z0-9.+_-]{1,128}$/
 const select = "SELECT channel, name, distribution, version, metadata, active, time_created, time_updated FROM artifact"
-const audience = "https://update.opencode.ai"
+const audience = "https://update.ocpp.ai"
 const githubKeys = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"))
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
 
-    if (url.pathname === "/") return json({ service: "opencode-updates" })
+    if (url.pathname === "/") return json({ service: "ocpp-updates" })
     if (url.pathname === "/admin" && request.method === "GET") return admin(request, env)
     if (url.pathname === "/admin/activate" && request.method === "POST") return activateArtifact(request, env)
     if (url.pathname === "/api/publish" && request.method === "POST") return publishArtifact(request, env)
@@ -122,7 +122,7 @@ async function admin(request: Request, env: Env) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OpenCode Updates</title>
+  <title>OC++ Updates</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/basecoat.cdn.min.css">
   <style>
     body { min-height: 100vh; background: var(--background); }
@@ -320,11 +320,11 @@ type GitHubClaims = JWTPayload & {
 }
 
 export function validGitHubClaims(claims: JWTPayload): claims is GitHubClaims {
-  if (claims.repository !== "anomalyco/opencode") return false
+  if (claims.repository !== "devagrawal09/oc-plus-plus") return false
   if (claims.repository_id !== "975734319") return false
   if (claims.repository_owner_id !== "66570915") return false
   if (typeof claims.workflow_ref !== "string" || typeof claims.ref !== "string") return false
-  if (claims.workflow_ref !== `anomalyco/opencode/.github/workflows/publish.yml@${claims.ref}`) return false
+  if (claims.workflow_ref !== `devagrawal09/oc-plus-plus/.github/workflows/publish.yml@${claims.ref}`) return false
   if (!channelsForRef(claims.ref).length) return false
   return [claims.sha, claims.run_id, claims.run_attempt, claims.actor].every((value) => typeof value === "string")
 }

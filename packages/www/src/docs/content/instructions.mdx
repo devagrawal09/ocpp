@@ -16,13 +16,13 @@ whole team receives the same instructions.
 
 V2 loads:
 
-1. The global file at `$XDG_CONFIG_HOME/opencode/AGENTS.md`, normally
-   `~/.config/opencode/AGENTS.md`.
+1. The global file at `$XDG_CONFIG_HOME/ocpp/AGENTS.md`, normally
+   `~/.config/ocpp/AGENTS.md`.
 2. Every `AGENTS.md` from the current Location up to and including the home
    directory when the Location is inside it. For Locations outside home, the
    scan stops at the project root.
 
-For example, when the Location is `packages/web`, OpenCode can load all three
+For example, when the Location is `packages/web`, OC++ can load all three
 project files below:
 
 ```text
@@ -36,22 +36,22 @@ my-project/
 
 The files are combined rather than selecting a single winner. They are rendered
 in this order: global, then files from the Location toward home or the project
-root. OpenCode does not resolve conflicts between their contents, so keep broad
+root. OC++ does not resolve conflicts between their contents, so keep broad
 guidance global and put scoped guidance in the relevant directory.
 
 If the Location is outside the project root, only the global file is loaded.
-Setting `OPENCODE_DISABLE_PROJECT_CONFIG=1` also skips project `AGENTS.md`
+Setting `OCPP_DISABLE_PROJECT_CONFIG=1` also skips project `AGENTS.md`
 discovery but does not disable the global file.
 
 <Callout type="note">
   Current V2 discovery only recognizes `AGENTS.md`. The `CLAUDE.md` fallback and related precedence described by older
-  OpenCode documentation do not apply.
+  OC++ documentation do not apply.
 </Callout>
 
 ### Nested instructions
 
 An `AGENTS.md` below the Location is not part of the initial upward scan. When
-the read tool successfully reads a file or lists a directory, OpenCode discovers
+the read tool successfully reads a file or lists a directory, OC++ discovers
 `AGENTS.md` files from that target upward to, but not including, the Location.
 It adds newly discovered files to the session in nearest-first order.
 
@@ -65,9 +65,9 @@ immediately.
 
 The V2 config schema accepts an `instructions` array of strings:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "instructions": ["CONTRIBUTING.md", "docs/guidelines/*.md", "https://example.com/shared-instructions.md"],
 }
 ```
@@ -87,7 +87,7 @@ See [Config](/config) for config locations and general precedence.
 
 ## Ordering
 
-The selected agent or provider system prompt is sent first. OpenCode then sends
+The selected agent or provider system prompt is sent first. OC++ then sends
 the session's initial instructions, composed in this order:
 
 1. Built-in environment and date context.
@@ -122,6 +122,6 @@ is delivered for that attempt:
 The durable event stores changed source keys and value hashes. Initial baseline
 events contain no rendered prose. Later changes render once when admitted and
 freeze that optional text in the event, which projects it as a chronological
-System message. During request assembly, OpenCode renders the epoch's initial
+System message. During request assembly, OC++ renders the epoch's initial
 values and reuses projected update messages verbatim. Clients see changed keys
 but never the privileged value bodies.

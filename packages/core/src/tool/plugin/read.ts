@@ -1,10 +1,10 @@
 export * as ReadTool from "./read.js"
 
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
+import type { Context } from "@ocpp/plugin/effect/plugin"
 import { basename, dirname, join } from "path"
-import { ToolFailure } from "@opencode-ai/ai"
+import { ToolFailure } from "@ocpp/ai"
 import { Effect, Schema } from "effect"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Location } from "../../location.js"
 import { LocationMutation } from "../../location-mutation.js"
 import { Permission } from "../../permission.js"
@@ -28,7 +28,7 @@ export const Input = LocationInput
 const Output = Schema.Union([ReadToolFileSystem.FileContent, ReadToolFileSystem.TextPage, ReadToolFileSystem.ListPage])
 
 export const Plugin = {
-  id: "opencode.tool.read",
+  id: "ocpp.tool.read",
   effect: Effect.fn("ReadTool.Plugin")(function* (ctx: Context) {
     const reader = yield* ReadToolFileSystem.Service
     const mutation = yield* LocationMutation.Service

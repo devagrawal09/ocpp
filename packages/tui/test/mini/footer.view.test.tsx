@@ -3,7 +3,7 @@ import { expect, test } from "bun:test"
 import { BoxRenderable, RGBA, type RootRenderable } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { createSignal } from "solid-js"
-import type { FormInfo } from "@opencode-ai/client/promise"
+import type { FormInfo } from "@ocpp/client/promise"
 import { Keymap } from "../../src/context/keymap"
 import {
   RUN_COMMAND_PANEL_ROWS,
@@ -70,7 +70,7 @@ function model(input: {
 function provider() {
   return {
     id: "opencode",
-    name: "opencode",
+    name: "ocpp",
     models: {
       "gpt-5": model({ id: "gpt-5", name: "GPT-5", variants: { high: {}, minimal: {} } }),
       "gpt-free": model({ id: "gpt-free", name: "GPT Free", cost: 0 }),
@@ -1223,8 +1223,8 @@ test("direct footer closes settings with ctrl-c instead of arming exit", async (
 })
 
 test("selectedCommand validates the bound command and refreshes its arguments", () => {
-  expect(selectedCommand("/opencode-ts", { name: "opencode-ts", arguments: "", source: "skill" })).toEqual({
-    name: "opencode-ts",
+  expect(selectedCommand("/ocpp-ts", { name: "ocpp-ts", arguments: "", source: "skill" })).toEqual({
+    name: "ocpp-ts",
     arguments: "",
     source: "skill",
   })
@@ -1868,7 +1868,7 @@ test("direct model panel renders current model selector", async () => {
 
     expect(frame).toContain("Select model")
     expect(frame).toContain("Search")
-    expect(frame).toContain("opencode")
+    expect(frame).toContain("ocpp")
     expect(frame).toContain("GPT-5")
     expect(frame).toContain("current")
     expect(frame).toContain("GPT Free")
@@ -1883,7 +1883,7 @@ test("direct model panel renders current model selector", async () => {
     const search = app.captureCharFrame()
 
     expect(search.match(/GPT-5/g)).toHaveLength(2)
-    expect(search).toContain("opencode")
+    expect(search).toContain("ocpp")
     expect(search).toContain("OpenAI")
   } finally {
     app.renderer.destroy()

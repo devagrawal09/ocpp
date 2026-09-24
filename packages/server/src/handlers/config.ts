@@ -1,4 +1,4 @@
-import { Config } from "@opencode-ai/core/config"
+import { Config } from "@ocpp/core/config"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Api } from "../api"
 

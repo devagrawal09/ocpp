@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { AIError, LLM, Message } from "@opencode-ai/ai"
+import { AIError, LLM, Message } from "@ocpp/ai"
 import {
   LLMClient,
   RequestExecutor,
   WebSocketTransport,
   type ChannelObservation,
   type WebSocketChannelExchange,
-} from "@opencode-ai/ai/route"
-import { configure } from "@opencode-ai/ai/providers/openai"
-import { SessionModelTransport } from "@opencode-ai/core/session/model-transport"
-import { WebSocketConstructor } from "@opencode-ai/core/effect/websocket-constructor"
-import { Session } from "@opencode-ai/schema/session"
+} from "@ocpp/ai/route"
+import { configure } from "@ocpp/ai/providers/openai"
+import { SessionModelTransport } from "@ocpp/core/session/model-transport"
+import { WebSocketConstructor } from "@ocpp/core/effect/websocket-constructor"
+import { Session } from "@ocpp/schema/session"
 import { Effect, Fiber, Layer, Stream } from "effect"
 import { Headers } from "effect/unstable/http"
 import { Socket } from "effect/unstable/socket"

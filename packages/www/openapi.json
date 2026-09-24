@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "opencode HttpApi",
+    "title": "ocpp HttpApi",
     "version": "0.0.1",
     "description": "Experimental HttpApi surface for selected instance routes."
   },
@@ -1190,7 +1190,7 @@
             }
           }
         },
-        "description": "Retrieve foreground Session drains currently owned by this OpenCode process. Sessions absent from the result are inactive.",
+        "description": "Retrieve foreground Session drains currently owned by this OC++ process. Sessions absent from the result are inactive.",
         "summary": "List active sessions"
       }
     },
@@ -3821,7 +3821,7 @@
             }
           }
         },
-        "description": "Interrupt active execution owned by this OpenCode process. Returns interrupted=true when an active execution was interrupted and false for the idle no-op. When continue=true, execution resumes pending steering input and next-in-line control items (manual compaction, moves) while queued prompts remain parked.",
+        "description": "Interrupt active execution owned by this OC++ process. Returns interrupted=true when an active execution was interrupted and false for the idle no-op. When continue=true, execution resumes pending steering input and next-in-line control items (manual compaction, moves) while queued prompts remain parked.",
         "summary": "Interrupt session execution"
       }
     },
@@ -9655,7 +9655,7 @@
             "required": true
           },
           {
-            "name": "x-opencode-ticket",
+            "name": "x-ocpp-ticket",
             "in": "header",
             "schema": {
               "anyOf": [
@@ -10550,7 +10550,7 @@
             "required": true
           },
           {
-            "name": "x-opencode-ticket",
+            "name": "x-ocpp-ticket",
             "in": "header",
             "schema": {
               "anyOf": [
@@ -10757,7 +10757,7 @@
             }
           }
         },
-        "description": "Stream persistent PTY output through the OpenCode server.",
+        "description": "Stream persistent PTY output through the OC++ server.",
         "summary": "Connect to a persistent PTY",
         "x-websocket": true
       }
@@ -13716,6 +13716,70 @@
                 "$ref": "#/components/schemas/Config.WarmingEncoded"
               }
             ]
+          },
+          "external_agents": {
+            "type": "object",
+            "properties": {
+              "claude": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "effort": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "codex": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "effort": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "pi": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "effort": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "subagent": {
+            "type": "object",
+            "properties": {
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^/#]+\\/[^#]+$"
+                }
+              }
+            },
+            "additionalProperties": false
           },
           "providers": {
             "type": "object",
@@ -18316,7 +18380,7 @@
         "properties": {
           "interrupted": {
             "type": "boolean",
-            "description": "Whether an active execution owned by this OpenCode process was interrupted."
+            "description": "Whether an active execution owned by this OC++ process was interrupted."
           }
         },
         "required": ["interrupted"],

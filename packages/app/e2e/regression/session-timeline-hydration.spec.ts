@@ -1,8 +1,8 @@
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { SessionMessageInfo } from "@ocpp/client/promise"
 import { expect, test } from "@playwright/test"
 import { fixture } from "../performance/timeline/session-timeline-stress.fixture"
 import { stressSessionHref } from "../performance/timeline/timeline-test-helpers"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 
 test.use({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" })
 
@@ -31,7 +31,7 @@ for (const window of ["assistant-only", "mixed"] as const) {
       release: Promise.withResolvers<void>(),
     }))
     const requests: (string | undefined)[] = []
-    await mockOpenCodeServer(page, {
+    await mockOcppServer(page, {
       ...fixture,
       sessions: [session],
       beforeMessagesResponse: async ({ before }) => {

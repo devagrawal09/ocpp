@@ -1,7 +1,7 @@
-import type { ConnectionInfo } from "@opencode-ai/client"
-import type { IntegrationApi } from "@opencode-ai/client/effect/api"
-import { Credential } from "@opencode-ai/schema/credential"
-import { Form } from "@opencode-ai/schema/form"
+import type { ConnectionInfo } from "@ocpp/client"
+import type { IntegrationApi } from "@ocpp/client/effect/api"
+import { Credential } from "@ocpp/schema/credential"
+import { Form } from "@ocpp/schema/form"
 import type { Effect, Scope } from "effect"
 import type { Transform } from "./registration.js"
 

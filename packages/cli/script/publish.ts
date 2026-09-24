@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { $ } from "bun"
 import pkg from "../package.json"
-import { Script } from "@opencode-ai/script"
+import { Script } from "@ocpp/script"
 import { fileURLToPath } from "url"
 import { existsSync } from "fs"
 import { UpdateArtifact } from "../../../script/update-artifact"
@@ -56,7 +56,7 @@ async function publishDistribution(input: { root: string; name: string; binary: 
         scripts: { postinstall: "node ./postinstall.mjs" },
         version,
         license: pkg.license,
-        repository: { type: "git", url: "git+https://github.com/anomalyco/opencode.git" },
+        repository: { type: "git", url: "git+https://github.com/devagrawal09/oc-plus-plus.git" },
         os: ["darwin", "linux", "win32"],
         cpu: ["arm64", "x64"],
         optionalDependencies: binaries,
@@ -68,7 +68,7 @@ async function publishDistribution(input: { root: string; name: string; binary: 
 
   await Promise.all(
     Object.entries(binaries).map(([name, version]) =>
-      publish(`${input.root}/${name.replace("@opencode-ai/", "")}`, name, version),
+      publish(`${input.root}/${name.replace("@ocpp/", "")}`, name, version),
     ),
   )
   await publish(`${input.root}/${input.name}`, input.name, version)
@@ -77,15 +77,15 @@ async function publishDistribution(input: { root: string; name: string; binary: 
 await publishDistribution({
   root: "./dist",
   name: pkg.name,
-  binary: "opencode2",
-  packagePrefix: "@opencode-ai/cli-",
+  binary: "ocpp",
+  packagePrefix: "@ocpp/cli-",
 })
 if (existsSync("./dist/node")) {
   await publishDistribution({
     root: "./dist/node",
-    name: "opencode-node",
-    binary: "opencode2-node",
-    packagePrefix: "@opencode-ai/cli-node-",
+    name: "ocpp-node",
+    binary: "ocpp-node",
+    packagePrefix: "@ocpp/cli-node-",
   })
 }
 await UpdateArtifact.publish({

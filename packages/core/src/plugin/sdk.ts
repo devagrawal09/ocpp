@@ -1,15 +1,15 @@
 export * as SdkPlugins from "./sdk.js"
 
-import type { Plugin } from "@opencode-ai/plugin/effect/plugin"
+import type { Plugin } from "@ocpp/plugin/effect/plugin"
 import { Context, Effect, Layer } from "effect"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Bus } from "../bus.js"
 import type { Versioned } from "../plugin.js"
 
 export const Updated = Bus.ephemeral({ type: "sdk.plugin.updated", schema: {} })
 
 /**
- * Holds the plugins an embedder (the `@opencode-ai/sdk` host) contributes,
+ * Holds the plugins an embedder (the `@ocpp/sdk` host) contributes,
  * so `PluginSupervisor` can add them on every Location boot through the ordinary
  * generation path that `PluginSupervisor` uses for plugins discovered from
  * config. Registration publishes an unlocated update so every booted Location
@@ -24,7 +24,7 @@ export interface Interface {
   readonly all: () => readonly Versioned[]
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SdkPlugins") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SdkPlugins") {}
 
 export const layer = Layer.effect(
   Service,

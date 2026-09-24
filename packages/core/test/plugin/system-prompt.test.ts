@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { SystemPart } from "@opencode-ai/ai"
-import { Agent } from "@opencode-ai/core/agent"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { SystemPromptPlugin } from "@opencode-ai/core/plugin/system-prompt"
-import { Session } from "@opencode-ai/core/session"
-import { SessionSystemPrompt } from "@opencode-ai/core/session/system-prompt"
-import type { SessionHooks } from "@opencode-ai/plugin/effect/session"
-import { Model } from "@opencode-ai/schema/model"
-import { Provider } from "@opencode-ai/schema/provider"
+import { SystemPart } from "@ocpp/ai"
+import { Agent } from "@ocpp/core/agent"
+import { Catalog } from "@ocpp/core/catalog"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { SystemPromptPlugin } from "@ocpp/core/plugin/system-prompt"
+import { Session } from "@ocpp/core/session"
+import { SessionSystemPrompt } from "@ocpp/core/session/system-prompt"
+import type { SessionHooks } from "@ocpp/plugin/effect/session"
+import { Model } from "@ocpp/schema/model"
+import { Provider } from "@ocpp/schema/provider"
 import { Effect } from "effect"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
@@ -45,19 +45,19 @@ describe("SystemPromptPlugin", () => {
     expect(PROMPT_META).toContain("`edit` for editing")
     expect(PROMPT_META).toContain("`write` for creating files")
     expect(PROMPT_META).toContain("Follow that reminder for the files you may edit")
-    expect(PROMPT_META).toContain("https://opencode.ai/v2/docs/")
+    expect(PROMPT_META).toContain("https://ocpp.ai/v2/docs/")
     expect(PROMPT_META).not.toMatch(
-      /TodoWrite|Task tool|WebFetch|\bBash\b|including planning files|https:\/\/opencode\.ai\/docs/,
+      /TodoWrite|Task tool|WebFetch|\bBash\b|including planning files|https:\/\/ocpp\.ai\/docs/,
     )
   })
 
   test("uses granular IDs with a common prefix", () => {
     expect(SystemPromptPlugin.Plugins.map((plugin) => plugin.id)).toEqual([
-      "opencode.prompt.openai",
-      "opencode.prompt.anthropic",
-      "opencode.prompt.kimi",
-      "opencode.prompt.arcee",
-      "opencode.prompt.meta",
+      "ocpp.prompt.openai",
+      "ocpp.prompt.anthropic",
+      "ocpp.prompt.kimi",
+      "ocpp.prompt.arcee",
+      "ocpp.prompt.meta",
     ])
   })
 
@@ -69,9 +69,9 @@ describe("SystemPromptPlugin", () => {
         discard: true,
       })
       const cases = [
-        ["gpt-5", "You are OpenCode, You and the user share the same workspace"],
-        ["gpt-4.1", "You are OpenCode, You and the user share the same workspace"],
-        ["o3", "You are OpenCode, You and the user share the same workspace"],
+        ["gpt-5", "You are OC++, You and the user share the same workspace"],
+        ["gpt-4.1", "You are OC++, You and the user share the same workspace"],
+        ["o3", "You are OC++, You and the user share the same workspace"],
         ["gpt-5-codex", "## Editing constraints"],
         ["gemini-2.5-pro", fallback],
         ["claude-sonnet-4", "# Professional objectivity"],
@@ -202,7 +202,7 @@ describe("SystemPromptPlugin", () => {
       yield* hooks.trigger("session", "context", physicalCustom)
       yield* hooks.trigger("session", "context", familyOpenAI)
 
-      expect(physicalOpenAI.system[0]?.text).toContain("You are OpenCode, You and the user share the same workspace")
+      expect(physicalOpenAI.system[0]?.text).toContain("You are OC++, You and the user share the same workspace")
       expect(physicalCustom.system[0]?.text).toBe(fallback)
       expect(familyOpenAI.system[0]?.text).toContain("## Editing constraints")
     }),

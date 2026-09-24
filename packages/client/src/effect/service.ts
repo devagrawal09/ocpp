@@ -1,4 +1,4 @@
-import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
+import { ServiceStatus } from "@ocpp/protocol/groups/health"
 import { Effect, FileSystem, Option, Schedule, Schema } from "effect"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -17,7 +17,7 @@ export * from "../service.js"
 /** Contents of the local service registration file. */
 export type Info = import("../service.js").Info
 
-// Find, start, and stop the local opencode background service.
+// Find, start, and stop the local ocpp background service.
 //
 // The service daemon advertises itself through a registration file in the
 // user's state directory: url, pid, version, and the private password, with
@@ -64,7 +64,7 @@ export const ensure = Effect.fn("service.ensure")(function* (options: EnsureOpti
       options.onStart?.(reason, previousVersion)
     })
   const spawnContender = Effect.gen(function* () {
-    const [command, ...args] = options.command ?? ["opencode", "serve", "--service"]
+    const [command, ...args] = options.command ?? ["ocpp", "serve", "--service"]
     if (command === undefined) return yield* Effect.fail(new Error("Missing service command"))
     const env = yield* Effect.tryPromise(() => PtyHandoff.environment(options.file ?? fallback(), options.env))
     return yield* Effect.try({
@@ -152,7 +152,7 @@ export const stop = Effect.fn("service.stop")(function* (options: StopOptions = 
 
 function fallback() {
   const state = process.env["XDG_STATE_HOME"] ?? join(homedir(), ".local", "state")
-  return join(state, "opencode", "service.json")
+  return join(state, "ocpp", "service.json")
 }
 
 /** Create HTTP authentication headers for a service endpoint. */
@@ -203,9 +203,7 @@ const probeResult = Effect.fnUntraced(function* (
   const endpoint = {
     url: info.url,
     auth:
-      info.password === undefined
-        ? undefined
-        : { type: "basic" as const, username: "opencode", password: info.password },
+      info.password === undefined ? undefined : { type: "basic" as const, username: "ocpp", password: info.password },
   } satisfies Endpoint
   const signal = AbortSignal.timeout(timeout)
   const result = yield* Effect.promise(() =>

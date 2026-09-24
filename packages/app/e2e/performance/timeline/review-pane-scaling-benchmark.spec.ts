@@ -299,7 +299,7 @@ async function installReviewPaneScalingProbe(page: Page, input: { expectedFile: 
           const toggle = event.target instanceof Element ? event.target.closest("button") : undefined
           if (!toggle?.hasAttribute("data-review-pane-scaling-toggle")) return
           probe.startedAt = performance.now()
-          performance.mark("opencode.review-pane-scaling.click")
+          performance.mark("ocpp.review-pane-scaling.click")
           requestAnimationFrame(sample)
         },
         { capture: true, once: true },

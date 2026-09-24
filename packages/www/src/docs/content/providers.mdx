@@ -2,17 +2,17 @@
 title: "Providers"
 ---
 
-OpenCode includes a built-in catalog of providers and models from [models.dev](https://models.dev). You can also add a
+OC++ includes a built-in catalog of providers and models from [models.dev](https://models.dev). You can also add a
 custom provider to your configuration.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "acme": {
       "name": "Acme",
       "env": ["ACME_API_KEY"],
-      "package": "@opencode-ai/ai/providers/openai-compatible",
+      "package": "@ocpp/ai/providers/openai-compatible",
       "settings": {
         "baseURL": "https://llm.acme.example/v1",
       },
@@ -68,14 +68,14 @@ Azure supports either an API key or your existing Microsoft Entra ID session fro
      --output table
    ```
 
-3. In OpenCode, run `/connect`, select **Azure**, and choose **Microsoft Entra ID (Azure CLI)**. OpenCode lists the Azure
+3. In OC++, run `/connect`, select **Azure**, and choose **Microsoft Entra ID (Azure CLI)**. OC++ lists the Azure
    resources visible to your active CLI session, including their resource groups. Select one, or choose **Type your own
-   answer** to enter a resource name that is not listed. If resource listing is unavailable, OpenCode asks for the name
-   directly. If `AZURE_RESOURCE_NAME` is already set, OpenCode uses it without prompting.
+   answer** to enter a resource name that is not listed. If resource listing is unavailable, OC++ asks for the name
+   directly. If `AZURE_RESOURCE_NAME` is already set, OC++ uses it without prompting.
 
 4. Select a deployed model with `/models`.
 
-OpenCode discovers successful model deployments from the active Azure subscription and refreshes access tokens through your
+OC++ discovers successful model deployments from the active Azure subscription and refreshes access tokens through your
 Azure CLI session. Set `AZURE_RESOURCE_GROUP` when you already know the resource group and want to skip subscription-wide
 resource discovery.
 
@@ -83,9 +83,9 @@ Listing deployments requires Azure management permissions, which are separate fr
 cannot list deployments, the Azure model catalog remains available. Select a model whose name matches the deployment, or
 configure the deployment name explicitly:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "azure": {
       "models": {
@@ -107,9 +107,9 @@ role for other Foundry models. If a request fails because the token belongs to a
 Override `settings.baseURL` to send an existing provider through a proxy or compatible endpoint. Its existing package,
 models, and connection continue to apply:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "anthropic": {
       "settings": {
@@ -127,9 +127,9 @@ models, and connection continue to apply:
 Use `headers` to add HTTP headers to provider requests. Use `body` to merge additional JSON fields into each request
 body:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "openai": {
       "headers": {
@@ -137,7 +137,7 @@ body:
       },
       "body": {
         "metadata": {
-          "application": "opencode",
+          "application": "ocpp",
         },
       },
     },
@@ -150,12 +150,12 @@ body:
 The `package` field selects the runtime used to communicate with a provider. For an OpenAI-compatible API, use the
 built-in compatible package:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "providers": {
     "acme": {
-      "package": "@opencode-ai/ai/providers/openai-compatible",
+      "package": "@ocpp/ai/providers/openai-compatible",
       "settings": {
         "baseURL": "https://llm.acme.example/v1",
       },
@@ -171,41 +171,41 @@ built-in compatible package:
 
 Native package options:
 
-- `@opencode-ai/ai/providers/openai`
-- `@opencode-ai/ai/providers/openai/chat`
-- `@opencode-ai/ai/providers/openai/responses`
-- `@opencode-ai/ai/providers/openai-compatible`
-- `@opencode-ai/ai/providers/openai-compatible/responses`
-- `@opencode-ai/ai/providers/anthropic`
-- `@opencode-ai/ai/providers/anthropic-compatible`
-- `@opencode-ai/ai/providers/google`
-- `@opencode-ai/ai/providers/google-vertex`
-- `@opencode-ai/ai/providers/google-vertex/gemini`
-- `@opencode-ai/ai/providers/google-vertex/chat`
-- `@opencode-ai/ai/providers/google-vertex/responses`
-- `@opencode-ai/ai/providers/google-vertex/messages`
-- `@opencode-ai/ai/providers/azure`
-- `@opencode-ai/ai/providers/azure/chat`
-- `@opencode-ai/ai/providers/azure/responses`
-- `@opencode-ai/ai/providers/amazon-bedrock`
-- `@opencode-ai/ai/providers/amazon-bedrock/mantle`
-- `@opencode-ai/ai/providers/amazon-bedrock/mantle/chat`
-- `@opencode-ai/ai/providers/amazon-bedrock/mantle/responses`
-- `@opencode-ai/ai/providers/openrouter`
-- `@opencode-ai/ai/providers/xai`
+- `@ocpp/ai/providers/openai`
+- `@ocpp/ai/providers/openai/chat`
+- `@ocpp/ai/providers/openai/responses`
+- `@ocpp/ai/providers/openai-compatible`
+- `@ocpp/ai/providers/openai-compatible/responses`
+- `@ocpp/ai/providers/anthropic`
+- `@ocpp/ai/providers/anthropic-compatible`
+- `@ocpp/ai/providers/google`
+- `@ocpp/ai/providers/google-vertex`
+- `@ocpp/ai/providers/google-vertex/gemini`
+- `@ocpp/ai/providers/google-vertex/chat`
+- `@ocpp/ai/providers/google-vertex/responses`
+- `@ocpp/ai/providers/google-vertex/messages`
+- `@ocpp/ai/providers/azure`
+- `@ocpp/ai/providers/azure/chat`
+- `@ocpp/ai/providers/azure/responses`
+- `@ocpp/ai/providers/amazon-bedrock`
+- `@ocpp/ai/providers/amazon-bedrock/mantle`
+- `@ocpp/ai/providers/amazon-bedrock/mantle/chat`
+- `@ocpp/ai/providers/amazon-bedrock/mantle/responses`
+- `@ocpp/ai/providers/openrouter`
+- `@ocpp/ai/providers/xai`
 
-You can also use an npm package such as `@acme/opencode-provider` or an absolute `file://` URL for a local package.
+You can also use an npm package such as `@acme/ocpp-provider` or an absolute `file://` URL for a local package.
 
 Use `settings` for options supported by the selected package.
 
 ## Models
 
-Add a model under a provider's `models` map. The object key is the model ID used in OpenCode; `modelID` is the ID sent to
+Add a model under a provider's `models` map. The object key is the model ID used in OC++; `modelID` is the ID sent to
 the provider:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "model": "openai/coding",
   "providers": {
     "openai": {

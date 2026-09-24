@@ -1,28 +1,28 @@
 import { describe, expect } from "bun:test"
-import { ToolFailure } from "@opencode-ai/ai"
+import { ToolFailure } from "@ocpp/ai"
 import { Context, Effect, Exit, Fiber, Schema, Stream } from "effect"
-import { Plugin as EffectPlugin } from "@opencode-ai/plugin/effect"
-import { Config as ConfigSchema } from "@opencode-ai/schema/config"
-import { Agent } from "@opencode-ai/core/agent"
-import { Bus } from "@opencode-ai/core/bus"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
-import { Location } from "@opencode-ai/core/location"
-import { PersistentPty } from "@opencode-ai/core/persistent-pty"
-import { Project } from "@opencode-ai/core/project"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Session } from "@opencode-ai/core/session"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Tool } from "@opencode-ai/core/tool"
-import { Vcs } from "@opencode-ai/core/vcs"
-import { Pty } from "@opencode-ai/schema/pty"
+import { Plugin as EffectPlugin } from "@ocpp/plugin/effect"
+import { Config as ConfigSchema } from "@ocpp/schema/config"
+import { Agent } from "@ocpp/core/agent"
+import { Bus } from "@ocpp/core/bus"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { PluginRuntime } from "@ocpp/core/plugin/runtime"
+import { Location } from "@ocpp/core/location"
+import { PersistentPty } from "@ocpp/core/persistent-pty"
+import { Project } from "@ocpp/core/project"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Session } from "@ocpp/core/session"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { Tool } from "@ocpp/core/tool"
+import { Vcs } from "@ocpp/core/vcs"
+import { Pty } from "@ocpp/schema/pty"
 import { testEffect } from "./lib/effect"
 import { PluginTestLayer } from "./plugin/fixture"
 
 const it = testEffect(PluginTestLayer)
 
-class Secret extends Context.Service<Secret, string>()("@opencode/test/PluginSecret") {}
+class Secret extends Context.Service<Secret, string>()("@ocpp/test/PluginSecret") {}
 
 const versioned = <R>(plugin: EffectPlugin.Plugin<R>, version = "1") => ({ ...plugin, version })
 

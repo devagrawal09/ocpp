@@ -1,6 +1,6 @@
 # Session diagnostics
 
-Offline, read-only analysis of Code Mode outcomes in a frozen copy of an OpenCode database.
+Offline, read-only analysis of Code Mode outcomes in a frozen copy of an OC++ database.
 
 ```
 bun run diagnostics:session <snapshot.db> [--holdout 30] [--out report.json]
@@ -31,7 +31,7 @@ change when the meaning of a count changes. `manifest.thresholds`, `manifest.def
 | Section            | Content                                                                                        |
 | ------------------ | ---------------------------------------------------------------------------------------------- |
 | `events`           | Canonical per-session event counts and one bounded example sequence.                           |
-| `strata`           | Execute calls by OpenCode version and observed execute mode, with completion provenance.       |
+| `strata`           | Execute calls by OC++ version and observed execute mode, with completion provenance.           |
 | `execute`          | Admission versus completion, refusal and failure categories with sources, blind retry loops.   |
 | `episodes`         | Failure episodes from first refusal or failed completion to recovery or non-recovery.          |
 | `sequences`        | Tool bigrams, per-tool status counts, and category transitions inside episodes.                |

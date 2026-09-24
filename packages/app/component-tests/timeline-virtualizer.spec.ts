@@ -4,7 +4,7 @@ import { expect, story } from "../../storybook/playwright/story"
 const fixture = `/@fs/${fileURLToPath(new URL("./timeline-virtualizer.fixture.tsx", import.meta.url)).replaceAll("\\", "/")}`
 
 story.beforeEach(async ({ mount }) => {
-  const component = await mount("opencode-composer-flow--mixed-attachments")
+  const component = await mount("ocpp-composer-flow--mixed-attachments")
   await expect(component.getByRole("textbox", { name: "Prompt", exact: true })).toBeVisible()
 })
 

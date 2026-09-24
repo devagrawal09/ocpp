@@ -1,6 +1,6 @@
-# OpenCode Desktop
+# OC++ Desktop
 
-The OpenCode Desktop app, built with Electron.
+The OC++ Desktop app, built with Electron.
 
 ## Development
 

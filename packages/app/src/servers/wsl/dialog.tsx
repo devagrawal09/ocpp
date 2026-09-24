@@ -1,10 +1,10 @@
-import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Button } from "@opencode-ai/ui/button"
-import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@opencode-ai/ui/dialog"
-import { Divider } from "@opencode-ai/ui/divider"
-import { Loader } from "@opencode-ai/ui/loader"
-import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio"
-import { TextInput } from "@opencode-ai/ui/text-input"
+import { useDialog } from "@ocpp/ui/context/dialog"
+import { Button } from "@ocpp/ui/button"
+import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@ocpp/ui/dialog"
+import { Divider } from "@ocpp/ui/divider"
+import { Loader } from "@ocpp/ui/loader"
+import { RadioGroup, RadioItem } from "@ocpp/ui/radio"
+import { TextInput } from "@ocpp/ui/text-input"
 import { createMemo, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
@@ -333,8 +333,8 @@ function useWslAddServerController(props: DialogWslServerProps) {
     const distro = model().selectedDistro
     const action = button.action
     if (!distro || !action) return
-    if (action === "install-opencode") {
-      await run(() => api.installOpencode(distro))
+    if (action === "install-ocpp") {
+      await run(() => api.installOcpp(distro))
       return
     }
     setStore("adding", true)

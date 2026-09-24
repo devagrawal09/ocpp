@@ -2,7 +2,7 @@
 title: "Snapshots"
 ---
 
-OpenCode snapshots let clients roll back conversation history and related file changes. They are a convenience for
+OC++ snapshots let clients roll back conversation history and related file changes. They are a convenience for
 revising recent work, not a replacement for Git commits or backups.
 
 ## Configuration
@@ -10,9 +10,9 @@ revising recent work, not a replacement for Git commits or backups.
 Snapshots are enabled by default. Set `snapshots` to `false` in your [configuration](/config#snapshots) to stop capturing
 filesystem state:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "snapshots": false,
 }
 ```
@@ -23,10 +23,10 @@ snapshots that were already stored.
 
 ## What is captured
 
-For each model step, OpenCode attempts to capture the worktree immediately before the model call and after a cleanly
+For each model step, OC++ attempts to capture the worktree immediately before the model call and after a cleanly
 completed step. It records the paths changed between those two points on the assistant message.
 
-Snapshots use a separate internal Git object database in the OpenCode data directory. They do not create commits, move
+Snapshots use a separate internal Git object database in the OC++ data directory. They do not create commits, move
 branches, or intentionally modify your repository's Git index. Capture is limited to the session's active directory, which
 may be a subdirectory of the repository.
 
@@ -55,7 +55,7 @@ recovered.
 - Other processes can edit the worktree between capture and restore. The server rejects revert operations while the
   session is actively running, but it cannot protect against external editors or commands.
 - Snapshot objects can contain complete contents of tracked and non-ignored untracked files. They are stored locally in
-  the OpenCode data directory; do not treat snapshots as secret-free metadata.
+  the OC++ data directory; do not treat snapshots as secret-free metadata.
 - Snapshot restoration is not secure erasure. Committing a revert removes messages from the active projection, not from
   durable session history or existing snapshot storage.
 

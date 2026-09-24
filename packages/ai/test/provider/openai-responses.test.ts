@@ -912,11 +912,11 @@ describe("OpenAI Responses route", () => {
       )
       const cases = [
         {
-          model: Azure.configure({ resourceName: "opencode-test", apiKey: "azure-key" }).responses("deployment"),
+          model: Azure.configure({ resourceName: "ocpp-test", apiKey: "azure-key" }).responses("deployment"),
           authorization: "Bearer azure-key",
         },
         {
-          model: Azure.configure({ resourceName: "opencode-test", auth: Auth.bearer("entra-token") }).responses(
+          model: Azure.configure({ resourceName: "ocpp-test", auth: Auth.bearer("entra-token") }).responses(
             "deployment",
           ),
           authorization: "Bearer entra-token",
@@ -928,7 +928,7 @@ describe("OpenAI Responses route", () => {
           webSocket: {
             execute: (exchange) =>
               Effect.gen(function* () {
-                expect(exchange.connect.url).toBe("wss://opencode-test.openai.azure.com/openai/v1/responses")
+                expect(exchange.connect.url).toBe("wss://ocpp-test.openai.azure.com/openai/v1/responses")
                 expect(exchange.connect.rotateAfterMs).toBe(55 * 60 * 1000)
                 expect(exchange.connect.headers.authorization).toBe(item.authorization)
                 expect(exchange.connect.headers["api-key"]).toBeUndefined()
@@ -957,19 +957,19 @@ describe("OpenAI Responses route", () => {
       const cases = [
         {
           model: Azure.configure({
-            resourceName: "opencode-test",
+            resourceName: "ocpp-test",
             apiKey: "azure-key",
             apiVersion: "2025-04-01-preview",
           }).responses("deployment"),
-          url: "https://opencode-test.openai.azure.com/openai/v1/responses?api-version=2025-04-01-preview",
+          url: "https://ocpp-test.openai.azure.com/openai/v1/responses?api-version=2025-04-01-preview",
         },
         {
           model: Azure.configure({
-            resourceName: "opencode-test",
+            resourceName: "ocpp-test",
             apiKey: "azure-key",
             useDeploymentBasedUrls: true,
           }).responses("deployment"),
-          url: "https://opencode-test.openai.azure.com/openai/deployments/deployment/responses?api-version=v1",
+          url: "https://ocpp-test.openai.azure.com/openai/deployments/deployment/responses?api-version=v1",
         },
         {
           model: Azure.configure({ baseURL: "https://gateway.example/azure", apiKey: "azure-key" }).responses(
@@ -1209,7 +1209,7 @@ describe("OpenAI Responses route", () => {
       yield* LLMClient.generate(
         LLMRequest.update(request, {
           model: Azure.configure({
-            baseURL: "https://opencode-test.openai.azure.com/openai/",
+            baseURL: "https://ocpp-test.openai.azure.com/openai/",
             apiKey: "azure-key",
             headers: { authorization: "Bearer stale" },
           }).responses("gpt-4.1-mini"),
@@ -1219,7 +1219,7 @@ describe("OpenAI Responses route", () => {
           dynamicResponse((input) =>
             Effect.gen(function* () {
               const web = yield* HttpClientRequest.toWeb(input.request).pipe(Effect.orDie)
-              expect(web.url).toBe("https://opencode-test.openai.azure.com/openai/v1/responses?api-version=v1")
+              expect(web.url).toBe("https://ocpp-test.openai.azure.com/openai/v1/responses?api-version=v1")
               expect(web.headers.get("api-key")).toBe("azure-key")
               expect(web.headers.get("authorization")).toBeNull()
               return input.respond(sseEvents({ type: "response.completed", response: {} }), {

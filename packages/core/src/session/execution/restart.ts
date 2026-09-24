@@ -1,7 +1,7 @@
 export * as SessionRestart from "./restart.js"
 
 import { Context, Effect, Layer } from "effect"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Bus } from "../../bus.js"
 import { Job } from "../../job.js"
 import { Session } from "../../session.js"
@@ -12,7 +12,7 @@ import { SessionStore } from "../store.js"
 import { ShellResult } from "../../shell/result.js"
 import { SubagentCompletion } from "../subagent-completion.js"
 import { CodeModeCompletion } from "../codemode-completion.js"
-import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
+import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 
 const CONTINUE_AFTER_SERVER_RESTART =
   "The server restarted while you were working. Continue from where you left off without repeating completed work."
@@ -62,7 +62,7 @@ export interface Interface {
  * have exclusive execution ownership of their database until clustered
  * ownership exists. The service is inert until called by its host at boot.
  */
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRestart") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionRestart") {}
 
 export const layer = (options?: Options) =>
   Layer.effect(

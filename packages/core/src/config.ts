@@ -1,24 +1,16 @@
 export * as Config from "./config.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import path from "path"
 import { isDeepStrictEqual } from "node:util"
 import { type ParseError, parse } from "jsonc-parser"
 import { Context, Effect, Layer, Option, PubSub, Ref, Schema, Semaphore, Stream } from "effect"
-import {
-  AgentsDirectory,
-  ClaudeDirectory,
-  Directory,
-  Document,
-  Info,
-  type Entry,
-  Event,
-} from "@opencode-ai/schema/config"
+import { AgentsDirectory, ClaudeDirectory, Directory, Document, Info, type Entry, Event } from "@ocpp/schema/config"
 import { Credential } from "./credential.js"
 import { Bus } from "./bus.js"
 import { Watcher } from "./filesystem/watcher.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
 import { Location } from "./location.js"
 import { AbsolutePath } from "./schema.js"
 import { ConfigVariable } from "./config/variable.js"
@@ -51,7 +43,7 @@ export const Options = Schema.Struct({
 })
 export type Options = typeof Options.Type
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Config") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Config") {}
 
 export interface TestInterface extends Interface {
   /** Replaces the entries returned by subsequent entries() calls. */
@@ -60,7 +52,7 @@ export interface TestInterface extends Interface {
   readonly emitChange: (update: Watcher.Update) => Effect.Effect<void>
 }
 
-export class Test extends Context.Service<Test, TestInterface>()("@opencode/Config/Test") {}
+export class Test extends Context.Service<Test, TestInterface>()("@ocpp/Config/Test") {}
 
 /** In-memory config for tests: static entries with replaceable state and a test-driven change feed. */
 export const testLayer = (initial: Entry[] = []) =>
@@ -89,7 +81,7 @@ export const layer = (options?: Options) =>
       const bus = yield* Bus.Service
       const credentials = yield* Credential.Service
       const wellknown = yield* WellKnown.Service
-      const names = ["opencode.json", "opencode.jsonc"]
+      const names = ["ocpp.json", "ocpp.jsonc"]
       const reloadLock = Semaphore.makeUnsafe(1)
       const fileTargets = new Set<AbsolutePath>()
       const decodeOptions = { errors: "all", onExcessProperty: "ignore", propertyOrder: "original" } as const
@@ -194,7 +186,7 @@ export const layer = (options?: Options) =>
             ? []
             : yield* fs
                 .up({
-                  targets: [".opencode", ".claude", ".agents", ...names.toReversed()],
+                  targets: [".ocpp", ".claude", ".agents", ...names.toReversed()],
                   start: location.directory,
                 })
                 .pipe(Effect.orDie)
@@ -228,11 +220,11 @@ export const layer = (options?: Options) =>
         ].map((directory) => new AgentsDirectory({ type: "agents", path: AbsolutePath.make(directory) }))
 
         const projectDirectories = visible
-          .filter((item) => path.basename(item) === ".opencode")
+          .filter((item) => path.basename(item) === ".ocpp")
           .toReversed()
           .map((directory) => AbsolutePath.make(directory))
         const directPaths = visible
-          .filter((item) => ![".agents", ".claude", ".opencode"].includes(path.basename(item)))
+          .filter((item) => ![".agents", ".claude", ".ocpp"].includes(path.basename(item)))
           .toReversed()
         fileTargets.clear()
         directPaths.forEach((filepath) => fileTargets.add(AbsolutePath.make(filepath)))
@@ -253,11 +245,11 @@ export const layer = (options?: Options) =>
           options?.content !== undefined
             ? yield* ConfigVariable.substitute({
                 type: "virtual",
-                source: "OPENCODE_CONFIG_CONTENT",
+                source: "OCPP_CONFIG_CONTENT",
                 dir: location.directory,
                 text: options.content,
               }).pipe(
-                Effect.flatMap((text) => parseInfo(text, "OPENCODE_CONFIG_CONTENT")),
+                Effect.flatMap((text) => parseInfo(text, "OCPP_CONFIG_CONTENT")),
                 Effect.map((info) => (info ? [new Document({ type: "document", info })] : [])),
                 Effect.orDie,
               )

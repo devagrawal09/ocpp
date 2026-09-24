@@ -3,11 +3,11 @@ export * as VcsHgPlugin from "./hg.js"
 import path from "path"
 import { Effect } from "effect"
 import { ChildProcess } from "effect/unstable/process"
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { FileDiff } from "@opencode-ai/schema/file-diff"
-import { FileStatus, Info, Mode } from "@opencode-ai/schema/vcs"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { AppProcess } from "@opencode-ai/util/process"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { FileDiff } from "@ocpp/schema/file-diff"
+import { FileStatus, Info, Mode } from "@ocpp/schema/vcs"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { AppProcess } from "@ocpp/util/process"
 import { Location } from "../../location.js"
 import type { Adapter, DiffOptions } from "../../vcs.js"
 import { DiffError } from "../../vcs.js"
@@ -23,7 +23,7 @@ import {
 } from "../../vcs/patch.js"
 
 export const Plugin = define({
-  id: "opencode.vcs.hg",
+  id: "ocpp.vcs.hg",
   vcs: { id: "hg", markers: [".hg"] },
   effect: Effect.fn("VcsHgPlugin")(function* (ctx) {
     const location = yield* Location.Service

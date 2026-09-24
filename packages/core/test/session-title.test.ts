@@ -1,39 +1,31 @@
 import { beforeEach, expect } from "bun:test"
-import {
-  AIError,
-  LLMClient,
-  LLMEvent,
-  LanguageModel,
-  SystemPart,
-  TransportError,
-  type LLMRequest,
-} from "@opencode-ai/ai"
-import { OpenAIChat } from "@opencode-ai/ai/protocols"
-import { Agent } from "@opencode-ai/core/agent"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Database } from "@opencode-ai/core/database/database"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { llmClient } from "@opencode-ai/core/effect/app-node-platform"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
-import { SessionTable } from "@opencode-ai/core/session/sql"
-import { SessionStore } from "@opencode-ai/core/session/store"
-import { SessionTitle } from "@opencode-ai/core/session/title"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { Location } from "@opencode-ai/core/location"
-import { Session } from "@opencode-ai/core/session"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { App } from "@opencode-ai/core/app"
-import { Model } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Money } from "@opencode-ai/schema/money"
+import { AIError, LLMClient, LLMEvent, LanguageModel, SystemPart, TransportError, type LLMRequest } from "@ocpp/ai"
+import { OpenAIChat } from "@ocpp/ai/protocols"
+import { Agent } from "@ocpp/core/agent"
+import { Catalog } from "@ocpp/core/catalog"
+import { Database } from "@ocpp/core/database/database"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { llmClient } from "@ocpp/core/effect/app-node-platform"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { SessionProjector } from "@ocpp/core/session/projector"
+import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
+import { SessionTable } from "@ocpp/core/session/sql"
+import { SessionStore } from "@ocpp/core/session/store"
+import { SessionTitle } from "@ocpp/core/session/title"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { Location } from "@ocpp/core/location"
+import { Session } from "@ocpp/core/session"
+import { Project } from "@ocpp/core/project"
+import { ProjectTable } from "@ocpp/core/project/sql"
+import { App } from "@ocpp/core/app"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Money } from "@ocpp/schema/money"
 import { Deferred, Effect, Fiber, Layer, Stream } from "effect"
 import { testEffect } from "./lib/effect"
 
@@ -225,9 +217,9 @@ it.effect("generates a title from the sole user message and renames the session"
       "x-session-affinity": sessionID,
       "X-Session-Id": sessionID,
       "User-Agent": App.useragent(App.make()),
-      "x-opencode-project": Project.ID.global,
-      "x-opencode-session": sessionID,
-      "x-opencode-client": "opencode",
+      "x-ocpp-project": Project.ID.global,
+      "x-ocpp-session": sessionID,
+      "x-ocpp-client": "ocpp",
     })
     expect(requests[0]?.promptCacheKey).toBe(sessionID)
     expect(requests[0]?.tools).toEqual([])

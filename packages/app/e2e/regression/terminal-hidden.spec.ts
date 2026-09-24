@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/HiddenTerminalRegression"
+const directory = "C:/OC++/HiddenTerminalRegression"
 const projectID = "proj_hidden_terminal_regression"
 const sessionID = "ses_hidden_terminal_regression"
 const title = "Hidden terminal regression"
@@ -10,7 +10,7 @@ const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${pr
 
 test("animates review and terminal panels while caching hidden terminal content", async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 900 })
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -24,7 +24,7 @@ test("animates review and terminal panels while caching hidden terminal content"
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: { test: { id: "test", name: "Test", limit: { context: 200_000 } } },
         },
       ],

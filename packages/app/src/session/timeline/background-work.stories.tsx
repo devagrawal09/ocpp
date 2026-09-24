@@ -2,13 +2,13 @@ import { BackgroundMoveHint, BackgroundWorkSummary } from "./message-timeline"
 
 const tasks = [
   { id: "task_explore", type: "subagent" as const, agent: "explore", label: "Reviewing component implementation" },
-  { id: "task_status", type: "shell" as const, label: "opencode2 service status" },
-  { id: "task_openapi", type: "shell" as const, label: "opencode2 api get /openapi.json" },
+  { id: "task_status", type: "shell" as const, label: "ocpp service status" },
+  { id: "task_openapi", type: "shell" as const, label: "ocpp api get /openapi.json" },
   { id: "task_tests", type: "shell" as const, label: "bun test packages/app" },
 ]
 
 export default {
-  title: "OpenCode/Session/Background work",
+  title: "OC++/Session/Background work",
   id: "session-background-work",
   parameters: {
     docs: {

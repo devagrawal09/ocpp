@@ -1,5 +1,5 @@
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import type { AISDKHooks } from "@opencode-ai/plugin/effect/aisdk"
+import { define } from "@ocpp/plugin/effect/plugin"
+import type { AISDKHooks } from "@ocpp/plugin/effect/aisdk"
 import { Effect } from "effect"
 
 export function createProviderPlugin(input: {

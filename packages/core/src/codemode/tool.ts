@@ -1,9 +1,9 @@
 export * as CodeModeTool from "./tool.js"
 
-import { CodeMode, CompileError, Tool as CodeModeDefinition, toolError } from "@opencode-ai/codemode"
-import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
-import { ascending } from "@opencode-ai/schema/identifier"
-import { Tool } from "@opencode-ai/schema/tool"
+import { CodeMode, CompileError, Tool as CodeModeDefinition, toolError } from "@ocpp/codemode"
+import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
+import { ascending } from "@ocpp/schema/identifier"
+import { Tool } from "@ocpp/schema/tool"
 import { Deferred, Effect, Exit, Ref, Schema, Scope, Semaphore } from "effect"
 import type { Bus } from "../bus.js"
 import type { Job } from "../job.js"

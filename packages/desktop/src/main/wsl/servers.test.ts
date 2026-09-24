@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import type { WslServerConfig } from "@opencode-ai/app/wsl/types"
+import type { WslServerConfig } from "@ocpp/app/wsl/types"
 import { Effect } from "effect"
 import { wslCliInstallCommand } from "./runtime"
 import { createWslServersController } from "./servers"
@@ -9,8 +9,8 @@ type ControllerOptions = Parameters<typeof createWslServersController>[0]
 let persistedServers: WslServerConfig[] = []
 
 test("passes a local CLI path directly to the V2 installer", () => {
-  expect(wslCliInstallCommand({ version: "local", binary: "C:\\build\\opencode2" })).toBe(
-    `curl -fsSL https://raw.githubusercontent.com/anomalyco/opencode/v2/install | bash -s -- --binary "$(wslpath -a 'C:\\build\\opencode2')"`,
+  expect(wslCliInstallCommand({ version: "local", binary: "C:\\build\\ocpp" })).toBe(
+    `curl -fsSL https://raw.githubusercontent.com/devagrawal09/oc-plus-plus/v2/install | bash -s -- --binary "$(wslpath -a 'C:\\build\\ocpp')"`,
   )
 })
 
@@ -23,15 +23,15 @@ test("installs and verifies the bundled CLI version", async () => {
         installCli: async (distro, cli) => {
           installs.push([distro, cli.version])
         },
-        resolveCli: async () => "/home/me/.opencode/bin/opencode2",
+        resolveCli: async () => "/home/me/.ocpp/bin/ocpp",
       }),
     ),
   )
 
-  await controller.installOpencode("Debian")
+  await controller.installOcpp("Debian")
 
   expect(installs).toEqual([["Debian", "0.0.0-dev-16365"]])
-  expect(controller.getState().opencodeChecks.Debian?.matchesDesktop).toBe(true)
+  expect(controller.getState().ocppChecks.Debian?.matchesDesktop).toBe(true)
 })
 
 test("rejects a WSL CLI version that differs from the bundled version", async () => {
@@ -40,14 +40,14 @@ test("rejects a WSL CLI version that differs from the bundled version", async ()
     createWslServersController(
       testControllerOptions({
         installCli: async () => undefined,
-        resolveCli: async () => "/home/me/.opencode/bin/opencode2",
+        resolveCli: async () => "/home/me/.ocpp/bin/ocpp",
         readCliVersion: async () => "0.0.0-dev-older",
       }),
     ),
   )
 
-  await expect(controller.installOpencode("Debian")).rejects.toThrow(
-    "OpenCode update finished but Debian still reports 0.0.0-dev-older; expected 0.0.0-dev-16365",
+  await expect(controller.installOcpp("Debian")).rejects.toThrow(
+    "OC++ update finished but Debian still reports 0.0.0-dev-older; expected 0.0.0-dev-16365",
   )
 })
 
@@ -65,7 +65,7 @@ test("stops a running WSL server before replacing its CLI", async () => {
             },
             onExit: () => undefined,
             url: "http://127.0.0.1:4096",
-            username: "opencode",
+            username: "ocpp",
             password: "secret",
           }
         },
@@ -78,7 +78,7 @@ test("stops a running WSL server before replacing its CLI", async () => {
   controller.startConfiguredServers()
   await waitFor(() => controller.getState().servers[0]?.runtime.kind === "ready")
 
-  await controller.installOpencode("Debian")
+  await controller.installOcpp("Debian")
 
   expect(events).toEqual(["start", "stop", "install", "start"])
   await controller.stopServers()
@@ -105,7 +105,7 @@ test("stops a sidecar that finishes starting after shutdown", async () => {
     },
     onExit: () => undefined,
     url: "http://127.0.0.1:4096",
-    username: "opencode",
+    username: "ocpp",
     password: "secret",
   })
   await waitFor(() => stopped.length === 1)
@@ -113,11 +113,11 @@ test("stops a sidecar that finishes starting after shutdown", async () => {
   expect(stopped).toEqual(["stop"])
 })
 
-test("probes addable distros in parallel before checking OpenCode", async () => {
+test("probes addable distros in parallel before checking OC++", async () => {
   persistedServers = []
   const started: string[] = []
   const release = new Map<string, () => void>()
-  const opencode: string[] = []
+  const ocpp: string[] = []
   const controller = await Effect.runPromise(
     createWslServersController(
       testControllerOptions({
@@ -128,8 +128,8 @@ test("probes addable distros in parallel before checking OpenCode", async () => 
           return { name: distro, canExecute: true, hasBash: true, hasCurl: true, error: null }
         },
         resolveCli: async (distro) => {
-          opencode.push(distro)
-          return "/home/me/.opencode/bin/opencode2"
+          ocpp.push(distro)
+          return "/home/me/.ocpp/bin/ocpp"
         },
       }),
     ),
@@ -138,19 +138,19 @@ test("probes addable distros in parallel before checking OpenCode", async () => 
   const task = controller.probeAddable(["Debian", "Ubuntu"])
   await waitFor(() => started.length === 2)
   expect(started).toEqual(["Debian", "Ubuntu"])
-  expect(opencode).toEqual([])
+  expect(ocpp).toEqual([])
   release.get("Debian")?.()
   release.get("Ubuntu")?.()
   await task
 
   expect(Object.keys(controller.getState().distroProbes)).toEqual(["Debian", "Ubuntu"])
-  expect(opencode).toEqual(["Debian", "Ubuntu"])
-  expect(Object.keys(controller.getState().opencodeChecks)).toEqual(["Debian", "Ubuntu"])
+  expect(ocpp).toEqual(["Debian", "Ubuntu"])
+  expect(Object.keys(controller.getState().ocppChecks)).toEqual(["Debian", "Ubuntu"])
 })
 
-test("does not check OpenCode in addable distros that cannot execute commands", async () => {
+test("does not check OC++ in addable distros that cannot execute commands", async () => {
   persistedServers = []
-  const opencode: string[] = []
+  const ocpp: string[] = []
   const controller = await Effect.runPromise(
     createWslServersController(
       testControllerOptions({
@@ -163,8 +163,8 @@ test("does not check OpenCode in addable distros that cannot execute commands", 
           error: distro === "Debian" ? null : "Open Ubuntu once to finish setup",
         }),
         resolveCli: async (distro) => {
-          opencode.push(distro)
-          return "/home/me/.opencode/bin/opencode2"
+          ocpp.push(distro)
+          return "/home/me/.ocpp/bin/ocpp"
         },
       }),
     ),
@@ -173,8 +173,8 @@ test("does not check OpenCode in addable distros that cannot execute commands", 
   await controller.probeAddable(["Debian", "Ubuntu"])
 
   expect(Object.keys(controller.getState().distroProbes)).toEqual(["Debian", "Ubuntu"])
-  expect(opencode).toEqual(["Debian"])
-  expect(Object.keys(controller.getState().opencodeChecks)).toEqual(["Debian"])
+  expect(ocpp).toEqual(["Debian"])
+  expect(Object.keys(controller.getState().ocppChecks)).toEqual(["Debian"])
 })
 
 async function waitFor(check: () => boolean) {
@@ -194,7 +194,7 @@ function testControllerOptions(overrides: Partial<ControllerOptions> = {}): Cont
       stop: async () => undefined,
       onExit: () => undefined,
       url: "http://127.0.0.1:4096",
-      username: "opencode",
+      username: "ocpp",
       password: "secret",
     }),
     readServers: () => persistedServers,
@@ -202,7 +202,7 @@ function testControllerOptions(overrides: Partial<ControllerOptions> = {}): Cont
       persistedServers = servers
     },
     readCliVersion: async () => "0.0.0-dev-16365",
-    resolveCli: async () => "/home/me/.opencode/bin/opencode2",
+    resolveCli: async () => "/home/me/.ocpp/bin/ocpp",
     ...overrides,
   }
 }

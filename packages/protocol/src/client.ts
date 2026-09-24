@@ -5,12 +5,10 @@ import type { Context } from "effect"
 import { HttpApiMiddleware } from "effect/unstable/httpapi"
 import type { EventGroup } from "./groups/event.js"
 
-class LocationMiddleware extends HttpApiMiddleware.Service<LocationMiddleware>()(
-  "@opencode-ai/client/LocationMiddleware",
-) {}
+class LocationMiddleware extends HttpApiMiddleware.Service<LocationMiddleware>()("@ocpp/client/LocationMiddleware") {}
 
 class SessionLocationMiddleware extends HttpApiMiddleware.Service<SessionLocationMiddleware>()(
-  "@opencode-ai/client/SessionLocationMiddleware",
+  "@ocpp/client/SessionLocationMiddleware",
   { error: [InvalidRequestError, SessionNotFoundError] },
 ) {}
 

@@ -1,6 +1,6 @@
 export * as McpInstructions from "./instructions.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Agent } from "../agent.js"
 import { Permission } from "../permission.js"
@@ -58,7 +58,7 @@ export interface Interface {
   readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.List>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/McpInstructions") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/McpInstructions") {}
 
 export const layer = Layer.effect(
   Service,

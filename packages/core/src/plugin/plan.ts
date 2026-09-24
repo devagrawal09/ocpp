@@ -1,10 +1,10 @@
 export * as PlanPlugin from "./plan.js"
 
-import { Message, ToolFailure } from "@opencode-ai/ai"
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Agent } from "@opencode-ai/schema/agent"
-import type { SessionEvent } from "@opencode-ai/schema/session-event"
-import { Global } from "@opencode-ai/util/global"
+import { Message, ToolFailure } from "@ocpp/ai"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Agent } from "@ocpp/schema/agent"
+import type { SessionEvent } from "@ocpp/schema/session-event"
+import { Global } from "@ocpp/util/global"
 import { Effect, Stream } from "effect"
 import path from "path"
 import { Permission } from "../permission.js"
@@ -25,10 +25,10 @@ You are NO LONGER in Plan mode. The previous Plan restrictions no longer apply. 
 </system-reminder>`
 
 export const Plugin = define({
-  id: "opencode.plan",
+  id: "ocpp.plan",
   effect: Effect.fn(function* (ctx) {
     const global = yield* Global.Service
-    const directory = path.join(global.home, ".opencode", "plan")
+    const directory = path.join(global.home, ".ocpp", "plan")
     const enterReminder = enter(directory)
     yield* ctx.agent.transform((draft) => {
       draft.update(plan, (item) => {

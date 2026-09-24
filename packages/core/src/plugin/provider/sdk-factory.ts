@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { pathToFileURL } from "url"
-import { Npm } from "@opencode-ai/util/npm"
-import { importModule } from "@opencode-ai/util/runtime-import"
+import { Npm } from "@ocpp/util/npm"
+import { importModule } from "@ocpp/util/runtime-import"
 
 export const loadSDKFactory = Effect.fnUntraced(function* (npm: Npm.Interface, packageName: string) {
   const installedPath = packageName.startsWith("file://")

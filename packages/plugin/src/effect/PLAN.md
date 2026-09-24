@@ -7,8 +7,8 @@ This document describes the agreed target design for the V2 plugin system. It is
 ## Goals
 
 - Internal and external plugins use the same public plugin API.
-- Effect plugins import `@opencode-ai/plugin/effect`, not `@opencode-ai/core`.
-- Public domain values use generated `@opencode-ai/sdk` types.
+- Effect plugins import `@ocpp/plugin/effect`, not `@ocpp/core`.
+- Public domain values use generated `@ocpp/sdk` types.
 - Core may retain branded IDs, decoded Effect schemas, and internal service types.
 - Plugins may register replayable domain transforms and runtime hooks imperatively during setup.
 - Registrations are scoped, independently disposable, ordered, and removable.
@@ -409,7 +409,7 @@ The runtime does not infer cross-domain dependencies.
 The imperative registration model maps naturally to a future application embedding API:
 
 ```ts
-const registration = oc.agent.transform((agent) => {
+const registration = ocpp.agent.transform((agent) => {
   agent.update("reviewer", configureReviewer)
 })
 
@@ -424,7 +424,7 @@ The Effect implementation remains the canonical runtime. Promise and embedding w
 
 ### 1. Define Public Contracts
 
-- Define `PluginHost` domain capabilities in `@opencode-ai/plugin/effect`.
+- Define `PluginHost` domain capabilities in `@ocpp/plugin/effect`.
 - Define SDK-typed editors for agent, catalog, command, integration, reference, skill, and tool.
 - Define typed runtime hook maps per domain.
 - Define `Registration`.

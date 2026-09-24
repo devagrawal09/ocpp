@@ -1,9 +1,9 @@
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { expect, test, type Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/ReviewStatePersistence"
+const directory = "C:/OC++/ReviewStatePersistence"
 const projectID = "proj_review_state_persistence"
 const sessionA = "ses_review_state_a"
 const sessionB = "ses_review_state_b"
@@ -53,7 +53,7 @@ async function switchSession(page: Page, title: string) {
 }
 
 async function setup(page: Page) {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -67,7 +67,7 @@ async function setup(page: Page) {
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: { test: { id: "test", name: "Test", limit: { context: 200_000 } } },
         },
       ],
@@ -103,14 +103,14 @@ async function setup(page: Page) {
   await page.addInitScript(
     ({ directory, server, sessions }) => {
       localStorage.setItem(
-        "opencode.global.dat:server",
+        "ocpp.global.dat:server",
         JSON.stringify({
           projects: { local: [{ worktree: directory, expanded: true }] },
           lastProject: { local: directory },
         }),
       )
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify(sessions.map((sessionId: string) => ({ type: "session", server, sessionId }))),
       )
     },

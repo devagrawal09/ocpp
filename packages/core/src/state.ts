@@ -36,7 +36,7 @@ type Batch = {
   readonly reloads: Set<Reload>
 }
 
-const CurrentBatch = Context.Reference<Batch | undefined>("@opencode/State/CurrentBatch", {
+const CurrentBatch = Context.Reference<Batch | undefined>("@ocpp/State/CurrentBatch", {
   defaultValue: () => undefined,
 })
 const reloadDebounce = 500

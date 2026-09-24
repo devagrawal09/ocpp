@@ -1,15 +1,15 @@
 import { defineConfig } from "electron-vite"
 
 const channel = (() => {
-  const raw = process.env.OPENCODE_CHANNEL
+  const raw = process.env.OCPP_CHANNEL
   if (raw === "local" || raw === "dev" || raw === "beta" || raw === "prod") return raw
-  if (process.env.OPENCODE_CHANNEL === "latest") return "prod"
+  if (process.env.OCPP_CHANNEL === "latest") return "prod"
   return "dev"
 })()
 
 const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.arch}`
 
-const appPlugin = (await import("@opencode-ai/app/vite")).default
+const appPlugin = (await import("@ocpp/app/vite")).default
 const picker = (await import("@brendonovich/vite-plugin-opencode")).default()
 const sentry =
   process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
@@ -34,7 +34,7 @@ export default defineConfig(({ command }) => ({
       dedupe: ["effect"],
     },
     define: {
-      "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel),
+      "import.meta.env.OCPP_CHANNEL": JSON.stringify(channel),
     },
     build: {
       minify: command === "build",
@@ -61,7 +61,7 @@ const require = __cjs_mod__.createRequire(import.meta.url);
     },
     plugins: [
       {
-        name: "opencode:node-pty-narrower",
+        name: "ocpp:node-pty-narrower",
         enforce: "pre",
         resolveId(s) {
           if (s === "@lydell/node-pty") return nodePtyPkg
@@ -87,8 +87,8 @@ const require = __cjs_mod__.createRequire(import.meta.url);
       bundledDev: true,
     },
     define: {
-      "import.meta.env.OPENCODE_VERSION": JSON.stringify(process.env.OPENCODE_VERSION),
-      "import.meta.env.VITE_OPENCODE_CHANNEL": JSON.stringify(channel),
+      "import.meta.env.OCPP_VERSION": JSON.stringify(process.env.OCPP_VERSION),
+      "import.meta.env.VITE_OCPP_CHANNEL": JSON.stringify(channel),
     },
     plugins: [{ ...picker, transformIndexHtml: undefined }, appPlugin, sentry],
     publicDir: "../../../app/public",

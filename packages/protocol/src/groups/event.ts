@@ -1,7 +1,7 @@
-import { Event } from "@opencode-ai/schema/event"
-import { EventManifest } from "@opencode-ai/schema/event-manifest"
-import { Location } from "@opencode-ai/schema/location"
-import type { Definition } from "@opencode-ai/schema/event"
+import { Event } from "@ocpp/schema/event"
+import { EventManifest } from "@ocpp/schema/event-manifest"
+import { Location } from "@ocpp/schema/location"
+import type { Definition } from "@ocpp/schema/event"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 
@@ -51,8 +51,8 @@ export const makeEventGroup = <const Definitions extends ReadonlyArray<Definitio
 
 const event = make(EventManifest.ServerDefinitions)
 export const EventGroup = event.group
-export const OpenCodeEvent = event.schema
-export type OpenCodeEvent = typeof OpenCodeEvent.Type
-export type OpenCodeEventEncoded = typeof OpenCodeEvent.Encoded
-export const isOpenCodeEvent = (event: { readonly type: string }): event is OpenCodeEvent =>
+export const OcppEvent = event.schema
+export type OcppEvent = typeof OcppEvent.Type
+export type OcppEventEncoded = typeof OcppEvent.Encoded
+export const isOcppEvent = (event: { readonly type: string }): event is OcppEvent =>
   event.type === "server.connected" || EventManifest.isServer(event)

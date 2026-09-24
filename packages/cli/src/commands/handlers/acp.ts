@@ -1,6 +1,6 @@
 import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk"
-import { OpenCode } from "@opencode-ai/client/promise"
-import { Service } from "@opencode-ai/client/effect/service"
+import { Ocpp } from "@ocpp/client/promise"
+import { Service } from "@ocpp/client/effect/service"
 import { Effect } from "effect"
 import { ACP } from "../../acp/agent"
 import { Commands } from "../commands"
@@ -10,9 +10,9 @@ import { Standalone } from "../../services/standalone"
 export default Runtime.handler(
   Commands.commands.acp,
   Effect.fn("cli.acp")(function* () {
-    process.env.OPENCODE_CLIENT = "acp"
+    process.env.OCPP_CLIENT = "acp"
     const endpoint = yield* Standalone.start()
-    const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+    const client = Ocpp.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
     const input = new WritableStream<Uint8Array>({
       write: (chunk) =>
         new Promise<void>((resolve, reject) => {

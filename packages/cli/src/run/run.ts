@@ -1,12 +1,12 @@
-import { Service, type Endpoint } from "@opencode-ai/client/effect/service"
-import { OpenCode, type OpenCodeClient, type SessionMessageAssistantTool } from "@opencode-ai/client/promise"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Service, type Endpoint } from "@ocpp/client/effect/service"
+import { Ocpp, type OcppClient, type SessionMessageAssistantTool } from "@ocpp/client/promise"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { open } from "node:fs/promises"
 import path from "node:path"
 import { readStdin } from "../util/io"
 import { ServerConnection } from "../services/server-connection"
 import { parseSessionTargetModel, resolveSessionTarget } from "../session-target"
-import { toolInlineInfo } from "@opencode-ai/tui/mini/tool"
+import { toolInlineInfo } from "@ocpp/tui/mini/tool"
 import { runNonInteractivePrompt } from "./noninteractive"
 import { UI } from "./ui"
 import { Env } from "../env"
@@ -81,7 +81,7 @@ async function run(input: RunCommandInput, options: ExecutionOptions) {
 }
 
 async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Endpoint, options: ExecutionOptions) {
-  const client = OpenCode.make({
+  const client = Ocpp.make({
     baseUrl: endpoint.url,
     headers: Service.headers(endpoint),
     // Bun's default five-minute deadline terminates the event stream used by long-running sessions.

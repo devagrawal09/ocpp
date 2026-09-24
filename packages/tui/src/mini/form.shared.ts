@@ -1,4 +1,4 @@
-import type { FormAnswer, FormField, FormInfo, FormValue } from "@opencode-ai/client/promise"
+import type { FormAnswer, FormField, FormInfo, FormValue } from "@ocpp/client/promise"
 import {
   formCustom,
   formDisplayValue,

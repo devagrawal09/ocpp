@@ -2,8 +2,8 @@
 title: "Migrate from V1"
 ---
 
-OpenCode 1 and OpenCode 2 can be installed side by side. V1 runs as `opencode`, while V2 installs and runs separately as
-`opencode2`.
+OC++ 1 and OC++ 2 can be installed side by side. V1 runs as `ocpp`, while V2 installs and runs separately as
+`ocpp`.
 
 ## Breaking changes
 
@@ -18,7 +18,7 @@ Supported V1 functionality outside those areas is intended to remain compatible 
 schema never had a V2 equivalent and are intentionally ignored; these are listed under
 [Accepted but unsupported fields](#accepted-but-unsupported-fields).
 
-Existing supported server config fields, agent definitions, command definitions, skills, and other files in `.opencode/`
+Existing supported server config fields, agent definitions, command definitions, skills, and other files in `.ocpp/`
 should continue to work without changes. If supported behavior described in this guide stops working in V2, treat it as a
 beta compatibility bug rather than an expected migration requirement.
 
@@ -28,7 +28,7 @@ beta compatibility bug rather than an expected migration requirement.
 </Callout>
 
 <Callout type="warning">
-  OpenCode 2.0 is in beta. Features may break unintentionally, and the server and plugin APIs may continue to change.
+  OC++ 2.0 is in beta. Features may break unintentionally, and the server and plugin APIs may continue to change.
 </Callout>
 
 ## Install the beta
@@ -37,39 +37,39 @@ The V2 terminal client is published on the `beta` distribution tag. See the [ter
 
 ## Configuration
 
-This section covers both JSON/JSONC configuration and file-based definitions under `.opencode/`.
+This section covers both JSON/JSONC configuration and file-based definitions under `.ocpp/`.
 
 ### Use your existing configuration
 
 V2 reads existing global and project configuration from the same locations as V1:
 
 ```text
-~/.config/opencode/opencode.json(c)
-<project>/opencode.json(c)
-<project>/.opencode/opencode.json(c)
+~/.config/ocpp/ocpp.json(c)
+<project>/ocpp.json(c)
+<project>/.ocpp/ocpp.json(c)
 ```
 
 V2 reads these same locations. It normalizes supported V1 and native V2 fields in memory without rewriting the source
 file. Existing supported V1 configuration is intended to keep working, so you do not need to convert it to try or adopt
 V2.
 
-### Ask OpenCode to migrate
+### Ask OC++ to migrate
 
 The V1 config format remains supported. The native V2 format is optional and makes several settings more explicit and
 ergonomic.
 
-The recommended migration path is to ask OpenCode to update the configuration for you:
+The recommended migration path is to ask OC++ to update the configuration for you:
 
 ```text
-Migrate my OpenCode configuration, including file-based definitions, from the V1 format to the native V2 format.
+Migrate my OC++ configuration, including file-based definitions, from the V1 format to the native V2 format.
 Preserve its behavior and all unrelated settings.
 ```
 
-OpenCode can inspect the complete file, apply the relevant changes below, and avoid rewriting settings that do not need to
+OC++ can inspect the complete file, apply the relevant changes below, and avoid rewriting settings that do not need to
 change. Conversion does not need to happen all at once: supported V1 and native V2 fields may coexist at the top level.
 When both forms set the same canonical value, a valid native V2 value takes precedence regardless of JSON key order.
 
-Nested mixing is intentionally bounded. OpenCode recognizes mixed V1 and V2 members within `mcp`, `compaction`, and
+Nested mixing is intentionally bounded. OC++ recognizes mixed V1 and V2 members within `mcp`, `compaction`, and
 `experimental`, but it does not recursively infer formats inside individual agents, providers, commands, or models. Keep
 each of those nested entries entirely in one format. Supported V1 syntax remains quiet by itself; malformed values,
 unsupported legacy fields, and conflicting V1/V2 values produce warnings while unrelated valid settings continue to load.
@@ -268,7 +268,7 @@ V1 separates extra skill paths and URLs. V2 combines both into one ordered array
 }
 ```
 
-Existing skill files and automatic `.opencode/skills/` discovery do not change. See [Skills](/skills).
+Existing skill files and automatic `.ocpp/skills/` discovery do not change. See [Skills](/skills).
 
 ### Commands
 
@@ -409,14 +409,14 @@ The V1 provider filters do not have one-to-one native V2 config fields, but thei
 - `small_model` becomes the `model` selection for the built-in `title` agent. Native V2 configuration should use
   `agents.title.model` instead.
 
-You may keep these fields in V1 syntax. OpenCode normalizes them without warning.
+You may keep these fields in V1 syntax. OC++ normalizes them without warning.
 
 ### Accepted but unsupported fields
 
 The V1 schema also accepted fields that have no supported V2 behavior. V2 ignores these values and emits a warning so
 they are not mistaken for active configuration:
 
-- `logLevel`: use `OPENCODE_LOG_LEVEL` when starting OpenCode.
+- `logLevel`: use `OCPP_LOG_LEVEL` when starting OC++.
 - `server`: use the V2 service and explicit server options; the server API is an intentional breaking change.
 - Top-level `subagent_depth`: use `experimental.subagent_depth` instead.
 - `compaction.tail_turns` and `compaction.prune`: V2 uses `compaction.keep.tokens` and checkpoint-based compaction instead.
@@ -436,7 +436,7 @@ V1 agent files may use `agent/`, `agents/`, `mode/`, or `modes/`. V2 still disco
 V2 location is:
 
 ```text
-.opencode/agents/<name>.md
+.ocpp/agents/<name>.md
 ```
 
 Files under a V1 `mode/` or `modes/` directory represent primary agents. When moving one into `agents/`, add
@@ -457,7 +457,7 @@ V2 translates legacy agent frontmatter automatically, so these edits are optiona
 V1 command files may use `command/` or `commands/`. V2 discovers both. The preferred location is:
 
 ```text
-.opencode/commands/<name>.md
+.ocpp/commands/<name>.md
 ```
 
 Move files from `command/` to the same relative path under `commands/` to preserve command names. The Markdown body remains
@@ -477,10 +477,10 @@ See [Commands](/commands).
 
 ### Skill files
 
-V2 discovers skills from both `.opencode/skill/` and `.opencode/skills/`. The preferred layout is:
+V2 discovers skills from both `.ocpp/skill/` and `.ocpp/skills/`. The preferred layout is:
 
 ```text
-.opencode/skills/<skill-id>/SKILL.md
+.ocpp/skills/<skill-id>/SKILL.md
 ```
 
 Move the complete skill directory, not only `SKILL.md`, so relative scripts, references, and other supporting files remain
@@ -489,7 +489,7 @@ require a V2 rewrite. See [Skills](/skills).
 
 ### Instruction files
 
-Existing `AGENTS.md` files stay in place. V2 discovers the global `~/.config/opencode/AGENTS.md` and ambient `AGENTS.md`
+Existing `AGENTS.md` files stay in place. V2 discovers the global `~/.config/ocpp/AGENTS.md` and ambient `AGENTS.md`
 files from the current directory up to home. For projects outside home, discovery stops at the project root.
 
 If a V1 setup relied on a `CLAUDE.md` fallback, move that guidance into the applicable `AGENTS.md`. V2 currently only
@@ -501,7 +501,7 @@ the affected project details. See [Instructions](/instructions).
 V2 replaces layered V1 `tui.json(c)` files with one global terminal client configuration file:
 
 ```text
-~/.config/opencode/cli.json
+~/.config/ocpp/cli.json
 ```
 
 The terminal client owns this file; the background service does not load it. When `cli.json` is absent, the first V2
@@ -517,7 +517,7 @@ Rename `plugin` to `plugins`. Replace a package-and-options tuple with an object
 // V1
 {
   "plugin": [
-    "opencode-example-plugin",
+    "ocpp-example-plugin",
     ["./plugin/local.ts", { "enabled": true }]
   ]
 }
@@ -525,7 +525,7 @@ Rename `plugin` to `plugins`. Replace a package-and-options tuple with an object
 // V2
 {
   "plugins": [
-    "opencode-example-plugin",
+    "ocpp-example-plugin",
     {
       "package": "./plugin/local.ts",
       "options": { "enabled": true }
@@ -534,7 +534,7 @@ Rename `plugin` to `plugins`. Replace a package-and-options tuple with an object
 }
 ```
 
-V2 discovers local plugins from both `.opencode/plugin/` and `.opencode/plugins/`; use `.opencode/plugins/` for V2 files.
+V2 discovers local plugins from both `.ocpp/plugin/` and `.ocpp/plugins/`; use `.ocpp/plugins/` for V2 files.
 Moving a file between these directories does not migrate its implementation.
 
 <Callout type="warning">V1 plugins will not work in V2.</Callout>
@@ -543,15 +543,15 @@ The config entry can be translated automatically, but plugin implementation code
 plugin API is still being finalized during beta, and detailed plugin migration guidance will be published when it is
 ready.
 
-Once the V2 plugin API is finalized, OpenCode should be able to migrate the majority of V1 plugins while keeping related
+Once the V2 plugin API is finalized, OC++ should be able to migrate the majority of V1 plugins while keeping related
 local modules and dependencies together. See the current beta [Plugins guide](/build/plugins).
 
 ## Server API and clients
 
-OpenCode 2 has a revised, more ergonomic server API and a new set of clients. Integrations that call the V1 server API
+OC++ 2 has a revised, more ergonomic server API and a new set of clients. Integrations that call the V1 server API
 must migrate to the V2 API.
 
-Use the `@opencode-ai/client` package to access the new clients. The server API and clients are still being finalized
+Use the `@ocpp/client` package to access the new clients. The server API and clients are still being finalized
 during beta, so their contracts may continue to change. See the generated [API reference](/api) for the current endpoints,
 request types, and responses.
 

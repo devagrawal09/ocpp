@@ -1,5 +1,5 @@
-import { CrossSpawnSpawner } from "@opencode-ai/util/cross-spawn-spawner"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer } from "effect"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import type { Files } from "./files.js"
@@ -13,7 +13,7 @@ export interface Interface {
   readonly spawner: ChildProcessSpawner["Service"]
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Environment") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Environment") {}
 
 const layer = Layer.effect(
   Service,

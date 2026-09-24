@@ -2,11 +2,11 @@
 title: "Overview"
 ---
 
-Plugins can modify OpenCode's behavior and add new features. To change the terminal UI, build a [CLI
+Plugins can modify OC++'s behavior and add new features. To change the terminal UI, build a [CLI
 plugin](/build/plugins/cli).
 
-```ts title=".opencode/plugins/example.ts"
-import { Plugin } from "@opencode-ai/plugin"
+```ts title=".ocpp/plugins/example.ts"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "example",
@@ -16,22 +16,22 @@ export default Plugin.define({
 })
 ```
 
-Plugins under `.opencode/plugins/` are loaded automatically, like the local example above. To load published packages
-or files from other locations, add them to `plugins` in `opencode.json(c)`:
+Plugins under `.ocpp/plugins/` are loaded automatically, like the local example above. To load published packages
+or files from other locations, add them to `plugins` in `ocpp.json(c)`:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "plugins": [
-    "opencode-acme-plugin",
-    "opencode-acme-plugin@1.2.0",
-    "@acme/opencode-plugin",
+    "ocpp-acme-plugin",
+    "ocpp-acme-plugin@1.2.0",
+    "@acme/ocpp-plugin",
     "./plugins/local.ts",
     "../shared/plugin.ts",
     "/absolute/path/plugin.ts",
     "file:///home/me/plugins/local.ts",
     {
-      "package": "@acme/opencode-plugin",
+      "package": "@acme/ocpp-plugin",
       "options": {
         "agent": "reviewer",
         "strict": true,
@@ -48,12 +48,12 @@ See [Configure plugins](/plugins) for more loading and configuration options.
 `setup` runs when the plugin loads. It may return a cleanup function that runs when the plugin unloads.
 
 ```ts
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "example",
   setup(ctx) {
-    console.log(`loaded in OpenCode ${ctx.app.version}`)
+    console.log(`loaded in OC++ ${ctx.app.version}`)
     return () => console.log("unloaded")
   },
 })
@@ -61,7 +61,7 @@ export default Plugin.define({
 
 ### Context
 
-The plugin context is essentially an [OpenCode server client](/build/client).
+The plugin context is essentially an [OC++ server client](/build/client).
 Its read and action methods use the same inputs and responses as the client. It
 adds plugin-only methods for transforms, runtime hooks, reloads, registrations,
 and plugin options.
@@ -87,25 +87,25 @@ setup(ctx) {
 
 ### Options
 
-Pass plugin options with the object form in `opencode.json(c)`.
+Pass plugin options with the object form in `ocpp.json(c)`.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
   "plugins": [
     {
       "package": "./plugins/company.ts",
       "options": {
-        "strict": true
-      }
-    }
-  ]
+        "strict": true,
+      },
+    },
+  ],
 }
 ```
 
 Read those values from `ctx.options` during `setup`.
 
 ```ts title="plugins/company.ts"
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "company",
@@ -117,13 +117,13 @@ export default Plugin.define({
 
 ## Transforms
 
-Transforms are a central pattern in the plugin API and modify how OpenCode works. Plugins register
+Transforms are a central pattern in the plugin API and modify how OC++ works. Plugins register
 transforms and each builds on the changes made before it.
 
 Say we have a plugin that adds one model to the catalog.
 
 ```ts title="plugins/models.ts"
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "company.models",
@@ -141,7 +141,7 @@ export default Plugin.define({
 A later plugin can enforce a maximum output price across every model, including models added by earlier plugins.
 
 ```ts title="plugins/model-budget.ts"
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "company.model-budget",
@@ -163,7 +163,7 @@ Now say the first plugin dynamically fetches can fetch its model list from a
 dynamic source. It can call `reload` when that list changes.
 
 ```ts title="plugins/models.ts"
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "company.models",
@@ -468,14 +468,23 @@ interface IntegrationContext {
     key(input: IntegrationConnectKeyInput, requestOptions?: RequestOptions): Promise<void>
   }
   oauth: {
-    connect(input: IntegrationOauthConnectInput, requestOptions?: RequestOptions): Promise<IntegrationOauthConnectOutput>
+    connect(
+      input: IntegrationOauthConnectInput,
+      requestOptions?: RequestOptions,
+    ): Promise<IntegrationOauthConnectOutput>
     status(input: IntegrationOauthStatusInput, requestOptions?: RequestOptions): Promise<IntegrationOauthStatusOutput>
     complete(input: IntegrationOauthCompleteInput, requestOptions?: RequestOptions): Promise<void>
     cancel(input: IntegrationOauthCancelInput, requestOptions?: RequestOptions): Promise<void>
   }
   command: {
-    connect(input: IntegrationCommandConnectInput, requestOptions?: RequestOptions): Promise<IntegrationCommandConnectOutput>
-    status(input: IntegrationCommandStatusInput, requestOptions?: RequestOptions): Promise<IntegrationCommandStatusOutput>
+    connect(
+      input: IntegrationCommandConnectInput,
+      requestOptions?: RequestOptions,
+    ): Promise<IntegrationCommandConnectOutput>
+    status(
+      input: IntegrationCommandStatusInput,
+      requestOptions?: RequestOptions,
+    ): Promise<IntegrationCommandStatusOutput>
     cancel(input: IntegrationCommandCancelInput, requestOptions?: RequestOptions): Promise<void>
   }
   transform(callback: (draft: IntegrationDraft) => void): Promise<Registration>
@@ -523,7 +532,7 @@ await ctx.mcp.transform((draft) => {
 ```
 
 Set `disabled: true` in a transform to disable a server and disconnect it, or `disabled: false` to enable it and allow
-OpenCode to connect. OpenCode reconciles server lifecycle from the transformed configuration.
+OC++ to connect. OC++ reconciles server lifecycle from the transformed configuration.
 
 Call `reload()` after external state used by a transform changes to reapply transforms and reconcile the servers.
 
@@ -708,7 +717,7 @@ await ctx.skill.transform((draft) => {
     id: "review",
     name: "Review",
     description: "Review the current changes",
-    location: "/workspace/.opencode/skills/review.md",
+    location: "/workspace/.ocpp/skills/review.md",
     content: "Review the current changes for correctness and missing tests.",
   })
   draft.update("review", (skill) => {
@@ -785,7 +794,7 @@ interface StorageScanResult {
 ### Tools
 
 Register, update, and remove tools with a transform. The callback is synchronous, including in Promise plugins; load external
-data before registering or reloading. OpenCode replays active transforms in registration order on a fresh draft.
+data before registering or reloading. OC++ replays active transforms in registration order on a fresh draft.
 For the same effective tool name, a later valid registration overrides an earlier one.
 
 ```ts
@@ -895,7 +904,7 @@ await ctx.vcs.transform((draft) => {
 
 Provider callbacks receive the current location, working-copy root, canonical project root, and optional repository
 store. Diff callbacks also receive the selected mode, requested context, and output byte budget. Repository discovery
-continues to use OpenCode's built-in Git and Mercurial detectors.
+continues to use OC++'s built-in Git and Mercurial detectors.
 
 #### Reference
 
@@ -927,7 +936,7 @@ List websearch providers or run a query through the selected provider.
 
 ```ts
 const providers = await ctx.websearch.providers()
-const results = await ctx.websearch.query({ query: "OpenCode plugins", providerID: "internal" })
+const results = await ctx.websearch.query({ query: "OC++ plugins", providerID: "internal" })
 ```
 
 Register a provider and select the default provider with a transform.
@@ -995,13 +1004,13 @@ Schema: [`V2EventEncoded`](/api#schema-V2EventEncoded)
 
 ```ts
 interface EventContext {
-  subscribe(requestOptions?: RequestOptions): AsyncIterable<OpenCodeEvent>
+  subscribe(requestOptions?: RequestOptions): AsyncIterable<OcppEvent>
 }
 ```
 
 ## Hooks
 
-Hooks intercept live operations. Multiple plugins can register the same hook; OpenCode runs them in plugin order so
+Hooks intercept live operations. Multiple plugins can register the same hook; OC++ runs them in plugin order so
 later hooks see earlier changes.
 
 ```ts
@@ -1104,8 +1113,8 @@ await ctx.session.hook("http.response", (event) => {
 })
 ```
 
-Override the retry decision for a provider failure or replace its delay in milliseconds. The hook runs after OpenCode
-classifies the failure and proposes its policy, but before any retry is scheduled. It does not expose how OpenCode
+Override the retry decision for a provider failure or replace its delay in milliseconds. The hook runs after OC++
+classifies the failure and proposes its policy, but before any retry is scheduled. It does not expose how OC++
 internally performs the next attempt.
 
 ```ts
@@ -1122,7 +1131,7 @@ await ctx.session.hook("retry", (event) => {
 })
 ```
 
-The initial `decision` is OpenCode's policy, so hooks may make a normally terminal provider failure retryable or veto a
+The initial `decision` is OC++'s policy, so hooks may make a normally terminal provider failure retryable or veto a
 proposed retry. Multiple hooks run in registration order and later hooks see the current decision. The built-in maximum
 attempt count remains a hard limit. `attempt` is the physical attempt being proposed; the initial request is attempt `1`,
 so the first retry is attempt `2`. Invalid delays (`NaN`, infinity, or negative values) fall back to the computed delay.
@@ -1131,7 +1140,7 @@ Context-overflow recovery remains separate because it compacts the conversation 
 #### Reference
 
 ```ts
-import type { SessionPrompt } from "@opencode-ai/plugin/promise/session"
+import type { SessionPrompt } from "@ocpp/plugin/promise/session"
 
 interface SessionHooks {
   prompt: SessionPrompt
@@ -1237,10 +1246,7 @@ await ctx.shell.hook("create.before", (event) => {
 
 ```ts
 interface ShellHookContext {
-  hook(
-    name: "create.before",
-    callback: (event: ShellCreateBefore) => Promise<void> | void,
-  ): Promise<Registration>
+  hook(name: "create.before", callback: (event: ShellCreateBefore) => Promise<void> | void): Promise<Registration>
 }
 
 interface ShellCreateBefore {
@@ -1294,19 +1300,19 @@ manifest is:
 
 ```json title="package.json"
 {
-  "name": "opencode-acme-plugin",
+  "name": "ocpp-acme-plugin",
   "version": "1.0.0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "beta"
+    "@ocpp/plugin": "beta"
   }
 }
 ```
 
-Use versions compatible with the OpenCode release you target and test the
+Use versions compatible with the OC++ release you target and test the
 installed package, not only a workspace-linked copy. Because the plugin API is
 beta, publish compatible plugin updates when V2 entrypoints or contracts
 change.

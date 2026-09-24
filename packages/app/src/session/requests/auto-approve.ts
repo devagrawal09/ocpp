@@ -1,6 +1,6 @@
 import { createEffect, onCleanup } from "solid-js"
-import type { PermissionRequest } from "@opencode-ai/client/promise"
-import type { Data } from "@opencode-ai/client/solid"
+import type { PermissionRequest } from "@ocpp/client/promise"
+import type { Data } from "@ocpp/client/solid"
 import type { ServerSDK } from "@/runtime/server/client"
 import { useSettings } from "@/settings/model"
 
@@ -49,10 +49,13 @@ export function createPermissionAutoApprover(input: { sdk: ServerSDK; data: Data
   async function sweepWithRetry(generation: number, attempt: number) {
     const complete = await sweep()
     if (complete || attempt >= retryLimit) return
-    setTimeout(() => {
-      if (state.disposed || !enabled() || generation !== state.generation) return
-      void sweepWithRetry(generation, attempt + 1)
-    }, retryDelayMs * (attempt + 1))
+    setTimeout(
+      () => {
+        if (state.disposed || !enabled() || generation !== state.generation) return
+        void sweepWithRetry(generation, attempt + 1)
+      },
+      retryDelayMs * (attempt + 1),
+    )
   }
 
   async function sweep() {

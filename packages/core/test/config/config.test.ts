@@ -3,25 +3,25 @@ import fs from "fs/promises"
 import { describe, expect, test } from "bun:test"
 import { Effect, Fiber, Layer, Logger, Schema, Stream } from "effect"
 import { FastCheck } from "effect/testing"
-import { Config } from "@opencode-ai/core/config"
-import { AgentsDirectory, Directory, Document, Event, Info } from "@opencode-ai/schema/config"
-import { ConfigModel } from "@opencode-ai/schema/config/model"
-import { ConfigProvider } from "@opencode-ai/schema/config/provider"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Credential } from "@opencode-ai/core/credential"
-import { ConfigMigrateV1 } from "@opencode-ai/core/v1/config/migrate"
-import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
-import { Watcher } from "@opencode-ai/core/filesystem/watcher"
-import { Bus } from "@opencode-ai/core/bus"
-import { Global } from "@opencode-ai/util/global"
-import { Location } from "@opencode-ai/core/location"
-import { Project } from "@opencode-ai/core/project"
-import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { WellKnown } from "@opencode-ai/core/wellknown"
-import { Integration } from "@opencode-ai/schema/integration"
+import { Config } from "@ocpp/core/config"
+import { AgentsDirectory, Directory, Document, Event, Info } from "@ocpp/schema/config"
+import { ConfigModel } from "@ocpp/schema/config/model"
+import { ConfigProvider } from "@ocpp/schema/config/provider"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Credential } from "@ocpp/core/credential"
+import { ConfigMigrateV1 } from "@ocpp/core/v1/config/migrate"
+import { ConfigV1 } from "@ocpp/core/v1/config/config"
+import { Watcher } from "@ocpp/core/filesystem/watcher"
+import { Bus } from "@ocpp/core/bus"
+import { Global } from "@ocpp/util/global"
+import { Location } from "@ocpp/core/location"
+import { Project } from "@ocpp/core/project"
+import { Provider } from "@ocpp/core/provider"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { WellKnown } from "@ocpp/core/wellknown"
+import { Integration } from "@ocpp/schema/integration"
 import { emptyCredentialNode, emptyWellknownNode } from "../fixture/config-nodes"
 import { location } from "../fixture/location"
 import { tmpdir } from "../fixture/tmpdir"
@@ -120,12 +120,12 @@ describe("Config", () => {
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
       Effect.flatMap((tmp) => {
         // The location sits BENEATH the global config dir, so the upward walk
-        // reaches the global opencode.json as a direct file.
+        // reaches the global ocpp.json as a direct file.
         const global = path.join(tmp.path, "global")
         const project = path.join(global, "plugins", "demo")
         return Effect.promise(async () => {
           await fs.mkdir(project, { recursive: true })
-          await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global-sentinel" }))
+          await fs.writeFile(path.join(global, "ocpp.json"), JSON.stringify({ shell: "global-sentinel" }))
         }).pipe(
           Effect.andThen(
             // Fixture control: with global enabled the file loads.
@@ -158,9 +158,9 @@ describe("Config", () => {
         return Effect.promise(async () => {
           await fs.mkdir(global, { recursive: true })
           await fs.mkdir(project, { recursive: true })
-          await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
+          await fs.writeFile(path.join(global, "ocpp.json"), JSON.stringify({ shell: "global" }))
           await fs.writeFile(explicit, JSON.stringify({ shell: "explicit" }))
-          await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
+          await fs.writeFile(path.join(project, "ocpp.json"), JSON.stringify({ shell: "project" }))
         }).pipe(
           Effect.andThen(
             Effect.gen(function* () {
@@ -192,8 +192,8 @@ describe("Config", () => {
         return Effect.promise(async () => {
           await fs.mkdir(global, { recursive: true })
           await fs.mkdir(project, { recursive: true })
-          await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
-          await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
+          await fs.writeFile(path.join(global, "ocpp.json"), JSON.stringify({ shell: "global" }))
+          await fs.writeFile(path.join(project, "ocpp.json"), JSON.stringify({ shell: "project" }))
         }).pipe(
           Effect.andThen(
             Effect.gen(function* () {
@@ -218,7 +218,7 @@ describe("Config", () => {
         Effect.gen(function* () {
           const global = path.join(tmp.path, "global")
           const project = path.join(tmp.path, "project")
-          const file = path.join(global, "opencode.json")
+          const file = path.join(global, "ocpp.json")
           yield* Effect.promise(async () => {
             await fs.mkdir(global, { recursive: true })
             await fs.mkdir(project, { recursive: true })
@@ -283,7 +283,7 @@ describe("Config", () => {
         Effect.gen(function* () {
           const global = path.join(tmp.path, "global")
           const project = path.join(tmp.path, "project")
-          const file = path.join(project, "opencode.json")
+          const file = path.join(project, "ocpp.json")
           yield* Effect.promise(async () => {
             await fs.mkdir(global, { recursive: true })
             await fs.mkdir(project, { recursive: true })
@@ -377,8 +377,8 @@ describe("Config", () => {
           yield* Effect.promise(async () => {
             await fs.mkdir(global, { recursive: true })
             await fs.mkdir(project, { recursive: true })
-            await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
-            await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
+            await fs.writeFile(path.join(global, "ocpp.json"), JSON.stringify({ shell: "global" }))
+            await fs.writeFile(path.join(project, "ocpp.json"), JSON.stringify({ shell: "project" }))
           })
 
           const integrationID = Integration.ID.make("https://example.com")
@@ -482,8 +482,8 @@ describe("Config", () => {
           yield* Effect.promise(async () => {
             await fs.mkdir(global, { recursive: true })
             await fs.mkdir(project, { recursive: true })
-            await fs.writeFile(path.join(global, "opencode.json"), "null")
-            await fs.writeFile(path.join(project, "opencode.json"), "")
+            await fs.writeFile(path.join(global, "ocpp.json"), "null")
+            await fs.writeFile(path.join(project, "ocpp.json"), "")
             await fs.writeFile(malformed, '{ "credential": "file-secret"')
           })
           const integrationID = Integration.ID.make("https://invalid.example.com")
@@ -544,11 +544,11 @@ describe("Config", () => {
 
           expect(output.map((item) => `${item.source}:${item.path}:${item.kind}`).toSorted()).toEqual(
             [
-              `${path.join(global, "opencode.json")}:$:invalid`,
-              `${path.join(project, "opencode.json")}:$:invalid`,
+              `${path.join(global, "ocpp.json")}:$:invalid`,
+              `${path.join(project, "ocpp.json")}:$:invalid`,
               `${malformed}:$:invalid`,
               "https://invalid.example.com:$:invalid",
-              "OPENCODE_CONFIG_CONTENT:$:invalid",
+              "OCPP_CONFIG_CONTENT:$:invalid",
             ].toSorted(),
           )
           expect(JSON.stringify(output)).not.toContain("secret")
@@ -862,18 +862,18 @@ describe("Config", () => {
     ),
   )
 
-  it.live("loads opencode JSON and JSONC files from lowest to highest priority", () =>
+  it.live("loads ocpp JSON and JSONC files from lowest to highest priority", () =>
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
       Effect.flatMap((tmp) =>
         Effect.gen(function* () {
           yield* Effect.promise(() =>
             Promise.all([
               fs.writeFile(
-                path.join(tmp.path, "opencode.json"),
+                path.join(tmp.path, "ocpp.json"),
                 JSON.stringify({ $schema: "base", providers: { base: provider } }),
               ),
               fs.writeFile(
-                path.join(tmp.path, "opencode.jsonc"),
+                path.join(tmp.path, "ocpp.jsonc"),
                 `{
                   // Later global files override scalar fields while retaining providers.
                   "$schema": "last",
@@ -890,11 +890,11 @@ describe("Config", () => {
             expect(documents.map((document) => document.type)).toEqual(["document", "document"])
             expect(documents.map((document) => document.info.$schema)).toEqual(["base", "last"])
             expect(documents[0]).toBeInstanceOf(Document)
-            expect(documents[0]?.path).toBe(AbsolutePath.make(path.join(tmp.path, "opencode.json")))
+            expect(documents[0]?.path).toBe(AbsolutePath.make(path.join(tmp.path, "ocpp.json")))
             expect(documents[1]?.info.providers?.last).toBeInstanceOf(ConfigProvider.Info)
 
             yield* Effect.promise(() =>
-              fs.writeFile(path.join(tmp.path, "opencode.jsonc"), JSON.stringify({ $schema: "changed" })),
+              fs.writeFile(path.join(tmp.path, "ocpp.jsonc"), JSON.stringify({ $schema: "changed" })),
             )
             expect(
               (yield* config.entries())
@@ -911,11 +911,11 @@ describe("Config", () => {
     Effect.acquireUseRelease(
       Effect.sync(() => {
         const previous = {
-          token: process.env.OPENCODE_TEST_MCP_TOKEN,
-          missing: process.env.OPENCODE_TEST_MISSING,
+          token: process.env.OCPP_TEST_MCP_TOKEN,
+          missing: process.env.OCPP_TEST_MISSING,
         }
-        process.env.OPENCODE_TEST_MCP_TOKEN = "secret"
-        delete process.env.OPENCODE_TEST_MISSING
+        process.env.OCPP_TEST_MCP_TOKEN = "secret"
+        delete process.env.OCPP_TEST_MISSING
         return previous
       }),
       () =>
@@ -927,17 +927,17 @@ describe("Config", () => {
                 Promise.all([
                   fs.writeFile(path.join(tmp.path, "token.txt"), 'file\n"token"\n'),
                   fs.writeFile(
-                    path.join(tmp.path, "opencode.jsonc"),
+                    path.join(tmp.path, "ocpp.jsonc"),
                     `{
                       // Ignored reference: {file:missing.txt}
-                      "username": "user-{env:OPENCODE_TEST_MISSING}",
+                      "username": "user-{env:OCPP_TEST_MISSING}",
                       "mcp": {
                         "servers": {
                           "remote": {
                             "type": "remote",
                             "url": "https://example.com/mcp",
                             "headers": {
-                              "Authorization": "Bearer {env:OPENCODE_TEST_MCP_TOKEN}",
+                              "Authorization": "Bearer {env:OCPP_TEST_MCP_TOKEN}",
                               "X-Token": "{file:token.txt}"
                             }
                           }
@@ -965,10 +965,10 @@ describe("Config", () => {
         ),
       (previous) =>
         Effect.sync(() => {
-          if (previous.token === undefined) delete process.env.OPENCODE_TEST_MCP_TOKEN
-          else process.env.OPENCODE_TEST_MCP_TOKEN = previous.token
-          if (previous.missing === undefined) delete process.env.OPENCODE_TEST_MISSING
-          else process.env.OPENCODE_TEST_MISSING = previous.missing
+          if (previous.token === undefined) delete process.env.OCPP_TEST_MCP_TOKEN
+          else process.env.OCPP_TEST_MCP_TOKEN = previous.token
+          if (previous.missing === undefined) delete process.env.OCPP_TEST_MISSING
+          else process.env.OCPP_TEST_MISSING = previous.missing
         }),
     ),
   )
@@ -996,7 +996,7 @@ describe("Config", () => {
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
       Effect.flatMap((tmp) =>
         Effect.gen(function* () {
-          const file = path.join(tmp.path, "opencode.json")
+          const file = path.join(tmp.path, "ocpp.json")
           const contents = JSON.stringify({
             shell: "/bin/zsh",
             providers: { local: provider },
@@ -1022,7 +1022,7 @@ describe("Config", () => {
         Effect.gen(function* () {
           yield* Effect.promise(() =>
             fs.writeFile(
-              path.join(tmp.path, "opencode.json"),
+              path.join(tmp.path, "ocpp.json"),
               JSON.stringify({
                 shell: "/bin/bash",
                 model: "anthropic/claude",
@@ -1208,7 +1208,7 @@ describe("Config", () => {
         Effect.gen(function* () {
           yield* Effect.promise(() =>
             fs.writeFile(
-              path.join(tmp.path, "opencode.json"),
+              path.join(tmp.path, "ocpp.json"),
               JSON.stringify({
                 reference: {
                   local: { path: "../library" },
@@ -1241,7 +1241,7 @@ describe("Config", () => {
         Effect.gen(function* () {
           yield* Effect.promise(() =>
             fs.writeFile(
-              path.join(tmp.path, "opencode.json"),
+              path.join(tmp.path, "ocpp.json"),
               JSON.stringify({
                 shell: "/bin/zsh",
                 default_agent: "reviewer",
@@ -1413,8 +1413,8 @@ describe("Config", () => {
         Effect.gen(function* () {
           yield* Effect.promise(() =>
             Promise.all([
-              fs.writeFile(path.join(tmp.path, "opencode.json"), JSON.stringify({ $schema: "base" })),
-              fs.writeFile(path.join(tmp.path, "opencode.jsonc"), "{ invalid"),
+              fs.writeFile(path.join(tmp.path, "ocpp.json"), JSON.stringify({ $schema: "base" })),
+              fs.writeFile(path.join(tmp.path, "ocpp.jsonc"), "{ invalid"),
             ]),
           )
           return yield* Effect.gen(function* () {
@@ -1424,7 +1424,7 @@ describe("Config", () => {
 
             expect(documents.map((document) => document.info.$schema)).toEqual(["base"])
             expect(yield* watcher.subscriptions()).toContainEqual({
-              path: path.join(tmp.path, "opencode.jsonc"),
+              path: path.join(tmp.path, "ocpp.jsonc"),
               type: "file",
             })
           }).pipe(Effect.provide(testLayer(tmp.path)))
@@ -1450,21 +1450,18 @@ describe("Config", () => {
             await fs.mkdir(directory, { recursive: true })
             await fs.mkdir(path.join(root, ".agents"), { recursive: true })
             await fs.mkdir(path.join(root, ".claude"), { recursive: true })
-            await fs.mkdir(path.join(root, ".opencode"), { recursive: true })
+            await fs.mkdir(path.join(root, ".ocpp"), { recursive: true })
             await fs.mkdir(path.join(directory, ".agents"), { recursive: true })
             await fs.mkdir(path.join(directory, ".claude"), { recursive: true })
-            await fs.mkdir(path.join(directory, ".opencode"), { recursive: true })
+            await fs.mkdir(path.join(directory, ".ocpp"), { recursive: true })
             await Promise.all([
-              fs.writeFile(path.join(tmp.path, "opencode.json"), JSON.stringify({ $schema: "outside" })),
-              fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ $schema: "global" })),
-              fs.writeFile(path.join(root, "opencode.json"), JSON.stringify({ $schema: "root" })),
-              fs.writeFile(path.join(parent, "opencode.jsonc"), JSON.stringify({ $schema: "parent" })),
-              fs.writeFile(path.join(directory, "opencode.json"), JSON.stringify({ $schema: "directory" })),
-              fs.writeFile(path.join(root, ".opencode", "opencode.json"), JSON.stringify({ $schema: "root-dot" })),
-              fs.writeFile(
-                path.join(directory, ".opencode", "opencode.jsonc"),
-                JSON.stringify({ $schema: "directory-dot" }),
-              ),
+              fs.writeFile(path.join(tmp.path, "ocpp.json"), JSON.stringify({ $schema: "outside" })),
+              fs.writeFile(path.join(global, "ocpp.json"), JSON.stringify({ $schema: "global" })),
+              fs.writeFile(path.join(root, "ocpp.json"), JSON.stringify({ $schema: "root" })),
+              fs.writeFile(path.join(parent, "ocpp.jsonc"), JSON.stringify({ $schema: "parent" })),
+              fs.writeFile(path.join(directory, "ocpp.json"), JSON.stringify({ $schema: "directory" })),
+              fs.writeFile(path.join(root, ".ocpp", "ocpp.json"), JSON.stringify({ $schema: "root-dot" })),
+              fs.writeFile(path.join(directory, ".ocpp", "ocpp.jsonc"), JSON.stringify({ $schema: "directory-dot" })),
             ])
           })
 
@@ -1475,8 +1472,8 @@ describe("Config", () => {
 
             expect(entries.filter((entry) => entry.type === "directory").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(global),
-              AbsolutePath.make(path.join(root, ".opencode")),
-              AbsolutePath.make(path.join(directory, ".opencode")),
+              AbsolutePath.make(path.join(root, ".ocpp")),
+              AbsolutePath.make(path.join(directory, ".ocpp")),
             ])
             expect(entries.filter((entry) => entry.type === "agents").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(globalAgents),
@@ -1511,9 +1508,9 @@ describe("Config", () => {
               "parent",
               "directory",
               "root-dot",
-              AbsolutePath.make(path.join(root, ".opencode")),
+              AbsolutePath.make(path.join(root, ".ocpp")),
               "directory-dot",
-              AbsolutePath.make(path.join(directory, ".opencode")),
+              AbsolutePath.make(path.join(directory, ".ocpp")),
             ])
           }).pipe(
             Effect.provide(

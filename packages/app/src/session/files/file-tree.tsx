@@ -1,8 +1,8 @@
 import { useFile } from "@/workspaces/files/model"
 import { encodeFilePath } from "@/workspaces/files/path"
-import { Collapsible } from "@opencode-ai/ui/collapsible"
-import { FileIcon } from "@opencode-ai/ui/file-icon"
-import { Icon } from "@opencode-ai/ui/icon"
+import { Collapsible } from "@ocpp/ui/collapsible"
+import { FileIcon } from "@ocpp/ui/file-icon"
+import { Icon } from "@ocpp/ui/icon"
 import {
   createEffect,
   createMemo,

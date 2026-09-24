@@ -1,11 +1,11 @@
-import { createData } from "@opencode-ai/client/solid"
-import type { Plugin } from "@opencode-ai/plugin/tui"
+import { createData } from "@ocpp/client/solid"
+import type { Plugin } from "@ocpp/plugin/tui"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useClient } from "./client"
 
-export { locationKey } from "@opencode-ai/client/solid"
-export type { FormWithLocation } from "@opencode-ai/client/solid"
+export { locationKey } from "@ocpp/client/solid"
+export type { FormWithLocation } from "@ocpp/client/solid"
 
 export const { use: useData, provider: DataProvider } = createSimpleContext({
   name: "Data",

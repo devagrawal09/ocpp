@@ -1,35 +1,35 @@
-import { SessionTimeline } from "@opencode-ai/session-ui/timeline"
-import type { SessionDocument } from "@opencode-ai/session-ui/document"
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
-import { SessionReview } from "@opencode-ai/session-ui/session-review"
-import { DataProvider } from "@opencode-ai/session-ui/context"
-import { FileComponentProvider } from "@opencode-ai/ui/context/file"
-import { WorkerPoolProvider } from "@opencode-ai/ui/context/worker-pool"
-import { withTimestampedFallback } from "@opencode-ai/util/session-title-fallback"
+import { SessionTimeline } from "@ocpp/session-ui/timeline"
+import type { SessionDocument } from "@ocpp/session-ui/document"
+import type { SessionMessageInfo } from "@ocpp/client/promise"
+import { SessionReview } from "@ocpp/session-ui/session-review"
+import { DataProvider } from "@ocpp/session-ui/context"
+import { FileComponentProvider } from "@ocpp/ui/context/file"
+import { WorkerPoolProvider } from "@ocpp/ui/context/worker-pool"
+import { withTimestampedFallback } from "@ocpp/util/session-title-fallback"
 import { createAsync, query, useParams } from "@solidjs/router"
 import { createMemo, createSignal, ErrorBoundary, Match, Show, Switch, type JSX } from "solid-js"
 import { Share } from "~/core/share"
 import { readShareDocument } from "~/core/share-document"
-import { Logo, Mark } from "@opencode-ai/ui/logo"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Icon } from "@opencode-ai/ui/icon"
-import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
-import { iife } from "@opencode-ai/core/util/iife"
-import { Binary } from "@opencode-ai/util/binary"
-import { NamedError } from "@opencode-ai/core/util/error"
+import { Logo, Mark } from "@ocpp/ui/logo"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { Icon } from "@ocpp/ui/icon"
+import { ProviderIcon } from "@ocpp/ui/provider-icon"
+import { iife } from "@ocpp/core/util/iife"
+import { Binary } from "@ocpp/util/binary"
+import { NamedError } from "@ocpp/core/util/error"
 import { DateTime } from "luxon"
 import { createStore } from "solid-js/store"
 import NotFound from "../[...404]"
-import { Tabs } from "@opencode-ai/ui/tabs"
-import { MessageNav } from "@opencode-ai/session-ui/message-nav"
-import { FileSSR } from "@opencode-ai/session-ui/file-ssr"
+import { Tabs } from "@ocpp/ui/tabs"
+import { MessageNav } from "@ocpp/session-ui/message-nav"
+import { FileSSR } from "@ocpp/session-ui/file-ssr"
 import { clientOnly } from "@solidjs/start"
 import { Meta, Title } from "@solidjs/meta"
 import { Base64 } from "js-base64"
 import { getRequestEvent } from "solid-js/web"
 
 const ClientOnlyWorkerPoolProvider = clientOnly(() =>
-  import("@opencode-ai/session-ui/pierre/worker").then((m) => ({
+  import("@ocpp/session-ui/pierre/worker").then((m) => ({
     default: (props: { children: JSX.Element }) => (
       <WorkerPoolProvider pools={m.getWorkerPools()}>{props.children}</WorkerPoolProvider>
     ),
@@ -139,8 +139,8 @@ export default function () {
 
           return (
             <>
-              <Title>{title()} | OpenCode</Title>
-              <Meta name="description" content="opencode - The AI coding agent built for the terminal." />
+              <Title>{title()} | OC++</Title>
+              <Meta name="description" content="ocpp - The AI coding agent built for the terminal." />
               <Meta property="og:image" content={ogImage()} />
               <Meta name="twitter:image" content={ogImage()} />
               <ClientOnlyWorkerPoolProvider>
@@ -230,21 +230,21 @@ export default function () {
                         <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">
                           <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
                             <div class="">
-                              <a href="https://opencode.ai">
+                              <a href="https://ocpp.ai">
                                 <Mark />
                               </a>
                             </div>
                             <div class="flex gap-3 items-center">
                               <IconButton
                                 as={"a"}
-                                href="https://github.com/anomalyco/opencode"
+                                href="https://github.com/devagrawal09/oc-plus-plus"
                                 target="_blank"
                                 icon={<Icon name="github" />}
                                 variant="ghost"
                               />
                               <IconButton
                                 as={"a"}
-                                href="https://opencode.ai/discord"
+                                href="https://ocpp.ai/discord"
                                 target="_blank"
                                 icon={<Icon name="discord" />}
                                 variant="ghost"

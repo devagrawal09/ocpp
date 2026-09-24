@@ -1,6 +1,6 @@
-import { Database } from "@opencode-ai/core/database/database"
-import { ModelsDev } from "@opencode-ai/core/models-dev"
-import { PersistentPty } from "@opencode-ai/core/persistent-pty"
+import { Database } from "@ocpp/core/database/database"
+import { ModelsDev } from "@ocpp/core/models-dev"
+import { PersistentPty } from "@ocpp/core/persistent-pty"
 import { Schema } from "effect"
 
 export const ServerOptions = Schema.Struct({

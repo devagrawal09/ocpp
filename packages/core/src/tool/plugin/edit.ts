@@ -6,10 +6,10 @@
  */
 export * as EditTool from "./edit.js"
 
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { ToolFailure } from "@opencode-ai/ai"
-import { FileDiff } from "@opencode-ai/schema/file-diff"
-import { Bom } from "@opencode-ai/util/bom"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import { ToolFailure } from "@ocpp/ai"
+import { FileDiff } from "@ocpp/schema/file-diff"
+import { Bom } from "@ocpp/util/bom"
 import { Effect, Schema } from "effect"
 import { Environment } from "../../environment/index.js"
 import { FileMutation } from "../../file-mutation.js"
@@ -107,7 +107,7 @@ const findLineOccurrences = (content: string, search: string) => {
 // TODO: Add LSP notification and diagnostics after LSP runtime exists.
 
 export const Plugin = {
-  id: "opencode.tool.edit",
+  id: "ocpp.tool.edit",
   effect: Effect.fn("EditTool.Plugin")(function* (ctx: Context) {
     const mutation = yield* LocationMutation.Service
     const fileMutation = yield* FileMutation.Service

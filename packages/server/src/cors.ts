@@ -1,10 +1,10 @@
 import { Context } from "effect"
 
-const opencodeOrigin = /^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/
+const ocppOrigin = /^https:\/\/([a-z0-9-]+\.)*ocpp\.ai$/
 
 export type CorsOptions = { readonly cors?: ReadonlyArray<string> }
 
-export const CorsConfig = Context.Reference<CorsOptions | undefined>("@opencode/ServerCorsConfig", {
+export const CorsConfig = Context.Reference<CorsOptions | undefined>("@ocpp/ServerCorsConfig", {
   defaultValue: () => undefined,
 })
 
@@ -12,10 +12,10 @@ export function isAllowedCorsOrigin(input: string | undefined, opts?: CorsOption
   if (!input) return true
   if (input.startsWith("http://localhost:")) return true
   if (input.startsWith("http://127.0.0.1:")) return true
-  if (input.startsWith("oc://renderer")) return true
+  if (input.startsWith("ocpp-renderer://renderer")) return true
   if (input === "tauri://localhost" || input === "http://tauri.localhost" || input === "https://tauri.localhost")
     return true
-  if (opencodeOrigin.test(input)) return true
+  if (ocppOrigin.test(input)) return true
   return opts?.cors?.includes(input) ?? false
 }
 

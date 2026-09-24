@@ -6,7 +6,7 @@ test("formats server and TUI plugins in sections without builtins", () => {
   expect(
     format(
       [
-        { id: "opencode.agent", source: { type: "builtin" }, status: "active", tui: false },
+        { id: "ocpp.agent", source: { type: "builtin" }, status: "active", tui: false },
         {
           id: "acme.dual",
           source: { type: "package", package: "acme-plugin@1.0.0" },
@@ -40,7 +40,7 @@ test("formats server and TUI plugins in sections without builtins", () => {
 })
 
 test("includes builtins when requested", () => {
-  expect(
-    format([{ id: "opencode.agent", source: { type: "builtin" }, status: "active", tui: false }], [], true),
-  ).toBe(["Server", "opencode.agent (active)"].join(EOL))
+  expect(format([{ id: "ocpp.agent", source: { type: "builtin" }, status: "active", tui: false }], [], true)).toBe(
+    ["Server", "ocpp.agent (active)"].join(EOL),
+  )
 })

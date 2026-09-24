@@ -1,8 +1,8 @@
 export * as PluginModule from "./module.js"
 
-import type { Plugin } from "@opencode-ai/plugin/effect/plugin"
-import { Npm } from "@opencode-ai/util/npm"
-import { importModule } from "@opencode-ai/util/runtime-import"
+import type { Plugin } from "@ocpp/plugin/effect/plugin"
+import { Npm } from "@ocpp/util/npm"
+import { importModule } from "@ocpp/util/runtime-import"
 import { Effect, Schema } from "effect"
 import path from "path"
 import { pathToFileURL } from "url"

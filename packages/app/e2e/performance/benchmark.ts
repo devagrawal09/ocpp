@@ -33,7 +33,7 @@ export const benchmark = base.extend<BenchmarkFixtures>({
       console.log(
         `BENCHMARK ${JSON.stringify({
           schemaVersion: 2,
-          runID: process.env.OPENCODE_PERFORMANCE_RUN_ID,
+          runID: process.env.OCPP_PERFORMANCE_RUN_ID,
           name: benchmarkName(testInfo),
           status: missing ? "failed" : testInfo.status,
           expectedStatus: testInfo.expectedStatus,
@@ -131,7 +131,7 @@ async function reportPerformancePage(name: string, diagnostics: PerformancePageD
   console.log(
     `BENCHMARK_PAGE ${JSON.stringify({
       schemaVersion: 2,
-      runID: process.env.OPENCODE_PERFORMANCE_RUN_ID,
+      runID: process.env.OCPP_PERFORMANCE_RUN_ID,
       name,
       test: testInfo ? benchmarkName(testInfo) : undefined,
       retry: testInfo?.retry,
@@ -140,7 +140,7 @@ async function reportPerformancePage(name: string, diagnostics: PerformancePageD
         platform: process.platform,
         trace,
         traceScope: diagnostics.traceScope,
-        selectorTrace: process.env.OPENCODE_PERFORMANCE_SELECTOR_TRACE === "1",
+        selectorTrace: process.env.OCPP_PERFORMANCE_SELECTOR_TRACE === "1",
       },
       navigations: diagnostics.navigations,
     })}`,

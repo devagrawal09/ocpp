@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "node:path"
-import { OPENCODE_VERSION } from "../src/version"
+import { OCPP_VERSION } from "../src/version"
 
 describe("auth command", () => {
   test("registers authentication commands", async () => {
@@ -21,14 +21,14 @@ describe("auth command", () => {
     expect(auth.stdout).toContain("log out from a configured provider")
     expect(auth.stdout).not.toContain("connect")
     expect(list.exitCode).toBe(0)
-    expect(list.stdout).toContain("opencode auth list [flags]")
+    expect(list.stdout).toContain("ocpp auth list [flags]")
     expect(list.stdout).toContain("--format")
     expect(login.exitCode).toBe(0)
-    expect(login.stdout).toContain("opencode auth login [flags] [<target>]")
+    expect(login.stdout).toContain("ocpp auth login [flags] [<target>]")
     expect(login.stdout).toContain("Integration ID, name, or well-known provider URL")
     expect(login.stdout).toContain("--method")
     expect(logout.exitCode).toBe(0)
-    expect(logout.stdout).toContain("opencode auth logout [flags] [<target>]")
+    expect(logout.stdout).toContain("ocpp auth logout [flags] [<target>]")
   })
 
   test("lists stored and environment connections", async () => {
@@ -249,7 +249,7 @@ function authServer(fetch: (request: Request, url: URL) => Response | Promise<Re
 }
 
 function health() {
-  return Response.json({ healthy: true, version: OPENCODE_VERSION, pid: process.pid })
+  return Response.json({ healthy: true, version: OCPP_VERSION, pid: process.pid })
 }
 
 function located<T>(data: T) {

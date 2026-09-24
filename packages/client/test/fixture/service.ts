@@ -12,8 +12,8 @@ if (mode === "record-start") {
   process.exit(1)
 }
 if (mode === "environment") {
-  await writeFile(registration + ".environment", process.env.OPENCODE_SERVICE_ENV_TEST ?? "")
-  await writeFile(registration + ".handoff", process.env.OPENCODE_PTY_HANDOFF ?? "null")
+  await writeFile(registration + ".environment", process.env.OCPP_SERVICE_ENV_TEST ?? "")
+  await writeFile(registration + ".handoff", process.env.OCPP_PTY_HANDOFF ?? "null")
 }
 if (mode === "signal") process.kill(process.pid, process.platform === "win32" ? "SIGTERM" : "SIGKILL")
 
@@ -47,7 +47,7 @@ const server = Bun.serve({
   async fetch(request) {
     const pathname = new URL(request.url).pathname
     if (pathname === "/api/experimental/persistent-pty/handoff" && mode === "handoff") {
-      if (request.method !== "POST" || request.headers.get("authorization") !== "Basic " + btoa("opencode:private"))
+      if (request.method !== "POST" || request.headers.get("authorization") !== "Basic " + btoa("ocpp:private"))
         return new Response(null, { status: 401 })
       await writeFile(registration + ".prepared", JSON.stringify(handoff))
       return Response.json({ handoff })

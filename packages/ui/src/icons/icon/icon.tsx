@@ -176,8 +176,8 @@ const icons = {
 
 type IconName = keyof typeof icons | keyof typeof additionalIcons
 
-const spriteID = "opencode-v2-icon-sprite"
-const symbol = (name: IconName) => `opencode-v2-icon-${name}`
+const spriteID = "ocpp-v2-icon-sprite"
+const symbol = (name: IconName) => `ocpp-v2-icon-${name}`
 let spriteInserted = false
 
 function getIcon(name: IconName) {

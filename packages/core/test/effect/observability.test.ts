@@ -4,8 +4,8 @@ import { Effect, Layer, Logger } from "effect"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import { fileLogger } from "@opencode-ai/util/observability/logging"
-import { resource } from "@opencode-ai/util/observability/otlp"
+import { fileLogger } from "@ocpp/util/observability/logging"
+import { resource } from "@ocpp/util/observability/otlp"
 
 const otelResourceAttributes = process.env.OTEL_RESOURCE_ATTRIBUTES
 
@@ -31,25 +31,24 @@ describe("resource", () => {
     process.env.OTEL_RESOURCE_ATTRIBUTES = "service.namespace=anomalyco,broken"
 
     expect(resource().attributes["service.namespace"]).toBeUndefined()
-    expect(resource().attributes["opencode.client"]).toBeDefined()
+    expect(resource().attributes["ocpp.client"]).toBeDefined()
   })
 
   test("keeps built-in attributes when env values conflict", () => {
-    process.env.OTEL_RESOURCE_ATTRIBUTES =
-      "opencode.client=web,service.instance.id=override,service.namespace=anomalyco"
+    process.env.OTEL_RESOURCE_ATTRIBUTES = "ocpp.client=web,service.instance.id=override,service.namespace=anomalyco"
 
     const app = { client: "cli", version: "1.2.3", channel: "beta" }
     expect(resource(app).attributes).toMatchObject({
-      "opencode.client": "cli",
+      "ocpp.client": "cli",
       "service.namespace": "anomalyco",
     })
     expect(resource(app).attributes["service.instance.id"]).not.toBe("override")
-    expect(resource(app).attributes["opencode.run"]).toMatch(/^[0-9a-f]{8}$/)
+    expect(resource(app).attributes["ocpp.run"]).toMatch(/^[0-9a-f]{8}$/)
   })
 })
 
 test("falls back to local logging when OTLP initialization fails", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-observability-test-"))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-observability-test-"))
   await using _ = {
     async [Symbol.asyncDispose]() {
       await fs.rm(dir, { recursive: true, force: true })
@@ -61,7 +60,7 @@ test("falls back to local logging when OTLP initialization fails", async () => {
       "--eval",
       `
         import { Effect } from "effect"
-        import { Observability } from "@opencode-ai/util/observability"
+        import { Observability } from "@ocpp/util/observability"
         await Effect.void.pipe(Effect.provide(Observability.layer()), Effect.scoped, Effect.runPromise)
       `,
     ],
@@ -85,13 +84,13 @@ test("falls back to local logging when OTLP initialization fails", async () => {
 })
 
 test("file logger appends concurrent runs with a run on every line", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-log-test-"))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-log-test-"))
   await using _ = {
     async [Symbol.asyncDispose]() {
       await fs.rm(dir, { recursive: true, force: true })
     },
   }
-  const file = path.join(dir, "opencode.log")
+  const file = path.join(dir, "ocpp.log")
   const write = (runID: string) =>
     Effect.forEach(
       Array.from({ length: 50 }, (_, index) => index),
@@ -113,13 +112,13 @@ test("file logger appends concurrent runs with a run on every line", async () =>
 })
 
 test("file logger flattens nested objects", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-log-test-"))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-log-test-"))
   await using _ = {
     async [Symbol.asyncDispose]() {
       await fs.rm(dir, { recursive: true, force: true })
     },
   }
-  const file = path.join(dir, "opencode.log")
+  const file = path.join(dir, "ocpp.log")
 
   await Effect.logInfo("request complete", {
     request: { method: "GET", timing: { duration: 42 } },

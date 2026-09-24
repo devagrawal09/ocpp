@@ -1,7 +1,7 @@
-import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
-import type { DesktopNativeBundle } from "@opencode-ai/app/i18n/desktop-native"
-import type { UpdaterState } from "@opencode-ai/app/updater"
-import type { WslServersPlatform } from "@opencode-ai/app/wsl/types"
+import type { DesktopMenuAction } from "@ocpp/app/desktop-menu"
+import type { DesktopNativeBundle } from "@ocpp/app/i18n/desktop-native"
+import type { UpdaterState } from "@ocpp/app/updater"
+import type { WslServersPlatform } from "@ocpp/app/wsl/types"
 import type {
   ClipboardImage,
   DirectoryPickerOptions,

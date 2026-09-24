@@ -1,15 +1,15 @@
 import { DateTime, Schema } from "effect"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Location } from "@opencode-ai/schema/location"
-import { Model } from "@opencode-ai/schema/model"
-import { Project } from "@opencode-ai/schema/project"
-import { Provider } from "@opencode-ai/schema/provider"
+import { Agent } from "@ocpp/schema/agent"
+import { Location } from "@ocpp/schema/location"
+import { Model } from "@ocpp/schema/model"
+import { Project } from "@ocpp/schema/project"
+import { Provider } from "@ocpp/schema/provider"
 import { AbsolutePath, RelativePath } from "../schema.js"
-import { Workspace } from "@opencode-ai/schema/workspace"
+import { Workspace } from "@ocpp/schema/workspace"
 import { SessionSchema } from "./schema.js"
 import type { SessionTable } from "./sql.js"
-import { PersistedRevert } from "@opencode-ai/schema/session-revert"
-import { Money } from "@opencode-ai/schema/money"
+import { PersistedRevert } from "@ocpp/schema/session-revert"
+import { Money } from "@ocpp/schema/money"
 
 const decodeRevert = Schema.decodeUnknownSync(PersistedRevert)
 

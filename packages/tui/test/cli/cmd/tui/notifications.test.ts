@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import Notifications from "../../../../src/feature-plugins/system/notifications"
-import type { OpenCodeEvent, PermissionAsked } from "@opencode-ai/client"
-import type { AttentionNotifyOptions, Context } from "@opencode-ai/plugin/tui/context"
+import type { OcppEvent, PermissionAsked } from "@ocpp/client"
+import type { AttentionNotifyOptions, Context } from "@ocpp/plugin/tui/context"
 
 type Session = { id: string; title: string; parentID?: string }
 
 async function setup() {
   const notifications: AttentionNotifyOptions[] = []
-  const handlers = new Map<OpenCodeEvent["type"], ((event: OpenCodeEvent) => void)[]>()
+  const handlers = new Map<OcppEvent["type"], ((event: OcppEvent) => void)[]>()
   const session = (id: string, title: string, parentID?: string): Session => ({
     id,
     title,
@@ -28,12 +28,12 @@ async function setup() {
       },
     },
     data: {
-      on: <Type extends OpenCodeEvent["type"]>(
+      on: <Type extends OcppEvent["type"]>(
         type: Type,
-        handler: (event: Extract<OpenCodeEvent, { type: Type }>) => void,
+        handler: (event: Extract<OcppEvent, { type: Type }>) => void,
       ) => {
         const list = handlers.get(type) ?? []
-        const wrapped = handler as (event: OpenCodeEvent) => void
+        const wrapped = handler as (event: OcppEvent) => void
         list.push(wrapped)
         handlers.set(type, list)
         return () => {
@@ -52,13 +52,13 @@ async function setup() {
 
   return {
     notifications,
-    emit(event: OpenCodeEvent) {
+    emit(event: OcppEvent) {
       for (const handler of handlers.get(event.type) ?? []) handler(event)
     },
   }
 }
 
-function form(id: string, sessionID = "session"): Extract<OpenCodeEvent, { type: "form.created" }>["data"]["form"] {
+function form(id: string, sessionID = "session"): Extract<OcppEvent, { type: "form.created" }>["data"]["form"] {
   return {
     id,
     sessionID,
@@ -82,7 +82,7 @@ function durable(sessionID: string): { aggregateID: string; seq: number; version
   return { aggregateID: sessionID, seq: 0, version: 1 }
 }
 
-function executionStarted(id: string, sessionID = "session"): OpenCodeEvent {
+function executionStarted(id: string, sessionID = "session"): OcppEvent {
   return {
     id,
     created: 0,
@@ -92,7 +92,7 @@ function executionStarted(id: string, sessionID = "session"): OpenCodeEvent {
   }
 }
 
-function executionSucceeded(id: string, sessionID = "session"): OpenCodeEvent {
+function executionSucceeded(id: string, sessionID = "session"): OcppEvent {
   return {
     id,
     created: 0,
@@ -102,7 +102,7 @@ function executionSucceeded(id: string, sessionID = "session"): OpenCodeEvent {
   }
 }
 
-function executionFailed(id: string, sessionID = "session"): OpenCodeEvent {
+function executionFailed(id: string, sessionID = "session"): OcppEvent {
   return {
     id,
     created: 0,

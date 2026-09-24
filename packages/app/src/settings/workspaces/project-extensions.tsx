@@ -1,6 +1,6 @@
-import { Icon } from "@opencode-ai/ui/icon"
-import { Switch } from "@opencode-ai/ui/switch"
-import { Tabs } from "@opencode-ai/ui/tabs"
+import { Icon } from "@ocpp/ui/icon"
+import { Switch } from "@ocpp/ui/switch"
+import { Tabs } from "@ocpp/ui/tabs"
 import { type Component, For, Show, createEffect, createMemo, createResource, createSignal, type JSX } from "solid-js"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useMcpToggle } from "@/providers/connect/mcp"
@@ -189,7 +189,7 @@ export const ProjectSettingsExtensions: Component = () => {
           <div class="project-settings-extension-section">
             <div class="project-settings-extension-section-header">
               <span>{language.t("project.settings.extensions.added")}</span>
-              <ExternalLink class="project-settings-extension-link" href="https://opencode.ai/docs/skills/">
+              <ExternalLink class="project-settings-extension-link" href="https://ocpp.ai/docs/skills/">
                 {language.t("settings.extensions.addSkills")}
               </ExternalLink>
             </div>

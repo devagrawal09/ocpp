@@ -11,7 +11,7 @@ export const buildLocalWslCli = Effect.fn("Wsl.buildLocalCli")(function* (input:
 }) {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
-  const directory = yield* fs.makeTempDirectory({ prefix: "opencode-wsl-cli-" })
+  const directory = yield* fs.makeTempDirectory({ prefix: "ocpp-wsl-cli-" })
   const build = Effect.gen(function* () {
     const root = path.join(path.dirname(input.script), "../../..")
     const packageManager = (
@@ -33,15 +33,15 @@ export const buildLocalWslCli = Effect.fn("Wsl.buildLocalCli")(function* (input:
         [
           packageManager,
           input.script,
-          `--target=opencode2-${target}`,
+          `--target=ocpp-${target}`,
           "--skip-install",
           "--skip-web-ui",
           `--outdir=${directory}`,
         ],
-        { cwd: root, env: { ...process.env, OPENCODE_VERSION: input.version }, windowsHide: true },
+        { cwd: root, env: { ...process.env, OCPP_VERSION: input.version }, windowsHide: true },
       ),
     )
-    yield* fs.copyFile(path.join(directory, `cli-${target}`, "bin", "opencode2"), input.output)
+    yield* fs.copyFile(path.join(directory, `cli-${target}`, "bin", "ocpp"), input.output)
     return input.output
   })
   return yield* build.pipe(Effect.ensuring(fs.remove(directory, { recursive: true, force: true }).pipe(Effect.orDie)))

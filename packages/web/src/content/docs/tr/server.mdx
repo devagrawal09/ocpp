@@ -1,61 +1,61 @@
 ---
 title: Sunucu
-description: opencode sunucusuyla HTTP uzerinden etkilesin.
+description: ocpp sunucusuyla HTTP uzerinden etkilesin.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-`opencode serve` komutu, opencode istemcisinin kullanabileceği bir OpenAPI endpoint'i açan headless bir HTTP sunucusu çalıştırır.
+`ocpp serve` komutu, ocpp istemcisinin kullanabileceği bir OpenAPI endpoint'i açan headless bir HTTP sunucusu çalıştırır.
 
 ---
 
 ### Kullanım
 
 ```bash
-opencode serve [--port <number>] [--hostname <string>] [--cors <origin>]
+ocpp serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### Seçenekler
 
-| Bayrak          | Açıklama                                       | Varsayılan       |
-| --------------- | ---------------------------------------------- | ---------------- |
-| `--port`        | Dinlenecek bağlantı noktası                    | `4096`           |
-| `--hostname`    | Dinlenecek ana bilgisayar adı                  | `127.0.0.1`      |
-| `--mdns`        | mDNS keşfini etkinleştir                       | `false`          |
-| `--mdns-domain` | mDNS hizmeti için özel alan adı                | `opencode.local` |
-| `--cors`        | İzin verilecek ek tarayıcı kaynakları (origin) | `[]`             |
+| Bayrak          | Açıklama                                       | Varsayılan   |
+| --------------- | ---------------------------------------------- | ------------ |
+| `--port`        | Dinlenecek bağlantı noktası                    | `4096`       |
+| `--hostname`    | Dinlenecek ana bilgisayar adı                  | `127.0.0.1`  |
+| `--mdns`        | mDNS keşfini etkinleştir                       | `false`      |
+| `--mdns-domain` | mDNS hizmeti için özel alan adı                | `ocpp.local` |
+| `--cors`        | İzin verilecek ek tarayıcı kaynakları (origin) | `[]`         |
 
 `--cors` birden fazla kez geçilebilir:
 
 ```bash
-opencode serve --cors http://localhost:5173 --cors https://app.example.com
+ocpp serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### Kimlik Doğrulama
 
-Sunucuyu HTTP temel kimlik doğrulama (basic auth) ile korumak için `OPENCODE_SERVER_PASSWORD` ayarlayın. Kullanıcı adı varsayılan olarak `opencode` değeridir; değiştirmek isterseniz `OPENCODE_SERVER_USERNAME` ayarlayabilirsiniz. Bu ayar hem `opencode serve` hem de `opencode web` için geçerlidir.
+Sunucuyu HTTP temel kimlik doğrulama (basic auth) ile korumak için `OCPP_SERVER_PASSWORD` ayarlayın. Kullanıcı adı varsayılan olarak `ocpp` değeridir; değiştirmek isterseniz `OCPP_SERVER_USERNAME` ayarlayabilirsiniz. Bu ayar hem `ocpp serve` hem de `ocpp web` için geçerlidir.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password opencode serve
+OCPP_SERVER_PASSWORD=your-password ocpp serve
 ```
 
 ---
 
 ### Nasıl çalışır
 
-`opencode` çalıştırdığınızda hem TUI hem de sunucu başlar. TUI, sunucuyla konuşan istemci tarafıdır.
+`ocpp` çalıştırdığınızda hem TUI hem de sunucu başlar. TUI, sunucuyla konuşan istemci tarafıdır.
 Sunucu bir OpenAPI 3.1 spesifikasyon uç noktası açar. Bu uç nokta [SDK](/docs/sdk) üretiminde de kullanılır.
 
 :::tip
-opencode ile programatik etkileşim için opencode sunucusunu kullanın.
+ocpp ile programatik etkileşim için ocpp sunucusunu kullanın.
 :::
 
-Bu mimari, opencode'un birden fazla istemciyi desteklemesini ve programatik kullanımları mümkün kılmasını sağlar.
+Bu mimari, ocpp'un birden fazla istemciyi desteklemesini ve programatik kullanımları mümkün kılmasını sağlar.
 
-`opencode serve` ile bağımsız bir sunucu başlatabilirsiniz. opencode TUI açıksa, `opencode serve` yeni bir sunucu başlatır.
+`ocpp serve` ile bağımsız bir sunucu başlatabilirsiniz. ocpp TUI açıksa, `ocpp serve` yeni bir sunucu başlatır.
 
 ---
 
@@ -63,7 +63,7 @@ Bu mimari, opencode'un birden fazla istemciyi desteklemesini ve programatik kull
 
 TUI başlarken rastgele bir port ve hostname atanır. Bunun yerine `--hostname` ve `--port` [bayraklarını](/docs/cli) verebilirsiniz.
 
-[`/tui`](#tui) uç noktası sunucu üzerinden TUI'yi sürmek için kullanılabilir. Örneğin bir istemi önceden doldurabilir veya çalıştırabilirsiniz. Bu kurulum opencode [IDE](/docs/ide) eklentileri tarafından kullanılır.
+[`/tui`](#tui) uç noktası sunucu üzerinden TUI'yi sürmek için kullanılabilir. Örneğin bir istemi önceden doldurabilir veya çalıştırabilirsiniz. Bu kurulum ocpp [IDE](/docs/ide) eklentileri tarafından kullanılır.
 
 ---
 
@@ -81,7 +81,7 @@ http://<hostname>:<port>/doc
 
 ## API'ler
 
-opencode sunucusu aşağıdaki API'leri sunar.
+ocpp sunucusu aşağıdaki API'leri sunar.
 
 ---
 

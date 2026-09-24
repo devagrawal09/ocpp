@@ -1,27 +1,27 @@
 import { createEffect, createMemo, createSignal, For, on, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createAnimatedPresence } from "@/runtime/animated-presence"
-import type { SessionUserActions } from "@opencode-ai/session-ui/actions"
-import { Badge } from "@opencode-ai/ui/badge"
-import { DiffChanges } from "@opencode-ai/ui/diff-changes"
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { InlineInput } from "@opencode-ai/ui/inline-input"
-import { Keybind } from "@opencode-ai/ui/keybind"
-import { Menu } from "@opencode-ai/ui/menu"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { ProjectAvatar } from "@opencode-ai/ui/project-avatar"
+import type { SessionUserActions } from "@ocpp/session-ui/actions"
+import { Badge } from "@ocpp/ui/badge"
+import { DiffChanges } from "@ocpp/ui/diff-changes"
+import { Icon } from "@ocpp/ui/icon"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { InlineInput } from "@ocpp/ui/inline-input"
+import { Keybind } from "@ocpp/ui/keybind"
+import { Menu } from "@ocpp/ui/menu"
+import { TextShimmer } from "@ocpp/ui/text-shimmer"
+import { Tooltip } from "@ocpp/ui/tooltip"
+import { ProjectAvatar } from "@ocpp/ui/project-avatar"
 import type { Project } from "@/runtime/server/types"
-import { getFilename } from "@opencode-ai/util/path"
+import { getFilename } from "@ocpp/util/path"
 import { Popover } from "@kobalte/core/popover"
 import { SessionContextUsage } from "@/session/timeline/session-context-usage"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useData, useServer } from "@/runtime/server/current"
 import { useWorkspaceLocation } from "@/workspaces/location"
-import { Timeline, TimelineRow } from "@opencode-ai/session-ui/timeline/projection"
-import { createSessionTimelineRowRenderer } from "@opencode-ai/session-ui/timeline/row"
-import { getReadyMarkdown, preloadMarkdown } from "@opencode-ai/session-ui/markdown-cache"
+import { Timeline, TimelineRow } from "@ocpp/session-ui/timeline/projection"
+import { createSessionTimelineRowRenderer } from "@ocpp/session-ui/timeline/row"
+import { getReadyMarkdown, preloadMarkdown } from "@ocpp/session-ui/markdown-cache"
 import { createTimelineController, type TimelineController, type TimelineSessionSource } from "./controller"
 import { createTimelineVirtualizer } from "./virtualizer"
 import { containsDirectory, isWorkspaceDirectory, workspaceDirectories } from "@/workspaces/paths"
@@ -49,7 +49,7 @@ type SessionBackground = {
 export function BackgroundMoveHint(props: { keybind?: string[] }) {
   const language = useLanguage()
   const command = useCommand()
-  const marker = "__OPENCODE_BACKGROUND_KEYBIND__"
+  const marker = "__OCPP_BACKGROUND_KEYBIND__"
   const parts = createMemo(() => language.t("session.background.moveInline", { keybind: marker }).split(marker))
   const keys = () => props.keybind ?? command.keybindParts("session.background")
   const keybind = () => props.keybind?.join("+") ?? command.keybind("session.background")
@@ -360,7 +360,7 @@ function MessageTimelineView(
       : projects.find((item) => containsDirectory(item.worktree, sessionDirectory()))
   })
   const workspaceSession = createMemo(() => isWorkspaceDirectory(project(), sessionDirectory()))
-  const showProjectIcon = () => import.meta.env.VITE_OPENCODE_CHANNEL !== "prod" && settings.general.showProjectIcon()
+  const showProjectIcon = () => import.meta.env.VITE_OCPP_CHANNEL !== "prod" && settings.general.showProjectIcon()
   const avatarProject = createMemo(() => {
     if (!showProjectIcon()) return
     const session = props.session.data.info()

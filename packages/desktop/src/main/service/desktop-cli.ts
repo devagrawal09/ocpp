@@ -22,7 +22,7 @@ export interface Interface {
   readonly install: Effect.Effect<string, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("opencode/desktop/DesktopCli") {}
+export class Service extends Context.Service<Service, Interface>()("ocpp/desktop/DesktopCli") {}
 
 export const layer = Layer.effect(
   Service,
@@ -37,15 +37,15 @@ export const layer = Layer.effect(
       if (!cli.binary) return yield* Effect.fail(new Error("Bundled CLI executable is unavailable"))
       const home = app.getPath("home")
       yield* runInstaller(cli.binary, home)
-      return path.join(home, ".opencode", "bin", "opencode2")
+      return path.join(home, ".ocpp", "bin", "ocpp")
     })
     return Service.of({ resolve, install })
   }),
 )
 
 const make = Effect.fn("DesktopCli.resolve")(function* () {
-  const development = !app.isPackaged && process.env.OPENCODE_DESKTOP_CLI_DEV
-  const version = process.env.OPENCODE_VERSION ?? "local"
+  const development = !app.isPackaged && process.env.OCPP_DESKTOP_CLI_DEV
+  const version = process.env.OCPP_VERSION ?? "local"
   const cli = development
     ? {
         version,
@@ -54,20 +54,20 @@ const make = Effect.fn("DesktopCli.resolve")(function* () {
           "run",
           "--cwd",
           development,
-          `--define=OPENCODE_VERSION=${JSON.stringify(version)}`,
+          `--define=OCPP_VERSION=${JSON.stringify(version)}`,
           "src/index.ts",
         ],
         binary: undefined,
       }
-    : yield* resolveBundledCli(!app.isPackaged && process.env.OPENCODE_DESKTOP_ISOLATED_SERVER === "1")
+    : yield* resolveBundledCli(!app.isPackaged && process.env.OCPP_DESKTOP_ISOLATED_SERVER === "1")
   return {
     ...cli,
     wslBuild:
-      app.isPackaged || !process.env.OPENCODE_DESKTOP_WSL_CLI_BUILD || !process.env.OPENCODE_DESKTOP_WSL_CLI_OUTPUT
+      app.isPackaged || !process.env.OCPP_DESKTOP_WSL_CLI_BUILD || !process.env.OCPP_DESKTOP_WSL_CLI_OUTPUT
         ? undefined
         : {
-            script: process.env.OPENCODE_DESKTOP_WSL_CLI_BUILD,
-            output: process.env.OPENCODE_DESKTOP_WSL_CLI_OUTPUT,
+            script: process.env.OCPP_DESKTOP_WSL_CLI_BUILD,
+            output: process.env.OCPP_DESKTOP_WSL_CLI_OUTPUT,
           },
   } satisfies Resolved
 })
@@ -167,9 +167,9 @@ const runInstaller = Effect.fn("DesktopCli.installForUser")(function* (binary: s
 })
 
 function executableName() {
-  return process.platform === "win32" ? "opencode-cli.exe" : "opencode-cli"
+  return process.platform === "win32" ? "ocpp-cli.exe" : "ocpp-cli"
 }
 
 function developmentExecutableName() {
-  return process.platform === "win32" ? "opencode-cli-dev.exe" : "opencode-cli-dev"
+  return process.platform === "win32" ? "ocpp-cli-dev.exe" : "ocpp-cli-dev"
 }

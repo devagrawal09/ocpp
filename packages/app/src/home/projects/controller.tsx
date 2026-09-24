@@ -8,7 +8,7 @@ import { ServerConnection } from "@/runtime/server/registry"
 import { closeHomeProject, errorMessage, homeProjectDirectories } from "@/shell/layout/helpers"
 import { Persist, persisted } from "@/runtime/persistence/storage"
 import { showToast } from "@/shell/notifications/toast"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { useDialog } from "@ocpp/ui/context/dialog"
 import { createResource } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { HomeController } from "../model"
@@ -126,7 +126,7 @@ export function createHomeProjectsController(home: HomeController) {
     },
     utility: {
       settings: openSettings,
-      help: () => platform.openExternal("https://opencode.ai/desktop-feedback"),
+      help: () => platform.openExternal("https://ocpp.ai/desktop-feedback"),
     },
   }
 }

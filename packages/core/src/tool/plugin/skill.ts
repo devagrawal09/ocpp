@@ -1,9 +1,9 @@
 export * as SkillTool from "./skill.js"
 
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { ToolFailure } from "@opencode-ai/ai"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import { ToolFailure } from "@ocpp/ai"
 import { Effect, Schema } from "effect"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Skill } from "../../skill.js"
 import { Permission } from "../../permission.js"
 
@@ -30,7 +30,7 @@ const unableToLoad = (name: string, error?: unknown) =>
   new ToolFailure({ message: `Unable to load skill ${name}`, error })
 
 export const Plugin = {
-  id: "opencode.tool.skill",
+  id: "ocpp.tool.skill",
   effect: Effect.fn("SkillTool.Plugin")(function* (ctx: Context) {
     const fs = yield* FSUtil.Service
     const skills = yield* Skill.Service

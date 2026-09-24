@@ -1,6 +1,6 @@
 import { getComponentCatalogue } from "@opentui/solid/components"
 import { registerSpinner } from "opentui-spinner/solid"
 
-export function registerOpencodeSpinner() {
+export function registerOcppSpinner() {
   if (!getComponentCatalogue().spinner) registerSpinner()
 }

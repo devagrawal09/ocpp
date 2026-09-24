@@ -1,9 +1,9 @@
 import { describe, expect } from "bun:test"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { ConfigPluginSource } from "@opencode-ai/core/config/plugin/source"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { ConfigPluginSource } from "@ocpp/core/config/plugin/source"
 import { Effect, Layer, Stream } from "effect"
-import { SkillPlugin } from "@opencode-ai/core/plugin/skill"
-import { Skill } from "@opencode-ai/core/skill"
+import { SkillPlugin } from "@ocpp/core/plugin/skill"
+import { Skill } from "@ocpp/core/skill"
 import { testEffect } from "../lib/effect"
 import { host } from "./host"
 
@@ -33,20 +33,20 @@ describe("SkillPlugin.Plugin", () => {
 
       expect(skills).toContainEqual(
         expect.objectContaining({
-          id: "opencode",
-          name: "OpenCode",
-          description: expect.stringContaining("any question about OpenCode itself"),
+          id: "ocpp",
+          name: "OC++",
+          description: expect.stringContaining("any question about OC++ itself"),
         }),
       )
       expect(skills).toContainEqual(
         expect.objectContaining({
           id: "report",
           name: "Report",
-          description: expect.stringContaining("opencode issue"),
+          description: expect.stringContaining("ocpp issue"),
         }),
       )
       expect(report?.slash).toBe(true)
-      expect(report?.content).toContain("- opencode version: 1.2.3")
+      expect(report?.content).toContain("- ocpp version: 1.2.3")
       expect(report?.content).toContain("- install/channel: beta")
     }),
   )

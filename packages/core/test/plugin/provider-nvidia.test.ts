@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { NvidiaPlugin } from "@opencode-ai/core/plugin/provider/nvidia"
-import { Provider } from "@opencode-ai/core/provider"
+import { Catalog } from "@ocpp/core/catalog"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { ProviderPlugins } from "@ocpp/core/plugin/provider"
+import { NvidiaPlugin } from "@ocpp/core/plugin/provider/nvidia"
+import { Provider } from "@ocpp/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -19,7 +19,7 @@ const addPlugin = Effect.fn(function* () {
 
 describe("NvidiaPlugin", () => {
   test("is registered so legacy referer headers can be applied", () => {
-    expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.nvidia")
+    expect(ProviderPlugins.map((item) => item.id)).toContain("ocpp.provider.nvidia")
   })
 
   it.effect("applies NVIDIA tracking headers only to nvidia", () =>
@@ -36,9 +36,9 @@ describe("NvidiaPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(Provider.ID.make("nvidia")))?.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
-        "X-BILLING-INVOKE-ORIGIN": "OpenCode",
+        "HTTP-Referer": "https://ocpp.ai/",
+        "X-Title": "ocpp",
+        "X-BILLING-INVOKE-ORIGIN": "OC++",
       })
       expect((yield* catalog.provider.get(Provider.ID.openrouter))?.headers).toBeUndefined()
     }),
@@ -56,9 +56,9 @@ describe("NvidiaPlugin", () => {
       yield* addPlugin()
 
       expect((yield* catalog.provider.get(Provider.ID.make("nvidia")))?.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
-        "X-BILLING-INVOKE-ORIGIN": "OpenCode",
+        "HTTP-Referer": "https://ocpp.ai/",
+        "X-Title": "ocpp",
+        "X-BILLING-INVOKE-ORIGIN": "OC++",
       })
     }),
   )
@@ -76,8 +76,8 @@ describe("NvidiaPlugin", () => {
       yield* addPlugin()
 
       expect((yield* catalog.provider.get(Provider.ID.make("nvidia")))?.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "HTTP-Referer": "https://ocpp.ai/",
+        "X-Title": "ocpp",
         "X-BILLING-INVOKE-ORIGIN": "CustomOrigin",
       })
     }),

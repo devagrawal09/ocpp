@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "opencode-www",
+  "name": "ocpp-www",
   "compatibility_date": "2026-07-25",
   "workers_dev": false,
   "preview_urls": false,
@@ -15,20 +15,20 @@
   },
   "env": {
     "dev": {
-      "name": "opencode-www-dev",
+      "name": "ocpp-www-dev",
       "routes": [
         {
-          "pattern": "dev.opencode.ai/v2*",
-          "zone_name": "opencode.ai",
+          "pattern": "dev.ocpp.ai/v2*",
+          "zone_name": "ocpp.ai",
         },
       ],
     },
     "production": {
-      "name": "opencode-www-production",
+      "name": "ocpp-www-production",
       "routes": [
         {
-          "pattern": "opencode.ai/v2*",
-          "zone_name": "opencode.ai",
+          "pattern": "ocpp.ai/v2*",
+          "zone_name": "ocpp.ai",
         },
       ],
     },

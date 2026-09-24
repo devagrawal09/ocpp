@@ -6,18 +6,18 @@ Custom commands turn a named prompt template into a reusable command.
 
 ## Configure with Markdown
 
-OpenCode discovers `.md` command files in `commands/` directories:
+OC++ discovers `.md` command files in `commands/` directories:
 
 ```text
-~/.config/opencode/commands/       # Global
-.opencode/commands/                # Project
+~/.config/ocpp/commands/       # Global
+.ocpp/commands/                # Project
 ```
 
-Files may be nested; for example, `.opencode/commands/team/review.md` defines
+Files may be nested; for example, `.ocpp/commands/team/review.md` defines
 the command `team/review`. Files with other extensions, including `.mdx`, are not
 discovered.
 
-```md title=".opencode/commands/review.md"
+```md title=".ocpp/commands/review.md"
 ---
 description: Review code for correctness and missing tests
 agent: plan
@@ -35,13 +35,13 @@ automatically.
 
 ## Configure with JSON
 
-Add commands under the `commands` key in any OpenCode JSON or JSONC
+Add commands under the `commands` key in any OC++ JSON or JSONC
 [configuration file](/config). Each entry's key is the command name and
 `template` is required.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "commands": {
     "review": {
       "description": "Review code for correctness and missing tests",
@@ -70,7 +70,7 @@ The four optional fields can be used in JSON or YAML frontmatter. Do not put
 
 Use `$ARGUMENTS` for the complete argument string:
 
-```md title=".opencode/commands/component.md"
+```md title=".ocpp/commands/component.md"
 ---
 description: Create a component
 ---
@@ -81,7 +81,7 @@ Create a typed React component named $ARGUMENTS.
 Use `$1`, `$2`, and higher numbers for parsed positional arguments. Single and
 double quotes group text containing spaces and are removed during parsing.
 
-```md title=".opencode/commands/check.md"
+```md title=".ocpp/commands/check.md"
 ---
 description: Check one area with a specific focus
 ---
@@ -95,14 +95,14 @@ only `$1`, then `$1` receives the full parsed argument list. Missing positions
 become empty strings.
 
 If a template contains neither positional placeholders nor `$ARGUMENTS`,
-OpenCode appends non-empty arguments to the template after a blank line.
+OC++ appends non-empty arguments to the template after a blank line.
 
 ## Shell interpolation
 
 Wrap a shell command in `!` followed by backticks to insert its output before
 the prompt is submitted:
 
-```md title=".opencode/commands/review-diff.md"
+```md title=".ocpp/commands/review-diff.md"
 ---
 description: Review the current diff
 ---
@@ -112,7 +112,7 @@ Review this diff:
 !`git diff --stat && git diff`
 ```
 
-OpenCode runs each interpolation with the configured shell in the active
+OC++ runs each interpolation with the configured shell in the active
 project location and inserts its combined output into the template. Argument
 interpolation happens first, so avoid placing untrusted arguments inside shell
 interpolations.

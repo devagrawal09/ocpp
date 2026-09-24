@@ -1,14 +1,14 @@
-import { Plugin } from "@opencode-ai/plugin/tui"
+import { Plugin } from "@ocpp/plugin/tui"
 import { createMermaidCodeBlockRenderer } from "./markdown.js"
-import { resolveOpenCodeDiagramPalette } from "./palette.js"
+import { resolveOcppDiagramPalette } from "./palette.js"
 
 export default Plugin.define({
-  id: "opencode.merman",
+  id: "ocpp.merman",
   setup(context) {
     context.markdown.registerCodeBlockRenderer(
       "mermaid",
       createMermaidCodeBlockRenderer(context.renderer, () => ({
-        colors: resolveOpenCodeDiagramPalette(context.theme, context.themeMode),
+        colors: resolveOcppDiagramPalette(context.theme, context.themeMode),
       })),
     )
   },

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { ClientError, OpenCode } from "@opencode-ai/client/promise"
-import { OPENCODE_VERSION } from "../src/version"
+import { ClientError, Ocpp } from "@ocpp/client/promise"
+import { OCPP_VERSION } from "../src/version"
 import path from "node:path"
 import { createMiniConnection, mergeInput as mergeInteractiveInput, resolveMiniTarget } from "../src/mini"
 import { mergeInput as mergeNonInteractiveInput, parseRunModel } from "../src/run/run"
@@ -31,14 +31,14 @@ describe("mini command", () => {
     const initial = Bun.serve({
       port: 0,
       fetch() {
-        return Response.json({ healthy: true, version: OPENCODE_VERSION, pid: process.pid })
+        return Response.json({ healthy: true, version: OCPP_VERSION, pid: process.pid })
       },
     })
     const replacement = Bun.serve({
       port: 0,
       fetch(request) {
         authorization.push(request.headers.get("authorization"))
-        return Response.json({ healthy: true, version: OPENCODE_VERSION, pid: process.pid })
+        return Response.json({ healthy: true, version: OCPP_VERSION, pid: process.pid })
       },
     })
     const controller = new AbortController()
@@ -70,8 +70,8 @@ describe("mini command", () => {
   })
 
   test("re-resolves a managed target when the endpoint moves before transport construction", async () => {
-    const initial = OpenCode.make({ baseUrl: "https://initial.opencode.test" })
-    const replacement = OpenCode.make({ baseUrl: "https://replacement.opencode.test" })
+    const initial = Ocpp.make({ baseUrl: "https://initial.ocpp.test" })
+    const replacement = Ocpp.make({ baseUrl: "https://replacement.ocpp.test" })
     const controller = new AbortController()
     const seen: (typeof initial)[] = []
     let reconnects = 0
@@ -118,7 +118,7 @@ describe("mini command", () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain("mini       Start the minimal interactive interface")
-    expect(result.stdout).toContain("run        Run OpenCode with a message")
+    expect(result.stdout).toContain("run        Run OC++ with a message")
   })
 
   test("exposes run without legacy interactive, attach, or command modes", async () => {
@@ -148,7 +148,7 @@ describe("mini command", () => {
         const url = new URL(request.url)
         requests.push(url.pathname)
         if (url.pathname === "/api/health")
-          return Response.json({ healthy: true, version: OPENCODE_VERSION, pid: process.pid })
+          return Response.json({ healthy: true, version: OCPP_VERSION, pid: process.pid })
         if (url.pathname === "/api/location")
           return Response.json({ directory: process.cwd(), project: { id: "global", directory: process.cwd() } })
         if (url.pathname === "/api/session") {
@@ -226,7 +226,7 @@ describe("mini command", () => {
       const result = await cli(args)
 
       expect(result.exitCode).toBe(1)
-      expect(result.stderr).toContain("opencode mini requires a TTY stdout")
+      expect(result.stderr).toContain("ocpp mini requires a TTY stdout")
     }
   })
 })

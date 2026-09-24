@@ -1,4 +1,4 @@
-// Top-level orchestrator for `opencode mini`.
+// Top-level orchestrator for `ocpp mini`.
 //
 // Wires the boot sequence, lifecycle (renderer + footer), stream transport,
 // and prompt queue together into a single session loop. The frontend paints
@@ -8,8 +8,8 @@
 //   3. starts the stream transport (SDK event subscription), lazily for fresh
 //      local sessions,
 //   4. runs the prompt queue until the footer closes.
-import { SessionMessage } from "@opencode-ai/schema/session-message"
-import type { LocationRef } from "@opencode-ai/client/promise"
+import { SessionMessage } from "@ocpp/schema/session-message"
+import type { LocationRef } from "@ocpp/client/promise"
 import type { Config } from "../config"
 import { newSessionLocation } from "../config/new-session-location"
 import { loadRunAgents, loadRunCommands, loadRunReferences } from "./catalog.shared"
@@ -151,7 +151,7 @@ function formRequestOptions(location: LocationRef | undefined) {
   if (!location) return
   return {
     headers: {
-      "x-opencode-directory": encodeURIComponent(location.directory),
+      "x-ocpp-directory": encodeURIComponent(location.directory),
       ...(location.workspaceID ? { "x-opencode-workspace": location.workspaceID } : {}),
     },
   }

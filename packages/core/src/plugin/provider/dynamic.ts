@@ -1,10 +1,10 @@
 import { Effect } from "effect"
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Npm } from "@opencode-ai/util/npm"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Npm } from "@ocpp/util/npm"
 import { loadSDKFactory } from "./sdk-factory.js"
 
 export const DynamicProviderPlugin = define({
-  id: "opencode.provider.dynamic",
+  id: "ocpp.provider.dynamic",
   effect: Effect.fn(function* (ctx) {
     const npm = yield* Npm.Service
     yield* ctx.aisdk.hook(

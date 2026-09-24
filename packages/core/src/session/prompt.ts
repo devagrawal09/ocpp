@@ -1,11 +1,11 @@
 export * as SessionPrompt from "./prompt.js"
 
-import { Base64, FileAttachment, Prompt } from "@opencode-ai/schema/prompt"
-import { PromptInput } from "@opencode-ai/schema/prompt-input"
-import { SessionInbox } from "@opencode-ai/schema/session-inbox"
-import type { Session } from "@opencode-ai/schema/session"
-import type { SessionMessage } from "@opencode-ai/schema/session-message"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Base64, FileAttachment, Prompt } from "@ocpp/schema/prompt"
+import { PromptInput } from "@ocpp/schema/prompt-input"
+import { SessionInbox } from "@ocpp/schema/session-inbox"
+import type { Session } from "@ocpp/schema/session"
+import type { SessionMessage } from "@ocpp/schema/session-message"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Context, Effect, Layer } from "effect"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -201,7 +201,7 @@ export const make = Effect.fn("SessionPrompt.make")(function* () {
 
 export type Interface = Effect.Success<ReturnType<typeof make>>
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionPrompt") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionPrompt") {}
 
 export const layer = Layer.effect(Service, make())
 

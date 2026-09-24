@@ -1,4 +1,4 @@
-import { checksum } from "@opencode-ai/util/encode"
+import { checksum } from "@ocpp/util/encode"
 import { batch, type Accessor } from "solid-js"
 import { createStore, type SetStoreFunction } from "solid-js/store"
 import type { FileSelection } from "@/workspaces/files/model"
@@ -6,8 +6,8 @@ import { Persist, persisted } from "@/runtime/persistence/storage"
 import { ServerScope } from "@/runtime/server/scope"
 import type { BlobReference } from "@/runtime/persistence/drafts"
 import type { Platform } from "@/runtime/platform/platform"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
-import { Skill } from "@opencode-ai/schema/skill"
+import { SessionMessage } from "@ocpp/schema/session-message"
+import { Skill } from "@ocpp/schema/skill"
 import { clonePrompt } from "./prompt-parts"
 
 interface PartBase {

@@ -1,8 +1,8 @@
 export * as ModelResolver from "./model-resolver.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { LanguageModel } from "@opencode-ai/ai"
-import { Auth } from "@opencode-ai/ai/route"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { LanguageModel } from "@ocpp/ai"
+import { Auth } from "@ocpp/ai/route"
 import { Context, Effect, Layer, Schema } from "effect"
 import { produce } from "immer"
 import { AISDK } from "./aisdk.js"
@@ -11,7 +11,7 @@ import { Catalog } from "./catalog.js"
 import { Credential } from "./credential.js"
 import { Integration } from "./integration.js"
 import { Capabilities, ID, Info, Ref, VariantID } from "./model.js"
-import { Npm } from "@opencode-ai/util/npm"
+import { Npm } from "@ocpp/util/npm"
 import { Provider } from "./provider.js"
 
 export class VariantUnavailableError extends Schema.TaggedError<VariantUnavailableError>()(
@@ -77,7 +77,7 @@ export interface Interface {
   readonly resolveModel: (model: Info, variant?: VariantID) => Effect.Effect<Resolved, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ModelResolver") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ModelResolver") {}
 
 export const withVariant = (
   model: Info,
@@ -229,15 +229,9 @@ function unresolvedProviderVariables(model: Info, baseURL: string) {
 const nativeCredentialSettings = (specifier: string, credential: Credential.Value | undefined) => {
   if (!credential) return {}
   if (credential.type === "key") return { apiKey: credential.key }
-  if (
-    specifier === "@opencode-ai/ai/providers/anthropic" ||
-    specifier === "@opencode-ai/ai/providers/anthropic-compatible"
-  )
+  if (specifier === "@ocpp/ai/providers/anthropic" || specifier === "@ocpp/ai/providers/anthropic-compatible")
     return { authToken: credential.access }
-  if (
-    specifier === "@opencode-ai/ai/providers/google-vertex" ||
-    specifier.startsWith("@opencode-ai/ai/providers/google-vertex/")
-  )
+  if (specifier === "@ocpp/ai/providers/google-vertex" || specifier.startsWith("@ocpp/ai/providers/google-vertex/"))
     return { accessToken: credential.access }
   return { apiKey: credential.access }
 }
@@ -343,21 +337,21 @@ function usesAPIKeyAuth(packageName: string | undefined) {
     name === "@ai-sdk/xai" ||
     name === "@openrouter/ai-sdk-provider" ||
     name === "@ai-sdk/azure" ||
-    name === "@opencode-ai/ai/providers/openai" ||
-    name?.startsWith("@opencode-ai/ai/providers/openai/") === true ||
-    name === "@opencode-ai/ai/providers/anthropic" ||
-    name === "@opencode-ai/ai/providers/anthropic-compatible" ||
-    name === "@opencode-ai/ai/providers/cerebras" ||
-    name === "@opencode-ai/ai/providers/deepinfra" ||
-    name === "@opencode-ai/ai/providers/openai-compatible" ||
-    name === "@opencode-ai/ai/providers/google" ||
-    name === "@opencode-ai/ai/providers/groq" ||
-    name === "@opencode-ai/ai/providers/mistral" ||
-    name === "@opencode-ai/ai/providers/togetherai" ||
-    name === "@opencode-ai/ai/providers/xai" ||
-    name === "@opencode-ai/ai/providers/openrouter" ||
-    name === "@opencode-ai/ai/providers/azure" ||
-    name?.startsWith("@opencode-ai/ai/providers/azure/") === true
+    name === "@ocpp/ai/providers/openai" ||
+    name?.startsWith("@ocpp/ai/providers/openai/") === true ||
+    name === "@ocpp/ai/providers/anthropic" ||
+    name === "@ocpp/ai/providers/anthropic-compatible" ||
+    name === "@ocpp/ai/providers/cerebras" ||
+    name === "@ocpp/ai/providers/deepinfra" ||
+    name === "@ocpp/ai/providers/openai-compatible" ||
+    name === "@ocpp/ai/providers/google" ||
+    name === "@ocpp/ai/providers/groq" ||
+    name === "@ocpp/ai/providers/mistral" ||
+    name === "@ocpp/ai/providers/togetherai" ||
+    name === "@ocpp/ai/providers/xai" ||
+    name === "@ocpp/ai/providers/openrouter" ||
+    name === "@ocpp/ai/providers/azure" ||
+    name?.startsWith("@ocpp/ai/providers/azure/") === true
   )
 }
 

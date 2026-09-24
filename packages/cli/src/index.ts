@@ -4,14 +4,14 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Effect } from "effect"
 import { Commands } from "./commands/commands"
 import { Runtime } from "./framework/runtime"
-import { Observability } from "@opencode-ai/util/observability"
+import { Observability } from "@ocpp/util/observability"
 import { Updater } from "./services/updater"
-import { OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "./version"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
-import { AppProcess } from "@opencode-ai/util/process"
+import { OCPP_CHANNEL, OCPP_LOCAL, OCPP_VERSION } from "./version"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
+import { AppProcess } from "@ocpp/util/process"
 import { Config } from "./config"
-import { Npm } from "@opencode-ai/util/npm"
+import { Npm } from "@ocpp/util/npm"
 import { Heap } from "./heap"
 import { CpuProfile } from "./cpu-profile"
 
@@ -82,12 +82,12 @@ Effect.gen(function* () {
     }),
   )
   yield* Effect.logInfo("cli starting", {
-    version: OPENCODE_VERSION,
-    channel: OPENCODE_CHANNEL,
-    local: OPENCODE_LOCAL,
+    version: OCPP_VERSION,
+    channel: OCPP_CHANNEL,
+    local: OCPP_LOCAL,
     args: process.argv.slice(2),
   })
-  return yield* Runtime.run(Commands, Handlers, { version: OPENCODE_VERSION })
+  return yield* Runtime.run(Commands, Handlers, { version: OCPP_VERSION })
 }).pipe(
   Effect.catchCause((cause) =>
     Effect.logError("cli process failed", {
@@ -100,19 +100,16 @@ Effect.gen(function* () {
   Effect.provide(Updater.layer),
   Effect.provide(
     LayerNode.compile(LayerNode.group([Global.node, AppProcess.node, Npm.node]), [
-      [
-        Global.node,
-        Global.layerWith(process.env.OPENCODE_CONFIG_DIR ? { config: process.env.OPENCODE_CONFIG_DIR } : {}),
-      ],
+      [Global.node, Global.layerWith(process.env.OCPP_CONFIG_DIR ? { config: process.env.OCPP_CONFIG_DIR } : {})],
     ]),
   ),
   Effect.provide(
     Observability.layer({
       endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
       headers: process.env.OTEL_EXPORTER_OTLP_HEADERS,
-      client: process.env.OPENCODE_CLIENT ?? "cli",
-      version: OPENCODE_VERSION,
-      channel: OPENCODE_CHANNEL,
+      client: process.env.OCPP_CLIENT ?? "cli",
+      version: OCPP_VERSION,
+      channel: OCPP_CHANNEL,
     }),
   ),
   Effect.provide(NodeServices.layer),

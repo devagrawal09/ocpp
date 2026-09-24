@@ -11,7 +11,7 @@ const directory = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 const packageJson = JSON.parse(fs.readFileSync(path.join(directory, "package.json"), "utf8"))
 const command = Object.keys(packageJson.bin ?? {})[0]
-if (!command) throw new Error("OpenCode package does not declare a binary")
+if (!command) throw new Error("OC++ package does not declare a binary")
 
 const platform = { darwin: "darwin", linux: "linux", win32: "windows" }[os.platform()] ?? os.platform()
 const arch = { x64: "x64", arm64: "arm64", arm: "arm" }[os.arch()] ?? os.arch()
@@ -19,7 +19,7 @@ const sourceBinary = platform === "windows" ? `${command}.exe` : command
 const targetBinary = path.resolve(directory, packageJson.bin[command])
 const dependencies = packageJson.optionalDependencies ?? {}
 const base = Object.keys(dependencies).find((name) => name.endsWith(`-${platform}-${arch}`))
-if (!base) throw new Error(`OpenCode does not provide a binary for ${platform}-${arch}`)
+if (!base) throw new Error(`OC++ does not provide a binary for ${platform}-${arch}`)
 
 function supportsAvx2() {
   if (arch !== "x64") return false
@@ -115,7 +115,7 @@ function resolveBinary(name) {
 }
 
 function installPackage(name) {
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "opencode-install-"))
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "ocpp-install-"))
   try {
     const result = childProcess.spawnSync(
       "npm",
@@ -159,7 +159,7 @@ function main() {
   }
 
   throw new Error(
-    `Failed to install OpenCode. Try manually installing ${names.map((name) => JSON.stringify(name)).join(" or ")}.`,
+    `Failed to install OC++. Try manually installing ${names.map((name) => JSON.stringify(name)).join(" or ")}.`,
   )
 }
 

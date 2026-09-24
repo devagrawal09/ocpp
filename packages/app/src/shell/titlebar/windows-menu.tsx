@@ -1,8 +1,8 @@
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { For, onMount, type JSX } from "solid-js"
-import { Menu } from "@opencode-ai/ui/menu"
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
+import { Menu } from "@ocpp/ui/menu"
+import { Icon } from "@ocpp/ui/icon"
+import { IconButton } from "@ocpp/ui/icon-button"
 
 import { matchKeybind, parseKeybind, useCommand } from "@/shell/commands/command"
 import {
@@ -95,7 +95,7 @@ export function WindowsAppMenu(props: {
       <Menu.Portal>
         <Menu.Content class="desktop-app-menu">
           <Menu.Group>
-            <Menu.GroupLabel class="desktop-app-menu-heading">OpenCode</Menu.GroupLabel>
+            <Menu.GroupLabel class="desktop-app-menu-heading">OC++</Menu.GroupLabel>
             <For each={DESKTOP_MENU.filter((menu) => desktopMenuVisible(menu, "windows"))}>
               {(menu) => (
                 <DesktopMenuSubmenu label={language.t(menu.labelKey)}>

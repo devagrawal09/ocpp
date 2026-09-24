@@ -3,7 +3,7 @@ import mdx from "@astrojs/mdx"
 import { defineConfig } from "astro/config"
 
 export default defineConfig({
-  site: "https://opencode.ai",
+  site: "https://ocpp.ai",
   base: "/posts",
   output: "server",
   adapter: cloudflare({ imageService: "passthrough" }),

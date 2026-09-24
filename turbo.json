@@ -7,80 +7,80 @@
     ".github/actions/setup-bun/**",
     ".github/workflows/test.yml"
   ],
-  "globalEnv": ["CI", "OPENCODE_DISABLE_SHARE"],
-  "globalPassThroughEnv": ["CI", "OPENCODE_DISABLE_SHARE"],
+  "globalEnv": ["CI", "OCPP_DISABLE_SHARE"],
+  "globalPassThroughEnv": ["CI", "OCPP_DISABLE_SHARE"],
   "tasks": {
     "typecheck": {},
     "test:components": {
       "outputs": [],
       "cache": false
     },
-    "@opencode-ai/enterprise#typecheck": {
-      "dependsOn": ["@opencode-ai/core#typecheck"]
+    "@ocpp/enterprise#typecheck": {
+      "dependsOn": ["@ocpp/core#typecheck"]
     },
-    "@opencode-ai/sdk#typecheck": {
-      "dependsOn": ["@opencode-ai/core#typecheck"]
+    "@ocpp/sdk#typecheck": {
+      "dependsOn": ["@ocpp/core#typecheck"]
     },
-    "@opencode-ai/server#typecheck": {
-      "dependsOn": ["@opencode-ai/core#typecheck"]
+    "@ocpp/server#typecheck": {
+      "dependsOn": ["@ocpp/core#typecheck"]
     },
-    "@opencode-ai/simulation#typecheck": {
-      "dependsOn": ["@opencode-ai/core#typecheck"]
+    "@ocpp/simulation#typecheck": {
+      "dependsOn": ["@ocpp/core#typecheck"]
     },
-    "@opencode-ai/tui#typecheck": {
-      "dependsOn": ["@opencode-ai/core#typecheck"]
+    "@ocpp/tui#typecheck": {
+      "dependsOn": ["@ocpp/core#typecheck"]
     },
     "build": {
       "dependsOn": [],
       "outputs": ["dist/**"]
     },
-    "@opencode-ai/ai#test": {
+    "@ocpp/ai#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/codemode#test": {
+    "@ocpp/codemode#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/core#test": {
+    "@ocpp/core#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/function#test": {
+    "@ocpp/function#test": {
       "outputs": []
     },
-    "@opencode-ai/httpapi-codegen#test": {
+    "@ocpp/httpapi-codegen#test": {
       "outputs": []
     },
-    "@opencode-ai/server#test": {
+    "@ocpp/server#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/cli#test": {
+    "@ocpp/cli#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/tui#test": {
+    "@ocpp/tui#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/latex#test": {
+    "@ocpp/latex#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/app#test": {
+    "@ocpp/app#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/ui#test": {
+    "@ocpp/ui#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/session-ui#test": {
+    "@ocpp/session-ui#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/sdk#verify:package": {
+    "@ocpp/sdk#verify:package": {
       "outputs": []
     }
   }

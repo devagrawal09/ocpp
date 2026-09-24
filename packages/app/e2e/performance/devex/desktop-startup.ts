@@ -1,4 +1,4 @@
-import { Service } from "@opencode-ai/client/service"
+import { Service } from "@ocpp/client/service"
 import { chromium, expect, type Browser, type Page, type TestInfo } from "@playwright/test"
 import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
@@ -97,7 +97,7 @@ export async function desktopBenchmarkContext(runs: number) {
     electronViteVersionRange: pkg.devDependencies["electron-vite"],
     gitCommit: revision.stdout.toString().trim(),
     gitDirty: status.stdout.length > 0,
-    trace: Boolean(process.env.OPENCODE_PERFORMANCE_TRACE_DIR),
+    trace: Boolean(process.env.OCPP_PERFORMANCE_TRACE_DIR),
   }
 }
 
@@ -144,7 +144,7 @@ async function createColdProfile() {
       rm(join(repository, path), { recursive: true, force: true }),
     ),
   )
-  const root = await mkdtemp(join(tmpdir(), "opencode-desktop-startup-"))
+  const root = await mkdtemp(join(tmpdir(), "ocpp-desktop-startup-"))
   return initializeColdProfile(root).catch(async (error) => {
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     throw error
@@ -158,13 +158,10 @@ async function initializeColdProfile(root: string) {
     ),
   )
   await Promise.all([
-    writeFile(
-      join(root, "desktop", "opencode.settings"),
-      JSON.stringify({ firstLaunchOnboardingComplete: true }),
-    ),
-    writeFile(join(root, "desktop", "opencode.global.dat"), JSON.stringify({ language: '{"locale":"en"}' })),
+    writeFile(join(root, "desktop", "ocpp.settings"), JSON.stringify({ firstLaunchOnboardingComplete: true })),
+    writeFile(join(root, "desktop", "ocpp.global.dat"), JSON.stringify({ language: '{"locale":"en"}' })),
   ])
-  const registration = join(root, "desktop", "opencode", "service-local.json")
+  const registration = join(root, "desktop", "ocpp", "service-local.json")
   await Service.stop({ file: registration })
   return { root, registration }
 }
@@ -176,13 +173,13 @@ function startDesktop(profile: Awaited<ReturnType<typeof createColdProfile>>) {
     detached: process.platform !== "win32",
     env: {
       ...process.env,
-      OPENCODE_CONFIG_DIR: join(profile.root, "config"),
-      OPENCODE_DB: join(profile.root, "data", "opencode.db"),
-      OPENCODE_TEST_HOME: join(profile.root, "home"),
-      OPENCODE_TEST_ONBOARDING: "0",
-      OPENCODE_DESKTOP_TEST_ROOT: profile.root,
-      OPENCODE_DESKTOP_REMOTE_DEBUGGING_PORT: "0",
-      OPENCODE_DESKTOP_DISABLE_PROTOCOL_REGISTRATION: "1",
+      OCPP_CONFIG_DIR: join(profile.root, "config"),
+      OCPP_DB: join(profile.root, "data", "ocpp.db"),
+      OCPP_TEST_HOME: join(profile.root, "home"),
+      OCPP_TEST_ONBOARDING: "0",
+      OCPP_DESKTOP_TEST_ROOT: profile.root,
+      OCPP_DESKTOP_REMOTE_DEBUGGING_PORT: "0",
+      OCPP_DESKTOP_DISABLE_PROTOCOL_REGISTRATION: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
   })
@@ -292,8 +289,8 @@ async function waitForHome(page: Page, mark: (name: Milestone) => void) {
 }
 
 type ThemeWindow = Window & {
-  __OPENCODE_THEME_STATES__?: string[]
-  __OPENCODE_THEME_OBSERVER__?: MutationObserver
+  __OCPP_THEME_STATES__?: string[]
+  __OCPP_THEME_OBSERVER__?: MutationObserver
 }
 
 async function startThemeObservation(page: Page) {
@@ -304,8 +301,8 @@ async function startThemeObservation(page: Page) {
 async function requireStableTheme(page: Page) {
   const states = await page.evaluate(() => {
     const target = window as ThemeWindow
-    target.__OPENCODE_THEME_OBSERVER__?.disconnect()
-    return target.__OPENCODE_THEME_STATES__ ?? []
+    target.__OCPP_THEME_OBSERVER__?.disconnect()
+    return target.__OCPP_THEME_STATES__ ?? []
   })
   if (states.length !== 1) throw new Error(`Desktop theme changed during startup: ${states.join(" -> ")}`)
 }
@@ -321,13 +318,13 @@ function installThemeObservation() {
       return theme && scheme ? `${theme}:${scheme}` : undefined
     }
     const initial = state()
-    target.__OPENCODE_THEME_STATES__ = initial ? [initial] : []
-    target.__OPENCODE_THEME_OBSERVER__ = new MutationObserver(() => {
+    target.__OCPP_THEME_STATES__ = initial ? [initial] : []
+    target.__OCPP_THEME_OBSERVER__ = new MutationObserver(() => {
       const next = state()
       if (!next) return
-      if (target.__OPENCODE_THEME_STATES__?.at(-1) !== next) target.__OPENCODE_THEME_STATES__?.push(next)
+      if (target.__OCPP_THEME_STATES__?.at(-1) !== next) target.__OCPP_THEME_STATES__?.push(next)
     })
-    target.__OPENCODE_THEME_OBSERVER__.observe(root, {
+    target.__OCPP_THEME_OBSERVER__.observe(root, {
       attributes: true,
       attributeFilter: ["data-theme", "data-color-scheme"],
     })
@@ -338,7 +335,7 @@ function installThemeObservation() {
     if (!observeRoot()) return
     documentObserver.disconnect()
   })
-  target.__OPENCODE_THEME_OBSERVER__ = documentObserver
+  target.__OCPP_THEME_OBSERVER__ = documentObserver
   documentObserver.observe(document, { childList: true })
 }
 

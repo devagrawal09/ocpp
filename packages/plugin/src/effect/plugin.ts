@@ -1,5 +1,5 @@
-import type { ExperimentalApi, GenerateApi, PluginApi } from "@opencode-ai/client/effect/api"
-import type { Location } from "@opencode-ai/schema/location"
+import type { ExperimentalApi, GenerateApi, PluginApi } from "@ocpp/client/effect/api"
+import type { Location } from "@ocpp/schema/location"
 import type { Effect, Scope } from "effect"
 import type { PluginOptions } from "../options.js"
 import type { VcsDiscovery } from "../vcs.js"

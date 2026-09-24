@@ -1,4 +1,4 @@
-import { Delegation } from "@opencode-ai/schema/delegation"
+import { Delegation } from "@ocpp/schema/delegation"
 import {
   batch,
   createContext,
@@ -38,7 +38,7 @@ import type {
   SessionMessageAssistantTool,
   SessionMessageUser,
   SessionInfo,
-} from "@opencode-ai/client"
+} from "@ocpp/client"
 import { useLocal } from "../../context/local"
 import { Locale } from "../../util/locale"
 import { FilePath } from "../../ui/file-path"
@@ -105,10 +105,10 @@ import { switchLabel } from "../../util/model"
 import { findMessageBoundary, messageNavigationSlack } from "./message-navigation"
 import { stringWidth } from "../../util/string-width"
 import { useArgs } from "../../context/args"
-import { withTimestampedFallback } from "@opencode-ai/util/session-title-fallback"
+import { withTimestampedFallback } from "@ocpp/util/session-title-fallback"
 import { useSessionTabs } from "../../context/session-tabs"
 import { createSingleFlight } from "../../util/single-flight"
-import type { SessionInbox } from "@opencode-ai/schema/session-inbox"
+import type { SessionInbox } from "@ocpp/schema/session-inbox"
 import { generateThinkingSyntax } from "./thinking-syntax"
 import { createDelayedPresence } from "../../util/delayed-presence"
 import { SessionLocationMissing } from "./location-missing"
@@ -3487,7 +3487,12 @@ export function isBackgroundSubagent(
   return status === "completed" && metadata.status === "running"
 }
 
-type ExecuteCall = { type: "tool"; tool: string; status: "running" | "completed" | "error"; input?: Record<string, unknown> }
+type ExecuteCall = {
+  type: "tool"
+  tool: string
+  status: "running" | "completed" | "error"
+  input?: Record<string, unknown>
+}
 type ExecuteTrace =
   | { type: "trace"; kind: "assignment"; target: string; value: string }
   | { type: "trace"; kind: "branch"; expression: string; result: boolean }
@@ -3664,9 +3669,7 @@ function Execute(props: ToolProps) {
       executionStatus() === "cancelled",
   )
   const failureOutput = createMemo(() => errorOutput() ?? output())
-  const outputPreview = createMemo(() =>
-    collapseToolOutput(failureOutput(), 4, 4 * Math.max(20, ctx.width - 6)).output,
-  )
+  const outputPreview = createMemo(() => collapseToolOutput(failureOutput(), 4, 4 * Math.max(20, ctx.width - 6)).output)
   const showOutput = createMemo(() => failureOutput() && hasRuntimeError())
 
   return (

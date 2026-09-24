@@ -1,5 +1,5 @@
-import { Switch } from "@opencode-ai/ui/switch"
-import { Tabs } from "@opencode-ai/ui/tabs"
+import { Switch } from "@ocpp/ui/switch"
+import { Tabs } from "@ocpp/ui/tabs"
 import { createMemo, createResource, For, Index, type JSXElement, Show } from "solid-js"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useMcpToggle } from "@/providers/connect/mcp"
@@ -39,7 +39,7 @@ export function StatusPopoverBody(props: { shown: boolean }) {
   )
   const plugins = createMemo(() => pluginLabels(pluginList.latest ?? []))
   const pluginCount = createMemo(() => plugins().length)
-  const pluginEmpty = createMemo(() => pluginEmptyMessage(language.t("dialog.plugins.empty"), "opencode.json"))
+  const pluginEmpty = createMemo(() => pluginEmptyMessage(language.t("dialog.plugins.empty"), "ocpp.json"))
 
   return (
     <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">

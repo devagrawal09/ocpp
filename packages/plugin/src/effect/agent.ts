@@ -1,5 +1,5 @@
-import type { AgentApi } from "@opencode-ai/client/effect/api"
-import type { Agent } from "@opencode-ai/schema/agent"
+import type { AgentApi } from "@ocpp/client/effect/api"
+import type { Agent } from "@ocpp/schema/agent"
 import type { Effect, Types } from "effect"
 import type { Transform } from "./registration.js"
 

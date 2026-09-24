@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import type { SessionMessageAssistant, SessionMessageAssistantTool, SessionMessageInfo } from "@opencode-ai/client"
+import type { SessionMessageAssistant, SessionMessageAssistantTool, SessionMessageInfo } from "@ocpp/client"
 import {
   backgroundToolRowIndex,
   cacheReuseDrop,

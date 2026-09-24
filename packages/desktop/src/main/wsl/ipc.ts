@@ -2,7 +2,7 @@ export * as WslIpc from "./ipc"
 
 import { app } from "electron"
 import type { WebContents } from "electron"
-import type { WslServerConfig, WslServersState } from "@opencode-ai/app/wsl/types"
+import type { WslServerConfig, WslServersState } from "@ocpp/app/wsl/types"
 import { Effect } from "effect"
 import { WslServersChanged } from "../../shared/ipc-rpc/events"
 import { emitIpcEvent } from "../ipc-events"
@@ -18,7 +18,7 @@ export interface Interface {
   readonly installWsl: () => Effect.Effect<void>
   readonly installDistro: (value: string) => Effect.Effect<void>
   readonly probeAddable: (value: string[]) => Effect.Effect<void>
-  readonly installOpencode: (value: string) => Effect.Effect<void>
+  readonly installOcpp: (value: string) => Effect.Effect<void>
   readonly openTerminal: (value: string) => Effect.Effect<void>
   readonly addServer: (value: string) => Effect.Effect<WslServerConfig>
   readonly removeServer: (value: string) => Effect.Effect<void>
@@ -65,7 +65,7 @@ export function create(controller?: WslServersController): Interface {
     installWsl: () => promise(() => controller.installWsl()),
     installDistro: (value) => promise(() => controller.installDistro(requireWslIpcString("distro", value))),
     probeAddable: (value) => promise(() => controller.probeAddable(requireWslIpcStrings("distro", value))),
-    installOpencode: (value) => promise(() => controller.installOpencode(requireWslIpcString("distro", value))),
+    installOcpp: (value) => promise(() => controller.installOcpp(requireWslIpcString("distro", value))),
     openTerminal: (value) => promise(() => controller.openTerminal(requireWslIpcString("distro", value))),
     addServer: (value) => promise(() => controller.addServer(requireWslIpcString("distro", value))),
     removeServer: (value) => promise(() => controller.removeServer(requireWslIpcString("server id", value))),
@@ -93,7 +93,7 @@ function createUnavailableWslIpc(): Interface {
     installed: [],
     online: [],
     distroProbes: {},
-    opencodeChecks: {},
+    ocppChecks: {},
     pendingRestart: false,
     servers: [],
     job: null,
@@ -109,7 +109,7 @@ function createUnavailableWslIpc(): Interface {
     installWsl: () => Effect.sync(unavailable),
     installDistro: () => Effect.sync(unavailable),
     probeAddable: () => Effect.sync(unavailable),
-    installOpencode: () => Effect.sync(unavailable),
+    installOcpp: () => Effect.sync(unavailable),
     openTerminal: () => Effect.sync(unavailable),
     addServer: () => Effect.sync(unavailable),
     removeServer: () => Effect.sync(unavailable),

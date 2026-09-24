@@ -1,5 +1,5 @@
-import { useI18n } from "@opencode-ai/ui/context/i18n"
-import { Icon } from "@opencode-ai/ui/icon"
+import { useI18n } from "@ocpp/ui/context/i18n"
+import { Icon } from "@ocpp/ui/icon"
 import "./session-review-v2.css"
 
 export function SessionReviewEmptyChangesV2() {

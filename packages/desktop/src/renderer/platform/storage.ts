@@ -1,4 +1,4 @@
-import { createDraftStore, type Platform } from "@opencode-ai/app/desktop"
+import { createDraftStore, type Platform } from "@ocpp/app/desktop"
 import type { AsyncStorage } from "@solid-primitives/storage"
 import type { ElectronAPI } from "../api-types"
 

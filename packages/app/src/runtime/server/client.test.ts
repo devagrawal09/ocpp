@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import type { OpenCodeEvent } from "@opencode-ai/client/promise"
+import type { OcppEvent } from "@ocpp/client/promise"
 import { createRoot } from "solid-js"
-import { createOpenCodeEventSource, createServerTransport } from "./client"
+import { createOcppEventSource, createServerTransport } from "./client"
 
 const permission = {
   id: "evt_permission",
@@ -15,16 +15,16 @@ const permission = {
     resources: ["src/**"],
     source: { type: "tool", messageID: "msg_1", id: "call_1" },
   },
-} satisfies Extract<OpenCodeEvent, { type: "permission.asked" }>
+} satisfies Extract<OcppEvent, { type: "permission.asked" }>
 
 function setup() {
-  return createRoot((dispose) => ({ ...createOpenCodeEventSource(), dispose }))
+  return createRoot((dispose) => ({ ...createOcppEventSource(), dispose }))
 }
 
 describe("server event stream", () => {
   test("publishes the original current event with exact data", () => {
     const server = setup()
-    const received: OpenCodeEvent[] = []
+    const received: OcppEvent[] = []
     let requestID: string | undefined
 
     server.event.on("permission.asked", (event) => {
@@ -41,15 +41,15 @@ describe("server event stream", () => {
 
   test("filters locations without changing workspace identity", () => {
     const server = setup()
-    const repo: OpenCodeEvent[] = []
-    const other: OpenCodeEvent[] = []
-    const all: OpenCodeEvent[] = []
+    const repo: OcppEvent[] = []
+    const other: OcppEvent[] = []
+    const all: OcppEvent[] = []
     let workspaceID: string | undefined
     const global = {
       id: "evt_connected",
       type: "server.connected",
       data: {},
-    } satisfies Extract<OpenCodeEvent, { type: "server.connected" }>
+    } satisfies Extract<OcppEvent, { type: "server.connected" }>
 
     const repoEvents = server.event.location("/repo")
     repoEvents.on("permission.asked", (event) => {
@@ -93,7 +93,7 @@ test("rotates HTTP and PTY clients together", async () => {
     return Response.json({ healthy: true, version: "2.0.0-test", pid: 1 })
   }) as typeof globalThis.fetch
   const transport = createServerTransport({
-    http: { url: "http://127.0.0.1:4100", username: "opencode", password: "first" },
+    http: { url: "http://127.0.0.1:4100", username: "ocpp", password: "first" },
     fetch,
   })
   const initialPty = transport.pty
@@ -101,7 +101,7 @@ test("rotates HTTP and PTY clients together", async () => {
   await transport.api.health.get()
   const replacement = transport.update({
     url: "http://127.0.0.1:4200",
-    username: "opencode",
+    username: "ocpp",
     password: "second",
   })
   await transport.api.health.get()
@@ -112,11 +112,11 @@ test("rotates HTTP and PTY clients together", async () => {
   expect(requests).toEqual([
     {
       url: "http://127.0.0.1:4100/api/health",
-      authorization: `Basic ${btoa("opencode:first")}`,
+      authorization: `Basic ${btoa("ocpp:first")}`,
     },
     {
       url: "http://127.0.0.1:4200/api/health",
-      authorization: `Basic ${btoa("opencode:second")}`,
+      authorization: `Basic ${btoa("ocpp:second")}`,
     },
   ])
 })

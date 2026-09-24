@@ -1,6 +1,6 @@
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
-import { run } from "@opencode-ai/tui"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
+import { run } from "@ocpp/tui"
 import { Commands } from "../commands"
 import { Runtime } from "../../framework/runtime"
 import { Config } from "../../config"
@@ -8,8 +8,8 @@ import { Context, Effect, FileSystem, Option, Queue } from "effect"
 import { ServerConnection } from "../../services/server-connection"
 import { Updater } from "../../services/updater"
 import { UpdatePreflight } from "../../services/update-preflight"
-import { Npm } from "@opencode-ai/util/npm"
-import { OPENCODE_CHANNEL, OPENCODE_VERSION } from "../../version"
+import { Npm } from "@ocpp/util/npm"
+import { OCPP_CHANNEL, OCPP_VERSION } from "../../version"
 import { Env } from "../../env"
 
 export default Runtime.handler(Commands, (input) =>
@@ -43,7 +43,7 @@ export default Runtime.handler(Commands, (input) =>
       },
     }).pipe(
       Effect.tapError(() =>
-        Effect.promise(() => preflight.fail("OpenCode update could not start the new background service")),
+        Effect.promise(() => preflight.fail("OC++ update could not start the new background service")),
       ),
     )
     const updater = yield* Updater.Service
@@ -59,9 +59,9 @@ export default Runtime.handler(Commands, (input) =>
     const service = server.service
     yield* run({
       app: {
-        name: process.env.OPENCODE_CLIENT ?? "cli",
-        version: OPENCODE_VERSION,
-        channel: process.env.OPENCODE_TUI_CHANNEL ?? OPENCODE_CHANNEL,
+        name: process.env.OCPP_CLIENT ?? "cli",
+        version: OCPP_VERSION,
+        channel: process.env.OCPP_TUI_CHANNEL ?? OCPP_CHANNEL,
       },
       server: {
         endpoint: server.endpoint,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createRoot } from "solid-js"
-import { Skill } from "@opencode-ai/schema/skill"
+import { Skill } from "@ocpp/schema/skill"
 import { createMemoryComposerState, DEFAULT_PROMPT, parseComposerStore } from "./state"
 
 describe("prompt state initialization", () => {

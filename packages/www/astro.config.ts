@@ -7,7 +7,7 @@ import remarkDocsLinks from "./src/docs/remark-links"
 const base = "/v2/"
 
 export default defineConfig({
-  site: process.env.CLOUDFLARE_ENV === "production" ? "https://opencode.ai" : "https://dev.opencode.ai",
+  site: process.env.CLOUDFLARE_ENV === "production" ? "https://ocpp.ai" : "https://dev.ocpp.ai",
   base,
   output: "server",
   adapter: cloudflare({ imageService: "passthrough" }),

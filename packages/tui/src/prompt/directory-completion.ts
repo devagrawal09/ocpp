@@ -1,4 +1,4 @@
-import type { KeymapCommand } from "@opencode-ai/plugin/tui/context"
+import type { KeymapCommand } from "@ocpp/plugin/tui/context"
 import path from "path"
 import { displaySlice, promptOffsetWidth } from "./display"
 import { parseSlashHead } from "./parse"

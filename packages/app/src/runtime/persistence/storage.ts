@@ -1,6 +1,6 @@
 import { Platform, usePlatform } from "@/runtime/platform/platform"
 import { makePersisted, messageSync, type AsyncStorage, type SyncStorage } from "@solid-primitives/storage"
-import { checksum } from "@opencode-ai/util/encode"
+import { checksum } from "@ocpp/util/encode"
 import { createResource, onCleanup, type Accessor } from "solid-js"
 import type { SetStoreFunction, Store } from "solid-js/store"
 import { pathKey } from "@/workspaces/path-key"
@@ -25,9 +25,9 @@ type PersistTarget = {
   migrate?: (value: unknown) => unknown
 }
 
-const GLOBAL_STORAGE = "opencode.global.dat"
-const WINDOW_STORAGE = "opencode.window"
-const LOCAL_PREFIX = "opencode."
+const GLOBAL_STORAGE = "ocpp.global.dat"
+const WINDOW_STORAGE = "ocpp.window"
+const LOCAL_PREFIX = "ocpp."
 const fallback = new Map<string, boolean>()
 
 const CACHE_MAX_ENTRIES = 500
@@ -314,13 +314,13 @@ async function relocateStoredValueAsync(input: {
 function workspaceStorage(dir: string) {
   const head = (dir.slice(0, 12) || "workspace").replace(/[^a-zA-Z0-9._-]/g, "-")
   const sum = checksum(dir) ?? "0"
-  return `opencode.workspace.${head}.${sum}.dat`
+  return `ocpp.workspace.${head}.${sum}.dat`
 }
 
 function draftStorage(draftID: string) {
   const head = (draftID.slice(0, 12) || "draft").replace(/[^a-zA-Z0-9._-]/g, "-")
   const sum = checksum(draftID) ?? "0"
-  return `opencode.draft.${head}.${sum}.dat`
+  return `ocpp.draft.${head}.${sum}.dat`
 }
 
 function windowStorage(windowID: string) {
@@ -640,7 +640,7 @@ export function persisted<T>(
 
   const channel =
     config.sync && typeof BroadcastChannel !== "undefined"
-      ? new BroadcastChannel(`opencode.persist:${config.storage ?? "default"}:${config.key}`)
+      ? new BroadcastChannel(`ocpp.persist:${config.storage ?? "default"}:${config.key}`)
       : undefined
   if (channel) onCleanup(() => channel.close())
 

@@ -1,4 +1,4 @@
-import { Delegation } from "@opencode-ai/schema/delegation"
+import { Delegation } from "@ocpp/schema/delegation"
 import type {
   ModelRef,
   SessionMessageAssistant,
@@ -6,7 +6,7 @@ import type {
   SessionMessageShell,
   SessionMessageUser,
   SessionStatus,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import { Option, Schema } from "effect"
 import { createMemo, type Accessor } from "solid-js"
 import { currentContentDefaultOpen } from "../message/current-tool-state"

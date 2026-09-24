@@ -19,7 +19,7 @@ describe("Z.ai Images recorded", () => {
       const response = yield* Image.generate({
         model,
         prompt: "A simple flat red circle centered on a plain white background.",
-        options: { size: "1024x1024", quality: "standard", userID: "opencode-image-test" },
+        options: { size: "1024x1024", quality: "standard", userID: "ocpp-image-test" },
       })
 
       expect(response.images).toHaveLength(1)

@@ -4,7 +4,7 @@ const server = "http://127.0.0.1:4097"
 
 test("server dialog keeps focus above fullscreen settings", async ({ page }) => {
   await page.addInitScript((server) => {
-    localStorage.setItem("opencode.global.dat:server", JSON.stringify({ list: [server] }))
+    localStorage.setItem("ocpp.global.dat:server", JSON.stringify({ list: [server] }))
   }, server)
   await page.route("**/*", async (route) => {
     const url = new URL(route.request().url())

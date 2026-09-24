@@ -13,7 +13,7 @@ test("routes packages according to their exported runtimes", () => {
 
 test("adds a package to global plugin config without replacing unrelated settings", async () => {
   await using directory = await tmpdir()
-  const file = path.join(directory.path, "opencode.jsonc")
+  const file = path.join(directory.path, "ocpp.jsonc")
   await Bun.write(file, '{\n  // retained\n  "model": "provider/model",\n  "plugins": ["first"]\n}\n')
 
   expect(await writePluginConfig(file, "second@1.0.0")).toBe(true)

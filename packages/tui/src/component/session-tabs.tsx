@@ -39,11 +39,11 @@ import { marqueeCycleWidth, marqueeOverflows, marqueeTextParts } from "../util/m
 import { useDialog } from "../ui/dialog"
 import { DialogSessionRename } from "./dialog-session-rename"
 import { Keymap } from "../context/keymap"
-import { registerOpencodeSpinner } from "./register-spinner"
+import { registerOcppSpinner } from "./register-spinner"
 import { SPINNER_FRAMES } from "./spinner-frames"
 import "./title-shimmer"
 
-registerOpencodeSpinner()
+registerOcppSpinner()
 
 export const TAB_SPINNERS = {
   dots: { frames: SPINNER_FRAMES, interval: 80 },

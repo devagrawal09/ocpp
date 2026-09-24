@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { Money } from "@opencode-ai/schema/money"
+import { Money } from "@ocpp/schema/money"
 import { Effect, Fiber, Layer, Ref, Scope, Stream } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/unstable/http"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNodePlatform } from "@opencode-ai/util/effect/app-node-platform"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { KV } from "@opencode-ai/core/kv"
-import { Model } from "@opencode-ai/core/model"
-import { bodyDigest, ModelsDev } from "@opencode-ai/core/models-dev"
-import { Provider } from "@opencode-ai/core/provider"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNodePlatform } from "@ocpp/util/effect/app-node-platform"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { KV } from "@ocpp/core/kv"
+import { Model } from "@ocpp/core/model"
+import { bodyDigest, ModelsDev } from "@ocpp/core/models-dev"
+import { Provider } from "@ocpp/core/provider"
 import { it } from "./lib/effect"
 
 const cacheKey = "models-dev:catalog"
@@ -329,7 +329,7 @@ describe("ModelsDev Service", () => {
       yield* ModelsDev.Service.use((service) => service.get()).pipe(
         Effect.provide(buildLayer(state, cache, { url: "", fetch: true, snapshot: false })),
       )
-      expect((yield* Ref.get(state)).calls[0]?.url).toBe("https://models.opencode.ai/api.json")
+      expect((yield* Ref.get(state)).calls[0]?.url).toBe("https://models.ocpp.ai/api.json")
     }),
   )
 
@@ -391,7 +391,7 @@ describe("ModelsDev Service", () => {
       const final = yield* Ref.get(state)
       expect(final.calls.length).toBe(1)
       expect(final.calls[0].url).toContain("/api.json")
-      expect(final.calls[0].userAgent).toContain("/opencode")
+      expect(final.calls[0].userAgent).toContain("/ocpp")
     }),
   )
 

@@ -1,14 +1,14 @@
 export * as ConfigMcpPlugin from "./mcp.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Document, type Entry } from "@opencode-ai/schema/config"
-import type { ServerConfig } from "@opencode-ai/schema/mcp"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Document, type Entry } from "@ocpp/schema/config"
+import type { ServerConfig } from "@ocpp/schema/mcp"
 import { Effect, Stream } from "effect"
 import { Config } from "../../config.js"
 import { Mcp } from "../../mcp/index.js"
 
 export const Plugin = define({
-  id: "opencode.config.mcp",
+  id: "ocpp.config.mcp",
   effect: Effect.fn(function* (ctx) {
     yield* register(ctx.event.subscribe())
   }),

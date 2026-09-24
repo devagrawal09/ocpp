@@ -1,4 +1,4 @@
-import { Icon } from "@opencode-ai/ui/icon"
+import { Icon } from "@ocpp/ui/icon"
 import { SplitButton, SplitButtonAction, SplitButtonMenuTrigger } from "./split-button"
 
 export default {

@@ -1,12 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "version": "1.18.4",
-  "name": "@opencode-ai/sdk",
+  "name": "@ocpp/sdk",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
+    "url": "git+https://github.com/devagrawal09/oc-plus-plus.git",
     "directory": "packages/sdk"
   },
   "publishConfig": {
@@ -28,18 +28,18 @@
     "verify:package": "bun run script/verify-package.ts"
   },
   "dependencies": {
-    "@opencode-ai/client": "workspace:*",
-    "@opencode-ai/core": "workspace:*",
-    "@opencode-ai/plugin": "workspace:*",
-    "@opencode-ai/schema": "workspace:*",
-    "@opencode-ai/server": "workspace:*",
-    "@opencode-ai/util": "workspace:*",
+    "@ocpp/client": "workspace:*",
+    "@ocpp/core": "workspace:*",
+    "@ocpp/plugin": "workspace:*",
+    "@ocpp/schema": "workspace:*",
+    "@ocpp/server": "workspace:*",
+    "@ocpp/util": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@opencode-ai/ai": "workspace:*",
-    "@opencode-ai/httpapi-codegen": "workspace:*",
-    "@opencode-ai/protocol": "workspace:*",
+    "@ocpp/ai": "workspace:*",
+    "@ocpp/httpapi-codegen": "workspace:*",
+    "@ocpp/protocol": "workspace:*",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"

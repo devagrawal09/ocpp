@@ -3,10 +3,10 @@ import type {
   SessionMessageInfo,
   SessionMessageUser,
   SessionStatus,
-} from "@opencode-ai/client/promise"
-import { Card } from "@opencode-ai/ui/card"
-import { useI18n } from "@opencode-ai/ui/context/i18n"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+} from "@ocpp/client/promise"
+import { Card } from "@ocpp/ui/card"
+import { useI18n } from "@ocpp/ui/context/i18n"
+import { Tooltip } from "@ocpp/ui/tooltip"
 import { For, Show, createMemo, type Accessor, type JSX } from "solid-js"
 import type { SessionUserActions, SessionUserComment } from "../actions"
 import { useData } from "../context"
@@ -114,7 +114,12 @@ export function createSessionTimelineRowRenderer(input: {
       const content = createMemo(() => {
         const first = parts()[0]
         if (!first) return undefined
-        return { ...first, text: parts().map((part) => part.text).join("\n\n") }
+        return {
+          ...first,
+          text: parts()
+            .map((part) => part.text)
+            .join("\n\n"),
+        }
       })
       const durationMs = createMemo(() =>
         parts().reduce<number | undefined>(

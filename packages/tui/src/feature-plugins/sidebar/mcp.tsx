@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode-ai/plugin/tui"
+import { Plugin } from "@ocpp/plugin/tui"
 import { createMemo, For, Match, Show, Switch, createSignal } from "solid-js"
 import { DialogMcp } from "../../component/dialog-mcp"
 
@@ -84,7 +84,7 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
 }
 
 export default Plugin.define({
-  id: "opencode.sidebar.mcp",
+  id: "ocpp.sidebar.mcp",
   setup(context) {
     context.ui.slot({
       append: "sidebar.content",

@@ -3,8 +3,8 @@ export * as McpOAuth from "./oauth.js"
 import { auth, type OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js"
 import type { OAuthClientInformationMixed, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js"
 import { Deferred, Effect } from "effect"
-import { Credential } from "@opencode-ai/schema/credential"
-import { ConfigMCP } from "@opencode-ai/schema/config/mcp"
+import { Credential } from "@ocpp/schema/credential"
+import { ConfigMCP } from "@ocpp/schema/config/mcp"
 import { OauthCallbackPage } from "../oauth/page.js"
 import type { Integration } from "../integration.js"
 
@@ -46,8 +46,8 @@ export const provider = (options: Options): OAuthClientProvider => {
     redirectUrl: options.redirectUrl,
     clientMetadata: {
       redirect_uris: [options.redirectUrl],
-      client_name: "opencode",
-      client_uri: "https://opencode.ai",
+      client_name: "ocpp",
+      client_uri: "https://ocpp.ai",
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: client?.secret ? "client_secret_post" : "none",

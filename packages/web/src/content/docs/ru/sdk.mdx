@@ -1,6 +1,6 @@
 ---
 title: SDK
-description: Типобезопасный JS-клиент для сервера opencode.
+description: Типобезопасный JS-клиент для сервера ocpp.
 ---
 
 import config from "../../../../config.mjs"
@@ -18,19 +18,19 @@ SDK JS/TS с открытым кодом предоставляет типобе
 Установите SDK из npm:
 
 ```bash
-npm install @opencode-ai/sdk
+npm install @ocpp/sdk
 ```
 
 ---
 
 ## Создать клиента
 
-Создайте экземпляр opencode:
+Создайте экземпляр ocpp:
 
 ```javascript
-import { createOpencode } from "@opencode-ai/sdk"
+import { createOcpp } from "@ocpp/sdk"
 
-const { client } = await createOpencode()
+const { client } = await createOcpp()
 ```
 
 Это запускает и сервер, и клиент.
@@ -49,12 +49,12 @@ const { client } = await createOpencode()
 
 ## Конфигурация
 
-Вы можете передать объект конфигурации для настройки поведения. Экземпляр по-прежнему получает ваш `opencode.json`, но вы можете переопределить или добавить встроенную конфигурацию:
+Вы можете передать объект конфигурации для настройки поведения. Экземпляр по-прежнему получает ваш `ocpp.json`, но вы можете переопределить или добавить встроенную конфигурацию:
 
 ```javascript
-import { createOpencode } from "@opencode-ai/sdk"
+import { createOcpp } from "@ocpp/sdk"
 
-const opencode = await createOpencode({
+const ocpp = await createOcpp({
   hostname: "127.0.0.1",
   port: 4096,
   config: {
@@ -62,19 +62,19 @@ const opencode = await createOpencode({
   },
 })
 
-console.log(`Server running at ${opencode.server.url}`)
+console.log(`Server running at ${ocpp.server.url}`)
 
-opencode.server.close()
+ocpp.server.close()
 ```
 
 ## Только клиент
 
-Если у вас уже есть работающий экземпляр opencode, вы можете создать экземпляр клиента для подключения к нему:
+Если у вас уже есть работающий экземпляр ocpp, вы можете создать экземпляр клиента для подключения к нему:
 
 ```javascript
-import { createOpencodeClient } from "@opencode-ai/sdk"
+import { createOcppClient } from "@ocpp/sdk"
 
-const client = createOpencodeClient({
+const client = createOcppClient({
   baseUrl: "http://localhost:4096",
 })
 ```
@@ -96,7 +96,7 @@ const client = createOpencodeClient({
 SDK включает определения TypeScript для всех типов API. Импортируйте их напрямую:
 
 ```typescript
-import type { Session, Message, Part } from "@opencode-ai/sdk"
+import type { Session, Message, Part } from "@ocpp/sdk"
 ```
 
 Все типы генерируются на основе спецификации OpenAPI сервера и доступны в файле <a href={typesUrl}>types</a>.
@@ -376,7 +376,7 @@ await client.session.prompt({
 ```javascript
 // Search and read files
 const textResults = await client.find.text({
-  query: { pattern: "function.*opencode" },
+  query: { pattern: "function.*ocpp" },
 })
 
 const files = await client.find.files({

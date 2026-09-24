@@ -2,11 +2,11 @@
 title: "Effect"
 ---
 
-`@opencode-ai/sdk/effect` is the Effect-native embedded SDK. Operations return typed Effects and Streams, and closing
+`@ocpp/sdk/effect` is the Effect-native embedded SDK. Operations return typed Effects and Streams, and closing
 the owning Scope releases the router, Location services, fibers, and plugin registrations.
 
 ```sh
-bun add @opencode-ai/sdk@dev effect
+bun add @ocpp/sdk@dev effect
 ```
 
 ## Create a host
@@ -14,16 +14,16 @@ bun add @opencode-ai/sdk@dev effect
 Create the host inside `Effect.scoped`, then use its generated API groups or the `sessions` alias.
 
 ```ts
-import { AbsolutePath, Location, OpenCode } from "@opencode-ai/sdk/effect"
+import { AbsolutePath, Location, OC++ } from "@ocpp/sdk/effect"
 import { Effect } from "effect"
 
 const program = Effect.scoped(
   Effect.gen(function* () {
-    const opencode = yield* OpenCode.create()
-    const session = yield* opencode.sessions.create({
+    const ocpp = yield* OC++.create()
+    const session = yield* ocpp.sessions.create({
       location: Location.Ref.make({ directory: AbsolutePath.make("/workspace") }),
     })
-    yield* opencode.sessions.prompt({
+    yield* ocpp.sessions.prompt({
       sessionID: session.id,
       text: "Review the current changes",
     })
@@ -35,11 +35,11 @@ const session = await Effect.runPromise(program)
 ```
 
 The embedded host uses the same schema values, declared errors, request options, and Streams as
-`@opencode-ai/client/effect`.
+`@ocpp/client/effect`.
 
 ```ts
-const health = yield* opencode.health.get()
-const sessions = yield* opencode.sessions.list()
+const health = yield * ocpp.health.get()
+const sessions = yield * ocpp.sessions.list()
 ```
 
 ## Stream events
@@ -50,19 +50,20 @@ background.
 ```ts
 import { Effect, Stream } from "effect"
 
-yield* opencode.events.subscribe().pipe(
-  Stream.runForEach((event) => Effect.logInfo("OpenCode event", { type: event.type })),
-  Effect.forkScoped,
-)
+yield *
+  ocpp.events.subscribe().pipe(
+    Stream.runForEach((event) => Effect.logInfo("OC++ event", { type: event.type })),
+    Effect.forkScoped,
+  )
 ```
 
 ## Customize
 
-Customize your OpenCode instance by registering Effect plugins. Use the embedded
+Customize your OC++ instance by registering Effect plugins. Use the embedded
 host to customize agents, models, tools, and other behavior:
 
 ```ts
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Effect } from "effect"
 
 const plugin = Plugin.define({
@@ -78,7 +79,7 @@ const plugin = Plugin.define({
     }),
 })
 
-yield* opencode.plugin(plugin)
+yield * ocpp.plugin(plugin)
 ```
 
 See the [full Effect plugins documentation](/build/plugins/effect) for plugin
@@ -86,16 +87,16 @@ hooks, transforms, tools, and the complete plugin context.
 
 ## Layer
 
-Use `OpenCode.layer()` when the embedded host should be an application service.
+Use `OC++.layer()` when the embedded host should be an application service.
 
 ```ts
-import { OpenCode } from "@opencode-ai/sdk/effect"
+import { OC++ } from "@ocpp/sdk/effect"
 import { Effect } from "effect"
 
 const program = Effect.gen(function* () {
-  const opencode = yield* OpenCode.Service
-  return yield* opencode.health.get()
+  const ocpp = yield* OC++.Service
+  return yield* ocpp.health.get()
 })
 
-const health = await Effect.runPromise(program.pipe(Effect.provide(OpenCode.layer())))
+const health = await Effect.runPromise(program.pipe(Effect.provide(OC++.layer())))
 ```

@@ -1,29 +1,29 @@
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Document, Event, Info } from "@opencode-ai/schema/config"
-import { Agent } from "@opencode-ai/core/agent"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Command } from "@opencode-ai/core/command"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigAgentPlugin } from "@opencode-ai/core/config/plugin/agent"
-import { ConfigCommandPlugin } from "@opencode-ai/core/config/plugin/command"
-import { ConfigProviderPlugin } from "@opencode-ai/core/config/plugin/provider"
-import { ConfigReferencePlugin } from "@opencode-ai/core/config/plugin/reference"
-import { ConfigSkillPlugin } from "@opencode-ai/core/config/plugin/skill"
-import { Bus } from "@opencode-ai/core/bus"
-import { Integration } from "@opencode-ai/core/integration"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Provider } from "@opencode-ai/core/provider"
-import { Reference } from "@opencode-ai/core/reference"
-import { Skill } from "@opencode-ai/core/skill"
-import { ShellSelect } from "@opencode-ai/core/shell/select"
-import { Global } from "@opencode-ai/util/global"
-import { AppProcess } from "@opencode-ai/util/process"
+import { Document, Event, Info } from "@ocpp/schema/config"
+import { Agent } from "@ocpp/core/agent"
+import { Catalog } from "@ocpp/core/catalog"
+import { Command } from "@ocpp/core/command"
+import { Config } from "@ocpp/core/config"
+import { ConfigAgentPlugin } from "@ocpp/core/config/plugin/agent"
+import { ConfigCommandPlugin } from "@ocpp/core/config/plugin/command"
+import { ConfigProviderPlugin } from "@ocpp/core/config/plugin/provider"
+import { ConfigReferencePlugin } from "@ocpp/core/config/plugin/reference"
+import { ConfigSkillPlugin } from "@ocpp/core/config/plugin/skill"
+import { Bus } from "@ocpp/core/bus"
+import { Integration } from "@ocpp/core/integration"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Provider } from "@ocpp/core/provider"
+import { Reference } from "@ocpp/core/reference"
+import { Skill } from "@ocpp/core/skill"
+import { ShellSelect } from "@ocpp/core/shell/select"
+import { Global } from "@ocpp/util/global"
+import { AppProcess } from "@ocpp/util/process"
 import { Effect, Layer, Schema } from "effect"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { AbsolutePath } from "@ocpp/core/schema"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "../plugin/fixture"
 
@@ -31,7 +31,7 @@ const it = testEffect(
   Layer.merge(PluginTestLayer, AppNodeBuilder.build(LayerNode.group([AppProcess.node, ShellSelect.node]))),
 )
 const decode = Schema.decodeUnknownSync(Info)
-const document = path.join(import.meta.dir, "opencode.json")
+const document = path.join(import.meta.dir, "ocpp.json")
 
 describe("config plugin reloads", () => {
   it.effect("preserves reference precedence and insertion order across documents", () =>
@@ -55,11 +55,11 @@ describe("config plugin reloads", () => {
     }).pipe(
       Effect.provide(
         Config.testLayer([
-          referenceConfig("/config/first/opencode.json", {
+          referenceConfig("/config/first/ocpp.json", {
             shared: "./shared",
             first: "./first",
           }),
-          referenceConfig("/config/second/opencode.json", {
+          referenceConfig("/config/second/ocpp.json", {
             shared: "./shared",
             second: "./second",
           }),

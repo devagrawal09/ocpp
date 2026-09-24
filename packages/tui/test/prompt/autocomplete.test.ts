@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
-import type { KeymapCommand } from "@opencode-ai/plugin/tui/context"
+import type { KeymapCommand } from "@ocpp/plugin/tui/context"
 import {
   directoryAutocompleteExactValue,
   directoryAutocompleteMatches,
@@ -149,7 +149,7 @@ describe("directoryAutocompleteMatches", () => {
 describe("directoryRecentValue", () => {
   test("abbreviates home paths", () => {
     expect(directoryRecentValue("/home/user", "/home/user")).toBe("~")
-    expect(directoryRecentValue("/home/user/projects/opencode", "/home/user")).toBe("~/projects/opencode")
+    expect(directoryRecentValue("/home/user/projects/ocpp", "/home/user")).toBe("~/projects/ocpp")
   })
 
   test("keeps paths outside home absolute", () => {

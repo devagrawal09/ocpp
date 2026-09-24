@@ -5,7 +5,7 @@ import { Effect, Path } from "effect"
 import { scoped } from "../native/logging"
 import { DesktopPaths } from "../paths"
 
-const rendererProtocol = "oc"
+const rendererProtocol = "ocpp-renderer"
 const rendererHost = "renderer"
 const documentPolicyHeader = "Document-Policy"
 const jsCallStacksDocumentPolicy = "include-js-call-stacks-in-crash-reports"

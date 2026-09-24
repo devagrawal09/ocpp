@@ -1,5 +1,5 @@
 import { createMemo } from "solid-js"
-import { createSimpleContext } from "@opencode-ai/ui/context"
+import { createSimpleContext } from "@ocpp/ui/context"
 import { dict, type Key } from "../i18n"
 import { useLanguage } from "./language"
 

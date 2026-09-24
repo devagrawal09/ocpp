@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron"
-import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
+import type { DesktopMenuAction } from "@ocpp/app/desktop-menu"
 import { updateTitlebar } from "../windows"
 
 export type DesktopMenuActionHandlers = Partial<{

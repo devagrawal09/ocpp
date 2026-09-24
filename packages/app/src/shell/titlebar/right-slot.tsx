@@ -40,7 +40,7 @@ export function createTitlebarRightSlot(): TitlebarRightSlot {
 
 export function TitlebarRightMount() {
   const slot = useTitlebarRightSlot()
-  return <div ref={slot.setMount} id="opencode-titlebar-right" class="flex shrink-0 items-center justify-end gap-0" />
+  return <div ref={slot.setMount} id="ocpp-titlebar-right" class="flex shrink-0 items-center justify-end gap-0" />
 }
 
 export function TitlebarRight(props: ParentProps) {

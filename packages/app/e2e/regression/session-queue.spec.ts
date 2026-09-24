@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test"
-import type { OpenCodeEvent, SessionMessageInfo } from "@opencode-ai/client/promise"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import type { OcppEvent, SessionMessageInfo } from "@ocpp/client/promise"
+import { base64Encode } from "@ocpp/util/encode"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
 
-const directory = "C:/OpenCode/SessionQueueRegression"
+const directory = "C:/OC++/SessionQueueRegression"
 const projectID = "proj_session_queue_regression"
 const sessionID = "ses_session_queue_regression"
 const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
@@ -27,15 +27,12 @@ function createQueueMock(seed: string[], messages: SessionMessageInfo[] = []) {
     payload: { text },
     delivery: "queue",
   }))
-  const events: OpenCodeEvent[] = []
+  const events: OcppEvent[] = []
   const prompts: Record<string, unknown>[] = []
   const changes: { inboxID: string; action: "cancel" | "steer" }[] = []
   const log: string[] = []
   let sequence = 0
-  const emit = <Type extends OpenCodeEvent["type"]>(
-    type: Type,
-    data: Extract<OpenCodeEvent, { type: Type }>["data"],
-  ) => {
+  const emit = <Type extends OcppEvent["type"]>(type: Type, data: Extract<OcppEvent, { type: Type }>["data"]) => {
     sequence += 1
     events.push({
       id: `evt_queue_${sequence}`,
@@ -43,7 +40,7 @@ function createQueueMock(seed: string[], messages: SessionMessageInfo[] = []) {
       created: Date.now(),
       durable: { aggregateID: sessionID, seq: sequence, version: type === "session.tool.success" ? 2 : 1 },
       data,
-    } as OpenCodeEvent)
+    } as OcppEvent)
   }
   return {
     rows,
@@ -102,7 +99,7 @@ async function openSession(page: Page, mock: ReturnType<typeof createQueueMock>,
       followUpBehavior,
     )
   }
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -116,7 +113,7 @@ async function openSession(page: Page, mock: ReturnType<typeof createQueueMock>,
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: { "queue-model": { id: "queue-model", name: "Queue Model", limit: { context: 200_000 } } },
         },
       ],

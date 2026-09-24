@@ -3,7 +3,7 @@ import en from "./en"
 type Keys = keyof typeof en
 
 export const dict = {
-  "desktop.menu.app": "OpenCode",
+  "desktop.menu.app": "OC++",
   "desktop.menu.file": "Dosya",
   "desktop.menu.edit": "Düzen",
   "desktop.menu.view": "Görünüm",
@@ -43,11 +43,11 @@ export const dict = {
   "desktop.menu.nextProject": "Sonraki proje",
   "desktop.menu.minimize": "Simge durumuna küçült",
   "desktop.menu.maximize": "Ekranı kapla",
-  "desktop.menu.documentation": "OpenCode belgeleri",
+  "desktop.menu.documentation": "OC++ belgeleri",
   "desktop.menu.supportForum": "Destek forumu",
   "desktop.menu.shareFeedback": "Geri bildirim paylaş",
   "desktop.menu.reportBug": "Hata bildir",
-  "desktop.menu.ariaLabel": "OpenCode menüsü",
+  "desktop.menu.ariaLabel": "OC++ menüsü",
 
   "desktop.updater.dialog.checkFailed.message": "Güncellemeler kontrol edilemedi.",
   "desktop.updater.dialog.checkFailed.title": "Güncelleme hatası",
@@ -62,9 +62,9 @@ export const dict = {
   "desktop.recovery.action.exportLogs": "Günlükleri dışa aktar",
   "desktop.recovery.action.keepWaiting": "Beklemeye devam et",
   "desktop.recovery.action.quit": "Çık",
-  "desktop.recovery.loadFailed": "OpenCode yüklenemedi",
-  "desktop.recovery.terminated": "OpenCode penceresi beklenmedik şekilde sonlandırıldı",
-  "desktop.recovery.unresponsive": "OpenCode yanıt vermiyor",
+  "desktop.recovery.loadFailed": "OC++ yüklenemedi",
+  "desktop.recovery.terminated": "OC++ penceresi beklenmedik şekilde sonlandırıldı",
+  "desktop.recovery.unresponsive": "OC++ yanıt vermiyor",
   "desktop.recovery.unresponsive.detail":
     "Uygulamayı yeniden başlatabilir, günlükleri açabilir veya beklemeye devam edebilirsiniz.",
   "desktop.recovery.loadFailed.detail": "Pencere: {{window}}\nURL: {{url}}\nHata: {{code}} {{description}}",
@@ -84,13 +84,13 @@ export const dict = {
   "desktop.wsl.error.executeDistro": "Dağıtımda komutlar çalıştırılamıyor",
   "desktop.wsl.error.installWsl": "WSL kurulamadı",
   "desktop.wsl.error.installDistro": "Dağıtım kurulamadı: {{distro}}",
-  "desktop.wsl.error.installOpencode": "OpenCode kurulamadı",
+  "desktop.wsl.error.installOcpp": "OC++ kurulamadı",
   "desktop.wsl.error.alreadyAdded": "{{distro}} zaten eklendi",
-  "desktop.wsl.error.opencodeMissing": "opencode bu dağıtımda kurulu değil",
-  "desktop.wsl.error.opencodeCannotRun": "opencode kurulu ancak çalıştırılamadı",
-  "desktop.wsl.error.opencodeNotInstalled": "OpenCode, {{distro}} içinde kurulu değil",
+  "desktop.wsl.error.ocppMissing": "ocpp bu dağıtımda kurulu değil",
+  "desktop.wsl.error.ocppCannotRun": "ocpp kurulu ancak çalıştırılamadı",
+  "desktop.wsl.error.ocppNotInstalled": "OC++, {{distro}} içinde kurulu değil",
   "desktop.wsl.error.updateVersion":
-    "OpenCode güncellemesi tamamlandı ancak {{distro}} hâlâ {{installed}} sürümünü bildiriyor; beklenen sürüm: {{expected}}",
+    "OC++ güncellemesi tamamlandı ancak {{distro}} hâlâ {{installed}} sürümünü bildiriyor; beklenen sürüm: {{expected}}",
   "desktop.wsl.error.noVersion": "sürüm yok",
   "desktop.wsl.error.serverExited": "WSL sunucusu başlatıldıktan sonra kapandı (code={{code}} signal={{signal}})",
   "desktop.wsl.error.serverExitedBeforeHealthy":
@@ -225,7 +225,7 @@ export const dict = {
   "dialog.model.manage.description": "Model seçicide hangi modellerin görüneceğini özelleştirin.",
   "dialog.model.manage.provider.toggle": "Tüm {{provider}} modellerini aç/kapat",
 
-  "dialog.model.unpaid.freeModels.title": "OpenCode tarafından sunulan ücretsiz modeller",
+  "dialog.model.unpaid.freeModels.title": "OC++ tarafından sunulan ücretsiz modeller",
   "dialog.model.unpaid.addMore.title": "Popüler sağlayıcılardan daha fazla model ekleyin",
   "dialog.model.unpaid.viewMoreProviders": "70'ten fazla sağlayıcı daha görüntüle",
 
@@ -241,7 +241,7 @@ export const dict = {
   "provider.connect.status.waiting": "Yetkilendirme bekleniyor...",
   "provider.connect.status.failed": "Yetkilendirme başarısız: {{error}}",
   "provider.connect.apiKey.description":
-    "{{provider}} hesabınızı bağlamak ve OpenCode'da {{provider}} modellerini kullanmak için API anahtarınızı girin.",
+    "{{provider}} hesabınızı bağlamak ve OC++'da {{provider}} modellerini kullanmak için API anahtarınızı girin.",
   "provider.connect.apiKey.label": "{{provider}} API anahtarı",
   "provider.connect.apiKey.placeholder": "API anahtarı",
   "provider.connect.apiKey.required": "API anahtarı gerekli",
@@ -255,7 +255,7 @@ export const dict = {
   "provider.connect.oauth.code.visit.prefix": "Yetkilendirme kodunuzu almak için ",
   "provider.connect.oauth.code.visit.link": "bu bağlantıya",
   "provider.connect.oauth.code.visit.suffix":
-    " gidin; ardından hesabınızı bağlayarak OpenCode'da {{provider}} modellerini kullanın.",
+    " gidin; ardından hesabınızı bağlayarak OC++'da {{provider}} modellerini kullanın.",
   "provider.connect.oauth.code.label": "{{method}} yetkilendirme kodu",
   "provider.connect.oauth.code.placeholder": "Yetkilendirme kodu",
   "provider.connect.oauth.code.required": "Yetkilendirme kodu gerekli",
@@ -263,7 +263,7 @@ export const dict = {
   "provider.connect.oauth.auto.visit.prefix": "",
   "provider.connect.oauth.auto.visit.link": "Bu bağlantıya",
   "provider.connect.oauth.auto.visit.suffix":
-    " tıklayarak aşağıdaki kodu girin ve hesabınızı bağlayarak OpenCode'da {{provider}} modellerini kullanın.",
+    " tıklayarak aşağıdaki kodu girin ve hesabınızı bağlayarak OC++'da {{provider}} modellerini kullanın.",
   "provider.connect.oauth.auto.confirmationCode": "Onay kodu",
   "provider.connect.toast.connected.title": "{{provider}} bağlandı",
   "provider.connect.toast.connected.description": "{{provider}} modelleri artık kullanımda.",
@@ -423,7 +423,7 @@ export const dict = {
   "dialog.mcp.empty": "Yapılandırılmış MCP yok",
 
   "dialog.lsp.empty": "LSP'ler dosya türlerinden otomatik algılanır",
-  "dialog.plugins.empty": "Eklentiler opencode.json içinde yapılandırılır",
+  "dialog.plugins.empty": "Eklentiler ocpp.json içinde yapılandırılır",
 
   "mcp.status.connected": "bağlı",
   "mcp.status.failed": "başarısız",
@@ -442,7 +442,7 @@ export const dict = {
   "dialog.directory.readError": "Bu klasör okunamıyor",
 
   "dialog.server.title": "Sunucular",
-  "dialog.server.description": "Bu uygulamanın hangi OpenCode sunucusuna bağlanacağını değiştirin.",
+  "dialog.server.description": "Bu uygulamanın hangi OC++ sunucusuna bağlanacağını değiştirin.",
   "dialog.server.search.placeholder": "Sunucu ara",
   "dialog.server.empty": "Henüz sunucu yok",
   "dialog.server.add.title": "Sunucu ekle",
@@ -477,7 +477,7 @@ export const dict = {
   "wsl.server.retryStart": "Başlatmayı yeniden dene",
   "wsl.server.updating": "Güncelleniyor...",
   "wsl.onboarding.step.distro": "Dağıtım seç",
-  "wsl.onboarding.step.opencode": "OpenCode",
+  "wsl.onboarding.step.ocpp": "OC++",
   "wsl.onboarding.checkingRuntime": "WSL kontrol ediliyor...",
   "wsl.onboarding.restartRequired": "WSL kurulumunu tamamlamak için Windows'un yeniden başlatılması gerekiyor.",
   "wsl.onboarding.ready": "WSL hazır.",
@@ -491,16 +491,16 @@ export const dict = {
   "wsl.onboarding.openDistroOnce": "Kurulumu tamamlamak için {{distro}} dağıtımını bir kez açın.",
   "wsl.onboarding.finishingDistro": "{{distro}} kurulumu tamamlanıyor.",
   "wsl.onboarding.pickDistro": "Bir dağıtım seçin veya aşağıdan bir dağıtım kurun.",
-  "wsl.onboarding.checkingOpencode": "OpenCode kontrol ediliyor...",
-  "wsl.onboarding.checkingOpencodeIn": "{{distro}} içinde OpenCode kontrol ediliyor...",
-  "wsl.onboarding.updatingOpencode": "OpenCode güncelleniyor...",
-  "wsl.onboarding.updatingOpencodeIn": "{{distro}} içinde OpenCode güncelleniyor...",
-  "wsl.onboarding.updateOpencodeIn": "{{distro}} içindeki OpenCode'u güncelleyin.",
-  "wsl.onboarding.updateOpencode": "OpenCode'u güncelle",
-  "wsl.onboarding.opencodeReadyIn": "{{distro}} içinde OpenCode hazır.",
-  "wsl.onboarding.opencodeReady": "OpenCode hazır.",
-  "wsl.onboarding.installOpencodeIn": "OpenCode'u {{distro}} içine kurun.",
-  "wsl.onboarding.installOpencode": "OpenCode'u kur",
+  "wsl.onboarding.checkingOcpp": "OC++ kontrol ediliyor...",
+  "wsl.onboarding.checkingOcppIn": "{{distro}} içinde OC++ kontrol ediliyor...",
+  "wsl.onboarding.updatingOcpp": "OC++ güncelleniyor...",
+  "wsl.onboarding.updatingOcppIn": "{{distro}} içinde OC++ güncelleniyor...",
+  "wsl.onboarding.updateOcppIn": "{{distro}} içindeki OC++'u güncelleyin.",
+  "wsl.onboarding.updateOcpp": "OC++'u güncelle",
+  "wsl.onboarding.ocppReadyIn": "{{distro}} içinde OC++ hazır.",
+  "wsl.onboarding.ocppReady": "OC++ hazır.",
+  "wsl.onboarding.installOcppIn": "OC++'u {{distro}} içine kurun.",
+  "wsl.onboarding.installOcpp": "OC++'u kur",
   "wsl.onboarding.chooseDistroFirst": "Önce bir dağıtım seçin.",
   "wsl.onboarding.loadFailed": "WSL durumu yüklenemedi.",
   "wsl.onboarding.loading": "Yükleniyor...",
@@ -508,19 +508,19 @@ export const dict = {
   "wsl.onboarding.checkAgain": "Tekrar kontrol et",
   "wsl.onboarding.distroStatus.ready": "Hazır",
   "wsl.onboarding.distroStatus.checking": "Kontrol ediliyor...",
-  "wsl.onboarding.distroStatus.opencodeMissing": "OpenCode kurulu değil",
+  "wsl.onboarding.distroStatus.ocppMissing": "OC++ kurulu değil",
   "wsl.onboarding.distroStatus.missingTools": "bash ve curl eksik",
   "wsl.onboarding.distroStatus.unsupported": "Desteklenmiyor · WSL 2 kullanın",
   "wsl.onboarding.needAnotherDistro": "Başka bir dağıtım mı gerekiyor?",
   "wsl.onboarding.needAnotherDistroHint": "WSL kataloğundan bir Linux dağıtımı kurun",
   "wsl.onboarding.wslNotInstalled.title": "WSL kurulu değil",
   "wsl.onboarding.wslNotInstalled.description":
-    "OpenCode'un WSL sunucusu ekleyebilmesi için önce WSL (Linux için Windows Alt Sistemi) kurulmalıdır",
+    "OC++'un WSL sunucusu ekleyebilmesi için önce WSL (Linux için Windows Alt Sistemi) kurulmalıdır",
   "wsl.onboarding.wslUnavailable.title": "WSL kullanılamıyor",
-  "wsl.onboarding.wslUnavailable.description": "OpenCode bu makinede WSL'yi doğrulayamadı.",
+  "wsl.onboarding.wslUnavailable.description": "OC++ bu makinede WSL'yi doğrulayamadı.",
   "wsl.onboarding.installWsl": "WSL'yi kur",
   "wsl.onboarding.windowsRestartRequired":
-    "WSL kurulumunu tamamlamak için Windows'u yeniden başlatın, ardından OpenCode'u tekrar açın.",
+    "WSL kurulumunu tamamlamak için Windows'u yeniden başlatın, ardından OC++'u tekrar açın.",
   "wsl.onboarding.next": "İleri",
   "wsl.onboarding.refresh": "Yenile",
   "wsl.onboarding.allDistrosAdded": "Kurulu tüm dağıtımlar zaten eklenmiş.",
@@ -634,7 +634,6 @@ export const dict = {
   "toast.context.noLineSelection.title": "Satır seçimi yok",
   "toast.context.noLineSelection.description": "Önce bir dosya sekmesinde satır aralığı seçin.",
 
-
   "toast.session.unshare.success.title": "Oturum paylaşımı kaldırıldı",
   "toast.session.unshare.success.description": "Oturum paylaşımı başarıyla kaldırıldı!",
   "toast.session.unshare.failed.title": "Oturum paylaşımı kaldırılamadı",
@@ -648,7 +647,7 @@ export const dict = {
   "toast.session.listFailed.title": "{{project}} için oturumlar yüklenemedi",
 
   "toast.update.title": "Güncelleme mevcut",
-  "toast.update.description": "OpenCode'un yeni bir sürümü ({{version}}) yüklemeye hazır.",
+  "toast.update.description": "OC++'un yeni bir sürümü ({{version}}) yüklemeye hazır.",
   "toast.update.action.installRestart": "Yükle ve yeniden başlat",
   "toast.update.action.notYet": "Şimdi değil",
 
@@ -663,7 +662,7 @@ export const dict = {
   "error.page.action.checking": "Kontrol ediliyor...",
   "error.page.action.checkUpdates": "Güncellemeleri kontrol et",
   "error.page.action.updateTo": "{{version}} sürümüne güncelle",
-  "error.page.report.prefix": "Lütfen bu hatayı OpenCode ekibine",
+  "error.page.report.prefix": "Lütfen bu hatayı OC++ ekibine",
   "error.page.report.discord": "Discord üzerinden bildirin",
   "error.page.version": "Sürüm: {{version}}",
 
@@ -681,9 +680,9 @@ export const dict = {
   "error.chain.responseBody": "Yanıt gövdesi:\n{{body}}",
   "error.chain.didYouMean": "Bunu mu demek istediniz: {{suggestions}}",
   "error.chain.modelNotFound": "Model bulunamadı: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Yapılandırma dosyanızdaki (opencode.json) sağlayıcı/model adlarını kontrol edin",
+  "error.chain.checkConfig": "Yapılandırma dosyanızdaki (ocpp.json) sağlayıcı/model adlarını kontrol edin",
   "error.chain.mcpFailed":
-    'MCP sunucusu "{{name}}" çalıştırılamadı. Not: OpenCode henüz MCP kimlik doğrulamasını desteklemiyor.',
+    'MCP sunucusu "{{name}}" çalıştırılamadı. Not: OC++ henüz MCP kimlik doğrulamasını desteklemiyor.',
   "error.chain.providerAuthFailed": "Sağlayıcı kimlik doğrulaması başarısız ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":
     '"{{provider}}" sağlayıcısı başlatılamadı. Kimlik bilgilerini ve yapılandırmayı kontrol edin.',
@@ -842,7 +841,7 @@ export const dict = {
   "sidebar.workspaces.enable": "Çalışma alanlarını etkinleştir",
   "sidebar.workspaces.disable": "Çalışma alanlarını devre dışı bırak",
   "sidebar.gettingStarted.title": "Başlarken",
-  "sidebar.gettingStarted.line1": "OpenCode ücretsiz modeller içerir, böylece hemen başlayabilirsiniz.",
+  "sidebar.gettingStarted.line1": "OC++ ücretsiz modeller içerir, böylece hemen başlayabilirsiniz.",
   "sidebar.gettingStarted.line2": "Claude, GPT, Gemini vb. modelleri kullanmak için herhangi bir sağlayıcı bağlayın.",
   "sidebar.project.recentSessions": "Son oturumlar",
   "sidebar.project.viewAllSessions": "Tüm oturumları görüntüle",
@@ -850,7 +849,7 @@ export const dict = {
   "sidebar.empty.title": "Açık proje yok",
   "sidebar.empty.description": "Başlamak için bir proje açın",
 
-  "app.name.desktop": "OpenCode Masaüstü",
+  "app.name.desktop": "OC++ Masaüstü",
 
   "settings.section.desktop": "Masaüstü",
   "settings.section.server": "Sunucu",
@@ -858,7 +857,7 @@ export const dict = {
   "settings.tab.shortcuts": "Kısayollar",
   "settings.desktop.section.wsl": "WSL",
   "settings.desktop.wsl.title": "WSL entegrasyonu",
-  "settings.desktop.wsl.description": "OpenCode sunucusunu Windows'ta WSL içinde çalıştırın.",
+  "settings.desktop.wsl.description": "OC++ sunucusunu Windows'ta WSL içinde çalıştırın.",
 
   "settings.general.section.appearance": "Görünüm",
   "settings.general.section.advanced": "Gelişmiş",
@@ -869,19 +868,18 @@ export const dict = {
   "settings.general.section.display": "Ekran",
 
   "settings.general.row.language.title": "Dil",
-  "settings.general.row.language.description": "OpenCode'un görünüm dilini değiştirin",
+  "settings.general.row.language.description": "OC++'un görünüm dilini değiştirin",
   "settings.general.row.shell.title": "Terminal Kabuğu",
   "settings.general.row.shell.description":
     "Terminalinizde kullanılacak kabuğu seçin. Uyumlu kabuklar, ajan araç çağrılarında da kullanılır.",
   "settings.general.row.shell.autoDefault": "Otomatik (Varsayılan)",
   "settings.general.row.shell.terminalOnly": "yalnızca terminal",
   "settings.general.row.appearance.title": "Görünüm",
-  "settings.general.row.appearance.description": "OpenCode'un cihazınızdaki görünümünü özelleştirin",
+  "settings.general.row.appearance.description": "OC++'un cihazınızdaki görünümünü özelleştirin",
   "settings.general.row.colorScheme.title": "Renk şeması",
-  "settings.general.row.colorScheme.description":
-    "OpenCode'un sistem, açık veya koyu temayı takip etip etmeyeceğini seçin",
+  "settings.general.row.colorScheme.description": "OC++'un sistem, açık veya koyu temayı takip etip etmeyeceğini seçin",
   "settings.general.row.theme.title": "Tema",
-  "settings.general.row.theme.description": "OpenCode'un temasını özelleştirin.",
+  "settings.general.row.theme.description": "OC++'un temasını özelleştirin.",
   "settings.general.row.font.title": "Kod yazı tipi",
   "settings.general.row.font.description": "Kod bloklarında kullanılan yazı tipini özelleştirin",
   "settings.general.row.terminalFont.title": "Terminal yazı tipi",
@@ -926,7 +924,7 @@ export const dict = {
   "settings.general.row.releaseNotes.description": "Güncellemelerden sonra Yenilikler bildirimlerini göster",
 
   "settings.updates.row.startup.title": "Başlangıçta güncellemeleri kontrol et",
-  "settings.updates.row.startup.description": "OpenCode başladığında otomatik güncelleme kontrolü yap",
+  "settings.updates.row.startup.description": "OC++ başladığında otomatik güncelleme kontrolü yap",
   "settings.updates.row.check.title": "Güncellemeleri kontrol et",
   "settings.updates.row.check.description": "Elle güncelleme kontrolü yap ve varsa yükle",
   "settings.updates.action.checkNow": "Şimdi kontrol et",
@@ -934,7 +932,7 @@ export const dict = {
   "settings.updates.action.downloading": "İndiriliyor...",
   "settings.updates.action.installing": "Kuruluyor...",
   "settings.updates.toast.latest.title": "Güncelsiniz",
-  "settings.updates.toast.latest.description": "OpenCode'un en son sürümünü kullanıyorsunuz.",
+  "settings.updates.toast.latest.description": "OC++'un en son sürümünü kullanıyorsunuz.",
 
   "sound.option.none": "Yok",
   "sound.option.alert01": "Uyarı 01",

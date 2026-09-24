@@ -1,7 +1,7 @@
 import { buildLocationServiceMap } from "../location-services.js"
 import { LocationServiceMap } from "../location-service-map.js"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 
 export function build<A, E>(root: LayerNode.Node<A, E, any>, replacements: LayerNode.Replacements = []) {
   // Only build the location service map if it's actually needed

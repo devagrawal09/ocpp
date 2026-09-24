@@ -73,9 +73,7 @@ export function MiniMaxClimb() {
 
         {/* headline (static) */}
         <div style={{ marginTop: 50 }}>
-          <div style={{ fontSize: 23, fontWeight: 600, color: c.muted, letterSpacing: 2 }}>
-            OPENCODE GO · WEEKLY TOKENS
-          </div>
+          <div style={{ fontSize: 23, fontWeight: 600, color: c.muted, letterSpacing: 2 }}>OCPP GO · WEEKLY TOKENS</div>
           <div
             style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 24, marginTop: 14 }}
           >
@@ -193,7 +191,7 @@ export function MiniMaxClimb() {
             <span style={{ width: 13, height: 13, background: c.accent, display: "inline-block" }} />
             2.56T tokens last week · +482.3B added
           </div>
-          <div style={{ color: c.ink }}>opencode.ai/data</div>
+          <div style={{ color: c.ink }}>ocpp.ai/data</div>
         </div>
       </div>
     </AbsoluteFill>

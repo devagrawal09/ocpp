@@ -5,9 +5,7 @@ import { DEFAULT_THEME, ThemeDocument, migrateV1, resolveThemeDocument } from ".
 import type { ThemeV1Json } from "../src/tui/v1.js"
 
 test.each(["light", "dark"] as const)("built-in %s themes resolve status colors", async (mode) => {
-  const source: ThemeV1Json = await Bun.file(
-    new URL("../../tui/src/theme/assets/opencode.json", import.meta.url),
-  ).json()
+  const source: ThemeV1Json = await Bun.file(new URL("../../tui/src/theme/assets/ocpp.json", import.meta.url)).json()
   for (const document of [DEFAULT_THEME, migrateV1(source)]) {
     const theme = resolveThemeDocument(document, mode)
     expect(theme.text.status.running.equals(theme.hue.interactive[mode === "light" ? 800 : 200])).toBeTrue()

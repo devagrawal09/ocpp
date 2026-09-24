@@ -2,13 +2,13 @@ export * as Vcs from "./vcs.js"
 
 import path from "path"
 import { Cause, Context, Effect, Layer, Schema, Stream } from "effect"
-import type { VcsDefinition, VcsDraft } from "@opencode-ai/plugin/effect/vcs"
-import { FileDiff } from "@opencode-ai/schema/file-diff"
-import { FileSystem } from "@opencode-ai/schema/filesystem"
-import { Base, BranchList, FileStatus, Info, Mode } from "@opencode-ai/schema/vcs"
-import { VcsEvent } from "@opencode-ai/schema/vcs-event"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import type { VcsDefinition, VcsDraft } from "@ocpp/plugin/effect/vcs"
+import { FileDiff } from "@ocpp/schema/file-diff"
+import { FileSystem } from "@ocpp/schema/filesystem"
+import { Base, BranchList, FileStatus, Info, Mode } from "@ocpp/schema/vcs"
+import { VcsEvent } from "@ocpp/schema/vcs-event"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Location } from "./location.js"
 import { Bus } from "./bus.js"
 import { State } from "./state.js"
@@ -47,7 +47,7 @@ interface Data {
   selection?: string
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Vcs") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Vcs") {}
 
 const layer = Layer.effect(
   Service,

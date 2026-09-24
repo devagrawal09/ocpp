@@ -8,7 +8,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { WebUi } from "../src/services/web-ui"
 
-const root = await mkdtemp(path.join(tmpdir(), "opencode-web-ui-"))
+const root = await mkdtemp(path.join(tmpdir(), "ocpp-web-ui-"))
 afterAll(() => rm(root, { recursive: true, force: true }))
 
 describe("web UI", () => {

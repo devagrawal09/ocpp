@@ -35,7 +35,7 @@ function compile<Id extends string, Groups extends HttpApiGroup.Constraint>(sour
 }
 
 async function emittedModule(output: Output) {
-  const directory = await mkdtemp(join(tmpdir(), "opencode-httpapi-codegen-"))
+  const directory = await mkdtemp(join(tmpdir(), "ocpp-httpapi-codegen-"))
   const dispose = () => rm(directory, { recursive: true, force: true })
 
   try {
@@ -149,16 +149,16 @@ describe("HttpApiCodegen.generate", () => {
       {
         outputTypes: {
           "session.events": {
-            name: "OpenCodeEvent",
-            import: 'import type { OpenCodeEvent } from "@example/protocol/event"',
+            name: "OcppEvent",
+            import: 'import type { OcppEvent } from "@example/protocol/event"',
           },
         },
       },
     )
     const source = output.files[0]?.content
 
-    expect(source).toContain('import type { OpenCodeEvent } from "@example/protocol/event"')
-    expect(source).toContain("export type SessionEventsOutput = OpenCodeEvent")
+    expect(source).toContain('import type { OcppEvent } from "@example/protocol/event"')
+    expect(source).toContain("export type SessionEventsOutput = OcppEvent")
   })
 
   test("rejects authoritative Effect types colliding with generated aliases", () => {
@@ -372,7 +372,7 @@ describe("HttpApiCodegen.generate", () => {
     await using emitted = await emittedModule(output)
     const methods: Array<string> = []
 
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
         methods.push(init?.method ?? "GET")
@@ -838,7 +838,7 @@ describe("HttpApiCodegen.generate", () => {
     )
     await using emitted = await emittedModule(output)
     let request: Request | undefined
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async (input: RequestInfo | URL) => {
         request = input instanceof Request ? input : new Request(input)
@@ -863,7 +863,7 @@ describe("HttpApiCodegen.generate", () => {
       ),
     )
     await using emitted = await emittedModule(output)
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async () => new Response(null, { status: 204 }),
     })
@@ -884,7 +884,7 @@ describe("HttpApiCodegen.generate", () => {
     )
     await using emitted = await emittedModule(output)
     let request: Request | undefined
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async (input: RequestInfo | URL) => {
         request = input instanceof Request ? input : new Request(input)
@@ -915,7 +915,7 @@ describe("HttpApiCodegen.generate", () => {
     )
     await using emitted = await emittedModule(output)
     let request: Request | undefined
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         request = input instanceof Request ? input : new Request(input, init)
@@ -947,7 +947,7 @@ describe("HttpApiCodegen.generate", () => {
     )
     await using emitted = await emittedModule(output)
     let request: Request | undefined
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         request = input instanceof Request ? input : new Request(input, init)
@@ -955,9 +955,9 @@ describe("HttpApiCodegen.generate", () => {
       },
     })
 
-    await client.session.configure({ payload: { type: "local", command: ["opencode"] } })
+    await client.session.configure({ payload: { type: "local", command: ["ocpp"] } })
 
-    expect(await request?.json()).toEqual({ type: "local", command: ["opencode"] })
+    expect(await request?.json()).toEqual({ type: "local", command: ["ocpp"] })
   })
 
   test("serializes explicit null query values", async () => {
@@ -973,7 +973,7 @@ describe("HttpApiCodegen.generate", () => {
     )
     await using emitted = await emittedModule(output)
     let request: Request | undefined
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         request = input instanceof Request ? input : new Request(input, init)
@@ -999,7 +999,7 @@ describe("HttpApiCodegen.generate", () => {
       ),
     )
     await using emitted = await emittedModule(output)
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async () => Response.json({ _tag: "Missing", message: "gone" }, { status: 404 }),
     })
@@ -1025,7 +1025,7 @@ describe("HttpApiCodegen.generate", () => {
     await using emitted = await emittedModule(output)
     let requests = 0
     let url: string | undefined
-    const client = emitted.module.OpenCode.make({
+    const client = emitted.module.Ocpp.make({
       baseUrl: "https://example.com",
       fetch: async (input: RequestInfo | URL) => {
         requests++

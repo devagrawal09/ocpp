@@ -3,18 +3,18 @@ import { describe, expect } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { Cause, Effect, Exit, Fiber, Layer, Stream } from "effect"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { AppProcess } from "@opencode-ai/util/process"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Git } from "@opencode-ai/core/git"
-import { Bus } from "@opencode-ai/core/bus"
-import { Location } from "@opencode-ai/core/location"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Vcs } from "@opencode-ai/core/vcs"
-import { VcsGitPlugin } from "@opencode-ai/core/plugin/vcs/git"
-import type { VcsDefinition, VcsDiffInput } from "@opencode-ai/plugin/effect/vcs"
-import { FileSystem } from "@opencode-ai/schema/filesystem"
-import { VcsEvent } from "@opencode-ai/schema/vcs-event"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { AppProcess } from "@ocpp/util/process"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Git } from "@ocpp/core/git"
+import { Bus } from "@ocpp/core/bus"
+import { Location } from "@ocpp/core/location"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Vcs } from "@ocpp/core/vcs"
+import { VcsGitPlugin } from "@ocpp/core/plugin/vcs/git"
+import type { VcsDefinition, VcsDiffInput } from "@ocpp/plugin/effect/vcs"
+import { FileSystem } from "@ocpp/schema/filesystem"
+import { VcsEvent } from "@ocpp/schema/vcs-event"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { it } from "./lib/effect"
@@ -73,7 +73,7 @@ async function initRepo(directory: string) {
   await $`git init -b main`.cwd(directory).quiet()
   await $`git config core.fsmonitor false`.cwd(directory).quiet()
   await $`git config commit.gpgsign false`.cwd(directory).quiet()
-  await $`git config user.email test@opencode.test`.cwd(directory).quiet()
+  await $`git config user.email test@ocpp.test`.cwd(directory).quiet()
   await $`git config user.name Test`.cwd(directory).quiet()
 }
 
@@ -536,7 +536,7 @@ describe("Vcs", () => {
           await fs.writeFile(path.join(directory, "feature.txt"), "feature\n")
           await commitAll(directory, "feature")
           await $`git branch --set-upstream-to=release feature`.cwd(directory).quiet()
-          await $`git config branch.feature.opencode-merge-base refs/heads/release`.cwd(directory).quiet()
+          await $`git config branch.feature.ocpp-merge-base refs/heads/release`.cwd(directory).quiet()
         })
         const vcs = yield* Vcs.Service
         expect(yield* vcs.base().pipe(Effect.flip)).toMatchObject({ message: "Choose a review base" })
@@ -670,7 +670,7 @@ describe("Vcs", () => {
           await commitAll(directory, "v2")
           await $`git update-ref refs/remotes/origin/v2 HEAD`.cwd(directory).quiet()
           await $`git checkout -b feature origin/v2`.cwd(directory).quiet()
-          await $`git config branch.feature.opencode-merge-base refs/remotes/origin/dev`.cwd(directory).quiet()
+          await $`git config branch.feature.ocpp-merge-base refs/remotes/origin/dev`.cwd(directory).quiet()
           await fs.writeFile(path.join(directory, "feature.txt"), "feature\n")
           await commitAll(directory, "feature")
           await fs.writeFile(path.join(directory, "second.txt"), "second\n")
@@ -702,9 +702,9 @@ describe("Vcs", () => {
         ])
         expect(yield* Effect.promise(() => fs.readFile(path.join(directory, ".git/config"), "utf8"))).toBe(config)
         expect(
-          yield* Effect.promise(() => Bun.file(path.join(directory, ".git/opencode-review.json")).exists()),
+          yield* Effect.promise(() => Bun.file(path.join(directory, ".git/ocpp-review.json")).exists()),
         ).toBeFalse()
-        yield* Effect.promise(() => $`git config branch.feature.opencode-merge-base missing`.cwd(directory).quiet())
+        yield* Effect.promise(() => $`git config branch.feature.ocpp-merge-base missing`.cwd(directory).quiet())
         expect(yield* vcs.base()).toEqual({ name: "v2", ref: "refs/remotes/origin/v2", source: "reflog" })
         yield* Effect.promise(() => $`git checkout -b uncertain HEAD`.cwd(directory).quiet())
         expect(yield* vcs.base().pipe(Effect.flip)).toMatchObject({ message: "Choose a review base" })
@@ -775,7 +775,7 @@ describe("Vcs", () => {
         })
         expect(yield* git.history.branch(linked)).toBeUndefined()
         expect(
-          yield* Effect.promise(() => Bun.file(path.join(linked.gitDirectory, "opencode-review.json")).exists()),
+          yield* Effect.promise(() => Bun.file(path.join(linked.gitDirectory, "ocpp-review.json")).exists()),
         ).toBeFalse()
         yield* Effect.gen(function* () {
           const vcs = yield* Vcs.Service
@@ -793,21 +793,21 @@ describe("Vcs", () => {
           expect(yield* vcs.base()).toEqual({ name: "v2", ref: "refs/remotes/origin/v2", source: "reflog" })
         }).pipe(provide(linked.worktree, { git: true }))
         expect(
-          yield* Effect.promise(() => Bun.file(path.join(linked.gitDirectory, "opencode-review.json")).exists()),
+          yield* Effect.promise(() => Bun.file(path.join(linked.gitDirectory, "ocpp-review.json")).exists()),
         ).toBeFalse()
         const fromHead = yield* git.worktree.create({
           repository,
           directory: AbsolutePath.make(path.join(directory, "from-head")),
         })
         expect(
-          yield* Effect.promise(() => Bun.file(path.join(fromHead.gitDirectory, "opencode-review.json")).exists()),
+          yield* Effect.promise(() => Bun.file(path.join(fromHead.gitDirectory, "ocpp-review.json")).exists()),
         ).toBeFalse()
         const detached = yield* git.worktree.create({
           repository: fromHead,
           directory: AbsolutePath.make(path.join(directory, "detached-source")),
         })
         expect(
-          yield* Effect.promise(() => Bun.file(path.join(detached.gitDirectory, "opencode-review.json")).exists()),
+          yield* Effect.promise(() => Bun.file(path.join(detached.gitDirectory, "ocpp-review.json")).exists()),
         ).toBeFalse()
       }),
     ),

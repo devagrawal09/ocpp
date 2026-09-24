@@ -1,18 +1,18 @@
 import { describe, expect } from "bun:test"
 import { Context, Effect, Layer } from "effect"
 import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Permission } from "@opencode-ai/core/permission"
-import { KV } from "@opencode-ai/core/kv"
-import { Form } from "@opencode-ai/core/form"
-import { WebSearch } from "@opencode-ai/core/websearch"
-import { Session } from "@opencode-ai/core/session"
-import { toSessionError } from "@opencode-ai/core/session/to-session-error"
-import { Tool } from "@opencode-ai/core/tool"
-import { WebSearchTool } from "@opencode-ai/core/tool/plugin/websearch"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { Image } from "@opencode-ai/core/image"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Permission } from "@ocpp/core/permission"
+import { KV } from "@ocpp/core/kv"
+import { Form } from "@ocpp/core/form"
+import { WebSearch } from "@ocpp/core/websearch"
+import { Session } from "@ocpp/core/session"
+import { toSessionError } from "@ocpp/core/session/to-session-error"
+import { Tool } from "@ocpp/core/tool"
+import { WebSearchTool } from "@ocpp/core/tool/plugin/websearch"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { Image } from "@ocpp/core/image"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
 import { permissionLayer } from "./lib/permission"
@@ -228,7 +228,7 @@ describe("WebSearchTool registration", () => {
           fields: [
             {
               key: "choice",
-              description: "Allow OpenCode to search the web for up-to-date information?",
+              description: "Allow OC++ to search the web for up-to-date information?",
               type: "string",
               required: true,
               custom: false,

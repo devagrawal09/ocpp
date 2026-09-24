@@ -10,7 +10,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-const values = (url: string): ServerFormValues => ({ url, name: "", username: "opencode", password: "" })
+const values = (url: string): ServerFormValues => ({ url, name: "", username: "ocpp", password: "" })
 
 describe("createServerHealthPreview", () => {
   test("ignores an older response that resolves after the latest response", async () => {

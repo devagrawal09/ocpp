@@ -1,13 +1,13 @@
 import { expect } from "bun:test"
-import { Agent } from "@opencode-ai/core/agent"
-import { Bus } from "@opencode-ai/core/bus"
-import { Model } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
-import { Session } from "@opencode-ai/core/session"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Money } from "@opencode-ai/schema/money"
+import { Agent } from "@ocpp/core/agent"
+import { Bus } from "@ocpp/core/bus"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
+import { Session } from "@ocpp/core/session"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionExecution } from "@ocpp/core/session/execution"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { Money } from "@ocpp/schema/money"
 import { Effect, Layer } from "effect"
 import { it } from "../../core/test/lib/effect"
 import { ServerFetch } from "../src/fetch"
@@ -57,7 +57,7 @@ it.live("updates completed assistant message content through the session HTTP AP
     )
     const created = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/session", {
+        new Request("http://ocpp.local/api/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: "{}",
@@ -68,7 +68,7 @@ it.live("updates completed assistant message content through the session HTTP AP
     const prompt = () =>
       Effect.promise(() =>
         handler(
-          new Request(`http://opencode.local/api/session/${sessionID}/prompt`, {
+          new Request(`http://ocpp.local/api/session/${sessionID}/prompt`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ id: state.user, text: "prompt" }),
@@ -78,7 +78,7 @@ it.live("updates completed assistant message content through the session HTTP AP
     const update = (messageID: SessionMessage.ID, body: unknown, id = sessionID) =>
       Effect.promise(() =>
         handler(
-          new Request(`http://opencode.local/api/session/${id}/message/${messageID}`, {
+          new Request(`http://ocpp.local/api/session/${id}/message/${messageID}`, {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
@@ -98,8 +98,8 @@ it.live("updates completed assistant message content through the session HTTP AP
     })
 
     const projected = yield* Effect.promise(() =>
-      handler(new Request(`http://opencode.local/api/session/${sessionID}/message/${state.assistant}`)).then(
-        (response) => response.json(),
+      handler(new Request(`http://ocpp.local/api/session/${sessionID}/message/${state.assistant}`)).then((response) =>
+        response.json(),
       ),
     )
     expect(projected.data.content).toEqual(content)

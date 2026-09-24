@@ -11,7 +11,7 @@ import {
   type ComponentProps,
   type ParentProps,
 } from "solid-js"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Tooltip } from "@ocpp/ui/tooltip"
 import "./field.css"
 
 type FieldContextValue = {

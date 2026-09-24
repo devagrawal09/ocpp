@@ -212,7 +212,7 @@ describe("acp permission behavior", () => {
   })
 
   test("previews edits during approval and syncs the completed file", async () => {
-    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-acp-permission-"))
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-acp-permission-"))
     const file = path.join(cwd, "file.ts")
     await fs.writeFile(file, "before")
     const permissionRequests: RequestPermissionRequest[] = []
@@ -288,7 +288,7 @@ describe("acp permission behavior", () => {
   })
 
   test("previews and syncs each file in a patch", async () => {
-    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-acp-patch-permission-"))
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-acp-patch-permission-"))
     await Promise.all([
       fs.writeFile(path.join(cwd, "first.ts"), "one\n"),
       fs.writeFile(path.join(cwd, "second.ts"), "alpha\n"),

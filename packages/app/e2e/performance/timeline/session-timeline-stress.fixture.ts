@@ -26,7 +26,7 @@ const words = [
 const sourceID = "ses_smoke_source"
 const targetID = "ses_smoke_target"
 const childID = "ses_smoke_child"
-const directory = "C:/OpenCode/SmokeProject"
+const directory = "C:/OC++/SmokeProject"
 const projectID = "proj_smoke_timeline"
 const model = { providerID: "opencode", modelID: "claude-opus-4-6", variant: "max" }
 
@@ -151,10 +151,7 @@ function toolPart(
     metadataOverride ??
     (tool === "patch"
       ? {
-          files: [
-            patchFile(index, "modified"),
-            patchFile(index + 1, index % 2 === 0 ? "added" : "deleted"),
-          ],
+          files: [patchFile(index, "modified"), patchFile(index + 1, index % 2 === 0 ? "added" : "deleted")],
         }
       : tool === "edit" || tool === "write"
         ? { files: [fileDiff(String(input.path ?? `src/generated/file-${index}.ts`), index)] }
@@ -232,14 +229,20 @@ function turn(index: number): SessionMessageInfo[] {
       : []),
     textPart(index, 2, 160 + (index % 6) * 90),
     ...(index % 4 === 0
-      ? [toolPart(index, 3, "edit", { path: `src/generated/file-${index}.ts`, oldString: "before", newString: "after" }, 700)]
+      ? [
+          toolPart(
+            index,
+            3,
+            "edit",
+            { path: `src/generated/file-${index}.ts`, oldString: "before", newString: "after" },
+            700,
+          ),
+        ]
       : []),
     ...(index % 6 === 0
       ? [toolPart(index, 7, "write", { path: `src/generated/write-${index}.ts`, content: code(index, 28) }, 560)]
       : []),
-    ...(index % 8 === 0
-      ? [toolPart(index, 8, "patch", { patchText: `Update generated patch ${index}` }, 620)]
-      : []),
+    ...(index % 8 === 0 ? [toolPart(index, 8, "patch", { patchText: `Update generated patch ${index}` }, 620)] : []),
     ...(index % 7 === 0
       ? [toolPart(index, 4, "shell", { command: "bun typecheck", description: "Verify generated output" }, 620)]
       : []),
@@ -314,7 +317,7 @@ export const fixture = {
     all: [
       {
         id: "opencode",
-        name: "OpenCode",
+        name: "OC++",
         models: { "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } } },
       },
     ],
@@ -389,4 +392,4 @@ export function pageMessages(sessionID: string, limit: number, before?: string) 
     cursor: start > 0 ? messages[start].id : undefined,
   }
 }
-import type { JsonValue, SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { JsonValue, SessionMessageAssistant, SessionMessageInfo } from "@ocpp/client/promise"

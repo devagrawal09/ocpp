@@ -31,7 +31,7 @@ Your app is ready to be deployed!
 
 ## E2E Testing
 
-Locally, Playwright starts the Vite dev server automatically via `webServer`, or reuses one already running at the configured address. The browser suite uses isolated API fixtures rather than a live opencode backend.
+Locally, Playwright starts the Vite dev server automatically via `webServer`, or reuses one already running at the configured address. The browser suite uses isolated API fixtures rather than a live ocpp backend.
 
 ```bash
 bunx playwright install chromium

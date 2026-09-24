@@ -1,9 +1,9 @@
 import { Effect, Stream } from "effect"
 import { HttpClient } from "effect/unstable/http"
-import { ClientError, OpenCode } from "./generated"
+import { ClientError, Ocpp } from "./generated"
 import { Missing } from "./fixture"
 
-export const program = OpenCode.make().pipe(
+export const program = Ocpp.make().pipe(
   Effect.map((client) => {
     const health = client.session.health()
     const list = client.session.list()
@@ -14,7 +14,7 @@ export const program = OpenCode.make().pipe(
       sessionID: "session",
       dryRun: true,
       traceID: "trace",
-      payload: { type: "local", command: ["opencode"] },
+      payload: { type: "local", command: ["ocpp"] },
     })
     const status = client.status()
     const subscribe = client.event.subscribe()

@@ -6,7 +6,7 @@ import { collectFiles } from "./files"
 export async function buildAppArchive(channel: string, options?: { skipBuild?: boolean }) {
   if (options?.skipBuild) return compress({})
   const root = path.resolve(import.meta.dirname, "../../app")
-  await $`bun run build`.cwd(root).env({ ...process.env, OPENCODE_CHANNEL: channel })
+  await $`bun run build`.cwd(root).env({ ...process.env, OCPP_CHANNEL: channel })
   const assets = Object.fromEntries(
     await Promise.all(
       (await collectFiles(path.join(root, "dist")))

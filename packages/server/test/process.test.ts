@@ -9,7 +9,7 @@ import { ServerProcess } from "../src/process"
 
 it.live("recovers durable background work for a foreground server", () =>
   Effect.gen(function* () {
-    const directory = yield* tmpdirScoped("opencode-server-process-")
+    const directory = yield* tmpdirScoped("ocpp-server-process-")
     const filename = path.join(directory.path, "process.db")
     const options = {
       hostname: "127.0.0.1",
@@ -23,26 +23,24 @@ it.live("recovers durable background work for a foreground server", () =>
     yield* Effect.addFinalizer(() => Effect.sync(() => database.close()))
     const key = "job.background/msg_process_restart"
     const now = Date.now()
-    database
-      .query("insert into kv (key, value, time_created, time_updated) values (?, ?, ?, ?)")
-      .run(
-        key,
-        JSON.stringify({
-          id: "exe_process_restart",
-          notificationID: "msg_process_restart",
-          recovery: {
-            kind: "codemode",
-            parentSessionID: "ses_process_restart_missing",
-            assistantMessageID: "msg_process_restart_assistant",
-            toolCallID: "call_process_restart",
-            code: "return 1",
-            timeoutMs: 1_000,
-          },
-          status: "running",
-        }),
-        now,
-        now,
-      )
+    database.query("insert into kv (key, value, time_created, time_updated) values (?, ?, ?, ?)").run(
+      key,
+      JSON.stringify({
+        id: "exe_process_restart",
+        notificationID: "msg_process_restart",
+        recovery: {
+          kind: "codemode",
+          parentSessionID: "ses_process_restart_missing",
+          assistantMessageID: "msg_process_restart_assistant",
+          toolCallID: "call_process_restart",
+          code: "return 1",
+          timeoutMs: 1_000,
+        },
+        status: "running",
+      }),
+      now,
+      now,
+    )
 
     yield* ServerProcess.start<never, never>(options)
     yield* waitForMarkerRemoval(database, key)
@@ -88,7 +86,7 @@ it.live("allows browser preflight requests without credentials", () =>
     const health = yield* Effect.promise(() =>
       fetch(new URL("/api/health", HttpServer.formatAddress(server.address)), {
         headers: {
-          authorization: `Basic ${btoa("opencode:secret")}`,
+          authorization: `Basic ${btoa("ocpp:secret")}`,
           origin: "http://localhost:3000",
         },
       }),
@@ -118,7 +116,7 @@ it.live("allows browser preflight requests without credentials", () =>
 
           const health = yield* Effect.promise(() =>
             fetch(new URL("/api/health", HttpServer.formatAddress(server.address)), {
-              headers: { origin, authorization: `Basic ${btoa("opencode:secret")}` },
+              headers: { origin, authorization: `Basic ${btoa("ocpp:secret")}` },
             }),
           )
           expect(health.status).toBe(200)
@@ -138,7 +136,7 @@ it.live("allows browser preflight requests without credentials", () =>
       fetch(new URL("/api/event", HttpServer.formatAddress(server.address)), {
         headers: {
           "accept-encoding": "br",
-          authorization: `Basic ${btoa("opencode:secret")}`,
+          authorization: `Basic ${btoa("ocpp:secret")}`,
         },
       }),
     )
@@ -150,7 +148,7 @@ it.live("allows browser preflight requests without credentials", () =>
       fetch(new URL("/missing", HttpServer.formatAddress(server.address)), {
         headers: {
           "accept-encoding": "br",
-          authorization: `Basic ${btoa("opencode:secret")}`,
+          authorization: `Basic ${btoa("ocpp:secret")}`,
         },
       }),
     )

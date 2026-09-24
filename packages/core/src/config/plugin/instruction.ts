@@ -1,8 +1,8 @@
 export * as ConfigInstructionPlugin from "./instruction.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
 import { dirname, join } from "path"
 import { Effect, PubSub, Semaphore, Stream } from "effect"
 import { Watcher } from "../../filesystem/watcher.js"
@@ -16,7 +16,7 @@ type Loaded =
   | { readonly type: "unavailable" }
 
 export const Plugin = define({
-  id: "opencode.config.instruction",
+  id: "ocpp.config.instruction",
   effect: Effect.fn(function* () {
     const discovery = yield* InstructionDiscovery.Service
     // Nothing this plugin watches or loads can contribute when both scopes

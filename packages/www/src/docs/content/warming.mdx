@@ -7,16 +7,16 @@ This can preserve provider-side prompt caches or other short-lived session
 state while you pause between prompts.
 
 Warming is disabled by default. Enable it with the default settings in any
-[OpenCode configuration file](/config):
+[OC++ configuration file](/config):
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "warming": true,
 }
 ```
 
-With the defaults, OpenCode sends a warming request after a session has made no
+With the defaults, OC++ sends a warming request after a session has made no
 model request for four minutes. It repeats this while the session remains idle,
 but stops 30 minutes after the last non-warming request. New model activity
 starts a new 30-minute window.
@@ -25,9 +25,9 @@ starts a new 30-minute window.
 
 Use the object form to customize the prompt, idle interval, or active duration:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "warming": {
     "prompt": "Do not perform any work. Reply with exactly: OK",
     "interval": "4 minutes",
@@ -68,7 +68,7 @@ ends when the configured duration expires.
 
 Warming requests are real provider requests. They can consume tokens, incur
 costs, count against rate limits, and fail for the same reasons as other model
-requests. OpenCode logs warming failures without failing or changing the
+requests. OC++ logs warming failures without failing or changing the
 session, then waits for the next interval before trying again.
 
 Enable warming only when the provider-side benefit is worth the additional

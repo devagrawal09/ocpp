@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import {
-  OpenCode,
+  Ocpp,
   type EventSubscribeOutput,
   type SessionMessageAssistantTool,
   type SessionMessageInfo,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import { runNonInteractivePrompt } from "../../src/run/noninteractive"
 
 type V2Event = EventSubscribeOutput
@@ -218,7 +218,7 @@ async function run(input: {
   wait?: () => Promise<void>
   terminalDelay?: number
 }) {
-  const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
+  const sdk = Ocpp.make({ baseUrl: "https://ocpp.test" })
   const values: V2Event[] = [{ id: "evt_connected", type: "server.connected", data: {} }]
   let wake: (() => void) | undefined
   const wait = Promise.withResolvers<void>()
@@ -423,7 +423,7 @@ describe("runNonInteractivePrompt", () => {
     })
     const globalOptions = {
       headers: {
-        "x-opencode-directory": "%2Fwork%20tree",
+        "x-ocpp-directory": "%2Fwork%20tree",
         "x-opencode-workspace": "wrk_1",
       },
     }

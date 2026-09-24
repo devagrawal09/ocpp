@@ -6,7 +6,7 @@ import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { Job } from "../job.js"
 import { LocationServiceMap } from "../location-service-map.js"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { SessionEvent } from "./event.js"
 import { SessionRunCoordinator } from "./run-coordinator.js"
 import { SessionRunner } from "./runner/index.js"
@@ -37,7 +37,7 @@ export interface Interface {
 }
 
 /** Routes execution from a Session ID to the runner owned by that Session's Location. */
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionExecution") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionExecution") {}
 
 type InterruptReason = "user" | "shutdown"
 

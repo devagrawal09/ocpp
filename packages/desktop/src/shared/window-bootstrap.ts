@@ -1,4 +1,4 @@
-const windowIDPrefix = "--opencode-window-id="
+const windowIDPrefix = "--ocpp-window-id="
 
 export function windowIDArgument(id: string) {
   return windowIDPrefix + encodeURIComponent(id)

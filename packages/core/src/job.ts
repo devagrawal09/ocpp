@@ -14,7 +14,7 @@ import {
   Scope,
   SynchronizedRef,
 } from "effect"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Identifier } from "./id/id.js"
 import { KV } from "./kv.js"
 import { SessionMessage } from "./session/message.js"
@@ -176,7 +176,7 @@ export interface Interface {
   readonly completeBackground: (notificationID: SessionMessage.ID) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Job") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Job") {}
 
 function snapshot(job: Active): Info {
   return {

@@ -1,8 +1,8 @@
 import path from "path"
 import { pathToFileURL } from "url"
 import { expect, test } from "bun:test"
-import { PluginModule } from "@opencode-ai/core/plugin/module"
-import { Npm } from "@opencode-ai/util/npm"
+import { PluginModule } from "@ocpp/core/plugin/module"
+import { Npm } from "@ocpp/util/npm"
 import { Effect } from "effect"
 
 test("loads cached plugin packages without requesting a refresh", async () => {

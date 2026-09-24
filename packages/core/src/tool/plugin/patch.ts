@@ -1,16 +1,16 @@
 export * as PatchTool from "./patch.js"
 
-import type { Context } from "@opencode-ai/plugin/effect/plugin"
-import { ToolFailure } from "@opencode-ai/ai"
-import { FileDiff } from "@opencode-ai/schema/file-diff"
+import type { Context } from "@ocpp/plugin/effect/plugin"
+import { ToolFailure } from "@ocpp/ai"
+import { FileDiff } from "@ocpp/schema/file-diff"
 import { Effect, Result, Schema } from "effect"
-import { Bom } from "@opencode-ai/util/bom"
+import { Bom } from "@ocpp/util/bom"
 import { Environment } from "../../environment/index.js"
 import { Formatter } from "../../formatter.js"
 import { FileMutation } from "../../file-mutation.js"
 import { Location } from "../../location.js"
 import { LocationMutation } from "../../location-mutation.js"
-import { Patch } from "@opencode-ai/util/patch"
+import { Patch } from "@ocpp/util/patch"
 import { Permission } from "../../permission.js"
 import DESCRIPTION from "../patch.txt"
 import { fileDiff } from "./file-diff.js"
@@ -64,7 +64,7 @@ type Prepared =
     })
 
 export const Plugin = {
-  id: "opencode.tool.patch",
+  id: "ocpp.tool.patch",
   effect: Effect.fn("PatchTool.Plugin")(function* (ctx: Context) {
     const environment = yield* Environment.Service
     const mutation = yield* LocationMutation.Service

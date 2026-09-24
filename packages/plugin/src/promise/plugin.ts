@@ -1,6 +1,6 @@
-import type { OpenCodeClient } from "@opencode-ai/client"
-import type { GenerateApi, PluginApi } from "@opencode-ai/client/promise/api"
-import type { Location } from "@opencode-ai/schema/location"
+import type { OcppClient } from "@ocpp/client"
+import type { GenerateApi, PluginApi } from "@ocpp/client/promise/api"
+import type { Location } from "@ocpp/schema/location"
 import type { PluginOptions } from "../options.js"
 import type { VcsDiscovery } from "../vcs.js"
 import type { App } from "../app.js"
@@ -31,7 +31,7 @@ export interface Context {
   readonly command: CommandDomain
   readonly event: EventDomain
   readonly experimental: {
-    readonly terminal: Pick<OpenCodeClient["experimental"]["persistentPty"], "read">
+    readonly terminal: Pick<OcppClient["experimental"]["persistentPty"], "read">
   }
   readonly integration: IntegrationDomain
   readonly mcp: MCPDomain

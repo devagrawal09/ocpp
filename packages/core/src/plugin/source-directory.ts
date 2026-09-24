@@ -1,6 +1,6 @@
 export * as PluginSourceDirectory from "./source-directory.js"
 
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Effect, Option, Predicate, Schema } from "effect"
 import path from "path"
 

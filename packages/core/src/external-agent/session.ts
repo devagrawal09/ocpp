@@ -1,8 +1,8 @@
 export * as ExternalAgentSession from "./session.js"
 
-import { AbsolutePath } from "@opencode-ai/schema/schema"
-import { ExternalSession } from "@opencode-ai/schema/external-session"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { AbsolutePath } from "@ocpp/schema/schema"
+import { ExternalSession } from "@ocpp/schema/external-session"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { eq } from "drizzle-orm"
 import { Context, Deferred, Effect, Layer, Scope } from "effect"
 import { Bus } from "../bus.js"
@@ -161,5 +161,5 @@ export interface Interface {
   ) => Effect.Effect<void, StepFailedError, Scope.Scope>
   readonly drain: (sessionID: ExternalSession.Info["sessionID"]) => Effect.Effect<void, StepFailedError>
 }
-export class Service extends Context.Service<Service, Interface>()("@opencode/ExternalAgentSession") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ExternalAgentSession") {}
 export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node, Bus.node] })

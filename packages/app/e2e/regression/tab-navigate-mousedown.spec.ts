@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test"
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { currentSession } from "../utils/mock-server"
 import pkg from "../../package.json" with { type: "json" }
 
@@ -14,7 +14,7 @@ test("pressing mouse down on a tab navigates before mouse up", async ({ page }) 
   await page.addInitScript(
     ({ server, sessionA, sessionB }) => {
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([
           { type: "session", server, sessionId: sessionA },
           { type: "session", server, sessionId: sessionB },
@@ -47,7 +47,7 @@ test("keyboard navigation follows the visible tab order", async ({ page }) => {
   await page.addInitScript(
     ({ server, sessionA, unresolved, sessionC }) => {
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([
           { type: "session", server, sessionId: sessionA },
           { type: "session", server, sessionId: unresolved },
@@ -75,7 +75,7 @@ test("cramped tabs only show the close button for the active tab", async ({ page
   await page.addInitScript(
     ({ server, sessionA, sessionB, sessionC }) => {
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([
           { type: "session", server, sessionId: sessionA },
           { type: "session", server, sessionId: sessionB },
@@ -118,7 +118,7 @@ test("vertical tabs show project details, resize, and navigate", async ({ page }
     ({ server, sessionA, sessionB }) => {
       localStorage.setItem("settings.v3", JSON.stringify({ appearance: { tabLayout: "vertical" } }))
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([
           { type: "session", server, sessionId: sessionA },
           { type: "session", server, sessionId: sessionB },
@@ -171,7 +171,7 @@ test("appearance experimental setting switches tab orientation", async ({ page }
   await page.addInitScript(
     ({ server, sessionA }) => {
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([{ type: "session", server, sessionId: sessionA }]),
       )
     },
@@ -185,7 +185,7 @@ test("appearance experimental setting switches tab orientation", async ({ page }
   const settings = page.getByTestId("settings-screen")
   await expect(settings).toBeVisible()
   const version = settings.getByRole("tablist").getByText(`v${pkg.version}`, { exact: true })
-  await expect(settings.getByRole("tablist").getByText("OpenCode Desktop", { exact: true })).toBeInViewport()
+  await expect(settings.getByRole("tablist").getByText("OC++ Desktop", { exact: true })).toBeInViewport()
   await expect(version).toBeInViewport()
   await settings.getByRole("tab", { name: "Appearance" }).click()
   await expect(settings.getByRole("heading", { name: "Experimental" })).toBeVisible()
@@ -249,7 +249,7 @@ test("vertical tab preference falls back to horizontal on mobile", async ({ page
     ({ server, sessionA }) => {
       localStorage.setItem("settings.v3", JSON.stringify({ appearance: { tabLayout: "vertical" } }))
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([{ type: "session", server, sessionId: sessionA }]),
       )
     },

@@ -1,8 +1,8 @@
 import { describe, expect } from "bun:test"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Location } from "@opencode-ai/core/location"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Tool } from "@opencode-ai/core/tool"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Location } from "@ocpp/core/location"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Tool } from "@ocpp/core/tool"
 import { Effect, Schema } from "effect"
 import { it } from "./lib/effect"
 

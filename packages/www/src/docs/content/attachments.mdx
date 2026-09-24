@@ -18,7 +18,7 @@ request. A client accepting a file does not mean its contents are visible to
 the model.
 
 <Callout type="warning">
-  Use a model that supports image input before attaching an image. OpenCode passes supported image media to the selected
+  Use a model that supports image input before attaching an image. OC++ passes supported image media to the selected
   provider, but the provider and model still enforce their own formats, dimensions, file counts, and size limits. A
   text-only model may reject the request.
 </Callout>
@@ -41,7 +41,7 @@ lines:
 file:///home/me/project/src/server.ts?start=20&end=60
 ```
 
-HTTP and HTTPS attachment URLs are not supported. OpenCode materializes each
+HTTP and HTTPS attachment URLs are not supported. OC++ materializes each
 attachment before admitting the prompt and rejects invalid URLs, unreadable
 paths, non-files other than directories, and attachments over 20 MiB decoded.
 The server infers the media type from the bytes. A supplied filename or data
@@ -49,11 +49,11 @@ URL media type does not make an unsupported binary format model-visible.
 
 ## Configure image processing
 
-Configure image normalization in `opencode.json` or `opencode.jsonc`:
+Configure image normalization in `ocpp.json` or `ocpp.jsonc`:
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "media": {
     "image": {
       "auto_resize": true,
@@ -76,20 +76,20 @@ All fields are optional:
 
 <Callout type="note">
   These settings apply to supported image media attached directly to prompts and images produced by the built-in `read`
-  tool. If the image resizer is unavailable, OpenCode passes the original image through unchanged.
+  tool. If the image resizer is unavailable, OC++ passes the original image through unchanged.
 </Callout>
 
 The `read` tool recognizes PNG, JPEG, GIF, and WebP by their contents and will
 ingest at most 20 MiB of source image bytes. It decodes the image and compares
 its width, height, and encoded Base64 length with all three configured limits.
 
-When `auto_resize` is `true`, OpenCode preserves the aspect ratio, scales the
+When `auto_resize` is `true`, OC++ preserves the aspect ratio, scales the
 image down to the dimension limits, and tries progressively smaller PNG and
 JPEG encodings until the Base64 limit is met. The resulting media type can
 therefore change to PNG or JPEG. If no encoding fits, the tool call fails.
 
 When `auto_resize` is `false`, exceeding any limit fails the tool call without
-modifying the image. An image that cannot be decoded also fails. If the image resizer cannot be loaded, OpenCode uses the
+modifying the image. An image that cannot be decoded also fails. If the image resizer cannot be loaded, OC++ uses the
 original image instead, so these settings are processing limits rather than an upload or security boundary.
 
 ## Limits and provider behavior
@@ -102,6 +102,6 @@ original image instead, so these settings are processing limits rather than an u
   multimodal model. Large text read through the `read` tool has separate
   paging and truncation limits.
 - Image attachments use provider-native image input. Provider errors can still
-  occur when OpenCode's limits pass but the selected model's limits do not.
+  occur when OC++'s limits pass but the selected model's limits do not.
 - PDFs and other unsupported binary prompt attachments should be converted to
   text or supported images before attaching them.

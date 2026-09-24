@@ -1,6 +1,6 @@
-import type { SessionInfo } from "@opencode-ai/client/promise"
-import { Icon } from "@opencode-ai/ui/icon"
-import { ProjectAvatar } from "@opencode-ai/ui/project-avatar"
+import type { SessionInfo } from "@ocpp/client/promise"
+import { Icon } from "@ocpp/ui/icon"
+import { ProjectAvatar } from "@ocpp/ui/project-avatar"
 import { useNavigate } from "@solidjs/router"
 import { createMemo, Show, type ParentProps } from "solid-js"
 import { useServer } from "@/runtime/server/current"
@@ -54,7 +54,9 @@ export function SessionIdentityHeader(props: { sessionID: string; session?: Sess
   const parentTitle = createMemo(() => {
     const id = parentID()
     const current = tab()
-    return sessionTitle(parent()?.title ?? (current?.type === "session" && current.sessionId === id ? info()?.title : undefined))
+    return sessionTitle(
+      parent()?.title ?? (current?.type === "session" && current.sessionId === id ? info()?.title : undefined),
+    )
   })
   const directory = createMemo(() => props.session?.location.directory ?? info()?.directory)
   const title = createMemo(() => sessionTitle(props.session?.title ?? (parentID() ? undefined : info()?.title)))
@@ -69,7 +71,7 @@ export function SessionIdentityHeader(props: { sessionID: string; session?: Sess
     )
   })
   const showProjectIcon = () =>
-    import.meta.env.VITE_OPENCODE_CHANNEL !== "prod" && settings.general.showProjectIcon() && !!directory()
+    import.meta.env.VITE_OCPP_CHANNEL !== "prod" && settings.general.showProjectIcon() && !!directory()
   const workspaceSession = createMemo(() => isWorkspaceDirectory(project(), directory() ?? ""))
   const navigateParent = () => {
     const id = parentID()

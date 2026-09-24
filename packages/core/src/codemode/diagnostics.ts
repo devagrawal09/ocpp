@@ -18,7 +18,7 @@ import { CodeModeDiagnosticsTaxonomy } from "./diagnostics-taxonomy.js"
  * object keys in sorted order, so identical input bytes produce identical output bytes.
  */
 
-export const SCHEMA = "opencode.codemode-diagnostics/4"
+export const SCHEMA = "ocpp.codemode-diagnostics/4"
 /** Bump when a change alters what a report counts, so reports from different analyzers never mix. */
 export const VERSION = 4
 

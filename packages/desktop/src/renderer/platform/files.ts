@@ -1,4 +1,4 @@
-import type { Platform } from "@opencode-ai/app/desktop"
+import type { Platform } from "@ocpp/app/desktop"
 import type { ElectronAPI } from "../api-types"
 
 type DesktopOS = Extract<Platform, { platform: "desktop" }>["os"]

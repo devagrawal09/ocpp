@@ -4,9 +4,9 @@ import path from "path"
 import { Context, Effect, Layer, Schema } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { AbsolutePath, RelativePath } from "./schema.js"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { AppProcess } from "@opencode-ai/util/process"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { AppProcess } from "@ocpp/util/process"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { File } from "./file.js"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 
@@ -16,9 +16,9 @@ export class Repository extends Schema.Class<Repository>("Git.Repository")({
   commonDirectory: AbsolutePath,
 }) {}
 
-// Included from $GIT_DIR/config via include.path (git >= 1.7.10); OpenCode owns
+// Included from $GIT_DIR/config via include.path (git >= 1.7.10); OC++ owns
 // this file entirely, so updates are plain rewrites with no config parsing.
-const snapshotConfigFile = "opencode.gitconfig"
+const snapshotConfigFile = "ocpp.gitconfig"
 const snapshotConfigInclude = `[include]
 	path = ${snapshotConfigFile}
 `
@@ -158,7 +158,7 @@ export interface Interface {
   }
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Git") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Git") {}
 
 const layer = Layer.effect(
   Service,

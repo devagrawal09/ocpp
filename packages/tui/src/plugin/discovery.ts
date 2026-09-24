@@ -7,7 +7,7 @@ const extensions = new Set([".cjs", ".cts", ".js", ".jsx", ".mjs", ".mts", ".ts"
 
 export async function tuiPluginDirectories(cwd: string, configDirectory: string) {
   const projectDirectory = await localProjectDirectory(cwd)
-  const projectConfig = path.join(projectDirectory, ".opencode")
+  const projectConfig = path.join(projectDirectory, ".ocpp")
   const directories = [configDirectory, ...projectConfigDirectories(projectDirectory, cwd)]
   const exists = await Promise.all(
     directories.map((directory) => {

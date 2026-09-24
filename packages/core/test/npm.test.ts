@@ -3,9 +3,9 @@ import path from "path"
 import { pathToFileURL } from "url"
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Global } from "@opencode-ai/util/global"
-import { Npm } from "@opencode-ai/util/npm"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Global } from "@ocpp/util/global"
+import { Npm } from "@ocpp/util/npm"
 import { tmpdir } from "./fixture/tmpdir"
 
 const win = process.platform === "win32"
@@ -57,14 +57,14 @@ async function createGitFixture(directory: string) {
 
 describe("Npm.sanitize", () => {
   test("keeps normal scoped package specs unchanged", () => {
-    expect(Npm.sanitize("@opencode/acme")).toBe("@opencode/acme")
-    expect(Npm.sanitize("@opencode/acme@1.0.0")).toBe("@opencode/acme@1.0.0")
+    expect(Npm.sanitize("@ocpp/acme")).toBe("@ocpp/acme")
+    expect(Npm.sanitize("@ocpp/acme@1.0.0")).toBe("@ocpp/acme@1.0.0")
     expect(Npm.sanitize("prettier")).toBe("prettier")
   })
 
   test("handles git https specs", () => {
-    const spec = "acme@git+https://github.com/opencode/acme.git"
-    const expected = win ? "acme@git+https_//github.com/opencode/acme.git" : spec
+    const spec = "acme@git+https://github.com/ocpp/acme.git"
+    const expected = win ? "acme@git+https_//github.com/ocpp/acme.git" : spec
     expect(Npm.sanitize(spec)).toBe(expected)
   })
 })
@@ -99,7 +99,7 @@ describe("Npm.isInstallablePackage", () => {
 
 describe("Npm.cacheKey", () => {
   test("preserves registry keys and hashes Git specs", async () => {
-    expect(await Npm.cacheKey("@opencode/acme@1.0.0")).toBe(Npm.sanitize("@opencode/acme@1.0.0"))
+    expect(await Npm.cacheKey("@ocpp/acme@1.0.0")).toBe(Npm.sanitize("@ocpp/acme@1.0.0"))
     const spec = "git+ssh://git@github.com/acme/plugin.git#main"
     expect(await Npm.cacheKey(spec)).toMatch(/^git-[a-f0-9]{64}$/)
     expect(await Npm.cacheKey(spec)).toBe(await Npm.cacheKey(spec))

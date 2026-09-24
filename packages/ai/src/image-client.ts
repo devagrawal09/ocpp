@@ -12,7 +12,7 @@ export interface Interface {
   ) => Effect.Effect<ImageResponse, AIError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ImageClient") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ImageClient") {}
 
 export const generate = <Options extends ImageOptions>(
   request: ImageRequestFor<Options>,

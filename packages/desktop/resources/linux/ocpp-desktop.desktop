@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=OC++
+Exec=/opt/OC++/ai.ocpp.desktop %U
+Terminal=false
+Type=Application
+Icon=ai.ocpp.desktop
+StartupWMClass=ai.ocpp.desktop
+NoDisplay=true
+Comment=Open source AI coding agent
+Categories=Development;

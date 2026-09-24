@@ -1,4 +1,4 @@
-import { Tool } from "@opencode-ai/schema/tool"
+import { Tool } from "@ocpp/schema/tool"
 import { Effect, Schema, SchemaAST, Stream } from "effect"
 import type { Scope } from "effect"
 import { HttpApiEndpoint, HttpApiSchema } from "effect/unstable/httpapi"
@@ -72,8 +72,8 @@ export function fromPromise(plugin: Plugin) {
     vcs: plugin.vcs,
     effect: (host) =>
       Effect.gen(function* () {
-        const [{ ClientApi }, { OpenCodeEvent }] = yield* Effect.promise(() =>
-          Promise.all([import("@opencode-ai/protocol/client"), import("@opencode-ai/protocol/groups/event")]),
+        const [{ ClientApi }, { OcppEvent }] = yield* Effect.promise(() =>
+          Promise.all([import("@ocpp/protocol/client"), import("@ocpp/protocol/groups/event")]),
         )
         const AgentEndpoints = ClientApi.groups["server.agent"].endpoints
         const CommandEndpoints = ClientApi.groups["server.command"].endpoints
@@ -184,7 +184,7 @@ export function fromPromise(plugin: Plugin) {
             subscribe: () =>
               Stream.toAsyncIterable(
                 host.event.subscribe().pipe(
-                  Stream.mapEffect((event) => Schema.encodeUnknownEffect(OpenCodeEvent)(event)),
+                  Stream.mapEffect((event) => Schema.encodeUnknownEffect(OcppEvent)(event)),
                   Stream.map((event) => event as unknown as PromiseEvent),
                 ),
               ),

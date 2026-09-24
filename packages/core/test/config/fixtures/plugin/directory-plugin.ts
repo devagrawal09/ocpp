@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "directory-plugin",

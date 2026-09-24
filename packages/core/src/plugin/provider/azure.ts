@@ -3,9 +3,9 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { Clock, Effect, Schema, Semaphore, Stream } from "effect"
 import { ChildProcess } from "effect/unstable/process"
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Form } from "@opencode-ai/schema/form"
-import { AppProcess } from "@opencode-ai/util/process"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Form } from "@ocpp/schema/form"
+import { AppProcess } from "@ocpp/util/process"
 import { App } from "../../app.js"
 import { Bus } from "../../bus.js"
 import { Credential } from "../../credential.js"
@@ -53,7 +53,7 @@ function selectLanguage(sdk: any, modelID: string, useChat: boolean) {
 }
 
 export const AzurePlugin = define({
-  id: "opencode.provider.azure",
+  id: "ocpp.provider.azure",
   effect: Effect.fn(function* (ctx) {
     const configured = yield* configuredSettings(Provider.ID.azure)
     const processes = yield* AppProcess.Service

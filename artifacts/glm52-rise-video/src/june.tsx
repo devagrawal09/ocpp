@@ -92,7 +92,7 @@ export function JuneTotals() {
 
         {/* hero */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ fontSize: 25, fontWeight: 600, color: c.muted, letterSpacing: 3 }}>OPENCODE GO · JUNE 2026</div>
+          <div style={{ fontSize: 25, fontWeight: 600, color: c.muted, letterSpacing: 3 }}>OCPP GO · JUNE 2026</div>
           <div style={{ marginTop: 14 }}>
             <div
               style={{
@@ -136,7 +136,7 @@ export function JuneTotals() {
             fontWeight: 500,
           }}
         >
-          <div style={{ color: c.ink }}>opencode.ai/data</div>
+          <div style={{ color: c.ink }}>ocpp.ai/data</div>
         </div>
       </div>
     </AbsoluteFill>

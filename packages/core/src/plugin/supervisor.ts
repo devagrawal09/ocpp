@@ -1,13 +1,13 @@
 export * as PluginSupervisor from "./supervisor.js"
 export { Service, type Interface } from "./supervisor-service.js"
 
-import { Event } from "@opencode-ai/schema/config"
+import { Event } from "@ocpp/schema/config"
 import { Cause, Effect, Latch, Layer, Stream } from "effect"
 import path from "path"
 import { ConfigPluginSource } from "../config/plugin/source.js"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Bus } from "../bus.js"
-import { Npm } from "@opencode-ai/util/npm"
+import { Npm } from "@ocpp/util/npm"
 import { Plugin } from "../plugin.js"
 import { InstancePlugins } from "./instance.js"
 import { PluginInternal } from "./internal.js"
@@ -42,7 +42,7 @@ const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
       matched.length > 0 ||
       operation.target === "*" ||
       operation.target.endsWith(".*") ||
-      operation.target.startsWith("opencode.")
+      operation.target.startsWith("ocpp.")
     if (selectsPlugins) {
       matched.forEach((plugin) => enabled.add(plugin.id))
       continue
@@ -97,7 +97,7 @@ export const layer = Layer.effect(
     let observed = 0
 
     const activate = Effect.fn("PluginSupervisor.activate")(function* () {
-      // Resolve OpenCode's internal plugins with their privileged Location services.
+      // Resolve OC++'s internal plugins with their privileged Location services.
       const internal = yield* PluginInternal.list()
       // Combine internal plugins with host-contributed plugins in boot order.
       // Instance-bound plugins come last: later activation can override earlier

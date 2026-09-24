@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
 
 const draftID = "draft_large_paste"
@@ -9,7 +9,7 @@ const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${pr
 test.use({ permissions: ["clipboard-read", "clipboard-write"] })
 
 test.beforeEach(async ({ page }) => {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: "proj_large_paste",
@@ -25,17 +25,17 @@ test.beforeEach(async ({ page }) => {
   })
   await page.addInitScript(
     ({ directory, draftID, server }) => {
-      localStorage.setItem("opencode-theme-id", "oc-2")
-      localStorage.setItem("opencode-color-scheme", "dark")
+      localStorage.setItem("ocpp-theme-id", "ocpp-v2")
+      localStorage.setItem("ocpp-color-scheme", "dark")
       localStorage.setItem(
-        "opencode.global.dat:server",
+        "ocpp.global.dat:server",
         JSON.stringify({
           projects: { local: [{ worktree: directory, expanded: true }] },
           lastProject: { local: directory },
         }),
       )
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([{ type: "draft", draftID, server, directory }]),
       )
     },

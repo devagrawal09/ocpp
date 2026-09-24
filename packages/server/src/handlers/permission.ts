@@ -1,12 +1,12 @@
-import { Database } from "@opencode-ai/core/database/database"
-import { Location } from "@opencode-ai/core/location"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
-import { Permission } from "@opencode-ai/core/permission"
-import { PermissionSaved } from "@opencode-ai/core/permission/saved"
+import { Database } from "@ocpp/core/database/database"
+import { Location } from "@ocpp/core/location"
+import { LocationServiceMap } from "@ocpp/core/location-services"
+import { Permission } from "@ocpp/core/permission"
+import { PermissionSaved } from "@ocpp/core/permission/saved"
 import { Effect, Option } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
-import { PermissionNotFoundError, SessionNotFoundError } from "@opencode-ai/protocol/errors"
+import { PermissionNotFoundError, SessionNotFoundError } from "@ocpp/protocol/errors"
 import { response, sessionRef, withLoadedLocationServices } from "../location"
 
 function missingRequest(id: Permission.ID) {

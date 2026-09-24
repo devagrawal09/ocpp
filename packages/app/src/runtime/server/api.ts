@@ -1,9 +1,9 @@
-import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
+import { Ocpp, type OcppClient } from "@ocpp/client/promise"
 import type { ServerConnection } from "@/runtime/server/registry"
 import { decode64 } from "@/runtime/persistence/base64"
 
 export function authTokenFromCredentials(input: { username?: string; password: string }) {
-  return btoa(`${input.username ?? "opencode"}:${input.password}`)
+  return btoa(`${input.username ?? "ocpp"}:${input.password}`)
 }
 
 export function authFromToken(token: string | null) {
@@ -12,7 +12,7 @@ export function authFromToken(token: string | null) {
   const separator = decoded.indexOf(":")
   if (separator === -1) return
   return {
-    username: decoded.slice(0, separator) || "opencode",
+    username: decoded.slice(0, separator) || "ocpp",
     password: decoded.slice(separator + 1),
   }
 }
@@ -20,8 +20,8 @@ export function authFromToken(token: string | null) {
 export function createApiForServer(input: {
   server: ServerConnection.HttpBase
   fetch?: typeof globalThis.fetch
-}): OpenCodeClient {
-  return OpenCode.make({
+}): OcppClient {
+  return Ocpp.make({
     baseUrl: input.server.url,
     fetch: input.fetch,
     headers: input.server.password
@@ -35,4 +35,4 @@ export function createApiForServer(input: {
   })
 }
 
-export type ServerApi = OpenCodeClient
+export type ServerApi = OcppClient

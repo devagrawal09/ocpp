@@ -13,7 +13,7 @@ import { storyDocument, storyPatchFile, storyTool } from "../storybook/current-s
 import { SessionTimeline } from "./session-timeline"
 
 export default {
-  title: "OpenCode/Work/File changes",
+  title: "OC++/Work/File changes",
   id: "current-session-file-changes",
   component: SessionTimeline,
   parameters: {

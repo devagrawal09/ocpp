@@ -1,6 +1,6 @@
 export * as SessionRevertNode from "./revert-node.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { PluginSupervisor } from "../plugin/supervisor.js"

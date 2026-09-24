@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Skill } from "@opencode-ai/schema/skill"
+import { Skill } from "@ocpp/schema/skill"
 import type { Prompt } from "@/composer/state"
 import { buildPromptRequest } from "./request"
 
@@ -73,19 +73,17 @@ describe("buildPromptRequest", () => {
         {
           type: "image",
           id: "img_external",
-          filename: "opencode.global.dat",
-          sourcePath: "C:\\Users\\Luke\\AppData\\Roaming\\ai.opencode.desktop.beta\\opencode.global.dat",
+          filename: "ocpp.global.dat",
+          sourcePath: "C:\\Users\\Luke\\AppData\\Roaming\\ai.ocpp.desktop.beta\\ocpp.global.dat",
           mime: "text/plain",
           dataUrl: "data:text/plain;base64,AAA",
         },
       ],
       text: "inspect this",
-      sessionDirectory: "C:\\Repos\\sst\\opencode",
+      sessionDirectory: "C:\\Repos\\sst\\ocpp",
     })
 
-    expect(result.files[0]?.name).toBe(
-      "C:\\Users\\Luke\\AppData\\Roaming\\ai.opencode.desktop.beta\\opencode.global.dat",
-    )
+    expect(result.files[0]?.name).toBe("C:\\Users\\Luke\\AppData\\Roaming\\ai.ocpp.desktop.beta\\ocpp.global.dat")
   })
 
   test("preserves reference aliases as directory files", () => {
@@ -220,10 +218,10 @@ describe("buildPromptRequest", () => {
       context: [],
       images: [],
       text: "@README.md",
-      sessionDirectory: "/Users/kelvin/Projects/opencode",
+      sessionDirectory: "/Users/kelvin/Projects/ocpp",
     })
 
-    expect(result.files[0]?.uri).toBe("file:///Users/kelvin/Projects/opencode/README.md")
+    expect(result.files[0]?.uri).toBe("file:///Users/kelvin/Projects/ocpp/README.md")
   })
 
   test("handles context files with Windows paths", () => {

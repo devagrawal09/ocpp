@@ -1,7 +1,7 @@
 import { createProviderPlugin } from "./factory.js"
 
 export const MistralPlugin = createProviderPlugin({
-  id: "opencode.provider.mistral",
+  id: "ocpp.provider.mistral",
   package: "@ai-sdk/mistral",
   load: async (options) => {
     const { createMistral } = await import("@ai-sdk/mistral")

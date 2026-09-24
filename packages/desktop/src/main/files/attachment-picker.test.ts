@@ -26,7 +26,7 @@ describe("assertAttachmentBudget", () => {
   })
 
   test("reads an approved file through a bounded buffer", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "opencode-attachment-"))
+    const directory = await mkdtemp(join(tmpdir(), "ocpp-attachment-"))
     const file = join(directory, "example.txt")
     try {
       await writeFile(file, "lorem ipsum")
@@ -37,7 +37,7 @@ describe("assertAttachmentBudget", () => {
   })
 
   test("rejects an oversized file before allocating its contents", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "opencode-attachment-"))
+    const directory = await mkdtemp(join(tmpdir(), "ocpp-attachment-"))
     const file = join(directory, "oversized.txt")
     try {
       await writeFile(file, "")

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { SessionInfo } from "@opencode-ai/client/promise"
+import type { SessionInfo } from "@ocpp/client/promise"
 import {
   childSessionOnPath,
   closeHomeProject,
@@ -176,17 +176,17 @@ describe("layout workspace helpers", () => {
       worktrees: [{ directory: "/repo" }, { directory: "/workspaces/feature", strategy: "git" }],
     }
 
-    expect(projectForSession(session({ id: "feature", directory: "/workspaces/feature/packages/app" }), [project])).toBe(
-      project,
-    )
+    expect(
+      projectForSession(session({ id: "feature", directory: "/workspaces/feature/packages/app" }), [project]),
+    ).toBe(project)
   })
 
   test("finds the enriched project for a nested workspace when its session project id is stale", () => {
     const project = { id: "updated", worktree: "/repo", sandboxes: ["/workspaces/feature"] }
 
-    expect(projectForSession(session({ id: "feature", directory: "/workspaces/feature/packages/app" }), [project])).toBe(
-      project,
-    )
+    expect(
+      projectForSession(session({ id: "feature", directory: "/workspaces/feature/packages/app" }), [project]),
+    ).toBe(project)
   })
 
   test("formats fallback project display name", () => {

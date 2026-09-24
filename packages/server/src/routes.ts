@@ -1,35 +1,35 @@
-import { Database } from "@opencode-ai/core/database/database"
-import { V1Migration } from "@opencode-ai/core/database/v1-migration"
-import { App } from "@opencode-ai/core/app"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Bus } from "@opencode-ai/core/bus"
-import { EventLogger } from "@opencode-ai/core/event-logger"
-import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
-import { Credential } from "@opencode-ai/core/credential"
-import { Config } from "@opencode-ai/core/config"
-import { PermissionSaved } from "@opencode-ai/core/permission/saved"
-import { PtyTicket } from "@opencode-ai/core/pty/ticket"
-import { PersistentPty } from "@opencode-ai/core/persistent-pty"
-import { Project } from "@opencode-ai/core/project"
-import { Session } from "@opencode-ai/core/session"
-import { SessionTransfer } from "@opencode-ai/core/session/transfer"
-import { ShellSelect } from "@opencode-ai/core/shell/select"
-import { Job } from "@opencode-ai/core/job"
-import { Mcp } from "@opencode-ai/core/mcp/index"
-import { Global } from "@opencode-ai/util/global"
-import { InstructionDiscovery } from "@opencode-ai/core/instruction-discovery"
-import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
-import { LocationActivity } from "@opencode-ai/core/location-activity"
-import { ModelsDev } from "@opencode-ai/core/models-dev"
-import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
-import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { WellKnown } from "@opencode-ai/core/wellknown"
-import { Workspace } from "@opencode-ai/core/workspace"
-import { Worktree } from "@opencode-ai/core/worktree"
-import { Watcher } from "@opencode-ai/core/filesystem/watcher"
+import { Database } from "@ocpp/core/database/database"
+import { V1Migration } from "@ocpp/core/database/v1-migration"
+import { App } from "@ocpp/core/app"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { httpClient } from "@ocpp/util/effect/app-node-platform"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Bus } from "@ocpp/core/bus"
+import { EventLogger } from "@ocpp/core/event-logger"
+import { FileSystemSearch } from "@ocpp/core/filesystem/search"
+import { Credential } from "@ocpp/core/credential"
+import { Config } from "@ocpp/core/config"
+import { PermissionSaved } from "@ocpp/core/permission/saved"
+import { PtyTicket } from "@ocpp/core/pty/ticket"
+import { PersistentPty } from "@ocpp/core/persistent-pty"
+import { Project } from "@ocpp/core/project"
+import { Session } from "@ocpp/core/session"
+import { SessionTransfer } from "@ocpp/core/session/transfer"
+import { ShellSelect } from "@ocpp/core/shell/select"
+import { Job } from "@ocpp/core/job"
+import { Mcp } from "@ocpp/core/mcp/index"
+import { Global } from "@ocpp/util/global"
+import { InstructionDiscovery } from "@ocpp/core/instruction-discovery"
+import { LocationServiceMap } from "@ocpp/core/location-service-map"
+import { LocationActivity } from "@ocpp/core/location-activity"
+import { ModelsDev } from "@ocpp/core/models-dev"
+import { SessionRestart } from "@ocpp/core/session/execution/restart"
+import { PluginRuntime } from "@ocpp/core/plugin/runtime"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
+import { WellKnown } from "@ocpp/core/wellknown"
+import { Workspace } from "@ocpp/core/workspace"
+import { Worktree } from "@ocpp/core/worktree"
+import { Watcher } from "@ocpp/core/filesystem/watcher"
 import { HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Context, Effect, Layer, Option } from "effect"
@@ -122,7 +122,7 @@ function makeRoutes<AuthError, AuthServices>(
       Mcp.node,
       Mcp.configured({
         clientInfo: {
-          name: options.app?.name ?? "opencode",
+          name: options.app?.name ?? "ocpp",
           version: options.app?.version ?? "unknown",
         },
       }),
@@ -134,7 +134,7 @@ function makeRoutes<AuthError, AuthServices>(
   const serviceLayer = options.simulation
     ? Layer.unwrap(
         Effect.gen(function* () {
-          const { simulationReplacements } = yield* Effect.promise(() => import("@opencode-ai/simulation/backend"))
+          const { simulationReplacements } = yield* Effect.promise(() => import("@ocpp/simulation/backend"))
           const simulation = yield* simulationReplacements({ version: App.make(options.app).version })
           return AppNodeBuilder.build(applicationServices, [...replacements, ...simulation])
         }),

@@ -2,11 +2,11 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, Schema } from "effect"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Location } from "@opencode-ai/core/location"
-import { LocationMutation } from "@opencode-ai/core/location-mutation"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Global } from "@opencode-ai/util/global"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Location } from "@ocpp/core/location"
+import { LocationMutation } from "@ocpp/core/location-mutation"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Global } from "@ocpp/util/global"
 import { tmpdir } from "./fixture/tmpdir"
 import { location } from "./fixture/location"
 import { it } from "./lib/effect"
@@ -90,7 +90,7 @@ describe("LocationMutation", () => {
   it.live("allows a relative path outside the Location but inside the project worktree", () =>
     withTmp((directory) =>
       Effect.gen(function* () {
-        const active = path.join(directory, "packages", "opencode")
+        const active = path.join(directory, "packages", "ocpp")
         yield* Effect.promise(() => fs.mkdir(active, { recursive: true }))
         const target = yield* (yield* LocationMutation.Service).resolve({ path: "../../README.md" })
         expect(target).toMatchObject({
@@ -98,7 +98,7 @@ describe("LocationMutation", () => {
           resource: "../../README.md",
         })
         expect(target.externalDirectory).toBeUndefined()
-      }).pipe(provide(path.join(directory, "packages", "opencode"), directory)),
+      }).pipe(provide(path.join(directory, "packages", "ocpp"), directory)),
     ),
   )
 

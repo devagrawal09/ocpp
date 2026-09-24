@@ -4,17 +4,17 @@ import fs from "fs/promises"
 import path from "path"
 import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Fiber, Stream } from "effect"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Git } from "@opencode-ai/core/git"
-import { Database } from "@opencode-ai/core/database/database"
-import { Bus } from "@opencode-ai/core/bus"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { Worktree } from "@opencode-ai/core/worktree"
-import { WorktreeDirectory } from "@opencode-ai/core/worktree/directory"
-import { WorktreeTable } from "@opencode-ai/core/worktree/sql"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Git } from "@ocpp/core/git"
+import { Database } from "@ocpp/core/database/database"
+import { Bus } from "@ocpp/core/bus"
+import { Project } from "@ocpp/core/project"
+import { ProjectTable } from "@ocpp/core/project/sql"
+import { Worktree } from "@ocpp/core/worktree"
+import { WorktreeDirectory } from "@ocpp/core/worktree/directory"
+import { WorktreeTable } from "@ocpp/core/worktree/sql"
 import { initRepo } from "./fixture/git"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
@@ -192,7 +192,7 @@ describe("Worktree", () => {
         .set({
           commands: {
             start:
-              "bun -e \"await Bun.write('setup.json', JSON.stringify([process.env.OPENCODE_WORKTREE_BASE, process.env.OPENCODE_WORKTREE_PATH, process.cwd()]))\"",
+              "bun -e \"await Bun.write('setup.json', JSON.stringify([process.env.OCPP_WORKTREE_BASE, process.env.OCPP_WORKTREE_PATH, process.cwd()]))\"",
           },
         })
         .where(eq(ProjectTable.id, input.projectID))
@@ -228,7 +228,7 @@ describe("Worktree", () => {
         await $`git remote add origin git@github.com:owner/repo.git`.cwd(main).quiet()
         await $`git clone --no-hardlinks ${main} ${clone}`.quiet()
         await $`git remote set-url origin https://github.com/owner/repo.git`.cwd(clone).quiet()
-        await $`git -c user.name=Test -c user.email=test@opencode.test -c commit.gpgsign=false commit --allow-empty -m clone`
+        await $`git -c user.name=Test -c user.email=test@ocpp.test -c commit.gpgsign=false commit --allow-empty -m clone`
           .cwd(clone)
           .quiet()
       })
@@ -240,7 +240,7 @@ describe("Worktree", () => {
         projectID: initial.id,
         commands: {
           start:
-            "bun -e \"await Bun.write('setup.json', JSON.stringify([process.env.OPENCODE_WORKTREE_BASE, process.env.OPENCODE_WORKTREE_PATH, process.cwd()]))\"",
+            "bun -e \"await Bun.write('setup.json', JSON.stringify([process.env.OCPP_WORKTREE_BASE, process.env.OCPP_WORKTREE_PATH, process.cwd()]))\"",
         },
       })
 

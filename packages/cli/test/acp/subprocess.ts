@@ -65,7 +65,7 @@ description: Verifier compatibility skill.
 `
 
 export async function createAcpFixture(options: { readonly skill?: string } = {}) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-cli-acp-"))
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-cli-acp-"))
   const home = path.join(root, "workspace")
   const config = path.join(root, "config")
   const skills = path.join(root, "skills")
@@ -90,7 +90,7 @@ export async function createAcpFixture(options: { readonly skill?: string } = {}
     },
   })
   await Bun.write(
-    path.join(config, "opencode.json"),
+    path.join(config, "ocpp.json"),
     JSON.stringify(verifierConfig(`http://127.0.0.1:${llm.port}/v1`, options.skill ? skills : undefined)),
   )
 
@@ -103,10 +103,10 @@ export async function createAcpFixture(options: { readonly skill?: string } = {}
       const acp = spawnAcp({
         env: isolatedEnv(root, {
           USERPROFILE: root,
-          OPENCODE_CONFIG: undefined,
-          OPENCODE_CONFIG_CONTENT: undefined,
-          OPENCODE_DISABLE_AUTOUPDATE: "true",
-          OPENCODE_MODELS_PATH: undefined,
+          OCPP_CONFIG: undefined,
+          OCPP_CONFIG_CONTENT: undefined,
+          OCPP_DISABLE_AUTOUPDATE: "true",
+          OCPP_MODELS_PATH: undefined,
           ...extraEnv,
         }),
       })
@@ -134,7 +134,7 @@ export function initialize(acp: AcpProcess) {
     .request<InitializeResponse>("initialize", {
       protocolVersion: 1,
       clientCapabilities: { _meta: { "terminal-auth": true } },
-      clientInfo: { name: "opencode-local-acp", version: "0.1.0" },
+      clientInfo: { name: "ocpp-local-acp", version: "0.1.0" },
     })
     .then(expectOk)
 }

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
-import { OpenCode } from "@opencode-ai/client/promise"
+import { Ocpp } from "@ocpp/client/promise"
 import { streamTurn } from "../../src/acp/event"
 
 test("acp prompt resolves after ordered turn updates", async () => {
@@ -81,7 +81,7 @@ test("acp prompt resolves after ordered turn updates", async () => {
       return new Response(null, { status: 404 })
     },
   })
-  const client = OpenCode.make({ baseUrl: server.url.toString() })
+  const client = Ocpp.make({ baseUrl: server.url.toString() })
 
   try {
     const id = "msg_prompt"
@@ -141,7 +141,7 @@ test("acp action resolves without prompt lifecycle events", async () => {
 
   try {
     const response = await streamTurn({
-      client: OpenCode.make({ baseUrl: server.url.toString() }),
+      client: Ocpp.make({ baseUrl: server.url.toString() }),
       connection: {
         sessionUpdate: async () => {},
         requestPermission: async () => ({ outcome: { outcome: "cancelled" } }),

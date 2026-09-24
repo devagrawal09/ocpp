@@ -3,7 +3,7 @@ import type { ElectronNative } from "../preload/types"
 declare global {
   interface Window {
     electron: ElectronNative
-    __OPENCODE__?: {
+    __OCPP__?: {
       deepLinks?: string[]
     }
   }

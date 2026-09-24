@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { OpenCode } from "@opencode-ai/client/promise"
+import { Ocpp } from "@ocpp/client/promise"
 import { loadRunReferences, runProviders } from "../../src/mini/catalog.shared"
 import { catalogModel, catalogProvider } from "./fixture/catalog"
 
@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe("run catalog shared", () => {
   test("loads visible project references from the current reference catalog", async () => {
-    const client = OpenCode.make({ baseUrl: "https://opencode.test" })
+    const client = Ocpp.make({ baseUrl: "https://ocpp.test" })
     const list = spyOn(client.reference, "list").mockImplementation(
       () =>
         Promise.resolve({

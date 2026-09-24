@@ -1,4 +1,4 @@
-import { Delegation } from "@opencode-ai/schema/delegation"
+import { Delegation } from "@ocpp/schema/delegation"
 // Current-native subagent (child Session) tracking for the mini transport.
 //
 // Discovers child Sessions of the active parent from four current sources:
@@ -18,11 +18,11 @@ import { Delegation } from "@opencode-ai/schema/delegation"
 // session, so only whole-session `v2.session.background(parentID)` exists.
 import type {
   EventSubscribeOutput,
-  OpenCodeClient,
+  OcppClient,
   PermissionRequest,
   SessionMessageAssistantTool,
   SessionMessageInfo,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import { Locale } from "../util/locale"
 import { createFragmentReconciler, fragmentRef, type FragmentReconciler } from "./stream-v2.fragment"
 import type {
@@ -131,24 +131,24 @@ export type SubagentTrackerInput = {
 }
 
 export type SubagentTracker = {
-  main(sdk: OpenCodeClient, event: V2Event, signal?: AbortSignal): void
-  foreign(sdk: OpenCodeClient, sessionID: string, event: V2Event, signal?: AbortSignal): void
+  main(sdk: OcppClient, event: V2Event, signal?: AbortSignal): void
+  foreign(sdk: OcppClient, sessionID: string, event: V2Event, signal?: AbortSignal): void
   hydrate(next: {
-    sdk: OpenCodeClient
+    sdk: OcppClient
     messages: SessionMessageInfo[]
     active: Record<string, unknown>
     signal?: AbortSignal
     reconnect?: boolean
   }): Promise<void>
   ready(): Promise<void>
-  select(sdk: OpenCodeClient, sessionID: string | undefined): void
+  select(sdk: OcppClient, sessionID: string | undefined): void
   snapshot(): FooterSubagentState
   settleForm(sessionID: string, formID: string): void
   close(): void
 }
 
 type DiscoveryJob = {
-  sdk: OpenCodeClient
+  sdk: OcppClient
   sessionID: string
   signal: AbortSignal
   task: Promise<void>
@@ -392,7 +392,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
     }
   }
 
-  const hydrateChild = (sdk: OpenCodeClient, child: ChildState, signal = input.signal): Promise<void> => {
+  const hydrateChild = (sdk: OcppClient, child: ChildState, signal = input.signal): Promise<void> => {
     if (!active(signal)) return Promise.resolve()
     const existing = hydrations.get(child.sessionID)
     if (existing) return existing
@@ -440,7 +440,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
     active(signal) && epoch === blockerEpoch && children.get(child.sessionID) === child
 
   const resolvePermissionTools = async (
-    sdk: OpenCodeClient,
+    sdk: OcppClient,
     child: ChildState,
     permissions: PermissionRequest[],
     epoch: number,
@@ -494,7 +494,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
     }
   }
 
-  function scheduleBlockerRetry(sdk: OpenCodeClient, child: ChildState, epoch: number, signal = input.signal) {
+  function scheduleBlockerRetry(sdk: OcppClient, child: ChildState, epoch: number, signal = input.signal) {
     if (!blockerCurrent(child, epoch, signal) || child.blockersHydrated || blockerRetryTimers.has(child.sessionID))
       return
     const attempt = blockerRetryAttempts.get(child.sessionID) ?? 0
@@ -510,7 +510,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
   }
 
   function hydrateBlockers(
-    sdk: OpenCodeClient,
+    sdk: OcppClient,
     child: ChildState,
     epoch = blockerEpoch,
     signal = input.signal,
@@ -627,7 +627,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
     }
   }
 
-  const discover = (sdk: OpenCodeClient, sessionID: string, signal = input.signal) => {
+  const discover = (sdk: OcppClient, sessionID: string, signal = input.signal) => {
     if (!active(signal) || children.size >= FAMILY_LIST_LIMIT) return Promise.resolve()
     if (checked.has(sessionID) || children.has(sessionID) || sessionID === input.sessionID) return Promise.resolve()
     const existing = discoveryJobs.get(sessionID)

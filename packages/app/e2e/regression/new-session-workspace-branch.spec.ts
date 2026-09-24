@@ -1,13 +1,13 @@
 import { expect, test } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
 
 const draftID = "draft_new_session_workspace_branch"
-const directory = "C:/OpenCode/WorkspaceBranch"
+const directory = "C:/OC++/WorkspaceBranch"
 const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
 
 test("selects a base branch for a new workspace", async ({ page }) => {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: "proj_new_session_workspace_branch",
@@ -25,14 +25,14 @@ test("selects a base branch for a new workspace", async ({ page }) => {
   await page.addInitScript(
     ({ directory, draftID, server }) => {
       localStorage.setItem(
-        "opencode.global.dat:server",
+        "ocpp.global.dat:server",
         JSON.stringify({
           projects: { local: [{ worktree: directory, expanded: true }] },
           lastProject: { local: directory },
         }),
       )
       localStorage.setItem(
-        "opencode.window.browser.dat:tabs",
+        "ocpp.window.browser.dat:tabs",
         JSON.stringify([{ type: "draft", draftID, server, directory }]),
       )
     },

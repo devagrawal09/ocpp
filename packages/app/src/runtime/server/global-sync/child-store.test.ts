@@ -4,7 +4,7 @@ import { createStore } from "solid-js/store"
 import type { State } from "./types"
 import type { QueryOptionsApi } from "../sync"
 import { ServerScope } from "@/runtime/server/scope"
-import type { Data } from "@opencode-ai/client/solid"
+import type { Data } from "@ocpp/client/solid"
 
 let createChildStoreManager: typeof import("./child-store").createChildStoreManager
 const querySingles: Array<() => { queryKey?: unknown[]; enabled?: boolean }> = []

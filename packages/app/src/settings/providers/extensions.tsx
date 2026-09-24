@@ -1,7 +1,7 @@
 import { Component, For, createEffect, createMemo, createResource } from "solid-js"
-import { Icon } from "@opencode-ai/ui/icon"
-import { Switch } from "@opencode-ai/ui/switch"
-import { Tabs } from "@opencode-ai/ui/tabs"
+import { Icon } from "@ocpp/ui/icon"
+import { Switch } from "@ocpp/ui/switch"
+import { Tabs } from "@ocpp/ui/tabs"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useData } from "@/runtime/server/current"
 import { useServerSDK } from "@/runtime/server/client"
@@ -132,7 +132,7 @@ export const SettingsExtensions: Component = () => {
                 </span>
                 <ExternalLink
                   class="text-13-regular text-v2-text-accent hover:underline"
-                  href="https://opencode.ai/docs/skills/"
+                  href="https://ocpp.ai/docs/skills/"
                 >
                   {language.t("settings.extensions.addSkills")}
                 </ExternalLink>

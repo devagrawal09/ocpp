@@ -1,8 +1,8 @@
 import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Config } from "@opencode-ai/schema/config"
-import { Money } from "@opencode-ai/schema/money"
+import { Config } from "@ocpp/schema/config"
+import { Money } from "@ocpp/schema/money"
 import {
   DateTime,
   Deferred,
@@ -19,27 +19,27 @@ import {
   Stream,
 } from "effect"
 import { TestClock } from "effect/testing"
-import { Plugin as EffectPlugin } from "@opencode-ai/plugin/effect"
-import { Agent } from "@opencode-ai/core/agent"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Global } from "@opencode-ai/util/global"
-import { LocationServiceMap, type LocationServices } from "@opencode-ai/core/location-services"
-import { LocationActivity } from "@opencode-ai/core/location-activity"
-import { Location } from "@opencode-ai/core/location"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { Model } from "@opencode-ai/core/model"
-import { Mcp } from "@opencode-ai/core/mcp/index"
-import { Project } from "@opencode-ai/core/project"
-import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Session } from "@opencode-ai/core/session"
-import { Workspace } from "@opencode-ai/core/workspace"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
+import { Plugin as EffectPlugin } from "@ocpp/plugin/effect"
+import { Agent } from "@ocpp/core/agent"
+import { Catalog } from "@ocpp/core/catalog"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Global } from "@ocpp/util/global"
+import { LocationServiceMap, type LocationServices } from "@ocpp/core/location-services"
+import { LocationActivity } from "@ocpp/core/location-activity"
+import { Location } from "@ocpp/core/location"
+import { Plugin } from "@ocpp/core/plugin"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { Model } from "@ocpp/core/model"
+import { Mcp } from "@ocpp/core/mcp/index"
+import { Project } from "@ocpp/core/project"
+import { Provider } from "@ocpp/core/provider"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Session } from "@ocpp/core/session"
+import { Workspace } from "@ocpp/core/workspace"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { tmpdir } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
@@ -313,7 +313,7 @@ describe("LocationServiceMap", () => {
       Effect.flatMap((dir) =>
         Effect.gen(function* () {
           const activations = { count: 0 }
-          const file = path.join(dir.path, "opencode.json")
+          const file = path.join(dir.path, "ocpp.json")
           yield* Effect.promise(() => fs.writeFile(file, "{}"))
           const firstStarted = yield* Deferred.make<void>()
           const releaseFirst = yield* Deferred.make<void>()
@@ -514,7 +514,7 @@ describe("LocationServiceMap", () => {
       Effect.flatMap((dir) =>
         Effect.gen(function* () {
           yield* Effect.promise(() =>
-            fs.writeFile(path.join(dir.path, "opencode.json"), JSON.stringify({ plugins: ["-*", "opencode.agent"] })),
+            fs.writeFile(path.join(dir.path, "ocpp.json"), JSON.stringify({ plugins: ["-*", "ocpp.agent"] })),
           )
           const plugins = yield* Effect.gen(function* () {
             const plugins = yield* Plugin.Service
@@ -528,7 +528,7 @@ describe("LocationServiceMap", () => {
             ),
           )
 
-          expect(plugins.map((plugin) => plugin.id)).toEqual([Plugin.ID.make("opencode.agent")])
+          expect(plugins.map((plugin) => plugin.id)).toEqual([Plugin.ID.make("ocpp.agent")])
         }),
       ),
     ),
@@ -541,21 +541,21 @@ describe("LocationServiceMap", () => {
     ).pipe(
       Effect.flatMap((dir) =>
         Effect.gen(function* () {
-          const file = path.join(dir.path, "opencode.json")
-          yield* Effect.promise(() => fs.writeFile(file, JSON.stringify({ plugins: ["-*", "opencode.agent"] })))
+          const file = path.join(dir.path, "ocpp.json")
+          yield* Effect.promise(() => fs.writeFile(file, JSON.stringify({ plugins: ["-*", "ocpp.agent"] })))
           yield* Effect.gen(function* () {
             const registry = yield* Plugin.Service
             const supervisor = yield* PluginSupervisor.Service
             yield* supervisor.flush
-            expect((yield* registry.list()).map((plugin) => String(plugin.id))).toEqual(["opencode.agent"])
+            expect((yield* registry.list()).map((plugin) => String(plugin.id))).toEqual(["ocpp.agent"])
 
-            yield* Effect.promise(() => fs.writeFile(file, JSON.stringify({ plugins: ["-*", "opencode.command"] })))
+            yield* Effect.promise(() => fs.writeFile(file, JSON.stringify({ plugins: ["-*", "ocpp.command"] })))
             for (let attempt = 0; attempt < 100; attempt++) {
-              if ((yield* registry.list()).some((plugin) => plugin.id === "opencode.command")) break
+              if ((yield* registry.list()).some((plugin) => plugin.id === "ocpp.command")) break
               yield* Effect.sleep("20 millis")
             }
 
-            expect((yield* registry.list()).map((plugin) => String(plugin.id))).toEqual(["opencode.command"])
+            expect((yield* registry.list()).map((plugin) => String(plugin.id))).toEqual(["ocpp.command"])
 
             yield* Effect.promise(() =>
               fs.writeFile(
@@ -579,12 +579,12 @@ describe("LocationServiceMap", () => {
               },
             ])
 
-            yield* Effect.promise(() => fs.writeFile(file, JSON.stringify({ plugins: ["-*", "opencode.agent"] })))
+            yield* Effect.promise(() => fs.writeFile(file, JSON.stringify({ plugins: ["-*", "ocpp.agent"] })))
             for (let attempt = 0; attempt < 100; attempt++) {
-              if ((yield* registry.list()).some((plugin) => plugin.id === "opencode.agent")) break
+              if ((yield* registry.list()).some((plugin) => plugin.id === "ocpp.agent")) break
               yield* Effect.sleep("20 millis")
             }
-            expect((yield* registry.list()).map((plugin) => String(plugin.id))).toEqual(["opencode.agent"])
+            expect((yield* registry.list()).map((plugin) => String(plugin.id))).toEqual(["ocpp.agent"])
           }).pipe(
             Effect.scoped,
             Effect.provide(
@@ -778,7 +778,7 @@ describe("LocationServiceMap", () => {
           const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
           yield* Effect.promise(() =>
             fs.writeFile(
-              path.join(dir.path, "opencode.json"),
+              path.join(dir.path, "ocpp.json"),
               JSON.stringify({
                 providers: {
                   unavailable: {
@@ -966,7 +966,7 @@ describe("LocationServiceMap", () => {
           const url = "https://example.com/mcp"
           yield* Effect.promise(() =>
             fs.writeFile(
-              path.join(dir.path, "opencode.json"),
+              path.join(dir.path, "ocpp.json"),
               JSON.stringify({ mcp: { servers: { example: { type: "remote", url, disabled: true } } } }),
             ),
           )

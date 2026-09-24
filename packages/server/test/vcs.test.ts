@@ -1,7 +1,7 @@
 import path from "node:path"
 import { $ } from "bun"
 import { expect } from "bun:test"
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
 import { Effect, Layer } from "effect"
 import { tmpdir } from "../../core/test/fixture/tmpdir"
 import { it } from "../../core/test/lib/effect"
@@ -12,11 +12,11 @@ it.live(
   "serves lazy review bases, committed diffs, and unavailable-base errors",
   () =>
     Effect.gen(function* () {
-      const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-vcs-endpoint-")))
+      const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("ocpp-vcs-endpoint-")))
       yield* Effect.promise(async () => {
         await $`git init -b main`.cwd(tmp.path).quiet()
         await $`git config commit.gpgsign false`.cwd(tmp.path).quiet()
-        await $`git config user.email test@opencode.test`.cwd(tmp.path).quiet()
+        await $`git config user.email test@ocpp.test`.cwd(tmp.path).quiet()
         await $`git config user.name Test`.cwd(tmp.path).quiet()
         await Bun.write(path.join(tmp.path, "file.txt"), "base\n")
         await $`git add .`.cwd(tmp.path).quiet()
@@ -72,7 +72,7 @@ it.live(
 
 it.live("maps a failing base provider to HTTP 503 instead of null metadata", () =>
   Effect.gen(function* () {
-    const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-vcs-failure-")))
+    const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("ocpp-vcs-failure-")))
     const handler = yield* ServerFetch.make(
       { database: { path: ":memory:" }, config: { directory: tmp.path }, fs: { filewatcher: false } },
       {
@@ -110,7 +110,7 @@ it.live("maps a failing base provider to HTTP 503 instead of null metadata", () 
         ],
       },
     )
-    const url = new URL("http://opencode.local/api/vcs/base")
+    const url = new URL("http://ocpp.local/api/vcs/base")
     url.searchParams.set("location[directory]", tmp.path)
     const response = yield* Effect.promise(() => handler(new Request(url)))
     expect(response.status).toBe(503)

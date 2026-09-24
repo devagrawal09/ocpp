@@ -60,7 +60,7 @@ const TestRpcs = RpcGroup.make(
 )
 type TestRpcClient = RpcClient.FromGroup<typeof TestRpcs, RpcClientError.RpcClientError>
 
-class TestClient extends Context.Service<TestClient, TestRpcClient>()("opencode/desktop/TestClient") {}
+class TestClient extends Context.Service<TestClient, TestRpcClient>()("ocpp/desktop/TestClient") {}
 
 function makeClient(port: MessagePort) {
   return ManagedRuntime.make(

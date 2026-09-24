@@ -1,13 +1,13 @@
 export * as SessionModelRequest from "./model-request.js"
 
-import { HttpOptions, LanguageModel, LLM, LLMRequest, Message, SystemPart } from "@opencode-ai/ai"
-import type { StreamOptions } from "@opencode-ai/ai/route"
-import type { Agent } from "@opencode-ai/schema/agent"
-import type { Model } from "@opencode-ai/schema/model"
-import type { Content } from "@opencode-ai/schema/tool"
+import { HttpOptions, LanguageModel, LLM, LLMRequest, Message, SystemPart } from "@ocpp/ai"
+import type { StreamOptions } from "@ocpp/ai/route"
+import type { Agent } from "@ocpp/schema/agent"
+import type { Model } from "@ocpp/schema/model"
+import type { Content } from "@ocpp/schema/tool"
 import { Cause, Config, Context, Effect, Layer, Result, Stream } from "effect"
 import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { App } from "../app.js"
 import { Permission } from "../permission.js"
 import { PluginHooks } from "../plugin/hooks.js"
@@ -26,7 +26,7 @@ const IMAGE_REMOVED =
   "[This image was removed to reduce the request size and is no longer visible. Do not make claims about its contents from memory. If needed, retrieve it again with an available tool or ask the user to attach it again.]"
 
 const responsesWebSocketFlag = (providerID: string) =>
-  `OPENCODE_EXPERIMENTAL_${providerID.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_RESPONSES_WEBSOCKET`
+  `OCPP_EXPERIMENTAL_${providerID.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_RESPONSES_WEBSOCKET`
 
 /** Failures a prepared execution can surface: infrastructure errors plus user declines resurfaced from the defect tunnel. */
 export type ExecuteError = Tool.Error | Permission.DeclinedError | QuestionTool.CancelledError
@@ -201,9 +201,9 @@ const sessionHeaders = (session: Pick<SessionSchema.Info, "id" | "parentID" | "p
   "X-Session-Id": session.id,
   ...(session.parentID ? { "x-parent-session-id": session.parentID } : {}),
   "User-Agent": App.useragent(app),
-  "x-opencode-project": session.projectID,
-  "x-opencode-session": session.id,
-  "x-opencode-client": app.name,
+  "x-ocpp-project": session.projectID,
+  "x-ocpp-session": session.id,
+  "x-ocpp-client": app.name,
 })
 
 const promptCacheKey = (sessionID: SessionSchema.ID) =>
@@ -272,7 +272,7 @@ export interface Interface {
 }
 
 /** Location-scoped outbound model-request preparation. */
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionModelRequest") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionModelRequest") {}
 
 export const layer = Layer.effect(
   Service,

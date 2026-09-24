@@ -1,23 +1,23 @@
 export * as ServerWorkerd from "./workerd"
 
 import { Effect, Layer } from "effect"
-import { ConfigPluginSource } from "@opencode-ai/core/config/plugin/source"
-import { Database } from "@opencode-ai/core/database/database"
-import { sqliteLayer } from "@opencode-ai/core/database/sqlite.workerd"
-import type { DurableObjectStorage } from "@opencode-ai/core/database/sqlite.workerd"
-import { EnvironmentUnavailable } from "@opencode-ai/core/environment/unavailable"
-import { FileSystem } from "@opencode-ai/core/filesystem"
-import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
-import { Pty } from "@opencode-ai/core/pty"
-import { Snapshot } from "@opencode-ai/core/snapshot"
-import { Vcs } from "@opencode-ai/core/vcs"
-import { CrossSpawnSpawner } from "@opencode-ai/util/cross-spawn-spawner"
-import type { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { ConfigPluginSource } from "@ocpp/core/config/plugin/source"
+import { Database } from "@ocpp/core/database/database"
+import { sqliteLayer } from "@ocpp/core/database/sqlite.workerd"
+import type { DurableObjectStorage } from "@ocpp/core/database/sqlite.workerd"
+import { EnvironmentUnavailable } from "@ocpp/core/environment/unavailable"
+import { FileSystem } from "@ocpp/core/filesystem"
+import { FileSystemSearch } from "@ocpp/core/filesystem/search"
+import { Pty } from "@ocpp/core/pty"
+import { Snapshot } from "@ocpp/core/snapshot"
+import { Vcs } from "@ocpp/core/vcs"
+import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
+import type { LayerNode } from "@ocpp/util/effect/layer-node"
 import { ServerFetch } from "./fetch"
 import type { ServerOptions } from "./options"
 
 /**
- * The workerd runtime profile: boots opencode core and server inside a
+ * The workerd runtime profile: boots ocpp core and server inside a
  * Cloudflare Durable Object, with every intentionally-local service replaced
  * or disabled.
  *
@@ -36,11 +36,11 @@ import type { ServerOptions } from "./options"
  * (see `script/workerd-probe.ts`).
  */
 export interface Options {
-  /** Durable Object storage whose SQLite database backs the opencode database. */
+  /** Durable Object storage whose SQLite database backs the ocpp database. */
   readonly storage: DurableObjectStorage
   readonly app?: ServerOptions["app"]
   readonly password?: string
-  /** Inline opencode config content (JSON), same as `ServerOptions.config.content`. */
+  /** Inline ocpp config content (JSON), same as `ServerOptions.config.content`. */
   readonly config?: { readonly content?: string }
   /** models.dev catalog options; the bundled snapshot is the boot-time floor either way. */
   readonly models?: ServerOptions["models"]

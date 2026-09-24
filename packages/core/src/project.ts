@@ -7,12 +7,12 @@ import path from "path"
 import { AbsolutePath } from "./schema.js"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
-import { Worktree } from "@opencode-ai/schema/worktree"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Worktree } from "@ocpp/schema/worktree"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Git } from "./git.js"
-import { AppProcess } from "@opencode-ai/util/process"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { Hash } from "@opencode-ai/util/hash"
+import { AppProcess } from "@ocpp/util/process"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { Hash } from "@ocpp/util/hash"
 import { ProjectMarkers } from "./project/markers.js"
 import { ProjectSchema } from "./project/schema.js"
 import { ProjectTable, upsertProject } from "./project/sql.js"
@@ -66,7 +66,7 @@ export interface Interface {
   readonly resolve: (input: AbsolutePath, options?: { readonly discovery?: boolean }) => Effect.Effect<Resolved>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Project") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/Project") {}
 
 function fromRow(row: typeof ProjectTable.$inferSelect): Info {
   const icon =
@@ -237,7 +237,7 @@ const layer = Layer.effect(
     })
 
     const cached = Effect.fnUntraced(function* (dir: string) {
-      return yield* fs.readFileString(path.join(dir, "opencode")).pipe(
+      return yield* fs.readFileString(path.join(dir, "ocpp")).pipe(
         Effect.map((value) => value.trim()),
         Effect.map((value) => (value ? ID.make(value) : undefined)),
         Effect.orElseSucceed(() => undefined),

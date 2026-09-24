@@ -1,7 +1,7 @@
 import { Duration, Effect, Layer, LayerMap } from "effect"
 import { existsSync } from "fs"
 import path from "path"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Instance } from "./instance.js"
 import { Location } from "./location.js"
 import { LocationServiceMap } from "./location-service-map.js"

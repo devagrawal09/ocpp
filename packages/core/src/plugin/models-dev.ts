@@ -1,12 +1,12 @@
-import { define } from "@opencode-ai/plugin/effect/plugin"
-import { Integration } from "@opencode-ai/schema/integration"
-import { Provider } from "@opencode-ai/schema/provider"
+import { define } from "@ocpp/plugin/effect/plugin"
+import { Integration } from "@ocpp/schema/integration"
+import { Provider } from "@ocpp/schema/provider"
 import { Effect, Stream } from "effect"
 import { Bus } from "../bus.js"
 import { ModelsDev } from "../models-dev.js"
 
 export const ModelsDevPlugin = define({
-  id: "opencode.models.dev",
+  id: "ocpp.models.dev",
   effect: Effect.fn(function* (ctx) {
     const modelsDev = yield* ModelsDev.Service
     const bus = yield* Bus.Service

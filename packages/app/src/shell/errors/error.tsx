@@ -1,12 +1,12 @@
-import { TextField } from "@opencode-ai/ui/text-field"
+import { TextField } from "@ocpp/ui/text-field"
 import type { captureException } from "@sentry/solid"
-import { Logo } from "@opencode-ai/ui/logo"
-import { Button } from "@opencode-ai/ui/button"
+import { Logo } from "@ocpp/ui/logo"
+import { Button } from "@ocpp/ui/button"
 import { Component, createSignal, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { usePlatform } from "@/runtime/platform/platform"
 import { useLanguage } from "@/runtime/i18n/language"
-import { Icon } from "@opencode-ai/ui/icon"
+import { Icon } from "@ocpp/ui/icon"
 import { errorDescriptionKey, errorStatus } from "./description"
 
 export type InitError = {
@@ -367,7 +367,7 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
             <button
               type="button"
               class="flex items-center text-text-interactive-base gap-1"
-              onClick={() => platform.openExternal("https://opencode.ai/desktop-feedback")}
+              onClick={() => platform.openExternal("https://ocpp.ai/desktop-feedback")}
             >
               <div>{language.t("error.page.report.discord")}</div>
               <Icon name="discord" class="text-text-interactive-base" />

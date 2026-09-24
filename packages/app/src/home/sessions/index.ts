@@ -1,4 +1,4 @@
-import type { SessionInfo, SessionsResponse } from "@opencode-ai/client/promise"
+import type { SessionInfo, SessionsResponse } from "@ocpp/client/promise"
 import { pathKey } from "@/workspaces/path-key"
 import { SESSION_RECENT_LIMIT, SESSION_RECENT_WINDOW } from "@/runtime/server/global-sync/types"
 

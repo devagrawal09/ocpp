@@ -8,7 +8,7 @@ const CLI_VERSION = "dev"
 export type Channel = "dev" | "beta" | "prod"
 
 export function resolveChannel(): Channel {
-  const raw = Bun.env.OPENCODE_CHANNEL
+  const raw = Bun.env.OCPP_CHANNEL
   if (raw === "dev" || raw === "beta" || raw === "prod") return raw
   return "dev"
 }
@@ -16,43 +16,43 @@ export function resolveChannel(): Channel {
 export const CLI_BINARIES: Array<{ target: string; package: string; os: string; cpu: string }> = [
   {
     target: "aarch64-apple-darwin",
-    package: "@opencode-ai/cli-darwin-arm64",
+    package: "@ocpp/cli-darwin-arm64",
     os: "darwin",
     cpu: "arm64",
   },
   {
     target: "x86_64-apple-darwin",
-    package: "@opencode-ai/cli-darwin-x64-baseline",
+    package: "@ocpp/cli-darwin-x64-baseline",
     os: "darwin",
     cpu: "x64",
   },
   {
     target: "aarch64-pc-windows-msvc",
-    package: "@opencode-ai/cli-windows-arm64",
+    package: "@ocpp/cli-windows-arm64",
     os: "win32",
     cpu: "arm64",
   },
   {
     target: "x86_64-pc-windows-msvc",
-    package: "@opencode-ai/cli-windows-x64-baseline",
+    package: "@ocpp/cli-windows-x64-baseline",
     os: "win32",
     cpu: "x64",
   },
   {
     target: "x86_64-unknown-linux-gnu",
-    package: "@opencode-ai/cli-linux-x64-baseline",
+    package: "@ocpp/cli-linux-x64-baseline",
     os: "linux",
     cpu: "x64",
   },
   {
     target: "aarch64-unknown-linux-gnu",
-    package: "@opencode-ai/cli-linux-arm64",
+    package: "@ocpp/cli-linux-arm64",
     os: "linux",
     cpu: "arm64",
   },
 ]
 
-export const CLI_TARGET = Bun.env.OPENCODE_CLI_TARGET
+export const CLI_TARGET = Bun.env.OCPP_CLI_TARGET
 
 function nativeTarget() {
   const { platform, arch } = process
@@ -69,13 +69,13 @@ export function getCurrentCli(target = CLI_TARGET ?? nativeTarget()) {
   return binaryConfig
 }
 
-export async function downloadCliToResources(version = CLI_VERSION, dest = windowsify("resources/opencode-cli")) {
+export async function downloadCliToResources(version = CLI_VERSION, dest = windowsify("resources/ocpp-cli")) {
   const cli = getCurrentCli()
-  const directory = await mkdtemp(join(tmpdir(), "opencode-cli-"))
+  const directory = await mkdtemp(join(tmpdir(), "ocpp-cli-"))
   try {
     await $`bun install --no-save --cwd ${directory} ${`${cli.package}@${version}`} ${`--os=${cli.os}`} ${`--cpu=${cli.cpu}`}`
     await copyCliToResources(
-      join(directory, "node_modules", cli.package, "bin", cli.os === "win32" ? "opencode2.exe" : "opencode2"),
+      join(directory, "node_modules", cli.package, "bin", cli.os === "win32" ? "ocpp.exe" : "ocpp"),
       dest,
     )
   } finally {
@@ -85,10 +85,10 @@ export async function downloadCliToResources(version = CLI_VERSION, dest = windo
   console.log(`Copied ${cli.package}@${version} to ${dest}`)
 }
 
-export async function copyBuiltCliToResources(root: string, dest = windowsify("resources/opencode-cli")) {
+export async function copyBuiltCliToResources(root: string, dest = windowsify("resources/ocpp-cli")) {
   const cli = getCurrentCli()
-  const directory = cli.package.replace("@opencode-ai/", "")
-  await copyCliToResources(join(root, directory, "bin", cli.os === "win32" ? "opencode2.exe" : "opencode2"), dest)
+  const directory = cli.package.replace("@ocpp/", "")
+  await copyCliToResources(join(root, directory, "bin", cli.os === "win32" ? "ocpp.exe" : "ocpp"), dest)
 }
 
 async function copyCliToResources(source: string, dest: string) {

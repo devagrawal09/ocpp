@@ -8,7 +8,7 @@ import { tmpdir } from "./fixture/fixture"
 
 test("discovers project TUI plugin files in stable order", async () => {
   await using tmp = await tmpdir()
-  const directory = path.join(tmp.path, ".opencode", "plugins", "tui")
+  const directory = path.join(tmp.path, ".ocpp", "plugins", "tui")
   await mkdir(path.join(directory, "nested"), { recursive: true })
   await Promise.all([
     writeFile(path.join(directory, "second.tsx"), "export default {}"),
@@ -27,7 +27,7 @@ test("returns no project TUI plugins when the directory is absent", async () => 
   await using tmp = await tmpdir()
   const roots = await tuiPluginDirectories(tmp.path, path.join(tmp.path, "config"))
   expect(await discoverTuiPlugins(roots)).toEqual([])
-  expect(roots).toContain(path.join(tmp.path, ".opencode", "plugins", "tui"))
+  expect(roots).toContain(path.join(tmp.path, ".ocpp", "plugins", "tui"))
 })
 
 test("discovers global and ancestor plugin roots in precedence order", async () => {
@@ -37,10 +37,10 @@ test("discovers global and ancestor plugin roots in precedence order", async () 
   const config = path.join(tmp.path, "config")
   const directories = [
     path.join(config, "plugins", "tui"),
-    path.join(tmp.path, "repo", ".opencode", "plugins", "tui"),
-    path.join(tmp.path, "repo", "packages", ".opencode", "plugins", "tui"),
+    path.join(tmp.path, "repo", ".ocpp", "plugins", "tui"),
+    path.join(tmp.path, "repo", "packages", ".ocpp", "plugins", "tui"),
   ]
-  const outside = path.join(tmp.path, ".opencode", "plugins", "tui")
+  const outside = path.join(tmp.path, ".ocpp", "plugins", "tui")
   await mkdir(path.join(project, ".git"), { recursive: true })
   await Promise.all([...directories, outside].map((directory) => mkdir(directory, { recursive: true })))
   await Promise.all(
@@ -52,7 +52,7 @@ test("discovers global and ancestor plugin roots in precedence order", async () 
   expect(await discoverTuiPlugins(roots)).toEqual(
     directories.map((directory, index) => path.join(directory, `${index}.ts`)),
   )
-  expect(roots).not.toContain(path.join(cwd, ".opencode", "plugins", "tui"))
+  expect(roots).not.toContain(path.join(cwd, ".ocpp", "plugins", "tui"))
   expect(roots).not.toContain(outside)
 })
 
@@ -64,7 +64,7 @@ test("uses an Hg root for a missing project plugin directory", async () => {
   await mkdir(cwd, { recursive: true })
 
   expect(await tuiPluginDirectories(cwd, path.join(tmp.path, "config"))).toContain(
-    path.join(project, ".opencode", "plugins", "tui"),
+    path.join(project, ".ocpp", "plugins", "tui"),
   )
 })
 

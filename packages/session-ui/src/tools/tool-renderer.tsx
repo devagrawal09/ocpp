@@ -1,4 +1,4 @@
-import { Delegation } from "@opencode-ai/schema/delegation"
+import { Delegation } from "@ocpp/schema/delegation"
 // Current Session tool presentation grouped by visual family.
 import {
   Component,
@@ -19,24 +19,24 @@ import {
 import stripAnsi from "strip-ansi"
 import { Dynamic } from "solid-js/web"
 import { type SessionSummary, useData } from "../context"
-import { useFileComponent } from "@opencode-ai/ui/context/file"
-import { type UiI18n, useI18n } from "@opencode-ai/ui/context/i18n"
+import { useFileComponent } from "@ocpp/ui/context/file"
+import { type UiI18n, useI18n } from "@ocpp/ui/context/i18n"
 import { BasicTool, GenericTool } from "../components/basic-tool"
 import { formatExecutionCode } from "../components/execution-code"
 import { HighlightedCode } from "../components/highlighted-code"
-import { Accordion } from "@opencode-ai/ui/accordion"
-import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
-import { Collapsible } from "@opencode-ai/ui/collapsible"
-import { FileIcon } from "@opencode-ai/ui/file-icon"
-import { Icon, type IconProps } from "@opencode-ai/ui/icon"
+import { Accordion } from "@ocpp/ui/accordion"
+import { StickyAccordionHeader } from "@ocpp/ui/sticky-accordion-header"
+import { Collapsible } from "@ocpp/ui/collapsible"
+import { FileIcon } from "@ocpp/ui/file-icon"
+import { Icon, type IconProps } from "@ocpp/ui/icon"
 import { ToolErrorCard } from "../components/tool-error-card"
-import { DiffChanges } from "@opencode-ai/ui/diff-changes"
+import { DiffChanges } from "@ocpp/ui/diff-changes"
 import { Markdown } from "../components/markdown"
-import { getDirectory, getFilename } from "@opencode-ai/util/path"
-import { checksum } from "@opencode-ai/util/encode"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
+import { getDirectory, getFilename } from "@ocpp/util/path"
+import { checksum } from "@ocpp/util/encode"
+import { Tooltip } from "@ocpp/ui/tooltip"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { TextShimmer } from "@ocpp/ui/text-shimmer"
 import { changedFileDiff, patchFileGroups } from "../components/apply-patch-file"
 import { animate } from "motion"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
@@ -45,7 +45,7 @@ import type {
   SessionMessageAssistantReasoning,
   SessionMessageAssistantTool,
   SessionMessageShell,
-} from "@opencode-ai/client/promise"
+} from "@ocpp/client/promise"
 import {
   currentToolError,
   currentToolInput,
@@ -981,7 +981,7 @@ export function CurrentContextToolGroup(props: {
                             return name ? [name] : []
                           }),
                         )
-                        const marker = "__OPENCODE_LOADED_SKILL__"
+                        const marker = "__OCPP_LOADED_SKILL__"
                         const loaded = createMemo(() =>
                           i18n.plural("ui.tool.loadedSkills", skills().length, { name: marker }),
                         )
@@ -1439,7 +1439,7 @@ ToolRegistry.register({
         return relative === filepath ? relative : relative.replace(/^[/\\]/, "")
       }),
     )
-    const marker = "__OPENCODE_LOADED_PATH__"
+    const marker = "__OCPP_LOADED_PATH__"
     const parts = createMemo(() => i18n.t("ui.tool.loadedFile", { path: marker }).split(marker))
     return (
       <>
@@ -2320,7 +2320,7 @@ ToolRegistry.register({
     const i18n = useI18n()
     const name = createMemo(() => skillToolName(props.input, props.metadata))
     const running = createMemo(() => props.status === "streaming" || props.status === "running")
-    const marker = "__OPENCODE_LOADED_SKILL__"
+    const marker = "__OCPP_LOADED_SKILL__"
     const parts = createMemo(() => i18n.t("ui.tool.loadedSkill", { name: marker }).split(marker))
 
     return (

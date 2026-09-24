@@ -1,4 +1,4 @@
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import { expect, test, type Page, type Route } from "@playwright/test"
 import { installSseTransport } from "../utils/sse-transport"
 import { currentSession } from "../utils/mock-server"
@@ -284,8 +284,8 @@ function pendingPermission(id: string, sessionID: string): MockPermission {
 async function configureServers(page: Page, tabs: { type: "session"; server: string; sessionId: string }[] = []) {
   await page.addInitScript(
     ({ serverB, tabs }) => {
-      localStorage.setItem("opencode.global.dat:server", JSON.stringify({ list: [serverB] }))
-      localStorage.setItem("opencode.window.browser.dat:tabs", JSON.stringify(tabs))
+      localStorage.setItem("ocpp.global.dat:server", JSON.stringify({ list: [serverB] }))
+      localStorage.setItem("ocpp.window.browser.dat:tabs", JSON.stringify(tabs))
     },
     { serverB, tabs },
   )

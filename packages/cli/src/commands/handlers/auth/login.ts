@@ -1,6 +1,6 @@
 import { autocomplete, intro, log, outro, select, spinner, text } from "@clack/prompts"
 import { Effect, Option } from "effect"
-import type { FormAnswer, IntegrationInfo, OpenCodeClient } from "@opencode-ai/client"
+import type { FormAnswer, IntegrationInfo, OcppClient } from "@ocpp/client"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
 import { handlePromptErrors, openUrl, prompt, requireInteractive } from "../../../ui/prompt"
@@ -17,7 +17,7 @@ import {
 } from "./shared"
 
 const integrationPriority = new Map([
-  ["opencode", 0],
+  ["ocpp", 0],
   ["opencode-go", 1],
   ["openai", 2],
   ["github-copilot", 3],
@@ -58,7 +58,7 @@ const login = Effect.fn("cli.auth.login.run")(function* (input: {
   outro("Done")
 })
 
-const findIntegration = Effect.fn("cli.auth.login.integration")(function* (client: OpenCodeClient, target?: string) {
+const findIntegration = Effect.fn("cli.auth.login.integration")(function* (client: OcppClient, target?: string) {
   if (target && URL.canParse(target)) {
     const protocol = new URL(target).protocol
     if (protocol === "http:" || protocol === "https:") {
@@ -89,7 +89,7 @@ const findIntegration = Effect.fn("cli.auth.login.integration")(function* (clien
       options: available.map((integration) => {
         const option = { value: integration.id, label: integration.name, hint: integration.id }
         if (integration.connections.length > 0) return { ...option, hint: "connected" }
-        if (integration.id === "opencode") return { ...option, hint: "recommended" }
+        if (integration.id === "ocpp") return { ...option, hint: "recommended" }
         return option
       }),
     }),
@@ -114,7 +114,7 @@ const chooseMethod = Effect.fn("cli.auth.login.method")(function* (methods: Conn
 })
 
 const authenticate = Effect.fn("cli.auth.login.authenticate")(function* (
-  client: OpenCodeClient,
+  client: OcppClient,
   integration: IntegrationInfo,
   method: ConnectMethod,
   answer?: FormAnswer,
@@ -125,7 +125,7 @@ const authenticate = Effect.fn("cli.auth.login.authenticate")(function* (
 })
 
 const keyLogin = Effect.fn("cli.auth.login.key")(function* (
-  client: OpenCodeClient,
+  client: OcppClient,
   integration: IntegrationInfo,
   method: Extract<ConnectMethod, { type: "key" }>,
   answer?: FormAnswer,
@@ -142,7 +142,7 @@ const keyLogin = Effect.fn("cli.auth.login.key")(function* (
 })
 
 const oauthLogin = Effect.fn("cli.auth.login.oauth")(function* (
-  client: OpenCodeClient,
+  client: OcppClient,
   integration: IntegrationInfo,
   method: Extract<ConnectMethod, { type: "oauth" }>,
   answer?: FormAnswer,
@@ -203,7 +203,7 @@ const oauthLogin = Effect.fn("cli.auth.login.oauth")(function* (
 })
 
 const commandLogin = Effect.fn("cli.auth.login.command")(function* (
-  client: OpenCodeClient,
+  client: OcppClient,
   integration: IntegrationInfo,
   method: Extract<ConnectMethod, { type: "command" }>,
 ) {
@@ -237,7 +237,7 @@ const commandLogin = Effect.fn("cli.auth.login.command")(function* (
 })
 
 const waitForOAuth = Effect.fn("cli.auth.login.oauth.wait")(function* (
-  client: OpenCodeClient,
+  client: OcppClient,
   integrationID: string,
   attemptID: string,
 ) {
@@ -251,7 +251,7 @@ const waitForOAuth = Effect.fn("cli.auth.login.oauth.wait")(function* (
 })
 
 const waitForCommand = Effect.fn("cli.auth.login.command.wait")(function* (
-  client: OpenCodeClient,
+  client: OcppClient,
   integrationID: string,
   attemptID: string,
   update: (message: string) => void,

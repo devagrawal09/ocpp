@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockOcppServer } from "../utils/mock-server"
 
 const directory = "C:/Projects/settings-demo"
 const sandboxes = Array.from({ length: 12 }, (_, index) => `${directory}/workspace-${index + 1}`)
@@ -7,7 +7,7 @@ const sandboxes = Array.from({ length: 12 }, (_, index) => `${directory}/workspa
 test.use({ viewport: { width: 1440, height: 1000 }, colorScheme: "dark" })
 
 test.beforeEach(async ({ page }) => {
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: {
       id: "proj_settings_demo",

@@ -17,5 +17,5 @@ export function make(tools: string[]) {
   if (tools.includes("read")) {
     instructions.push("- Prefer using the read tool rather than shell commands like `cat`.")
   }
-  return PROMPT.replace("${OPENCODE_TOOL_GUIDANCE}", instructions.join("\n"))
+  return PROMPT.replace("${OCPP_TOOL_GUIDANCE}", instructions.join("\n"))
 }

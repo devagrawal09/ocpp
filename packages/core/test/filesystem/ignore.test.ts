@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { Ignore } from "@opencode-ai/core/filesystem/ignore"
+import { Ignore } from "@ocpp/core/filesystem/ignore"
 // @ts-ignore
 import { createWrapper } from "@parcel/watcher/wrapper"
 

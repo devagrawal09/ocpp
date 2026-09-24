@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { CodeModeCatalog } from "@opencode-ai/core/codemode/catalog"
-import { CodeModeInstructions } from "@opencode-ai/core/codemode/instructions"
+import { CodeModeCatalog } from "@ocpp/core/codemode/catalog"
+import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
 
 const entry = (path: string, description: string, signature?: string, pinned = false): CodeModeCatalog.Entry => ({
   path,

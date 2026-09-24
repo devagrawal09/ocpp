@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, expect, test } from "bun:test"
-import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client"
+import type { OcppClient, OcppEvent } from "@ocpp/client"
 import { testRender } from "@opentui/solid"
 import { onMount } from "solid-js"
 import { ClientProvider, useClient } from "../../../src/context/client"
@@ -19,17 +19,14 @@ async function wait(fn: () => boolean, timeout = 2000) {
   }
 }
 
-function event(
-  payload: OpenCodeEvent,
-  input: { directory: string; project?: string; workspace?: string },
-): OpenCodeEvent {
+function event(payload: OcppEvent, input: { directory: string; project?: string; workspace?: string }): OcppEvent {
   return {
     ...payload,
     location: { directory: input.directory, workspaceID: input.workspace },
   }
 }
 
-function vcs(branch: string): OpenCodeEvent {
+function vcs(branch: string): OcppEvent {
   return {
     id: `evt_vcs_${branch}`,
     created: 0,
@@ -40,7 +37,7 @@ function vcs(branch: string): OpenCodeEvent {
   }
 }
 
-function update(version: string): OpenCodeEvent {
+function update(version: string): OcppEvent {
   return {
     id: `evt_update_${version}`,
     created: 0,
@@ -51,10 +48,10 @@ function update(version: string): OpenCodeEvent {
   }
 }
 
-async function mount(reconnect?: (signal: AbortSignal) => Promise<{ api: OpenCodeClient }>, log?: LogSink) {
+async function mount(reconnect?: (signal: AbortSignal) => Promise<{ api: OcppClient }>, log?: LogSink) {
   const events = createEventStream()
   const calls = createFetch(undefined, events)
-  const seen: OpenCodeEvent[] = []
+  const seen: OcppEvent[] = []
   const workspaces: Array<string | undefined> = []
   let client!: ReturnType<typeof useClient>
   let done!: () => void
@@ -83,7 +80,7 @@ async function mount(reconnect?: (signal: AbortSignal) => Promise<{ api: OpenCod
 }
 
 function Probe(props: {
-  seen: OpenCodeEvent[]
+  seen: OcppEvent[]
   workspaces: Array<string | undefined>
   onReady: (ctx: { client: ReturnType<typeof useClient> }) => void
 }) {

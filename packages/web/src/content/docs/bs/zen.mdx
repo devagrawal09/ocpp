@@ -1,17 +1,17 @@
 ---
 title: Zen
-description: Kurirana lista modela koje nudi OpenCode.
+description: Kurirana lista modela koje nudi OC++.
 ---
 
 import config from "../../../../config.mjs"
 export const console = config.console
 export const email = `mailto:${config.email}`
 
-OpenCode Zen je lista testiranih i provjerenih modela koje pruža OpenCode tim.
+OpenCode Zen je lista testiranih i provjerenih modela koje pruža OC++ tim.
 
-Zen radi kao i svaki drugi provajder u OpenCode. Prijavite se na OpenCode Zen i
+Zen radi kao i svaki drugi provajder u OC++. Prijavite se na OpenCode Zen i
 preuzmete svoj API ključ. To je **potpuno opcionalno** i ne morate ga koristiti
-da biste koristili OpenCode.
+da biste koristili OC++.
 
 ---
 
@@ -22,7 +22,7 @@ coding agent. Osim toga, većina provajdera je konfigurisana veoma različito, p
 zbog toga dobijate veoma različite performanse i kvalitet.
 
 :::tip
-Testirali smo odabranu grupu modela i provajdera koji dobro rade s OpenCode.
+Testirali smo odabranu grupu modela i provajdera koji dobro rade s OC++.
 :::
 
 Zato, ako model koristite preko nečega poput OpenRouter, nikada ne možete biti
@@ -43,7 +43,7 @@ OpenCode Zen je AI gateway koji vam daje pristup tim modelima.
 
 ## Kako radi
 
-OpenCode Zen radi kao i svaki drugi provajder u OpenCode.
+OpenCode Zen radi kao i svaki drugi provajder u OC++.
 
 1. Prijavite se na **<a href={console}>OpenCode Zen</a>**, dodajte podatke za
    naplatu i kopirajte svoj API ključ.
@@ -122,8 +122,8 @@ Našim modelima možete pristupiti i preko sljedećih API endpointa.
 | Nemotron 3 Ultra Free  | nemotron-3-ultra-free  | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | DeepSeek V4 Flash Free | deepseek-v4-flash-free | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 
-[model id](/docs/config/#models) u vašoj OpenCode konfiguraciji koristi format
-`opencode/<model-id>`. Na primjer, za GPT 5.5 u konfiguraciji biste
+[model id](/docs/config/#models) u vašoj OC++ konfiguraciji koristi format
+`ocpp/<model-id>`. Na primjer, za GPT 5.5 u konfiguraciji biste
 koristili `opencode/gpt-5.5`.
 
 ---
@@ -214,7 +214,7 @@ Podržavamo pay-as-you-go model. Ispod su cijene **po 1M tokena**.
 | GPT 5 Codex                       | $1.07  | $8.50   | $0.107      | -            |
 | GPT 5 Nano                        | $0.05  | $0.40   | $0.005      | -            |
 
-U historiji korištenja možete primijetiti [jeftinije modele](/docs/config/#models), kao što su Haiku, Nano ili Flash. OpenCode koristi ove modele za generisanje naslova sesija.
+U historiji korištenja možete primijetiti [jeftinije modele](/docs/config/#models), kao što su Haiku, Nano ili Flash. OC++ koristi ove modele za generisanje naslova sesija.
 
 :::note
 Naknade za kreditne kartice prosljeđujemo po stvarnom trošku (4.4% + $0.30 po transakciji); ne naplaćujemo ništa preko toga.
@@ -222,14 +222,14 @@ Naknade za kreditne kartice prosljeđujemo po stvarnom trošku (4.4% + $0.30 po 
 
 Besplatni modeli:
 
-- DeepSeek V4 Flash Free je dostupan na OpenCode ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
-- MiMo-V2.5 Free je dostupan na OpenCode ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
-- Laguna S 2.1 Free je dostupan na OpenCode ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
-- Ling-3.0-tiny Free je dostupan na OpenCode ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
-- LongCat-2.0 Free je dostupan na OpenCode ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
-- North Mini Code Free je dostupan na OpenCode ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
-- Nemotron 3 Ultra Free je dostupan na OpenCode ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
-- Big Pickle je stealth model koji je besplatan na OpenCode ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
+- DeepSeek V4 Flash Free je dostupan na OC++ ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
+- MiMo-V2.5 Free je dostupan na OC++ ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
+- Laguna S 2.1 Free je dostupan na OC++ ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
+- Ling-3.0-tiny Free je dostupan na OC++ ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
+- LongCat-2.0 Free je dostupan na OC++ ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
+- North Mini Code Free je dostupan na OC++ ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
+- Nemotron 3 Ultra Free je dostupan na OC++ ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
+- Big Pickle je stealth model koji je besplatan na OC++ ograničeno vrijeme. Tim koristi ovo vrijeme da prikupi povratne informacije i poboljša model.
 
 <a href={email}>Kontaktirajte nas</a> ako imate bilo kakvih pitanja.
 
@@ -353,4 +353,4 @@ OpenCode Zen smo napravili da:
 1. **Benchmarkiramo** najbolje modele/provajdere za coding agente.
 2. Imamo pristup opcijama **najvišeg kvaliteta** bez snižavanja performansi ili preusmjeravanja na jeftinije provajdere.
 3. Prenesemo sva **sniženja cijena** prodajom po stvarnom trošku; tako da je jedini markup pokrivanje naših processing naknada.
-4. Obezbijedimo **bez lock-ina** time što vam omogućavamo da ga koristite s bilo kojim drugim coding agentom. I da vam uvijek omogućimo da koristite bilo koji drugi provajder i u OpenCode.
+4. Obezbijedimo **bez lock-ina** time što vam omogućavamo da ga koristite s bilo kojim drugim coding agentom. I da vam uvijek omogućimo da koristite bilo koji drugi provajder i u OC++.

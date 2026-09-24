@@ -1,8 +1,8 @@
-declare const OPENCODE_VERSION: string
-declare const OPENCODE_CHANNEL: string
+declare const OCPP_VERSION: string
+declare const OCPP_CHANNEL: string
 
-const version = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
-const channel = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
+const version = typeof OCPP_VERSION === "string" ? OCPP_VERSION : "local"
+const channel = typeof OCPP_CHANNEL === "string" ? OCPP_CHANNEL : "local"
 
-export { version as OPENCODE_VERSION, channel as OPENCODE_CHANNEL }
-export const OPENCODE_LOCAL = channel === "local"
+export { version as OCPP_VERSION, channel as OCPP_CHANNEL }
+export const OCPP_LOCAL = channel === "local"

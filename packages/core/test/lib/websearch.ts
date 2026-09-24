@@ -1,11 +1,11 @@
 export * as TestWebSearch from "./websearch"
 
 import { Context, Deferred, Effect, Layer } from "effect"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { KV } from "@opencode-ai/core/kv"
-import { WebSearch } from "@opencode-ai/core/websearch"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { KV } from "@ocpp/core/kv"
+import { WebSearch } from "@ocpp/core/websearch"
 
 export interface Interface extends WebSearch.Interface {
   readonly queries: readonly WebSearch.Input[]

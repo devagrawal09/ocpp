@@ -9,7 +9,7 @@ import type {
   FormField,
   FormFields,
   FormValue,
-} from "@opencode-ai/client"
+} from "@ocpp/client"
 import open from "open"
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useClipboard } from "../context/clipboard"
@@ -25,7 +25,7 @@ import { useToast } from "../ui/toast"
 import { formLabel, formToggleMultiselect, formValidateValue, type FormAnswerField } from "../util/form"
 
 const INTEGRATION_PRIORITY: Record<string, number> = {
-  opencode: 0,
+  ocpp: 0,
   "opencode-go": 1,
   openai: 2,
   "github-copilot": 3,

@@ -1,9 +1,9 @@
 import { render, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { registerOpencodeSpinner } from "./component/register-spinner"
+import { registerOcppSpinner } from "./component/register-spinner"
 import { Effect, Latch } from "effect"
-import { Service, type Endpoint } from "@opencode-ai/client/effect/service"
-import { OpenCode, type SessionInfo } from "@opencode-ai/client"
-import { Global } from "@opencode-ai/util/global"
+import { Service, type Endpoint } from "@ocpp/client/effect/service"
+import { Ocpp, type SessionInfo } from "@ocpp/client"
+import { Global } from "@ocpp/util/global"
 import { ClipboardProvider, useClipboard } from "./context/clipboard"
 import { LogProvider, useLog, type LogSink } from "./context/log"
 import { ExitProvider, useExit } from "./context/exit"
@@ -80,7 +80,7 @@ import { PromptHistoryProvider } from "./prompt/history"
 import { FrecencyProvider } from "./prompt/frecency"
 import { PromptStashProvider } from "./prompt/stash"
 import { Toast, ToastProvider, useToast } from "./ui/toast"
-import { isFallbackTitle } from "@opencode-ai/util/session-title-fallback"
+import { isFallbackTitle } from "@ocpp/util/session-title-fallback"
 import * as Model from "./util/model"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
@@ -102,7 +102,7 @@ import { SessionTerminalsProvider } from "./context/session-terminals"
 import { SessionFrame } from "./component/session-frame"
 import { createTuiClipboard } from "./clipboard"
 
-registerOpencodeSpinner()
+registerOcppSpinner()
 
 const appGlobalBindingCommands = ["session.list", "session.new", "open.menu"] as const
 
@@ -151,11 +151,11 @@ const appBindingCommands = [
   "variant.cycle",
   "variant.list",
   "provider.connect",
-  "opencode.settings",
-  "opencode.status",
+  "ocpp.settings",
+  "ocpp.status",
   "server.pair",
   "service.restart",
-  "opencode.debug",
+  "ocpp.debug",
   "theme.switch",
   "theme.switch_mode",
   "theme.mode.lock",
@@ -204,7 +204,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
     terminalSuspend: process.platform !== "win32",
   })
   const options = { baseUrl: input.server.endpoint.url, headers: Service.headers(input.server.endpoint) }
-  const api = OpenCode.make(options)
+  const api = Ocpp.make(options)
   const location = yield* Effect.tryPromise(() => api.file.list({ location: { directory: process.cwd() } })).pipe(
     Effect.map((response) => response.location),
     Effect.catch(() => Effect.tryPromise(() => api.location.get())),
@@ -218,7 +218,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
         reconnect: async (signal: AbortSignal) => {
           const endpoint = await managed.reconnect(signal)
           const next = { baseUrl: endpoint.url, headers: Service.headers(endpoint) }
-          return { api: OpenCode.make(next), url: endpoint.url }
+          return { api: Ocpp.make(next), url: endpoint.url }
         },
         restart: managed.restart,
       }
@@ -246,8 +246,8 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
             Effect.sync(() => destroyRenderer(renderer)),
           )
         }
-        if (process.env.OPENCODE_DRIVE) {
-          const { Drive } = yield* Effect.promise(() => import("@opencode-ai/simulation/frontend"))
+        if (process.env.OCPP_DRIVE) {
+          const { Drive } = yield* Effect.promise(() => import("@ocpp/simulation/frontend"))
           return yield* Drive.create(options, input.app.version)
         }
         return yield* Effect.acquireRelease(
@@ -337,21 +337,21 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                             >
                               <TuiStartupProvider
                                 value={{
-                                  initialRoute: process.env.OPENCODE_STORY
+                                  initialRoute: process.env.OCPP_STORY
                                     ? {
                                         type: "plugin",
-                                        id: "opencode.storybook",
+                                        id: "ocpp.storybook",
                                         name: "storybook",
-                                        // OPENCODE_STORY=1 opens the index; any other value opens that story.
+                                        // OCPP_STORY=1 opens the index; any other value opens that story.
                                         data:
-                                          process.env.OPENCODE_STORY === "1"
+                                          process.env.OCPP_STORY === "1"
                                             ? undefined
-                                            : { story: process.env.OPENCODE_STORY },
+                                            : { story: process.env.OCPP_STORY },
                                       }
-                                    : process.env.OPENCODE_ROUTE
-                                      ? JSON.parse(process.env.OPENCODE_ROUTE)
+                                    : process.env.OCPP_ROUTE
+                                      ? JSON.parse(process.env.OCPP_ROUTE)
                                       : undefined,
-                                  skipInitialLoading: Boolean(process.env.OPENCODE_FAST_BOOT),
+                                  skipInitialLoading: Boolean(process.env.OCPP_FAST_BOOT),
                                 }}
                               >
                                 <ClipboardProvider value={clipboard}>
@@ -401,7 +401,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                                                 input.server.endpoint.auth
                                                                                   ? input.server.endpoint.auth
                                                                                   : {
-                                                                                      username: "opencode",
+                                                                                      username: "ocpp",
                                                                                       password: "",
                                                                                     }
                                                                               }
@@ -583,23 +583,23 @@ function App(props: { pair?: DialogPairCredentials }) {
     if (!terminalTitleEnabled()) return
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("OpenCode")
+      renderer.setTerminalTitle("OC++")
       return
     }
 
     if (route.data.type === "session") {
       const title = session?.title
       if (!title || isFallbackTitle(title)) {
-        renderer.setTerminalTitle("OpenCode")
+        renderer.setTerminalTitle("OC++")
         return
       }
 
-      renderer.setTerminalTitle(`OC | ${title.length > 40 ? title.slice(0, 37) + "…" : title}`)
+      renderer.setTerminalTitle(`OC++ | ${title.length > 40 ? title.slice(0, 37) + "…" : title}`)
       return
     }
 
     if (route.data.type === "plugin") {
-      renderer.setTerminalTitle(`OC | ${route.data.name}`)
+      renderer.setTerminalTitle(`OC++ | ${route.data.name}`)
     }
   })
 
@@ -912,7 +912,7 @@ function App(props: { pair?: DialogPairCredentials }) {
         category: "Integration",
       },
       {
-        name: "opencode.settings",
+        name: "ocpp.settings",
         title: "Open settings",
         suggested: true,
         slash: { name: "settings" },
@@ -922,7 +922,7 @@ function App(props: { pair?: DialogPairCredentials }) {
         category: "System",
       },
       {
-        name: "opencode.status",
+        name: "ocpp.status",
         title: "View status",
         slash: { name: "status" },
         run: () => {
@@ -961,7 +961,7 @@ function App(props: { pair?: DialogPairCredentials }) {
           ]
         : []),
       {
-        name: "opencode.debug",
+        name: "ocpp.debug",
         title: "View debug info",
         slash: { name: "debug" },
         run: () => {
@@ -1013,7 +1013,7 @@ function App(props: { pair?: DialogPairCredentials }) {
         name: "docs.open",
         title: "Open docs",
         run: () => {
-          open("https://opencode.ai/docs").catch(() => {})
+          open("https://ocpp.ai/docs").catch(() => {})
           dialog.clear()
         },
         category: "System",

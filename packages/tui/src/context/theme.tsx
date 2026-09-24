@@ -1,12 +1,6 @@
 import { CliRenderEvents, SyntaxStyle, type TerminalColors } from "@opentui/core"
 import { useRenderer } from "@opentui/solid"
-import {
-  generateSyntax,
-  resolveThemeDocument,
-  themeModes,
-  type ResolvedTheme,
-  type ContextName,
-} from "@opencode-ai/theme/tui"
+import { generateSyntax, resolveThemeDocument, themeModes, type ResolvedTheme, type ContextName } from "@ocpp/theme/tui"
 import {
   DEFAULT_THEMES,
   addTheme,
@@ -130,7 +124,7 @@ const [store, setStore] = createStore<State>({
   themes: allThemes(),
   mode: "dark",
   lock: undefined,
-  active: "opencode",
+  active: "ocpp",
   ready: false,
 })
 
@@ -154,8 +148,8 @@ const themeContext = createSimpleContext({
         const mode = lock ?? pick(renderer.themeMode) ?? props.mode
         draft.mode = mode
         draft.lock = lock
-        const active = config.theme?.name ?? "opencode"
-        draft.active = typeof active === "string" ? active : "opencode"
+        const active = config.theme?.name ?? "ocpp"
+        draft.active = typeof active === "string" ? active : "ocpp"
         draft.ready = false
       }),
     )
@@ -180,7 +174,7 @@ const themeContext = createSimpleContext({
         .then((themes) => {
           setCustomThemes(themes)
         })
-        .catch(() => setStore("active", "opencode"))
+        .catch(() => setStore("active", "ocpp"))
     }
 
     onMount(() => {
@@ -200,7 +194,7 @@ const themeContext = createSimpleContext({
           if (!colors.palette[0]) {
             if (hasResolvedSystemTheme) return
             setSystemTheme(undefined)
-            if (store.active === "system") setStore("active", "opencode")
+            if (store.active === "system") setStore("active", "ocpp")
             return
           }
           const next = store.lock ?? terminalMode(colors) ?? mode
@@ -215,7 +209,7 @@ const themeContext = createSimpleContext({
         .catch(() => {
           if (hasResolvedSystemTheme) return
           setSystemTheme(undefined)
-          if (store.active === "system") setStore("active", "opencode")
+          if (store.active === "system") setStore("active", "ocpp")
         })
     }
 
@@ -303,14 +297,14 @@ const themeContext = createSimpleContext({
 
     const initStarted = performance.now()
     const selected = createMemo(() => {
-      const name = store.themes[store.active] ? store.active : "opencode"
+      const name = store.themes[store.active] ? store.active : "ocpp"
       try {
         return loadTheme(store.themes[name], name, store.mode)
       } catch (error) {
-        if (name === "opencode") throw error
+        if (name === "ocpp") throw error
         themeErrors.emit(name, error)
-        setStore("active", "opencode")
-        return loadTheme(store.themes.opencode, "opencode", store.mode)
+        setStore("active", "ocpp")
+        return loadTheme(store.themes.ocpp, "ocpp", store.mode)
       }
     })
     const modes = () => selected().modes

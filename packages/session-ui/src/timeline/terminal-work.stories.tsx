@@ -1,4 +1,4 @@
-import type { SessionMessageAssistant, SessionMessageShell } from "@opencode-ai/client/promise"
+import type { SessionMessageAssistant, SessionMessageShell } from "@ocpp/client/promise"
 import { createMemo, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { DataProvider } from "../context/data"
@@ -19,7 +19,7 @@ import { storyDocument, storyTool } from "../storybook/current-session-scenarios
 import { SessionTimeline } from "./session-timeline"
 
 export default {
-  title: "OpenCode/Work/Terminal",
+  title: "OC++/Work/Terminal",
   id: "current-session-terminal-work",
   component: SessionTimeline,
   parameters: {

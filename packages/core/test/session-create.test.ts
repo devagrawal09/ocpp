@@ -3,38 +3,38 @@ import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
 import { DateTime, Effect, Layer, Stream } from "effect"
-import { Money } from "@opencode-ai/schema/money"
-import { Shell } from "@opencode-ai/schema/shell"
-import { Skill } from "@opencode-ai/schema/skill"
-import { Agent } from "@opencode-ai/core/agent"
+import { Money } from "@ocpp/schema/money"
+import { Shell } from "@ocpp/schema/shell"
+import { Skill } from "@ocpp/schema/skill"
+import { Agent } from "@ocpp/core/agent"
 import { asc, eq } from "drizzle-orm"
-import { Database } from "@opencode-ai/core/database/database"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Hash } from "@opencode-ai/util/hash"
-import { Bus } from "@opencode-ai/core/bus"
-import { EventTable } from "@opencode-ai/core/event/sql"
-import { Instructions } from "@opencode-ai/core/instructions/index"
-import { Location } from "@opencode-ai/core/location"
-import { Model } from "@opencode-ai/core/model"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath, RelativePath } from "@opencode-ai/core/schema"
-import { Session } from "@opencode-ai/core/session"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionInbox } from "@opencode-ai/core/session/inbox"
-import { InstructionEntry } from "@opencode-ai/core/session/instruction-entry"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionTable } from "@opencode-ai/core/session/sql"
-import { SessionStore } from "@opencode-ai/core/session/store"
-import { SessionTransfer } from "@opencode-ai/core/session/transfer"
-import { Workspace } from "@opencode-ai/core/workspace"
+import { Database } from "@ocpp/core/database/database"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Hash } from "@ocpp/util/hash"
+import { Bus } from "@ocpp/core/bus"
+import { EventTable } from "@ocpp/core/event/sql"
+import { Instructions } from "@ocpp/core/instructions/index"
+import { Location } from "@ocpp/core/location"
+import { Model } from "@ocpp/core/model"
+import { Project } from "@ocpp/core/project"
+import { ProjectTable } from "@ocpp/core/project/sql"
+import { Provider } from "@ocpp/core/provider"
+import { AbsolutePath, RelativePath } from "@ocpp/core/schema"
+import { Session } from "@ocpp/core/session"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { SessionProjector } from "@ocpp/core/session/projector"
+import { SessionExecution } from "@ocpp/core/session/execution"
+import { SessionInbox } from "@ocpp/core/session/inbox"
+import { InstructionEntry } from "@ocpp/core/session/instruction-entry"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionTable } from "@ocpp/core/session/sql"
+import { SessionStore } from "@ocpp/core/session/store"
+import { SessionTransfer } from "@ocpp/core/session/transfer"
+import { Workspace } from "@ocpp/core/workspace"
 import { Expected } from "./lib/session-message"
 import { testEffect } from "./lib/effect"
-import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
+import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { promptLocationNode } from "./fixture/prompt-location"
 import { globalProjectNode } from "./lib/project"
 import { tmpdirScoped } from "./fixture/tmpdir"
@@ -107,7 +107,7 @@ describe("Session.create", () => {
         const clone = AbsolutePath.make(path.join(directory, "other-clone"))
         yield* Effect.promise(async () => {
           await $`git init -q ${main}`.cwd(directory)
-          await $`git -c user.name=Test -c user.email=test@opencode.test -c commit.gpgsign=false commit --allow-empty -qm root`
+          await $`git -c user.name=Test -c user.email=test@ocpp.test -c commit.gpgsign=false commit --allow-empty -qm root`
             .cwd(main)
             .quiet()
           await $`git remote add origin git@github.com:owner/repo.git`.cwd(main)
@@ -1034,12 +1034,12 @@ describe("Session.create", () => {
         const created = yield* session.create({
           location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
         })
-        yield* session.environment({ sessionID: created.id, variables: { OPENCODE_SESSION_ENV_TEST: "attached" } })
+        yield* session.environment({ sessionID: created.id, variables: { OCPP_SESSION_ENV_TEST: "attached" } })
 
         const command =
           process.platform === "win32"
-            ? "[Console]::Out.Write($env:OPENCODE_SESSION_ENV_TEST)"
-            : 'printf %s "$OPENCODE_SESSION_ENV_TEST"'
+            ? "[Console]::Out.Write($env:OCPP_SESSION_ENV_TEST)"
+            : 'printf %s "$OCPP_SESSION_ENV_TEST"'
         yield* session.shell({ sessionID: created.id, command })
 
         const messages = yield* session.messages({ sessionID: created.id, order: "asc" })

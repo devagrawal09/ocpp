@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode-ai/plugin/tui"
+import { Plugin } from "@ocpp/plugin/tui"
 import { createMemo, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { usePlugin } from "../../plugin/context"
@@ -99,7 +99,7 @@ function View(props: { context: Plugin.Context }) {
 }
 
 export default Plugin.define({
-  id: "opencode.home.footer",
+  id: "ocpp.home.footer",
   setup(context) {
     // Root takeover: an external plugin replacing home.footer wins (last-
     // enabled) and this builtin shows as suppressed, not silently gone.

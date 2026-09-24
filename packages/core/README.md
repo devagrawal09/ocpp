@@ -1,3 +1,3 @@
-# @opencode-ai/core
+# @ocpp/core
 
-Core runtime services for OpenCode.
+Core runtime services for OC++.

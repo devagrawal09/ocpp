@@ -1,13 +1,13 @@
 export * as McpCodeModeExclusionPlugin from "./mcp-codemode-exclusion.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { Effect } from "effect"
 
-// These servers provide Code Mode, so expose them directly instead of nesting them inside OpenCode Code Mode.
+// These servers provide Code Mode, so expose them directly instead of nesting them inside OC++ Code Mode.
 const urls = [/^https:\/\/executor\.sh\/[^/]+\/mcp$/]
 
 export const Plugin = define({
-  id: "opencode.mcp.codemode.exclusion",
+  id: "ocpp.mcp.codemode.exclusion",
   effect: Effect.fn(function* (ctx) {
     yield* ctx.mcp.transform((draft) => {
       for (const [, server] of draft.list()) {

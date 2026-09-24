@@ -1,10 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test"
-import type { OpenCodeEvent, WorktreeDirectory } from "@opencode-ai/client/promise"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import type { OcppEvent, WorktreeDirectory } from "@ocpp/client/promise"
+import { base64Encode } from "@ocpp/util/encode"
+import { mockOcppServer } from "../utils/mock-server"
 import { expectAppVisible, expectSessionReady } from "../utils/waits"
 
-const root = "C:/OpenCode/WorkspaceAccent"
+const root = "C:/OC++/WorkspaceAccent"
 const workspace = `${root}/.worktrees/feature`
 const projectID = "proj_workspace_accent"
 const sessionID = "ses_workspace_accent"
@@ -13,9 +13,9 @@ const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${pr
 const inventory: WorktreeDirectory[] = [
   { directory: root },
   { directory: workspace, strategy: "git" },
-  { directory: "C:/OpenCode/LinkedWorkspace", strategy: "git" },
-  { directory: "C:/OpenCode/WorkspaceCopy", strategy: "copy" },
-  { directory: "C:/OpenCode/RegisteredDirectory" },
+  { directory: "C:/OC++/LinkedWorkspace", strategy: "git" },
+  { directory: "C:/OC++/WorkspaceCopy", strategy: "copy" },
+  { directory: "C:/OC++/RegisteredDirectory" },
 ]
 
 test.use({ serviceWorkers: "block" })
@@ -24,35 +24,35 @@ for (const theme of ["light", "dark"] as const) {
   test.describe(theme, () => {
     test.beforeEach(async ({ page }) => {
       await page.addInitScript((theme) => {
-        localStorage.setItem("opencode-theme-id", "oc-2")
-        localStorage.setItem("opencode-color-scheme", theme)
+        localStorage.setItem("ocpp-theme-id", "ocpp-v2")
+        localStorage.setItem("ocpp-color-scheme", theme)
       }, theme)
     })
 
     for (const scenario of [
       { name: "managed Git worktree", directory: workspace, accent: true },
-      { name: "linked Git worktree outside main", directory: "C:/OpenCode/LinkedWorkspace", accent: true },
+      { name: "linked Git worktree outside main", directory: "C:/OC++/LinkedWorkspace", accent: true },
       {
         name: "linked Git worktree on a narrow screen",
-        directory: "C:/OpenCode/LinkedWorkspace",
+        directory: "C:/OC++/LinkedWorkspace",
         accent: true,
         viewport: { width: 390, height: 844 },
       },
       {
         name: "main root with Windows case and separators",
-        directory: "c:\\OPENCODE\\workspaceaccent\\",
+        directory: "c:\\OCPP\\workspaceaccent\\",
         accent: false,
       },
       { name: "nested main directory", directory: `${root}/packages/app`, accent: false },
       { name: "nested workspace inside main", directory: `${workspace}/packages/app`, accent: true },
       {
         name: "workspace with Windows case and separators",
-        directory: "c:\\opencode\\WORKSPACEACCENT\\.worktrees\\FEATURE\\src\\",
+        directory: "c:\\ocpp\\WORKSPACEACCENT\\.worktrees\\FEATURE\\src\\",
         accent: true,
       },
       { name: "unregistered sibling with the same prefix", directory: `${workspace}-unregistered`, accent: false },
-      { name: "workspace using another strategy", directory: "C:/OpenCode/WorkspaceCopy", accent: true },
-      { name: "registered directory without a strategy", directory: "C:/OpenCode/RegisteredDirectory", accent: true },
+      { name: "workspace using another strategy", directory: "C:/OC++/WorkspaceCopy", accent: true },
+      { name: "registered directory without a strategy", directory: "C:/OC++/RegisteredDirectory", accent: true },
     ]) {
       test(`existing session send button: ${scenario.name}`, async ({ page }, testInfo) => {
         if (scenario.viewport) await page.setViewportSize(scenario.viewport)
@@ -148,8 +148,8 @@ for (const theme of ["light", "dark"] as const) {
 }
 
 async function openSession(page: Page, directory: string, worktrees = [...inventory], draft = false) {
-  const events: OpenCodeEvent[] = []
-  await mockOpenCodeServer(page, {
+  const events: OcppEvent[] = []
+  await mockOcppServer(page, {
     directory,
     project: {
       id: projectID,
@@ -164,7 +164,7 @@ async function openSession(page: Page, directory: string, worktrees = [...invent
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "OC++",
           models: { "accent-model": { id: "accent-model", name: "Accent Model", limit: { context: 200_000 } } },
         },
       ],
@@ -202,14 +202,14 @@ async function openSession(page: Page, directory: string, worktrees = [...invent
     await page.addInitScript(
       ({ root, server }) => {
         localStorage.setItem(
-          "opencode.global.dat:server",
+          "ocpp.global.dat:server",
           JSON.stringify({
             projects: { local: [{ worktree: root, expanded: true }] },
             lastProject: { local: root },
           }),
         )
         localStorage.setItem(
-          "opencode.window.browser.dat:tabs",
+          "ocpp.window.browser.dat:tabs",
           JSON.stringify([{ type: "draft", draftID: "draft_workspace_accent", server, directory: root }]),
         )
       },

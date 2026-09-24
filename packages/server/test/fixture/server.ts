@@ -14,6 +14,6 @@ export const startServer = Effect.fnUntraced(function* (directory: string) {
   })
   return {
     base: HttpServer.formatAddress(server.address),
-    headers: { authorization: `Basic ${btoa("opencode:secret")}` },
+    headers: { authorization: `Basic ${btoa("ocpp:secret")}` },
   }
 })

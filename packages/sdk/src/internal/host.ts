@@ -1,12 +1,12 @@
 export * as EmbeddedHost from "./host"
 
-import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
-import { Workspace } from "@opencode-ai/core/workspace"
-import { WorkspaceDriver } from "@opencode-ai/core/workspace/driver"
-import { createEmbeddedRoutes } from "@opencode-ai/server/routes"
-import type { ServerOptions } from "@opencode-ai/server/options"
-import type { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { SdkPlugins } from "@ocpp/core/plugin/sdk"
+import { SessionRestart } from "@ocpp/core/session/execution/restart"
+import { Workspace } from "@ocpp/core/workspace"
+import { WorkspaceDriver } from "@ocpp/core/workspace/driver"
+import { createEmbeddedRoutes } from "@ocpp/server/routes"
+import type { ServerOptions } from "@ocpp/server/options"
+import type { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Context, Effect, Layer, ManagedRuntime, Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http"
 import { context, layer, type LogOptions } from "../logging"
@@ -17,7 +17,7 @@ export interface CreateOptions extends Omit<ServerOptions, "hostname" | "port" |
   readonly workspaceProviders?: Readonly<Record<string, WorkspaceDriver.Interface>>
 }
 
-/** Host hooks for embedding opencode on a non-default runtime profile. */
+/** Host hooks for embedding ocpp on a non-default runtime profile. */
 export interface EmbedOptions {
   readonly overrides?: LayerNode.Replacements
 }

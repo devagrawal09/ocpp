@@ -1,5 +1,5 @@
 import { expect } from "bun:test"
-import { ProcessLock } from "@opencode-ai/core/util/process-lock"
+import { ProcessLock } from "@ocpp/core/util/process-lock"
 import { Effect } from "effect"
 import fs from "node:fs/promises"
 import os from "node:os"
@@ -11,7 +11,7 @@ const worker = path.join(import.meta.dir, "../fixture/process-lock-worker.ts")
 it.live(
   "releases ownership when the scope closes",
   Effect.gen(function* () {
-    const root = yield* temp("opencode-process-lock-")
+    const root = yield* temp("ocpp-process-lock-")
     const file = path.join(root, "service.lock")
     yield* Effect.scoped(ProcessLock.acquire(file))
     yield* Effect.scoped(ProcessLock.acquire(file))
@@ -21,7 +21,7 @@ it.live(
 it.live(
   "releases ownership when the process dies",
   Effect.gen(function* () {
-    const root = yield* temp("opencode-process-lock-death-")
+    const root = yield* temp("ocpp-process-lock-death-")
     const file = path.join(root, "service.lock")
     const ready = path.join(root, "ready")
     const child = yield* Effect.acquireRelease(

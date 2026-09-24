@@ -2,7 +2,7 @@ export * as Updater from "./index"
 
 import type { WebContents } from "electron"
 import { Context, Deferred, Effect, Exit, Fiber, Layer } from "effect"
-import type { UpdaterState } from "@opencode-ai/app/updater"
+import type { UpdaterState } from "@ocpp/app/updater"
 import { UpdaterStateChanged } from "../../shared/ipc-rpc/events"
 import { emitIpcEvent } from "../ipc-events"
 
@@ -38,7 +38,7 @@ export interface Interface {
   readonly started: Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("opencode/desktop/Updater") {}
+export class Service extends Context.Service<Service, Interface>()("ocpp/desktop/Updater") {}
 
 export const layerWith = (dependencies: Dependencies) => Layer.effect(Service, make(dependencies))
 

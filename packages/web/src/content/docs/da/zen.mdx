@@ -1,17 +1,17 @@
 ---
 title: Zen
-description: Udvalgt liste over modeller leveret af OpenCode.
+description: Udvalgt liste over modeller leveret af OC++.
 ---
 
 import config from "../../../../config.mjs"
 export const console = config.console
 export const email = `mailto:${config.email}`
 
-OpenCode Zen er en liste over testede og verificerede modeller leveret af OpenCode-teamet.
+OpenCode Zen er en liste over testede og verificerede modeller leveret af OC++-teamet.
 
-Zen fungerer som enhver anden udbyder i OpenCode. Du logger ind på OpenCode Zen og får
+Zen fungerer som enhver anden udbyder i OC++. Du logger ind på OpenCode Zen og får
 din API-nøgle. Det er **helt valgfrit**, og du behøver ikke bruge det for at bruge
-OpenCode.
+OC++.
 
 ---
 
@@ -22,7 +22,7 @@ fungerer godt som kodeagenter. Derudover er de fleste udbydere
 konfigureret meget forskelligt, så du får meget forskellig ydeevne og kvalitet.
 
 :::tip
-Vi testede en udvalgt gruppe modeller og udbydere, som fungerer godt med OpenCode.
+Vi testede en udvalgt gruppe modeller og udbydere, som fungerer godt med OC++.
 :::
 
 Så hvis du bruger en model gennem noget som OpenRouter, kan du aldrig være
@@ -43,7 +43,7 @@ OpenCode Zen er en AI gateway, der giver dig adgang til disse modeller.
 
 ## Sådan fungerer det
 
-OpenCode Zen fungerer som enhver anden udbyder i OpenCode.
+OpenCode Zen fungerer som enhver anden udbyder i OC++.
 
 1. Du logger ind på **<a href={console}>OpenCode Zen</a>**, tilføjer dine faktureringsoplysninger
    og kopierer din API-nøgle.
@@ -122,8 +122,8 @@ Du kan også få adgang til vores modeller gennem følgende API-endpoints.
 | Nemotron 3 Ultra Free  | nemotron-3-ultra-free  | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | DeepSeek V4 Flash Free | deepseek-v4-flash-free | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 
-[model id](/docs/config/#models) i din OpenCode-konfiguration
-bruger formatet `opencode/<model-id>`. For eksempel ville du for GPT 5.5
+[model id](/docs/config/#models) i din OC++-konfiguration
+bruger formatet `ocpp/<model-id>`. For eksempel ville du for GPT 5.5
 bruge `opencode/gpt-5.5` i din konfiguration.
 
 ---
@@ -214,7 +214,7 @@ Vi understøtter en pay-as-you-go-model. Nedenfor er priserne **pr. 1M tokens**.
 | GPT 5 Codex                       | $1.07  | $8.50   | $0.107      | -            |
 | GPT 5 Nano                        | $0.05  | $0.40   | $0.005      | -            |
 
-Du vil måske bemærke [lavprismodeller](/docs/config/#models), såsom Haiku, Nano eller Flash, i din brugshistorik. OpenCode bruger disse modeller til at generere sessionstitler.
+Du vil måske bemærke [lavprismodeller](/docs/config/#models), såsom Haiku, Nano eller Flash, i din brugshistorik. OC++ bruger disse modeller til at generere sessionstitler.
 
 :::note
 Kreditkortgebyrer videregives til kostpris (4.4% + $0.30 pr. transaktion); vi opkræver ikke noget ud over det.
@@ -222,14 +222,14 @@ Kreditkortgebyrer videregives til kostpris (4.4% + $0.30 pr. transaktion); vi op
 
 De gratis modeller:
 
-- DeepSeek V4 Flash Free er tilgængelig på OpenCode i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
-- MiMo-V2.5 Free er tilgængelig på OpenCode i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
-- Laguna S 2.1 Free er tilgængelig på OpenCode i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
-- Ling-3.0-tiny Free er tilgængelig på OpenCode i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
-- LongCat-2.0 Free er tilgængelig på OpenCode i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
-- North Mini Code Free er tilgængelig på OpenCode i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
-- Nemotron 3 Ultra Free er tilgængelig på OpenCode i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
-- Big Pickle er en stealth-model, som er gratis på OpenCode i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
+- DeepSeek V4 Flash Free er tilgængelig på OC++ i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
+- MiMo-V2.5 Free er tilgængelig på OC++ i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
+- Laguna S 2.1 Free er tilgængelig på OC++ i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
+- Ling-3.0-tiny Free er tilgængelig på OC++ i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
+- LongCat-2.0 Free er tilgængelig på OC++ i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
+- North Mini Code Free er tilgængelig på OC++ i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
+- Nemotron 3 Ultra Free er tilgængelig på OC++ i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
+- Big Pickle er en stealth-model, som er gratis på OC++ i en begrænset periode. Teamet bruger denne tid til at indsamle feedback og forbedre modellen.
 
 <a href={email}>Kontakt os</a>, hvis du har spørgsmål.
 
@@ -348,4 +348,4 @@ Vi skabte OpenCode Zen for at:
 1. **Benchmarke** de bedste modeller/udbydere til kodeagenter.
 2. Give adgang til muligheder af **højeste kvalitet** uden at nedgradere ydeevnen eller route til billigere udbydere.
 3. Videreføre eventuelle **prisfald** ved at sælge til kostpris; så den eneste markup er for at dække vores behandlingsgebyrer.
-4. Have **ingen lock-in** ved at lade dig bruge det med enhver anden kodeagent. Og altid lade dig bruge enhver anden udbyder med OpenCode også.
+4. Have **ingen lock-in** ved at lade dig bruge det med enhver anden kodeagent. Og altid lade dig bruge enhver anden udbyder med OC++ også.

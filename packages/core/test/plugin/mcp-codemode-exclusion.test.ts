@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
-import { McpCodeModeExclusionPlugin } from "@opencode-ai/core/plugin/mcp-codemode-exclusion"
-import type { Mcp } from "@opencode-ai/schema/mcp"
+import { McpCodeModeExclusionPlugin } from "@ocpp/core/plugin/mcp-codemode-exclusion"
+import type { Mcp } from "@ocpp/schema/mcp"
 import { Effect, type Types } from "effect"
 import { it } from "../lib/effect"
 import { host } from "./host"
@@ -14,7 +14,7 @@ it.effect("defaults only known Code Mode MCP servers to direct tools", () =>
     }> = [
       {
         name: "executor remote",
-        server: { type: "remote", url: "https://executor.sh/example/mcp?source=opencode" },
+        server: { type: "remote", url: "https://executor.sh/example/mcp?source=ocpp" },
         codemode: false,
       },
       { name: "executor local", server: { type: "local", command: ["executor", "mcp"] }, codemode: false },

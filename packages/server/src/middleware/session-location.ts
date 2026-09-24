@@ -1,15 +1,15 @@
-import { Database } from "@opencode-ai/core/database/database"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
+import { Database } from "@ocpp/core/database/database"
+import { LocationServiceMap } from "@ocpp/core/location-services"
 import { Effect, Layer } from "effect"
 import { HttpRouter } from "effect/unstable/http"
 import { HttpApiMiddleware } from "effect/unstable/httpapi"
-import { InvalidRequestError, SessionNotFoundError } from "@opencode-ai/protocol/errors"
+import { InvalidRequestError, SessionNotFoundError } from "@ocpp/protocol/errors"
 import { sessionRef, type LocationServices } from "../location"
 
 export class SessionLocationMiddleware extends HttpApiMiddleware.Service<
   SessionLocationMiddleware,
   { provides: LocationServices }
->()("@opencode/HttpApiSessionLocation", {
+>()("@ocpp/HttpApiSessionLocation", {
   error: [InvalidRequestError, SessionNotFoundError],
 }) {}
 

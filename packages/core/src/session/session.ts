@@ -1,9 +1,9 @@
 export * as Session from "./session.js"
 
 import { DateTime, Effect, Fiber, Layer, Schema, Scope } from "effect"
-import type { Agent } from "@opencode-ai/schema/agent"
-import type { Model } from "@opencode-ai/schema/model"
-import { Event } from "@opencode-ai/schema/event"
+import type { Agent } from "@ocpp/schema/agent"
+import type { Model } from "@ocpp/schema/model"
+import { Event } from "@ocpp/schema/event"
 import { Bus } from "../bus.js"
 import { Location } from "../location.js"
 import { PluginSupervisor } from "../plugin/supervisor-service.js"

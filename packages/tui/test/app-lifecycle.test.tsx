@@ -2,8 +2,8 @@ import { expect, test } from "bun:test"
 import { EmbeddedTerminalRenderable, type Renderable, ScrollBoxRenderable } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
 import { Effect, FileSystem } from "effect"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Global } from "@opencode-ai/util/global"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Global } from "@ocpp/util/global"
 import path from "node:path"
 import { createEventStream, createFetch, directory, json, type FetchHandler } from "./fixture/tui-client"
 import { tmpdir } from "./fixture/fixture"
@@ -225,7 +225,7 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
   const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
   setup.renderer.setTerminalTitle = (title) => {
     titles.push(title)
-    if (title === "OpenCode") started()
+    if (title === "OC++") started()
     setTitle(title)
   }
   const listeners = new Set(process.listeners("SIGHUP"))
@@ -270,8 +270,8 @@ test("session lifecycle updates the terminal title and prints the epilogue after
   })
   const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
   setup.renderer.setTerminalTitle = (title) => {
-    if (title === "OC | Demo session") initialTitle()
-    if (title === "OC | Renamed session") renamedTitle()
+    if (title === "OC++ | Demo session") initialTitle()
+    if (title === "OC++ | Renamed session") renamedTitle()
     setTitle(title)
   }
   const events = createEventStream()
@@ -335,7 +335,7 @@ test("session lifecycle updates the terminal title and prints the epilogue after
     await task
 
     expect(stdout).toContain("Renamed session")
-    expect(stdout).toContain("opencode2 -s dummy")
+    expect(stdout).toContain("ocpp -s dummy")
     expect(promptRequests).toBe(0)
   } finally {
     process.stdout.write = originalWrite
@@ -351,7 +351,7 @@ test("session title generated while an untitled session is loading remains visib
   const generatedTitle = Promise.withResolvers<void>()
   setup.renderer.setTerminalTitle = (title) => {
     titles.push(title)
-    if (title === "OC | Generated title") generatedTitle.resolve()
+    if (title === "OC++ | Generated title") generatedTitle.resolve()
     setTitle(title)
   }
   const sessionRequested = Promise.withResolvers<void>()
@@ -419,9 +419,9 @@ test("session title generated while an untitled session is loading remains visib
     ])
     await Bun.sleep(20)
 
-    const generated = titles.lastIndexOf("OC | Generated title")
+    const generated = titles.lastIndexOf("OC++ | Generated title")
     expect(generated).toBeGreaterThan(-1)
-    expect(titles.slice(generated + 1)).not.toContain("OpenCode")
+    expect(titles.slice(generated + 1)).not.toContain("OC++")
     setup.renderer.destroy()
     await task
   } finally {
@@ -899,7 +899,7 @@ test("new session inherits the active session model", async () => {
 
 test("keeps the prompt display stable while a new location catalog loads", async () => {
   const source = process.cwd()
-  const target = path.join(path.parse(source).root, "opencode-target")
+  const target = path.join(path.parse(source).root, "ocpp-target")
   const locationCatalog = Promise.withResolvers<void>()
   const catalog = Promise.withResolvers<void>()
   const providerCatalog = Promise.withResolvers<void>()
@@ -1006,7 +1006,7 @@ test("keeps the prompt display stable while a new location catalog loads", async
 
 test("configured app bindings execute settings and permission commands", async () => {
   await using setup = await createAppFixture({
-    config: { animations: false, keybinds: { "opencode.settings": "f6", "permission.mode": "f7" } },
+    config: { animations: false, keybinds: { "ocpp.settings": "f6", "permission.mode": "f7" } },
   })
   await setup.ready
   await setup.waitForFrame((frame) => frame.includes("commands"))

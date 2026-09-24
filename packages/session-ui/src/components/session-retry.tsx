@@ -1,9 +1,9 @@
 import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
-import type { SessionStatus } from "@opencode-ai/client/promise"
-import { useI18n } from "@opencode-ai/ui/context/i18n"
-import { Card } from "@opencode-ai/ui/card"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { Spinner } from "@opencode-ai/ui/spinner"
+import type { SessionStatus } from "@ocpp/client/promise"
+import { useI18n } from "@ocpp/ui/context/i18n"
+import { Card } from "@ocpp/ui/card"
+import { Tooltip } from "@ocpp/ui/tooltip"
+import { Spinner } from "@ocpp/ui/spinner"
 
 export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
   const i18n = useI18n()

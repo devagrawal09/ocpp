@@ -1,5 +1,5 @@
 import { Effect, Option, Schema } from "effect"
-import { Tool } from "@opencode-ai/schema/tool"
+import { Tool } from "@ocpp/schema/tool"
 import { Route } from "../route/client.js"
 import { Auth } from "../route/auth.js"
 import { Endpoint } from "../route/endpoint.js"
@@ -30,7 +30,7 @@ const SKIP_THOUGHT_SIGNATURE_VALIDATOR = "skip_thought_signature_validator"
 export const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 // Gemini 3 rejects replayed function calls without a thought signature. Google's SDKs avoid that in normal chats by
-// retaining complete model responses, but OpenCode reconstructs durable history and may encounter an unsigned call
+// retaining complete model responses, but OC++ reconstructs durable history and may encounter an unsigned call
 // from an older or external session. Model IDs are open-ended, so unknown Gemini aliases inherit current behavior.
 const requiresThoughtSignatureFallback = (modelID: string) => {
   if (!/(^|\/)gemini-/i.test(modelID)) return false
@@ -255,7 +255,7 @@ interface ParserState {
 // 1. Sanitize — fix common authoring mistakes Gemini rejects: integer/number
 //    enums (must be strings), `required` entries that don't match a property,
 //    untyped arrays (`items` must be present), and `properties`/`required`
-//    keys on non-object scalars. Mirrors OpenCode's historical Gemini rules.
+//    keys on non-object scalars. Mirrors OC++'s historical Gemini rules.
 //
 // 2. Project — lossy mapping from JSON Schema to Gemini's schema dialect:
 //    drop empty root parameter schemas while preserving nested empty objects,

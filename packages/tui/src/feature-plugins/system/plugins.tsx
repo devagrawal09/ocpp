@@ -1,12 +1,12 @@
-import type { PluginInfo } from "@opencode-ai/client"
-import { Plugin } from "@opencode-ai/plugin/tui"
+import type { PluginInfo } from "@ocpp/client"
+import { Plugin } from "@ocpp/plugin/tui"
 import { createEffect, createMemo, createResource, createSignal, onMount, Show } from "solid-js"
 import { DialogErrorDetails } from "../../component/dialog-error-details"
 import { usePlugin } from "../../plugin/context"
 import { DialogSelect, type DialogSelectOption } from "../../ui/dialog-select"
 import { useDialog } from "../../ui/dialog"
 
-const id = "opencode.plugins"
+const id = "ocpp.plugins"
 
 type Entry =
   | { readonly key: string; readonly runtime: "server"; readonly plugin: PluginInfo }

@@ -1,9 +1,9 @@
 export * as SessionRunnerRetry from "./retry.js"
 
-import { AIError } from "@opencode-ai/ai"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Model } from "@opencode-ai/schema/model"
-import { SessionError } from "@opencode-ai/schema/session-error"
+import { AIError } from "@ocpp/ai"
+import { Agent } from "@ocpp/schema/agent"
+import { Model } from "@ocpp/schema/model"
+import { SessionError } from "@ocpp/schema/session-error"
 import { Clock, Duration, Effect, Pull, Schedule } from "effect"
 import { Bus } from "../../bus.js"
 import type { PluginHooks } from "../../plugin/hooks.js"

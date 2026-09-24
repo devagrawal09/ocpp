@@ -47,8 +47,8 @@ function format(input: unknown) {
 }
 
 export function file(local = true, channel = "local") {
-  if (!local) return path.join(Global.Path.log, "opencode.log")
-  return path.join(Global.Path.log, `opencode-${channel.replace(/[^a-zA-Z0-9._-]/g, "-")}.log`)
+  if (!local) return path.join(Global.Path.log, "ocpp.log")
+  return path.join(Global.Path.log, `ocpp-${channel.replace(/[^a-zA-Z0-9._-]/g, "-")}.log`)
 }
 
 export function fileLogger(target = file(), id: string = runID()) {
@@ -61,12 +61,12 @@ export function fileLogger(target = file(), id: string = runID()) {
 }
 
 const stderrLogger = Logger.make((options) => {
-  if (process.env.OPENCODE_PRINT_LOGS !== "1") return
+  if (process.env.OCPP_PRINT_LOGS !== "1") return
   process.stderr.write(formatter().log(options) + "\n")
 })
 
 export function minimumLogLevel() {
-  const value = process.env.OPENCODE_LOG_LEVEL?.toUpperCase()
+  const value = process.env.OCPP_LOG_LEVEL?.toUpperCase()
   const levels = {
     DEBUG: "Debug",
     INFO: "Info",

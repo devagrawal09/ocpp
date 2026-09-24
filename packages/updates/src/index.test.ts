@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test"
 import worker, { channelsForRef, resolveChannel, validGitHubClaims } from "./index"
 
 const claims = {
-  repository: "anomalyco/opencode",
+  repository: "devagrawal09/oc-plus-plus",
   repository_id: "975734319",
   repository_owner_id: "66570915",
-  workflow_ref: "anomalyco/opencode/.github/workflows/publish.yml@refs/heads/dev",
+  workflow_ref: "devagrawal09/oc-plus-plus/.github/workflows/publish.yml@refs/heads/dev",
   ref: "refs/heads/dev",
   sha: "abc123",
   run_id: "123",
@@ -26,14 +26,21 @@ describe("GitHub publish authorization", () => {
   test("rejects another repository or workflow", () => {
     expect(validGitHubClaims({ ...claims, repository_id: "1" })).toBe(false)
     expect(
-      validGitHubClaims({ ...claims, workflow_ref: "anomalyco/opencode/.github/workflows/other.yml@refs/heads/dev" }),
+      validGitHubClaims({
+        ...claims,
+        workflow_ref: "devagrawal09/oc-plus-plus/.github/workflows/other.yml@refs/heads/dev",
+      }),
     ).toBe(false)
   })
 
   test("rejects unconfigured refs", () => {
     const ref = "refs/heads/untrusted"
     expect(
-      validGitHubClaims({ ...claims, ref, workflow_ref: `anomalyco/opencode/.github/workflows/publish.yml@${ref}` }),
+      validGitHubClaims({
+        ...claims,
+        ref,
+        workflow_ref: `devagrawal09/oc-plus-plus/.github/workflows/publish.yml@${ref}`,
+      }),
     ).toBe(false)
   })
 })
@@ -45,7 +52,7 @@ test("routes the retired next channel to beta", () => {
 
 const artifact = {
   channel: "beta",
-  name: "opencode",
+  name: "ocpp",
   distribution: "darwin-arm64",
   version: "1.0.0",
   metadata: "{}",
@@ -57,15 +64,11 @@ const artifact = {
 test.each([
   ["/api/next", ["beta"], { channel: "beta", artifacts: [{ ...artifact, metadata: {}, active: true }] }],
   [
-    "/api/next/opencode",
-    ["beta", "opencode"],
-    { channel: "beta", name: "opencode", artifacts: [{ ...artifact, metadata: {}, active: true }] },
+    "/api/next/ocpp",
+    ["beta", "ocpp"],
+    { channel: "beta", name: "ocpp", artifacts: [{ ...artifact, metadata: {}, active: true }] },
   ],
-  [
-    "/api/next/opencode/darwin-arm64",
-    ["beta", "opencode", "darwin-arm64"],
-    { ...artifact, metadata: {}, active: true },
-  ],
+  ["/api/next/ocpp/darwin-arm64", ["beta", "ocpp", "darwin-arm64"], { ...artifact, metadata: {}, active: true }],
 ])("routes GET %s", async (path, expectedBindings, expectedBody) => {
   const bindings: unknown[][] = []
   const statement = {
@@ -86,14 +89,14 @@ test.each([
     },
   } as unknown as D1Database
 
-  const response = await worker.fetch(new Request(`https://update.opencode.ai${path}`), { DB: db })
+  const response = await worker.fetch(new Request(`https://update.ocpp.ai${path}`), { DB: db })
 
   expect(response.status).toBe(200)
   expect(await response.text()).toBe(JSON.stringify(expectedBody))
   expect(bindings).toEqual([expectedBindings])
 })
 
-test.each(["/api", "/v1/dev", "/api/dev/opencode/darwin-arm64/extra", "/api/dev/opencode/darwin$arm64"])(
+test.each(["/api", "/v1/dev", "/api/dev/ocpp/darwin-arm64/extra", "/api/dev/ocpp/darwin$arm64"])(
   "returns 404 for GET %s",
   async (path) => {
     const db = {
@@ -102,7 +105,7 @@ test.each(["/api", "/v1/dev", "/api/dev/opencode/darwin-arm64/extra", "/api/dev/
       },
     } as unknown as D1Database
 
-    const response = await worker.fetch(new Request(`https://update.opencode.ai${path}`), { DB: db })
+    const response = await worker.fetch(new Request(`https://update.ocpp.ai${path}`), { DB: db })
 
     expect(response.status).toBe(404)
     expect(await response.text()).toBe("Not found")

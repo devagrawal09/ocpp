@@ -1,13 +1,13 @@
-import { Database } from "@opencode-ai/core/database/database"
-import { Form } from "@opencode-ai/core/form"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
+import { Database } from "@ocpp/core/database/database"
+import { Form } from "@ocpp/core/form"
+import { LocationServiceMap } from "@ocpp/core/location-services"
 import {
   ConflictError,
   FormAlreadySettledError,
   FormInvalidAnswerError,
   FormNotFoundError,
   InvalidRequestError,
-} from "@opencode-ai/protocol/errors"
+} from "@ocpp/protocol/errors"
 import { Effect, Option } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"

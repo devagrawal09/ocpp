@@ -1,9 +1,9 @@
 export * as ExternalAgentStream from "./stream.js"
 
-import { Money } from "@opencode-ai/schema/money"
-import type { Agent } from "@opencode-ai/schema/agent"
-import type { Model } from "@opencode-ai/schema/model"
-import type { Session } from "@opencode-ai/schema/session"
+import { Money } from "@ocpp/schema/money"
+import type { Agent } from "@ocpp/schema/agent"
+import type { Model } from "@ocpp/schema/model"
+import type { Session } from "@ocpp/schema/session"
 import { Effect } from "effect"
 import { Bus } from "../bus.js"
 import { SessionEvent } from "../session/event.js"
@@ -123,7 +123,7 @@ export function make(
       if (state.tools.has(event.id)) return
       state.tools.set(event.id, event.name)
       // A structured submission's output is deliberately absent from the canonical transcript.
-      const input = ["submit_result", "mcp__opencode__submit_result"].includes(event.name)
+      const input = ["submit_result", "mcp__ocpp__submit_result"].includes(event.name)
         ? { message: event.input.message }
         : event.input
       yield* bus.publish(SessionEvent.Tool.Input.Started, { ...base, id: event.id, name: event.name })

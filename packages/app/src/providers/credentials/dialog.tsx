@@ -1,10 +1,10 @@
-import { Button } from "@opencode-ai/ui/button"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
+import { Button } from "@ocpp/ui/button"
+import { useDialog } from "@ocpp/ui/context/dialog"
+import { Icon } from "@ocpp/ui/icon"
+import { IconButton } from "@ocpp/ui/icon-button"
+import { ProviderIcon } from "@ocpp/ui/provider-icon"
 import { useMutation } from "@tanstack/solid-query"
-import { TextField } from "@opencode-ai/ui/text-field"
+import { TextField } from "@ocpp/ui/text-field"
 import { showToast } from "@/shell/notifications/toast"
 import { batch, For } from "solid-js"
 import { createStore, produce } from "solid-js/store"
@@ -141,7 +141,7 @@ export function CustomProviderForm(props: { autofocus?: boolean } = {}) {
       <form onSubmit={save} class="px-2.5 pb-6 flex flex-col gap-6">
         <p class="text-14-regular text-text-base">
           {language.t("provider.custom.description.prefix")}
-          <ExternalLink href="https://opencode.ai/docs/providers/#custom-provider" tabIndex={-1}>
+          <ExternalLink href="https://ocpp.ai/docs/providers/#custom-provider" tabIndex={-1}>
             {language.t("provider.custom.description.link")}
           </ExternalLink>
           {language.t("provider.custom.description.suffix")}

@@ -1,25 +1,20 @@
 import { describe, expect } from "bun:test"
 import { and, asc, eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
-import { Database } from "@opencode-ai/core/database/database"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { Event } from "@opencode-ai/schema/event"
-import { EventTable } from "@opencode-ai/core/event/sql"
-import { Instructions } from "@opencode-ai/core/instructions/index"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { InstructionState } from "@opencode-ai/core/session/instruction-state"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionSchema } from "@opencode-ai/core/session/schema"
-import {
-  InstructionBlobTable,
-  InstructionStateTable,
-  SessionMessageTable,
-  SessionTable,
-} from "@opencode-ai/core/session/sql"
+import { Database } from "@ocpp/core/database/database"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { Event } from "@ocpp/schema/event"
+import { EventTable } from "@ocpp/core/event/sql"
+import { Instructions } from "@ocpp/core/instructions/index"
+import { Project } from "@ocpp/core/project"
+import { ProjectTable } from "@ocpp/core/project/sql"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { InstructionState } from "@ocpp/core/session/instruction-state"
+import { SessionProjector } from "@ocpp/core/session/projector"
+import { SessionSchema } from "@ocpp/core/session/schema"
+import { InstructionBlobTable, InstructionStateTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(

@@ -1,8 +1,8 @@
 import { expect } from "bun:test"
 import { createServer } from "node:http"
-import { makeMemoryDriver } from "@opencode-ai/core/environment/index"
-import { Workspace } from "@opencode-ai/core/workspace"
-import { WorkspaceDriver } from "@opencode-ai/core/workspace/driver"
+import { makeMemoryDriver } from "@ocpp/core/environment/index"
+import { Workspace } from "@ocpp/core/workspace"
+import { WorkspaceDriver } from "@ocpp/core/workspace/driver"
 import { Effect } from "effect"
 import { tmpdir } from "../../core/test/fixture/tmpdir"
 import { it } from "../../core/test/lib/effect"
@@ -58,13 +58,12 @@ function occupy(port: number, cancel = false) {
   })
 }
 
-const ready = (handler: Handler) =>
-  Effect.promise(() => handler(new Request("http://opencode.local/api/model/default")))
+const ready = (handler: Handler) => Effect.promise(() => handler(new Request("http://ocpp.local/api/model/default")))
 
 const connectOpenAI = (handler: Handler) =>
   Effect.promise(() =>
     handler(
-      new Request("http://opencode.local/api/integration/openai/connect/oauth", {
+      new Request("http://ocpp.local/api/integration/openai/connect/oauth", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ methodID: "chatgpt-browser" }),
@@ -83,13 +82,13 @@ it.live("serves the HttpApi and enforces Basic auth like the Node server", () =>
   Effect.gen(function* () {
     const handler = yield* ServerFetch.make({ ...options, password: "secret" })
 
-    const denied = yield* Effect.promise(() => handler(new Request("http://opencode.local/api/health")))
+    const denied = yield* Effect.promise(() => handler(new Request("http://ocpp.local/api/health")))
     expect(denied.status).toBe(401)
 
     const response = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/health", {
-          headers: { authorization: `Basic ${btoa("opencode:secret")}` },
+        new Request("http://ocpp.local/api/health", {
+          headers: { authorization: `Basic ${btoa("ocpp:secret")}` },
         }),
       ),
     )
@@ -104,7 +103,7 @@ it.live("activates credentials through the HttpApi", () =>
   Effect.gen(function* () {
     const handler = yield* ServerFetch.make(options)
     const response = yield* Effect.promise(() =>
-      handler(new Request("http://opencode.local/api/credential/cred_missing/activate", { method: "POST" })),
+      handler(new Request("http://ocpp.local/api/credential/cred_missing/activate", { method: "POST" })),
     )
     expect(response.status).toBe(204)
   }),
@@ -114,12 +113,12 @@ it.live("serves unauthenticated and answers CORS preflight when no password is c
   Effect.gen(function* () {
     const handler = yield* ServerFetch.make(options)
 
-    const response = yield* Effect.promise(() => handler(new Request("http://opencode.local/api/health")))
+    const response = yield* Effect.promise(() => handler(new Request("http://ocpp.local/api/health")))
     expect(response.status).toBe(200)
 
     const preflight = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/health", {
+        new Request("http://ocpp.local/api/health", {
           method: "OPTIONS",
           headers: {
             origin: "http://localhost:3000",
@@ -146,7 +145,7 @@ it.live("applies custom CORS origins to HTTP responses and PTY ticket checks", (
           const allowed = origin !== "https://untrusted.example.com"
           const preflight = yield* Effect.promise(() =>
             handler(
-              new Request("http://opencode.local/api/health", {
+              new Request("http://ocpp.local/api/health", {
                 method: "OPTIONS",
                 headers: {
                   origin,
@@ -162,8 +161,8 @@ it.live("applies custom CORS origins to HTTP responses and PTY ticket checks", (
 
           const response = yield* Effect.promise(() =>
             handler(
-              new Request("http://opencode.local/api/health", {
-                headers: { origin, authorization: `Basic ${btoa("opencode:secret")}` },
+              new Request("http://ocpp.local/api/health", {
+                headers: { origin, authorization: `Basic ${btoa("ocpp:secret")}` },
               }),
             ),
           )
@@ -172,9 +171,9 @@ it.live("applies custom CORS origins to HTTP responses and PTY ticket checks", (
 
           const ticket = yield* Effect.promise(() =>
             handler(
-              new Request("http://opencode.local/api/experimental/persistent-pty/pty_missing/connect-token", {
+              new Request("http://ocpp.local/api/experimental/persistent-pty/pty_missing/connect-token", {
                 method: "POST",
-                headers: { origin, authorization: `Basic ${btoa("opencode:secret")}`, "x-opencode-ticket": "1" },
+                headers: { origin, authorization: `Basic ${btoa("ocpp:secret")}`, "x-ocpp-ticket": "1" },
               }),
             ),
           )
@@ -240,7 +239,7 @@ it.live("treats destroying a missing workspace as success", () =>
     const handler = yield* ServerFetch.make(options)
     const response = yield* Effect.promise(() =>
       handler(
-        new Request(`http://opencode.local/api/workspace/${Workspace.ID.create()}`, {
+        new Request(`http://ocpp.local/api/workspace/${Workspace.ID.create()}`, {
           method: "DELETE",
         }),
       ),
@@ -262,7 +261,7 @@ it.live("creates idempotent caller-identified workspaces through the HttpApi", (
     const create = (body: unknown) =>
       Effect.promise(() =>
         handler(
-          new Request("http://opencode.local/api/workspace", {
+          new Request("http://ocpp.local/api/workspace", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
@@ -298,7 +297,7 @@ it.live("serves the session view operation and missing-session error", () =>
     const handler = yield* ServerFetch.make(options)
     const created = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/session", {
+        new Request("http://ocpp.local/api/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: "{}",
@@ -313,7 +312,7 @@ it.live("serves the session view operation and missing-session error", () =>
 
     const viewed = yield* Effect.promise(() =>
       handler(
-        new Request(`http://opencode.local/api/session/${data.id}/view`, {
+        new Request(`http://ocpp.local/api/session/${data.id}/view`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ idle: 0 }),
@@ -323,13 +322,13 @@ it.live("serves the session view operation and missing-session error", () =>
     expect(viewed.status).toBe(204)
 
     const invalid = yield* Effect.promise(() =>
-      handler(new Request(`http://opencode.local/api/session/${data.id}/view`, { method: "POST" })),
+      handler(new Request(`http://ocpp.local/api/session/${data.id}/view`, { method: "POST" })),
     )
     expect(invalid.status).toBe(400)
 
     const missing = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/session/ses_missing_view/view", {
+        new Request("http://ocpp.local/api/session/ses_missing_view/view", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ idle: 0 }),
@@ -342,7 +341,7 @@ it.live("serves the session view operation and missing-session error", () =>
 
 it.live("does not load a location when reading pending session requests", () =>
   Effect.gen(function* () {
-    const config = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-pending-read-")))
+    const config = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("ocpp-pending-read-")))
     const handler = yield* ServerFetch.make({
       ...options,
       config: {
@@ -353,7 +352,7 @@ it.live("does not load a location when reading pending session requests", () =>
     })
     const created = (yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/session", {
+        new Request("http://ocpp.local/api/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: "{}",
@@ -363,7 +362,7 @@ it.live("does not load a location when reading pending session requests", () =>
 
     const loaded = () =>
       Effect.promise(() =>
-        handler(new Request("http://opencode.local/api/debug/location")).then(
+        handler(new Request("http://ocpp.local/api/debug/location")).then(
           (response) => response.json() as Promise<unknown[]>,
         ),
       )
@@ -371,20 +370,20 @@ it.live("does not load a location when reading pending session requests", () =>
     expect(yield* loaded()).toEqual([])
     for (const resource of ["permission", "form"]) {
       const response = yield* Effect.promise(() =>
-        handler(new Request(`http://opencode.local/api/session/${created.data.id}/${resource}`)),
+        handler(new Request(`http://ocpp.local/api/session/${created.data.id}/${resource}`)),
       )
       expect(response.status).toBe(200)
       expect(yield* Effect.promise(() => response.json())).toEqual({ data: [] })
 
       const missing = yield* Effect.promise(() =>
-        handler(new Request(`http://opencode.local/api/session/ses_missing_pending/${resource}`)),
+        handler(new Request(`http://ocpp.local/api/session/ses_missing_pending/${resource}`)),
       )
       expect(missing.status).toBe(404)
     }
     const global = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/session/global/form", {
-          headers: { "x-opencode-directory": encodeURIComponent(process.cwd()) },
+        new Request("http://ocpp.local/api/session/global/form", {
+          headers: { "x-ocpp-directory": encodeURIComponent(process.cwd()) },
         }),
       ),
     )
@@ -394,7 +393,7 @@ it.live("does not load a location when reading pending session requests", () =>
 
     const createdForm = yield* Effect.promise(() =>
       handler(
-        new Request(`http://opencode.local/api/session/${created.data.id}/form`, {
+        new Request(`http://ocpp.local/api/session/${created.data.id}/form`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title: "Test form", fields: [{ key: "answer", type: "string" }] }),
@@ -404,7 +403,7 @@ it.live("does not load a location when reading pending session requests", () =>
     expect(createdForm.status).toBe(200)
 
     const forms = yield* Effect.promise(() =>
-      handler(new Request(`http://opencode.local/api/session/${created.data.id}/form`)),
+      handler(new Request(`http://ocpp.local/api/session/${created.data.id}/form`)),
     )
     expect(forms.status).toBe(200)
     expect(yield* Effect.promise(() => forms.json())).toMatchObject({
@@ -414,11 +413,11 @@ it.live("does not load a location when reading pending session requests", () =>
 
     const globalForm = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/session/global/form", {
+        new Request("http://ocpp.local/api/session/global/form", {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-opencode-directory": encodeURIComponent(process.cwd()),
+            "x-ocpp-directory": encodeURIComponent(process.cwd()),
           },
           body: JSON.stringify({ title: "Global form", fields: [{ key: "answer", type: "string" }] }),
         }),
@@ -428,8 +427,8 @@ it.live("does not load a location when reading pending session requests", () =>
 
     const globalForms = yield* Effect.promise(() =>
       handler(
-        new Request("http://opencode.local/api/session/global/form", {
-          headers: { "x-opencode-directory": encodeURIComponent(process.cwd()) },
+        new Request("http://ocpp.local/api/session/global/form", {
+          headers: { "x-ocpp-directory": encodeURIComponent(process.cwd()) },
         }),
       ),
     )
@@ -440,7 +439,7 @@ it.live("does not load a location when reading pending session requests", () =>
     expect((yield* ready(handler)).status).toBe(200)
     const createdPermission = yield* Effect.promise(() =>
       handler(
-        new Request(`http://opencode.local/api/session/${created.data.id}/permission`, {
+        new Request(`http://ocpp.local/api/session/${created.data.id}/permission`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ id: "per_pending_read", action: "shell", resources: ["pwd"] }),
@@ -453,7 +452,7 @@ it.live("does not load a location when reading pending session requests", () =>
     })
 
     const permissions = yield* Effect.promise(() =>
-      handler(new Request(`http://opencode.local/api/session/${created.data.id}/permission`)),
+      handler(new Request(`http://ocpp.local/api/session/${created.data.id}/permission`)),
     )
     expect(permissions.status).toBe(200)
     expect(yield* Effect.promise(() => permissions.json())).toMatchObject({
@@ -472,7 +471,7 @@ it.live("stays serviceable when the first request aborts", () =>
 
     const aborted = yield* Effect.promise(() => {
       const controller = new AbortController()
-      const first = handler(new Request("http://opencode.local/api/health", { signal: controller.signal }))
+      const first = handler(new Request("http://ocpp.local/api/health", { signal: controller.signal }))
       controller.abort()
       return first.then(
         () => "resolved" as const,
@@ -481,7 +480,7 @@ it.live("stays serviceable when the first request aborts", () =>
     })
     expect(["resolved", "rejected"]).toContain(aborted)
 
-    const second = yield* Effect.promise(() => handler(new Request("http://opencode.local/api/health")))
+    const second = yield* Effect.promise(() => handler(new Request("http://ocpp.local/api/health")))
     expect(second.status).toBe(200)
   }),
 )

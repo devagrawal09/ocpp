@@ -1,11 +1,11 @@
 export * as WellKnown from "./wellknown.js"
 
-import { Integration } from "@opencode-ai/schema/integration"
+import { Integration } from "@ocpp/schema/integration"
 import { Context, Effect, Layer, Ref, Schema, Semaphore } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { isDeepStrictEqual } from "node:util"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { httpClient } from "@ocpp/util/effect/app-node-platform"
 import { Bus } from "./bus.js"
 import { KV } from "./kv.js"
 
@@ -51,7 +51,7 @@ export interface Interface {
   readonly resolve: (entry: Entry, variables: Readonly<Record<string, string>>) => Effect.Effect<Config[], Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/WellKnown") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/WellKnown") {}
 
 export const Event = {
   Updated: Bus.ephemeral({ type: "wellknown.updated", schema: {} }),

@@ -1,6 +1,6 @@
 import type { V2ColorValue } from "../types"
 
-/** Default v2 hue ramps from `v2/styles/colors.css` (OC-2). Alpha ramps live in CSS only. */
+/** Default v2 hue ramps from `v2/styles/colors.css` (OC++ V2). Alpha ramps live in CSS only. */
 export const V2_PRIMITIVES_DEFAULT: Record<string, V2ColorValue> = {
   "v2-grey-50": "#ffffffff",
   "v2-grey-100": "#fafafaff",

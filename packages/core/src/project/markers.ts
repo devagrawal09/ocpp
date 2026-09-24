@@ -1,9 +1,9 @@
 export * as ProjectMarkers from "./markers.js"
 
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
-import { Npm } from "@opencode-ai/util/npm"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
+import { Npm } from "@ocpp/util/npm"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Option } from "effect"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "path"
@@ -29,7 +29,7 @@ export interface Interface {
   readonly targets: () => readonly string[]
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ProjectMarkers") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ProjectMarkers") {}
 
 const layer = Layer.effect(
   Service,
@@ -46,13 +46,13 @@ const layer = Layer.effect(
     // no-discovery caller must skip — it imports plugin modules.
     const scanOperations = Effect.fnUntraced(function* (directory: AbsolutePath) {
       const found = yield* fs
-        .up({ targets: [".opencode", "opencode.json", "opencode.jsonc"], start: directory })
+        .up({ targets: [".ocpp", "ocpp.json", "ocpp.jsonc"], start: directory })
         .pipe(Effect.orElseSucceed(() => []))
-      const roots = [global.config, ...found.filter((value) => path.basename(value) === ".opencode").toReversed()]
+      const roots = [global.config, ...found.filter((value) => path.basename(value) === ".ocpp").toReversed()]
       const files = [
-        ...["opencode.json", "opencode.jsonc"].map((name) => path.join(global.config, name)),
-        ...found.filter((value) => path.basename(value) !== ".opencode").toReversed(),
-        ...roots.slice(1).flatMap((root) => ["opencode.json", "opencode.jsonc"].map((name) => path.join(root, name))),
+        ...["ocpp.json", "ocpp.jsonc"].map((name) => path.join(global.config, name)),
+        ...found.filter((value) => path.basename(value) !== ".ocpp").toReversed(),
+        ...roots.slice(1).flatMap((root) => ["ocpp.json", "ocpp.jsonc"].map((name) => path.join(root, name))),
       ]
       const automatic = yield* Effect.forEach(roots, (root) => PluginSourceDirectory.discover(fs, root)).pipe(
         Effect.map((entries) => entries.flat()),
@@ -104,7 +104,7 @@ const layer = Layer.effect(
           }
           continue
         }
-        if (operation.target === "*" || operation.target.endsWith(".*") || operation.target.startsWith("opencode."))
+        if (operation.target === "*" || operation.target.endsWith(".*") || operation.target.startsWith("ocpp."))
           continue
         const key = JSON.stringify(operation)
         const plugin = loaded.has(key)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { AgentListOutput, ModelListOutput, ProviderListOutput } from "@opencode-ai/client/promise"
+import type { AgentListOutput, ModelListOutput, ProviderListOutput } from "@ocpp/client/promise"
 import { directoryKey, normalizeAgentList, normalizeProviderList } from "./utils"
 
 describe("normalizeAgentList", () => {
@@ -87,8 +87,8 @@ describe("normalizeProviderList", () => {
 
 describe("directoryKey", () => {
   test("normalizes slashes", () => {
-    expect(String(directoryKey("C:\\Repos\\sst\\opencode"))).toBe("C:/Repos/sst/opencode")
-    expect(String(directoryKey("C:/Repos/sst/opencode"))).toBe("C:/Repos/sst/opencode")
+    expect(String(directoryKey("C:\\Repos\\sst\\ocpp"))).toBe("C:/Repos/sst/ocpp")
+    expect(String(directoryKey("C:/Repos/sst/ocpp"))).toBe("C:/Repos/sst/ocpp")
   })
 
   test("preserves backslashes in posix paths", () => {
@@ -96,7 +96,7 @@ describe("directoryKey", () => {
   })
 
   test("trims trailing slashes without breaking roots", () => {
-    expect(String(directoryKey("C:/Repos/sst/opencode/"))).toBe("C:/Repos/sst/opencode")
+    expect(String(directoryKey("C:/Repos/sst/ocpp/"))).toBe("C:/Repos/sst/ocpp")
     expect(String(directoryKey("C:/"))).toBe("C:/")
     expect(String(directoryKey("/"))).toBe("/")
   })

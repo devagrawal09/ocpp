@@ -1,5 +1,5 @@
 import { CliRenderEvents, EmbeddedTerminalRenderable, type RGBA } from "@opentui/core"
-import type { ResolvedThemeTokens } from "@opencode-ai/theme/tui"
+import type { ResolvedThemeTokens } from "@ocpp/theme/tui"
 import { extend, useRenderer } from "@opentui/solid"
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useClient } from "../context/client"
@@ -241,7 +241,7 @@ export function TerminalPane(props: {
       }
       if (message.type !== "attached") return
       if (!("inputProtocol" in message) || message.inputProtocol !== 1) {
-        setFailure("Persistent terminal server is out of date; restart OpenCode")
+        setFailure("Persistent terminal server is out of date; restart OC++")
         next.close()
         return
       }

@@ -12,81 +12,76 @@ import {
   InvalidRequestError,
   RateLimitError,
   UnknownProviderError,
-} from "@opencode-ai/ai"
-import { OpenAIChat } from "@opencode-ai/ai/protocols/openai-chat"
-import { TestLLM } from "@opencode-ai/ai/testing"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Database } from "@opencode-ai/core/database/database"
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { Event } from "@opencode-ai/schema/event"
-import { App } from "@opencode-ai/core/app"
-import { Permission } from "@opencode-ai/core/permission"
-import { EventTable } from "@opencode-ai/core/event/sql"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { Form } from "@opencode-ai/core/form"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Session } from "@opencode-ai/core/session"
-import { Snapshot } from "@opencode-ai/core/snapshot"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionContext } from "@opencode-ai/core/session/context"
-import { SessionCompaction } from "@opencode-ai/core/session/compaction"
-import { SessionInbox } from "@opencode-ai/core/session/inbox"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { SessionModelRequest } from "@opencode-ai/core/session/model-request"
-import { SessionModelTransport } from "@opencode-ai/core/session/model-transport"
-import { Money } from "@opencode-ai/schema/money"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionRunCoordinator } from "@opencode-ai/core/session/run-coordinator"
-import { SessionRunner } from "@opencode-ai/core/session/runner/index"
-import { SessionRunnerLLM } from "@opencode-ai/core/session/runner/llm"
-import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
-import { SessionUsage } from "@opencode-ai/core/session/usage"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { SystemPromptPlugin } from "@opencode-ai/core/plugin/system-prompt"
-import { QuestionTool } from "@opencode-ai/core/tool/plugin/question"
-import { Agent } from "@opencode-ai/core/agent"
-import { Config } from "@opencode-ai/core/config"
-import { Document, Info } from "@opencode-ai/schema/config"
-import { ConfigCompaction } from "@opencode-ai/schema/config/compaction"
-import { Tool } from "@opencode-ai/core/tool"
-import type { Info as ToolInfo } from "@opencode-ai/schema/tool"
-import {
-  InstructionStateTable,
-  SessionInboxTable,
-  SessionMessageTable,
-  SessionTable,
-} from "@opencode-ai/core/session/sql"
-import { InstructionEntry } from "@opencode-ai/core/session/instruction-entry"
-import { InstructionState } from "@opencode-ai/core/session/instruction-state"
-import { SessionStore } from "@opencode-ai/core/session/store"
-import { Instructions } from "@opencode-ai/core/instructions/index"
-import { InstructionBuiltIns } from "@opencode-ai/core/instructions/builtins"
-import { InstructionDiscovery } from "@opencode-ai/core/instruction-discovery"
-import { SkillInstructions } from "@opencode-ai/core/skill/instructions"
-import { ReferenceInstructions } from "@opencode-ai/core/reference/instructions"
-import { McpInstructions } from "@opencode-ai/core/mcp/instructions"
-import { SessionSystemPrompt } from "@opencode-ai/core/session/system-prompt"
-import { ID } from "@opencode-ai/core/model"
-import { Location } from "@opencode-ai/core/location"
-import { Provider } from "@opencode-ai/core/provider"
+} from "@ocpp/ai"
+import { OpenAIChat } from "@ocpp/ai/protocols/openai-chat"
+import { TestLLM } from "@ocpp/ai/testing"
+import { Catalog } from "@ocpp/core/catalog"
+import { Database } from "@ocpp/core/database/database"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { Event } from "@ocpp/schema/event"
+import { App } from "@ocpp/core/app"
+import { Permission } from "@ocpp/core/permission"
+import { EventTable } from "@ocpp/core/event/sql"
+import { Project } from "@ocpp/core/project"
+import { ProjectTable } from "@ocpp/core/project/sql"
+import { Form } from "@ocpp/core/form"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Session } from "@ocpp/core/session"
+import { Snapshot } from "@ocpp/core/snapshot"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionContext } from "@ocpp/core/session/context"
+import { SessionCompaction } from "@ocpp/core/session/compaction"
+import { SessionInbox } from "@ocpp/core/session/inbox"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { SessionModelRequest } from "@ocpp/core/session/model-request"
+import { SessionModelTransport } from "@ocpp/core/session/model-transport"
+import { Money } from "@ocpp/schema/money"
+import { SessionProjector } from "@ocpp/core/session/projector"
+import { SessionExecution } from "@ocpp/core/session/execution"
+import { SessionRunCoordinator } from "@ocpp/core/session/run-coordinator"
+import { SessionRunner } from "@ocpp/core/session/runner/index"
+import { SessionRunnerLLM } from "@ocpp/core/session/runner/llm"
+import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
+import { SessionUsage } from "@ocpp/core/session/usage"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { SystemPromptPlugin } from "@ocpp/core/plugin/system-prompt"
+import { QuestionTool } from "@ocpp/core/tool/plugin/question"
+import { Agent } from "@ocpp/core/agent"
+import { Config } from "@ocpp/core/config"
+import { Document, Info } from "@ocpp/schema/config"
+import { ConfigCompaction } from "@ocpp/schema/config/compaction"
+import { Tool } from "@ocpp/core/tool"
+import type { Info as ToolInfo } from "@ocpp/schema/tool"
+import { InstructionStateTable, SessionInboxTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
+import { InstructionEntry } from "@ocpp/core/session/instruction-entry"
+import { InstructionState } from "@ocpp/core/session/instruction-state"
+import { SessionStore } from "@ocpp/core/session/store"
+import { Instructions } from "@ocpp/core/instructions/index"
+import { InstructionBuiltIns } from "@ocpp/core/instructions/builtins"
+import { InstructionDiscovery } from "@ocpp/core/instruction-discovery"
+import { SkillInstructions } from "@ocpp/core/skill/instructions"
+import { ReferenceInstructions } from "@ocpp/core/reference/instructions"
+import { McpInstructions } from "@ocpp/core/mcp/instructions"
+import { SessionSystemPrompt } from "@ocpp/core/session/system-prompt"
+import { ID } from "@ocpp/core/model"
+import { Location } from "@ocpp/core/location"
+import { Provider } from "@ocpp/core/provider"
 import { Cause, Context, Deferred, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { asc, desc, eq, sql } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 import { promptLocationNode } from "./fixture/prompt-location"
-import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
+import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Expected } from "./lib/session-message"
 import { permissionLayer } from "./lib/permission"
 import { agentHost, catalogHost, host } from "./plugin/host"
-import { CodeModeInstructions } from "@opencode-ai/core/codemode/instructions"
+import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
 
 const emptyCodeMode = `\n\n${CodeModeInstructions.render({ total: 0, shown: 0, namespaces: [] })}`
 type ToolBarrier = {
@@ -1714,7 +1709,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
-      expect.stringContaining("You are OpenCode, You and the user share the same workspace"),
+      expect.stringContaining("You are OC++, You and the user share the same workspace"),
       "Initial context",
     ])
   })
@@ -1734,7 +1729,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
-      expect.stringContaining("You are OpenCode, You and the user share the same workspace"),
+      expect.stringContaining("You are OC++, You and the user share the same workspace"),
       "Initial context",
     ])
   })
@@ -3696,9 +3691,9 @@ describe("SessionRunnerLLM", () => {
       "x-session-affinity": sessionID,
       "X-Session-Id": sessionID,
       "User-Agent": App.useragent(App.make()),
-      "x-opencode-project": Project.ID.global,
-      "x-opencode-session": sessionID,
-      "x-opencode-client": "opencode",
+      "x-ocpp-project": Project.ID.global,
+      "x-ocpp-session": sessionID,
+      "x-ocpp-client": "ocpp",
     })
   })
 

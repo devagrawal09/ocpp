@@ -1,4 +1,4 @@
-import { FileDiff } from "@opencode-ai/schema/file-diff"
+import { FileDiff } from "@ocpp/schema/file-diff"
 import { createTwoFilesPatch, diffLines } from "diff"
 
 export function fileDiff(

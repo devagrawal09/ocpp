@@ -6,11 +6,11 @@ const failures = (
   await Promise.all(
     files.flatMap(async (file) => {
       const html = await Bun.file(file).text()
-      const page = `https://opencode.local/${path.relative(root, file).replace(/index\.html$/, "")}`
+      const page = `https://ocpp.local/${path.relative(root, file).replace(/index\.html$/, "")}`
       return Promise.all(
         Array.from(html.matchAll(/href="([^"]+)"/g), async (match) => {
           const url = new URL(match[1], page)
-          if (url.origin !== "https://opencode.local") return
+          if (url.origin !== "https://ocpp.local") return
 
           const targetPath = path.join(root, decodeURIComponent(url.pathname))
           const target = (

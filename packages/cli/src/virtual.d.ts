@@ -1,4 +1,4 @@
-declare module "virtual:opencode-app-assets" {
+declare module "virtual:ocpp-app-assets" {
   const archive: string
   export default archive
 }

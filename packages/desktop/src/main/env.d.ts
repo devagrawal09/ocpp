@@ -1,8 +1,8 @@
-declare module "virtual:vite-opencode-picker/client"
+declare module "virtual:vite-ocpp-picker/client"
 
 interface ImportMetaEnv {
-  readonly OPENCODE_CHANNEL: string
-  readonly OPENCODE_VERSION?: string
+  readonly OCPP_CHANNEL: string
+  readonly OCPP_VERSION?: string
 }
 
 interface ImportMeta {

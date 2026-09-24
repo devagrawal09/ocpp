@@ -1,7 +1,7 @@
-import { PersistentPty } from "@opencode-ai/schema/persistent-pty"
-import { Pty } from "@opencode-ai/schema/pty"
-import { PtyTicket } from "@opencode-ai/schema/pty-ticket"
-import { Session } from "@opencode-ai/schema/session"
+import { PersistentPty } from "@ocpp/schema/persistent-pty"
+import { Pty } from "@ocpp/schema/pty"
+import { PtyTicket } from "@ocpp/schema/pty-ticket"
+import { Session } from "@ocpp/schema/session"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 import { ForbiddenError, InvalidRequestError, PtyNotFoundError, ServiceUnavailableError } from "../errors.js"
@@ -108,7 +108,7 @@ export const PersistentPtyGroup = HttpApiGroup.make("server.experimental")
       OpenApi.annotations({
         identifier: "v2.persistentPty.connect",
         summary: "Connect to a persistent PTY",
-        description: "Stream persistent PTY output through the OpenCode server.",
+        description: "Stream persistent PTY output through the OC++ server.",
         transform: (operation) => ({
           ...operation,
           "x-websocket": true,

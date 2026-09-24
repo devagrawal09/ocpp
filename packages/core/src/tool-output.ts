@@ -1,11 +1,11 @@
 export * as ToolOutput from "./tool-output.js"
 
 import path from "path"
-import type { Tool } from "@opencode-ai/schema/tool"
+import type { Tool } from "@ocpp/schema/tool"
 import { Context, Duration, Effect, Layer, Schedule } from "effect"
-import { makeGlobalNode, makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
+import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
 import { FileRetention } from "./file-retention.js"
 import { Identifier } from "./id/id.js"
 import { State } from "./state.js"
@@ -31,7 +31,7 @@ export interface Interface extends State.Transformable<Draft> {
   readonly cleanup: () => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ToolOutput") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ToolOutput") {}
 
 const cleanup = Effect.fn("ToolOutput.cleanup")(function* (fs: FSUtil.Interface, directory: string) {
   const entries = yield* fs.readDirectory(directory).pipe(

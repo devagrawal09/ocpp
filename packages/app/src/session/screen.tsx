@@ -1,7 +1,7 @@
 import { ErrorBoundary, Show, Match, Switch, createMemo, createEffect, createComputed, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import createPresence from "solid-presence"
-import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
+import { ResizeHandle } from "@ocpp/ui/resize-handle"
 import { SessionHeader } from "@/session/header/session-header"
 import { useLayout } from "@/shell/state/layout"
 import { useSettings } from "@/settings/model"

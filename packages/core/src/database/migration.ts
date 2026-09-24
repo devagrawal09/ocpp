@@ -6,7 +6,7 @@ import { supportsForeignKeyToggle } from "#sqlite"
 import type { EffectDrizzleSqlite } from "./drizzle.js"
 import { migrations } from "./migration.gen.js"
 import schema from "./schema.gen.js"
-import { Global } from "@opencode-ai/util/global"
+import { Global } from "@ocpp/util/global"
 
 type Database = EffectDrizzleSqlite.EffectSQLiteDatabase
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0]
@@ -21,7 +21,7 @@ export type Migration = {
 export function apply(db: Database) {
   return lock.withPermit(
     Effect.gen(function* () {
-      // OpenCode owns the unprefixed table namespace. Embedders sharing this
+      // OC++ owns the unprefixed table namespace. Embedders sharing this
       // database may own underscore-prefixed tables, which bootstrap ignores.
       const tables = yield* db.all<{ name: string }>(
         sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND substr(name, 1, 1) <> '_'`,

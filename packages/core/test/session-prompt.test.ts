@@ -4,44 +4,44 @@ import { mkdir, symlink } from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
 import { eq } from "drizzle-orm"
-import { Database } from "@opencode-ai/core/database/database"
-import { Agent } from "@opencode-ai/core/agent"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Bus } from "@opencode-ai/core/bus"
-import { EventTable } from "@opencode-ai/core/event/sql"
-import { Location } from "@opencode-ai/schema/location"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { Model } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Session } from "@opencode-ai/core/session"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { SessionPrompt } from "@opencode-ai/core/session/prompt"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionRevert } from "@opencode-ai/core/session/revert"
-import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionInbox } from "@opencode-ai/core/session/inbox"
-import { SessionInboxTable, SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
-import { SessionStore } from "@opencode-ai/core/session/store"
-import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
-import type { LocationServices } from "@opencode-ai/core/location-services"
-import { Image } from "@opencode-ai/core/image"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
-import { Snapshot } from "@opencode-ai/core/snapshot"
-import { Skill } from "@opencode-ai/core/skill"
+import { Database } from "@ocpp/core/database/database"
+import { Agent } from "@ocpp/core/agent"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Bus } from "@ocpp/core/bus"
+import { EventTable } from "@ocpp/core/event/sql"
+import { Location } from "@ocpp/schema/location"
+import { SessionEvent } from "@ocpp/core/session/event"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
+import { Project } from "@ocpp/core/project"
+import { ProjectTable } from "@ocpp/core/project/sql"
+import { AbsolutePath } from "@ocpp/core/schema"
+import { Session } from "@ocpp/core/session"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { SessionPrompt } from "@ocpp/core/session/prompt"
+import { SessionProjector } from "@ocpp/core/session/projector"
+import { SessionRevert } from "@ocpp/core/session/revert"
+import { SessionExecution } from "@ocpp/core/session/execution"
+import { SessionInbox } from "@ocpp/core/session/inbox"
+import { SessionInboxTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
+import { SessionStore } from "@ocpp/core/session/store"
+import { LocationServiceMap } from "@ocpp/core/location-service-map"
+import type { LocationServices } from "@ocpp/core/location-services"
+import { Image } from "@ocpp/core/image"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { Snapshot } from "@ocpp/core/snapshot"
+import { Skill } from "@ocpp/core/skill"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
-import { Reference } from "@opencode-ai/core/reference"
-import { RepositoryCache } from "@opencode-ai/core/repository-cache"
-import { Global } from "@opencode-ai/util/global"
-import { EffectFlock } from "@opencode-ai/util/effect-flock"
-import { KV } from "@opencode-ai/core/kv"
+import { Reference } from "@ocpp/core/reference"
+import { RepositoryCache } from "@ocpp/core/repository-cache"
+import { Global } from "@ocpp/util/global"
+import { EffectFlock } from "@ocpp/util/effect-flock"
+import { KV } from "@ocpp/core/kv"
 import { gitRemote, git, commit, read } from "./fixture/git"
 
 const executionCalls: Session.ID[] = []
@@ -215,12 +215,12 @@ describe("Session.prompt", () => {
         await mkdir(path.join(root, "owner"))
         await symlink(path.join(root, "origin.git"), path.join(root, "owner", "repo.git"))
       })
-      const previous = process.env.OPENCODE_REPO_CLONE_GITHUB_BASE_URL
-      process.env.OPENCODE_REPO_CLONE_GITHUB_BASE_URL = pathToFileURL(root + "/").href
+      const previous = process.env.OCPP_REPO_CLONE_GITHUB_BASE_URL
+      process.env.OCPP_REPO_CLONE_GITHUB_BASE_URL = pathToFileURL(root + "/").href
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
-          if (previous === undefined) delete process.env.OPENCODE_REPO_CLONE_GITHUB_BASE_URL
-          else process.env.OPENCODE_REPO_CLONE_GITHUB_BASE_URL = previous
+          if (previous === undefined) delete process.env.OCPP_REPO_CLONE_GITHUB_BASE_URL
+          else process.env.OCPP_REPO_CLONE_GITHUB_BASE_URL = previous
         }),
       )
       yield* Effect.gen(function* () {
@@ -553,7 +553,7 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const directory = yield* tmpdirScoped("opencode-session-prompt-")
+      const directory = yield* tmpdirScoped("ocpp-session-prompt-")
       const source = path.join(directory.path, "image.png")
       const bytes = Buffer.from(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",

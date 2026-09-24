@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { SessionMessageAssistant, SessionMessageInfo } from "@ocpp/client/promise"
 import {
   compactionDelta,
   compactionEnded,

@@ -58,7 +58,7 @@ story("shows a delegating row while subagent input streams", async ({ mount }) =
   await expect(shimmer).toHaveAttribute("aria-label", "Delegating agent...")
   await expect(shimmer).toHaveCSS("line-height", "16px")
   const icon = delegating.locator('[data-slot="icon-svg"]')
-  await expect(icon.locator('use[href="#opencode-v2-icon-subagent"]')).toBeVisible()
+  await expect(icon.locator('use[href="#ocpp-v2-icon-subagent"]')).toBeVisible()
   await expect(icon).toHaveCSS("color", "rgb(174, 174, 174)")
   await expect(timeline.locator('[data-component="task-tool-card"]')).toHaveCount(0)
   await expect(timeline.locator('[data-timeline-row="Thinking"]')).toHaveCount(0)

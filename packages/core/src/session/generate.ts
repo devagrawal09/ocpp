@@ -1,6 +1,6 @@
 export * as SessionGenerate from "./generate.js"
 
-import type { AIError } from "@opencode-ai/ai"
+import type { AIError } from "@ocpp/ai"
 import { Context, type Effect } from "effect"
 import type { Instructions } from "../instructions/index.js"
 import type { AgentNotFoundError } from "./error.js"
@@ -18,4 +18,4 @@ export interface Interface {
 }
 
 /** Location-scoped transient generation from Session context. */
-export class Service extends Context.Service<Service, Interface>()("@opencode/SessionGenerate") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionGenerate") {}

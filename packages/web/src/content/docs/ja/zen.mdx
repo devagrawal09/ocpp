@@ -1,15 +1,15 @@
 ---
 title: OpenCode Zen
-description: OpenCode によって提供されるモデルの厳選されたリスト。
+description: OC++ によって提供されるモデルの厳選されたリスト。
 ---
 
 import config from "../../../../config.mjs"
 export const console = config.console
 export const email = `mailto:${config.email}`
 
-OpenCode Zen は、OpenCode チームが提供する、テスト済みかつ検証済みのモデルの一覧です。
+OpenCode Zen は、OC++ チームが提供する、テスト済みかつ検証済みのモデルの一覧です。
 
-Zen は OpenCode のほかのプロバイダーと同じように動作します。OpenCode Zen にログインして API キーを取得できます。これは **完全にオプション** であり、OpenCode を使うために必須ではありません。
+Zen は OC++ のほかのプロバイダーと同じように動作します。OpenCode Zen にログインして API キーを取得できます。これは **完全にオプション** であり、OC++ を使うために必須ではありません。
 
 ---
 
@@ -18,7 +18,7 @@ Zen は OpenCode のほかのプロバイダーと同じように動作します
 世の中には非常に多くのモデルがありますが、コーディングエージェントとして十分に機能するものはごく一部です。さらに、ほとんどのプロバイダーは設定が大きく異なるため、得られるパフォーマンスや品質にも大きな差が出ます。
 
 :::tip
-OpenCode でうまく動作する、厳選したモデルとプロバイダーの組み合わせをテストしました。
+OC++ でうまく動作する、厳選したモデルとプロバイダーの組み合わせをテストしました。
 :::
 
 そのため、OpenRouter のようなものを通じてモデルを使っている場合、欲しいモデルの最適なバージョンを本当に使えているかを判断するのは困難です。
@@ -35,7 +35,7 @@ OpenCode Zen は、これらのモデルにアクセスできる AI ゲートウ
 
 ## 仕組み
 
-OpenCode Zen は、OpenCode のほかのプロバイダーと同じように動作します。
+OpenCode Zen は、OC++ のほかのプロバイダーと同じように動作します。
 
 1. **<a href={console}>OpenCode Zen</a>** にサインインし、請求情報を追加して、API キーをコピーします。
 2. TUI で `/connect` コマンドを実行し、OpenCode Zen を選んで API キーを貼り付けます。
@@ -113,7 +113,7 @@ OpenCode Zen は、OpenCode のほかのプロバイダーと同じように動�
 | Nemotron 3 Ultra Free  | nemotron-3-ultra-free  | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | DeepSeek V4 Flash Free | deepseek-v4-flash-free | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 
-OpenCode 設定で使う [model id](/docs/config/#models) は `opencode/<model-id>` 形式です。たとえば、GPT 5.5 では設定に `opencode/gpt-5.5` を使用します。
+OC++ 設定で使う [model id](/docs/config/#models) は `ocpp/<model-id>` 形式です。たとえば、GPT 5.5 では設定に `opencode/gpt-5.5` を使用します。
 
 ---
 
@@ -203,7 +203,7 @@ https://opencode.ai/zen/v1/models
 | GPT 5 Codex                       | $1.07  | $8.50   | $0.107      | -            |
 | GPT 5 Nano                        | $0.05  | $0.40   | $0.005      | -            |
 
-使用履歴に Haiku、Nano、Flash などの[低コストモデル](/docs/config/#models)が表示されることがあります。OpenCode はこれらのモデルをセッションタイトルの生成に使用します。
+使用履歴に Haiku、Nano、Flash などの[低コストモデル](/docs/config/#models)が表示されることがあります。OC++ はこれらのモデルをセッションタイトルの生成に使用します。
 
 :::note
 クレジットカード手数料は実費で転嫁されます（各取引につき 4.4% + $0.30）。それ以外の上乗せはありません。
@@ -211,14 +211,14 @@ https://opencode.ai/zen/v1/models
 
 無料モデル:
 
-- DeepSeek V4 Flash Free は期間限定で OpenCode で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
-- MiMo-V2.5 Free は期間限定で OpenCode で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
-- Laguna S 2.1 Free は期間限定で OpenCode で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
-- Ling-3.0-tiny Free は期間限定で OpenCode で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
-- LongCat-2.0 Free は期間限定で OpenCode で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
-- North Mini Code Free は期間限定で OpenCode で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
-- Nemotron 3 Ultra Free は期間限定で OpenCode で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
-- Big Pickle はステルスモデルで、期間限定で OpenCode で無料提供されています。チームはこの期間中にフィードバックを集め、モデルを改善しています。
+- DeepSeek V4 Flash Free は期間限定で OC++ で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
+- MiMo-V2.5 Free は期間限定で OC++ で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
+- Laguna S 2.1 Free は期間限定で OC++ で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
+- Ling-3.0-tiny Free は期間限定で OC++ で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
+- LongCat-2.0 Free は期間限定で OC++ で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
+- North Mini Code Free は期間限定で OC++ で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
+- Nemotron 3 Ultra Free は期間限定で OC++ で利用できます。チームはこの期間中にフィードバックを集め、モデルを改善しています。
+- Big Pickle はステルスモデルで、期間限定で OC++ で無料提供されています。チームはこの期間中にフィードバックを集め、モデルを改善しています。
 
 ご不明な点があれば、<a href={email}>お問い合わせください</a>。
 
@@ -330,4 +330,4 @@ Zen のほかのモデルにアクセスしながら、自分の OpenAI また�
 1. コーディングエージェントに最適なモデル/プロバイダーを **Benchmark** すること。
 2. **highest quality** の選択肢にアクセスできるようにし、性能を落としたり、より安価なプロバイダーへルーティングされたりしないこと。
 3. 原価で提供することで **price drops** をそのまま反映し、上乗せは処理手数料のカバー分だけにすること。
-4. ほかのコーディングエージェントでも使えるようにして **no lock-in** を実現し、さらに OpenCode では常にほかのプロバイダーも使えるようにすること。
+4. ほかのコーディングエージェントでも使えるようにして **no lock-in** を実現し、さらに OC++ では常にほかのプロバイダーも使えるようにすること。

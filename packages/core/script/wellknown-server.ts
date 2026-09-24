@@ -1,11 +1,11 @@
 const token = "dummy-wellknown-token"
 const port = Number(process.env.PORT ?? 8787)
 const config = {
-  $schema: "https://opencode.ai/config.json",
+  $schema: "https://ocpp.ai/config.json",
   share: "manual",
   model: "example-primary/example-chat",
   enabled_providers: ["example-primary", "example-secondary"],
-  disabled_providers: ["opencode", "anthropic", "openai", "google", "xai", "amazon-bedrock", "azure"],
+  disabled_providers: ["ocpp", "anthropic", "openai", "google", "xai", "amazon-bedrock", "azure"],
   provider: {
     "example-primary": {
       name: "Example Primary",
@@ -93,12 +93,12 @@ const server = Bun.serve({
           env: "TOKEN",
         },
         remote_config: {
-          url: `${url.origin}/config/opencode.json`,
+          url: `${url.origin}/config/ocpp.json`,
           headers: { authorization: "Bearer {env:TOKEN}" },
         },
       })
     }
-    if (url.pathname === "/config/opencode.json") {
+    if (url.pathname === "/config/ocpp.json") {
       if (request.headers.get("authorization") !== `Bearer ${token}`) {
         return new Response("Unauthorized", { status: 401 })
       }

@@ -1,6 +1,6 @@
 export * as SystemPromptPlugin from "./system-prompt.js"
 
-import { define } from "@opencode-ai/plugin/effect/plugin"
+import { define } from "@ocpp/plugin/effect/plugin"
 import { Effect } from "effect"
 
 import PROMPT_ANTHROPIC from "./system-prompt/anthropic.txt"
@@ -31,7 +31,7 @@ export const Plugins = [OpenAIPlugin, AnthropicPlugin, KimiPlugin, ArceePlugin, 
 
 function make(id: string, select: (modelID: string) => string | undefined) {
   return define({
-    id: `opencode.prompt.${id}`,
+    id: `ocpp.prompt.${id}`,
     effect: Effect.fn(`SystemPromptPlugin.${id}`)(function* (ctx) {
       yield* ctx.session.hook("context", (event) =>
         Effect.gen(function* () {

@@ -1,4 +1,4 @@
-import { Config } from "@opencode-ai/schema/config"
+import { Config } from "@ocpp/schema/config"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { LocationQuery, locationQueryOpenApi } from "./location.js"

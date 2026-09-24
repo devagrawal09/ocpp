@@ -1,8 +1,8 @@
-# OpenCode V2 Promise Plugin API
+# OC++ V2 Promise Plugin API
 
-The Promise plugin API at `@opencode-ai/plugin` is the async/await equivalent of `@opencode-ai/plugin/effect`. It grants plugins the same two in-process capabilities:
+The Promise plugin API at `@ocpp/plugin` is the async/await equivalent of `@ocpp/plugin/effect`. It grants plugins the same two in-process capabilities:
 
-- `hook` installs behavior at an OpenCode extension point.
+- `hook` installs behavior at an OC++ extension point.
 - `reload` reruns every transform hook for a stateful domain.
 
 The Promise API uses Promises instead of Effects for setup, runtime hook
@@ -12,7 +12,7 @@ draft callbacks remain synchronous.
 ## Defining A Plugin
 
 ```ts
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "@ocpp/plugin"
 
 export default Plugin.define({
   id: "example",
@@ -27,7 +27,7 @@ export default Plugin.define({
 ```
 
 Plugin setup registers hooks imperatively through each domain's `hook` method.
-It may return a synchronous or asynchronous cleanup function. OpenCode awaits
+It may return a synchronous or asynchronous cleanup function. OC++ awaits
 the cleanup when the plugin is unloaded or replaced:
 
 ```ts

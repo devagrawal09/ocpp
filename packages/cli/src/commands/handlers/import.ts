@@ -1,7 +1,7 @@
-import { OpenCode } from "@opencode-ai/client"
-import { Service } from "@opencode-ai/client/effect/service"
-import { Session } from "@opencode-ai/schema/session"
-import { SessionTransfer } from "@opencode-ai/schema/session-transfer"
+import { Ocpp } from "@ocpp/client"
+import { Service } from "@ocpp/client/effect/service"
+import { Session } from "@ocpp/schema/session"
+import { SessionTransfer } from "@ocpp/schema/session-transfer"
 import { Effect, Option, Schema } from "effect"
 import { EOL } from "node:os"
 import path from "node:path"
@@ -29,7 +29,7 @@ export default Runtime.handler(
       server: Option.getOrUndefined(input.server),
       standalone: input.standalone,
     })
-    const client = OpenCode.make({
+    const client = Ocpp.make({
       baseUrl: server.endpoint.url,
       headers: Service.headers(server.endpoint),
     })

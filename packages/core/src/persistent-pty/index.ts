@@ -3,12 +3,12 @@ export * as PersistentPty from "./index.js"
 import os from "node:os"
 import path from "node:path"
 import { Context, Effect, Layer, Schema } from "effect"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { Added, Handoff, PersistentPty, ReadLines, Removed, type ReadResult } from "@opencode-ai/schema/persistent-pty"
-import { Session } from "@opencode-ai/schema/session"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { Added, Handoff, PersistentPty, ReadLines, Removed, type ReadResult } from "@ocpp/schema/persistent-pty"
+import { Session } from "@ocpp/schema/session"
 import { Bus } from "../bus.js"
-import { Pty } from "@opencode-ai/schema/pty"
-import { Global } from "@opencode-ai/util/global"
+import { Pty } from "@ocpp/schema/pty"
+import { Global } from "@ocpp/util/global"
 import { ShellSelect } from "../shell/select.js"
 import {
   makeDaemonTransport,
@@ -21,7 +21,7 @@ import {
 import { resolveBinary } from "#persistent-pty-binary"
 
 export type { Role, StreamEvent } from "./daemon.js"
-export { Handoff } from "@opencode-ai/schema/persistent-pty"
+export { Handoff } from "@ocpp/schema/persistent-pty"
 
 export const Options = Schema.Struct({ handoff: Schema.optional(Handoff) })
 export type Options = typeof Options.Type
@@ -110,7 +110,7 @@ export interface Interface {
   ) => Effect.Effect<Attachment, NotFoundError | UnavailableError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/PersistentPty") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/PersistentPty") {}
 
 export const configured = (options: Options = {}) =>
   Layer.effect(
@@ -378,12 +378,12 @@ const unavailable = (error: unknown) =>
 
 const runtimeDirectory = () => {
   const root =
-    process.env.OPENCODE_PTY_RUNTIME_DIR ??
+    process.env.OCPP_PTY_RUNTIME_DIR ??
     (process.env.XDG_RUNTIME_DIR
       ? path.join(process.env.XDG_RUNTIME_DIR, "opencode-pty")
       : path.join(
           os.tmpdir(),
-          `opencode-pty-${typeof process.getuid === "function" ? process.getuid() : process.env.USER || "unknown"}`,
+          `ocpp-pty-${typeof process.getuid === "function" ? process.getuid() : process.env.USER || "unknown"}`,
         ))
   return path.join(root, crypto.randomUUID())
 }

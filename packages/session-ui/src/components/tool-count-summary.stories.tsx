@@ -1,4 +1,4 @@
-import { Button } from "@opencode-ai/ui/button"
+import { Button } from "@ocpp/ui/button"
 import { createStore } from "solid-js/store"
 import { AnimatedCountList, type CountItem } from "./tool-count-summary"
 import { ToolStatusTitle } from "./tool-status-title"
@@ -48,7 +48,7 @@ function ContextProgress() {
 }
 
 export default {
-  title: "OpenCode/Work/Context progress",
+  title: "OC++/Work/Context progress",
   id: "components-animated-count-list",
   component: AnimatedCountList,
   parameters: {

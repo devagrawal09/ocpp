@@ -1,19 +1,18 @@
-import { Global } from "@opencode-ai/util/global"
-import { AppProcess } from "@opencode-ai/util/process"
-import { OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
+import { Global } from "@ocpp/util/global"
+import { AppProcess } from "@ocpp/util/process"
+import { OCPP_CHANNEL, OCPP_LOCAL, OCPP_VERSION } from "../version"
 import { Context, Duration, Effect, FileSystem, Layer } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "node:path"
 import { action, parseReleaseVersion, type Policy } from "./updater-action"
 
-declare const OPENCODE_CLI_NAME: string | undefined
+declare const OCPP_CLI_NAME: string | undefined
 
 export const methods = ["curl", "npm", "pnpm", "bun", "yarn"] as const
 export type Method = (typeof methods)[number]
 
-const packageName =
-  typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "opencode2-node" ? "opencode-node" : "@opencode-ai/cli"
+const packageName = typeof OCPP_CLI_NAME === "string" && OCPP_CLI_NAME === "ocpp-node" ? "ocpp-node" : "@ocpp/cli"
 
 export interface Interface {
   readonly check: () => Effect.Effect<void>
@@ -22,7 +21,7 @@ export interface Interface {
   readonly upgrade: (method: Method, version: string) => Effect.Effect<void, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/cli/Updater") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/cli/Updater") {}
 
 export function decodePolicy(text: string): Policy | undefined {
   // The CLI only projects this host-level preference instead of initializing
@@ -40,10 +39,10 @@ export const layer = Layer.effect(
     const fs = yield* FileSystem.FileSystem
     const global = yield* Global.Service
     const appProcess = yield* AppProcess.Service
-    const channel = OPENCODE_CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")
+    const channel = OCPP_CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")
 
     const readPolicy = Effect.fnUntraced(function* () {
-      const values = yield* Effect.forEach(["config.json", "opencode.json", "opencode.jsonc"], (name) =>
+      const values = yield* Effect.forEach(["config.json", "ocpp.json", "ocpp.jsonc"], (name) =>
         fs.readFileString(path.join(global.config, name)).pipe(
           Effect.map(decodePolicy),
           Effect.orElseSucceed(() => undefined),
@@ -70,12 +69,7 @@ export const layer = Layer.effect(
     })
 
     const method = Effect.fnUntraced(function* () {
-      const binary = path.join(
-        global.home,
-        ".opencode",
-        "bin",
-        process.platform === "win32" ? "opencode2.exe" : "opencode2",
-      )
+      const binary = path.join(global.home, ".ocpp", "bin", process.platform === "win32" ? "ocpp.exe" : "ocpp")
       if (path.resolve(process.execPath) === path.resolve(binary)) return "curl"
 
       const checks: ReadonlyArray<{ method: Method; command: string[] }> = [
@@ -95,8 +89,8 @@ export const layer = Layer.effect(
     const latest = Effect.fnUntraced(function* () {
       const response = yield* Effect.tryPromise({
         try: () =>
-          fetch(`https://update.opencode.ai/api/${encodeURIComponent(channel)}/cli/npm`, {
-            headers: { "User-Agent": `opencode/${OPENCODE_VERSION}` },
+          fetch(`https://update.ocpp.ai/api/${encodeURIComponent(channel)}/cli/npm`, {
+            headers: { "User-Agent": `ocpp/${OCPP_VERSION}` },
             signal: AbortSignal.timeout(10_000),
           }),
         catch: (cause) => new Error("Failed to check for updates", { cause }),
@@ -133,10 +127,7 @@ export const layer = Layer.effect(
             yield* fs.makeDirectory(global.cache, { recursive: true })
             const directory = yield* fs.makeTempDirectoryScoped({ directory: global.cache, prefix: "update-" })
             const installer = path.join(directory, "install")
-            const download = yield* run(
-              ["curl", "-fsSL", "-o", installer, "https://opencode.ai/v2/install"],
-              "5 minutes",
-            )
+            const download = yield* run(["curl", "-fsSL", "-o", installer, "https://ocpp.ai/v2/install"], "5 minutes")
             if (download.code !== 0) return download
             return yield* run(["bash", installer, "--version", version, "--no-modify-path"], "5 minutes")
           }
@@ -149,11 +140,11 @@ export const layer = Layer.effect(
 
     const check = Effect.fn("cli.updater.check")(
       function* () {
-        if (OPENCODE_LOCAL || ["1", "true"].includes(process.env.OPENCODE_DISABLE_AUTOUPDATE?.toLowerCase() ?? ""))
+        if (OCPP_LOCAL || ["1", "true"].includes(process.env.OCPP_DISABLE_AUTOUPDATE?.toLowerCase() ?? ""))
           return yield* Effect.logInfo("update check skipped", {
-            reason: OPENCODE_LOCAL ? "local-install" : "disabled",
-            version: OPENCODE_VERSION,
-            channel: OPENCODE_CHANNEL,
+            reason: OCPP_LOCAL ? "local-install" : "disabled",
+            version: OCPP_VERSION,
+            channel: OCPP_CHANNEL,
           })
         const policy = yield* readPolicy()
         if (policy === false) return yield* Effect.logInfo("update check skipped", { reason: "policy-disabled" })
@@ -161,17 +152,17 @@ export const layer = Layer.effect(
         return yield* Effect.gen(function* () {
           const version = yield* latest()
           yield* Effect.logInfo("update check", {
-            current: OPENCODE_VERSION,
+            current: OCPP_VERSION,
             latest: version,
           })
-          const next = action(OPENCODE_VERSION, version, policy)
+          const next = action(OCPP_VERSION, version, policy)
           if (next === "none") return yield* Effect.logInfo("update check done", { action: "up-to-date" })
           if (next === "notify")
-            return yield* Effect.logInfo("OpenCode update available", { current: OPENCODE_VERSION, latest: version })
+            return yield* Effect.logInfo("OC++ update available", { current: OCPP_VERSION, latest: version })
           const detected = yield* method()
           if (!detected) return yield* Effect.logWarning("automatic update skipped: installation method not found")
           yield* upgrade(detected, version)
-          yield* Effect.logInfo("updated OpenCode", { from: OPENCODE_VERSION, to: version, method: detected })
+          yield* Effect.logInfo("updated OC++", { from: OCPP_VERSION, to: version, method: detected })
         })
       },
       Effect.catchCause((cause) => Effect.logWarning("automatic update failed", { cause })),

@@ -1,13 +1,13 @@
 import { Cause, Context, Duration, Effect, Layer, Option, Schedule, Schema, Semaphore } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/unstable/http"
-import { ModelsDev } from "@opencode-ai/schema/models-dev"
-import { Money } from "@opencode-ai/schema/money"
+import { ModelsDev } from "@ocpp/schema/models-dev"
+import { Money } from "@ocpp/schema/money"
 import { App } from "./app.js"
-import { Hash } from "@opencode-ai/util/hash"
-import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Hash } from "@ocpp/util/hash"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Bus } from "./bus.js"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { httpClient } from "@ocpp/util/effect/app-node-platform"
 import { Model } from "./model.js"
 import { Provider } from "./provider.js"
 import { KV } from "./kv.js"
@@ -519,7 +519,7 @@ function modelInfo(
   }
 }
 
-export { Event } from "@opencode-ai/schema/models-dev"
+export { Event } from "@ocpp/schema/models-dev"
 
 export interface Interface {
   readonly get: () => Effect.Effect<readonly Snapshot[]>
@@ -534,7 +534,7 @@ export const Options = Schema.Struct({
 })
 export type Options = typeof Options.Type
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ModelsDev") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/ModelsDev") {}
 
 const CatalogJson = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown))
 const decodeCatalog = (text: string) =>
@@ -546,9 +546,9 @@ const Cache = Schema.Struct({
   digest: Schema.optional(Schema.String),
   body: CatalogJson,
 })
-const defaultSource = "https://models.opencode.ai"
+const defaultSource = "https://models.ocpp.ai"
 
-// Bundled snapshot of https://models.opencode.ai/api.json, committed at
+// Bundled snapshot of https://models.ocpp.ai/api.json, committed at
 // packages/core/src/models-dev/snapshot.txt and refreshed via
 // `bun run script/update-models-snapshot.ts`. Decoded and normalized once per
 // isolate: the snapshot is a multi-MB module-level constant and one isolate can

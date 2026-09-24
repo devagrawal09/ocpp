@@ -1,5 +1,5 @@
-import { Location } from "@opencode-ai/schema/location"
-import { Plugin } from "@opencode-ai/schema/plugin"
+import { Location } from "@ocpp/schema/location"
+import { Plugin } from "@ocpp/schema/plugin"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { LocationQuery, locationQueryOpenApi } from "./location.js"

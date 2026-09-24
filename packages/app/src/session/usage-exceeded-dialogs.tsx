@@ -1,10 +1,10 @@
 import { useWorkspaceLocation } from "@/workspaces/location"
 import { Persist, persisted } from "@/runtime/persistence/storage"
-import type { SessionStatus } from "@opencode-ai/client/promise"
+import type { SessionStatus } from "@ocpp/client/promise"
 import { onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSessionLayout } from "./session-layout"
-import { useDialog, useI18n } from "@opencode-ai/ui/context"
+import { useDialog, useI18n } from "@ocpp/ui/context"
 import { DialogUsageExceeded } from "@/providers/connect/usage-exceeded"
 
 const GO_UPSELL_FREE_TIER_LAST_SEEN_AT = "go_upsell_last_seen_at"

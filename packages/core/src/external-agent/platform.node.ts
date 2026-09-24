@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { ExternalSession } from "@opencode-ai/schema/external-session"
+import { ExternalSession } from "@ocpp/schema/external-session"
 import { which } from "../util/which.js"
 import type { ExternalAgentDriver } from "./driver.js"
 

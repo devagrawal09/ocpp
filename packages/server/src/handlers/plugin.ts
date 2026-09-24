@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode-ai/core/plugin"
+import { Plugin } from "@ocpp/core/plugin"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Api } from "../api"

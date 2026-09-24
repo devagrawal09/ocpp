@@ -1,4 +1,4 @@
-import type { SessionMessageInfo, SessionMessageUser } from "@opencode-ai/client/promise"
+import type { SessionMessageInfo, SessionMessageUser } from "@ocpp/client/promise"
 import { promptCopy, promptSame } from "./prompt.shared"
 import type { RunInput, RunPrompt } from "./types"
 

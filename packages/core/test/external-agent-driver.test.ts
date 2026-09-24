@@ -92,7 +92,7 @@ describe("external SDK drivers", () => {
     const gateway = await Effect.runPromise(
       ExternalAgentGateway.make({ input: { token: "private" }, outputSchema: { type: "string" } }),
     )
-    const mcp = createSdkMcpServer({ name: "opencode", tools: [] })
+    const mcp = createSdkMcpServer({ name: "ocpp", tools: [] })
     ExternalAgentBridge.handlers(mcp.instance.server, gateway, new AbortController().signal)
     const pair = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: "test", version: "1" })
@@ -150,7 +150,7 @@ describe("external SDK drivers", () => {
         item: {
           id: "m",
           type: "mcp_tool_call",
-          server: "opencode",
+          server: "ocpp",
           tool: "execute",
           arguments: { code: "1" },
           error: { message: "blocked" },
@@ -395,7 +395,7 @@ test("Claude permission hooks fail closed and recheck modified tool input", asyn
   const calls: string[] = []
   const policy = permissionHooks(async (_name, input) => {
     calls.push(String(input.file_path))
-    if (input.file_path === "denied") throw new Error("OpenCode denied")
+    if (input.file_path === "denied") throw new Error("OC++ denied")
   })
   const hook = policy.hooks!.PreToolUse![0].hooks[0]
   const signal = new AbortController().signal

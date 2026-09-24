@@ -1,14 +1,14 @@
 import { Cause, Effect, Exit, Option } from "effect"
-import { Service } from "@opencode-ai/client/effect/service"
-import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
-import { AppProcess } from "@opencode-ai/util/process"
+import { Service } from "@ocpp/client/effect/service"
+import { Ocpp, type OcppClient } from "@ocpp/client/promise"
+import { AppProcess } from "@ocpp/util/process"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
 import { ServiceConfig } from "../../../services/service-config"
 import { createTimelineHost, type TimelineHost } from "../../../ui/timeline"
 import { errorMessage } from "../../../util/error"
 
-const integrationID = "opencode"
+const integrationID = "ocpp"
 const location = { directory: process.cwd() }
 
 export default Runtime.handler(
@@ -34,15 +34,15 @@ export default Runtime.handler(
 
 const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHost, server?: string) {
   yield* request(() => timeline.intro("Log in"))
-  yield* request(() => timeline.pending("Connecting to OpenCode..."))
+  yield* request(() => timeline.pending("Connecting to OC++..."))
 
   const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
-  const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+  const client = Ocpp.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
   const found = yield* request((signal) => client.integration.get({ integrationID, location }, { signal }))
-  const integration = yield* required(found.data, "OpenCode Console integration is unavailable")
+  const integration = yield* required(found.data, "OC++ Console integration is unavailable")
   const method = yield* required(
     integration.methods.find((candidate) => candidate.type === "oauth"),
-    "OpenCode Console login is unavailable",
+    "OC++ Console login is unavailable",
   )
 
   yield* request(() => timeline.pending("Starting authorization..."))
@@ -66,7 +66,7 @@ const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHo
       ),
     ).pipe(Effect.ignore),
   )
-  if (attempt.mode !== "auto") yield* Effect.fail(new Error("OpenCode Console requires a device login"))
+  if (attempt.mode !== "auto") yield* Effect.fail(new Error("OC++ Console requires a device login"))
 
   yield* request(() => timeline.item(`Go to: ${attempt.url}`))
   yield* request(() => timeline.item(attempt.instructions))
@@ -80,12 +80,12 @@ const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHo
   if (status.status === "failed") yield* Effect.fail(new Error(status.message))
   if (status.status === "expired") yield* Effect.fail(new Error("Device code expired"))
 
-  yield* request(() => timeline.success("Connected to OpenCode Console"))
+  yield* request(() => timeline.success("Connected to OC++ Console"))
   yield* request(() => timeline.outro("Done"))
 })
 
 const waitForConsoleLogin = Effect.fn("cli.console.login.wait")(function* (
-  client: OpenCodeClient,
+  client: OcppClient,
   integrationID: string,
   attemptID: string,
 ) {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { OpenCode } from "../src/promise"
+import { Ocpp } from "../src/promise"
 import { createPersistentPtyClient, createPtyClient } from "../src/solid"
 
 describe("createPtyClient", () => {
@@ -7,7 +7,7 @@ describe("createPtyClient", () => {
     let request: Request | undefined
     let socketURL: URL | undefined
     const socket = { binaryType: "blob" } as unknown as WebSocket
-    const api = OpenCode.make({
+    const api = Ocpp.make({
       baseUrl: "https://server.example/base",
       headers: { Authorization: "Basic credential" },
       fetch: async (input, init) => {
@@ -41,7 +41,7 @@ describe("createPtyClient", () => {
       "https://server.example/api/pty/pty_1/connect-token?location%5Bdirectory%5D=%2Frepo%2Fworktree&location%5Bworkspace%5D=workspace_1",
     )
     expect(request?.headers.get("authorization")).toBe("Basic credential")
-    expect(request?.headers.get("x-opencode-ticket")).toBe("1")
+    expect(request?.headers.get("x-ocpp-ticket")).toBe("1")
     expect(socketURL?.toString()).toBe(
       "wss://server.example/api/pty/pty_1/connect?location%5Bdirectory%5D=%2Frepo%2Fworktree&location%5Bworkspace%5D=workspace_1&cursor=42&ticket=ticket-1",
     )
@@ -50,7 +50,7 @@ describe("createPtyClient", () => {
 
   test("does not open a socket when ticket minting fails", async () => {
     let opened = false
-    const api = OpenCode.make({
+    const api = Ocpp.make({
       baseUrl: "http://localhost:4096",
       fetch: async () => new Response(null, { status: 401 }),
     })
@@ -72,7 +72,7 @@ describe("createPersistentPtyClient", () => {
     let request: Request | undefined
     let socketURL: URL | undefined
     const socket = { binaryType: "blob" } as unknown as WebSocket
-    const api = OpenCode.make({
+    const api = Ocpp.make({
       baseUrl: "https://server.example/base",
       headers: { Authorization: "Basic credential" },
       fetch: async (input, init) => {
@@ -92,7 +92,7 @@ describe("createPersistentPtyClient", () => {
     expect(request?.method).toBe("POST")
     expect(request?.url).toBe("https://server.example/api/experimental/persistent-pty/pty_1/connect-token")
     expect(request?.headers.get("authorization")).toBe("Basic credential")
-    expect(request?.headers.get("x-opencode-ticket")).toBe("1")
+    expect(request?.headers.get("x-ocpp-ticket")).toBe("1")
     expect(socketURL?.toString()).toBe(
       "wss://server.example/api/experimental/persistent-pty/pty_1/connect?ticket=persistent-ticket&cursor=42&attachment_id=attachment_1&takeover=true&input_protocol=1",
     )

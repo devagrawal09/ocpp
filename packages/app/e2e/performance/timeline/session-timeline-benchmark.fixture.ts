@@ -1,12 +1,12 @@
-import { base64Encode } from "@opencode-ai/util/encode"
-import type { JsonValue, OpenCodeEvent, SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client/promise"
+import { base64Encode } from "@ocpp/util/encode"
+import type { JsonValue, OcppEvent, SessionMessageAssistant, SessionMessageInfo } from "@ocpp/client/promise"
 import type { Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../../utils/mock-server"
+import { mockOcppServer } from "../../utils/mock-server"
 import { expectAppVisible, expectSessionTitle } from "../../utils/waits"
 import { expect } from "../benchmark"
 import { createTwoFilesPatch } from "diff"
 
-const directory = "C:/OpenCode/TimelineStateRegression"
+const directory = "C:/OC++/TimelineStateRegression"
 const projectID = "proj_timeline_state_regression"
 const sessionID = "ses_timeline_state_regression"
 const userMessageID = "msg_user_regression"
@@ -16,7 +16,7 @@ export const textPartID = `${assistantMessageID}:text:0`
 const title = "Timeline collapse state regression"
 const model = { providerID: "opencode", modelID: "claude-opus-4-6", variant: "max" }
 
-type EventPayload = OpenCodeEvent
+type EventPayload = OcppEvent
 
 const userMessage = {
   id: userMessageID,
@@ -39,13 +39,7 @@ const editPart: ToolSeed = {
     content: [{ type: "text", text: "Edited src/regression.ts" }],
     metadata: {
       files: [
-        currentFile(
-          "src/regression.ts",
-          "export const value = 'before'\n",
-          "export const value = 'after'\n",
-          1,
-          1,
-        ),
+        currentFile("src/regression.ts", "export const value = 'before'\n", "export const value = 'after'\n", 1, 1),
       ],
     },
   },
@@ -77,7 +71,7 @@ export async function setupTimelineBenchmark(
   const currentUserMessage = options.turnDiffs
     ? { ...userMessage, metadata: { diffs: options.turnDiffs as JsonValue } }
     : userMessage
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: project(),
     provider: provider(),
@@ -340,9 +334,9 @@ let eventSequence = 0
 
 function timelineEvent<Type extends "session.text.started" | "session.text.delta">(
   type: Type,
-  data: Extract<OpenCodeEvent, { type: Type }>["data"],
+  data: Extract<OcppEvent, { type: Type }>["data"],
   durable = false,
-): Extract<OpenCodeEvent, { type: Type }> {
+): Extract<OcppEvent, { type: Type }> {
   eventSequence++
   return {
     id: `evt_timeline_benchmark_${eventSequence}`,
@@ -351,7 +345,7 @@ function timelineEvent<Type extends "session.text.started" | "session.text.delta
     data,
     location: { directory },
     ...(durable ? { durable: { aggregateID: sessionID, seq: eventSequence, version: 1 } } : {}),
-  } as unknown as Extract<OpenCodeEvent, { type: Type }>
+  } as unknown as Extract<OcppEvent, { type: Type }>
 }
 
 function historicalMarkdown(index: number) {
@@ -494,7 +488,7 @@ function provider() {
     all: [
       {
         id: "opencode",
-        name: "OpenCode",
+        name: "OC++",
         models: { "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } } },
       },
     ],

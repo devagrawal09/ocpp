@@ -3,21 +3,21 @@ import { describe, expect } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { Deferred, Duration, Effect, Fiber, Layer, Option, Schedule, Stream } from "effect"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigLocationWatcherPlugin } from "@opencode-ai/core/config/plugin/location-watcher"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { makeLocationNode, type LocationNode } from "@opencode-ai/util/effect/app-node"
-import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { Bus } from "@opencode-ai/core/bus"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { LocationWatcher } from "@opencode-ai/core/filesystem/location-watcher"
-import { LocationWatcherPolicy } from "@opencode-ai/core/filesystem/location-watcher-policy"
-import { Watcher } from "@opencode-ai/core/filesystem/watcher"
-import { FileSystem } from "@opencode-ai/schema/filesystem"
-import { Document, Event, Info, type Entry } from "@opencode-ai/schema/config"
-import { Location } from "@opencode-ai/core/location"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+import { Config } from "@ocpp/core/config"
+import { ConfigLocationWatcherPlugin } from "@ocpp/core/config/plugin/location-watcher"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { makeLocationNode, type LocationNode } from "@ocpp/util/effect/app-node"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { Bus } from "@ocpp/core/bus"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { LocationWatcher } from "@ocpp/core/filesystem/location-watcher"
+import { LocationWatcherPolicy } from "@ocpp/core/filesystem/location-watcher-policy"
+import { Watcher } from "@ocpp/core/filesystem/watcher"
+import { FileSystem } from "@ocpp/schema/filesystem"
+import { Document, Event, Info, type Entry } from "@ocpp/schema/config"
+import { Location } from "@ocpp/core/location"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
+import { AbsolutePath } from "@ocpp/core/schema"
 import { location } from "../fixture/location"
 import { tmpdir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
@@ -168,7 +168,7 @@ function withTmp<A, E, R>(
       await $`git init`.cwd(tmp.path).quiet()
       await $`git config core.fsmonitor false`.cwd(tmp.path).quiet()
       await $`git config commit.gpgsign false`.cwd(tmp.path).quiet()
-      await $`git config user.email test@opencode.test`.cwd(tmp.path).quiet()
+      await $`git config user.email test@ocpp.test`.cwd(tmp.path).quiet()
       await $`git config user.name Test`.cwd(tmp.path).quiet()
       await $`git commit --allow-empty -m root`.cwd(tmp.path).quiet()
       await options.init?.(tmp.path)
@@ -397,7 +397,7 @@ describeNative("LocationWatcher", () => {
       Effect.gen(function* () {
         const fs = yield* FSUtil.Service
         const watcher = yield* Watcher.Service
-        const target = path.join(directory, "opencode.json")
+        const target = path.join(directory, "ocpp.json")
         const sibling = path.join(directory, "other.json")
         const updates = yield* watcher.subscribe({ path: target, type: "file" })
         const update = yield* updates.pipe(

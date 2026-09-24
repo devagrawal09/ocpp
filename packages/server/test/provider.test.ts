@@ -10,7 +10,7 @@ it.live(
   "waits for plugin initialization on the first provider list request",
   () =>
     Effect.gen(function* () {
-      const fixture = yield* configuredProvider("opencode-provider-list-endpoint-")
+      const fixture = yield* configuredProvider("ocpp-provider-list-endpoint-")
       const url = new URL("/api/provider", fixture.server.base)
       url.searchParams.set("location[directory]", fixture.path)
       const response = yield* Effect.promise(() => fetch(url, { headers: fixture.server.headers }))
@@ -27,7 +27,7 @@ it.live(
   "waits for plugin initialization on the first provider get request",
   () =>
     Effect.gen(function* () {
-      const fixture = yield* configuredProvider("opencode-provider-get-endpoint-")
+      const fixture = yield* configuredProvider("ocpp-provider-get-endpoint-")
       const url = new URL("/api/provider/custom", fixture.server.base)
       url.searchParams.set("location[directory]", fixture.path)
       const response = yield* Effect.promise(() => fetch(url, { headers: fixture.server.headers }))
@@ -44,11 +44,11 @@ const configuredProvider = Effect.fnUntraced(function* (prefix: string) {
   const tmp = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir(prefix)))
   yield* Effect.promise(() =>
     fs.writeFile(
-      path.join(tmp.path, "opencode.json"),
+      path.join(tmp.path, "ocpp.json"),
       JSON.stringify({
         providers: {
           custom: {
-            package: "@opencode-ai/ai/providers/openai-compatible",
+            package: "@ocpp/ai/providers/openai-compatible",
             settings: { apiKey: "secret" },
             models: { chat: {} },
           },

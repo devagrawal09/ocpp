@@ -1,12 +1,12 @@
-import { AISDK } from "@opencode-ai/core/aisdk"
+import { AISDK } from "@ocpp/core/aisdk"
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { Model } from "@opencode-ai/core/model"
-import { Plugin } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { SnowflakeCortexPlugin, cortexFetch } from "@opencode-ai/core/plugin/provider/snowflake-cortex"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { Provider } from "@opencode-ai/core/provider"
+import { Model } from "@ocpp/core/model"
+import { Plugin } from "@ocpp/core/plugin"
+import { PluginHost } from "@ocpp/core/plugin/host"
+import { SnowflakeCortexPlugin, cortexFetch } from "@ocpp/core/plugin/provider/snowflake-cortex"
+import { ProviderPlugins } from "@ocpp/core/plugin/provider"
+import { Provider } from "@ocpp/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -42,11 +42,9 @@ function withEnv<A, E, R>(vars: Record<string, string | undefined>, effect: () =
 describe("SnowflakeCortexPlugin", () => {
   it.effect("is registered in ProviderPlugins before OpenAICompatiblePlugin", () =>
     Effect.sync(() => {
-      expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.snowflake.cortex")
+      expect(ProviderPlugins.map((item) => item.id)).toContain("ocpp.provider.snowflake.cortex")
       const ids = ProviderPlugins.map((p) => p.id)
-      expect(ids.indexOf("opencode.provider.snowflake.cortex")).toBeLessThan(
-        ids.indexOf("opencode.provider.openai.compatible"),
-      )
+      expect(ids.indexOf("ocpp.provider.snowflake.cortex")).toBeLessThan(ids.indexOf("ocpp.provider.openai.compatible"))
     }),
   )
 

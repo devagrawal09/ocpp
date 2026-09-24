@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { OPENCODE_VERSION } from "../src/version"
+import { OCPP_VERSION } from "../src/version"
 
 const info = {
   id: "ses_export_test",
@@ -42,7 +42,7 @@ const sanitizedTransfer = {
   ],
 }
 
-const health = () => Response.json({ healthy: true, version: OPENCODE_VERSION, pid: process.pid })
+const health = () => Response.json({ healthy: true, version: OCPP_VERSION, pid: process.pid })
 
 function run(args: string[], stdin?: string) {
   const child = Bun.spawn([process.execPath, "run", "src/index.ts", ...args], {
@@ -149,7 +149,7 @@ test("export reports a missing session without a stack trace", async () => {
 })
 
 test("import validates a file and sends it to the resolved location", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-import-"))
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-import-"))
   const file = path.join(root, "session.json")
   await fs.writeFile(file, JSON.stringify(transfer))
   let imported: unknown
@@ -185,7 +185,7 @@ test("import validates a file and sends it to the resolved location", async () =
 })
 
 test("import reports an existing session without a stack trace", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-import-conflict-"))
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-import-conflict-"))
   const file = path.join(root, "session.json")
   await fs.writeFile(file, JSON.stringify(transfer))
   const server = Bun.serve({

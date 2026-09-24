@@ -3,12 +3,12 @@ import { useTheme } from "../context/theme"
 import { useConfig } from "../config"
 import type { JSX } from "@opentui/solid"
 import type { RGBA } from "@opentui/core"
-import { registerOpencodeSpinner } from "./register-spinner"
+import { registerOcppSpinner } from "./register-spinner"
 import { SPINNER_FRAMES } from "./spinner-frames"
 
 export { SPINNER_FRAMES } from "./spinner-frames"
 
-registerOpencodeSpinner()
+registerOcppSpinner()
 
 export function Spinner(props: { children?: JSX.Element; color?: RGBA }) {
   const theme = useTheme()

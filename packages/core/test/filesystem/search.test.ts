@@ -5,14 +5,14 @@ import os from "os"
 import path from "path"
 import { Deferred, Effect, Layer } from "effect"
 import { TestClock } from "effect/testing"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { FileSystem } from "@opencode-ai/core/filesystem"
-import { Protected } from "@opencode-ai/core/filesystem/protected"
-import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
-import { Location } from "@opencode-ai/core/location"
-import { Ripgrep } from "@opencode-ai/core/ripgrep"
-import { AbsolutePath, RelativePath } from "@opencode-ai/core/schema"
-import { Workspace } from "@opencode-ai/core/workspace"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { FileSystem } from "@ocpp/core/filesystem"
+import { Protected } from "@ocpp/core/filesystem/protected"
+import { FileSystemSearch } from "@ocpp/core/filesystem/search"
+import { Location } from "@ocpp/core/location"
+import { Ripgrep } from "@ocpp/core/ripgrep"
+import { AbsolutePath, RelativePath } from "@ocpp/core/schema"
+import { Workspace } from "@ocpp/core/workspace"
 import { location } from "../fixture/location"
 import { tmpdir } from "../fixture/tmpdir"
 import { it } from "../lib/effect"
@@ -36,7 +36,7 @@ const ripgrepStub = (entry: string, onFind: (input: Ripgrep.FindInput) => void) 
 describe("FileSystemSearch", () => {
   it.live("honors wildcard directory rules from .gitignore", () =>
     Effect.gen(function* () {
-      const directory = (yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-fff-ignore-")))).path
+      const directory = (yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("ocpp-fff-ignore-")))).path
       yield* Effect.promise(() => mkdir(path.join(directory, "rust/target/debug/deps"), { recursive: true }))
       yield* Effect.promise(() => Bun.write(path.join(directory, ".gitignore"), "**/target/\n"))
       yield* Effect.promise(() => Bun.write(path.join(directory, "rust/target/debug/deps/ignored.rs"), "ignored"))
@@ -65,8 +65,7 @@ describe("FileSystemSearch", () => {
 
   it.live("selects the ripgrep layer for workspace-backed locations even when vcs would pick fff", () =>
     Effect.gen(function* () {
-      const directory = (yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-search-workspace-"))))
-        .path
+      const directory = (yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("ocpp-search-workspace-")))).path
       // A local file that only an fff index of the server directory could surface.
       // The fff-vs-ripgrep discrimination only bites where Fff.available() is
       // true; elsewhere the layer choice already falls back to ripgrep.
@@ -142,7 +141,7 @@ describe("FileSystemSearch", () => {
           Layer.succeed(
             Location.Service,
             Location.Service.of(
-              location({ directory: AbsolutePath.make(path.join(os.tmpdir(), "opencode-search-atomic")) }),
+              location({ directory: AbsolutePath.make(path.join(os.tmpdir(), "ocpp-search-atomic")) }),
             ),
           ),
         ],
@@ -213,7 +212,7 @@ describe("FileSystemSearch", () => {
           Layer.succeed(
             Location.Service,
             Location.Service.of(
-              location({ directory: AbsolutePath.make(path.join(os.tmpdir(), "opencode-search-cache")) }),
+              location({ directory: AbsolutePath.make(path.join(os.tmpdir(), "ocpp-search-cache")) }),
             ),
           ),
         ],

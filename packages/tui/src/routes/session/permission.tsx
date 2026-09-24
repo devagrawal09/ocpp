@@ -3,7 +3,7 @@ import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { Portal, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import type { TextareaRenderable } from "@opentui/core"
 import { useTheme, useThemes } from "../../context/theme"
-import type { PermissionReply, PermissionRequest } from "@opencode-ai/client"
+import type { PermissionReply, PermissionRequest } from "@ocpp/client"
 import { SplitBorder } from "../../ui/border"
 import { useData } from "../../context/data"
 import { filetype } from "../../util/filetype"
@@ -336,7 +336,7 @@ function RejectPrompt(props: {
           <text fg={theme.text.default}>Reject permission</text>
         </box>
         <box paddingLeft={1}>
-          <text fg={theme.text.subdued}>Tell OpenCode what to do differently</text>
+          <text fg={theme.text.subdued}>Tell OC++ what to do differently</text>
         </box>
       </box>
       <box

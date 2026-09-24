@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-const packages = ["@opencode-ai/simulation", "@opencode-ai/server"]
+const packages = ["@ocpp/simulation", "@ocpp/server"]
 const publish = Bun.argv.includes("--publish")
 
 if (!publish) {
@@ -19,7 +19,7 @@ if (run(["npm", "whoami"]) !== 0) {
   if (run(["npm", "whoami"]) !== 0) throw new Error("npm authentication failed")
 }
 
-const directory = await mkdtemp(path.join(tmpdir(), "opencode-package-reservations-"))
+const directory = await mkdtemp(path.join(tmpdir(), "ocpp-package-reservations-"))
 try {
   for (const name of packages) {
     const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`)
@@ -29,7 +29,7 @@ try {
     }
     if (response.status !== 404) throw new Error(`Failed to check ${name}: npm returned ${response.status}`)
 
-    const target = path.join(directory, name.slice("@opencode-ai/".length))
+    const target = path.join(directory, name.slice("@ocpp/".length))
     await mkdir(target, { recursive: true })
     await Bun.write(
       path.join(target, "package.json"),
@@ -37,11 +37,11 @@ try {
         {
           name,
           version: "0.0.0-reserved",
-          description: "Reserved for OpenCode",
+          description: "Reserved for OC++",
           license: "MIT",
           repository: {
             type: "git",
-            url: "git+https://github.com/anomalyco/opencode.git",
+            url: "git+https://github.com/devagrawal09/oc-plus-plus.git",
           },
           publishConfig: {
             access: "public",
@@ -52,7 +52,7 @@ try {
         2,
       ) + "\n",
     )
-    await Bun.write(path.join(target, "README.md"), `# ${name}\n\nReserved for OpenCode.\n`)
+    await Bun.write(path.join(target, "README.md"), `# ${name}\n\nReserved for OC++.\n`)
 
     console.log(`Reserving ${name}`)
     if (run(["npm", "publish", "--access", "public", "--tag", "reserved"], target) !== 0) {

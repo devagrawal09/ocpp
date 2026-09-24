@@ -9,9 +9,9 @@ import {
   Provider,
   Reference,
   Skill,
-} from "@opencode-ai/plugin"
+} from "@ocpp/plugin"
 
-const key = Symbol.for("opencode.plugin.v2.promise")
+const key = Symbol.for("ocpp.plugin.v2.promise")
 ;(globalThis as typeof globalThis & { [key]?: unknown })[key] = {
   Agent,
   Command,

@@ -1,30 +1,30 @@
 ---
 title: CLI
-description: Opciones y comandos de la CLI de OpenCode.
+description: Opciones y comandos de la CLI de OC++.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-La CLI de OpenCode de forma predeterminada inicia el [TUI](/docs/tui) cuando se ejecuta sin ningún argumento.
+La CLI de OC++ de forma predeterminada inicia el [TUI](/docs/tui) cuando se ejecuta sin ningún argumento.
 
 ```bash
-opencode
+ocpp
 ```
 
-Pero también acepta comandos como se documenta en esta página. Esto le permite interactuar con OpenCode mediante programación.
+Pero también acepta comandos como se documenta en esta página. Esto le permite interactuar con OC++ mediante programación.
 
 ```bash
-opencode run "Explain how closures work in JavaScript"
+ocpp run "Explain how closures work in JavaScript"
 ```
 
 ---
 
 ### tui
 
-Inicie la interfaz de usuario del terminal OpenCode.
+Inicie la interfaz de usuario del terminal OC++.
 
 ```bash
-opencode [project]
+ocpp [project]
 ```
 
 #### Opciones
@@ -44,48 +44,48 @@ opencode [project]
 
 ## Comandos
 
-La CLI de OpenCode también tiene los siguientes comandos.
+La CLI de OC++ también tiene los siguientes comandos.
 
 ---
 
 ### agent
 
-Administrar agentes para OpenCode.
+Administrar agentes para OC++.
 
 ```bash
-opencode agent [command]
+ocpp agent [command]
 ```
 
 ---
 
 ### attach
 
-Conecte una terminal a un servidor backend OpenCode que ya se esté ejecutando y iniciado mediante los comandos `serve` o `web`.
+Conecte una terminal a un servidor backend OC++ que ya se esté ejecutando y iniciado mediante los comandos `serve` o `web`.
 
 ```bash
-opencode attach [url]
+ocpp attach [url]
 ```
 
-Esto permite usar TUI con un backend remoto OpenCode. Por ejemplo:
+Esto permite usar TUI con un backend remoto OC++. Por ejemplo:
 
 ```bash
 # Start the backend server for web/mobile access
-opencode web --port 4096 --hostname 0.0.0.0
+ocpp web --port 4096 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-opencode attach http://10.20.30.40:4096
+ocpp attach http://10.20.30.40:4096
 ```
 
 #### Opciones
 
-| Opción                                   | Corta | Descripción                                                                               |
-| ---------------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
-| <nobr><code>{"--dir"}</code></nobr>      |       | Directorio de trabajo para iniciar TUI en                                                 |
-| <nobr><code>{"--continue"}</code></nobr> | `-c`  | Continuar la última sesión                                                                |
-| <nobr><code>{"--session"}</code></nobr>  | `-s`  | ID de sesión para continuar                                                               |
-| <nobr><code>{"--fork"}</code></nobr>     |       | Bifurcar la sesión al continuar (usar con `--continue` o `--session`)                     |
-| <nobr><code>{"--password"}</code></nobr> | `-p`  | Contraseña de autenticación básica (predeterminada: `OPENCODE_SERVER_PASSWORD`)           |
-| <nobr><code>{"--username"}</code></nobr> | `-u`  | Usuario de autenticación básica (predeterminado: `OPENCODE_SERVER_USERNAME` u `opencode`) |
+| Opción                                   | Corta | Descripción                                                                       |
+| ---------------------------------------- | ----- | --------------------------------------------------------------------------------- |
+| <nobr><code>{"--dir"}</code></nobr>      |       | Directorio de trabajo para iniciar TUI en                                         |
+| <nobr><code>{"--continue"}</code></nobr> | `-c`  | Continuar la última sesión                                                        |
+| <nobr><code>{"--session"}</code></nobr>  | `-s`  | ID de sesión para continuar                                                       |
+| <nobr><code>{"--fork"}</code></nobr>     |       | Bifurcar la sesión al continuar (usar con `--continue` o `--session`)             |
+| <nobr><code>{"--password"}</code></nobr> | `-p`  | Contraseña de autenticación básica (predeterminada: `OCPP_SERVER_PASSWORD`)       |
+| <nobr><code>{"--username"}</code></nobr> | `-u`  | Usuario de autenticación básica (predeterminado: `OCPP_SERVER_USERNAME` u `ocpp`) |
 
 ---
 
@@ -94,7 +94,7 @@ opencode attach http://10.20.30.40:4096
 Cree un nuevo agente con configuración personalizada.
 
 ```bash
-opencode agent create
+ocpp agent create
 ```
 
 Este comando lo guiará en la creación de un nuevo agente con un mensaje del sistema personalizado y una configuración de herramientas.
@@ -106,7 +106,7 @@ Este comando lo guiará en la creación de un nuevo agente con un mensaje del si
 Enumere todos los agentes disponibles.
 
 ```bash
-opencode agent list
+ocpp agent list
 ```
 
 ---
@@ -116,20 +116,20 @@ opencode agent list
 Comando para administrar credenciales e iniciar sesión para proveedores.
 
 ```bash
-opencode auth [command]
+ocpp auth [command]
 ```
 
 ---
 
 #### login
 
-OpenCode funciona con la lista de proveedores en [Models.dev](https://models.dev), por lo que puede usar `opencode auth login` para configurar las claves API para cualquier proveedor que desee utilizar. Esto se almacena en `~/.local/share/opencode/auth.json`.
+OC++ funciona con la lista de proveedores en [Models.dev](https://models.dev), por lo que puede usar `ocpp auth login` para configurar las claves API para cualquier proveedor que desee utilizar. Esto se almacena en `~/.local/share/ocpp/auth.json`.
 
 ```bash
-opencode auth login
+ocpp auth login
 ```
 
-Cuando se inicia OpenCode, carga los proveedores desde el archivo de credenciales. Y si hay claves definidas en sus entornos o un archivo `.env` en su proyecto.
+Cuando se inicia OC++, carga los proveedores desde el archivo de credenciales. Y si hay claves definidas en sus entornos o un archivo `.env` en su proyecto.
 
 ---
 
@@ -138,13 +138,13 @@ Cuando se inicia OpenCode, carga los proveedores desde el archivo de credenciale
 Enumera todos los proveedores autenticados tal como están almacenados en el archivo de credenciales.
 
 ```bash
-opencode auth list
+ocpp auth list
 ```
 
 O la versión corta.
 
 ```bash
-opencode auth ls
+ocpp auth ls
 ```
 
 ---
@@ -154,7 +154,7 @@ opencode auth ls
 Cierra tu sesión de un proveedor eliminándolo del archivo de credenciales.
 
 ```bash
-opencode auth logout
+ocpp auth logout
 ```
 
 ---
@@ -164,7 +164,7 @@ opencode auth logout
 Administre el agente GitHub para la automatización del repositorio.
 
 ```bash
-opencode github [command]
+ocpp github [command]
 ```
 
 ---
@@ -174,7 +174,7 @@ opencode github [command]
 Instale el agente GitHub en su repositorio.
 
 ```bash
-opencode github install
+ocpp github install
 ```
 
 Esto configura el flujo de trabajo de acciones GitHub necesario y lo guía a través del proceso de configuración. [Más información](/docs/github).
@@ -186,7 +186,7 @@ Esto configura el flujo de trabajo de acciones GitHub necesario y lo guía a tra
 Ejecute el agente GitHub. Esto se usa normalmente en acciones GitHub.
 
 ```bash
-opencode github run
+ocpp github run
 ```
 
 ##### Opciones
@@ -203,7 +203,7 @@ opencode github run
 Administrar servidores de protocolo de contexto modelo.
 
 ```bash
-opencode mcp [command]
+ocpp mcp [command]
 ```
 
 ---
@@ -213,7 +213,7 @@ opencode mcp [command]
 Agregue un servidor MCP a su configuración.
 
 ```bash
-opencode mcp add
+ocpp mcp add
 ```
 
 Este comando lo guiará para agregar un servidor MCP local o remoto.
@@ -225,13 +225,13 @@ Este comando lo guiará para agregar un servidor MCP local o remoto.
 Enumere todos los servidores MCP configurados y su estado de conexión.
 
 ```bash
-opencode mcp list
+ocpp mcp list
 ```
 
 O utilice la versión corta.
 
 ```bash
-opencode mcp ls
+ocpp mcp ls
 ```
 
 ---
@@ -241,7 +241,7 @@ opencode mcp ls
 Autentíquese con un servidor MCP habilitado para OAuth.
 
 ```bash
-opencode mcp auth [name]
+ocpp mcp auth [name]
 ```
 
 Si no proporciona un nombre de servidor, se le pedirá que seleccione entre los servidores compatibles con OAuth disponibles.
@@ -249,13 +249,13 @@ Si no proporciona un nombre de servidor, se le pedirá que seleccione entre los 
 También puede enumerar los servidores compatibles con OAuth y su estado de autenticación.
 
 ```bash
-opencode mcp auth list
+ocpp mcp auth list
 ```
 
 O utilice la versión corta.
 
 ```bash
-opencode mcp auth ls
+ocpp mcp auth ls
 ```
 
 ---
@@ -265,7 +265,7 @@ opencode mcp auth ls
 Elimine las credenciales OAuth para un servidor MCP.
 
 ```bash
-opencode mcp logout [name]
+ocpp mcp logout [name]
 ```
 
 ---
@@ -275,7 +275,7 @@ opencode mcp logout [name]
 Depurar problemas de conexión OAuth para un servidor MCP.
 
 ```bash
-opencode mcp debug <name>
+ocpp mcp debug <name>
 ```
 
 ---
@@ -285,7 +285,7 @@ opencode mcp debug <name>
 Enumere todos los modelos disponibles de los proveedores configurados.
 
 ```bash
-opencode models [provider]
+ocpp models [provider]
 ```
 
 Este comando muestra todos los modelos disponibles en sus proveedores configurados en el formato `provider/model`.
@@ -295,7 +295,7 @@ Esto es útil para determinar el nombre exacto del modelo que se usará en [su c
 Opcionalmente, puede pasar un ID de proveedor para filtrar modelos por ese proveedor.
 
 ```bash
-opencode models anthropic
+ocpp models anthropic
 ```
 
 #### Opciones
@@ -305,71 +305,71 @@ opencode models anthropic
 | <nobr><code>{"--refresh"}</code></nobr> | Actualizar la caché de modelos desde models.dev                             |
 | <nobr><code>{"--verbose"}</code></nobr> | Utilice una salida del modelo más detallada (incluye metadatos como costos) |
 
-Utilice el indicador `--refresh` para actualizar la lista de modelos almacenados en caché. Esto es útil cuando se han agregado nuevos modelos a un proveedor y desea verlos en OpenCode.
+Utilice el indicador `--refresh` para actualizar la lista de modelos almacenados en caché. Esto es útil cuando se han agregado nuevos modelos a un proveedor y desea verlos en OC++.
 
 ```bash
-opencode models --refresh
+ocpp models --refresh
 ```
 
 ---
 
 ### run
 
-Ejecute opencode en modo no interactivo pasando un mensaje directamente.
+Ejecute ocpp en modo no interactivo pasando un mensaje directamente.
 
 ```bash
-opencode run [message..]
+ocpp run [message..]
 ```
 
 Esto es útil para secuencias de comandos, automatización o cuando desea una respuesta rápida sin iniciar el TUI completo. Por ejemplo.
 
-```bash "opencode run"
-opencode run Explain the use of context in Go
+```bash "ocpp run"
+ocpp run Explain the use of context in Go
 ```
 
-También puede conectarse a una instancia `opencode serve` en ejecución para evitar tiempos de arranque en frío del servidor MCP en cada ejecución:
+También puede conectarse a una instancia `ocpp serve` en ejecución para evitar tiempos de arranque en frío del servidor MCP en cada ejecución:
 
 ```bash
 # Start a headless server in one terminal
-opencode serve
+ocpp serve
 
 # In another terminal, run commands that attach to it
-opencode run --attach http://localhost:4096 "Explain async/await in JavaScript"
+ocpp run --attach http://localhost:4096 "Explain async/await in JavaScript"
 ```
 
 #### Opciones
 
-| Opción                                   | Corta | Descripción                                                                               |
-| ---------------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
-| <nobr><code>{"--command"}</code></nobr>  |       | El comando a ejecutar, use mensaje para args                                              |
-| <nobr><code>{"--continue"}</code></nobr> | `-c`  | Continuar la última sesión                                                                |
-| <nobr><code>{"--session"}</code></nobr>  | `-s`  | ID de sesión para continuar                                                               |
-| <nobr><code>{"--fork"}</code></nobr>     |       | Bifurcar la sesión al continuar (usar con `--continue` o `--session`)                     |
-| <nobr><code>{"--share"}</code></nobr>    |       | Comparte la sesión                                                                        |
-| <nobr><code>{"--model"}</code></nobr>    | `-m`  | Modelo a utilizar en forma de proveedor/modelo                                            |
-| <nobr><code>{"--agent"}</code></nobr>    |       | Agente a utilizar                                                                         |
-| <nobr><code>{"--file"}</code></nobr>     | `-f`  | Archivo(s) para adjuntar al mensaje                                                       |
-| <nobr><code>{"--format"}</code></nobr>   |       | Formato: predeterminado (formateado) o json (eventos JSON sin formato)                    |
-| <nobr><code>{"--title"}</code></nobr>    |       | Título de la sesión (utiliza un mensaje truncado si no se proporciona ningún valor)       |
-| <nobr><code>{"--attach"}</code></nobr>   |       | Adjuntar a un servidor opencode en ejecución (por ejemplo, http://localhost:4096)         |
-| <nobr><code>{"--password"}</code></nobr> | `-p`  | Contraseña de autenticación básica (predeterminada: `OPENCODE_SERVER_PASSWORD`)           |
-| <nobr><code>{"--username"}</code></nobr> | `-u`  | Usuario de autenticación básica (predeterminado: `OPENCODE_SERVER_USERNAME` u `opencode`) |
-| <nobr><code>{"--dir"}</code></nobr>      |       | Directorio de ejecución, o ruta en el servidor remoto al adjuntar                         |
-| <nobr><code>{"--variant"}</code></nobr>  |       | Variante del modelo (esfuerzo de razonamiento específico del proveedor)                   |
-| <nobr><code>{"--thinking"}</code></nobr> |       | Mostrar bloques de pensamiento                                                            |
-| <nobr><code>{"--port"}</code></nobr>     |       | Puerto para el servidor local (el puerto predeterminado es aleatorio)                     |
+| Opción                                   | Corta | Descripción                                                                         |
+| ---------------------------------------- | ----- | ----------------------------------------------------------------------------------- |
+| <nobr><code>{"--command"}</code></nobr>  |       | El comando a ejecutar, use mensaje para args                                        |
+| <nobr><code>{"--continue"}</code></nobr> | `-c`  | Continuar la última sesión                                                          |
+| <nobr><code>{"--session"}</code></nobr>  | `-s`  | ID de sesión para continuar                                                         |
+| <nobr><code>{"--fork"}</code></nobr>     |       | Bifurcar la sesión al continuar (usar con `--continue` o `--session`)               |
+| <nobr><code>{"--share"}</code></nobr>    |       | Comparte la sesión                                                                  |
+| <nobr><code>{"--model"}</code></nobr>    | `-m`  | Modelo a utilizar en forma de proveedor/modelo                                      |
+| <nobr><code>{"--agent"}</code></nobr>    |       | Agente a utilizar                                                                   |
+| <nobr><code>{"--file"}</code></nobr>     | `-f`  | Archivo(s) para adjuntar al mensaje                                                 |
+| <nobr><code>{"--format"}</code></nobr>   |       | Formato: predeterminado (formateado) o json (eventos JSON sin formato)              |
+| <nobr><code>{"--title"}</code></nobr>    |       | Título de la sesión (utiliza un mensaje truncado si no se proporciona ningún valor) |
+| <nobr><code>{"--attach"}</code></nobr>   |       | Adjuntar a un servidor ocpp en ejecución (por ejemplo, http://localhost:4096)       |
+| <nobr><code>{"--password"}</code></nobr> | `-p`  | Contraseña de autenticación básica (predeterminada: `OCPP_SERVER_PASSWORD`)         |
+| <nobr><code>{"--username"}</code></nobr> | `-u`  | Usuario de autenticación básica (predeterminado: `OCPP_SERVER_USERNAME` u `ocpp`)   |
+| <nobr><code>{"--dir"}</code></nobr>      |       | Directorio de ejecución, o ruta en el servidor remoto al adjuntar                   |
+| <nobr><code>{"--variant"}</code></nobr>  |       | Variante del modelo (esfuerzo de razonamiento específico del proveedor)             |
+| <nobr><code>{"--thinking"}</code></nobr> |       | Mostrar bloques de pensamiento                                                      |
+| <nobr><code>{"--port"}</code></nobr>     |       | Puerto para el servidor local (el puerto predeterminado es aleatorio)               |
 
 ---
 
 ### serve
 
-Inicie un servidor OpenCode sin cabeza para acceso API. Consulte los [documentos del servidor](/docs/server) para conocer la interfaz HTTP completa.
+Inicie un servidor OC++ sin cabeza para acceso API. Consulte los [documentos del servidor](/docs/server) para conocer la interfaz HTTP completa.
 
 ```bash
-opencode serve
+ocpp serve
 ```
 
-Esto inicia un servidor HTTP que proporciona acceso API a la funcionalidad opencode sin la interfaz TUI. Configure `OPENCODE_SERVER_PASSWORD` para habilitar la autenticación básica HTTP (el nombre de usuario predeterminado es `opencode`).
+Esto inicia un servidor HTTP que proporciona acceso API a la funcionalidad ocpp sin la interfaz TUI. Configure `OCPP_SERVER_PASSWORD` para habilitar la autenticación básica HTTP (el nombre de usuario predeterminado es `ocpp`).
 
 #### Opciones
 
@@ -384,20 +384,20 @@ Esto inicia un servidor HTTP que proporciona acceso API a la funcionalidad openc
 
 ### session
 
-Administrar OpenCode sesiones.
+Administrar OC++ sesiones.
 
 ```bash
-opencode session [command]
+ocpp session [command]
 ```
 
 ---
 
 #### list
 
-Enumere todas las sesiones OpenCode.
+Enumere todas las sesiones OC++.
 
 ```bash
-opencode session list
+ocpp session list
 ```
 
 ##### Opciones
@@ -411,10 +411,10 @@ opencode session list
 
 ### stats
 
-Muestre el uso de tokens y las estadísticas de costos para sus sesiones OpenCode.
+Muestre el uso de tokens y las estadísticas de costos para sus sesiones OC++.
 
 ```bash
-opencode stats
+ocpp stats
 ```
 
 #### Opciones
@@ -433,7 +433,7 @@ opencode stats
 Exportar datos de la sesión como JSON.
 
 ```bash
-opencode export [sessionID]
+ocpp export [sessionID]
 ```
 
 Si no proporciona una ID de sesión, se le pedirá que seleccione entre las sesiones disponibles.
@@ -442,30 +442,30 @@ Si no proporciona una ID de sesión, se le pedirá que seleccione entre las sesi
 
 ### import
 
-Importe datos de sesión desde un archivo JSON o una URL compartida OpenCode.
+Importe datos de sesión desde un archivo JSON o una URL compartida OC++.
 
 ```bash
-opencode import <file>
+ocpp import <file>
 ```
 
-Puede importar desde un archivo local o una URL compartida OpenCode.
+Puede importar desde un archivo local o una URL compartida OC++.
 
 ```bash
-opencode import session.json
-opencode import https://opncd.ai/s/abc123
+ocpp import session.json
+ocpp import https://ocpp.ai/s/abc123
 ```
 
 ---
 
 ### web
 
-Inicie un servidor OpenCode sin cabeza con una interfaz web.
+Inicie un servidor OC++ sin cabeza con una interfaz web.
 
 ```bash
-opencode web
+ocpp web
 ```
 
-Esto inicia un servidor HTTP y abre un navegador web para acceder a OpenCode a través de una interfaz web. Configure `OPENCODE_SERVER_PASSWORD` para habilitar la autenticación básica HTTP (el nombre de usuario predeterminado es `opencode`).
+Esto inicia un servidor HTTP y abre un navegador web para acceder a OC++ a través de una interfaz web. Configure `OCPP_SERVER_PASSWORD` para habilitar la autenticación básica HTTP (el nombre de usuario predeterminado es `ocpp`).
 
 #### Opciones
 
@@ -483,7 +483,7 @@ Esto inicia un servidor HTTP y abre un navegador web para acceder a OpenCode a t
 Inicie un servidor ACP (Agent Client Protocol).
 
 ```bash
-opencode acp
+ocpp acp
 ```
 
 Este comando inicia un servidor ACP que se comunica a través de stdin/stdout usando nd-JSON.
@@ -500,10 +500,10 @@ Este comando inicia un servidor ACP que se comunica a través de stdin/stdout us
 
 ### uninstall
 
-Desinstale OpenCode y elimine todos los archivos relacionados.
+Desinstale OC++ y elimine todos los archivos relacionados.
 
 ```bash
-opencode uninstall
+ocpp uninstall
 ```
 
 #### Opciones
@@ -519,22 +519,22 @@ opencode uninstall
 
 ### upgrade
 
-Actualiza opencode a la última versión o a una versión específica.
+Actualiza ocpp a la última versión o a una versión específica.
 
 ```bash
-opencode upgrade [target]
+ocpp upgrade [target]
 ```
 
 Para actualizar a la última versión.
 
 ```bash
-opencode upgrade
+ocpp upgrade
 ```
 
 Para actualizar a una versión específica.
 
 ```bash
-opencode upgrade v0.1.48
+ocpp upgrade v0.1.48
 ```
 
 #### Opciones
@@ -547,7 +547,7 @@ opencode upgrade v0.1.48
 
 ## Opciones globales
 
-La CLI de OpenCode toma las siguientes banderas globales.
+La CLI de OC++ toma las siguientes banderas globales.
 
 | Opción                                     | Corta | Descripción                                  |
 | ------------------------------------------ | ----- | -------------------------------------------- |
@@ -560,33 +560,33 @@ La CLI de OpenCode toma las siguientes banderas globales.
 
 ## Variables de entorno
 
-OpenCode se puede configurar mediante variables de entorno.
+OC++ se puede configurar mediante variables de entorno.
 
-| Variable                              | Type     | Description                                                                     |
-| ------------------------------------- | -------- | ------------------------------------------------------------------------------- |
-| `OPENCODE_AUTO_SHARE`                 | booleano | Compartir sesiones automáticamente                                              |
-| `OPENCODE_GIT_BASH_PATH`              | cadena   | Ruta al ejecutable de Git Bash en Windows                                       |
-| `OPENCODE_CONFIG`                     | cadena   | Ruta al archivo de configuración                                                |
-| `OPENCODE_CONFIG_DIR`                 | cadena   | Ruta al directorio de configuración                                             |
-| `OPENCODE_CONFIG_CONTENT`             | cadena   | Contenido de configuración json en línea                                        |
-| `OPENCODE_DISABLE_AUTOUPDATE`         | booleano | Deshabilitar las comprobaciones automáticas de actualizaciones                  |
-| `OPENCODE_DISABLE_PRUNE`              | booleano | Deshabilitar la poda de datos antiguos                                          |
-| `OPENCODE_DISABLE_TERMINAL_TITLE`     | booleano | Deshabilitar las actualizaciones automáticas de títulos de terminal             |
-| `OPENCODE_PERMISSION`                 | cadena   | Configuración de permisos json incorporados                                     |
-| `OPENCODE_DISABLE_DEFAULT_PLUGINS`    | booleano | Deshabilitar complementos predeterminados                                       |
-| `OPENCODE_DISABLE_LSP_DOWNLOAD`       | booleano | Deshabilitar las descargas automáticas del servidor LSP                         |
-| `OPENCODE_ENABLE_EXPERIMENTAL_MODELS` | booleano | Habilitar modelos experimentales                                                |
-| `OPENCODE_DISABLE_AUTOCOMPACT`        | booleano | Deshabilitar la compactación automática de contexto                             |
-| `OPENCODE_DISABLE_CLAUDE_CODE`        | booleano | Deshabilitar la lectura desde `.claude` (mensaje + habilidades)                 |
-| `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT` | booleano | Desactivar lectura `~/.claude/CLAUDE.md`                                        |
-| `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` | booleano | Deshabilitar la carga `.claude/skills`                                          |
-| `OPENCODE_DISABLE_MODELS_FETCH`       | booleano | Deshabilitar la recuperación de modelos desde fuentes remotas                   |
-| `OPENCODE_FAKE_VCS`                   | cadena   | Proveedor de VCS falso para fines de prueba                                     |
-| `OPENCODE_CLIENT`                     | cadena   | Identificador de cliente (por defecto `cli`)                                    |
-| `OPENCODE_ENABLE_EXA`                 | booleano | Habilitar las herramientas de búsqueda web de Exa                               |
-| `OPENCODE_SERVER_PASSWORD`            | cadena   | Habilite la autenticación básica para `serve`/`web`                             |
-| `OPENCODE_SERVER_USERNAME`            | cadena   | Anular el nombre de usuario de autenticación básica (predeterminado `opencode`) |
-| `OPENCODE_MODELS_URL`                 | cadena   | URL personalizada para buscar la configuración de modelos                       |
+| Variable                          | Type     | Description                                                                 |
+| --------------------------------- | -------- | --------------------------------------------------------------------------- |
+| `OCPP_AUTO_SHARE`                 | booleano | Compartir sesiones automáticamente                                          |
+| `OCPP_GIT_BASH_PATH`              | cadena   | Ruta al ejecutable de Git Bash en Windows                                   |
+| `OCPP_CONFIG`                     | cadena   | Ruta al archivo de configuración                                            |
+| `OCPP_CONFIG_DIR`                 | cadena   | Ruta al directorio de configuración                                         |
+| `OCPP_CONFIG_CONTENT`             | cadena   | Contenido de configuración json en línea                                    |
+| `OCPP_DISABLE_AUTOUPDATE`         | booleano | Deshabilitar las comprobaciones automáticas de actualizaciones              |
+| `OCPP_DISABLE_PRUNE`              | booleano | Deshabilitar la poda de datos antiguos                                      |
+| `OCPP_DISABLE_TERMINAL_TITLE`     | booleano | Deshabilitar las actualizaciones automáticas de títulos de terminal         |
+| `OCPP_PERMISSION`                 | cadena   | Configuración de permisos json incorporados                                 |
+| `OCPP_DISABLE_DEFAULT_PLUGINS`    | booleano | Deshabilitar complementos predeterminados                                   |
+| `OCPP_DISABLE_LSP_DOWNLOAD`       | booleano | Deshabilitar las descargas automáticas del servidor LSP                     |
+| `OCPP_ENABLE_EXPERIMENTAL_MODELS` | booleano | Habilitar modelos experimentales                                            |
+| `OCPP_DISABLE_AUTOCOMPACT`        | booleano | Deshabilitar la compactación automática de contexto                         |
+| `OCPP_DISABLE_CLAUDE_CODE`        | booleano | Deshabilitar la lectura desde `.claude` (mensaje + habilidades)             |
+| `OCPP_DISABLE_CLAUDE_CODE_PROMPT` | booleano | Desactivar lectura `~/.claude/CLAUDE.md`                                    |
+| `OCPP_DISABLE_CLAUDE_CODE_SKILLS` | booleano | Deshabilitar la carga `.claude/skills`                                      |
+| `OCPP_DISABLE_MODELS_FETCH`       | booleano | Deshabilitar la recuperación de modelos desde fuentes remotas               |
+| `OCPP_FAKE_VCS`                   | cadena   | Proveedor de VCS falso para fines de prueba                                 |
+| `OCPP_CLIENT`                     | cadena   | Identificador de cliente (por defecto `cli`)                                |
+| `OCPP_ENABLE_EXA`                 | booleano | Habilitar las herramientas de búsqueda web de Exa                           |
+| `OCPP_SERVER_PASSWORD`            | cadena   | Habilite la autenticación básica para `serve`/`web`                         |
+| `OCPP_SERVER_USERNAME`            | cadena   | Anular el nombre de usuario de autenticación básica (predeterminado `ocpp`) |
+| `OCPP_MODELS_URL`                 | cadena   | URL personalizada para buscar la configuración de modelos                   |
 
 ---
 
@@ -594,22 +594,22 @@ OpenCode se puede configurar mediante variables de entorno.
 
 Estas variables de entorno habilitan funciones experimentales que pueden cambiar o eliminarse.
 
-| Variable                                        | Type     | Description                                                |
-| ----------------------------------------------- | -------- | ---------------------------------------------------------- |
-| `OPENCODE_EXPERIMENTAL`                         | booleano | Habilitar funciones experimentales de la bandera global    |
-| `OPENCODE_EXPERIMENTAL_ICON_DISCOVERY`          | booleano | Habilitar descubrimiento de íconos                         |
-| `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | booleano | Deshabilitar copia al seleccionar en TUI                   |
-| `OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | número   | Tiempo de espera predeterminado para comandos bash en ms   |
-| `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | número   | Tokens de salida máximos para respuestas LLM               |
-| `OPENCODE_EXPERIMENTAL_FILEWATCHER`             | booleano | Habilite el observador de archivos para todo el directorio |
-| `OPENCODE_EXPERIMENTAL_OXFMT`                   | booleano | Habilitar el formateador oxfmt                             |
-| `OPENCODE_EXPERIMENTAL_LSP_TOOL`                | booleano | Habilitar herramienta experimental LSP                     |
-| `OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER`     | booleano | Deshabilitar el observador de archivos                     |
-| `OPENCODE_EXPERIMENTAL_EXA`                     | booleano | Habilitar funciones experimentales de Exa                  |
-| `OPENCODE_EXPERIMENTAL_LSP_TY`                  | booleano | Habilitar Habilitar TY LSP para archivos python            |
-| `OPENCODE_EXPERIMENTAL_PLAN_MODE`               | booleano | Habilitar modo de plan                                     |
-| `OPENCODE_EXPERIMENTAL_EVENT_SYSTEM`            | booleano | Habilitar sistema de eventos experimental                  |
-| `OPENCODE_EXPERIMENTAL_NATIVE_LLM`              | booleano | Habilitar ruta nativa de solicitud LLM                     |
-| `OPENCODE_EXPERIMENTAL_PARALLEL`                | booleano | Habilitar ejecución paralela de búsqueda web               |
-| `OPENCODE_EXPERIMENTAL_SCOUT`                   | booleano | Habilitar subagente Scout                                  |
-| `OPENCODE_EXPERIMENTAL_WORKSPACES`              | booleano | Habilitar soporte de espacios de trabajo                   |
+| Variable                                    | Type     | Description                                                |
+| ------------------------------------------- | -------- | ---------------------------------------------------------- |
+| `OCPP_EXPERIMENTAL`                         | booleano | Habilitar funciones experimentales de la bandera global    |
+| `OCPP_EXPERIMENTAL_ICON_DISCOVERY`          | booleano | Habilitar descubrimiento de íconos                         |
+| `OCPP_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | booleano | Deshabilitar copia al seleccionar en TUI                   |
+| `OCPP_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | número   | Tiempo de espera predeterminado para comandos bash en ms   |
+| `OCPP_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | número   | Tokens de salida máximos para respuestas LLM               |
+| `OCPP_EXPERIMENTAL_FILEWATCHER`             | booleano | Habilite el observador de archivos para todo el directorio |
+| `OCPP_EXPERIMENTAL_OXFMT`                   | booleano | Habilitar el formateador oxfmt                             |
+| `OCPP_EXPERIMENTAL_LSP_TOOL`                | booleano | Habilitar herramienta experimental LSP                     |
+| `OCPP_EXPERIMENTAL_DISABLE_FILEWATCHER`     | booleano | Deshabilitar el observador de archivos                     |
+| `OCPP_EXPERIMENTAL_EXA`                     | booleano | Habilitar funciones experimentales de Exa                  |
+| `OCPP_EXPERIMENTAL_LSP_TY`                  | booleano | Habilitar Habilitar TY LSP para archivos python            |
+| `OCPP_EXPERIMENTAL_PLAN_MODE`               | booleano | Habilitar modo de plan                                     |
+| `OCPP_EXPERIMENTAL_EVENT_SYSTEM`            | booleano | Habilitar sistema de eventos experimental                  |
+| `OCPP_EXPERIMENTAL_NATIVE_LLM`              | booleano | Habilitar ruta nativa de solicitud LLM                     |
+| `OCPP_EXPERIMENTAL_PARALLEL`                | booleano | Habilitar ejecución paralela de búsqueda web               |
+| `OCPP_EXPERIMENTAL_SCOUT`                   | booleano | Habilitar subagente Scout                                  |
+| `OCPP_EXPERIMENTAL_WORKSPACES`              | booleano | Habilitar soporte de espacios de trabajo                   |

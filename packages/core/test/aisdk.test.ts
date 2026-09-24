@@ -2,11 +2,11 @@ import { APICallError } from "@ai-sdk/provider"
 import type { LanguageModelV3, LanguageModelV3StreamPart } from "@ai-sdk/provider"
 import { createMistral } from "@ai-sdk/mistral"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
-import { AISDK } from "@opencode-ai/core/aisdk"
-import { SessionRunnerRetry } from "@opencode-ai/core/session/runner/retry"
-import { toSessionError } from "@opencode-ai/core/session/to-session-error"
-import { Model } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
+import { AISDK } from "@ocpp/core/aisdk"
+import { SessionRunnerRetry } from "@ocpp/core/session/runner/retry"
+import { toSessionError } from "@ocpp/core/session/to-session-error"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
 import {
   LLM,
   AIError,
@@ -17,9 +17,9 @@ import {
   TransportError,
   UnknownProviderError,
   isContextOverflowFailure,
-} from "@opencode-ai/ai"
-import { LLMClient, RequestExecutor } from "@opencode-ai/ai/route"
-import { compileRequest } from "@opencode-ai/ai/route/client"
+} from "@ocpp/ai"
+import { LLMClient, RequestExecutor } from "@ocpp/ai/route"
+import { compileRequest } from "@ocpp/ai/route/client"
 import { expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { testEffect } from "./lib/effect"

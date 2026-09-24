@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import type { FormField, FormValue } from "@opencode-ai/client"
+import type { FormField, FormValue } from "@ocpp/client"
 import {
   formCustom,
   formDisplayValue,

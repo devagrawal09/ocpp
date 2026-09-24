@@ -1,5 +1,5 @@
-import { Bus } from "@opencode-ai/core/bus"
-import { Event } from "@opencode-ai/schema/event"
+import { Bus } from "@ocpp/core/bus"
+import { Event } from "@ocpp/schema/event"
 import { Effect, Stream } from "effect"
 import { HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"

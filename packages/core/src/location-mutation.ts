@@ -1,10 +1,10 @@
 export * as LocationMutation from "./location-mutation.js"
 
-import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import path from "path"
 import { Context, Effect, Layer, Schema } from "effect"
-import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Global } from "@opencode-ai/util/global"
+import { FSUtil } from "@ocpp/util/fs-util"
+import { Global } from "@ocpp/util/global"
 import { Location } from "./location.js"
 import { Project } from "./project.js"
 import { ProjectMarkers } from "./project/markers.js"
@@ -72,7 +72,7 @@ export const resolvePath = (directory: string, input: string, home = Global.Path
   )
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/LocationMutation") {}
+export class Service extends Context.Service<Service, Interface>()("@ocpp/LocationMutation") {}
 
 const slash = (value: string) => value.replaceAll("\\", "/")
 

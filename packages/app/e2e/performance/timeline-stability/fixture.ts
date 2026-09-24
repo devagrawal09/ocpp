@@ -1,23 +1,23 @@
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Encode } from "@ocpp/util/encode"
 import type {
   JsonValue,
-  OpenCodeEvent,
+  OcppEvent,
   SessionInfo,
   SessionMessageAssistant,
   SessionMessageInfo,
   SessionMessageUser,
   SessionStatus,
   SessionStructuredError,
-} from "@opencode-ai/client/promise"
-import { EventManifest } from "@opencode-ai/schema/event-manifest"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
+} from "@ocpp/client/promise"
+import { EventManifest } from "@ocpp/schema/event-manifest"
+import { SessionMessage } from "@ocpp/schema/session-message"
 import { expect, type Page } from "@playwright/test"
 import { Schema } from "effect"
-import { mockOpenCodeServer } from "../../utils/mock-server"
+import { mockOcppServer } from "../../utils/mock-server"
 import { installSseTransport } from "../../utils/sse-transport"
 import { expectSessionReady } from "../../utils/waits"
 
-export const directory = "C:/OpenCode/TimelineStability"
+export const directory = "C:/OC++/TimelineStability"
 export const projectID = "proj_timeline_stability"
 export const sessionID = "ses_timeline_stability"
 export const userID = "msg_1000_timeline_user"
@@ -93,8 +93,8 @@ type ToolSeed = {
 }
 
 export type TimelineMessage = SessionMessageUser | SessionMessageAssistant
-export type TimelineEvent = OpenCodeEvent | readonly OpenCodeEvent[]
-export type EventPayload = OpenCodeEvent
+export type TimelineEvent = OcppEvent | readonly OcppEvent[]
+export type EventPayload = OcppEvent
 export type ToolStatus = ToolSeed["state"]["status"]
 export type PartSeed<Owner extends "user" | "assistant"> = Owner extends "user"
   ? TextSeed | FileSeed | AgentSeed
@@ -146,7 +146,7 @@ export async function setupTimeline(
   const initialStatus: SessionStatus =
     active?.type === "assistant" && active.time.completed === undefined ? { type: "busy" } : { type: "idle" }
   const transport = await installSseTransport(page, { server, retry: input.eventRetry ?? 20 })
-  await mockOpenCodeServer(page, {
+  await mockOcppServer(page, {
     directory,
     project: project(),
     provider: provider(),
@@ -170,7 +170,7 @@ export async function setupTimeline(
   }, input.settings ?? {})
   if (input.locale) {
     await page.addInitScript((locale) => {
-      localStorage.setItem("opencode.global.dat:language", JSON.stringify({ locale }))
+      localStorage.setItem("ocpp.global.dat:language", JSON.stringify({ locale }))
     }, input.locale)
   }
   if (input.reducedMotion) await page.emulateMedia({ reducedMotion: "reduce" })
@@ -244,7 +244,7 @@ function timelineEvents(input: TimelineEvent) {
   return (Array.isArray(input) ? input : [input]).map(validateTimelineEvent)
 }
 
-function describeEvent(event: OpenCodeEvent) {
+function describeEvent(event: OcppEvent) {
   if (event.type.startsWith("session.tool.")) {
     const data = event.data as { id?: string }
     return [event.type, data.id].filter(Boolean).join(":")
@@ -252,47 +252,44 @@ function describeEvent(event: OpenCodeEvent) {
   return event.type
 }
 
-export function event(
-  type: "session.status",
-  data: Extract<OpenCodeEvent, { type: "session.status" }>["data"],
-): OpenCodeEvent {
+export function event(type: "session.status", data: Extract<OcppEvent, { type: "session.status" }>["data"]): OcppEvent {
   return makeEvent(type, data)
 }
 
-export function compactionStarted(data: Extract<OpenCodeEvent, { type: "session.compaction.started" }>["data"]) {
+export function compactionStarted(data: Extract<OcppEvent, { type: "session.compaction.started" }>["data"]) {
   return makeEvent("session.compaction.started", data)
 }
 
-export function compactionDelta(data: Extract<OpenCodeEvent, { type: "session.compaction.delta" }>["data"]) {
+export function compactionDelta(data: Extract<OcppEvent, { type: "session.compaction.delta" }>["data"]) {
   return makeEvent("session.compaction.delta", data)
 }
 
-export function compactionEnded(data: Extract<OpenCodeEvent, { type: "session.compaction.ended" }>["data"]) {
+export function compactionEnded(data: Extract<OcppEvent, { type: "session.compaction.ended" }>["data"]) {
   return makeEvent("session.compaction.ended", data)
 }
 
-export function compactionFailed(data: Extract<OpenCodeEvent, { type: "session.compaction.failed" }>["data"]) {
+export function compactionFailed(data: Extract<OcppEvent, { type: "session.compaction.failed" }>["data"]) {
   return makeEvent("session.compaction.failed", data)
 }
 
-export function toolInputStarted(data: Extract<OpenCodeEvent, { type: "session.tool.input.started" }>["data"]) {
+export function toolInputStarted(data: Extract<OcppEvent, { type: "session.tool.input.started" }>["data"]) {
   return makeEvent("session.tool.input.started", data)
 }
 
-export function toolInputEnded(data: Extract<OpenCodeEvent, { type: "session.tool.input.ended" }>["data"]) {
+export function toolInputEnded(data: Extract<OcppEvent, { type: "session.tool.input.ended" }>["data"]) {
   return makeEvent("session.tool.input.ended", data)
 }
 
-export function toolCalled(data: Extract<OpenCodeEvent, { type: "session.tool.called" }>["data"]) {
+export function toolCalled(data: Extract<OcppEvent, { type: "session.tool.called" }>["data"]) {
   return makeEvent("session.tool.called", data)
 }
 
-export function validateTimelineEvent(input: unknown): OpenCodeEvent {
+export function validateTimelineEvent(input: unknown): OcppEvent {
   if (!input || typeof input !== "object") throw new Error("Timeline event must be an object")
   if (!("type" in input) || typeof input.type !== "string") throw new Error("Timeline event requires a type")
   const definition = EventManifest.ServerDefinitions.find((definition) => definition.type === input.type)
   if (!definition) throw new Error(`Unknown timeline event: ${input.type}`)
-  return Schema.decodeUnknownSync(definition)(input) as OpenCodeEvent
+  return Schema.decodeUnknownSync(definition)(input) as OcppEvent
 }
 
 export function validateTimelineMessages(input: readonly TimelineMessage[]): TimelineMessage[] {
@@ -379,7 +376,7 @@ export function historyMessages(count: number): TimelineMessage[] {
   }).flat()
 }
 
-export function partUpdated(part: PartSeed<"assistant">): readonly OpenCodeEvent[] {
+export function partUpdated(part: PartSeed<"assistant">): readonly OcppEvent[] {
   const messageID = part.messageID ?? assistantID
   const started = startedParts.has(part.id)
   const ref = partRef(part.id, messageID, part.type)
@@ -756,11 +753,11 @@ function messageContent(
   }
 }
 
-function toolEvents(part: ToolSeed, messageID: string): readonly OpenCodeEvent[] {
+function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
   const previous = toolStates.get(part.id)
   if (previous === "completed" || previous === "error") return []
 
-  const events: OpenCodeEvent[] = []
+  const events: OcppEvent[] = []
   if (!previous) {
     events.push(
       makeEvent("session.tool.input.started", {
@@ -855,10 +852,10 @@ function partRef(id: string, messageID: string, type: PartRef["type"]): PartRef 
   return ref
 }
 
-function makeEvent<Type extends OpenCodeEvent["type"]>(
+function makeEvent<Type extends OcppEvent["type"]>(
   type: Type,
-  data: Extract<OpenCodeEvent, { type: Type }>["data"],
-): OpenCodeEvent {
+  data: Extract<OcppEvent, { type: Type }>["data"],
+): OcppEvent {
   const id = `evt_timeline_${String(++eventSequence).padStart(4, "0")}`
   const base = { id, created: 1700000002000 + eventSequence, type, data, location: { directory } }
   const definition = EventManifest.ServerDefinitions.find((definition) => definition.type === type)
@@ -870,7 +867,7 @@ function makeEvent<Type extends OpenCodeEvent["type"]>(
           durable: { aggregateID: sessionID, seq: ++durableSequence, version: definition.durable.version },
         }
       : base
-  return Schema.decodeUnknownSync(definition)(input) as unknown as OpenCodeEvent
+  return Schema.decodeUnknownSync(definition)(input) as unknown as OcppEvent
 }
 
 function jsonRecord(value: Record<string, unknown> | undefined): Record<string, JsonValue> {
@@ -896,7 +893,7 @@ function provider() {
     all: [
       {
         id: "opencode",
-        name: "OpenCode",
+        name: "OC++",
         models: { "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } } },
       },
       {

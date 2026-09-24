@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { Message } from "@opencode-ai/ai"
-import { Model } from "@opencode-ai/core/model"
-import { Provider } from "@opencode-ai/core/provider"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { AgentAttachment, Base64, FileAttachment, SkillAttachment } from "@opencode-ai/schema/prompt"
-import { Skill } from "@opencode-ai/schema/skill"
-import { toLLMMessages } from "@opencode-ai/core/session/runner/to-llm-message"
-import { Agent } from "@opencode-ai/core/agent"
-import { Shell } from "@opencode-ai/schema/shell"
-import { Location } from "@opencode-ai/schema/location"
-import { AbsolutePath } from "@opencode-ai/schema/schema"
+import { Message } from "@ocpp/ai"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { AgentAttachment, Base64, FileAttachment, SkillAttachment } from "@ocpp/schema/prompt"
+import { Skill } from "@ocpp/schema/skill"
+import { toLLMMessages } from "@ocpp/core/session/runner/to-llm-message"
+import { Agent } from "@ocpp/core/agent"
+import { Shell } from "@ocpp/schema/shell"
+import { Location } from "@ocpp/schema/location"
+import { AbsolutePath } from "@ocpp/schema/schema"
 import { DateTime } from "effect"
 import path from "path"
 import { pathToFileURL } from "url"
@@ -840,15 +840,15 @@ Recent work
     ])
   })
 
-  test("replays flat state under an OpenCode hosted model's route key", () => {
-    const opencode = Model.Ref.make({ id: Model.ID.make("claude-fable-5"), providerID: Provider.ID.opencode })
+  test("replays flat state under an OC++ hosted model's route key", () => {
+    const ocpp = Model.Ref.make({ id: Model.ID.make("claude-fable-5"), providerID: Provider.ID.opencode })
     const messages = toLLMMessages(
       [
         SessionMessage.Assistant.make({
-          id: id("assistant-opencode-reasoning"),
+          id: id("assistant-ocpp-reasoning"),
           type: "assistant",
           agent: build,
-          model: opencode,
+          model: ocpp,
           content: [
             SessionMessage.AssistantReasoning.make({
               type: "reasoning",
@@ -859,7 +859,7 @@ Recent work
           time: { created, completed: created },
         }),
       ],
-      opencode,
+      ocpp,
       "anthropic",
     )
 

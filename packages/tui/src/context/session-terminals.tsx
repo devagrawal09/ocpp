@@ -1,4 +1,4 @@
-import type { PersistentPtyInfo } from "@opencode-ai/client"
+import type { PersistentPtyInfo } from "@ocpp/client"
 import { createSignal, onCleanup } from "solid-js"
 import { createSimpleContext } from "./helper"
 import { useClient } from "./client"

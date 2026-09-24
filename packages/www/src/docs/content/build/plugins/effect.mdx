@@ -2,18 +2,18 @@
 title: "Effect"
 ---
 
-`@opencode-ai/plugin/effect` is the Effect-native version of the OpenCode plugin API. Its context operations return
+`@ocpp/plugin/effect` is the Effect-native version of the OC++ plugin API. Its context operations return
 Effects or Streams, callbacks return Effects, and plugin lifetime is represented by `Scope`. Install `effect` with the
 plugin package.
 
 ```sh
-bun add @opencode-ai/plugin@beta effect
+bun add @ocpp/plugin@beta effect
 ```
 
-Export an Effect plugin from `.opencode/plugins/` to load it automatically.
+Export an Effect plugin from `.ocpp/plugins/` to load it automatically.
 
-```ts title=".opencode/plugins/concise.ts"
-import { Plugin } from "@opencode-ai/plugin/effect"
+```ts title=".ocpp/plugins/concise.ts"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Effect } from "effect"
 
 export default Plugin.define({
@@ -26,29 +26,29 @@ export default Plugin.define({
 })
 ```
 
-Published packages and files outside `.opencode/plugins/` use the same `plugins` configuration as other server
+Published packages and files outside `.ocpp/plugins/` use the same `plugins` configuration as other server
 plugins.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "plugins": [
-    "opencode-acme-effect-plugin",
-    "opencode-acme-effect-plugin@1.2.0",
-    "@acme/opencode-effect-plugin",
+    "ocpp-acme-effect-plugin",
+    "ocpp-acme-effect-plugin@1.2.0",
+    "@acme/ocpp-effect-plugin",
     "./plugins/local-effect.ts",
     {
-      "package": "@acme/opencode-effect-plugin",
-      "options": { "agent": "reviewer", "strict": true }
-    }
-  ]
+      "package": "@acme/ocpp-effect-plugin",
+      "options": { "agent": "reviewer", "strict": true },
+    },
+  ],
 }
 ```
 
 See [Configure plugins](/plugins) for enablement, package resolution, and configuration precedence.
 
 ```ts title="plugins/local-effect.ts"
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Effect } from "effect"
 
 export default Plugin.define({
@@ -66,7 +66,7 @@ The `effect` runs when the plugin loads. Its scope closes when the plugin reload
 fibers, and finalizers are released together.
 
 ```ts
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Effect } from "effect"
 
 export default Plugin.define({
@@ -94,8 +94,8 @@ effect: (ctx) =>
 
 ### Context
 
-The context exposes the Effect client for the connected OpenCode server plus plugin-only transforms, hooks, storage,
-reloads, and options. It does not expose OpenCode's private Core services.
+The context exposes the Effect client for the connected OC++ server plus plugin-only transforms, hooks, storage,
+reloads, and options. It does not expose OC++'s private Core services.
 
 ```ts
 effect: (ctx) =>
@@ -138,23 +138,23 @@ interface Plugin<R = Scope.Scope> {
 
 ### Options
 
-Pass options with the object form in `opencode.json(c)`.
+Pass options with the object form in `ocpp.json(c)`.
 
-```jsonc title="opencode.jsonc"
+```jsonc title="ocpp.jsonc"
 {
   "plugins": [
     {
       "package": "./plugins/company-effect.ts",
-      "options": { "strict": true }
-    }
-  ]
+      "options": { "strict": true },
+    },
+  ],
 }
 ```
 
 Read options from `ctx.options`. Narrow unknown values before use.
 
 ```ts title="plugins/company-effect.ts"
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Effect } from "effect"
 
 export default Plugin.define({
@@ -169,11 +169,11 @@ export default Plugin.define({
 
 ## Transforms
 
-Transforms synchronously edit a mutable draft. OpenCode applies transforms in plugin order, so later transforms see
+Transforms synchronously edit a mutable draft. OC++ applies transforms in plugin order, so later transforms see
 earlier changes. Yielding the registration keeps it in the plugin scope.
 
 ```ts title="plugins/models-effect.ts"
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Effect } from "effect"
 
 export default Plugin.define({
@@ -562,7 +562,7 @@ effect: (ctx) =>
 ```
 
 Set `disabled: true` in a transform to disable a server and disconnect it, or `disabled: false` to enable it and allow
-OpenCode to connect. OpenCode reconciles server lifecycle from the transformed configuration.
+OC++ to connect. OC++ reconciles server lifecycle from the transformed configuration.
 
 Call `reload()` after external state used by a transform changes to reapply transforms and reconcile the servers.
 
@@ -758,7 +758,7 @@ effect: (ctx) =>
         id: Skill.ID.make("review"),
         name: Skill.Name.make("Review"),
         description: "Review the current changes",
-        location: "/workspace/.opencode/skills/review.md",
+        location: "/workspace/.ocpp/skills/review.md",
         content: "Review the current changes for correctness and missing tests.",
       }))
       draft.update("review", (item) => (item.autoinvoke = true))
@@ -830,7 +830,7 @@ Register typed tools with Effect `Schema`. The executor receives decoded input a
 output, display content, or metadata.
 
 The draft supports `add`, `update`, and `remove`. The transform callback is synchronous: it must not return an Effect or Promise. Load
-external data before registering or reloading. OpenCode replays active transforms in registration order on a fresh
+external data before registering or reloading. OC++ replays active transforms in registration order on a fresh
 draft; for the same effective tool name, a later valid registration overrides an earlier one.
 
 ```ts
@@ -864,12 +864,13 @@ namespaces and unsupported characters in tool names become `_`. Missing names ar
 them rather than mutating nested values. Invalid updates are logged and leave the previous definition intact.
 
 ```ts
-yield* ctx.tool.transform((draft) => {
-  draft.update("acme_greeting", (tool) => {
-    tool.description = "Greet the user by name"
+yield *
+  ctx.tool.transform((draft) => {
+    draft.update("acme_greeting", (tool) => {
+      tool.description = "Greet the user by name"
+    })
+    draft.remove("acme_obsolete")
   })
-  draft.remove("acme_obsolete")
-})
 ```
 
 Updates and removals replay in order with additions, including after MCP catalog refreshes.
@@ -941,7 +942,7 @@ effect: (ctx) =>
 
 Provider callbacks receive the current location, working-copy root, canonical project root, and optional repository
 store. Diff callbacks also receive the selected mode, requested context, and output byte budget. Repository discovery
-continues to use OpenCode's built-in Git and Mercurial detectors.
+continues to use OC++'s built-in Git and Mercurial detectors.
 
 Schemas: [`Vcs.Info`](/api#schema-Vcs.Info), [`Vcs.FileStatus`](/api#schema-Vcs.FileStatus),
 [`FileDiff.Info`](/api#schema-FileDiff.Info).
@@ -971,7 +972,7 @@ effect: (ctx) =>
     const websearch = ctx.websearch
     const providers = yield* websearch.providers().pipe(Effect.orDie)
     const results = yield* websearch
-      .query({ query: "OpenCode plugins", providerID: WebSearch.ID.make("internal") })
+      .query({ query: "OC++ plugins", providerID: WebSearch.ID.make("internal") })
       .pipe(Effect.orDie)
     yield* Effect.logInfo("websearch", { providers: providers.data.length, results: results.data.results.length })
   }),
@@ -1029,7 +1030,7 @@ effect: (ctx) =>
   Effect.gen(function* () {
     const event = ctx.event
     yield* event.subscribe().pipe(
-      Stream.tap((item) => Effect.logDebug("OpenCode event", { type: item.type })),
+      Stream.tap((item) => Effect.logDebug("OC++ event", { type: item.type })),
       Stream.runDrain,
       Effect.forkScoped,
     )
@@ -1053,7 +1054,7 @@ effect: (ctx) =>
 Schema: [`V2EventEncoded`](/api#schema-V2EventEncoded).
 
 ```ts
-type EventSubscribeOutput = OpenCodeEvent
+type EventSubscribeOutput = OcppEvent
 type EventSubscribeOperation<E = never> = () => Stream.Stream<EventSubscribeOutput, E>
 
 interface EventApi<E = never> {
@@ -1065,7 +1066,7 @@ interface EventDomain extends Pick<EventApi<unknown>, "subscribe"> {}
 
 ## Hooks
 
-Hooks intercept live operations. Multiple plugins can register the same hook; OpenCode runs them in plugin order so
+Hooks intercept live operations. Multiple plugins can register the same hook; OC++ runs them in plugin order so
 later hooks see earlier changes. Registrations remain active for the plugin scope.
 
 ```ts
@@ -1128,8 +1129,8 @@ effect: (ctx) =>
   }),
 ```
 
-Override the retry decision for a provider failure or replace its delay in milliseconds. The hook runs after OpenCode
-classifies the failure and proposes its policy, but before any retry is scheduled. It does not expose how OpenCode
+Override the retry decision for a provider failure or replace its delay in milliseconds. The hook runs after OC++
+classifies the failure and proposes its policy, but before any retry is scheduled. It does not expose how OC++
 internally performs the next attempt.
 
 ```ts
@@ -1151,7 +1152,7 @@ effect: (ctx) =>
   }),
 ```
 
-The initial `decision` is OpenCode's policy, so hooks may make a normally terminal provider failure retryable or veto a
+The initial `decision` is OC++'s policy, so hooks may make a normally terminal provider failure retryable or veto a
 proposed retry. Multiple hooks run in registration order and later hooks see the current decision. The built-in maximum
 attempt count remains a hard limit. `attempt` is the physical attempt being proposed; the initial request is attempt `1`,
 so the first retry is attempt `2`. Invalid delays (`NaN`, infinity, or negative values) fall back to the computed delay.
@@ -1293,14 +1294,14 @@ entrypoint and declare both runtime dependencies.
 
 ```json title="package.json"
 {
-  "name": "opencode-acme-effect-plugin",
+  "name": "ocpp-acme-effect-plugin",
   "version": "1.0.0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "beta",
+    "@ocpp/plugin": "beta",
     "effect": "4.0.0-rc.111"
   }
 }
@@ -1309,7 +1310,7 @@ entrypoint and declare both runtime dependencies.
 The package entrypoint exports `Plugin.define` with an `effect` function.
 
 ```ts title="src/index.ts"
-import { Plugin } from "@opencode-ai/plugin/effect"
+import { Plugin } from "@ocpp/plugin/effect"
 import { Effect } from "effect"
 
 export default Plugin.define({
@@ -1322,10 +1323,10 @@ export default Plugin.define({
 })
 ```
 
-Use versions compatible with the OpenCode release you target and test the installed package rather than only a
+Use versions compatible with the OC++ release you target and test the installed package rather than only a
 workspace-linked copy.
 
 ```sh
 bun pm pack
-bun add ./opencode-acme-effect-plugin-1.0.0.tgz
+bun add ./ocpp-acme-effect-plugin-1.0.0.tgz
 ```

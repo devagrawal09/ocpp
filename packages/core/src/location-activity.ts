@@ -5,11 +5,11 @@ import { Bus } from "./bus.js"
 import { Location } from "./location.js"
 import { LocationServiceMap } from "./location-service-map.js"
 import { SessionEvent } from "./session/event.js"
-import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 
 const isSessionEvent = Schema.is(SessionEvent.Durable)
 
-export class Service extends Context.Service<Service, {}>()("@opencode/LocationActivity") {}
+export class Service extends Context.Service<Service, {}>()("@ocpp/LocationActivity") {}
 
 export function layer(options: { readonly timeToLive?: Duration.Input; readonly sweepInterval?: Duration.Input } = {}) {
   return Layer.effect(
@@ -39,11 +39,7 @@ export function layer(options: { readonly timeToLive?: Duration.Input; readonly 
         yield* Effect.sleep(options.sweepInterval ?? "1 minute")
         const refs = Array.from(yield* RcMap.keys(locations.rcMap))
         const cached = new Set(refs.map(key))
-        yield* Effect.forEach(
-          refs,
-          (ref) => (entries.has(key(ref)) ? Effect.void : touch(ref)),
-          { discard: true },
-        )
+        yield* Effect.forEach(refs, (ref) => (entries.has(key(ref)) ? Effect.void : touch(ref)), { discard: true })
         for (const id of entries.keys()) {
           if (!cached.has(id)) entries.delete(id)
         }

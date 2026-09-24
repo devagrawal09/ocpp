@@ -1,9 +1,9 @@
 ---
 title: Teilen
-description: Teile OpenCode-Unterhaltungen per oeffentlichem Link.
+description: Teile OC++-Unterhaltungen per oeffentlichem Link.
 ---
 
-Mit der Share-Funktion erstellst du oeffentliche Links zu OpenCode-Unterhaltungen.
+Mit der Share-Funktion erstellst du oeffentliche Links zu OC++-Unterhaltungen.
 So kannst du einfacher mit dem Team zusammenarbeiten oder Hilfe einholen.
 
 :::note
@@ -14,23 +14,23 @@ Geteilte Unterhaltungen sind fuer alle mit dem Link oeffentlich zugaenglich.
 
 ## Funktionsweise
 
-Wenn du eine Unterhaltung teilst, macht OpenCode Folgendes:
+Wenn du eine Unterhaltung teilst, macht OC++ Folgendes:
 
 1. Erstellt eine eindeutige oeffentliche URL fuer deine Sitzung
 2. Synchronisiert den Verlauf auf unsere Server
-3. Stellt die Unterhaltung unter `opncd.ai/s/<share-id>` bereit
+3. Stellt die Unterhaltung unter `ocpp.ai/s/<share-id>` bereit
 
 ---
 
 ## Teilen
 
-OpenCode hat drei Modi, die das Teilen steuern:
+OC++ hat drei Modi, die das Teilen steuern:
 
 ---
 
 ### Manuell (Standard)
 
-Standardmaessig nutzt OpenCode den manuellen Modus.
+Standardmaessig nutzt OC++ den manuellen Modus.
 Sitzungen werden nicht automatisch geteilt, du kannst sie aber mit `/share` veroeffentlichen:
 
 ```
@@ -41,9 +41,9 @@ Dabei wird eine eindeutige URL erzeugt und in die Zwischenablage kopiert.
 
 Um den manuellen Modus explizit in der [Konfiguration](/docs/config) zu setzen:
 
-```json title="opencode.json"
+```json title="ocpp.json"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "share": "manual"
 }
 ```
@@ -54,9 +54,9 @@ Um den manuellen Modus explizit in der [Konfiguration](/docs/config) zu setzen:
 
 Du kannst automatisches Teilen fuer neue Unterhaltungen aktivieren, indem du in der [Konfiguration](/docs/config) `share` auf `"auto"` setzt:
 
-```json title="opencode.json"
+```json title="ocpp.json"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "share": "auto"
 }
 ```
@@ -69,14 +69,14 @@ Mit aktiviertem Auto-Share wird jede neue Unterhaltung automatisch geteilt und e
 
 Du kannst Teilen komplett deaktivieren, indem du in der [Konfiguration](/docs/config) `share` auf `"disabled"` setzt:
 
-```json title="opencode.json"
+```json title="ocpp.json"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://ocpp.ai/config.json",
   "share": "disabled"
 }
 ```
 
-Wenn das fuer ein Projekt teamweit gelten soll, lege es in der Projekt-`opencode.json` fest und committe die Datei.
+Wenn das fuer ein Projekt teamweit gelten soll, lege es in der Projekt-`ocpp.json` fest und committe die Datei.
 
 ---
 
@@ -127,4 +127,4 @@ In Enterprise-Umgebungen kann die Share-Funktion:
 - Auf **SSO-authentifizierte** Nutzer eingeschraenkt werden
 - **Self-hosted** auf eigener Infrastruktur betrieben werden
 
-[Mehr dazu](/docs/enterprise), wie du opencode in deiner Organisation einsetzt.
+[Mehr dazu](/docs/enterprise), wie du ocpp in deiner Organisation einsetzt.

@@ -32,7 +32,7 @@ export const PiDriver: ExternalAgentDriver.Driver = {
     if (previous === undefined && options.history.length > 0)
       manager.appendMessage({
         role: "user",
-        content: "Restored canonical OpenCode history:\n" + ExternalAgentDriver.replay(options.history),
+        content: "Restored canonical OC++ history:\n" + ExternalAgentDriver.replay(options.history),
         timestamp: Date.now(),
       })
     const loader = new DefaultResourceLoader({

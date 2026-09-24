@@ -1,12 +1,15 @@
-# OpenCode Code Mode Fork
+# OC++
 
-> [!IMPORTANT]
-> This repository is a clean, independent fork of [anomalyco/opencode](https://github.com/anomalyco/opencode).
-> It is maintained at [devagrawal09/opencode](https://github.com/devagrawal09/opencode) and is not affiliated with or endorsed by the upstream OpenCode team. Upstream history, project structure, and documentation are preserved; the focused fork changes live on the [`codemode-fork`](https://github.com/devagrawal09/opencode/tree/codemode-fork) branch.
+OC++ is an open source AI coding agent for the terminal, the desktop, and the browser. It ships as the `ocpp` command, reads its own `ocpp.json` configuration, and is developed and released as its own product.
 
-### What This Fork Changes
+OC++ is forked from [OpenCode](https://github.com/anomalyco/opencode). It is an independent project: it is not an OpenCode branch, edition, or distribution, and it is not affiliated with or endorsed by the OpenCode project. Upstream Git history and the MIT license are preserved, and OpenCode retains copyright in the code inherited from it.
 
-This branch redesigns Code Mode as an append-only durable notebook that a Session writes to by running code:
+> [!NOTE]
+> OC++ has not published release artifacts yet. The installation commands below describe the intended channels; until they are live, build from source with `bun install` and `bun run dev`.
+
+### Code Mode
+
+OC++ models Code Mode as an append-only durable notebook that a Session writes to by running code:
 
 - **Automatic publication:** Every direct top-level `const` and `function` declaration is saved to the Session notebook and readable by name in later executions. There is no `export` syntax, and `return` is only a small preview.
 - **Immutable names with atomic admission:** A notebook name is written once and never reused. Names are verified and reserved before an execution ID exists, so conflicts are refused immediately and disjoint executions run concurrently without a global revision gate.
@@ -16,27 +19,23 @@ This branch redesigns Code Mode as an append-only durable notebook that a Sessio
 - **Durable lifecycle and recovery:** Executions, tool-call journals, notebook values, fork boundaries, and committed reverts are persisted by Core. Uncertain in-flight work becomes `indeterminate` instead of being replayed.
 - **Scoped tool handles:** `tool.define` creates same-execution opaque handles with frozen captures and compiler-derived tool capabilities. Handles are never durable.
 
-The redesign is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. See the single [Code Mode guide](packages/codemode/interpreter-support.md) for architecture diagrams, examples, lifecycle semantics, limits, and the full language contract.
-
-> [!NOTE]
-> The installation commands and release downloads in the upstream README below install upstream OpenCode, not this fork. Build the `codemode-fork` branch from source to run these changes.
+This design is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. See the single [Code Mode guide](packages/codemode/interpreter-support.md) for architecture diagrams, examples, lifecycle semantics, limits, and the full language contract.
 
 ---
 
 <p align="center">
-  <a href="https://opencode.ai">
+  <a href="https://ocpp.ai">
     <picture>
       <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
       <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
+      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OC++ logo">
     </picture>
   </a>
 </p>
 <p align="center">The open source AI coding agent.</p>
 <p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
+  <a href="https://www.npmjs.com/package/ocpp"><img alt="npm" src="https://img.shields.io/npm/v/ocpp?style=flat-square" /></a>
+  <a href="https://github.com/devagrawal09/oc-plus-plus/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/devagrawal09/oc-plus-plus/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
 <p align="center">
@@ -64,7 +63,7 @@ The redesign is intentionally incompatible with the earlier Promise-oriented Cod
   <a href="README.vi.md">Tiếng Việt</a>
 </p>
 
-[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+[![OC++ Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://ocpp.ai)
 
 ---
 
@@ -72,18 +71,18 @@ The redesign is intentionally incompatible with the earlier Promise-oriented Cod
 
 ```bash
 # YOLO
-curl -fsSL https://opencode.ai/install | bash
+curl -fsSL https://ocpp.ai/install | bash
 
 # Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # Any OS
-nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
+npm i -g ocpp@latest        # or bun/pnpm/yarn
+scoop install ocpp             # Windows
+choco install ocpp             # Windows
+brew install devagrawal09/tap/ocpp # macOS and Linux (recommended, always up to date)
+brew install ocpp              # macOS and Linux (official brew formula, updated less)
+sudo pacman -S ocpp            # Arch Linux (Stable)
+paru -S ocpp-bin               # Arch Linux (Latest from AUR)
+mise use -g ocpp               # Any OS
+nix run nixpkgs#ocpp           # or github:devagrawal09/oc-plus-plus for latest dev branch
 ```
 
 > [!TIP]
@@ -91,40 +90,40 @@ nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev
 
 ### Desktop App (BETA)
 
-OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
+OC++ is also available as a desktop application. Download directly from the [releases page](https://github.com/devagrawal09/oc-plus-plus/releases) or [ocpp.ai/download](https://ocpp.ai/download).
 
-| Platform              | Download                           |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
-| Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
+| Platform              | Download                       |
+| --------------------- | ------------------------------ |
+| macOS (Apple Silicon) | `ocpp-desktop-mac-arm64.dmg`   |
+| macOS (Intel)         | `ocpp-desktop-mac-x64.dmg`     |
+| Windows               | `ocpp-desktop-windows-x64.exe` |
+| Linux                 | `.deb`, `.rpm`, or `.AppImage` |
 
 ```bash
 # macOS (Homebrew)
-brew install --cask opencode-desktop
+brew install --cask ocpp-desktop
 # Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+scoop bucket add extras; scoop install extras/ocpp-desktop
 ```
 
 #### Installation Directory
 
 The install script respects the following priority order for the installation path:
 
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
+1. `$OCPP_INSTALL_DIR` - Custom installation directory
 2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
 3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
+4. `$HOME/.ocpp/bin` - Default fallback
 
 ```bash
 # Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+OCPP_INSTALL_DIR=/usr/local/bin curl -fsSL https://ocpp.ai/install | bash
+XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://ocpp.ai/install | bash
 ```
 
 ### Agents
 
-OpenCode includes two built-in agents you can switch between with the `Tab` key.
+OC++ includes two built-in agents you can switch between with the `Tab` key.
 
 - **build** - Default, full-access agent for development work
 - **plan** - Read-only agent for analysis and code exploration
@@ -135,20 +134,20 @@ OpenCode includes two built-in agents you can switch between with the `Tab` key.
 Also included is a **general** subagent for complex searches and multistep tasks.
 This is used internally and can be invoked using `@general` in messages.
 
-Learn more about [agents](https://opencode.ai/docs/agents).
+Learn more about [agents](https://ocpp.ai/docs/agents).
 
 ### Documentation
 
-For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
+For more info on how to configure OC++, [**head over to our docs**](https://ocpp.ai/docs).
 
 ### Contributing
 
-If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
+If you're interested in contributing to OC++, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
 
-### Building on OpenCode
+### Building on OC++
 
-If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
+If you are working on a project that's related to OC++ and is using "ocpp" as part of its name, for example "ocpp-dashboard" or "ocpp-mobile", please add a note to your README to clarify that it is not built by the OC++ team and is not affiliated with us in any way.
 
 ---
 
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**Join our community** [Discord](https://discord.gg/ocpp) | [X.com](https://x.com/ocpp)

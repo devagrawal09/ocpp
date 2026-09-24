@@ -31,7 +31,7 @@ export default defineConfig({
   ] as any,
   server: {
     host: "0.0.0.0",
-    allowedHosts: true,
+    allowedHosts: ["devs-macbook-pro.tail2c77bf.ts.net"],
     port: 3000,
   },
   build: {

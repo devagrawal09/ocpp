@@ -51,6 +51,32 @@ describe("Form", () => {
     }),
   )
 
+  it.effect("settles a reply before a racing cancellation", () =>
+    Effect.gen(function* () {
+      const service = yield* Form.Service
+      const bus = yield* Bus.Service
+      const replying = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const created = yield* service.create(input)
+      const unsubscribe = yield* bus.listen((event) =>
+        event.type === Form.Event.Replied.type && (event.data as { readonly id: Form.ID }).id === created.id
+          ? Deferred.succeed(replying, undefined).pipe(Effect.andThen(Deferred.await(release)))
+          : Effect.void,
+      )
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      const reply = yield* service.reply({ id: created.id, answer: { name: "Ava" } }).pipe(Effect.forkScoped)
+      yield* Deferred.await(replying)
+      const cancel = yield* service.cancel(created.id).pipe(Effect.forkScoped)
+      yield* Effect.yieldNow
+      yield* Deferred.succeed(release, undefined)
+
+      expect(yield* Fiber.join(reply)).toBeUndefined()
+      expect(yield* Fiber.join(cancel).pipe(Effect.flip)).toEqual(new Form.AlreadySettledError({ id: created.id }))
+      expect(yield* service.state(created.id)).toEqual({ status: "answered", answer: { name: "Ava" } })
+    }),
+  )
+
   it.effect("supports the temporary global mcp elicitation owner", () =>
     Effect.gen(function* () {
       const service = yield* Form.Service

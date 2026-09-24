@@ -60,6 +60,39 @@ test("changes live reasoning through Settings and persists Hidden, Compact, and 
   await expect(select).toHaveText("Compact")
 })
 
+test("groups directly adjacent completed reasoning", async ({ page }) => {
+  await setupTimeline(page, {
+    messages: [
+      userMessage(),
+      assistantMessage([
+        {
+          ...reasoningPart("prt_reasoning_group_first", "First adjacent thought body."),
+          time: { start: 1700000001000, end: 1700000002000 },
+        },
+        {
+          ...reasoningPart("prt_reasoning_group_second", "Second adjacent thought body."),
+          time: { start: 1700000003000, end: 1700000005000 },
+        },
+      ]),
+    ],
+  })
+
+  const ids = [`${assistantID}:reasoning:0`, `${assistantID}:reasoning:1`]
+  const group = page.locator(`[data-timeline-part-ids="${ids.join(",")}"]`)
+  const trigger = group.getByRole("button")
+  await expect(group).toHaveCount(1)
+  await expect(page.locator('[data-component="reasoning-part"]')).toHaveCount(1)
+  await expect(page.locator(ids.map((id) => `[data-timeline-part-id="${id}"]`).join(","))).toHaveCount(0)
+  await expect(trigger).toHaveText(/Thought\s*3s/)
+  await expect(trigger).toHaveAttribute("aria-expanded", "false")
+
+  await trigger.click()
+  await expect(trigger).toHaveAttribute("aria-expanded", "true")
+  await expect(group.locator('[data-component="markdown"]')).toHaveText(
+    /First adjacent thought body\.[\s\S]*Second adjacent thought body\./,
+  )
+})
+
 // The persisted boolean migrates to compact (false) or full (true).
 for (const summaries of [false, true]) {
   for (const profile of ["none", "blank", "heading", "tool", "text"] as const) {

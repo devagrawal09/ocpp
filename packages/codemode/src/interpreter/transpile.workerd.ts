@@ -1,6 +1,8 @@
 export interface TranspileResult {
   readonly outputText: string
   readonly error?: string
+  /** One-based source position of the first error diagnostic, when the compiler reports one. */
+  readonly location?: { readonly line: number; readonly column: number }
 }
 
 // workerd profile: the typescript compiler is ~11 MiB and probes node

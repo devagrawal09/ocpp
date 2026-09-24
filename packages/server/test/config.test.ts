@@ -25,6 +25,11 @@ it.live("returns ordered config entries for the requested directory", () =>
             { action: "shell", resource: "*", effect: "ask" },
             { action: "shell", resource: "git status", effect: "allow" },
           ],
+          external_agents: {
+            claude: { enabled: false, model: "sonnet", effort: "high" },
+            codex: { enabled: false, model: "gpt-5.4" },
+            pi: { enabled: false, model: "anthropic/claude-sonnet-4-6" },
+          },
           mcp: { servers: { docs: { type: "remote", url: "https://example.com/mcp" } } },
         }),
       ),
@@ -45,6 +50,11 @@ it.live("returns ordered config entries for the requested directory", () =>
       { action: "shell", resource: "*", effect: "ask" },
       { action: "shell", resource: "git status", effect: "allow" },
     ])
+    expect(document?.info.external_agents).toMatchObject({
+      claude: { enabled: false, model: "sonnet", effort: "high" },
+      codex: { enabled: false, model: "gpt-5.4" },
+      pi: { enabled: false, model: "anthropic/claude-sonnet-4-6" },
+    })
     expect(document?.path).toBe(AbsolutePath.make(config))
     if (!Array.isArray(body)) throw new Error("Expected a config entry array")
     const raw = body.find((entry) => isRecord(entry) && entry["type"] === "document" && entry["path"] === config)

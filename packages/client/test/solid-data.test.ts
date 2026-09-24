@@ -383,6 +383,197 @@ test("reports optimistic sessions as creating until the request settles", async 
   }
 })
 
+test("preserves a fast Code Mode terminal across outer tool success", async () => {
+  const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
+  const assistant = {
+    id: "msg_codemode",
+    type: "assistant",
+    agent: "build",
+    model: { id: "model", providerID: "provider" },
+    time: { created: 1 },
+    content: [
+      {
+        type: "tool",
+        id: "call_codemode",
+        name: "execute",
+        time: { created: 1, ran: 1 },
+        state: { status: "running", input: { code: "return 1" }, metadata: {} },
+      },
+    ],
+  }
+  const api = OpenCode.make({
+    baseUrl: "http://opencode.local",
+    fetch: async () => Response.json({ data: [assistant], cursor: {} }),
+  })
+  const event: CreateDataInput["event"] = {
+    on: () => () => {},
+    listen(handler) {
+      listeners.add(handler)
+      return () => listeners.delete(handler)
+    },
+  }
+  const setup = createRoot((dispose) => ({
+    data: createData({ api: () => api, directory: "/project", event }),
+    dispose,
+  }))
+
+  try {
+    await setup.data.session.message.sync("ses_codemode")
+    const publish = (details: OpenCodeEvent) =>
+      listeners.forEach((listener) => listener({ name: details.type, details }))
+    publish({
+      id: "evt_codemode_completed",
+      created: 2,
+      type: "session.codemode.completed",
+      durable: { aggregateID: "ses_codemode", seq: 1, version: 1 },
+      data: {
+        sessionID: "ses_codemode",
+        assistantMessageID: assistant.id,
+        id: "call_codemode",
+        executionID: "exe_codemode",
+        events: [{ type: "trace", kind: "return", value: "1" }],
+        output: "1",
+      },
+    })
+    publish({
+      id: "evt_tool_success",
+      created: 3,
+      type: "session.tool.success",
+      durable: { aggregateID: "ses_codemode", seq: 2, version: 2 },
+      data: {
+        sessionID: "ses_codemode",
+        assistantMessageID: assistant.id,
+        id: "call_codemode",
+        content: [{ type: "text", text: "Code Mode execution started." }],
+        metadata: { executionID: "exe_codemode", executionStatus: "running", events: [] },
+        executed: false,
+      },
+    })
+
+    const message = setup.data.session.message.get("ses_codemode", assistant.id)
+    expect(message?.type).toBe("assistant")
+    if (message?.type !== "assistant") throw new Error("Assistant message is unavailable")
+    expect(message.content[0]).toMatchObject({
+      type: "tool",
+      state: {
+        status: "completed",
+        metadata: {
+          executionID: "exe_codemode",
+          executionStatus: "completed",
+          events: [{ type: "trace", kind: "return", value: "1" }],
+          output: "1",
+        },
+      },
+    })
+  } finally {
+    setup.dispose()
+  }
+})
+
+test("refreshes a loaded Code Mode terminal after reconnect misses its event", async () => {
+  const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
+  let failed = false
+  let requests = 0
+  const api = OpenCode.make({
+    baseUrl: "http://opencode.local",
+    fetch: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      const path = new URL(request.url).pathname
+      if (path === "/api/session/active") return Response.json({ data: {} })
+      if (path === "/api/project") return Response.json([])
+      if (path === "/api/location") return Response.json({ directory: "/project" })
+      if (path === "/api/vcs")
+        return Response.json({ location: { directory: "/project" }, data: { branch: "main" } })
+      if (path !== "/api/session/ses_codemode/message") throw new Error("Unexpected request: " + path)
+      requests++
+      return Response.json({
+        data: [
+          {
+            id: "msg_codemode",
+            type: "assistant",
+            agent: "build",
+            model: { id: "model", providerID: "provider" },
+            time: { created: 1 },
+            content: [
+              {
+                type: "tool",
+                id: "call_codemode",
+                name: "execute",
+                time: { created: 1, ran: 1 },
+                state: {
+                  status: "completed",
+                  input: { code: "return await tools.shell({ command: 'sleep 60' })" },
+                  content: [{ type: "text", text: "Code Mode execution started." }],
+                  metadata: failed
+                    ? {
+                        executionID: "exe_codemode",
+                        executionStatus: "error",
+                        events: [],
+                        error: "Execution failed because the server restarted.",
+                      }
+                    : { executionID: "exe_codemode", executionStatus: "running", events: [] },
+                },
+              },
+            ],
+          },
+        ],
+        cursor: {},
+      })
+    },
+  })
+  const setup = createRoot((dispose) => ({
+    data: createData({
+      api: () => api,
+      directory: "/project",
+      event: {
+        on: () => () => {},
+        listen(handler) {
+          listeners.add(handler)
+          return () => listeners.delete(handler)
+        },
+      },
+    }),
+    dispose,
+  }))
+  const connected = { type: "server.connected", data: {} } satisfies OpenCodeEvent
+  const executionStatus = () => {
+    const message = setup.data.session.message.get("ses_codemode", "msg_codemode")
+    if (message?.type !== "assistant") return
+    const tool = message.content[0]
+    if (tool?.type !== "tool") return
+    return tool.state.metadata.executionStatus
+  }
+
+  try {
+    listeners.forEach((listener) => listener({ name: connected.type, details: connected }))
+    await setup.data.session.message.sync("ses_codemode")
+    expect(requests).toBe(1)
+    expect(setup.data.session.message.get("ses_codemode", "msg_codemode")).toMatchObject({
+      content: [{ state: { metadata: { executionStatus: "running" } } }],
+    })
+
+    failed = true
+    listeners.forEach((listener) => listener({ name: connected.type, details: connected }))
+
+    await wait(() => executionStatus() === "error")
+    expect(requests).toBe(2)
+    expect(setup.data.session.message.get("ses_codemode", "msg_codemode")).toMatchObject({
+      content: [
+        {
+          state: {
+            metadata: {
+              executionStatus: "error",
+              error: "Execution failed because the server restarted.",
+            },
+          },
+        },
+      ],
+    })
+  } finally {
+    setup.dispose()
+  }
+})
+
 test("loads bounded message pages", async () => {
   const requests: URL[] = []
   const api = OpenCode.make({

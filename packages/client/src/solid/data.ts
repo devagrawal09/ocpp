@@ -1,7 +1,7 @@
 // Client data layer: apply server events and cache API reads into a Solid store.
 // Prefer straightforward projection. Invalidated reads revalidate serially so an older
-// response cannot commit after its replacement. Reconnect invalidates cached reads;
-// active UI owners decide what to sync again.
+// response cannot commit after its replacement. Reconnect invalidates cached reads and
+// refreshes loaded message tails; active UI owners decide what else to sync again.
 
 import type {
   AgentInfo,
@@ -189,6 +189,7 @@ function createSync() {
 
 export function createData(config: CreateDataInput) {
   const api = config.api
+  let streamConnected = false
 
   const [store, setStore] = createStore<Store>({
     session: {
@@ -526,6 +527,12 @@ export function createData(config: CreateDataInput) {
   function handleEvent(event: OpenCodeEvent) {
     switch (event.type) {
       case "server.connected": {
+        if (streamConnected)
+          Object.keys(store.session.message).forEach((sessionID) => {
+            result.session.message.invalidate(sessionID)
+            void result.session.message.sync(sessionID).catch(() => undefined)
+          })
+        streamConnected = true
         const updates = new Map<string, DataSessionStatus | undefined>()
         activeUpdates = updates
         void api()
@@ -920,6 +927,31 @@ export function createData(config: CreateDataInput) {
           match.state.metadata = event.data.metadata
         })
         return
+      case "session.codemode.started":
+        return
+      case "session.codemode.progress":
+      case "session.codemode.completed":
+      case "session.codemode.failed":
+        message.update(event.data.sessionID, (draft, index) => {
+          const match = message.latestTool(
+            message.assistant(draft, index, event.data.assistantMessageID),
+            event.data.id,
+          )
+          if (!match || match.state.status === "streaming") return
+          match.state.metadata = {
+            ...match.state.metadata,
+            executionID: event.data.executionID,
+            executionStatus:
+              event.type === "session.codemode.progress"
+                ? "running"
+                : event.type === "session.codemode.completed"
+                  ? "completed"
+                  : event.data.status,
+            events: [...event.data.events],
+            ...(event.type === "session.codemode.failed" ? { error: event.data.error } : {}),
+          }
+        })
+        return
       case "session.tool.success":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestTool(
@@ -927,10 +959,14 @@ export function createData(config: CreateDataInput) {
             event.data.id,
           )
           if (match?.state.status !== "running") return
+          const terminal =
+            match.state.metadata.executionStatus !== undefined && match.state.metadata.executionStatus !== "running"
+              ? match.state.metadata
+              : undefined
           match.state = {
             status: "completed",
             input: match.state.input,
-            metadata: event.data.metadata,
+            metadata: terminal ? { ...event.data.metadata, ...terminal } : event.data.metadata,
             content: [...event.data.content],
           }
           match.executed = event.data.executed || match.executed === true
@@ -1119,6 +1155,14 @@ export function createData(config: CreateDataInput) {
         return
       case "permission.replied":
         removePermission(event.data.sessionID, event.data.requestID)
+        return
+      case "form.created":
+        if (event.data.form.sessionID === "global") break
+        if (store.session.form[event.data.form.sessionID]?.some((form) => form.id === event.data.form.id)) return
+        setStore("session", "form", event.data.form.sessionID, [
+          ...(store.session.form[event.data.form.sessionID] ?? []),
+          event.data.form,
+        ])
         return
       case "form.replied":
       case "form.cancelled":

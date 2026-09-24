@@ -1,17 +1,20 @@
 export * as Tool from "./tool.js"
 export { CallID, Content, Error, FileContent, TextContent } from "@opencode-ai/schema/tool"
-export type { Context, Metadata, Options, Result } from "@opencode-ai/schema/tool"
+export type { Context, Info, Metadata, Options, Result } from "@opencode-ai/schema/tool"
 
 import { ToolDefinition, type ToolCall } from "@opencode-ai/ai"
 import { Tool } from "@opencode-ai/schema/tool"
-import { Context, Effect, Layer, Result, Schema, SchemaIssue, Types } from "effect"
+import { Context, Effect, Layer, Result, Schema, SchemaIssue, Scope, Types } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import type { Agent } from "./agent.js"
 import { CodeModeCatalog } from "./codemode/catalog.js"
+import { CodeModeStore } from "./codemode/store.js"
 import { CodeModeTool } from "./codemode/tool.js"
+import { Bus } from "./bus.js"
 import { Image } from "./image.js"
 import { Permission } from "./permission.js"
 import { PluginHooks } from "./plugin/hooks.js"
+import { PluginRuntime } from "./plugin/runtime.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionSchema } from "./session/schema.js"
 import { State } from "./state.js"
@@ -37,7 +40,16 @@ type Data = {
 }
 
 export interface Interface extends State.Transformable<Draft> {
-  readonly snapshot: (permissions?: Permission.Ruleset) => Effect.Effect<Snapshot>
+  readonly registerSession: (
+    sessionID: SessionSchema.ID,
+    tools: ReadonlyArray<Tool.Info>,
+    options?: { readonly input?: Schema.Json },
+  ) => Effect.Effect<State.Registration, RegistrationError>
+  readonly registrations: (
+    permissions?: Permission.Ruleset,
+    sessionID?: SessionSchema.ID,
+  ) => Effect.Effect<ReadonlyArray<Tool.Info>>
+  readonly snapshot: (permissions?: Permission.Ruleset, sessionID?: SessionSchema.ID) => Effect.Effect<Snapshot>
 }
 
 export interface Snapshot {
@@ -61,6 +73,14 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
     const image = yield* Image.Service
+    const bus = yield* Bus.Service
+    const codemodeStore = yield* CodeModeStore.Service
+    const runtime = yield* PluginRuntime.Service
+    const scope = yield* Scope.Scope
+    const sessionTools = new Map<
+      SessionSchema.ID,
+      Array<{ readonly token: symbol; readonly tools: ReadonlyMap<string, Tool.Info>; readonly input?: Schema.Json }>
+    >()
 
     type NormalizedItem = Tool.Content | "decode" | "size"
     const normalizeImages = Effect.fnUntraced(function* (content: ReadonlyArray<Tool.Content>) {
@@ -198,25 +218,94 @@ const layer = Layer.effect(
         ),
     })
 
+    const active = (permissions?: Permission.Ruleset, sessionID?: SessionSchema.ID) => {
+      const tools = new Map<string, Tool.Info>()
+      const rules = permissions ?? []
+      for (const [name, tool] of state.get().tools) {
+        if (whollyDisabled(tool.options?.permission ?? name, rules)) continue
+        tools.set(name, tool)
+      }
+      if (sessionID === undefined) return tools
+      for (const registration of sessionTools.get(sessionID) ?? []) {
+        for (const [name, tool] of registration.tools) {
+          if (whollyDisabled(tool.options?.permission ?? name, rules)) continue
+          tools.set(name, tool)
+        }
+      }
+      return tools
+    }
+
+    const activeInput = (sessionID?: SessionSchema.ID) =>
+      sessionID === undefined
+        ? undefined
+        : (sessionTools.get(sessionID) ?? []).findLast((registration) => registration.input !== undefined)?.input
+
+    const registerSession = Effect.fn("Tool.registerSession")(function* (
+      sessionID: SessionSchema.ID,
+      tools: ReadonlyArray<Tool.Info>,
+      options?: { readonly input?: Schema.Json },
+    ) {
+      const registered = new Map<string, Tool.Info>()
+      for (const tool of tools) {
+        const error = registrationError(tool)
+        if (error) return yield* error
+        const id = effectiveName(tool)
+        if (registered.has(id))
+          return yield* new RegistrationError({ name: id, message: `Duplicate Session tool: ${id}` })
+        registered.set(id, tool)
+      }
+      // Machine input is resolved for the Session by taking the single live registration that
+      // carries it, so two concurrent input-bearing registrations for one Session would silently
+      // cross-wire the wrong value into a child. Refuse the second one instead.
+      if (options?.input !== undefined && (sessionTools.get(sessionID) ?? []).some((item) => item.input !== undefined))
+        return yield* new RegistrationError({
+          name: sessionID,
+          message: `Machine input is already registered for Session: ${sessionID}`,
+        })
+      const token = Symbol(sessionID)
+      sessionTools.set(sessionID, [
+        ...(sessionTools.get(sessionID) ?? []),
+        { token, tools: registered, ...(options?.input === undefined ? {} : { input: options.input }) },
+      ])
+      let disposed = false
+      return {
+        dispose: Effect.sync(() => {
+          if (disposed) return
+          disposed = true
+          const next = (sessionTools.get(sessionID) ?? []).filter((item) => item.token !== token)
+          if (next.length === 0) sessionTools.delete(sessionID)
+          else sessionTools.set(sessionID, next)
+        }),
+      }
+    })
+
     return Service.of({
       transform: state.transform,
       reload: state.reload,
-      snapshot: Effect.fn("Tool.snapshot")((permissions) =>
+      registerSession,
+      registrations: Effect.fn("Tool.registrations")((permissions, sessionID) =>
+        Effect.sync(() => Array.from(active(permissions, sessionID).values())),
+      ),
+      snapshot: Effect.fn("Tool.snapshot")((permissions, sessionID) =>
         Effect.sync(() => {
-          const active = new Map<string, Tool.Info>()
+          const registrations = active(permissions, sessionID)
           const rules = permissions ?? []
-          for (const [name, tool] of state.get().tools) {
-            if (whollyDisabled(tool.options?.permission ?? name, rules)) continue
-            active.set(name, tool)
-          }
-          const direct = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode === false))
-          const codemode = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode !== false))
+          const direct = new Map(
+            Array.from(registrations).filter(
+              ([, tool]) => tool.options?.codemode === false || tool.options?.codemode === "both",
+            ),
+          )
+          const codemode = new Map(Array.from(registrations).filter(([, tool]) => tool.options?.codemode !== false))
           const codemodeEnabled = !whollyDisabled("execute", rules)
           const codemodeTool = codemodeEnabled
-            ? CodeModeTool.create(codemode, (name, tool, input, context) =>
-                beforeExecute(name, input, context).pipe(
-                  Effect.flatMap((event) => executeTool(tool, name, event.input, context)),
-                ),
+            ? CodeModeTool.create(
+                codemode,
+                (name, tool, input, context) =>
+                  beforeExecute(name, input, context).pipe(
+                    Effect.flatMap((event) => executeTool(tool, name, event.input, context)),
+                  ),
+                { bus, jobs: runtime.job, sessions: runtime.session, store: codemodeStore, scope },
+                activeInput(sessionID),
               )
             : undefined
           const codeModeCatalog = codemodeEnabled ? CodeModeTool.catalog(codemode) : undefined
@@ -274,8 +363,10 @@ function registrationError(tool: Tool.Info) {
   const name = normalizedName(tool)
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) return new RegistrationError({ name, message: `Invalid tool name: ${name}` })
   const id = effectiveName(tool)
-  if (tool.options?.codemode === false && id === "execute")
-    return new RegistrationError({ name: id, message: 'Tool name "execute" is reserved for CodeMode' })
+  if ((tool.options?.codemode === false || tool.options?.codemode === "both") && id === "execute")
+    return new RegistrationError({ name: id, message: "Tool name is reserved for Code Mode: " + id })
+  if (tool.options?.codemode !== false && id === "search")
+    return new RegistrationError({ name: id, message: "Tool name is reserved for Code Mode: " + id })
   const result = Result.try({
     try: () => ToolDefinition.make(definition(tool)),
     catch: (error) =>
@@ -287,5 +378,5 @@ function registrationError(tool: Tool.Info) {
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, Image.node],
+  deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node],
 })

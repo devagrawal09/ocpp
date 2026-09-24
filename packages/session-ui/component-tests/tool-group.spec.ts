@@ -1,5 +1,67 @@
 import { expect, story } from "../../storybook/playwright/story"
 
+for (const { width, direction } of [
+  { width: 840, direction: "ltr" },
+  { width: 390, direction: "rtl" },
+] as const) {
+  story(`renders one ordered Code Mode trace at ${width}px in ${direction}`, async ({ mount, page }) => {
+    await page.setViewportSize({ width, height: 600 })
+    const root = await mount("current-tool-group--code-mode-trace")
+    await root.evaluate((element, dir) => element.setAttribute("dir", dir), direction)
+    const group = root.locator('[data-component="collapsed-tool-group"]')
+    await expect(group.getByRole("button", { name: "Executed 8 steps", exact: true })).toBeVisible()
+    await expect(group.locator('[data-slot="context-tool-group-prefix"]')).toHaveText("8 steps")
+    const source = group.getByRole("button", { name: "Source", exact: true })
+    const trace = group.getByRole("button", { name: "Execution trace", exact: true })
+    await expect(source).toHaveAttribute("aria-expanded", "false")
+    await expect(trace).toHaveAttribute("aria-expanded", "true")
+    const rows = group.locator('[data-slot="context-tool-group-item"]')
+    await expect(rows).toHaveCount(8)
+    await expect(rows).toHaveText([
+      /Assignedfiles= \[package.json, src\] \(24 items\)/,
+      /Mapped24 items-> 24 paths/,
+      /Condition metfiles\.length > 0/,
+      /Called `search`.*package metadata/,
+      /Assignedreader= tools.read/,
+      /Read.*package.json/,
+      /LoggedLoaded package opencode/,
+      /Final result\{ total: 1482 \}/,
+    ])
+    await expect(root.locator('[data-timeline-part-id="codemode_execute"]')).toHaveCount(0)
+    await expect(root.locator('[data-timeline-part-id="codemode_execute:3"]')).toBeVisible()
+    await expect(root.locator('[data-component="codemode-trace"]').first()).toHaveCSS("direction", direction)
+    await source.click()
+    await trace.click()
+    await expect(source).toHaveAttribute("aria-expanded", "true")
+    await expect(trace).toHaveAttribute("aria-expanded", "false")
+    await expect(group.locator('[data-component="highlighted-code"]')).toBeVisible()
+    await expect(rows).not.toBeVisible()
+  })
+}
+
+story("renders parallel Execute calls together without completion notices", async ({ mount }) => {
+  const root = await mount("current-session-terminal-work--parallel-code-mode")
+  const groups = root.locator('[data-component="collapsed-tool-group"]')
+  await expect(groups).toHaveCount(1)
+  const executed = groups.getByRole("button", { name: "Executed 9 steps", exact: true })
+  await expect(executed).toBeVisible()
+  await expect(groups.locator('[data-slot="context-tool-group-prefix"]')).toHaveText("9 steps")
+  await expect(root.getByText("Code Mode execution", { exact: true })).toHaveCount(0)
+  expect(await groups.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-timeline-part-ids")))).toEqual(
+    [
+      "parallel_execute_a:0,parallel_execute_a:1,parallel_execute_a:2,parallel_execute_b:0,parallel_execute_b:1,parallel_execute_b:2,parallel_execute_c:0,parallel_execute_c:1,parallel_execute_c:2",
+    ],
+  )
+  await executed.click()
+  const trace = groups.locator('[data-component="codemode-trace-content"]')
+  await expect(trace.locator('[data-slot="context-tool-group-item"]')).toHaveCount(9)
+  await expect(trace).toHaveCSS("gap", "0px")
+  await groups.getByRole("button", { name: "Source", exact: true }).click()
+  await expect(groups.locator('[data-component="highlighted-code"]')).toContainText(
+    /return tools\.taska\(\)\s*return tools\.taskb\(\)\s*return tools\.taskc\(\)/,
+  )
+})
+
 for (const reasoningDefaultOpen of [false, true]) {
   story(
     `keeps ordered thoughts and tool-only counts with reasoning ${reasoningDefaultOpen ? "expanded" : "collapsed"}`,

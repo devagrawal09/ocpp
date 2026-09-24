@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 import { type LLMEvent, type ProviderMetadata, type ToolResultValue } from "@opencode-ai/ai"
 import type { Agent } from "@opencode-ai/schema/agent"
 import type { Model } from "@opencode-ai/schema/model"
@@ -325,7 +326,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
       assistantMessageID,
       id,
       error:
-        tool.name === "subagent" && error.type === "aborted" && typeof tool.progress?.sessionID === "string"
+        Delegation.isTool(tool.name) && error.type === "aborted" && typeof tool.progress?.sessionID === "string"
           ? { ...error, message: `${error.message} (sessionID: ${tool.progress.sessionID})` }
           : error,
       ...failureSnapshot(tool, metadata),

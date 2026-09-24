@@ -3,13 +3,14 @@ import { realpathSync } from "node:fs"
 import os from "os"
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Queue, Scope, Stream } from "effect"
+import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect"
 import { Money } from "@opencode-ai/schema/money"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { makeGlobalNode, makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { filesystem } from "@opencode-ai/util/effect/app-node-platform"
 import { Database } from "@opencode-ai/core/database/database"
+import { CodeModeStore } from "@opencode-ai/core/codemode/store"
 import { Bus } from "@opencode-ai/core/bus"
 import { Config } from "@opencode-ai/core/config"
 import { Environment } from "@opencode-ai/core/environment/index"
@@ -44,7 +45,15 @@ import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
 import { Expected } from "./lib/session-message"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import {
+  executeTool,
+  readCodeModeNotebook,
+  seedToolSession,
+  registerToolPlugin,
+  toolDefinitions,
+  toolIdentity,
+  waitForCodeMode,
+} from "./lib/tool"
 
 const sessionID = Session.ID.make("ses_shell_tool_test")
 const sessionModel = Model.Ref.make({ id: Model.ID.make("test"), providerID: Provider.ID.make("test") })
@@ -145,6 +154,7 @@ const shellPluginSupervisor = makeLocationNode({
 
 const nodes = LayerNode.group([
   Database.node,
+  CodeModeStore.node,
   Bus.node,
   Job.node,
   Session.node,
@@ -704,7 +714,7 @@ describe("ShellTool ordinary shell syntax", () => {
 })
 
 describe("ShellTool", () => {
-  it.live("returns both parallel CodeMode shell results", () =>
+  it.live("returns both sequential Code Mode shell results", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => {
@@ -716,6 +726,7 @@ describe("ShellTool", () => {
                 tool.options = { ...tool.options, codemode: true }
               }),
             )
+            yield* seedToolSession(sessionID, toolIdentity.messageID)
             const command = isWindows ? helloCommand : `${helloCommand}; sleep 0.1`
             const inputs = ["one", "two"].map((text) => JSON.stringify({ command: command.replace("hello", text) }))
             const result = yield* executeTool(registry, {
@@ -725,14 +736,23 @@ describe("ShellTool", () => {
                 type: "tool-call",
                 id: "call-parallel-shells",
                 name: "execute",
-                input: { code: `return await Promise.all([tools.shell(${inputs[0]}), tools.shell(${inputs[1]})])` },
+                input: { code: `const shells = [tools.shell(${inputs[0]}), tools.shell(${inputs[1]})]` },
               },
             }).pipe(Effect.timeout("3 seconds"))
             expect(result.status).toBe("completed")
-            expect(JSON.parse(result.output.output)).toEqual([
-              { output: "one", exit: 0, truncated: false, status: "completed" },
-              { output: "two", exit: 0, truncated: false, status: "completed" },
-            ])
+            expect(
+              yield* waitForCodeMode(result.output, {
+                sessionID,
+                assistantMessageID: toolIdentity.messageID,
+                id: "call-parallel-shells",
+              }),
+            ).toMatchObject({ status: "saved", saved: ["shells"] })
+            expect(yield* readCodeModeNotebook(sessionID)).toMatchObject({
+              shells: [
+                { output: "one", exit: 0, truncated: false, status: "completed" },
+                { output: "two", exit: 0, truncated: false, status: "completed" },
+              ],
+            })
           }),
         )
       },
@@ -1572,56 +1592,4 @@ describe("ShellTool", () => {
       ),
     )
   }
-
-  it.live("backgrounds a foreground command when the session is signaled", () =>
-    Effect.acquireUseRelease(
-      Effect.promise(() => tmpdir()),
-      (tmp) => {
-        reset()
-        return withSession(tmp.path, (registry) =>
-          Effect.gen(function* () {
-            const jobs = yield* Job.Service
-            const scope = yield* Scope.Scope
-            const waiting = yield* executeTool(
-              registry,
-              call({ command: idleCommand, timeout: 50 }, "call-background-signal"),
-            ).pipe(Effect.forkIn(scope, { startImmediately: true }))
-
-            const backgroundWhenReady = (remaining = 1000): Effect.Effect<Job.Info[], Error> =>
-              Effect.gen(function* () {
-                const backgrounded = yield* jobs.backgroundAll({ sessionID })
-                if (backgrounded.length > 0) return backgrounded
-                if (remaining <= 0) return yield* Effect.fail(new Error("Timed out waiting for foreground shell job"))
-                yield* Effect.promise(() => Bun.sleep(1))
-                return yield* backgroundWhenReady(remaining - 1)
-              })
-            const backgrounded = yield* backgroundWhenReady()
-            const settled = yield* Fiber.join(waiting)
-            const shellID = typeof settled.metadata?.shellID === "string" ? settled.metadata.shellID : undefined
-            expect(backgrounded).toMatchObject([{ id: shellID, type: "shell" }])
-            expect(settled.metadata).toMatchObject({ truncated: false })
-            expect(shellID).toStartWith("sh_")
-
-            const shell = yield* Shell.Service
-            if (!shellID) return
-            const id = ShellSchema.ID.make(shellID)
-            const info = yield* shell.get(id)
-            expect(settled.content?.[0]).toEqual({
-              type: "text",
-              text: `Command moved to the background (shell ID: ${shellID}).\nOutput is streaming to: ${info.file}`,
-            })
-            expect(settled.content?.[1]).toEqual({
-              type: "text",
-              text: "You will be notified automatically when the command finishes. The notification will include the command's output. DO NOT run sleep commands or poll the output file to check for completion. You can read from the file when its current output would be useful, such as when inspecting logs from a background server. Otherwise, continue with other work or end your response.",
-            })
-            yield* Effect.sleep(Duration.millis(100))
-            expect((yield* shell.get(id)).status).toBe("running")
-            expect((yield* shell.list()).map((info) => info.id)).toContain(id)
-            yield* shell.remove(id)
-          }),
-        )
-      },
-      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]().then(() => undefined)),
-    ),
-  )
 })

@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 import {
   batch,
   createContext,
@@ -1736,7 +1737,7 @@ function BackgroundToolHint(props: { messages: SessionMessageInfo[] }) {
     const part = current?.content.find((part): part is SessionMessageAssistantTool => {
       if (part.type !== "tool" || part.state.status !== "running") return false
       const name = canonicalToolName(part.name)
-      return name === "shell" || name === "subagent"
+      return name === "shell" || Delegation.isTool(name)
     })
     if (!current || !part) return
     return { key: `${current.id}:${part.id}`, started: part.time.ran ?? part.time.created }
@@ -2727,7 +2728,7 @@ function ToolPart(props: { part: SessionMessageAssistantTool; images?: boolean }
       <Match when={display() === "edit"}>
         <Edit {...toolprops} />
       </Match>
-      <Match when={display() === "subagent"}>
+      <Match when={Delegation.isTool(display())}>
         <Subagent {...toolprops} />
       </Match>
       <Match when={display() === "execute"}>
@@ -3486,24 +3487,109 @@ export function isBackgroundSubagent(
   return status === "completed" && metadata.status === "running"
 }
 
-type ExecuteCall = { tool: string; status: "running" | "completed" | "error"; input?: Record<string, unknown> }
+type ExecuteCall = { type: "tool"; tool: string; status: "running" | "completed" | "error"; input?: Record<string, unknown> }
+type ExecuteTrace =
+  | { type: "trace"; kind: "assignment"; target: string; value: string }
+  | { type: "trace"; kind: "branch"; expression: string; result: boolean }
+  | { type: "trace"; kind: "operation"; operation: string; input: string; output: string }
+  | { type: "trace"; kind: "log"; method: string; message: string }
+  | { type: "trace"; kind: "return"; value: string }
+type ExecuteEvent = ExecuteCall | ExecuteTrace
 
-function executeCalls(value: unknown): ExecuteCall[] {
+function executeEvents(value: unknown): ExecuteEvent[] {
   if (!Array.isArray(value)) return []
-  return value.flatMap((call) => {
-    const item = recordValue(call)
-    const tool = stringValue(item?.tool)
-    const status = stringValue(item?.status)
-    if (!tool || !status || !["running", "completed", "error"].includes(status)) return []
-    return [{ tool, status: status as ExecuteCall["status"], input: recordValue(item?.input) }]
+  return value.flatMap((event): ExecuteEvent[] => {
+    const item = recordValue(event)
+    if (item?.type === "tool") {
+      const tool = stringValue(item.tool)
+      const status = stringValue(item.status)
+      if (!tool || !status || !["running", "completed", "error"].includes(status)) return []
+      return [{ type: "tool", tool, status: status as ExecuteCall["status"], input: recordValue(item.input) }]
+    }
+    if (item?.type !== "trace") return []
+    const kind = stringValue(item.kind)
+    if (kind === "assignment") {
+      const target = stringValue(item.target)
+      const value = stringValue(item.value)
+      return target !== undefined && value !== undefined ? [{ type: "trace", kind, target, value }] : []
+    }
+    if (kind === "branch") {
+      const expression = stringValue(item.expression)
+      return expression !== undefined && typeof item.result === "boolean"
+        ? [{ type: "trace", kind, expression, result: item.result }]
+        : []
+    }
+    if (kind === "operation") {
+      const operation = stringValue(item.operation)
+      const input = stringValue(item.input)
+      const output = stringValue(item.output)
+      return operation !== undefined && input !== undefined && output !== undefined
+        ? [{ type: "trace", kind, operation, input, output }]
+        : []
+    }
+    if (kind === "log") {
+      const method = stringValue(item.method)
+      const message = stringValue(item.message)
+      return method !== undefined && message !== undefined ? [{ type: "trace", kind, method, message }] : []
+    }
+    if (kind === "return") {
+      const value = stringValue(item.value)
+      return value !== undefined ? [{ type: "trace", kind, value }] : []
+    }
+    return []
   })
 }
 
-export function executeCallSummary(call: ExecuteCall) {
+export function executeCallSummary(call: Omit<ExecuteCall, "type">) {
   const args = primitiveInputSummary(call.input ?? {}).replace(/\s+/g, " ")
   return `${call.tool}${args ? ` ${args}` : ""}`
 }
 
+export function executeTraceSummary(trace: ExecuteTrace) {
+  switch (trace.kind) {
+    case "assignment":
+      return `Set ${trace.target} = ${trace.value}`
+    case "branch":
+      return `${trace.result ? "Matched" : "Skipped"} ${trace.expression}`
+    case "operation":
+      return `${trace.operation} ${trace.input} -> ${trace.output}`
+    case "log":
+      return `${trace.method} ${trace.message}`
+    case "return":
+      return `Return ${trace.value}`
+  }
+}
+
+function ExecuteEventView(props: { event: Accessor<ExecuteEvent> }) {
+  const call = createMemo(() => {
+    const event = props.event()
+    return event.type === "tool" ? event : undefined
+  })
+  const trace = createMemo(() => {
+    const event = props.event()
+    return event.type === "trace" ? event : undefined
+  })
+  return (
+    <Switch>
+      <Match when={call()}>{(item) => <ExecuteCallView call={item} />}</Match>
+      <Match when={trace()}>{(item) => <ExecuteTraceView trace={item} />}</Match>
+    </Switch>
+  )
+}
+
+function ExecuteTraceView(props: { trace: Accessor<ExecuteTrace> }) {
+  const theme = useTheme()
+  return (
+    <box paddingLeft={3} flexDirection="row">
+      <box width={INLINE_TOOL_ICON_WIDTH} flexShrink={0}>
+        <text fg={theme.text.subdued}>·</text>
+      </box>
+      <text flexGrow={1} wrapMode="none" truncate fg={theme.text.subdued}>
+        {executeTraceSummary(props.trace())}
+      </text>
+    </box>
+  )
+}
 function ExecuteCallView(props: { call: Accessor<ExecuteCall> }) {
   const theme = useTheme()
   const renderer = useRenderer()
@@ -3560,17 +3646,33 @@ function ExecuteCallView(props: { call: Accessor<ExecuteCall> }) {
 function Execute(props: ToolProps) {
   const ctx = use()
   const theme = useTheme()
-  const isLoading = createMemo(() => props.part.state.status === "streaming" || props.part.state.status === "running")
-  const calls = createMemo(() => executeCalls(props.metadata.toolCalls))
+  const executionStatus = createMemo(() => stringValue(props.metadata.executionStatus))
+  const isLoading = createMemo(
+    () =>
+      props.part.state.status === "streaming" ||
+      props.part.state.status === "running" ||
+      executionStatus() === "running",
+  )
+  const events = createMemo(() => executeEvents(props.metadata.events))
   const output = createMemo(() => stripAnsi(props.output?.trim() ?? ""))
-  const hasRuntimeError = createMemo(() => props.metadata.error === true || props.part.state.status === "error")
-  const outputPreview = createMemo(() => collapseToolOutput(output(), 4, 4 * Math.max(20, ctx.width - 6)).output)
-  const showOutput = createMemo(() => output() && hasRuntimeError())
+  const errorOutput = createMemo(() => stringValue(props.metadata.error))
+  const hasRuntimeError = createMemo(
+    () =>
+      props.metadata.error === true ||
+      props.part.state.status === "error" ||
+      executionStatus() === "error" ||
+      executionStatus() === "cancelled",
+  )
+  const failureOutput = createMemo(() => errorOutput() ?? output())
+  const outputPreview = createMemo(() =>
+    collapseToolOutput(failureOutput(), 4, 4 * Math.max(20, ctx.width - 6)).output,
+  )
+  const showOutput = createMemo(() => failureOutput() && hasRuntimeError())
 
   return (
     <>
       <InlineTool
-        icon={hasRuntimeError() ? "✗" : props.part.state.status === "completed" ? "✓" : "│"}
+        icon={hasRuntimeError() ? "✗" : isLoading() ? "│" : "✓"}
         color={hasRuntimeError() ? theme.text.feedback.error.default : undefined}
         spinner={isLoading()}
         pending="execute"
@@ -3579,7 +3681,7 @@ function Execute(props: ToolProps) {
       >
         execute
       </InlineTool>
-      <Index each={calls()}>{(call) => <ExecuteCallView call={call} />}</Index>
+      <Index each={events()}>{(event) => <ExecuteEventView event={event} />}</Index>
       <Show when={showOutput()}>
         <box paddingLeft={3}>
           <For each={outputPreview().split("\n")}>

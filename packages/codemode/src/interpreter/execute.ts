@@ -1,13 +1,11 @@
-import { parse } from "acorn"
-import { Cause, Effect, Scope } from "effect"
-// #transpile: conditional import — full typescript on node/bun, an identity
-// pass-through on workerd (the compiler is ~11 MiB and can't init there).
-import { transpile } from "#transpile"
+import { Cause, Duration, Effect, Scope } from "effect"
+import { compile } from "../compiler.js"
+import { decodeProgram } from "../ir.js"
 import type { DataValue, Diagnostic, ExecuteOptions, ResolvedExecutionLimits, Result } from "../codemode.js"
 import { copyIn, copyOut, ToolRuntime, type Services } from "../tool-runtime.js"
 import type { Tools } from "../tools.js"
+import { defaultDurableLimits, encodeDeclarations } from "./durable.js"
 import { normalizeError } from "./errors.js"
-import { InterpreterRuntimeError, isRecord, type ProgramNode } from "./model.js"
 import { PromiseRuntime } from "./promises.js"
 import { Interpreter } from "./runtime.js"
 
@@ -23,6 +21,16 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
       toolCalls: [],
     })
   }
+  // A supplied program may have been persisted by an earlier host, so it is decoded before anything
+  // else: the interpreter only ever evaluates a program this boundary accepted.
+  const decoded = options.program === undefined ? undefined : decodeProgram(options.program)
+  if (decoded?.ok === false) {
+    return Effect.succeed({
+      ok: false,
+      error: { kind: "ExecutionFailure", message: decoded.message },
+      toolCalls: [],
+    })
+  }
 
   // Allocate execution state inside suspension so reused Effects never share it.
   return Effect.suspend(() => {
@@ -31,35 +39,55 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
       limits.maxToolCalls,
       searchIndex,
       {
-        onToolCallStart: options.onToolCallStart,
-        onToolCallEnd: options.onToolCallEnd,
+        onToolCallStart: (call) => options.onToolCallStart?.(call) ?? Effect.void,
+        onToolCallEnd: (call) => options.onToolCallEnd?.(call) ?? Effect.void,
       },
     )
     const logs: Array<string> = []
     const logged = () => (logs.length > 0 ? { logs: [...logs] } : {})
-    // Set only after copy-out so timeouts cannot report invalid values as completed.
-    let returned: { value: DataValue; promises: PromiseRuntime<Services<Provided>> } | undefined
+    // Set only after copy-out and encoding so timeouts cannot report invalid values as completed.
+    let returned:
+      | {
+          value: DataValue
+          declarations: Record<string, DataValue>
+          promises: PromiseRuntime<Services<Provided>>
+        }
+      | undefined
 
-    const base = Effect.acquireUseRelease(
+    const base: Effect.Effect<Result, unknown, Services<Provided>> = Effect.acquireUseRelease(
       Scope.make("parallel"),
       (scope) =>
         Effect.gen(function* () {
-          const program = parseProgram(options.code)
+          const parsed = decoded?.program ?? compile(options.code)
           const promises = new PromiseRuntime<Services<Provided>>(scope)
+          const input = options.input === undefined ? undefined : copyIn(options.input, "Execution input")
           const interpreter = new Interpreter<Services<Provided>>(
             tools.execute,
             tools.search,
             tools.keys,
             promises,
             logs,
+            options.onTrace,
+            parsed.source,
+            true,
+            options.bindings,
+            input,
+            parsed.declarations,
           )
-          const value = yield* interpreter.run(program)
-          const result = copyOut(copyIn(value, "Execution result"), "nullify") as DataValue
-          returned = { value: result, promises }
-          const warnings = yield* promises.interrupt()
+          const executed = yield* interpreter.run(parsed.body)
+          const result = copyOut(copyIn(executed.value, "Execution preview"), "nullify") as DataValue
+          // Saving happens before the execution reports success, so an invalid durable value fails
+          // the execution instead of surprising the host at commit.
+          const declarations = encodeDeclarations(executed.declarations, interpreter.notebook(), {
+            maxDepth: defaultDurableLimits.maxDepth,
+            maxBytes: limits.maxDeclarationBytes,
+          }) as Record<string, DataValue>
+          returned = { value: result, declarations, promises }
+          const warnings = [...(parsed.warnings ?? []), ...(yield* promises.interrupt())]
           return {
             ok: true,
             value: result,
+            declarations,
             ...(warnings.length > 0 ? { warnings } : {}),
             ...logged(),
             toolCalls: tools.calls,
@@ -68,38 +96,39 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
       (scope, exit) => Scope.close(scope, exit),
     )
     const timeoutMs = limits.timeoutMs
+    const expired = () =>
+      Effect.sync(() => {
+        if (returned === undefined) {
+          return {
+            ok: false,
+            error: { kind: "TimeoutExceeded", message: `Execution timed out after ${timeoutMs}ms.` },
+            ...logged(),
+            toolCalls: tools.calls,
+          } satisfies Result
+        }
+        // The declarations were already encoded successfully, so only the interruption of leftover
+        // background work is new information. Keep the timeout warning first so truncation
+        // preserves it.
+        return {
+          ok: true,
+          value: returned.value,
+          declarations: returned.declarations,
+          warnings: [
+            {
+              kind: "TimeoutExceeded",
+              message: `The program returned, but background work was still running at the ${timeoutMs}ms timeout and was interrupted. Await all started promises.`,
+            },
+            ...returned.promises.diagnostics(),
+          ],
+          ...logged(),
+          toolCalls: tools.calls,
+        } satisfies Result
+      })
     const operation =
       timeoutMs === undefined
         ? base
-        : base.pipe(
-            Effect.timeoutOrElse({
-              duration: timeoutMs,
-              orElse: () =>
-                Effect.sync(() => {
-                  if (returned === undefined) {
-                    return {
-                      ok: false,
-                      error: { kind: "TimeoutExceeded", message: `Execution timed out after ${timeoutMs}ms.` },
-                      ...logged(),
-                      toolCalls: tools.calls,
-                    } satisfies Result
-                  }
-                  // Keep the timeout warning first so truncation preserves it.
-                  return {
-                    ok: true,
-                    value: returned.value,
-                    warnings: [
-                      {
-                        kind: "TimeoutExceeded",
-                        message: `The program returned, but background work was still running at the ${timeoutMs}ms timeout and was interrupted. Await all started promises.`,
-                      },
-                      ...returned.promises.diagnostics(),
-                    ],
-                    ...logged(),
-                    toolCalls: tools.calls,
-                  } satisfies Result
-                }),
-            }),
+        : Effect.flatMap(raceDeadline(Effect.sleep(Duration.millis(timeoutMs)), base), (outcome) =>
+            outcome.kind === "expired" ? expired() : Effect.succeed(outcome.value),
           )
 
     return operation.pipe(
@@ -114,35 +143,24 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             } satisfies Result),
       ),
       Effect.map((result) =>
-        limits.maxOutputBytes === undefined ? result : boundOutput(result, limits.maxOutputBytes),
+        limits.maxOutputBytes === undefined
+          ? result
+          : boundOutput(result, limits.maxOutputBytes, limits.maxLogBytes ?? limits.maxOutputBytes),
       ),
     )
   })
 }
 
-const parseProgram = (code: string): ProgramNode => {
-  const transpiled = transpile(`async function __codemode__() {\n${code}\n}`)
-
-  if (transpiled.error !== undefined) {
-    throw new InterpreterRuntimeError(`Failed to parse TypeScript: ${transpiled.error}`, undefined, "ParseError")
-  }
-
-  const bodyStart = transpiled.outputText.indexOf("{") + 1
-  const bodyEnd = transpiled.outputText.lastIndexOf("}")
-  const executableCode = transpiled.outputText.slice(bodyStart, bodyEnd)
-  const parsed = parse(executableCode, {
-    ecmaVersion: "latest",
-    sourceType: "script",
-    allowReturnOutsideFunction: true,
-    allowAwaitOutsideFunction: true,
-    locations: true,
-  }) as unknown
-
-  if (!isRecord(parsed) || parsed.type !== "Program" || !Array.isArray(parsed.body)) {
-    throw new InterpreterRuntimeError("Failed to parse script as a Program node.")
-  }
-
-  return parsed as ProgramNode
+// raceFirst interrupts the loser and waits for its interruption, so an expired
+// deadline still waits for tool cleanup before the result is reported.
+function raceDeadline<A, E, R>(
+  timer: Effect.Effect<void>,
+  base: Effect.Effect<A, E, R>,
+): Effect.Effect<{ kind: "completed"; value: A } | { kind: "expired" }, E, R> {
+  return Effect.raceFirst(
+    base.pipe(Effect.map((value) => ({ kind: "completed" as const, value }))),
+    timer.pipe(Effect.as({ kind: "expired" as const })),
+  )
 }
 
 const utf8ByteLength = (value: string): number => new TextEncoder().encode(value).byteLength
@@ -156,7 +174,7 @@ const utf8Truncate = (value: string, maxBytes: number): string => {
 }
 
 // Warnings have a separate budget so result data cannot starve diagnostics.
-const boundOutput = (result: Result, maxOutputBytes: number): Result => {
+const boundOutput = (result: Result, maxOutputBytes: number, maxLogBytes: number): Result => {
   let truncated = false
 
   let value: DataValue = null
@@ -193,7 +211,7 @@ const boundOutput = (result: Result, maxOutputBytes: number): Result => {
 
   const logs = result.logs ?? []
   const kept: Array<string> = []
-  const logBudget = Math.max(0, maxOutputBytes - valueBytes)
+  const logBudget = Math.min(maxLogBytes, Math.max(0, maxOutputBytes - valueBytes))
   let logBytes = 0
   for (const line of logs) {
     const lineBytes = utf8ByteLength(line) + 1
@@ -213,6 +231,7 @@ const boundOutput = (result: Result, maxOutputBytes: number): Result => {
     ? {
         ok: true,
         value,
+        declarations: result.declarations,
         ...warningsPart,
         ...logsPart,
         truncated: true,

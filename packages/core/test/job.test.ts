@@ -10,6 +10,45 @@ import { testEffect } from "./lib/effect"
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Job.node, KV.node])))
 
 describe("Job", () => {
+  it.live("atomically limits and cancels work owned by a Session", () =>
+    Effect.gen(function* () {
+      const jobs = yield* Job.Service
+      const parent = SessionSchema.ID.make("ses_limited_jobs")
+      const latch = yield* Deferred.make<void>()
+      const admitted = yield* Effect.forEach(Array.from({ length: 4 }), (_, index) =>
+        jobs.startLimited({
+          id: "job_limited_" + index,
+          type: "codemode",
+          ownerSessionID: parent,
+          maxConcurrent: 4,
+          run: Deferred.await(latch).pipe(Effect.as("done-" + index)),
+        }),
+      )
+      expect(admitted.every((job) => job?.status === "running")).toBe(true)
+      expect(
+        yield* jobs.startLimited({
+          id: "job_limited_rejected",
+          type: "codemode",
+          ownerSessionID: parent,
+          maxConcurrent: 4,
+          run: Effect.never,
+        }),
+      ).toBeUndefined()
+
+      expect(yield* jobs.cancelAll({ ownerSessionID: parent, type: "codemode" })).toHaveLength(4)
+      expect(
+        yield* jobs.startLimited({
+          id: "job_limited_after_cancel",
+          type: "codemode",
+          ownerSessionID: parent,
+          maxConcurrent: 4,
+          run: Effect.never,
+        }),
+      ).toMatchObject({ status: "running" })
+      yield* jobs.cancelAll({ ownerSessionID: parent })
+    }),
+  )
+
   it.live("tracks process-local work through explicit observation", () =>
     Effect.gen(function* () {
       const jobs = yield* Job.Service
@@ -180,6 +219,8 @@ describe("Job", () => {
       })
       if (!completed) return yield* Effect.die("background marker missing")
 
+      yield* jobs.markBackgroundTerminal(completed.notificationID)
+      expect((yield* jobs.pendingBackground).find((item) => item.id === job.id)?.terminal).toBe(true)
       yield* jobs.completeBackground(completed.notificationID)
       expect((yield* jobs.pendingBackground).find((item) => item.id === job.id)).toBeUndefined()
     }),

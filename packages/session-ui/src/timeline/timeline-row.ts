@@ -18,6 +18,11 @@ export type PartGroup =
     }
   | {
       key: string
+      type: "reasoning"
+      refs: PartRef[]
+    }
+  | {
+      key: string
       type: "file"
       refs: PartRef[]
     }

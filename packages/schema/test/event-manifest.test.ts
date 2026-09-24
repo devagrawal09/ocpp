@@ -112,6 +112,9 @@ describe("public event manifest", () => {
     expect(Array.from(EventManifest.Durable.keys()).toSorted()).toEqual(
       [
         "session.created.1",
+        "session.external.bound.1",
+        "session.external.linked.1",
+        "session.external.checkpointed.1",
         "session.deleted.2",
         "session.agent.selected.1",
         "session.model.selected.1",
@@ -145,6 +148,9 @@ describe("public event manifest", () => {
         "session.tool.called.1",
         "session.tool.success.2",
         "session.tool.failed.2",
+        "session.codemode.started.1",
+        "session.codemode.completed.1",
+        "session.codemode.failed.1",
         "session.reasoning.started.1",
         "session.reasoning.ended.1",
         "session.retry.scheduled.1",
@@ -170,6 +176,8 @@ describe("public event manifest", () => {
     expect(SessionEvent.UsageUpdated.durability).toBe("ephemeral")
     expect(SessionEvent.Compaction.Delta.durability).toBe("ephemeral")
     expect(SessionEvent.Tool.Progress.durability).toBe("ephemeral")
+    expect(SessionEvent.CodeMode.Progress.durability).toBe("ephemeral")
+    expect(EventManifest.Server.get("session.codemode.progress")).toBe(SessionEvent.CodeMode.Progress)
     expect(EventManifest.Server.get("session.tool.progress")).toBe(SessionEvent.Tool.Progress)
     expect(EventManifest.Durable.has("session.compaction.delta.1")).toBe(false)
     expect(EventManifest.ServerDefinitions).toContain(SessionEvent.UsageUpdated)

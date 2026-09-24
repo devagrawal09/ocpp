@@ -278,7 +278,7 @@ const RecoverFromToolFailures = {
       if (name === "patch") return { patchText: "Update src/error.ts" }
       if (name === "webfetch") return { url: "https://example.com" }
       if (name === "websearch") return { query: "failure" }
-      if (name === "subagent") return { description: "Fail subagent", agent: "explore", prompt: "Inspect." }
+      if (name === "subagent") return { description: "Fail subagent", agent: "explore", message: "Inspect." }
       if (name === "skill") return { name: "failure" }
       return { target: "failure" }
     }

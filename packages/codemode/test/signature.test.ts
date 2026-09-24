@@ -345,7 +345,7 @@ describe("JSDoc signatures in catalogs and search results", () => {
   const runtime = CodeMode.make({ tools: { github: { list_issues: listIssues }, orders: { lookup: lookupOrder } } })
 
   const search = async (query: string) => {
-    const result = await Effect.runPromise(runtime.execute(`return search({ query: ${JSON.stringify(query)} })`))
+    const result = await Effect.runPromise(runtime.execute(`return tools.search({ query: ${JSON.stringify(query)} })`))
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error("search failed")
     return result.value as { items: Array<{ path: string; signature: string }>; remaining: number }
@@ -373,7 +373,7 @@ describe("JSDoc signatures in catalogs and search results", () => {
         "   */",
         "  labels?: Array<string>,",
         '  state?: "open" | "closed",',
-        "}): Promise<unknown>",
+        "}): unknown",
       ].join("\n"),
     )
   })
@@ -388,10 +388,10 @@ describe("JSDoc signatures in catalogs and search results", () => {
           "  /** Order identifier */",
           "  id: string,",
           "  verbose?: boolean,",
-          "}): Promise<{",
+          "}): {",
           "  /** Current order status */",
           "  status: string,",
-          "}>",
+          "}",
         ].join("\n"),
       )
     }
@@ -427,12 +427,12 @@ describe("non-identifier tool paths", () => {
 
   test("catalog signatures use bracket notation for dashed tool names", () => {
     expect(runtime.catalog()[0]?.signature).toBe(
-      'tools.context7["resolve-library-id"](input: {\n  query: string,\n  libraryName: string,\n}): Promise<unknown>',
+      'tools.context7["resolve-library-id"](input: {\n  query: string,\n  libraryName: string,\n}): unknown',
     )
   })
 
   test("search results return callable bracket-notation paths and signatures", async () => {
-    const result = await Effect.runPromise(runtime.execute(`return search({ query: "resolve library" })`))
+    const result = await Effect.runPromise(runtime.execute(`return tools.search({ query: "resolve library" })`))
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error("search failed")
 

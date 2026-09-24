@@ -161,7 +161,10 @@ const serialize = (message: SessionMessage.Info) => {
       .join("\n")
   }
   if (message.type === "system") return `[System update]: ${message.text}`
-  if (message.type === "synthetic") return `[Synthetic context]: ${message.text}`
+  if (message.type === "synthetic")
+    return `[Synthetic context]: ${
+      message.metadata?.source === "codemode" ? truncateToolOutput(message.text) : message.text
+    }`
   if (message.type === "skill") return `[Skill activated: ${message.name}]\n${message.text}`
   if (message.type === "shell")
     return message.metadata?.background === true

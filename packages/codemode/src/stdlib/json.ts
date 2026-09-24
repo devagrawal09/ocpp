@@ -4,14 +4,6 @@ import { applyCollectionCallback } from "../interpreter/methods.js"
 import { type AstNode, InterpreterRuntimeError } from "../interpreter/model.js"
 import { typeofValue } from "../interpreter/references.js"
 import { copyIn, copyOut, type SafeObject } from "../tool-runtime.js"
-import {
-  CodeModeDate,
-  CodeModeMap,
-  CodeModeRegExp,
-  CodeModeSet,
-  CodeModeURL,
-  CodeModeURLSearchParams,
-} from "../values.js"
 
 export const jsonStatics = new Set(["parse", "stringify"])
 export type JsonMethodName = "parse" | "stringify"
@@ -79,8 +71,7 @@ const stringify = <R>(
   const indent = typeof space === "number" || typeof space === "string" ? space : undefined
   const replacer = args[1]
   const callable = typeofValue(replacer) === "function"
-  const checked = copyIn(args[0], "JSON.stringify value", callable)
-  const input = callable ? args[0] : checked
+  const input = callable ? args[0] : copyIn(args[0], "JSON.stringify value")
 
   if (Array.isArray(replacer)) {
     const properties = replacer
@@ -98,9 +89,9 @@ const stringify = <R>(
   const stack = new Set<object>()
   const visit = (holder: SafeObject | Array<unknown>, key: string): Effect.Effect<unknown, unknown, R> =>
     Effect.gen(function* () {
-      const value = yield* apply([key, toJSONValue(holder[key as keyof typeof holder])])
+      const value = yield* apply([key, holder[key as keyof typeof holder]])
       if (value === undefined || typeofValue(value) === "function") return undefined
-      copyIn(value, "JSON.stringify replacer result", true)
+      copyIn(value, "JSON.stringify replacer result")
       if (typeof value === "number") return Number.isFinite(value) ? value : null
       if (value === null || typeof value === "string" || typeof value === "boolean") return value
       if (Array.isArray(value)) {
@@ -130,20 +121,4 @@ const stringify = <R>(
   return Effect.map(visit(root, ""), (value) => JSON.stringify(value, null, indent))
 }
 
-const toJSONValue = (value: unknown): unknown => {
-  if (value instanceof CodeModeDate) {
-    return Number.isFinite(value.time) ? new Date(value.time).toISOString() : null
-  }
-  if (value instanceof CodeModeURL) return value.url.href
-  return value
-}
-
-const isPlainObject = (value: unknown): value is SafeObject =>
-  value !== null &&
-  typeof value === "object" &&
-  !(value instanceof CodeModeDate) &&
-  !(value instanceof CodeModeRegExp) &&
-  !(value instanceof CodeModeMap) &&
-  !(value instanceof CodeModeSet) &&
-  !(value instanceof CodeModeURL) &&
-  !(value instanceof CodeModeURLSearchParams)
+const isPlainObject = (value: unknown): value is SafeObject => value !== null && typeof value === "object"

@@ -161,22 +161,22 @@ describe("OpenAPI.fromSpec", () => {
       CodeMode.make({ tools: { api: api.tools } })
         .execute(
           `
-          const user = await tools.api.users.get({
+          const user = tools.api.users.get({
             userId: "user-1",
             include: ["profile", "permissions"],
             verbose: true,
             "X-Trace-ID": "trace-1",
           })
-          const created = await tools.api.users.create({
+          const created = tools.api.users.create({
             name: "Grace",
             email: "grace@example.test",
             role: "admin",
           })
-          const summary = await tools.api.search.run({
+          const summary = tools.api.search.run({
             filter: { query: "effect", page: 2 },
             tags: ["typescript", "runtime"],
           })
-          const removed = await tools.api.users.remove({ userId: "user-1" })
+          const removed = tools.api.users.remove({ userId: "user-1" })
           return { user, created, summary, removed }
         `,
         )
@@ -963,7 +963,7 @@ describe("OpenAPI.fromSpec", () => {
       runtime
         .execute(
           `
-        return search({ query: "global health", namespace: "opencode", limit: 1 })
+        return tools.search({ query: "global health", namespace: "opencode", limit: 1 })
       `,
         )
         .pipe(Effect.provide(layer)),
@@ -995,8 +995,8 @@ describe("OpenAPI.fromSpec", () => {
       runtime
         .execute(
           `
-          const existing = await tools.opencode.v2.session.get({ sessionID: "ses_123" })
-          const created = await tools.opencode.v2.session.create({ id: "ses_456" })
+          const existing = tools.opencode.v2.session.get({ sessionID: "ses_123" })
+          const created = tools.opencode.v2.session.create({ id: "ses_456" })
           return { existing, created }
         `,
         )
@@ -1439,7 +1439,7 @@ describe("OpenAPI.fromSpec", () => {
     })
 
     const result = await Effect.runPromise(
-      runtime.execute("return await tools.opencode.v2.session.get({})").pipe(Effect.provide(layer)),
+      runtime.execute("return tools.opencode.v2.session.get({})").pipe(Effect.provide(layer)),
     )
 
     expect(result).toMatchObject({ ok: false })
@@ -1508,8 +1508,8 @@ describe("OpenAPI.fromSpec", () => {
       runtime
         .execute(
           `
-            const updated = await tools.things.update({ path_id: "path", query_id: "query", path_id_2: "literal", header_id: "header", body_id: "body" })
-            const echoed = await tools.echo({ body: "hello" })
+            const updated = tools.things.update({ path_id: "path", query_id: "query", path_id_2: "literal", header_id: "header", body_id: "body" })
+            const echoed = tools.echo({ body: "hello" })
             return { updated, echoed }
           `,
         )

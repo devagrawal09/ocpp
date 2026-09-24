@@ -1,0 +1,2201 @@
+{
+  "cohorts": [
+    {
+      "calls": 8,
+      "dimension": "version",
+      "episodeRecoveryRate": {
+        "denominator": 3,
+        "high": 0.7923,
+        "low": 0.0615,
+        "numerator": 1,
+        "rate": 0.3333
+      },
+      "episodes": 3,
+      "failedCompletionRate": {
+        "denominator": 2,
+        "high": 0.9055,
+        "low": 0.0945,
+        "numerator": 1,
+        "rate": 0.5
+      },
+      "refusalRate": {
+        "denominator": 8,
+        "high": 0.9285,
+        "low": 0.4093,
+        "numerator": 6,
+        "rate": 0.75
+      },
+      "sessions": 2,
+      "unknownCompletions": 0,
+      "value": "1.1.0"
+    },
+    {
+      "calls": 3,
+      "dimension": "version",
+      "episodeRecoveryRate": {
+        "denominator": 1,
+        "high": 0.7935,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "episodes": 1,
+      "failedCompletionRate": {
+        "denominator": 2,
+        "high": 0.9055,
+        "low": 0.0945,
+        "numerator": 1,
+        "rate": 0.5
+      },
+      "refusalRate": {
+        "denominator": 3,
+        "high": 0.7923,
+        "low": 0.0615,
+        "numerator": 1,
+        "rate": 0.3333
+      },
+      "sessions": 1,
+      "unknownCompletions": 0,
+      "value": "1.0.0"
+    },
+    {
+      "calls": 8,
+      "dimension": "mode",
+      "episodeRecoveryRate": {
+        "denominator": 3,
+        "high": 0.5615,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "episodes": 3,
+      "failedCompletionRate": {
+        "denominator": 1,
+        "high": 0.7935,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "refusalRate": {
+        "denominator": 8,
+        "high": 0.9776,
+        "low": 0.5291,
+        "numerator": 7,
+        "rate": 0.875
+      },
+      "sessions": 3,
+      "unknownCompletions": 0,
+      "value": "unknown"
+    },
+    {
+      "calls": 2,
+      "dimension": "mode",
+      "episodeRecoveryRate": {
+        "denominator": 1,
+        "high": 1,
+        "low": 0.2065,
+        "numerator": 1,
+        "rate": 1
+      },
+      "episodes": 1,
+      "failedCompletionRate": {
+        "denominator": 2,
+        "high": 0.9055,
+        "low": 0.0945,
+        "numerator": 1,
+        "rate": 0.5
+      },
+      "refusalRate": {
+        "denominator": 2,
+        "high": 0.6576,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "sessions": 1,
+      "unknownCompletions": 0,
+      "value": "async"
+    },
+    {
+      "calls": 1,
+      "dimension": "mode",
+      "episodeRecoveryRate": {
+        "denominator": 0,
+        "high": null,
+        "low": null,
+        "numerator": 0,
+        "rate": null
+      },
+      "episodes": 0,
+      "failedCompletionRate": {
+        "denominator": 1,
+        "high": 1,
+        "low": 0.2065,
+        "numerator": 1,
+        "rate": 1
+      },
+      "refusalRate": {
+        "denominator": 1,
+        "high": 0.7935,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "sessions": 1,
+      "unknownCompletions": 0,
+      "value": "sync"
+    },
+    {
+      "calls": 10,
+      "dimension": "provider",
+      "episodeRecoveryRate": {
+        "denominator": 3,
+        "high": 0.7923,
+        "low": 0.0615,
+        "numerator": 1,
+        "rate": 0.3333
+      },
+      "episodes": 3,
+      "failedCompletionRate": {
+        "denominator": 4,
+        "high": 0.85,
+        "low": 0.15,
+        "numerator": 2,
+        "rate": 0.5
+      },
+      "refusalRate": {
+        "denominator": 10,
+        "high": 0.8318,
+        "low": 0.3127,
+        "numerator": 6,
+        "rate": 0.6
+      },
+      "sessions": 2,
+      "unknownCompletions": 0,
+      "value": "p"
+    },
+    {
+      "calls": 1,
+      "dimension": "provider",
+      "episodeRecoveryRate": {
+        "denominator": 1,
+        "high": 0.7935,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "episodes": 1,
+      "failedCompletionRate": {
+        "denominator": 0,
+        "high": null,
+        "low": null,
+        "numerator": 0,
+        "rate": null
+      },
+      "refusalRate": {
+        "denominator": 1,
+        "high": 1,
+        "low": 0.2065,
+        "numerator": 1,
+        "rate": 1
+      },
+      "sessions": 1,
+      "unknownCompletions": 0,
+      "value": "q"
+    },
+    {
+      "calls": 10,
+      "dimension": "model",
+      "episodeRecoveryRate": {
+        "denominator": 3,
+        "high": 0.7923,
+        "low": 0.0615,
+        "numerator": 1,
+        "rate": 0.3333
+      },
+      "episodes": 3,
+      "failedCompletionRate": {
+        "denominator": 4,
+        "high": 0.85,
+        "low": 0.15,
+        "numerator": 2,
+        "rate": 0.5
+      },
+      "refusalRate": {
+        "denominator": 10,
+        "high": 0.8318,
+        "low": 0.3127,
+        "numerator": 6,
+        "rate": 0.6
+      },
+      "sessions": 2,
+      "unknownCompletions": 0,
+      "value": "p/m"
+    },
+    {
+      "calls": 1,
+      "dimension": "model",
+      "episodeRecoveryRate": {
+        "denominator": 1,
+        "high": 0.7935,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "episodes": 1,
+      "failedCompletionRate": {
+        "denominator": 0,
+        "high": null,
+        "low": null,
+        "numerator": 0,
+        "rate": null
+      },
+      "refusalRate": {
+        "denominator": 1,
+        "high": 1,
+        "low": 0.2065,
+        "numerator": 1,
+        "rate": 1
+      },
+      "sessions": 1,
+      "unknownCompletions": 0,
+      "value": "q/n"
+    },
+    {
+      "calls": 10,
+      "dimension": "session",
+      "episodeRecoveryRate": {
+        "denominator": 3,
+        "high": 0.7923,
+        "low": 0.0615,
+        "numerator": 1,
+        "rate": 0.3333
+      },
+      "episodes": 3,
+      "failedCompletionRate": {
+        "denominator": 4,
+        "high": 0.85,
+        "low": 0.15,
+        "numerator": 2,
+        "rate": 0.5
+      },
+      "refusalRate": {
+        "denominator": 10,
+        "high": 0.8318,
+        "low": 0.3127,
+        "numerator": 6,
+        "rate": 0.6
+      },
+      "sessions": 2,
+      "unknownCompletions": 0,
+      "value": "top-level"
+    },
+    {
+      "calls": 1,
+      "dimension": "session",
+      "episodeRecoveryRate": {
+        "denominator": 1,
+        "high": 0.7935,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "episodes": 1,
+      "failedCompletionRate": {
+        "denominator": 0,
+        "high": null,
+        "low": null,
+        "numerator": 0,
+        "rate": null
+      },
+      "refusalRate": {
+        "denominator": 1,
+        "high": 1,
+        "low": 0.2065,
+        "numerator": 1,
+        "rate": 1
+      },
+      "sessions": 1,
+      "unknownCompletions": 0,
+      "value": "child"
+    },
+    {
+      "calls": 10,
+      "dimension": "split",
+      "episodeRecoveryRate": {
+        "denominator": 3,
+        "high": 0.7923,
+        "low": 0.0615,
+        "numerator": 1,
+        "rate": 0.3333
+      },
+      "episodes": 3,
+      "failedCompletionRate": {
+        "denominator": 4,
+        "high": 0.85,
+        "low": 0.15,
+        "numerator": 2,
+        "rate": 0.5
+      },
+      "refusalRate": {
+        "denominator": 10,
+        "high": 0.8318,
+        "low": 0.3127,
+        "numerator": 6,
+        "rate": 0.6
+      },
+      "sessions": 2,
+      "unknownCompletions": 0,
+      "value": "training"
+    },
+    {
+      "calls": 1,
+      "dimension": "split",
+      "episodeRecoveryRate": {
+        "denominator": 1,
+        "high": 0.7935,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "episodes": 1,
+      "failedCompletionRate": {
+        "denominator": 0,
+        "high": null,
+        "low": null,
+        "numerator": 0,
+        "rate": null
+      },
+      "refusalRate": {
+        "denominator": 1,
+        "high": 1,
+        "low": 0.2065,
+        "numerator": 1,
+        "rate": 1
+      },
+      "sessions": 1,
+      "unknownCompletions": 0,
+      "value": "holdout"
+    },
+    {
+      "calls": 2,
+      "dimension": "journalTool",
+      "exitCoverage": 2,
+      "failureRate": {
+        "denominator": 2,
+        "high": 0.6576,
+        "low": 0,
+        "numerator": 0,
+        "rate": 0
+      },
+      "nonzeroExitRate": {
+        "denominator": 2,
+        "high": 0.9055,
+        "low": 0.0945,
+        "numerator": 1,
+        "rate": 0.5
+      },
+      "sessions": 1,
+      "value": "shell"
+    },
+    {
+      "calls": 1,
+      "dimension": "journalTool",
+      "exitCoverage": 0,
+      "failureRate": {
+        "denominator": 1,
+        "high": 1,
+        "low": 0.2065,
+        "numerator": 1,
+        "rate": 1
+      },
+      "nonzeroExitRate": {
+        "denominator": 0,
+        "high": null,
+        "low": null,
+        "numerator": 0,
+        "rate": null
+      },
+      "sessions": 1,
+      "value": "fs.read"
+    }
+  ],
+  "episodes": {
+    "byInitialKind": [
+      {
+        "count": 3,
+        "name": "refusal"
+      },
+      {
+        "count": 1,
+        "name": "failure"
+      }
+    ],
+    "byOutcomeAndClosure": [
+      {
+        "count": 3,
+        "name": "unrecovered / session-end"
+      },
+      {
+        "count": 1,
+        "name": "recovered / saved"
+      }
+    ],
+    "episodes": 4,
+    "examples": [
+      {
+        "calls": 5,
+        "categories": [
+          "ToolFailure",
+          "ConcurrencyLimit",
+          "ConcurrencyLimit",
+          "ConcurrencyLimit"
+        ],
+        "closedBy": "saved",
+        "holdout": false,
+        "initial": {
+          "category": "ToolFailure",
+          "executionID": "exe_new_1",
+          "index": 1,
+          "kind": "failure",
+          "messageID": "msg_new_1",
+          "seq": 1,
+          "sessionID": "ses_new",
+          "source": "structured-kind"
+        },
+        "outcome": "recovered",
+        "recoveryGap": 4,
+        "retries": {
+          "different": 2,
+          "exact": 0,
+          "fingerprint": 0,
+          "normalized": 2
+        },
+        "sessionID": "ses_new"
+      },
+      {
+        "calls": 2,
+        "categories": [
+          "UnsupportedSyntax",
+          "Provider"
+        ],
+        "closedBy": "session-end",
+        "holdout": false,
+        "initial": {
+          "category": "UnsupportedSyntax",
+          "index": 0,
+          "kind": "refusal",
+          "messageID": "msg_new_8",
+          "seq": 8,
+          "sessionID": "ses_new",
+          "source": "rule"
+        },
+        "outcome": "unrecovered",
+        "recoveryGap": null,
+        "retries": {
+          "different": 1,
+          "exact": 0,
+          "fingerprint": 0,
+          "normalized": 0
+        },
+        "sessionID": "ses_new"
+      },
+      {
+        "calls": 2,
+        "categories": [
+          "ParseError",
+          "Legacy:ToolFailure"
+        ],
+        "closedBy": "session-end",
+        "holdout": false,
+        "initial": {
+          "category": "ParseError",
+          "index": 0,
+          "kind": "refusal",
+          "messageID": "msg_old_2",
+          "seq": 2,
+          "sessionID": "ses_old",
+          "source": "rule"
+        },
+        "outcome": "unrecovered",
+        "recoveryGap": null,
+        "retries": {
+          "different": 1,
+          "exact": 0,
+          "fingerprint": 0,
+          "normalized": 0
+        },
+        "sessionID": "ses_old"
+      },
+      {
+        "calls": 1,
+        "categories": [
+          "unclassified"
+        ],
+        "closedBy": "session-end",
+        "holdout": true,
+        "initial": {
+          "category": "unclassified",
+          "index": 0,
+          "kind": "refusal",
+          "messageID": "msg_failed_1",
+          "seq": 1,
+          "sessionID": "ses_failed",
+          "source": "unclassified"
+        },
+        "outcome": "unrecovered",
+        "recoveryGap": null,
+        "retries": {
+          "different": 0,
+          "exact": 0,
+          "fingerprint": 0,
+          "normalized": 0
+        },
+        "sessionID": "ses_failed"
+      }
+    ],
+    "followups": {
+      "count": 4,
+      "max": 4,
+      "mean": 1.5,
+      "min": 0,
+      "p50": 1,
+      "p90": 4
+    },
+    "holdoutSessions": 1,
+    "outcomes": [
+      {
+        "count": 3,
+        "name": "unrecovered"
+      },
+      {
+        "count": 1,
+        "name": "recovered"
+      }
+    ],
+    "recoveryGap": {
+      "count": 1,
+      "max": 4,
+      "mean": 4,
+      "min": 4,
+      "p50": 4,
+      "p90": 4
+    },
+    "recoveryRate": {
+      "denominator": 4,
+      "high": 0.6994,
+      "low": 0.0456,
+      "numerator": 1,
+      "rate": 0.25
+    },
+    "retries": {
+      "different": 4,
+      "exact": 0,
+      "fingerprint": 0,
+      "normalized": 2
+    },
+    "sessions": 3
+  },
+  "events": {
+    "byType": [
+      {
+        "count": 8,
+        "name": "execute.settled-error"
+      },
+      {
+        "count": 3,
+        "name": "execute.completed"
+      },
+      {
+        "count": 2,
+        "name": "journal.completed"
+      },
+      {
+        "count": 2,
+        "name": "session.succeeded"
+      },
+      {
+        "count": 1,
+        "name": "execution.failed"
+      },
+      {
+        "count": 1,
+        "name": "execution.saved"
+      },
+      {
+        "count": 1,
+        "name": "journal.failed"
+      },
+      {
+        "count": 1,
+        "name": "notification.completed"
+      },
+      {
+        "count": 1,
+        "name": "notification.failed"
+      },
+      {
+        "count": 1,
+        "name": "session.failed"
+      },
+      {
+        "count": 1,
+        "name": "tool.completed"
+      }
+    ],
+    "example": {
+      "events": [
+        {
+          "index": 0,
+          "seq": 1,
+          "type": "execute.settled-error"
+        },
+        {
+          "index": 0,
+          "ref": "provider.transport",
+          "seq": 9007199254740991,
+          "type": "session.failed"
+        }
+      ],
+      "sessionID": "ses_failed"
+    },
+    "sessions": 3,
+    "total": 22
+  },
+  "execute": {
+    "admission": [
+      {
+        "count": 7,
+        "name": "refused"
+      },
+      {
+        "count": 4,
+        "name": "admitted"
+      }
+    ],
+    "completion": [
+      {
+        "count": 2,
+        "name": "failed"
+      },
+      {
+        "count": 2,
+        "name": "saved"
+      }
+    ],
+    "failures": [
+      {
+        "category": "Legacy:ToolFailure",
+        "episodes": {
+          "episodes": 0,
+          "followups": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "holdoutSessions": 0,
+          "outcomes": [],
+          "recoveryGap": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "recoveryRate": {
+            "denominator": 0,
+            "high": null,
+            "low": null,
+            "numerator": 0,
+            "rate": null
+          },
+          "retries": {
+            "different": 0,
+            "exact": 0,
+            "fingerprint": 0,
+            "normalized": 0
+          },
+          "sessions": 0
+        },
+        "examples": [
+          {
+            "executionID": "exe_old_sync",
+            "index": 0,
+            "messageID": "msg_old_3",
+            "seq": 3,
+            "sessionID": "ses_old"
+          }
+        ],
+        "holdoutOccurrences": 0,
+        "holdoutSessions": 0,
+        "modes": [
+          {
+            "count": 1,
+            "name": "sync"
+          }
+        ],
+        "occurrences": 1,
+        "rules": [
+          {
+            "count": 1,
+            "name": "legacy-wrapper"
+          }
+        ],
+        "sessions": 1,
+        "signatures": [
+          {
+            "count": 1,
+            "name": "execution <id> failed (<num> durable bytes)."
+          }
+        ],
+        "sources": [
+          {
+            "count": 1,
+            "name": "rule"
+          }
+        ],
+        "versions": [
+          {
+            "count": 1,
+            "name": "1.0.0"
+          }
+        ]
+      },
+      {
+        "category": "ToolFailure",
+        "episodes": {
+          "episodes": 1,
+          "followups": {
+            "count": 1,
+            "max": 4,
+            "mean": 4,
+            "min": 4,
+            "p50": 4,
+            "p90": 4
+          },
+          "holdoutSessions": 0,
+          "outcomes": [
+            {
+              "count": 1,
+              "name": "recovered"
+            }
+          ],
+          "recoveryGap": {
+            "count": 1,
+            "max": 4,
+            "mean": 4,
+            "min": 4,
+            "p50": 4,
+            "p90": 4
+          },
+          "recoveryRate": {
+            "denominator": 1,
+            "high": 1,
+            "low": 0.2065,
+            "numerator": 1,
+            "rate": 1
+          },
+          "retries": {
+            "different": 2,
+            "exact": 0,
+            "fingerprint": 0,
+            "normalized": 2
+          },
+          "sessions": 1
+        },
+        "examples": [
+          {
+            "executionID": "exe_new_1",
+            "index": 1,
+            "messageID": "msg_new_1",
+            "seq": 1,
+            "sessionID": "ses_new"
+          }
+        ],
+        "holdoutOccurrences": 0,
+        "holdoutSessions": 0,
+        "modes": [
+          {
+            "count": 1,
+            "name": "async"
+          }
+        ],
+        "occurrences": 1,
+        "rules": [],
+        "sessions": 1,
+        "signatures": [
+          {
+            "count": 1,
+            "name": "toolfailure: command failed with exit code <num>"
+          }
+        ],
+        "sources": [
+          {
+            "count": 1,
+            "name": "structured-kind"
+          }
+        ],
+        "versions": [
+          {
+            "count": 1,
+            "name": "1.1.0"
+          }
+        ]
+      }
+    ],
+    "refusalLoops": [],
+    "refusals": [
+      {
+        "category": "ConcurrencyLimit",
+        "episodes": {
+          "episodes": 0,
+          "followups": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "holdoutSessions": 0,
+          "outcomes": [],
+          "recoveryGap": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "recoveryRate": {
+            "denominator": 0,
+            "high": null,
+            "low": null,
+            "numerator": 0,
+            "rate": null
+          },
+          "retries": {
+            "different": 0,
+            "exact": 0,
+            "fingerprint": 0,
+            "normalized": 0
+          },
+          "sessions": 0
+        },
+        "examples": [
+          {
+            "index": 0,
+            "messageID": "msg_new_3",
+            "seq": 3,
+            "sessionID": "ses_new"
+          },
+          {
+            "index": 0,
+            "messageID": "msg_new_4",
+            "seq": 4,
+            "sessionID": "ses_new"
+          },
+          {
+            "index": 0,
+            "messageID": "msg_new_5",
+            "seq": 5,
+            "sessionID": "ses_new"
+          }
+        ],
+        "holdoutOccurrences": 0,
+        "holdoutSessions": 0,
+        "modes": [
+          {
+            "count": 3,
+            "name": "unknown"
+          }
+        ],
+        "occurrences": 3,
+        "rules": [],
+        "sessions": 1,
+        "signatures": [
+          {
+            "count": 3,
+            "name": "at most <num> executions may run per session, and <num> are running: <id>."
+          }
+        ],
+        "sources": [
+          {
+            "count": 3,
+            "name": "structured-kind"
+          }
+        ],
+        "versions": [
+          {
+            "count": 3,
+            "name": "1.1.0"
+          }
+        ]
+      },
+      {
+        "category": "ParseError",
+        "episodes": {
+          "episodes": 1,
+          "followups": {
+            "count": 1,
+            "max": 1,
+            "mean": 1,
+            "min": 1,
+            "p50": 1,
+            "p90": 1
+          },
+          "holdoutSessions": 0,
+          "outcomes": [
+            {
+              "count": 1,
+              "name": "unrecovered"
+            }
+          ],
+          "recoveryGap": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "recoveryRate": {
+            "denominator": 1,
+            "high": 0.7935,
+            "low": 0,
+            "numerator": 0,
+            "rate": 0
+          },
+          "retries": {
+            "different": 1,
+            "exact": 0,
+            "fingerprint": 0,
+            "normalized": 0
+          },
+          "sessions": 1
+        },
+        "examples": [
+          {
+            "index": 0,
+            "messageID": "msg_old_2",
+            "seq": 2,
+            "sessionID": "ses_old"
+          }
+        ],
+        "holdoutOccurrences": 0,
+        "holdoutSessions": 0,
+        "modes": [
+          {
+            "count": 1,
+            "name": "unknown"
+          }
+        ],
+        "occurrences": 1,
+        "rules": [
+          {
+            "count": 1,
+            "name": "parse"
+          }
+        ],
+        "sessions": 1,
+        "signatures": [
+          {
+            "count": 1,
+            "name": "failed to parse typescript: ',' expected."
+          }
+        ],
+        "sources": [
+          {
+            "count": 1,
+            "name": "rule"
+          }
+        ],
+        "versions": [
+          {
+            "count": 1,
+            "name": "1.0.0"
+          }
+        ]
+      },
+      {
+        "category": "Provider",
+        "episodes": {
+          "episodes": 0,
+          "followups": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "holdoutSessions": 0,
+          "outcomes": [],
+          "recoveryGap": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "recoveryRate": {
+            "denominator": 0,
+            "high": null,
+            "low": null,
+            "numerator": 0,
+            "rate": null
+          },
+          "retries": {
+            "different": 0,
+            "exact": 0,
+            "fingerprint": 0,
+            "normalized": 0
+          },
+          "sessions": 0
+        },
+        "examples": [
+          {
+            "index": 1,
+            "messageID": "msg_new_8",
+            "seq": 8,
+            "sessionID": "ses_new"
+          }
+        ],
+        "holdoutOccurrences": 0,
+        "holdoutSessions": 0,
+        "modes": [
+          {
+            "count": 1,
+            "name": "unknown"
+          }
+        ],
+        "occurrences": 1,
+        "rules": [],
+        "sessions": 1,
+        "signatures": [
+          {
+            "count": 1,
+            "name": "econnreset: socket closed"
+          }
+        ],
+        "sources": [
+          {
+            "count": 1,
+            "name": "structured-type"
+          }
+        ],
+        "versions": [
+          {
+            "count": 1,
+            "name": "1.1.0"
+          }
+        ]
+      },
+      {
+        "category": "UnsupportedSyntax",
+        "episodes": {
+          "episodes": 1,
+          "followups": {
+            "count": 1,
+            "max": 1,
+            "mean": 1,
+            "min": 1,
+            "p50": 1,
+            "p90": 1
+          },
+          "holdoutSessions": 0,
+          "outcomes": [
+            {
+              "count": 1,
+              "name": "unrecovered"
+            }
+          ],
+          "recoveryGap": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "recoveryRate": {
+            "denominator": 1,
+            "high": 0.7935,
+            "low": 0,
+            "numerator": 0,
+            "rate": 0
+          },
+          "retries": {
+            "different": 1,
+            "exact": 0,
+            "fingerprint": 0,
+            "normalized": 0
+          },
+          "sessions": 1
+        },
+        "examples": [
+          {
+            "index": 0,
+            "messageID": "msg_new_8",
+            "seq": 8,
+            "sessionID": "ses_new"
+          }
+        ],
+        "holdoutOccurrences": 0,
+        "holdoutSessions": 0,
+        "modes": [
+          {
+            "count": 1,
+            "name": "unknown"
+          }
+        ],
+        "occurrences": 1,
+        "rules": [
+          {
+            "count": 1,
+            "name": "regex"
+          }
+        ],
+        "sessions": 1,
+        "signatures": [
+          {
+            "count": 1,
+            "name": "regular expressions are not available; use string methods."
+          }
+        ],
+        "sources": [
+          {
+            "count": 1,
+            "name": "rule"
+          }
+        ],
+        "versions": [
+          {
+            "count": 1,
+            "name": "1.1.0"
+          }
+        ]
+      },
+      {
+        "category": "unclassified",
+        "episodes": {
+          "episodes": 1,
+          "followups": {
+            "count": 1,
+            "max": 0,
+            "mean": 0,
+            "min": 0,
+            "p50": 0,
+            "p90": 0
+          },
+          "holdoutSessions": 1,
+          "outcomes": [
+            {
+              "count": 1,
+              "name": "unrecovered"
+            }
+          ],
+          "recoveryGap": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p90": null
+          },
+          "recoveryRate": {
+            "denominator": 1,
+            "high": 0.7935,
+            "low": 0,
+            "numerator": 0,
+            "rate": 0
+          },
+          "retries": {
+            "different": 0,
+            "exact": 0,
+            "fingerprint": 0,
+            "normalized": 0
+          },
+          "sessions": 1
+        },
+        "examples": [
+          {
+            "index": 0,
+            "messageID": "msg_failed_1",
+            "seq": 1,
+            "sessionID": "ses_failed"
+          }
+        ],
+        "holdoutOccurrences": 1,
+        "holdoutSessions": 1,
+        "modes": [
+          {
+            "count": 1,
+            "name": "unknown"
+          }
+        ],
+        "occurrences": 1,
+        "rules": [],
+        "sessions": 1,
+        "signatures": [
+          {
+            "count": 1,
+            "name": "something new happened"
+          }
+        ],
+        "sources": [
+          {
+            "count": 1,
+            "name": "unclassified"
+          }
+        ],
+        "versions": [
+          {
+            "count": 1,
+            "name": "1.1.0"
+          }
+        ]
+      }
+    ]
+  },
+  "manifest": {
+    "analyzerVersion": 4,
+    "definitions": {
+      "admission": "An execute tool record with status completed. On asynchronous versions this proves only that the program was admitted.",
+      "completion": "Decided by the first available source in order: codemode_execution row, completion notification (current failed or legacy error both mean failed), lifecycle metadata on the tool record, the tool record itself for synchronous versions; otherwise unknown.",
+      "episode": "Starts at a refused execute call or an admitted execution that did not save, includes every following execute call in the session, and closes at the first call whose execution saved (recovered), after followupCalls further calls without a save (unrecovered, or unknown when a completion was unknown), or at session end.",
+      "holdout": "The newest terminal sessions by time_created (ties by id descending), up to options.holdout.",
+      "ranking": "Orders review candidates by the published weighted components; it does not produce guidance.",
+      "retryRelation": "Each call in an episode is compared with the call before it: exact (identical source), normalized (identical after whitespace collapse), fingerprint (identical sorted static tool paths and top-level declared names), otherwise different."
+    },
+    "executeCalls": 11,
+    "executions": 2,
+    "holdoutSessions": 1,
+    "journalRows": 3,
+    "options": {
+      "holdout": 1
+    },
+    "ranking": {
+      "tieBreakers": [
+        "score desc",
+        "affectedSessions desc",
+        "occurrences desc",
+        "kind asc",
+        "category asc"
+      ],
+      "weights": {
+        "evidenceQuality": 0.2,
+        "holdoutShare": 0.25,
+        "sessionShare": 0.35,
+        "unrecoveredRate": 0.2
+      }
+    },
+    "schema": "opencode.codemode-diagnostics/4",
+    "sessions": 4,
+    "taxonomy": {
+      "failureRules": [
+        {
+          "category": "TimeoutExceeded",
+          "name": "timeout",
+          "pattern": "^execution timed out after"
+        },
+        {
+          "category": "InvalidToolInput",
+          "name": "tool-input",
+          "pattern": "^(?:invalid arguments for tool|invalid input for tool|expected number)"
+        },
+        {
+          "category": "UnknownTool",
+          "name": "unknown-tool",
+          "pattern": "^unknown tool"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "file-not-found",
+          "pattern": "^file not found:"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "path-missing",
+          "pattern": "^search path does not exist"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "regex-invalid",
+          "pattern": "^invalid regex pattern"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "fetch",
+          "pattern": "^unable to fetch"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "offset",
+          "pattern": "^offset <num> is out of range"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "patch",
+          "pattern": "^patch verification failed"
+        },
+        {
+          "category": "UnsupportedSyntax",
+          "name": "unsupported-syntax",
+          "pattern": "^syntax '.*' is not supported"
+        },
+        {
+          "category": "CommitFailure",
+          "name": "commit-conflict",
+          "pattern": "(?:are no longer reserved by this execution|was reverted; nothing was saved|nothing was saved\\.$)"
+        },
+        {
+          "category": "Interrupted",
+          "name": "restart",
+          "pattern": "^execution (?:failed because the server restarted|became indeterminate)"
+        },
+        {
+          "category": "LegacyWrappedFailure",
+          "name": "legacy-wrapper",
+          "pattern": "^execution <id> failed \\(<num> durable bytes\\)"
+        },
+        {
+          "category": "ExecutionFailure",
+          "name": "uncaught",
+          "pattern": "^uncaught:"
+        },
+        {
+          "category": "ExecutionFailure",
+          "name": "unknown-identifier",
+          "pattern": "^unknown identifier '"
+        },
+        {
+          "category": "ExecutionFailure",
+          "name": "json-parse",
+          "pattern": "^json\\.parse received invalid json"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "edit-mismatch",
+          "pattern": "^could not find oldstring in"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "command-spawn",
+          "pattern": "^unable to execute command"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "unknown-agent",
+          "pattern": "^unknown agent:"
+        },
+        {
+          "category": "ToolFailure",
+          "name": "browser",
+          "pattern": "^could not connect to chrome"
+        },
+        {
+          "category": "UserDismissed",
+          "name": "question-dismissed",
+          "pattern": "^the user dismissed this question"
+        },
+        {
+          "category": "Interrupted",
+          "name": "fiber-interrupt",
+          "pattern": "^all fibers interrupted without error"
+        },
+        {
+          "category": "Interrupted",
+          "name": "cancelled",
+          "pattern": "^execution cancelled$"
+        }
+      ],
+      "journalRules": [
+        {
+          "category": "InvalidToolInput",
+          "name": "tool-input",
+          "pattern": "^invalid arguments for tool"
+        },
+        {
+          "category": "NotFound",
+          "name": "file-not-found",
+          "pattern": "^(?:file not found|search path does not exist)"
+        },
+        {
+          "category": "InvalidPattern",
+          "name": "regex-invalid",
+          "pattern": "^invalid regex pattern"
+        },
+        {
+          "category": "Network",
+          "name": "fetch",
+          "pattern": "^unable to fetch"
+        },
+        {
+          "category": "Timeout",
+          "name": "timeout",
+          "pattern": "(?:timed out|exceeded timeout)"
+        },
+        {
+          "category": "Permission",
+          "name": "permission",
+          "pattern": "(?:permission|denied)"
+        },
+        {
+          "category": "VerificationFailed",
+          "name": "patch",
+          "pattern": "^(?:patch verification failed|could not find oldstring in)"
+        },
+        {
+          "category": "UserDismissed",
+          "name": "question-dismissed",
+          "pattern": "^the user dismissed this question"
+        },
+        {
+          "category": "Interrupted",
+          "name": "fiber-interrupt",
+          "pattern": "^all fibers interrupted without error"
+        },
+        {
+          "category": "SpawnFailure",
+          "name": "command-spawn",
+          "pattern": "^unable to execute command"
+        }
+      ],
+      "precedence": [
+        "structured-kind",
+        "structured-type",
+        "rule",
+        "unclassified"
+      ],
+      "refusalRules": [
+        {
+          "category": "ConcurrencyLimit",
+          "name": "concurrency-limit",
+          "pattern": "^(?:at most <num> executions may run|code mode allows at most <num> concurrent executions)"
+        },
+        {
+          "category": "Compatibility",
+          "name": "await",
+          "pattern": "^await is not supported"
+        },
+        {
+          "category": "UnsupportedSyntax",
+          "name": "promise",
+          "pattern": "^promise is not supported"
+        },
+        {
+          "category": "UnsupportedSyntax",
+          "name": "regex",
+          "pattern": "^regular expressions are not available"
+        },
+        {
+          "category": "UnsupportedSyntax",
+          "name": "removed-global",
+          "pattern": "^(?:set|map|date|url|urlsearchparams) is not a value"
+        },
+        {
+          "category": "UnsupportedSyntax",
+          "name": "mutation",
+          "pattern": "^(?:mutating method|arrays and objects are immutable)"
+        },
+        {
+          "category": "UnsupportedSyntax",
+          "name": "tool-path",
+          "pattern": "^(?:tools must be called through|the tool namespace only)"
+        },
+        {
+          "category": "UnsupportedSyntax",
+          "name": "unsupported-syntax",
+          "pattern": "^syntax '.*' is not supported"
+        },
+        {
+          "category": "ParseError",
+          "name": "parse",
+          "pattern": "^(?:failed to parse|invalid compiler node)"
+        },
+        {
+          "category": "InvalidDurableValue",
+          "name": "durable-limit",
+          "pattern": "^code mode result exceeds the <num>-byte durable"
+        },
+        {
+          "category": "NameAlreadyDefined",
+          "name": "name-defined",
+          "pattern": "^notebook names are immutable"
+        },
+        {
+          "category": "NameReserved",
+          "name": "name-reserved",
+          "pattern": "^execution <id> is already running and holds"
+        },
+        {
+          "category": "NotebookLimitExceeded",
+          "name": "notebook-limit",
+          "pattern": "^(?:this session's notebook would hold|one execution may declare at most)"
+        },
+        {
+          "category": "InvalidToolInput",
+          "name": "input-schema",
+          "pattern": "^(?:expected number|invalid arguments for tool)"
+        },
+        {
+          "category": "LegacyWrappedFailure",
+          "name": "legacy-wrapper",
+          "pattern": "^execution <id> failed \\(<num> durable bytes\\)"
+        }
+      ],
+      "signatureLength": 240,
+      "typedCategories": {
+        "aborted": "Interrupted",
+        "permission.rejected": "PermissionRejected"
+      }
+    },
+    "terminalSessions": 3,
+    "thresholds": {
+      "codePreviewLength": 120,
+      "cohortValueLimit": 20,
+      "episodeExampleLimit": 40,
+      "exampleLimit": 3,
+      "followupCalls": 5,
+      "minCohortEvents": 100,
+      "minCohortSessions": 20,
+      "refusalLoopMinimum": 3,
+      "rounding": 4,
+      "sequenceLimit": 40,
+      "signatureLimit": 40,
+      "z95": 1.96
+    }
+  },
+  "nested": {
+    "byStatus": [
+      {
+        "count": 2,
+        "name": "completed"
+      },
+      {
+        "count": 1,
+        "name": "failed"
+      }
+    ],
+    "calls": 3,
+    "categories": [
+      {
+        "category": "NonzeroExit",
+        "examples": [
+          {
+            "callIndex": 0,
+            "executionID": "exe_new_1",
+            "sessionID": "ses_new"
+          }
+        ],
+        "holdoutSessions": 0,
+        "occurrences": 1,
+        "sessions": 1,
+        "sources": [
+          {
+            "count": 1,
+            "name": "structured-type"
+          }
+        ],
+        "tools": [
+          {
+            "count": 1,
+            "name": "shell"
+          }
+        ]
+      },
+      {
+        "category": "NotFound",
+        "examples": [
+          {
+            "callIndex": 1,
+            "executionID": "exe_new_2",
+            "sessionID": "ses_new"
+          }
+        ],
+        "holdoutSessions": 0,
+        "occurrences": 1,
+        "sessions": 1,
+        "sources": [
+          {
+            "count": 1,
+            "name": "rule"
+          }
+        ],
+        "tools": [
+          {
+            "count": 1,
+            "name": "fs.read"
+          }
+        ]
+      }
+    ],
+    "exits": [
+      {
+        "count": 1,
+        "name": "0"
+      },
+      {
+        "count": 1,
+        "name": "1"
+      }
+    ],
+    "recurringNonzero": [
+      {
+        "examples": [
+          {
+            "callIndex": 0,
+            "executionID": "exe_new_1",
+            "sessionID": "ses_new"
+          }
+        ],
+        "exit": 1,
+        "holdoutSessions": 0,
+        "occurrences": 1,
+        "sessions": 1,
+        "signature": "(no output)"
+      }
+    ]
+  },
+  "quality": {
+    "coverage": {
+      "assistantMessagesWithoutModel": {
+        "count": 0,
+        "examples": []
+      },
+      "classificationSources": {
+        "failures": [
+          {
+            "count": 1,
+            "name": "rule"
+          },
+          {
+            "count": 1,
+            "name": "structured-kind"
+          }
+        ],
+        "journal": [
+          {
+            "count": 2,
+            "name": "structured-type"
+          },
+          {
+            "count": 1,
+            "name": "rule"
+          }
+        ],
+        "refusals": [
+          {
+            "count": 3,
+            "name": "structured-kind"
+          },
+          {
+            "count": 2,
+            "name": "rule"
+          },
+          {
+            "count": 1,
+            "name": "structured-type"
+          },
+          {
+            "count": 1,
+            "name": "unclassified"
+          }
+        ]
+      },
+      "completionNotificationsMissingExecuteCall": {
+        "count": 0,
+        "examples": []
+      },
+      "completionSources": [
+        {
+          "count": 2,
+          "name": "execution"
+        },
+        {
+          "count": 2,
+          "name": "tool"
+        }
+      ],
+      "executeCallsMissingExecutionRow": {
+        "count": 1,
+        "examples": [
+          "exe_old_sync"
+        ]
+      },
+      "executeCallsWithModel": 11,
+      "executionIDSources": [
+        {
+          "count": 8,
+          "name": "none"
+        },
+        {
+          "count": 3,
+          "name": "metadata"
+        }
+      ],
+      "executionRowsMissingExecuteCall": {
+        "count": 0,
+        "examples": []
+      },
+      "executionsWithDuration": 2,
+      "sessionsWithCost": 1,
+      "terminalFailuresWithError": 1
+    },
+    "impossibleStates": {
+      "executionsCompletedBeforeCreated": {
+        "count": 0,
+        "examples": []
+      },
+      "executionsStillRunningInTerminalSessions": {
+        "count": 0,
+        "examples": []
+      },
+      "notificationStateConflicts": {
+        "count": 0,
+        "examples": []
+      },
+      "shellCallsWithoutExitCode": {
+        "count": 0,
+        "examples": []
+      },
+      "terminalSessionsWithoutOutcome": {
+        "count": 0,
+        "examples": []
+      },
+      "toolRecordsWithUnknownStatus": {
+        "count": 0,
+        "examples": []
+      }
+    },
+    "integrity": {
+      "completionNotificationsWithDuplicateExecutionID": {
+        "count": 0,
+        "examples": []
+      },
+      "duplicateMessageSequence": {
+        "count": 0,
+        "examples": []
+      },
+      "executeCallsWithDuplicateExecutionID": {
+        "count": 0,
+        "examples": []
+      },
+      "executionRowsWithDuplicateID": {
+        "count": 0,
+        "examples": []
+      },
+      "executionSessionMismatches": {
+        "count": 0,
+        "examples": []
+      },
+      "journalRowsMissingExecution": {
+        "count": 0,
+        "examples": []
+      }
+    }
+  },
+  "ranking": [
+    {
+      "affectedSessions": 1,
+      "category": "unclassified",
+      "components": {
+        "evidenceQuality": 0,
+        "holdoutShare": 1,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 1
+      },
+      "decidedEpisodes": 1,
+      "holdoutSessions": 1,
+      "kind": "refusal",
+      "occurrences": 1,
+      "score": 0.5667,
+      "unrecoveredEpisodes": 1
+    },
+    {
+      "affectedSessions": 1,
+      "category": "ParseError",
+      "components": {
+        "evidenceQuality": 0.5,
+        "holdoutShare": 0,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 1
+      },
+      "decidedEpisodes": 1,
+      "holdoutSessions": 0,
+      "kind": "refusal",
+      "occurrences": 1,
+      "score": 0.4167,
+      "unrecoveredEpisodes": 1
+    },
+    {
+      "affectedSessions": 1,
+      "category": "UnsupportedSyntax",
+      "components": {
+        "evidenceQuality": 0.5,
+        "holdoutShare": 0,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 1
+      },
+      "decidedEpisodes": 1,
+      "holdoutSessions": 0,
+      "kind": "refusal",
+      "occurrences": 1,
+      "score": 0.4167,
+      "unrecoveredEpisodes": 1
+    },
+    {
+      "affectedSessions": 1,
+      "category": "ConcurrencyLimit",
+      "components": {
+        "evidenceQuality": 1,
+        "holdoutShare": 0,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 0
+      },
+      "decidedEpisodes": 0,
+      "holdoutSessions": 0,
+      "kind": "refusal",
+      "occurrences": 3,
+      "score": 0.3167,
+      "unrecoveredEpisodes": 0
+    },
+    {
+      "affectedSessions": 1,
+      "category": "ToolFailure",
+      "components": {
+        "evidenceQuality": 1,
+        "holdoutShare": 0,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 0
+      },
+      "decidedEpisodes": 1,
+      "holdoutSessions": 0,
+      "kind": "failure",
+      "occurrences": 1,
+      "score": 0.3167,
+      "unrecoveredEpisodes": 0
+    },
+    {
+      "affectedSessions": 1,
+      "category": "NonzeroExit",
+      "components": {
+        "evidenceQuality": 1,
+        "holdoutShare": 0,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 0
+      },
+      "decidedEpisodes": 0,
+      "holdoutSessions": 0,
+      "kind": "journal",
+      "occurrences": 1,
+      "score": 0.3167,
+      "unrecoveredEpisodes": 0
+    },
+    {
+      "affectedSessions": 1,
+      "category": "Provider",
+      "components": {
+        "evidenceQuality": 1,
+        "holdoutShare": 0,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 0
+      },
+      "decidedEpisodes": 0,
+      "holdoutSessions": 0,
+      "kind": "refusal",
+      "occurrences": 1,
+      "score": 0.3167,
+      "unrecoveredEpisodes": 0
+    },
+    {
+      "affectedSessions": 1,
+      "category": "Legacy:ToolFailure",
+      "components": {
+        "evidenceQuality": 0.5,
+        "holdoutShare": 0,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 0
+      },
+      "decidedEpisodes": 0,
+      "holdoutSessions": 0,
+      "kind": "failure",
+      "occurrences": 1,
+      "score": 0.2167,
+      "unrecoveredEpisodes": 0
+    },
+    {
+      "affectedSessions": 1,
+      "category": "NotFound",
+      "components": {
+        "evidenceQuality": 0.5,
+        "holdoutShare": 0,
+        "sessionShare": 0.3333,
+        "unrecoveredRate": 0
+      },
+      "decidedEpisodes": 0,
+      "holdoutSessions": 0,
+      "kind": "journal",
+      "occurrences": 1,
+      "score": 0.2167,
+      "unrecoveredEpisodes": 0
+    }
+  ],
+  "sequences": {
+    "episodeTransitions": [
+      {
+        "occurrences": 2,
+        "pair": "ConcurrencyLimit -> ConcurrencyLimit",
+        "sessions": 1
+      },
+      {
+        "occurrences": 1,
+        "pair": "ParseError -> Legacy:ToolFailure",
+        "sessions": 1
+      },
+      {
+        "occurrences": 1,
+        "pair": "ToolFailure -> ConcurrencyLimit",
+        "sessions": 1
+      },
+      {
+        "occurrences": 1,
+        "pair": "UnsupportedSyntax -> Provider",
+        "sessions": 1
+      }
+    ],
+    "toolBigrams": [
+      {
+        "occurrences": 8,
+        "pair": "execute -> execute",
+        "sessions": 2
+      },
+      {
+        "occurrences": 1,
+        "pair": "read -> execute",
+        "sessions": 1
+      }
+    ],
+    "toolStatus": [
+      {
+        "calls": 11,
+        "statuses": [
+          {
+            "count": 8,
+            "name": "error"
+          },
+          {
+            "count": 3,
+            "name": "completed"
+          }
+        ],
+        "tool": "execute"
+      },
+      {
+        "calls": 1,
+        "statuses": [
+          {
+            "count": 1,
+            "name": "completed"
+          }
+        ],
+        "tool": "read"
+      }
+    ]
+  },
+  "statistics": {
+    "effects": [
+      {
+        "a": {
+          "denominator": 1,
+          "high": 1,
+          "low": 0.2065,
+          "name": "child",
+          "numerator": 1,
+          "rate": 1,
+          "sessions": 1
+        },
+        "b": {
+          "denominator": 10,
+          "high": 0.8318,
+          "low": 0.3127,
+          "name": "top-level",
+          "numerator": 6,
+          "rate": 0.6,
+          "sessions": 2
+        },
+        "measure": "refusal rate per execute call",
+        "observational": true,
+        "supported": false
+      },
+      {
+        "a": {
+          "denominator": 1,
+          "high": 1,
+          "low": 0.2065,
+          "name": "holdout",
+          "numerator": 1,
+          "rate": 1,
+          "sessions": 1
+        },
+        "b": {
+          "denominator": 10,
+          "high": 0.8318,
+          "low": 0.3127,
+          "name": "training",
+          "numerator": 6,
+          "rate": 0.6,
+          "sessions": 2
+        },
+        "measure": "refusal rate per execute call",
+        "observational": true,
+        "supported": false
+      },
+      {
+        "a": {
+          "denominator": 1,
+          "high": 1,
+          "low": 0.2065,
+          "name": "child",
+          "numerator": 1,
+          "rate": 1,
+          "sessions": 1
+        },
+        "b": {
+          "denominator": 3,
+          "high": 0.9385,
+          "low": 0.2077,
+          "name": "top-level",
+          "numerator": 2,
+          "rate": 0.6667,
+          "sessions": 2
+        },
+        "measure": "unrecovered rate per decided episode",
+        "observational": true,
+        "supported": false
+      }
+    ],
+    "executeCallsPerSession": {
+      "count": 3,
+      "max": 7,
+      "mean": 3.6667,
+      "min": 1,
+      "p50": 3,
+      "p90": 7
+    },
+    "executionDurationMs": {
+      "count": 2,
+      "max": 1,
+      "mean": 1,
+      "min": 1,
+      "p50": 1,
+      "p90": 1
+    }
+  },
+  "strata": [
+    {
+      "calls": 6,
+      "completionSources": [
+        {
+          "count": 6,
+          "name": "none"
+        }
+      ],
+      "completions": [
+        {
+          "count": 6,
+          "name": "unknown"
+        }
+      ],
+      "mode": "unknown",
+      "refused": 6,
+      "sessions": 2,
+      "version": "1.1.0"
+    },
+    {
+      "calls": 2,
+      "completionSources": [
+        {
+          "count": 1,
+          "name": "none"
+        },
+        {
+          "count": 1,
+          "name": "tool"
+        }
+      ],
+      "completions": [
+        {
+          "count": 1,
+          "name": "saved"
+        },
+        {
+          "count": 1,
+          "name": "unknown"
+        }
+      ],
+      "mode": "unknown",
+      "refused": 1,
+      "sessions": 1,
+      "version": "1.0.0"
+    },
+    {
+      "calls": 2,
+      "completionSources": [
+        {
+          "count": 2,
+          "name": "execution"
+        }
+      ],
+      "completions": [
+        {
+          "count": 1,
+          "name": "failed"
+        },
+        {
+          "count": 1,
+          "name": "saved"
+        }
+      ],
+      "mode": "async",
+      "refused": 0,
+      "sessions": 1,
+      "version": "1.1.0"
+    },
+    {
+      "calls": 1,
+      "completionSources": [
+        {
+          "count": 1,
+          "name": "tool"
+        }
+      ],
+      "completions": [
+        {
+          "count": 1,
+          "name": "failed"
+        }
+      ],
+      "mode": "sync",
+      "refused": 0,
+      "sessions": 1,
+      "version": "1.0.0"
+    }
+  ],
+  "terminalFailures": [
+    {
+      "errorMessage": "socket closed",
+      "errorType": "provider.transport",
+      "holdout": true,
+      "parentID": "ses_new",
+      "sessionID": "ses_failed",
+      "version": "1.1.0"
+    }
+  ]
+}

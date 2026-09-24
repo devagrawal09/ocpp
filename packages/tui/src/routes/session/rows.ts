@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 import type { SessionInboxEnqueued, SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client"
 import { createEffect, on, onCleanup, type Accessor } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -423,7 +424,7 @@ export function backgroundToolRowIndex(
       )
     return (
       part?.type === "tool" &&
-      part.name.toLowerCase() === "subagent" &&
+      Delegation.isTool(part.name.toLowerCase()) &&
       part.state.status === "completed" &&
       part.state.metadata?.status === "running" &&
       part.state.metadata.sessionID === target.id

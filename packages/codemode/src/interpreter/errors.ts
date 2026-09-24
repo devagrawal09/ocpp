@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import type { Diagnostic } from "../codemode.js"
+import { CompileError } from "../compiler.js"
 import { ToolError } from "../tool-error.js"
 import { copyOut, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
 import { type AstNode, formatLocation, InterpreterRuntimeError, ProgramThrow, sourceLocation } from "./model.js"
@@ -8,7 +9,17 @@ import { type SyncIteratorRunner } from "./iterator.js"
 import { coerceToString, createAggregateErrorValue, createErrorValue, errorConstructors } from "../stdlib/value.js"
 
 export const normalizeError = (error: unknown): Diagnostic => {
-  if (error instanceof InterpreterRuntimeError) {
+  if (error instanceof CompileError && error.location) {
+    return {
+      kind: error.kind,
+      message: `${error.message} (line ${error.location.line}, col ${error.location.column})`,
+      location: error.location,
+      ...(error.excerpt ? { excerpt: error.excerpt } : {}),
+      ...(error.suggestions ? { suggestions: error.suggestions } : {}),
+    }
+  }
+
+  if (error instanceof InterpreterRuntimeError || error instanceof CompileError) {
     return {
       kind: error.kind,
       message: `${error.message}${formatLocation(error.node)}`,

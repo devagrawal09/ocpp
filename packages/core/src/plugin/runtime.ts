@@ -16,6 +16,7 @@ export interface Interface {
     | "get"
     | "create"
     | "messages"
+    | "message"
     | "prompt"
     | "generate"
     | "command"
@@ -29,7 +30,19 @@ export interface Interface {
     | "wait"
     | "context"
   >
-  readonly job: Pick<Job.Interface, "start" | "wait" | "block" | "background" | "cancel" | "completeBackground">
+  readonly job: Pick<
+    Job.Interface,
+    | "start"
+    | "startLimited"
+    | "active"
+    | "wait"
+    | "block"
+    | "background"
+    | "cancel"
+    | "cancelAll"
+    | "markBackgroundTerminal"
+    | "completeBackground"
+  >
   readonly persistentPty: Pick<PersistentPty.Interface, "read">
   readonly location: {
     readonly agent: {
@@ -70,6 +83,7 @@ export const layerWithCell = (cell: Cell) =>
         get: (sessionID) => require(cell, (runtime) => runtime.session.get(sessionID)),
         create: (input) => require(cell, (runtime) => runtime.session.create(input)),
         messages: (input) => require(cell, (runtime) => runtime.session.messages(input)),
+        message: (input) => require(cell, (runtime) => runtime.session.message(input)),
         prompt: (input) => require(cell, (runtime) => runtime.session.prompt(input)),
         generate: (input) => require(cell, (runtime) => runtime.session.generate(input)),
         command: (input) => require(cell, (runtime) => runtime.session.command(input)),
@@ -85,10 +99,15 @@ export const layerWithCell = (cell: Cell) =>
       },
       job: {
         start: (input) => require(cell, (runtime) => runtime.job.start(input)),
+        startLimited: (input) => require(cell, (runtime) => runtime.job.startLimited(input)),
+        active: (input) => require(cell, (runtime) => runtime.job.active(input)),
         wait: (input) => require(cell, (runtime) => runtime.job.wait(input)),
         block: (input) => require(cell, (runtime) => runtime.job.block(input)),
         background: (id) => require(cell, (runtime) => runtime.job.background(id)),
         cancel: (id) => require(cell, (runtime) => runtime.job.cancel(id)),
+        cancelAll: (input) => require(cell, (runtime) => runtime.job.cancelAll(input)),
+        markBackgroundTerminal: (notificationID) =>
+          require(cell, (runtime) => runtime.job.markBackgroundTerminal(notificationID)),
         completeBackground: (notificationID) =>
           require(cell, (runtime) => runtime.job.completeBackground(notificationID)),
       },

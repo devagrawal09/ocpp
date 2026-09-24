@@ -1,27 +1,13 @@
 import type { Effect } from "effect"
+import type { coercionFunctions, globalNamespaces, uriFunctions } from "../globals.js"
+import { isRecord, type AstNode } from "../ir.js"
 import type { SafeObject } from "../tool-runtime.js"
-import type { CodeModePromise, CodeModeRegExp, CodeModeURL } from "../values.js"
+import type { CodeModePromise } from "../values.js"
 
-export type SourcePosition = {
-  line: number
-  column: number
-}
-
-export type SourceLocation = {
-  start: SourcePosition
-  end: SourcePosition
-}
-
-export type AstNode = {
-  type: string
-  loc?: SourceLocation
-  [key: string]: unknown
-}
-
-export type ProgramNode = AstNode & {
-  type: "Program"
-  body: Array<AstNode>
-}
+// The compiled representation lives in ../ir.ts so the compiler that produces it does not depend on
+// the interpreter that evaluates it. Interpreter modules keep reading it through this module.
+export type { AstNode, ProgramNode, SourceLocation, SourcePosition } from "../ir.js"
+export { isRecord } from "../ir.js"
 
 export type Binding = {
   mutable: boolean
@@ -36,7 +22,7 @@ export type StatementResult =
   | { kind: "continue"; label?: string }
 
 export type MemberReference = {
-  target: SafeObject | Array<unknown> | CodeModeRegExp | CodeModeURL
+  target: SafeObject | Array<unknown>
   key: PropertyKey
 }
 
@@ -47,6 +33,11 @@ export class CodeModeFunction {
     readonly capturedScopes: ReadonlyArray<Map<string, Binding>>,
     readonly async: boolean,
     readonly generator: boolean,
+    /** Function node, source text, and captured bindings kept so the value can be saved durably. */
+    readonly node: AstNode,
+    readonly source: string,
+    readonly captures: ReadonlyMap<string, Binding>,
+    readonly unresolved: ReadonlyArray<string>,
   ) {}
 }
 
@@ -83,6 +74,14 @@ export class ComputedValue {
 
 export class PromiseNamespace {}
 
+export class ToolNamespace {
+  readonly _tag = "ToolNamespace"
+}
+
+export class ToolDefineReference {
+  readonly _tag = "ToolDefineReference"
+}
+
 export class SymbolNamespace {}
 
 export const AsyncIteratorSymbol: unique symbol = Symbol("codemode.async-iterator")
@@ -108,18 +107,7 @@ export class PromiseCapabilityFunction {
   constructor(readonly settle: (value: unknown) => void) {}
 }
 
-export type GlobalNamespaceName =
-  | "Object"
-  | "Math"
-  | "JSON"
-  | "Array"
-  | "console"
-  | "Date"
-  | "RegExp"
-  | "Map"
-  | "Set"
-  | "URL"
-  | "URLSearchParams"
+export type GlobalNamespaceName = (typeof globalNamespaces)[number]
 
 export class GlobalNamespace {
   constructor(readonly name: GlobalNamespaceName) {}
@@ -137,14 +125,34 @@ export class JsonMethodReference {
 }
 
 export class CoercionFunction {
-  constructor(readonly name: "Number" | "String" | "Boolean" | "parseInt" | "parseFloat" | "isFinite" | "isNaN") {}
+  constructor(readonly name: (typeof coercionFunctions)[number]) {}
 }
 
 export class UriFunction {
-  constructor(readonly name: "encodeURI" | "encodeURIComponent" | "decodeURI" | "decodeURIComponent") {}
+  constructor(readonly name: (typeof uriFunctions)[number]) {}
 }
 
 export class SearchFunction {}
+
+/**
+ * A stored notebook value that could not be decoded. It is quarantined in its binding instead of
+ * failing the whole activation, so unrelated later code still runs and only a program that actually
+ * reads the name receives the diagnostic.
+ */
+export class BrokenNotebookValue {
+  readonly message: string
+  constructor(
+    readonly name: string,
+    readonly cause: string,
+  ) {
+    this.message = `Notebook value '${name}' cannot be loaded: ${cause}`
+  }
+}
+
+/** The name is already saved and append-only, so recovery is a new name, never a redeclaration. */
+export const brokenNotebookSuggestions = [
+  "This name is permanent and cannot be declared again. Use a different name, or revert the message that saved it.",
+]
 
 export class ProgramThrow {
   constructor(readonly value: unknown) {}
@@ -165,6 +173,7 @@ export type DiagnosticKind =
   | "InvalidToolInput"
   | "InvalidToolOutput"
   | "InvalidDataValue"
+  | "InvalidDurableValue"
   | "ToolCallLimitExceeded"
   | "TimeoutExceeded"
   | "ToolFailure"
@@ -173,7 +182,7 @@ export type DiagnosticKind =
 export const OptionalShortCircuit: unique symbol = Symbol("codemode.optional-short-circuit")
 
 export const supportedSyntaxMessage =
-  "Supported orchestration syntax: tools.* calls (they return promises - resolve them with await), data literals, destructuring, optional chaining, template literals, conditionals, switch, loops (incl. for...of and for...in over object/array/tools keys), arrow functions, spread, try/catch, array methods (map/filter/find/findIndex/some/every/reduce/flatMap/forEach/sort/slice/concat/indexOf/lastIndexOf/at/flat/reverse/includes/join), string methods (incl. match/matchAll/replace/split with regular expressions), Date/RegExp/Map/Set/URL/URLSearchParams, URI encoding helpers, Object/Math/JSON helpers, captured console.log/warn/error/dir/table, Promise.all/allSettled/race/any/resolve/reject over arrays mixing promises and plain values for parallel tool calls, promise chaining with .then/.catch/.finally, and new Promise((resolve, reject) => ...) construction."
+  "Supported syntax: direct blocking tools.* calls, immutable data literals and transformations, local let bindings, synchronous functions and callbacks, control flow, and captured console output. Direct top-level const and function declarations are saved to the notebook automatically. await and Promise.all are warning-producing compatibility no-ops; other Promise forms, async, generators, dynamic tool dispatch, export, and aggregate mutation are not supported."
 
 export class InterpreterRuntimeError extends Error {
   readonly node?: AstNode
@@ -203,9 +212,6 @@ export const unsupportedSyntax = (kind: string, node: AstNode): InterpreterRunti
     "UnsupportedSyntax",
     [supportedSyntaxMessage],
   )
-
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null
 
 export const asNode = (value: unknown, context: string): AstNode => {
   if (!isRecord(value) || typeof value.type !== "string") {
@@ -240,9 +246,10 @@ export const getOptionalNode = (node: AstNode, key: string): AstNode | undefined
 
 export const getNode = (node: AstNode, key: string): AstNode => asNode(node[key], key)
 
+// acorn positions are a one-based line and a zero-based column; diagnostics report both one-based.
 export const sourceLocation = (node: AstNode): { readonly line: number; readonly column: number } => ({
-  line: Math.max(1, (node.loc?.start.line ?? 2) - 1),
-  column: Math.max(1, (node.loc?.start.column ?? 4) - 3),
+  line: Math.max(1, node.loc?.start.line ?? 1),
+  column: Math.max(1, (node.loc?.start.column ?? 0) + 1),
 })
 
 export const formatLocation = (node?: AstNode): string => {

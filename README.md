@@ -1,3 +1,28 @@
+# OpenCode Code Mode Fork
+
+> [!IMPORTANT]
+> This repository is a clean, independent fork of [anomalyco/opencode](https://github.com/anomalyco/opencode).
+> It is maintained at [devagrawal09/opencode](https://github.com/devagrawal09/opencode) and is not affiliated with or endorsed by the upstream OpenCode team. Upstream history, project structure, and documentation are preserved; the focused fork changes live on the [`codemode-fork`](https://github.com/devagrawal09/opencode/tree/codemode-fork) branch.
+
+### What This Fork Changes
+
+This branch redesigns Code Mode as an append-only durable notebook that a Session writes to by running code:
+
+- **Automatic publication:** Every direct top-level `const` and `function` declaration is saved to the Session notebook and readable by name in later executions. There is no `export` syntax, and `return` is only a small preview.
+- **Immutable names with atomic admission:** A notebook name is written once and never reused. Names are verified and reserved before an execution ID exists, so conflicts are refused immediately and disjoint executions run concurrently without a global revision gate.
+- **All-or-nothing saving:** A successful program commits every declaration in one transaction; any failure, cancellation, revert, or restart saves nothing and releases its reservations.
+- **Durable values, including closures:** Values are `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, and functions saved with their compiled body and exact captures. `Date`, `Map`, `Set`, and `URL` are replaced by `time` and `url` helpers that return plain data; regular expressions are unavailable.
+- **One asynchronous flow:** `execute` takes source code only, returns an execution ID after admission, and delivers one bounded completion notification with status, saved names, diagnostics, and logs. Mode, model-supplied timeouts, durable result blobs, and `execution_result` paging are gone.
+- **Durable lifecycle and recovery:** Executions, tool-call journals, notebook values, fork boundaries, and committed reverts are persisted by Core. Uncertain in-flight work becomes `indeterminate` instead of being replayed.
+- **Scoped tool handles:** `tool.define` creates same-execution opaque handles with frozen captures and compiler-derived tool capabilities. Handles are never durable.
+
+The redesign is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. See the single [Code Mode guide](packages/codemode/interpreter-support.md) for architecture diagrams, examples, lifecycle semantics, limits, and the full language contract.
+
+> [!NOTE]
+> The installation commands and release downloads in the upstream README below install upstream OpenCode, not this fork. Build the `codemode-fork` branch from source to run these changes.
+
+---
+
 <p align="center">
   <a href="https://opencode.ai">
     <picture>

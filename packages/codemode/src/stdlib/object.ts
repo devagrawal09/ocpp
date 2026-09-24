@@ -8,7 +8,7 @@ import {
 } from "../interpreter/model.js"
 import { containsOpaqueReference } from "../interpreter/references.js"
 import { isBlockedMember } from "../tool-runtime.js"
-import { isCodeModeValue, CodeModePromise } from "../values.js"
+import { CodeModePromise } from "../values.js"
 import { boundedData, coerceToString } from "./value.js"
 import { preserveConsumerError, type SyncIteratorRunner } from "../interpreter/iterator.js"
 
@@ -20,7 +20,6 @@ export const invokeObjectMethod = (name: string, args: Array<unknown>, node: Ast
   const requireObject = (): Record<string, unknown> => {
     const input = args[0]
     if (Array.isArray(input)) return input as unknown as Record<string, unknown>
-    if (isCodeModeValue(input)) return {}
     if (input instanceof CodeModePromise) {
       throw new InterpreterRuntimeError(
         `Object.${name} received an un-awaited Promise; await it before inspecting the result.`,
@@ -60,12 +59,12 @@ export const invokeObjectMethod = (name: string, args: Array<unknown>, node: Ast
       return Object.is(args[0], args[1])
     case "assign": {
       const target = args[0]
-      if (target === null || typeof target !== "object" || Array.isArray(target) || isCodeModeValue(target)) {
+      if (target === null || typeof target !== "object" || Array.isArray(target)) {
         throw new InterpreterRuntimeError("Object.assign expects a data object target.", node)
       }
       const out = target as Record<string, unknown>
       for (const source of args.slice(1)) {
-        if (source === null || source === undefined || isCodeModeValue(source)) continue
+        if (source === null || source === undefined) continue
         if (typeof source !== "object" || Array.isArray(source)) {
           throw new InterpreterRuntimeError("Object.assign expects data objects.", node)
         }
@@ -99,12 +98,7 @@ export const invokeObjectFromEntries = <R>(
       yield* preserveConsumerError(
         cursor,
         Effect.sync(() => {
-          if (
-            step.value === null ||
-            typeof step.value !== "object" ||
-            isCodeModeValue(step.value) ||
-            containsOpaqueReference(step.value)
-          ) {
+          if (step.value === null || typeof step.value !== "object" || containsOpaqueReference(step.value)) {
             throw new InterpreterRuntimeError("Object.fromEntries expects [key, value] entry objects.", node).as(
               "TypeError",
             )

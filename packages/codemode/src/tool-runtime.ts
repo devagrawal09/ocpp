@@ -1,4 +1,5 @@
 import { Cause, Effect, Exit, Formatter, Schema } from "effect"
+import { collectionLimitMessage, MAX_COLLECTION_ITEMS, MAX_STRING_LENGTH, stringLimitMessage } from "./limits.js"
 import { toolError } from "./tool-error.js"
 import {
   decodeInput as decodeToolInput,
@@ -9,16 +10,9 @@ import {
   outputTypeScript,
 } from "./tool-schema.js"
 import { isTool, type Tool } from "./tool.js"
+import { ToolHandle } from "./tool-handle.js"
 import type { Tools } from "./tools.js"
-import {
-  CodeModeDate,
-  CodeModeMap,
-  CodeModePromise,
-  CodeModeRegExp,
-  CodeModeSet,
-  CodeModeURL,
-  CodeModeURLSearchParams,
-} from "./values.js"
+import { CodeModePromise } from "./values.js"
 
 const compareText = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0)
 
@@ -28,7 +22,7 @@ type ServicesOf<T, Depth extends ReadonlyArray<unknown>> = Depth["length"] exten
   ? never
   : T extends {
         readonly _tag: "CodeModeTool"
-        readonly execute: (input: unknown) => Effect.Effect<unknown, unknown, infer R>
+        readonly execute: (...args: never[]) => Effect.Effect<unknown, unknown, infer R>
       }
     ? R
     : T extends object
@@ -53,6 +47,7 @@ export type ToolCallEnded = {
   readonly input: unknown
   readonly durationMs: number
   readonly outcome: "success" | "failure" | "interrupted"
+  readonly output?: unknown
   readonly message?: string
 }
 
@@ -121,27 +116,28 @@ const blockedMemberNames = new Set(["__proto__", "constructor", "prototype"])
 
 export const isBlockedMember = (name: string): boolean => blockedMemberNames.has(name)
 
-// Checkpoint mode preserves CodeMode values; boundary mode JSON-normalizes them.
-export const copyIn = (value: unknown, label: string, preserveCodeModeValues = false): unknown =>
-  copyBounded(value, label, 0, new Set(), preserveCodeModeValues)
+export const copyIn = (value: unknown, label: string, preserveToolHandles = false): unknown =>
+  copyBounded(value, label, 0, new Set(), preserveToolHandles)
 
 const copyBounded = (
   value: unknown,
   label: string,
   depth: number,
   seen: Set<object>,
-  preserveCodeModeValues: boolean,
+  preserveToolHandles: boolean,
 ): unknown => {
   if (depth > MAX_VALUE_DEPTH) {
     throw new ToolRuntimeError("InvalidDataValue", `${label} exceeds the maximum value depth of ${MAX_VALUE_DEPTH}.`)
   }
-  if (
-    value === null ||
-    value === undefined ||
-    typeof value === "string" ||
-    typeof value === "boolean" ||
-    typeof value === "number"
-  ) {
+  // Strings arrive already built, so this is the backstop for growth that no single call could
+  // predict, such as a `+` chain the host kept as an unflattened rope.
+  if (typeof value === "string") {
+    if (value.length > MAX_STRING_LENGTH) {
+      throw new ToolRuntimeError("InvalidDataValue", stringLimitMessage(label, value.length))
+    }
+    return value
+  }
+  if (value === null || value === undefined || typeof value === "boolean" || typeof value === "number") {
     return value
   }
 
@@ -152,58 +148,12 @@ const copyBounded = (
   if (value instanceof CodeModePromise) {
     throw new ToolRuntimeError(
       "InvalidDataValue",
-      `${label} contains an un-awaited Promise; await tool calls (e.g. \`const result = await tools.ns.tool(...)\`) before using their results.`,
+      `${label} contains an un-awaited Promise; tool calls block and return their result directly.`,
     )
   }
-
-  if (preserveCodeModeValues) {
-    if (
-      value instanceof CodeModeDate ||
-      value instanceof CodeModeRegExp ||
-      value instanceof CodeModeMap ||
-      value instanceof CodeModeSet ||
-      value instanceof CodeModeURL ||
-      value instanceof CodeModeURLSearchParams
-    ) {
-      return value
-    }
-    if (value instanceof Date) return new CodeModeDate(value.getTime())
-    if (value instanceof RegExp) return new CodeModeRegExp(value.source, value.flags)
-    if (value instanceof Map) {
-      const wrapped = new CodeModeMap()
-      for (const [key, item] of value.entries()) {
-        wrapped.map.set(copyBounded(key, label, depth + 1, seen, true), copyBounded(item, label, depth + 1, seen, true))
-      }
-      return wrapped
-    }
-    if (value instanceof Set) {
-      const wrapped = new CodeModeSet()
-      for (const item of value.values()) wrapped.set.add(copyBounded(item, label, depth + 1, seen, true))
-      return wrapped
-    }
-    if (value instanceof URL) return new CodeModeURL(new URL(value.href))
-    if (value instanceof URLSearchParams) return new CodeModeURLSearchParams(new URLSearchParams(value))
-  }
-
-  if (value instanceof CodeModeDate) {
-    return Number.isFinite(value.time) ? new Date(value.time).toISOString() : null
-  }
-  if (value instanceof Date) {
-    return Number.isFinite(value.getTime()) ? value.toISOString() : null
-  }
-  if (value instanceof CodeModeURL) return value.url.href
-  if (value instanceof URL) return value.href
-  if (
-    value instanceof CodeModeRegExp ||
-    value instanceof CodeModeMap ||
-    value instanceof CodeModeSet ||
-    value instanceof CodeModeURLSearchParams ||
-    value instanceof RegExp ||
-    value instanceof Map ||
-    value instanceof Set ||
-    value instanceof URLSearchParams
-  ) {
-    return Object.create(null) as SafeObject
+  if (value instanceof ToolHandle) {
+    if (preserveToolHandles) return value
+    throw new ToolRuntimeError("InvalidDataValue", `${label} contains an opaque tool handle.`)
   }
 
   if (seen.has(value)) {
@@ -212,18 +162,13 @@ const copyBounded = (
 
   seen.add(value)
 
+  // Every value the interpreter builds crosses this copy, so refusing an oversized collection here
+  // is what lets the rest of the runtime treat the item limit as an invariant.
   if (Array.isArray(value)) {
-    const copied = value.map((item) => copyBounded(item, label, depth + 1, seen, preserveCodeModeValues))
-    if (preserveCodeModeValues) {
-      // Checkpoint copies retain array metadata that boundary copies omit.
-      for (const [key, item] of Object.entries(value)) {
-        if (Object.hasOwn(copied, key)) continue
-        if (isBlockedMember(key)) {
-          throw new ToolRuntimeError("InvalidDataValue", `${label} contains blocked property '${key}'.`)
-        }
-        Reflect.set(copied, key, copyBounded(item, label, depth + 1, seen, true))
-      }
+    if (value.length > MAX_COLLECTION_ITEMS) {
+      throw new ToolRuntimeError("InvalidDataValue", collectionLimitMessage(label, value.length))
     }
+    const copied = value.map((item) => copyBounded(item, label, depth + 1, seen, preserveToolHandles))
     seen.delete(value)
     return copied
   }
@@ -233,12 +178,16 @@ const copyBounded = (
     throw new ToolRuntimeError("InvalidDataValue", `${label} must contain plain objects only.`)
   }
 
+  const entries = Object.entries(value)
+  if (entries.length > MAX_COLLECTION_ITEMS) {
+    throw new ToolRuntimeError("InvalidDataValue", collectionLimitMessage(label, entries.length))
+  }
   const copied: SafeObject = Object.create(null) as SafeObject
-  for (const [key, item] of Object.entries(value)) {
+  for (const [key, item] of entries) {
     if (isBlockedMember(key)) {
       throw new ToolRuntimeError("InvalidDataValue", `${label} contains blocked property '${key}'.`)
     }
-    copied[key] = copyBounded(item, label, depth + 1, seen, preserveCodeModeValues)
+    copied[key] = copyBounded(item, label, depth + 1, seen, preserveToolHandles)
   }
   seen.delete(value)
   return copied
@@ -250,7 +199,8 @@ const copyBounded = (
 // one, into null: use it for program results, where the consumer must never see undefined.
 export type CopyOutMode = "json" | "nullify"
 
-export const copyOut = (value: unknown, mode: CopyOutMode): unknown => {
+export const copyOut = (value: unknown, mode: CopyOutMode, preserveToolHandles = false): unknown => {
+  if (value instanceof ToolHandle && preserveToolHandles) return value
   if (value === undefined && mode === "nullify") return null
   if (typeof value === "number" && !Number.isFinite(value)) {
     return null
@@ -258,7 +208,7 @@ export const copyOut = (value: unknown, mode: CopyOutMode): unknown => {
   if (Array.isArray(value)) {
     // Array.from densifies holes so sparse arrays normalize at the boundary like JSON does.
     return Array.from(value, (item) => {
-      const copied = copyOut(item, mode)
+      const copied = copyOut(item, mode, preserveToolHandles)
       return copied === undefined && mode === "json" ? null : copied
     })
   }
@@ -266,7 +216,7 @@ export const copyOut = (value: unknown, mode: CopyOutMode): unknown => {
   if (value !== null && typeof value === "object" && !(value instanceof ToolReference)) {
     return Object.fromEntries(
       Object.entries(value)
-        .map(([key, item]) => [key, copyOut(item, mode)] as const)
+        .map(([key, item]) => [key, copyOut(item, mode, preserveToolHandles)] as const)
         .filter(([, item]) => !(item === undefined && mode === "json")),
     )
   }
@@ -296,6 +246,8 @@ const toolTrie = <R>(tools: Tools<R>): ToolNode<R> => {
     }
   }
   insert(root, tools)
+  if (root.children.get("search")?.tool !== undefined)
+    throw new TypeError("Tool path 'search' is reserved for the built-in tools.search function.")
   return root
 }
 
@@ -313,7 +265,7 @@ const flattenTools = <R>(
 const describeTool = <R>(path: string, tool: Tool<R>): ToolDescription => ({
   path,
   description: tool.description,
-  signature: `${toolExpression(path)}(input: ${inputTypeScript(tool, true)}): Promise<${outputTypeScript(tool, true)}>`,
+  signature: `${toolExpression(path)}(input: ${inputTypeScript(tool, true)}): ${outputTypeScript(tool, true)}`,
 })
 
 // Discovery bytes are durable instructions, so order only after canonical-path collisions settle.
@@ -355,6 +307,7 @@ const makeSearchTool = (searchIndex: ReadonlyArray<SearchEntry>): Tool => ({
   description: "Search available tools",
   input: SearchInput,
   output: SearchOutput,
+  acceptsToolHandles: false,
   execute: (input) =>
     Effect.sync(() => {
       const request = input as typeof SearchInput.Type
@@ -414,10 +367,10 @@ const makeSearchTool = (searchIndex: ReadonlyArray<SearchEntry>): Tool => ({
     }),
 })
 
-/** Exact callable signature of the built-in `search` function, for host-owned instructions. */
+/** Exact callable signature of the built-in `tools.search` function, for host-owned instructions. */
 export const searchSignature = (() => {
   const tool = makeSearchTool([])
-  return `search(input: ${inputTypeScript(tool, true)}): ${outputTypeScript(tool, true)}`
+  return `tools.search(input: ${inputTypeScript(tool, true)}): ${outputTypeScript(tool, true)}`
 })()
 
 const toSearchEntry = <R>(path: string, tool: Tool<R>, description: ToolDescription): SearchEntry => ({
@@ -461,7 +414,7 @@ const resolve = <R>(root: ToolNode<R>, path: ReadonlyArray<string>): Tool<R> => 
   const node = lookup(root, segments)
   if (node === undefined) {
     throw new ToolRuntimeError("UnknownTool", `Unknown tool '${segments.join(".")}'.`, [
-      "The tool may have been removed or renamed. Use search to find available tools.",
+      "The tool may have been removed or renamed. Use tools.search to find available tools.",
     ])
   }
   if (node.tool === undefined) {
@@ -487,6 +440,9 @@ export const make = <R>(
   const calls: Array<ToolCall> = []
   const root = toolTrie(tools)
   const searchTool = makeSearchTool(searchIndex)
+  const searchNode: ToolNode<R> = root.children.get("search") ?? { children: new Map() }
+  searchNode.tool = searchTool
+  root.children.set("search", searchNode)
 
   const observeEnd = <A, E>(effect: Effect.Effect<A, E, R>, call: ToolCallStarted): Effect.Effect<A, E, R> => {
     const onEnd = hooks?.onToolCallEnd
@@ -495,7 +451,7 @@ export const make = <R>(
     return effect.pipe(
       Effect.onExit((exit) => {
         const durationMs = Date.now() - startedAt
-        if (Exit.isSuccess(exit)) return onEnd({ ...call, durationMs, outcome: "success" })
+        if (Exit.isSuccess(exit)) return onEnd({ ...call, durationMs, outcome: "success", output: exit.value })
         if (Cause.hasInterruptsOnly(exit.cause)) return onEnd({ ...call, durationMs, outcome: "interrupted" })
         const error = Cause.squash(exit.cause)
         const message = error instanceof Error ? error.message : Cause.pretty(exit.cause)
@@ -521,7 +477,7 @@ export const make = <R>(
           new ToolRuntimeError(
             "InvalidToolInput",
             `Invalid input for tool '${name}': ${String(cause)}`,
-            name === "search" ? [] : ["The signature may have changed. Use search to get the current signature."],
+            name === "search" ? [] : ["The signature may have changed. Use tools.search to get the current signature."],
           ),
       })
       const index = yield* Effect.sync(() => {
@@ -532,7 +488,7 @@ export const make = <R>(
       return yield* observeEnd(
         Effect.gen(function* () {
           if (hooks?.onToolCallStart !== undefined) yield* hooks.onToolCallStart(call)
-          const raw = yield* Effect.suspend(() => tool.execute(input)).pipe(
+          const raw = yield* Effect.suspend(() => tool.execute(input, { index, name })).pipe(
             Effect.catchCause((cause) => {
               if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt
               return Effect.fail(
@@ -568,8 +524,14 @@ export const make = <R>(
     execute: (path, args) =>
       Effect.gen(function* () {
         const name = canonicalSegments(path).join(".")
-        const externalArgs = args.map((arg) => copyOut(copyIn(arg, `Arguments for tool '${name}'`), "json"))
         const tool = resolve(root, path)
+        const externalArgs = args.map((arg) =>
+          copyOut(
+            copyIn(arg, `Arguments for tool '${name}'`, tool.acceptsToolHandles),
+            "json",
+            tool.acceptsToolHandles,
+          ),
+        )
         return yield* executeTool(name, tool, externalArgs)
       }),
   }

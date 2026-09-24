@@ -16,6 +16,8 @@ const args = parseArgs({
   options: {
     check: { type: "boolean" },
     name: { type: "string" },
+    // Drizzle cannot tell a rename from a create; forward its resolution hints when it asks.
+    hints: { type: "string" },
   },
 })
 
@@ -34,7 +36,7 @@ async function generate() {
     await fs.mkdir(incremental)
     await fs.mkdir(path.join(incremental, "baseline"))
     await fs.copyFile(snapshot, path.join(incremental, "baseline/snapshot.json"))
-    await drizzle(temporary, incremental, args.values.name)
+    await drizzle(temporary, incremental, args.values.name, args.values.hints)
 
     const generated = await generatedMigrations(incremental)
     if (generated.length > 1) throw new Error(`Expected one generated migration, found ${generated.length}.`)
@@ -90,7 +92,7 @@ async function check() {
   }
 }
 
-async function drizzle(temporary: string, output: string, name?: string) {
+async function drizzle(temporary: string, output: string, name?: string, hints?: string) {
   const config = path.join(temporary, `${path.basename(output)}.config.ts`)
   await Bun.write(
     config,
@@ -99,12 +101,23 @@ async function drizzle(temporary: string, output: string, name?: string) {
 export default { ...config, out: ${JSON.stringify(output)} }
 `,
   )
-  const child = Bun.spawn(["bun", "drizzle-kit", "generate", "--config", config, ...(name ? ["--name", name] : [])], {
-    cwd: path.join(root, "packages/core"),
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  })
+  const child = Bun.spawn(
+    [
+      "bun",
+      "drizzle-kit",
+      "generate",
+      "--config",
+      config,
+      ...(name ? ["--name", name] : []),
+      ...(hints ? ["--hints", hints] : []),
+    ],
+    {
+      cwd: path.join(root, "packages/core"),
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    },
+  )
   const exit = await child.exited
   if (exit !== 0) throw new Error(`Drizzle generation failed with exit code ${exit}.`)
 }

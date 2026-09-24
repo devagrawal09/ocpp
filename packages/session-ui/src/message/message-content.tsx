@@ -497,8 +497,10 @@ export function AssistantTextContent(props: {
 
 export function AssistantReasoningContent(props: {
   id: string
+  ids?: string[]
   content: SessionMessageAssistantReasoning
   streaming: boolean
+  durationMs?: number
   defaultOpen?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -510,8 +512,9 @@ export function AssistantReasoningContent(props: {
   const heading = createMemo(() => (props.streaming ? reasoningHeading(props.content.text) : ""))
   const duration = createMemo(() => {
     const time = props.content.time
-    if (time?.completed === undefined) return undefined
-    const total = Math.max(0, Math.round((time.completed - time.created) / 1000))
+    const elapsed = props.durationMs ?? (time?.completed === undefined ? undefined : time.completed - time.created)
+    if (elapsed === undefined) return undefined
+    const total = Math.max(0, Math.round(elapsed / 1000))
     const numfmt = new Intl.NumberFormat(i18n.locale())
     if (total < 60) return i18n.t("ui.message.duration.seconds", { count: numfmt.format(total) })
     return i18n.t("ui.message.duration.minutesSeconds", {
@@ -520,7 +523,11 @@ export function AssistantReasoningContent(props: {
     })
   })
   return (
-    <div data-component="reasoning-part" data-timeline-part-id={props.id}>
+    <div
+      data-component="reasoning-part"
+      data-timeline-part-id={props.ids ? undefined : props.id}
+      data-timeline-part-ids={props.ids?.join(",")}
+    >
       <BasicTool
         icon="mcp"
         status={props.streaming ? "running" : "completed"}

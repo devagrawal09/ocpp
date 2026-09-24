@@ -24,6 +24,7 @@ import { Project } from "@opencode-ai/schema/project"
 import { AbsolutePath, RelativePath } from "../schema.js"
 import type { SessionSchema } from "./schema.js"
 import { ProjectTable } from "../project/sql.js"
+import { CodeModeStore } from "../codemode/store.js"
 
 type DatabaseService = Database.Interface["db"]
 type MessageEvent = Exclude<
@@ -105,6 +106,7 @@ const publishSessionUsage = Effect.fn("SessionProjector.publishUsage")(function*
 
 const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
   db: DatabaseService,
+  codemode: CodeModeStore.Interface,
   event: typeof SessionEvent.Forked.Type,
 ) {
   const parent = yield* db
@@ -211,7 +213,7 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
           seq: row.seq,
           time_created: row.time_created,
           time_updated: row.time_updated,
-          data: row.data,
+          data: row.type === "assistant" ? settledCodeMode(row) : row.data,
         })),
       )
       .run()
@@ -220,9 +222,57 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
     cursor = rows.at(-1)!.seq
   }
   if (copiedSeq !== undefined) yield* Bus.reserveSequence(db, event.data.sessionID, copiedSeq)
+  yield* codemode.fork({
+    from: event.data.parentID,
+    to: event.data.sessionID,
+    throughSeq: copiedSeq ?? -1,
+  })
   if (event.data.instructions)
     yield* InstructionState.initialize(db, event.data.sessionID, event.durable.seq, event.data.instructions)
 })
+
+/**
+ * An execution belongs to the Session that admitted it: its completion notification and the notebook
+ * values it saves stay on the parent. A fork copies the settled tool result that announced it, so
+ * that result is rewritten here to stop promising a notification the child will never receive. This
+ * mirrors how running shell and compaction messages are left behind entirely.
+ */
+function settledCodeMode(row: typeof SessionMessageTable.$inferSelect) {
+  const message = decodeMessage({ ...row.data, id: row.id, type: row.type })
+  if (message.type !== "assistant") return row.data
+  const inflight = message.content.some(
+    (part) => part.type === "tool" && part.state.status !== "streaming" && running(part.state.metadata),
+  )
+  if (!inflight) return row.data
+  const { id, type, ...data } = encodeMessage({
+    ...message,
+    content: message.content.map((part) => {
+      if (part.type !== "tool" || part.state.status === "streaming" || !running(part.state.metadata)) return part
+      const metadata = part.state.metadata ?? {}
+      const executionID = metadata.executionID
+      return {
+        ...part,
+        state: {
+          ...part.state,
+          status: "completed" as const,
+          content: [
+            {
+              type: "text" as const,
+              text:
+                "Execution " +
+                (typeof executionID === "string" ? executionID : "") +
+                " was still running when this Session was forked. It stayed with the original Session: no notification arrives here and it saves no notebook values here. Start a new execution if you still need its result.",
+            },
+          ],
+          metadata: { ...metadata, executionStatus: "cancelled" },
+        },
+      }
+    }),
+  })
+  return data
+}
+
+const running = (metadata: Record<string, Schema.Json> | undefined) => metadata?.executionStatus === "running"
 
 function run(db: DatabaseService, event: MessageEvent) {
   return Effect.gen(function* () {
@@ -422,6 +472,10 @@ function projectIdle(
         // Unread uses a strict timestamp comparison, so every terminal must advance even within one millisecond.
         time_idle: sql`max(${time}, coalesce(${SessionTable.time_idle} + 1, ${time}))`,
         idle_outcome: outcome,
+        // Only a failure carries an error; the other terminals clear the previous one so the row
+        // always describes the outcome recorded at time_idle.
+        idle_error_type: event.type === SessionEvent.Execution.Failed.type ? event.data.error.type : null,
+        idle_error_message: event.type === SessionEvent.Execution.Failed.type ? event.data.error.message : null,
         time_updated: sql`${SessionTable.time_updated}`,
       })
       .where(eq(SessionTable.id, event.data.sessionID))
@@ -434,6 +488,7 @@ const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
+    const codemode = yield* CodeModeStore.Service
     yield* bus.project(SessionEvent.Created, (event) =>
       Effect.gen(function* () {
         const stored = yield* db
@@ -587,7 +642,7 @@ const layer = Layer.effectDiscard(
     })
     yield* bus.project(SessionEvent.MessageContentUpdated, (event) => run(db, event))
     yield* bus.project(SessionEvent.UsageRecorded, (event) => applyUsage(db, event.data.sessionID, event.data))
-    yield* bus.project(SessionEvent.Forked, (event) => projectFork(db, event))
+    yield* bus.project(SessionEvent.Forked, (event) => projectFork(db, codemode, event))
     yield* bus.project(SessionEvent.InboxDelivered, (event) =>
       Effect.gen(function* () {
         const input = yield* SessionInbox.projectDelivered(db, {
@@ -685,6 +740,9 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.Tool.Called, (event) => run(db, event))
     yield* bus.project(SessionEvent.Tool.Success, (event) => run(db, event))
     yield* bus.project(SessionEvent.Tool.Failed, (event) => run(db, event))
+    yield* bus.project(SessionEvent.CodeMode.Started, (event) => run(db, event))
+    yield* bus.project(SessionEvent.CodeMode.Completed, (event) => run(db, event))
+    yield* bus.project(SessionEvent.CodeMode.Failed, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Ended, (event) => run(db, event))
     yield* bus.project(SessionEvent.RetryScheduled, (event) => run(db, event))
@@ -752,6 +810,7 @@ const layer = Layer.effectDiscard(
           .where(eq(SessionTable.id, event.data.sessionID))
           .run()
           .pipe(Effect.orDie)
+        yield* codemode.revert({ sessionID: event.data.sessionID, beforeSeq: boundary.seq })
         yield* InstructionState.reset(db, event.data.sessionID)
       }),
     )
@@ -769,4 +828,8 @@ const layer = Layer.effectDiscard(
   }),
 )
 
-export const node = makeGlobalNode({ name: "session-projector", layer, deps: [Bus.node, Database.node] })
+export const node = makeGlobalNode({
+  name: "session-projector",
+  layer,
+  deps: [Bus.node, Database.node, CodeModeStore.node],
+})

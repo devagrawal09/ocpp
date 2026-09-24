@@ -1,371 +1,584 @@
-# CodeMode Interpreter Support
+# Code Mode: The Durable Notebook
 
-This is the checkable support matrix for CodeMode's confined JavaScript interpreter. It tracks the language and
-standard-library surface that programs can use today, plus concrete gaps that may be implemented later.
+This fork redesigns Code Mode around one idea: **a Session owns an append-only notebook, and running
+code is how the model writes into it.** Every direct top-level `const` and `function` declaration
+becomes a durable notebook value that later executions can read by name. There is no publication
+syntax, no revision negotiation, and no separate durable result payload.
 
-- `[x]` means the feature is implemented at the scope described here.
-- `[ ]` means a concrete compatibility gap remains.
-- Checked items do not promise complete ECMAScript edge-case parity; known differences are stated explicitly.
-- Intentional boundaries are not listed as compatibility work.
+The implementation has two deliberate layers:
 
-When behavior changes, update this file and the tests in the same change. The implementation and tests remain the
-ultimate source of truth.
+- `@opencode-ai/codemode` compiles and evaluates a restricted JavaScript-shaped language over an
+  explicit catalog of schema-described tools, and encodes the values a program declares. It has no
+  Session, database, authorization, or delivery knowledge.
+- OpenCode Core supplies the authorized tool catalog, fixed safety limits, name admission and
+  reservation, durable storage, Session lifecycle integration, and model-facing delivery.
 
-## Source and execution model
+```mermaid
+flowchart LR
+    Model[Model] -->|execute code| Core[OpenCode Core host]
+    Core -->|source| Compiler[Compiler]
+    Compiler -->|versioned IR + declared names| Admission[Admission]
+    Admission -->|reserve names, snapshot notebook| Store[(Durable notebook)]
+    Admission -->|execution ID| Model
+    Admission --> Runtime[Confined interpreter]
+    Core -->|authorized catalog| Runtime
+    Runtime -->|exact static call| Tools[Core tool registry]
+    Tools -->|decoded result| Runtime
+    Runtime -->|declared values| Commit[Commit]
+    Commit -->|all or nothing| Store
+    Commit -->|bounded summary| Model
+```
 
-- [x] JavaScript parsed with the latest syntax accepted by Acorn, then restricted by the interpreter allowlist.
-- [x] Erasable TypeScript syntax, including type annotations, type declarations, assertions, and non-null assertions.
-      TypeScript is transpiled first; the emitted JavaScript must still use the supported subset.
-- [x] Top-level `await` and `return` through the program's implicit async-function scope.
-- [x] Explicit `return`, final top-level expression as a REPL-style result, and `null` when no value is produced.
-- [x] Program results use JSON-like boundaries, with `undefined` and non-finite numbers normalized to `null`. Tool
-      arguments follow JSON serialization semantics before their schema applies (see the tools section).
-- [x] Live Date, RegExp, Map, Set, URL, and URLSearchParams values inside CodeMode.
-- [x] Tool calls through the host-provided `tools` tree only.
-- [x] The global `search(...)` built-in: synchronous tool discovery that counts as an admitted tool call and is
-      shadowable by program declarations like other globals.
-- [x] Cooperative timeout, an optional total tool-call limit, output bounding, and unrestricted tool-call concurrency.
+The interpreter never reaches around the tool registry. Filesystem, network, process, and
+application effects are available only when the host exposes a named tool that performs them.
 
-## Values and literals
+## Feature Summary
 
-- [x] `null`, `undefined`, booleans, finite and non-finite numbers, and strings.
-- [x] Array literals, including holes and spread from arrays, strings, Maps, Sets, URLSearchParams, custom synchronous
-      iterators, and synchronous generators.
-- [x] Object literals with shorthand, computed string/number keys, and spread from plain data objects; `null` and
-      `undefined` are no-ops, while arrays are rejected.
-- [x] Template literals with interpolation.
-- [x] Regular-expression literals.
-- [x] `NaN` and `Infinity` globals.
-- [ ] BigInt literals and in-interpreter BigInt arithmetic; BigInt remains invalid at JSON-like host boundaries.
-- [ ] Arbitrary Symbol primitive values and symbol-keyed properties. The confined `Symbol.iterator` and
-      `Symbol.asyncIterator` keys are available only for custom iterator protocols.
-- [ ] Tagged-template calls.
-- [ ] Getter and setter definitions in object literals.
+| Feature                | Behavior                                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| Automatic publication  | Direct top-level `const` and `function` declarations are saved. No `export` syntax exists.         |
+| Immutable names        | A notebook name is written once and can never be redefined or reused.                              |
+| Admission              | Names are verified and reserved before an execution ID exists. Conflicts refuse immediately.       |
+| Fixed snapshots        | An execution sees exactly the completed notebook captured when it was admitted.                    |
+| All-or-nothing saving  | Success saves every declaration in one transaction; any failure saves none.                        |
+| Durable functions      | Closures are saved with their compiled body and exact captures, and re-authorize tools on call.    |
+| Plain durable data     | `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, functions.      |
+| Asynchronous execution | `execute` returns an execution ID; the outcome arrives as one later notification.                  |
+| Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.        |
+| Blocking tool calls    | `tools.repository.read(input)` returns its decoded result directly. `await` and `Promise.all` are warning-producing compatibility no-ops. |
 
-## Bindings and destructuring
+Calls within one execution always run serially, including subagent calls. To run independent
+subagents concurrently, issue one `execute` invocation per subagent; never put parallel subagent
+work in the same execution.
 
-- [x] `const`, `let`, and accepted `var` declarations.
-- [x] Object and array destructuring in declarations, parameters, assignment expressions, and `for...of` bindings.
-- [x] Nested patterns, defaults, elisions, and rest elements.
-- [x] Assignment to identifiers, unblocked plain-object fields, non-negative integer array indexes, and writable URL
-      fields.
-- [x] Direct function declarations are hoisted in program and block statement lists.
-- [x] Parameter defaults observe a temporal dead zone for later parameters.
-- [ ] JavaScript-correct function scoping, hoisting, and redeclaration for accepted `var` declarations.
-- [x] Predeclare `let` and `const` bindings in every lexical scope, including program/block bodies, switch bodies, and
-      loop headers, so reads before initialization and self- or cross-referential initializers observe the JavaScript
-      temporal dead zone.
-- [ ] Hoist function declarations accepted directly in switch cases.
-- [x] Computed object destructuring keys such as `const { [field]: value } = record`.
-- [x] Object destructuring from arrays, such as `const { length } = values`.
-- [x] Array binding and assignment destructuring from strings, Maps, Sets, URLSearchParams, custom synchronous
-      iterators, and synchronous generators, including stepwise elisions/rest and `IteratorClose` on early completion
-      or binding/default failure.
+## Quick Start
 
-## Statements and control flow
+Tool paths are catalog-dependent. The examples below use an illustrative `repository` namespace; use
+`tools.search` to find the paths and schemas exposed by the current host.
 
-- [x] Blocks and empty statements.
-- [x] `if`/`else` and conditional expressions.
-- [x] `switch`, including default clauses and fallthrough.
-- [x] `for`, `while`, and `do...while`.
-- [x] `for...of` over arrays, strings, Maps, Sets, URLSearchParams, custom synchronous iterators, and confined
-      synchronous generators. Abrupt completion invokes the iterator's optional `return()`.
-- [x] `for...in` over own keys of plain objects, arrays, and tool references.
-- [x] Unlabeled `break` and `continue`.
-- [x] `try`, `catch`, optional catch bindings, and `finally`.
-- [x] `throw` with arbitrary values.
-- [x] Labeled statements, labeled `break`, and labeled `continue`.
-- [x] `for await...of` over the supported synchronous collections and custom iterator objects using
-      `Symbol.asyncIterator` or the `Symbol.iterator` fallback. Each iterator step is sequential, yielded promises and
-      plain values from synchronous collections and sync iterators are awaited before binding, and abrupt loop
-      completion invokes the iterator's optional `return()`. Custom async iterators control their yielded values, as in
-      JavaScript; only their `next()` results are awaited. Confined sync and async generators are iterable here.
+```ts
+const matches = tools.repository.glob({ pattern: "src/**/*.ts" })
+const files = matches.slice(0, 20).map((item) => tools.repository.read({ path: item.path }))
+const lastScan = {
+  files: matches.length,
+  totalLines: files.reduce((total, file) => total + file.content.split("\n").length, 0),
+}
+return lastScan.totalLines
+```
 
-## Functions and callbacks
+That program saves three notebook values: `matches`, `files`, and `lastScan`. A later execution reads
+them by name:
 
-- [x] Function declarations, function expressions, and arrow functions.
-- [x] Synchronous and `async` functions.
-- [x] Closures, recursion, default parameters, rest parameters, and destructured parameters.
-- [x] Expression and block function bodies.
-- [x] User callbacks for the supported Array, Map, Set, URLSearchParams, sort, string-replacement, and `Array.from`
-      mapper APIs, with one shared acceptance rule everywhere including promise reactions.
-- [x] `Boolean`, `Number`, `String`, `parseInt`, `parseFloat`, `isFinite`, `isNaN`, and URI helpers as callbacks.
-- [x] Built-in method references as callbacks, such as `values.map(Math.abs)`, `records.map(JSON.stringify)`,
-      `items.forEach(console.log)`, and `Promise.resolve(-1).then(Math.abs)`. Extra callback arguments a built-in
-      does not consume are ignored, like JS; consumed arguments stay strictly validated (`Math.floor` still rejects a
-      string). Intrinsic references keep their receiver (`"abc".includes` works as a predicate), unlike detached JS
-      methods, which lose `this`.
-- [x] Constructors work as callbacks with JS call semantics: `Error` types construct (`messages.map(Error)`),
-      and new-requiring constructors (`Map`, `Set`, `URL`, `URLSearchParams`, `Promise`) throw a `TypeError`,
-      like JS.
-- [x] Tool references and detached `Promise` statics are rejected as callbacks with a hint to wrap them in an
-      arrow function.
-- [x] Promise-returning string replacers are coerced synchronously to `"[object Promise]"`, like JavaScript; they are
-      not automatically awaited.
-- [x] The optional `thisArg` of iteration methods is accepted and ignored: CodeMode functions have no `this`, so
-      ignoring it matches JS arrow-function semantics exactly.
-- [ ] `this` in non-arrow CodeMode functions and callbacks.
-- [ ] User-defined constructor calls.
-- [ ] `Function.prototype.call`, `apply`, and `bind` for CodeMode functions.
-- [ ] Classes and private fields.
-- [x] Synchronous and async generator declarations/expressions, `yield`, and `yield*`, including lazy bodies,
-      `next(value)`, `return(value)`, `throw(value)`, exhaustion, promise adoption, async request ordering,
-      `try`/`catch`/`finally`, and sync/async iterator symbols. Async `yield*` awaits values while adapting a sync
-      iterator but preserves values supplied by a manually implemented async iterator. Generator values are opaque
-      runtime references.
-- [x] Synchronous generators and custom synchronous iterators are consumed stepwise by array/argument spread, array
-      destructuring, `Array.from`, Map/Set/URLSearchParams construction, `Object.fromEntries`, Object/Map `groupBy`,
-      Promise combinators, `AggregateError`, and `Math.sumPrecise`. Mapper/grouping callbacks interleave with iterator
-      steps; synchronous consumers preserve yielded promise objects rather than awaiting them. Async generators are
-      rejected by every synchronous consumer.
-- [x] Synchronous iterator acquisition and result validation follow `IteratorClose` boundaries: consumer errors and
-      intentional early stops invoke `return()`, acquisition/`next()` failures do not, and an original consumer error
-      wins over a cleanup failure. Async iterator consumption remains limited to `for await...of` and async `yield*`.
-- [x] Portable generator protocol coverage is adapted from pinned Test262 cases for suspended-start, suspended-yield,
-      and completed states; sync and async `next`/`return`/`throw`; finally yields and completion overrides; rejected
-      yielded promises; mixed async request queues; sync and async `yield*` forwarding; malformed methods/results;
-      and declaration, expression, and object-method forms with closure and parameter behavior. The adapted suite
-      deliberately skips Test262 variants whose observation mechanism requires unsupported getter definitions,
-      proxies, prototype inspection or mutation, non-arrow `this`, classes, or arbitrary symbols. It also skips tests
-      asserting exact promise reaction-turn counts beyond the observable ordering guarantee documented below. These
-      are interpreter-surface boundaries, not claims that the corresponding full Test262 families pass unchanged.
+```ts
+const largest = files.toSorted((left, right) => right.content.length - left.content.length)[0]
+```
 
-## Expressions and operators
+The `return` value is a small preview for display only. It may be truncated or omitted, and it is
+never the canonical output: publish real results as top-level declarations.
 
-- [x] Property access with dot or computed bracket syntax.
-- [x] Optional property access and optional calls.
-- [x] Function/tool calls and spread arguments.
-- [x] Sequence expressions (the comma operator).
-- [x] `await` for CodeMode promises and callable thenables; a plain value passes through unchanged, though every
-      `await` still defers its continuation one reaction turn.
-- [x] `new` for Array, Object, Error types, Date, RegExp, Map, Set, URL, URLSearchParams, and Promise.
-- [x] Arithmetic operators: `+`, `-`, `*`, `/`, `%`, and `**`.
-- [x] Equality and ordering: `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, and `>=`.
-- [x] Bitwise operators: `&`, `|`, `^`, `~`, `<<`, `>>`, and `>>>`.
-- [x] Logical operators: `&&`, `||`, `??`, and `!`, with short-circuiting.
-- [x] Unary `+`, unary `-`, `void`, `typeof`, `instanceof`, and own-property-only `in`.
-- [x] Prefix and postfix `++` and `--`.
-- [x] Plain, arithmetic, bitwise, and logical assignment operators.
-- [x] Property deletion on plain data objects and arrays, including computed and optional forms; deleting an array index
-      creates a hole without changing its length.
+If the exact catalog path or signature is unknown, discover it and call the returned static path in a
+later execution:
 
-## Promises and tools
+```ts
+return tools.search({ query: "read file", namespace: "repository" })
+```
 
-- [x] Tool calls start eagerly and return supervised, run-once CodeMode promises.
-- [x] Direct `await`, repeated awaits, and recursive thenable assimilation when a promise or thenable is returned from
-      a function/program.
-- [x] `Promise.resolve` and `Promise.reject`.
-- [x] `Promise.all`, `Promise.allSettled`, `Promise.race`, and `Promise.any` over finite collections, custom synchronous
-      iterators, and synchronous generators containing promises and plain values.
-- [x] `Promise.all` preserves result order and rejects on the first observed failure without cancelling siblings.
-- [x] `Promise.allSettled` returns plain fulfilled/rejected outcome records.
-- [x] `Promise.race` settles from the first result without cancelling losers at settlement time.
-- [x] Real promise values from `Promise.all`, `Promise.allSettled`, and `Promise.race`; separately constructed
-      combinator batches overlap as in normal JavaScript.
-- [x] Promise chaining with `.then`, `.catch`, and `.finally`: handlers run deferred in attach order, returned
-      promises are adopted, handler throws reject the derived promise, `.finally` preserves the original settlement
-      unless its cleanup fails, and direct self-resolution rejects with a `TypeError`.
-- [x] Every `await` (including of plain values and already-settled promises) defers its continuation one reaction
-      turn, so concurrent async functions interleave at await points as in JavaScript.
-- [x] Combinators settle one reaction turn after their deciding member (V8-observable ordering): reactions already
-      attached to members run first, and an aggregate cannot beat a plain value settling in the same turn into a
-      `Promise.race`. Exact microtask-count parity beyond this observable ordering is not a documented guarantee.
-- [x] All still-pending work (race losers, fail-fast `Promise.all` stragglers, and un-awaited calls alike) is
-      interrupted when the program returns; rejections that settled un-awaited become `Success.warnings`
-      diagnostics. A combinator abandoned inside its final settlement turn counts as pending and is interrupted
-      without a warning.
-- [x] `try`/`catch` can handle awaited tool and promise failures.
-- [x] `Promise.any`: first fulfillment wins; all-rejected rejects with an `AggregateError` whose `errors` array holds
-      the catch-normalized reasons in input order, and empty input rejects with an empty `AggregateError`.
-- [x] `new Promise((resolve, reject) => ...)`: the executor runs synchronously and receives first-class resolve/reject
-      callables that settle the promise exactly once (they may escape the executor and settle later); an executor
-      throw rejects unless the promise already settled, resolving with a promise or callable thenable adopts it, and
-      resolving with the promise itself rejects with a `TypeError`. Resolver callables work anywhere callbacks are
-      accepted, including `.then`/`.catch` handlers and collection callbacks, but remain opaque references that cannot
-      cross the data boundary.
-- [x] Recursive assimilation of objects with an own callable `then` field across `Promise.resolve`, combinators,
-      constructors, reactions, `finally`, `await`, and async returns. Thenable methods run deferred, receive
-      first-call-wins resolve/reject functions, and ignore throws after settlement. Inherited/accessor `then` fields
-      and a JavaScript `this` receiver remain outside the supported object/function model.
-- [x] Dotted tool names are canonicalized into namespace paths; a path can be both callable and a namespace, and the
-      last tool supplied for a canonical path wins.
-- [x] Tool path segments may be named `constructor`, `prototype`, or `__proto__` because paths use inert Map keys.
-- [x] Outbound tool arguments follow JSON serialization semantics, like `JSON.stringify`: object properties with
-      `undefined` values are dropped, `undefined` array elements and non-finite numbers become `null`, and sparse
-      arrays densify. Tools never receive `undefined` inside their input object, though a bare `tools.t(undefined)`
-      argument still reaches schema decoding as `undefined`. Program results keep the stricter
-      normalization where every `undefined` becomes `null`.
-- [ ] Tokenize and case-fold non-ASCII tool paths, descriptions, and queries for tool search.
+Do not assign a discovered path to a variable and invoke it dynamically. Dynamic dispatch is
+intentionally rejected.
 
-## Objects and properties
+## What Is Saved
 
-- [x] Own-field reads and writes on plain data objects.
-- [x] `Object()` and `new Object()` return `{}` for nullish arguments and pass objects through unchanged;
-      primitive wrapper objects (`Object(1)`) are rejected explicitly.
-- [x] Computed property names and object spread.
-- [x] `Object.keys`, `Object.values`, `Object.entries`, `Object.hasOwn`, `Object.assign`, and `Object.fromEntries`, with
-      synchronous iterator support for `fromEntries`.
-- [x] `Object.keys` over arrays and tool references.
-- [x] Object identity is preserved by in-CodeMode Object helpers.
-- [x] Prototype traversal and mutation through `__proto__`, `constructor`, and `prototype` are blocked.
-- [ ] Legal own data fields named `__proto__`, `constructor`, or `prototype` are rejected at JSON/tool boundaries and
-      cannot be created, read, or written in CodeMode; tool path segments with those names remain supported.
-- [x] `Object.is` for supported data values.
-- [x] `Object.groupBy` over finite collections and custom synchronous iterators/generators, with string-key coercion
-      and null-prototype results.
+Only **direct** top-level declarations are durable:
 
-## Arrays
+```ts
+const kept = 1 // saved
+function alsoKept() {
+  const temporary = 2 // not saved
+  return temporary
+}
+let counter = 0 // not saved: let is local working state
+{
+  const hidden = 3 // not saved
+}
+for (const item of [1, 2]) {
+  const looped = item // not saved
+}
+```
 
-- [x] The `Array` constructor with or without `new`: `Array(a, b)` collects arguments and `Array(n)` creates a sparse
-      array of that length; invalid lengths throw `RangeError`. Iteration, spread, join, and JSON handle holes like
-      JavaScript, and host results normalize holes to `null`.
-- [x] Static methods: `Array.isArray`, `Array.of`, and `Array.from`, including the `Array.from` mapper form with
-      `(value, index)` arguments and stepwise synchronous iterator consumption.
-- [x] Iteration/transformation: `map`, `filter`, `flatMap`, and `forEach`.
-- [x] Searching/tests: `find`, `findIndex`, `findLast`, `findLastIndex`, `some`, `every`, `includes`, `indexOf`, and
-      `lastIndexOf`.
-- [x] Aggregation: `reduce` and `reduceRight`.
-- [x] Ordering: `sort`, `toSorted`, `reverse`, and `toReversed`.
-- [x] Access/copying: `at`, `slice`, `concat`, `flat`, `with`, and `join`.
-- [x] Mutation: `push`, `pop`, `shift`, `unshift`, `splice`, `fill`, and `copyWithin`.
-- [x] Materialized iteration helpers: `keys`, `values`, and `entries` return arrays rather than iterators.
-- [x] `length`, numeric indexing, index assignment, spread, and `for...of`.
-- [x] The `thisArg` argument of `Array.from` is accepted and ignored, like JS arrows.
-- [x] `Array.prototype.toSpliced`.
-- [x] Canonical array/string index parsing: keys such as `"01"` remain non-index properties rather than aliasing index
-      `1`; arbitrary array-property assignment remains unsupported.
-- [x] `Array.prototype.sort` preserves trailing holes, while `toSorted` densifies holes into `undefined` elements,
-      like JavaScript.
+Deterministic rules keep extraction precise:
 
-## Strings
+- A top-level `const` declarator must bind one identifier. Top-level destructuring is rejected;
+  destructure inside a block or function instead.
+- A top-level `const` declarator must have an initializer.
+- Top-level `function` declarations are saved under their own name.
+- `let`, nested declarations, and declarations inside control flow are activation-local.
+- `export` in any form is rejected: publication is automatic.
+- `const handle = tool.define(...)` is rejected before execution, because a live handle cannot be
+  saved. Bind it with `let`, or create it inside a function.
+- A durable name may not be a runtime global such as `time`, `url`, `console`, `JSON`, `Object`,
+  `Math`, `Array`, `String`, `Error`, `tools`, or `tool`. A notebook name is permanent, so
+  shadowing a builtin would hide it from every later execution in the Session. Nested bindings are
+  ordinary lexical scoping and may use any name.
+- A `return` outside a function is rejected when a later top-level statement declares a durable name,
+  because that name would be reserved and never initialized. The rule is syntactic rather than a
+  control-flow analysis: it does not ask which branch runs. A final preview `return` placed after
+  every declaration stays valid, and so does a `return` in a program that declares nothing after it.
 
-- [x] Case/normalization: `toLowerCase`, `toUpperCase`, `normalize`.
-- [x] Trimming: `trim`, `trimStart`, and `trimEnd`.
-- [x] Searching/tests: `includes`, `startsWith`, `endsWith`, `indexOf`, `lastIndexOf`, and `search`.
-- [x] Slicing/access: `slice`, `substring`, `at`, `charAt`, `charCodeAt`, and `codePointAt`.
-- [x] Construction/transformation: `split`, `concat`, `repeat`, `padStart`, `padEnd`, `replace`, and `replaceAll`.
-- [x] Regular-expression integration: `match`, materialized `matchAll`, `replace`, `replaceAll`, `split`, and `search`.
-- [x] `localeCompare`; locale and options arguments are currently ignored.
-- [x] `toString`, `length`, numeric indexing, spread, and `for...of` by Unicode code point.
-- [x] Static `String.fromCharCode` and `String.fromCodePoint`.
-- [x] Native argument coercion for supported String methods; for example, `includes(1)` and `slice("1")` coerce like
-      native JS, `split(undefined)` returns the whole string, and `includes`/`startsWith`/`endsWith` reject regular
-      expressions with a native-style `TypeError`. Opaque runtime references still reject as data errors, and
-      `repeat` still requires a finite non-negative count.
-- [x] Native no-argument parity for `match()`, `matchAll()`, and `search()`; all behave as an empty pattern. Present
-      arguments must still be a regular expression or string pattern.
+```ts
+const first = tools.repository.read({ path: "a.ts" })
+if (first.content === "") {
+  return "nothing to do" // rejected: `later` below would never be saved
+}
+const later = first.content.length
+```
 
-## Numbers and Math
+## Admission And Name Reservation
 
-- [x] Coercion functions: `Number`, `parseInt`, and `parseFloat`.
-- [x] Number predicates/parsers: `Number.isInteger`, `Number.isFinite`, `Number.isNaN`, `Number.isSafeInteger`,
-      `Number.parseInt`, and `Number.parseFloat`.
-- [x] Number formatting: `toFixed`, `toPrecision`, `toExponential`, `toString`, and `valueOf`.
-- [x] Number constants: `MAX_SAFE_INTEGER`, `MIN_SAFE_INTEGER`, `MAX_VALUE`, `MIN_VALUE`, `EPSILON`, `NaN`,
-      `POSITIVE_INFINITY`, and `NEGATIVE_INFINITY`.
-- [x] Math constants: `PI`, `E`, `LN2`, `LN10`, `LOG2E`, `LOG10E`, `SQRT2`, and `SQRT1_2`.
-- [x] Math methods: `random`, `max`, `min`, `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atan2`, `atanh`,
-      `floor`, `ceil`, `round`, `trunc`, `sign`, `sqrt`, `cbrt`, `pow`, `hypot`, `cos`, `cosh`, `sin`, `sinh`,
-      `tan`, `tanh`, `log`, `log2`, `log10`, `log1p`, `exp`, `expm1`, `f16round`, `fround`, `clz32`, and `imul`.
-- [x] Native zero-argument behavior for `Number()` and `String()`: they produce `0` and `""`, while
-      `Number(undefined)` stays `NaN` and `String(undefined)` stays `"undefined"`.
-- [x] `++` and `--` use CodeMode numeric coercion (numeric strings increment, plain data objects become `NaN`, Dates
-      use their epoch time) and reject opaque runtime references as data errors.
-- [x] Unknown static members on global namespaces and on `Number`/`String`/the coercion functions read as `undefined`
-      for feature detection. Calling any undefined value reports a native-style `TypeError` naming the callee, for
-      example `Math.sum is not a function.` Blocked members (`constructor`, `__proto__`, ...) still throw,
-      and unknown `Promise` statics keep their descriptive error.
-- [x] `Math.sumPrecise` over finite collections and custom synchronous iterators/generators, rejecting non-number
-      elements without coercion.
-- [x] Global coercing `isFinite` and `isNaN`; opaque runtime references reject as data errors, like `Number(...)`.
+Before returning an execution ID the host compiles the source, extracts every durable name, captures
+the current completed notebook, verifies and reserves all candidate names atomically, and persists
+the admitted execution with its compiled IR, its ownership identity, and its snapshot. Compilation is
+source in and versioned IR out: the compiler knows nothing about Sessions, tools, authorization, or
+storage, and the persisted IR keeps its canonical source so a later compiler can recompile it.
 
-## JSON and console
+A compiled program reaches the interpreter through exactly one boundary. `decodeProgram` checks the
+IR version and shape, and an unsupported or damaged program becomes a diagnostic instead of an
+interpreter defect. Saved notebook functions cross the same kind of boundary when they are decoded.
 
-- [x] `JSON.parse` and `JSON.stringify` for supported data objects; the blocked data-key gap listed above still applies.
-- [x] Numeric/string indentation for `JSON.stringify`.
-- [x] `JSON.parse` reviver callbacks, including postorder traversal, deletion through `undefined`, and root replacement.
-      Revivers receive `(key, value)` but no `this` holder because CodeMode functions intentionally have no `this`.
-- [x] `JSON.stringify` function and array replacers. Function replacers receive `(key, value)` in preorder, including
-      the root, but no `this` holder. Array replacers preserve requested property order, deduplicate names, coerce
-      number primitives, and ignore non-string/non-number entries. Primitive wrapper entries remain unsupported.
-- [x] JSON callbacks retain the blocked-key boundary: parsed or stringified data containing `__proto__`, `constructor`,
-      or `prototype` is rejected before callback traversal.
-- [x] Captured `console.log`, `console.info`, `console.debug`, `console.warn`, and `console.error`.
-- [x] Captured `console.dir` and `console.table`.
+```mermaid
+sequenceDiagram
+    participant M as Model
+    participant C as Core host
+    participant N as Notebook
 
-## Date
+    M->>C: execute(code)
+    C->>C: compile, extract declared names
+    C->>N: verify and reserve every name (atomic)
+    alt name already defined or reserved
+        N-->>C: conflict
+        C-->>M: admission error, no execution ID, no tool calls
+    else all names reserved
+        N-->>C: reservation + notebook snapshot
+        C-->>M: execution ID (running)
+    end
+```
 
-- [x] `Date.now`, `Date.parse`, and `Date.UTC`.
-- [x] `new Date()` from the current time, epoch milliseconds, a date string, another Date, or local components.
-- [x] `Date()` without `new` returns the current time as a string, like JS, but in deterministic ISO format
-      rather than the host's locale/timezone string.
-- [x] `getTime`, `valueOf`, `toISOString`, `toJSON`, and deterministic ISO `toString`.
-- [x] Local getters: `getFullYear`, `getMonth`, `getDate`, `getDay`, `getHours`, `getMinutes`, `getSeconds`, and
-      `getMilliseconds`.
-- [x] UTC getters: `getUTCFullYear`, `getUTCMonth`, `getUTCDate`, `getUTCDay`, `getUTCHours`, `getUTCMinutes`,
-      `getUTCSeconds`, and `getUTCMilliseconds`.
-- [x] `getTimezoneOffset`, arithmetic, relational comparison, and `instanceof Date`.
-- [x] Date values serialize to ISO strings; invalid dates serialize to `null`.
-- [x] Local and UTC Date setters, including native argument coercion, mutation, rollover, invalid-Date recovery, and
-      `TimeClip` behavior.
-- [x] `Date.prototype.toUTCString` and its `toGMTString` alias.
-- [x] Native one-argument Date coercion for supported values, including booleans, null, arrays, and plain objects.
-- [x] Native Date loose-equality and default primitive-coercion semantics, using CodeMode's deterministic ISO string
-      representation for the string primitive.
-- [x] Native `RangeError` branding for invalid `toISOString()` calls.
+- An existing binding produces an immediate `NameAlreadyDefined` error.
+- An active reservation produces an immediate `NameReserved` error that names the owning execution.
+- A refused program receives **no execution ID** and performs **no tool calls**.
+- Reservations are all-or-none and owned by one execution ID.
+- Executions declaring disjoint names may reserve and run concurrently; their results merge because
+  the notebook has no global revision. Executions declaring the same name cannot.
+- Commit verifies that the execution still owns every reservation and that the assistant message it
+  was admitted from still exists.
+- Runtime failure, tool failure, cancellation, reverted ownership, and restart recovery save nothing
+  and release the reservations.
 
-## Regular expressions
+## Execution Lifecycle
 
-- [x] Literal and `RegExp(pattern, flags)` construction, with or without `new`.
-- [x] `test`, `exec`, and `toString`.
-- [x] Readable `source`, `flags`, `lastIndex`, `hasIndices`, `global`, `ignoreCase`, `multiline`, `sticky`, `unicode`,
-      `unicodeSets`, and `dotAll`.
-- [x] Captures, safe named groups (blocked member names are omitted), match `.index`, and stateful global matching.
-- [x] Integration with supported String methods, including function replacers.
-- [x] Writable `lastIndex`.
-- [x] Match `indices` metadata for the `d` flag, including named groups on `exec`, `match`, and `matchAll` results.
-- [x] `RegExp.escape`.
+Execution is durable and asynchronous. There is one flow: `execute` accepts source code, returns an
+execution ID once admission succeeds, and delivers the outcome later.
 
-## Map and Set
+```mermaid
+sequenceDiagram
+    participant M as Model
+    participant C as Core host
+    participant J as Session jobs
+    participant N as Notebook
 
-- [x] Static `Map.groupBy` over finite collections and custom synchronous iterators/generators, preserving key identity.
-- [x] `new Map()` from synchronous iterables of entries.
-- [x] Map `get`, `set`, `has`, `delete`, `clear`, `size`, and `forEach`.
-- [x] `new Set()` from synchronous iterables.
-- [x] Set `add`, `has`, `delete`, `clear`, `size`, and `forEach`.
-- [x] Materialized `keys`, `values`, and `entries` arrays for Map and Set.
-- [x] Spread, `for...of`, `Array.from`, and `Object.fromEntries` integration.
-- [x] Map and Set values serialize to `{}` at host/JSON boundaries.
-- [x] Set composition and relation methods: `union`, `intersection`, `difference`, `symmetricDifference`, `isSubsetOf`,
-      `isSupersetOf`, and `isDisjointFrom`, including supported Set-like operands.
+    M->>C: execute(code)
+    C->>N: admit, reserve names, snapshot
+    C-->>M: execution ID (running)
+    Note over C,J: Work starts only after the outer tool result commits
+    J->>C: run compiled IR
+    C->>N: commit declarations, or release reservations
+    C-->>M: one completion notification with status and saved names
+```
 
-## URL and URI helpers
+The Session drain stops after admission and resumes from the completion notification, so background
+work can never settle before the execution ID is durably visible. Coalesced wakeups are fine; the
+design does not depend on exactly one scheduler wake.
 
-- [x] `encodeURI`, `encodeURIComponent`, `decodeURI`, and `decodeURIComponent`.
-- [x] `new URL(input, base)`, `URL.canParse`, and `URL.parse`.
-- [x] URL `toString`, `toJSON`, and linked `searchParams`.
-- [x] Readable URL fields: `href`, `origin`, `protocol`, `username`, `password`, `host`, `hostname`, `port`,
-      `pathname`, `search`, and `hash`.
-- [x] Writable URL fields except `origin`.
-- [x] `new URLSearchParams()` from query strings, data objects, synchronous iterables of pairs, and URLSearchParams.
-- [x] URLSearchParams `append`, `delete`, `get`, `getAll`, `has`, `set`, `sort`, `forEach`, `keys`, `values`,
-      `entries`, `toString`, and `size`.
-- [x] URL values serialize to their href; URLSearchParams serialize to `{}`.
+Terminal outcomes are:
 
-## Errors and diagnostics
+| Outcome         | Meaning                                                                           |
+| --------------- | --------------------------------------------------------------------------------- |
+| `saved`         | The program succeeded and every declaration was committed.                        |
+| `failed`        | Compilation, execution, a tool, a limit, or the commit failed. Nothing was saved. |
+| `indeterminate` | The host could not determine whether in-flight work finished. Nothing was saved.  |
 
-- [x] `Error`, `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError`, and `URIError`, callable with
-      or without `new`.
-- [x] `AggregateError` with the `(errors, message?)` signature and an own `errors` array, constructed directly or by
-      an all-rejected `Promise.any`; direct construction accepts custom synchronous iterators and generators.
-- [x] Error `name`/`message`, error inheritance through `instanceof`, and plain-data serialization.
-- [x] `instanceof` for Date, RegExp, Map, Set, URL, URLSearchParams, Array, Object, Promise, and Error types.
-- [x] Catchable user throws, runtime failures raised during interpreted evaluation, awaited tool failures, and awaited
-      tool-call-limit failures; parse/compile failures, cooperative timeout, and output bounding remain outside program
-      `catch`.
-- [x] Source locations on unsupported-syntax diagnostics for JavaScript-shaped input; TypeScript transpilation may
-      shift them.
-- [x] Model-visible host failure messages and underlying causes, including output-validation errors.
-- [ ] Distinguish user-thrown failures from interpreter defects and explicit tool refusals from internal tool
-      failures; preserve those categories in caught errors, promise rejection handlers, and `Promise.allSettled`
-      reasons.
+Name collisions are admission errors, not asynchronous outcomes.
+
+## Durable Value Model
+
+Every value admitted for notebook storage survives execution, restart, fork, and revert:
+
+- `null`, booleans, finite numbers, and strings
+- immutable arrays
+- immutable string-keyed plain records
+- durable functions and closures
+
+`Date`, `Map`, `Set`, `URL`, and `URLSearchParams` are not language values; the `time` and `url`
+helpers replace them with plain data. `RegExp` has no replacement at all. Native JavaScript objects
+still exist inside helper implementations, but they never cross into notebook values.
+
+A durable function keeps:
+
+- its versioned compiled body and its original source text,
+- its exact captures, frozen when the execution saves,
+- static tool paths, which are resolved and authorized again in the execution that invokes it.
+
+A saved closure never looks up a later notebook value by name: every free identifier is either a host
+global (`tools`, `console`, `Math`, `JSON`, `time`, `url`, …) or a captured value stored with the
+function. A function that reads an identifier which does not exist when the execution saves is
+rejected. Fixes use new names and new closures.
+
+```ts
+// First execution
+const factor = 3
+const scale = (value) => value * factor
+function total(values) {
+  return values.reduce((sum, value) => sum + scale(value), 0)
+}
+
+// A later execution, even after a restart
+return total([1, 2]) // 9
+```
+
+Recursive and mutually recursive declarations are saved as references to their immutable notebook
+names, so their capture graphs stay finite.
+
+Live activation-local tool handles are not durable: they carry the current execution's counters,
+deadline, and authorization, so they are rejected clearly instead of being weakened.
+
+Depth and size limits apply while values are constructed, so an invalid or oversized declaration
+fails during execution rather than surprising the host at commit. Intentionally large artifacts
+belong in files through host tools.
+
+Encoding normalizes what JSON cannot represent: an array hole and an `undefined` value become
+`null`, `-0` becomes `0`, and a record key whose value is `undefined` is dropped. A value therefore
+behaves the same in the execution that declared it and in every later execution that loads it from
+storage.
+
+A stored value that cannot be decoded — damaged data, or a function saved by an unsupported IR
+version — is quarantined in its own name rather than failing the whole activation. Unrelated code
+still runs; reading the name, or reading a stored value that references it, produces a precise
+diagnostic naming the value and its cause. The name stays permanent: recovery is a new name, or a
+revert of the message that saved it.
+
+## Runtime Helpers
+
+Helpers return plain durable data only.
+
+| Namespace | Members                                                            | Returns                   |
+| --------- | ------------------------------------------------------------------ | ------------------------- |
+| `time`    | `now`, `parse`, `format`, `parts`, `fromParts`, `add`, `diff`      | numbers, strings, records |
+| `url`     | `parse`, `format`, `parseQuery`, `formatQuery`, `encode`, `decode` | strings, records, arrays  |
+
+```ts
+const at = time.parse("2020-01-02T03:04:05Z") // epoch milliseconds, or null
+const tomorrow = time.format(time.add(at, { days: 1 }))
+const parsed = url.parse("https://example.dev/a?x=1&x=2#frag")
+```
+
+`time.now()` reads host authority and is the only impure member; it does not masquerade as a pure
+function. Collections use ordinary immutable arrays and records with the usual non-mutating methods.
+
+### Regular Expressions Are Unavailable
+
+There is no `regex` namespace, no `RegExp`, and no regular-expression literal. The only matcher
+available to this runtime is a backtracking one, and a pattern such as `^a*a*a*a*a*$` makes it run
+for effectively unbounded time inside the host's event loop, where the execution deadline cannot
+interrupt it. Restricting the accepted pattern syntax does not fix that: the rejected constructs are
+not the only way to build a pathological pattern. Pattern matching stays unavailable until the
+runtime has an engine whose cost is bounded by the length of the input.
+
+Match text with string operations instead:
+
+```ts
+const line = "id-42 ok"
+const id = line.startsWith("id-") ? line.slice(3, line.indexOf(" ")) : null
+const fields = line.split(" ")
+```
+
+`String.match`, `String.matchAll`, and `String.search` are removed; `String.split`, `String.replace`,
+and `String.replaceAll` accept string separators only.
+
+## Results
+
+Notebook bindings are the only canonical successful data output. The host keeps compact durable
+lifecycle information for status and recovery:
+
+- execution ID and terminal status,
+- saved names,
+- diagnostics,
+- bounded warnings, logs, and progress,
+- a bounded tool-call journal,
+- an optional small preview of the returned value.
+
+There is no `execution_result` tool, no result paging, no durable result blob, and no overflow file.
+An oversized declaration fails clearly instead of being truncated into the notebook.
+
+## Fork, Revert, And Restart
+
+Binding rows record the assistant-message sequence they were saved from, which is enough to rebuild
+notebook state without a global revision gate:
+
+- A fork copies completed values through the fork boundary. Active reservations are never copied, so
+  a forked Session may declare a name its parent is still holding.
+- An in-flight execution belongs to the Session and history lineage where it was admitted. Its
+  completion notification and the values it saves stay on the parent, so the fork rewrites the copied
+  tool result that announced it: the child sees an execution that stayed behind rather than one that
+  promises a notification it will never receive. This mirrors running shell and compaction messages,
+  which a fork leaves behind entirely.
+- A committed revert deletes values saved from its boundary onward and releases the reservations it
+  orphans. An execution whose initiating message is gone saves nothing.
+- Reusing a Session ID adopts its existing notebook.
+- Restart marks uncertain in-flight executions `indeterminate`, saves nothing, and releases their
+  reservations. Arbitrary tool side effects are never replayed.
+
+## Language
+
+### Supported
+
+- Erasable TypeScript syntax that transpiles to supported JavaScript.
+- JSON-like literals and template literals.
+- Object and array spread and destructuring (outside top-level `const`).
+- Synchronous function declarations, function expressions, arrow functions, closures, recursion,
+  parameters, and callbacks.
+- Blocks, `if`, `switch`, `for`, `for...of`, `for...in`, `while`, and `do...while`.
+- `break`, `continue`, labels, `try`, `catch`, `finally`, and `throw`.
+- Arithmetic, comparison, logical, nullish, bitwise, and conditional expressions.
+- Assignment to local scalar `let` bindings.
+- Optional chaining and property reads.
+- Non-mutating Array, Object, String, Number, Math, and JSON operations implemented by the evaluator.
+- The `time` and `url` helper namespaces.
+- Captured `console.log`, `console.info`, `console.debug`, `console.warn`, `console.error`,
+  `console.dir`, and `console.table` output.
+- Literal bracket notation for tool path segments that are not JavaScript identifiers.
+- Synchronous `tools.search(input)` for bounded catalog discovery. Search counts as a tool call.
+
+### Rejected
+
+- `export` in any form.
+- `Promise` other than compatibility `Promise.all`, `async`, generators, `yield`, and `for await...of`.
+- `Date`, `RegExp`, `Map`, `Set`, `URL`, `URLSearchParams`, regular-expression literals, and the
+  `regex` namespace.
+- Dynamic tool dispatch such as `tools[name](input)`, detached tool references, and namespace
+  enumeration.
+- Imports, dynamic imports, re-exports, and ambient modules.
+- `var`.
+- Member assignment, member updates, `delete`, destructuring into members, and loop assignment into
+  members.
+- Mutating Array and Object methods.
+- Classes and evaluator syntax not explicitly implemented.
+- Ambient filesystem, process, network, timer, `fetch`, module-loading, or cryptographic authority.
+
+The compiler catches unsupported forms before execution. Runtime checks provide a second boundary for
+computed mutator names and evaluator references.
+
+## Immutability Model
+
+`let` exists for local scalar state:
+
+```ts
+let total = 0
+;[1, 2, 3].forEach((value) => {
+  total += value
+})
+const sum = total
+```
+
+Aggregate values are immutable. Derive replacements with `map`, `filter`, `slice`, spread, and object
+literals. Notebook values are immutable even when they are arrays or records, and compiler validation
+rejects assignment targets hidden in destructuring and loop forms.
+
+## Opaque Tool Handles
+
+`tool.define` creates a delegated tool that exists only for the current execution:
+
+```ts
+let inspect = tool.define({
+  name: "inspect",
+  description: "Read one source file and return numbered matching lines",
+  inputSchema: {
+    type: "object",
+    properties: { path: { type: "string" }, pattern: { type: "string" } },
+    required: ["path", "pattern"],
+  },
+  outputSchema: {
+    type: "array",
+    items: {
+      type: "object",
+      properties: { line: { type: "number" }, text: { type: "string" } },
+      required: ["line", "text"],
+    },
+  },
+  execute: (input) =>
+    tools.repository
+      .read({ path: input.path })
+      .content.split("\n")
+      .map((text, index) => ({ line: index + 1, text }))
+      .filter((item) => item.text.toLowerCase().includes(input.pattern.toLowerCase())),
+})
+
+const review = tools.subagent({
+  agent: "build",
+  description: "Review error handling",
+  message: "Use inspect to find error-handling branches in src/worker.ts, then explain the gaps.",
+  tools: [inspect],
+})
+```
+
+Handle guarantees:
+
+- Captured bindings are snapshotted at definition time and made immutable.
+- Direct static tool calls in the execute function become enforced capabilities; calls hidden behind
+  captured helpers are rejected.
+- The handle uses the outer execution's filtered catalog, authorization, counters, hooks, and
+  deadline.
+- Only host tools with `acceptsToolHandles: true` may receive handles.
+- Handles are opaque, are not data, cannot be saved, and become inactive when the execution settles.
+
+## Subagent Data Plane
+
+A subagent call carries two planes. `message` is shown to the child in full. `input` is never
+rendered into either model's context: it is available directly as `input` in the child's Code Mode
+executions, so a notebook value travels by reference in source instead of being pasted into a prompt:
+
+```ts
+const review = tools.subagent({
+  agent: "build",
+  description: "Summarize the dataset",
+  message: "Read the machine input, summarize its dataset, and submit the totals.",
+  input: { dataset },
+  inputSchema: { type: "object", required: ["dataset"] },
+  outputSchema: {
+    type: "object",
+    properties: { total: { type: "number" } },
+    required: ["total"],
+  },
+})
+```
+
+The child's prompt says only that machine input is available and describes its shape and size. The
+child can use it directly, for example `const total = input.dataset.length`. The value is
+invocation-local rather than a notebook binding; declarations derived from it follow the ordinary
+durable rules, and saved functions capture the exact input value they used. Each continuation may
+provide fresh input. When `inputSchema` is given, the host validates `input` against it before any
+child session exists.
+
+A structured child finishes with `tools.submit_result({ message, output })`. The parent's tool
+result renders `message` in full and only a short summary of `output` in metadata; the complete
+`output` stays in the returned value, so `review.output.total` is available to later computation
+through the notebook without ever entering the parent's context as text.
+
+## Limits
+
+OpenCode Core applies these fixed host limits. A program cannot raise or lower them.
+
+| Resource                          |     Limit |
+| --------------------------------- | --------: |
+| Tool calls                        |       100 |
+| One durable notebook value        |   256 KiB |
+| Declarations per execution        |        64 |
+| Notebook values per Session       |       512 |
+| Notebook bytes per Session        |     8 MiB |
+| Captured journal input or output  |   256 KiB |
+| Model-facing preview              |     4 KiB |
+| Captured logs                     |     4 KiB |
+| Completion summary                |     8 KiB |
+| Captured tool and trace events    |  100 each |
+| One captured event value          |     4 KiB |
+| Concurrent executions per Session |        10 |
+| Durable value depth               |        32 |
+| Items in one array or record      | 1,000,000 |
+| Characters in one string          | 4,000,000 |
+
+There is no wall-clock limit. Core supplies no execution deadline, so a program runs until it
+settles, is cancelled, or the host restarts.
+
+Logs share the preview budget rather than owning an independent one: retained console output is
+whatever remains of the 4 KiB model-facing preview after the returned value is counted. Core also
+sets a 64 KiB log ceiling, but that sharing keeps it out of reach.
+
+Notebook names are append-only, so a Session's notebook only ever grows. The per-execution
+declaration count is checked at admission, before any tool runs, and is refused with the same
+`NotebookLimitExceeded` kind as a name conflict: no execution ID, no tool calls, no reservation. The
+per-Session totals are checked at admission too, and checked again inside the commit transaction,
+because two executions can both pass admission and only collide when they save. A refused commit
+saves nothing and releases its reservations. Reverting the messages that saved values no longer
+needed is how a Session reclaims room.
+
+The standalone `@opencode-ai/codemode` package remains host-neutral and applies only the limits its
+host supplies, including the optional `timeoutMs` deadline Core currently leaves unset. When a host
+does supply one, the deadline includes in-flight tool calls: a timeout interrupts the tool fiber and
+waits for interruption cleanup before settlement. If the program had already returned and its
+declarations were already encoded, the timeout only interrupts leftover background work: the encoded
+declarations are still reported, with the timeout recorded as a warning.
+
+The last two limits are the exception: they belong to the interpreter itself, not to the host, and no
+host can raise them. A deadline can only interrupt the interpreter between steps, so one operation
+that asks for four billion array slots or a gigabyte-long string would exhaust the process inside a
+single native call before any deadline is observed. Operations whose result size is known before the
+work starts check it first — array construction and `Array.from` lengths, `repeat`, `padStart`,
+`padEnd`, `concat`, `replaceAll`, `split`, `join`, `flat`, `flatMap`, spreads, and template literals —
+and the tool boundary refuses an oversized tool result, so every array a program can observe is
+already within the limit. Exceeding it fails the operation with an `InvalidDataValue` diagnostic that
+the program can catch as a `RangeError`:
+
+```ts
+const rows = Array.from({ length: 4_000_000_000 }) // InvalidDataValue, before any allocation
+const wide = "ab".repeat(3_000_000_000) // InvalidDataValue, before the native repeat
+```
+
+## Diagnostics
+
+| Kind                    | Meaning                                                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ParseError`            | Source is empty or cannot be parsed.                                                                                         |
+| `UnsupportedSyntax`     | Parsed JavaScript is outside the supported subset.                                                                           |
+| `UnknownTool`           | The program referenced an unavailable tool.                                                                                  |
+| `InvalidToolInput`      | Tool input failed schema decoding or safe-data copying.                                                                      |
+| `InvalidToolOutput`     | Tool output failed schema decoding or safe-data copying.                                                                     |
+| `InvalidDataValue`      | Program data violated the plain-data contract.                                                                               |
+| `InvalidDurableValue`   | A declared value cannot be saved durably, exceeds a value limit, or a stored value read by the program could not be decoded. |
+| `ToolCallLimitExceeded` | The program exceeded its tool-call limit.                                                                                    |
+| `TimeoutExceeded`       | Execution exceeded its wall-clock deadline.                                                                                  |
+| `ToolFailure`           | A tool refused or failed.                                                                                                    |
+| `ExecutionFailure`      | The program threw or another execution error occurred.                                                                       |
+| `Compatibility`         | Warning only: `await` or `Promise.all` was accepted as an ignored no-op.                                                     |
+| `Truncated`             | Warning only: output was cut by the output limit.                                                                            |
+
+Admission errors are reported by the host with a stable `kind` of `NameAlreadyDefined`,
+`NameReserved`, or `NotebookLimitExceeded`, plus the names involved. Compiler diagnostics include a one-based
+`location` when available, and a `ParseError` also carries an `excerpt` of the failing source line
+so the failure can be understood without the whole program. Host failures preserve their useful
+messages, and interruption remains interruption rather than a generic failure.
+
+## Authorization And Trust Boundaries
+
+Code Mode does not invent a second permission system. The host controls authority by exposing only
+the tools available to the current request, running normal domain authorization inside each tool,
+marking the few tools allowed to receive opaque handles, and applying the same hooks and permission
+flow used by native tool calls. Saved closures re-resolve and re-authorize their tool paths in the
+execution that invokes them, so authority is never captured.
+
+Tool output and execution data are untrusted data, not instructions. Completion summaries frame
+previews and logs explicitly and neutralize spoofable markers and tags.
+
+## Implementation Map
+
+- `src/ir.ts`: the versioned data-only program representation and the `decodeProgram` boundary.
+- `src/compiler.ts`: transpilation, versioned IR, declaration extraction, and rejected syntax.
+- `src/interpreter/captures.ts`: lexical free-variable analysis for durable closures.
+- `src/interpreter/durable.ts`: notebook value encoding, decoding, and limits.
+- `src/interpreter/runtime.ts`: evaluator, immutability, closures, handles, and capability enforcement.
+- `src/globals.ts`: the shared global-name lists the runtime binds and the compiler reserves.
+- `src/stdlib/time.ts`, `src/stdlib/url.ts`: plain-data helpers.
+- `src/tool-runtime.ts`: schema boundaries, catalog lookup, call accounting, and host hooks.
+- `../core/src/codemode/store.ts`: admission, reservations, commit, journal, fork, revert, recovery.
+- `../core/src/codemode/tool.ts`: the asynchronous `execute` tool, progress, and bounded summaries.
+- `../session-ui/src/tools/tool-renderer.tsx`: Session timeline rendering.
+
+Direct contract tests live in `test/notebook.test.ts`, with durable lifecycle tests in Core's
+`test/codemode-store.test.ts`, `test/tool-execute.test.ts`, and `test/tool-registry.test.ts`.

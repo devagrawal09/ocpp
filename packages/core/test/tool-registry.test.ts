@@ -1,21 +1,29 @@
 import { describe, expect } from "bun:test"
 import { Agent } from "@opencode-ai/core/agent"
+import { Bus } from "@opencode-ai/core/bus"
+import { Database } from "@opencode-ai/core/database/database"
+import { CodeModeStore } from "@opencode-ai/core/codemode/store"
+import { CodeModeExecutionTable } from "@opencode-ai/core/codemode/sql"
 import type { Permission } from "@opencode-ai/core/permission"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Image } from "@opencode-ai/core/image"
+import { Job } from "@opencode-ai/core/job"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
+import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { Session } from "@opencode-ai/core/session"
+import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionModelRequest } from "@opencode-ai/core/session/model-request"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
+import { CodeModeExecution } from "@opencode-ai/schema/codemode-execution"
 import { LanguageModel } from "@opencode-ai/ai"
 import { route } from "@opencode-ai/ai/protocols/openai-chat"
 import { State } from "@opencode-ai/core/state"
 import { Tool } from "@opencode-ai/core/tool"
 import type { Info } from "@opencode-ai/schema/tool"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { executeTool, toolDefinitions } from "./lib/tool"
-import { Deferred, Effect, Exit, Fiber, Layer, Logger, Schema, SchemaGetter, SchemaIssue, Scope } from "effect"
+import { executeTool, readCodeModeNotebook, readCodeModeOutcome, seedToolSession, toolDefinitions } from "./lib/tool"
+import { Deferred, Effect, Exit, Fiber, Layer, Logger, Schema, SchemaGetter, SchemaIssue, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { z } from "zod"
 import { testEffect } from "./lib/effect"
@@ -42,9 +50,58 @@ const imageStore = Layer.mock(Image.Service, {
     })
   },
 })
-const registryLayer = AppNodeBuilder.build(LayerNode.group([Tool.node, PluginHooks.node, SessionModelRequest.node]), [
-  [Image.node, imageStore],
-])
+let testJobs: Job.Interface | undefined
+const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
+const runtimeLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    const jobs = yield* Job.Service
+    testJobs = jobs
+    return Layer.mock(PluginRuntime.Service, {
+      job: {
+        start: jobs.start,
+        startLimited: jobs.startLimited,
+        active: jobs.active,
+        wait: jobs.wait,
+        block: jobs.block,
+        background: jobs.background,
+        cancel: jobs.cancel,
+        cancelAll: jobs.cancelAll,
+        markBackgroundTerminal: jobs.markBackgroundTerminal,
+        completeBackground: jobs.completeBackground,
+      },
+      session: {
+        get: () => Effect.die("Unavailable in Tool registry tests"),
+        create: () => Effect.die("Unavailable in Tool registry tests"),
+        messages: () => Effect.die("Unavailable in Tool registry tests"),
+        message: () => Effect.succeed(undefined),
+        prompt: () => Effect.die("Unavailable in Tool registry tests"),
+        generate: () => Effect.die("Unavailable in Tool registry tests"),
+        command: () => Effect.die("Unavailable in Tool registry tests"),
+        rename: () => Effect.die("Unavailable in Tool registry tests"),
+        move: () => Effect.die("Unavailable in Tool registry tests"),
+        resume: () => Effect.die("Unavailable in Tool registry tests"),
+        switchAgent: () => Effect.die("Unavailable in Tool registry tests"),
+        switchModel: () => Effect.die("Unavailable in Tool registry tests"),
+        interrupt: () => Effect.die("Unavailable in Tool registry tests"),
+        synthetic: () => Effect.never,
+        wait: () => Effect.die("Unavailable in Tool registry tests"),
+        context: () => Effect.die("Unavailable in Tool registry tests"),
+      },
+      persistentPty: { read: () => Effect.die("Unavailable in Tool registry tests") },
+      location: {
+        agent: { list: () => Effect.die("Unavailable in Tool registry tests") },
+        mcp: { list: () => Effect.die("Unavailable in Tool registry tests") },
+      },
+    })
+  }),
+).pipe(Layer.provide(jobLayer))
+const registryLayer = AppNodeBuilder.build(
+  LayerNode.group([Tool.node, PluginHooks.node, SessionModelRequest.node, Bus.node, Database.node, CodeModeStore.node]),
+  [
+    [Image.node, imageStore],
+    [PluginRuntime.node, runtimeLayer],
+  ],
+)
 const it = testEffect(registryLayer)
 const identity = {
   agent: Agent.ID.make("build"),
@@ -56,6 +113,28 @@ const call = (name: string, id = `call-${name}`): Parameters<Tool.Snapshot["exec
   ...identity,
   call: { type: "tool-call", id, name, input: { text: name } },
 })
+
+const CodeModeOutput = Schema.Struct({ executionID: CodeModeExecution.ID, status: Schema.Literal("running") })
+const isCodeModeStarted = (event: Bus.LogItem): event is SessionEvent.CodeMode.Started =>
+  event.type === SessionEvent.CodeMode.Started.type
+const waitCodeMode = (output: unknown, id: string) =>
+  Effect.gen(function* () {
+    const jobs = testJobs
+    if (!jobs) return yield* Effect.die("Job test service is unavailable")
+    const value = Schema.decodeUnknownSync(CodeModeOutput)(output)
+    expect(value.executionID).toStartWith("exe_")
+    expect((yield* jobs.get(value.executionID))?.status).toBe("running")
+    const bus = yield* Bus.Service
+    yield* bus.publish(SessionEvent.Tool.Success, {
+      sessionID,
+      assistantMessageID: identity.messageID,
+      id,
+      content: [{ type: "text", text: "Execution started" }],
+      executed: false,
+    })
+    const info = (yield* jobs.wait({ id: value.executionID })).info
+    return { ...(yield* readCodeModeOutcome(value.executionID)), summary: info?.output ?? info?.error ?? "" }
+  })
 
 const make = (): Info => ({
   name: "echo",
@@ -81,6 +160,7 @@ const transform = (service: Tool.Interface, tools: Readonly<Record<string, Info>
 describe("Tool", () => {
   it.effect("reads the current draft tools by effective name", () =>
     Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
       const service = yield* Tool.Service
       yield* transform(service, { echo: make() }, { namespace: "acme", codemode: false })
       yield* service.transform((draft) => {
@@ -89,6 +169,59 @@ describe("Tool", () => {
         expect(draft.get("acme_echo")?.name).toBe("echo")
         expect(draft.get("missing")).toBeUndefined()
       })
+    }),
+  )
+
+  it.effect("isolates temporary tools to one Session and restores earlier registrations", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { echo: constant("base") }, { codemode: false })
+      const other = Session.ID.make("ses_registry_other")
+      const first = yield* service.registerSession(sessionID, [
+        { ...constant("session"), name: "echo", options: { codemode: false } },
+        { ...constant("temporary"), name: "temporary" },
+      ])
+
+      expect((yield* service.snapshot(undefined, other)).codeModeCatalog?.map((tool) => tool.path)).toEqual([])
+      expect((yield* service.snapshot(undefined, sessionID)).codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "temporary",
+      ])
+      expect((yield* (yield* service.snapshot(undefined, sessionID)).execute(call("echo"))).output).toEqual({
+        text: "session",
+      })
+      expect((yield* (yield* service.snapshot(undefined, other)).execute(call("echo"))).output).toEqual({
+        text: "base",
+      })
+
+      yield* first.dispose
+      expect((yield* service.snapshot(undefined, sessionID)).codeModeCatalog).toEqual([])
+      expect((yield* service.registrations(undefined, sessionID)).map((tool) => tool.name)).toEqual(["echo"])
+    }),
+  )
+
+  it.effect("refuses a second machine-input registration for one Session", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      const first = yield* service.registerSession(sessionID, [{ ...constant("first"), name: "temporary_one" }], {
+        input: { dataset: [1] },
+      })
+      // A concurrent second input-bearing registration would silently cross-wire which value the
+      // child reads as `input`, so it is refused with a typed error rather than accepted.
+      const error = yield* service
+        .registerSession(sessionID, [{ ...constant("second"), name: "temporary_two" }], { input: { dataset: [2] } })
+        .pipe(Effect.flip)
+      expect(error).toBeInstanceOf(Tool.RegistrationError)
+      expect(error.message).toContain("Machine input is already registered")
+      // The refused registration left nothing behind, and an input-free registration is still allowed.
+      expect((yield* service.registrations(undefined, sessionID)).map((tool) => tool.name)).toEqual(["temporary_one"])
+      const third = yield* service.registerSession(sessionID, [{ ...constant("third"), name: "temporary_three" }])
+      yield* first.dispose
+      // The first input registration is gone, so a fresh input registration is accepted again.
+      const fourth = yield* service.registerSession(sessionID, [{ ...constant("fourth"), name: "temporary_four" }], {
+        input: { dataset: [4] },
+      })
+      yield* third.dispose
+      yield* fourth.dispose
     }),
   )
 
@@ -165,6 +298,7 @@ describe("Tool", () => {
 
   it.effect("hooks execute and known Code Mode calls once but leaves unknown interpreter paths unchanged", () =>
     Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
       const service = yield* Tool.Service
       const hooks = yield* PluginHooks.Service
       yield* transform(service, { echo: make() })
@@ -183,10 +317,13 @@ describe("Tool", () => {
           type: "tool-call",
           id: "known",
           name: "run_code",
-          input: { code: 'return await tools.echo({ text: "hello" })' },
+          input: { code: 'return tools.echo({ text: "hello" })' },
         },
       })
-      expect(known.output).toMatchObject({ output: '{\n  "text": "hello"\n}' })
+      expect(yield* waitCodeMode(known.output, "known")).toMatchObject({
+        status: "saved",
+        summary: expect.stringContaining('{"text":"hello"}'),
+      })
       expect(seen).toEqual(["run_code", "echo"])
       const unknown = yield* snapshot.execute({
         ...call("execute"),
@@ -194,10 +331,13 @@ describe("Tool", () => {
           type: "tool-call",
           id: "unknown",
           name: "execute",
-          input: { code: "return await tools.missing({})" },
+          input: { code: "return tools.missing({})" },
         },
       })
-      expect(unknown.output).toMatchObject({ error: true })
+      expect(yield* waitCodeMode(unknown.output, "unknown")).toMatchObject({
+        status: "failed",
+        error: expect.stringContaining("missing"),
+      })
       expect(seen).toEqual(["run_code", "echo", "execute"])
     }),
   )
@@ -469,6 +609,17 @@ describe("Tool", () => {
     }),
   )
 
+  it.effect("reserves the built-in Code Mode search path", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { search: make() })
+
+      const snapshot = yield* service.snapshot()
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(snapshot.codeModeCatalog).toEqual([])
+    }),
+  )
+
   it.effect("executes native tools without requiring letter-leading names or namespace segments", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
@@ -496,6 +647,7 @@ describe("Tool", () => {
 
   it.effect("executes Code Mode tools without requiring letter-leading names or namespace segments", () =>
     Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
       const service = yield* Tool.Service
       yield* transform(service, { "2d_get_scene": make(), "123": make(), _lookup: make(), "-lookup": make() })
       yield* transform(service, { "2d_get_scene": make() }, { namespace: "123._private.-tools", codemode: true })
@@ -516,17 +668,141 @@ describe("Tool", () => {
           id: "call-nonletter-names",
           name: "execute",
           input: {
-            code: `const results = await Promise.all([
+            code: `const results = [
               tools["2d_get_scene"]({ text: "digit" }),
               tools["123"]({ text: "numeric" }),
               tools._lookup({ text: "underscore" }),
               tools["-lookup"]({ text: "hyphen" }),
               tools["123"]._private["-tools"]["2d_get_scene"]({ text: "namespaced" }),
-            ]); return results.map(result => result.text).join(",");`,
+            ]
+            const joined = results.map(result => result.text).join(",")`,
           },
         },
       })
-      expect(result.content).toEqual([{ type: "text", text: "digit,numeric,underscore,hyphen,namespaced" }])
+      expect(yield* waitCodeMode(result.output, "call-nonletter-names")).toMatchObject({
+        status: "saved",
+        saved: ["results", "joined"],
+      })
+      expect(yield* readCodeModeNotebook(sessionID)).toMatchObject({
+        joined: "digit,numeric,underscore,hyphen,namespaced",
+      })
+    }),
+  )
+
+  it.effect("does not impose a wall-clock deadline on Code Mode executions", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const started = yield* Deferred.make<void>()
+      const service = yield* Tool.Service
+      yield* transform(service, {
+        delayed: {
+          name: "delayed",
+          description: "Return after a delay",
+          input: Schema.Struct({}),
+          output: Schema.String,
+          execute: () =>
+            Deferred.succeed(started, undefined).pipe(
+              Effect.andThen(Effect.sleep("121 seconds")),
+              Effect.as({ output: "finished", content: "finished" }),
+            ),
+        },
+      })
+
+      const snapshot = yield* service.snapshot()
+      const result = yield* snapshot.execute({
+        ...call("execute", "no-deadline"),
+        call: {
+          type: "tool-call",
+          id: "no-deadline",
+          name: "execute",
+          input: { code: "const result = tools.delayed({})" },
+        },
+      })
+      const waiting = yield* waitCodeMode(result.output, "no-deadline").pipe(Effect.forkChild)
+      yield* Deferred.await(started)
+      yield* TestClock.adjust("121 seconds")
+
+      expect(yield* Fiber.join(waiting)).toMatchObject({ status: "saved", saved: ["result"] })
+      expect(yield* readCodeModeNotebook(sessionID)).toMatchObject({ result: "finished" })
+    }),
+  )
+
+  it.effect("discards executions rejected by the concurrency limit", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      const snapshot = yield* service.snapshot()
+      const started = yield* Effect.forEach(
+        Array.from({ length: 10 }, (_, index) => index),
+        (index) =>
+          snapshot.execute({
+            ...call("execute", "detached-" + index),
+            call: {
+              type: "tool-call",
+              id: "detached-" + index,
+              name: "execute",
+              input: { code: "return null" },
+            },
+          }),
+      )
+      const rejected = yield* snapshot
+        .execute({
+          ...call("execute", "detached-rejected"),
+          call: {
+            type: "tool-call",
+            id: "detached-rejected",
+            name: "execute",
+            input: { code: "return null" },
+          },
+        })
+        .pipe(Effect.flip)
+      expect(rejected.message).toContain("At most 10 executions")
+
+      const db = (yield* Database.Service).db
+      expect((yield* db.select({ id: CodeModeExecutionTable.id }).from(CodeModeExecutionTable).all()).length).toBe(10)
+      const jobs = testJobs ?? (yield* Effect.die("Job test service is unavailable"))
+      yield* Effect.forEach(
+        started,
+        (item) => jobs.cancel(Schema.decodeUnknownSync(CodeModeOutput)(item.output).executionID),
+        { discard: true },
+      )
+    }),
+  )
+
+  it.effect("cancels the job when launch is interrupted before listener registration", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      const bus = yield* Bus.Service
+      const started = yield* Deferred.make<CodeModeExecution.ID>()
+      const block = yield* Deferred.make<void>()
+      const unsubscribe = yield* bus.listen((event) => {
+        if (!isCodeModeStarted(event) || event.data.id !== "detached-interrupted") return Effect.void
+        return Deferred.succeed(started, event.data.executionID).pipe(Effect.andThen(Deferred.await(block)))
+      })
+      const snapshot = yield* service.snapshot()
+      const fiber = yield* snapshot
+        .execute({
+          ...call("execute", "detached-interrupted"),
+          call: {
+            type: "tool-call",
+            id: "detached-interrupted",
+            name: "execute",
+            input: { code: "return null" },
+          },
+        })
+        .pipe(Effect.forkChild)
+      const executionID = yield* Deferred.await(started)
+      yield* Fiber.interrupt(fiber)
+      yield* unsubscribe
+
+      const jobs = testJobs ?? (yield* Effect.die("Job test service is unavailable"))
+      expect((yield* jobs.get(executionID))?.status).toBe("cancelled")
+      expect(yield* readCodeModeOutcome(executionID)).toMatchObject({
+        status: "indeterminate",
+        saved: [],
+        error: expect.stringContaining("indeterminate"),
+      })
     }),
   )
 
@@ -1085,6 +1361,7 @@ describe("Tool", () => {
 
   it.effect("executes and reports progress for codemode tools advertised in a model request", () =>
     Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
       const service = yield* Tool.Service
       const executed: string[] = []
       const scope = yield* Scope.make()
@@ -1104,7 +1381,7 @@ describe("Tool", () => {
       const toolSet = yield* service.snapshot()
       const execute = toolSet.definitions.find((tool) => tool.name === "execute")
       expect(toolSet.codeModeCatalog?.[0]?.signature).toContain("tools.echo")
-      expect(execute?.description).toContain("confined Code Mode runtime")
+      expect(execute?.description).toContain("JavaScript-shaped program")
       expect(execute?.description).not.toContain("Echo text")
       yield* Scope.close(scope, Exit.void)
       yield* transform(service, {
@@ -1117,25 +1394,196 @@ describe("Tool", () => {
         },
       })
 
-      const progress: Tool.Metadata[] = []
+      const bus = yield* Bus.Service
+      let backgroundAtStarted = false
+      yield* bus.project(SessionEvent.CodeMode.Started, () => {
+        const jobs = testJobs
+        if (!jobs) return Effect.die("Job test service is unavailable")
+        return jobs.pendingBackground.pipe(
+          Effect.map((items) => {
+            backgroundAtStarted = items.some((item) => item.recovery.kind === "codemode")
+          }),
+        )
+      })
+      const progress: Array<SessionEvent.CodeMode.Progress["data"]["events"]> = []
+      const boundedProgress: Array<SessionEvent.CodeMode.Progress["data"]["events"]> = []
+      const progressFiber = yield* bus.subscribe(SessionEvent.CodeMode.Progress).pipe(
+        Stream.runForEach((event) =>
+          Effect.sync(() => {
+            if (event.data.id === "call-execute") progress.push(event.data.events)
+            if (event.data.id === "call-bounded") boundedProgress.push(event.data.events)
+          }),
+        ),
+        Effect.forkIn(yield* Scope.Scope, { startImmediately: true }),
+      )
       const execution = yield* toolSet.execute({
         ...call("execute"),
         call: {
           type: "tool-call",
           id: "call-execute",
           name: "execute",
-          input: { code: 'return await tools.echo({ text: "request" })' },
+          input: { code: 'const answer = tools.echo({ text: "request" })' },
         },
-        progress: (update) => Effect.sync(() => progress.push(update)),
       })
 
-      expect(execution).toMatchObject({ content: [{ type: "text" }] })
+      expect(backgroundAtStarted).toBe(true)
+      expect(yield* waitCodeMode(execution.output, "call-execute")).toMatchObject({
+        status: "saved",
+        saved: ["answer"],
+        summary: expect.stringContaining("answer"),
+      })
+      expect(yield* readCodeModeNotebook(sessionID)).toMatchObject({ answer: { text: "request" } })
       expect(executed).toEqual(["old:request"])
-      expect(progress).toEqual([
-        { toolCalls: [{ tool: "echo", status: "running", input: { text: "request" } }] },
-        { stage: "old" },
-        { toolCalls: [{ tool: "echo", status: "completed", input: { text: "request" } }] },
+      expect(progress.at(-1)).toEqual([
+        {
+          type: "tool",
+          tool: "echo",
+          status: "completed",
+          input: { text: "request" },
+          output: '{"text":"request"}',
+          metadata: { stage: "old" },
+        },
+        { type: "trace", kind: "assignment", target: "answer", value: "{ text: request }" },
+        { type: "trace", kind: "return", value: "undefined" },
       ])
+
+      const bounded = yield* toolSet.execute({
+        ...call("execute"),
+        call: {
+          type: "tool-call",
+          id: "call-bounded",
+          name: "execute",
+          input: {
+            code: 'console.log("\u{1F600}".repeat(5000)); return Array.from({ length: 101 }, (_, index) => tools.echo({ text: String.fromCharCode(0).repeat(5000) + index }))',
+          },
+        },
+      })
+      const boundedOutcome = yield* waitCodeMode(bounded.output, "call-bounded")
+      expect(boundedOutcome).toMatchObject({
+        status: "failed",
+        saved: [],
+        error: expect.stringContaining("tool-call limit"),
+      })
+      // The completion summary is bounded even when the program logged and returned far more.
+      expect(new TextEncoder().encode(boundedOutcome.summary).length).toBeLessThanOrEqual(8 * 1024)
+      yield* Fiber.interrupt(progressFiber)
+      const boundedEvents = boundedProgress.at(-1) ?? []
+      expect(boundedEvents.filter((event) => event.type === "tool").length).toBeLessThanOrEqual(100)
+      expect(new TextEncoder().encode(JSON.stringify(boundedEvents)).length).toBeLessThanOrEqual(256 * 1024)
+      expect(boundedEvents.find((event) => event.type === "tool")).toMatchObject({
+        input: { truncated: expect.any(String) },
+        output: expect.any(String),
+      })
+      const first = boundedEvents.find((event) => event.type === "tool")
+      const output = first?.output ?? ""
+      expect(new TextEncoder().encode(JSON.stringify(first?.input)).length).toBeLessThanOrEqual(4 * 1024)
+      expect(new TextEncoder().encode(JSON.stringify(output)).length).toBeLessThanOrEqual(4 * 1024)
+      const log = boundedEvents.find((event) => event.type === "trace" && event.kind === "log")
+      expect(log).toMatchObject({ message: expect.any(String) })
+      expect(
+        new TextEncoder().encode(JSON.stringify(log?.kind === "log" ? log.message : "")).length,
+      ).toBeLessThanOrEqual(4 * 1024)
+    }),
+  )
+
+  it.effect("refuses a program that redeclares a saved notebook name without running anything", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      const executed: Array<string> = []
+      yield* transform(service, {
+        echo: {
+          name: "echo",
+          description: "Echo text",
+          input: Schema.Struct({ text: Schema.String }),
+          output: Schema.Struct({ text: Schema.String }),
+          execute: ({ text }) => Effect.sync(() => executed.push(text)).pipe(Effect.as({ output: { text } })),
+        },
+      })
+      const snapshot = yield* service.snapshot()
+      const first = yield* snapshot.execute({
+        ...call("execute"),
+        call: {
+          type: "tool-call",
+          id: "call-first-name",
+          name: "execute",
+          input: { code: 'const shared = tools.echo({ text: "first" })' },
+        },
+      })
+      expect(yield* waitCodeMode(first.output, "call-first-name")).toMatchObject({
+        status: "saved",
+        saved: ["shared"],
+      })
+
+      const refused = yield* snapshot
+        .execute({
+          ...call("execute"),
+          call: {
+            type: "tool-call",
+            id: "call-redeclare",
+            name: "execute",
+            input: { code: 'const shared = tools.echo({ text: "second" })' },
+          },
+        })
+        .pipe(Effect.flip)
+      expect(refused.message).toContain("cannot be redefined")
+      expect(refused.metadata).toMatchObject({ kind: "NameAlreadyDefined", names: ["shared"] })
+      // A refused program never runs, so its tool call never happened.
+      expect(executed).toEqual(["first"])
+      const store = yield* CodeModeStore.Service
+      expect(yield* store.reservations(sessionID)).toEqual([])
+    }),
+  )
+
+  it.effect("settles interrupted executions durably", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      const gate = yield* Deferred.make<void>()
+      yield* transform(service, {
+        blocked: {
+          name: "blocked",
+          description: "Never completes",
+          input: Schema.Struct({}),
+          output: Schema.Null,
+          execute: () => Deferred.await(gate).pipe(Effect.as({ output: null })),
+        },
+      })
+      const started = yield* Deferred.make<CodeModeExecution.ID>()
+      const bus = yield* Bus.Service
+      yield* bus.project(SessionEvent.CodeMode.Started, (event) =>
+        event.data.id === "call-interrupted" ? Deferred.succeed(started, event.data.executionID) : Effect.void,
+      )
+      const snapshot = yield* service.snapshot()
+      const scope = yield* Scope.Scope
+      const fiber = yield* snapshot
+        .execute({
+          ...call("execute"),
+          call: {
+            type: "tool-call",
+            id: "call-interrupted",
+            name: "execute",
+            input: { code: "return tools.blocked({})" },
+          },
+        })
+        .pipe(Effect.forkIn(scope, { startImmediately: true }))
+      const executionID = yield* Deferred.await(started)
+      // Release the outer tool result so the execution starts, then cancel it while a tool blocks.
+      yield* bus.publish(SessionEvent.Tool.Success, {
+        sessionID,
+        assistantMessageID: identity.messageID,
+        id: "call-interrupted",
+        content: [{ type: "text", text: "Execution started" }],
+        executed: false,
+      })
+      const store = yield* CodeModeStore.Service
+      while ((yield* store.get(executionID))?.status !== "running") yield* Effect.promise(() => Bun.sleep(1))
+      const jobs = testJobs ?? (yield* Effect.die("Job test service is unavailable"))
+      yield* jobs.cancel(executionID)
+      yield* Fiber.interrupt(fiber)
+      expect(yield* store.get(executionID)).toMatchObject({ status: "indeterminate", saved: [] })
+      expect(yield* store.bindings(sessionID)).toEqual({})
+      expect(yield* store.reservations(sessionID)).toEqual([])
     }),
   )
 })

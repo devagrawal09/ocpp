@@ -411,6 +411,15 @@ describe("ConfigNormalize", () => {
     expect(normalized({ enabled_providers: "anthropic" }).encoded.experimental).toBeUndefined()
   })
 
+  test("preserves the subagent model allowlist", () => {
+    expect(
+      normalized({
+        subagent: { models: ["opencode/gpt-5.6-luna", "opencode/gpt-5.6-sol"] },
+      }).encoded.subagent,
+    ).toEqual({ models: ["opencode/gpt-5.6-luna", "opencode/gpt-5.6-sol"] })
+    expect(normalized({ subagent: { models: ["opencode/gpt-5.6-luna#high"] } }).encoded.subagent).toBeUndefined()
+  })
+
   test("appends native policies after migrated provider policies", () => {
     expect(
       normalized({

@@ -162,6 +162,79 @@ describe("current session timeline rows", () => {
     ])
   })
 
+  test("groups adjacent Code Mode executions and hides their completion notices", () => {
+    const source = [
+      { id: "msg_user", type: "user", text: "run in parallel", time: { created: 1 } },
+      {
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [
+          { type: "reasoning", text: "prepare", time: { created: 2, completed: 3 } },
+          storyTool("execute_a", "execute", "completed", { code: "return a" }),
+          storyTool("read_between", "read", "completed", { filePath: "package.json" }),
+          storyTool("execute_b", "execute", "completed", { code: "return b" }),
+          storyTool("execute_c", "execute", "completed", { code: "return c" }),
+        ],
+        time: { created: 2, completed: 3 },
+      },
+      ...["a", "b", "c"].map((id, index) => ({
+        id: "msg_codemode_" + id,
+        type: "synthetic" as const,
+        text: '<codemode executionID="exe_' + id + '" state="completed">done</codemode>',
+        description: "Code Mode execution",
+        metadata: { source: "codemode", executionID: "exe_" + id, state: "completed" },
+        time: { created: 4 + index },
+      })),
+    ] satisfies SessionMessageInfo[]
+
+    const rows = Timeline.constructSessionMessageRows(source, true, { type: "idle" }).rows
+    expect(
+      rows.flatMap((row) =>
+        row._tag === "AssistantPart" && row.group.type === "context" ? [row.group.refs.map((ref) => ref.partID)] : [],
+      ),
+    ).toEqual([
+      ["msg_assistant:reasoning:0", "execute_a"],
+      ["read_between"],
+      ["execute_b", "execute_c"],
+    ])
+    expect(rows.map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart", "AssistantPart", "AssistantPart"])
+  })
+
+  test("isolates custom tool executions from adjacent context tools", () => {
+    const source = [
+      { id: "msg_user", type: "user", text: "run custom tool", time: { created: 1 } },
+      {
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [
+          storyTool("read_before", "read", "completed", { filePath: "package.json" }),
+          storyTool(
+            "custom",
+            "inspect_repository",
+            "completed",
+            {},
+            {
+              metadata: { executionKind: "custom-tool", executionStatus: "completed", events: [] },
+            },
+          ),
+          storyTool("grep_after", "grep", "completed", { pattern: "custom" }),
+        ],
+        time: { created: 2, completed: 3 },
+      },
+    ] satisfies SessionMessageInfo[]
+
+    const rows = Timeline.constructSessionMessageRows(source, true, { type: "idle" }).rows
+    expect(
+      rows.flatMap((row) =>
+        row._tag === "AssistantPart" && row.group.type === "context" ? [row.group.refs.map((ref) => ref.partID)] : [],
+      ),
+    ).toEqual([["read_before"], ["custom"], ["grep_after"]])
+  })
+
   test("does not infer thinking from an optimistic busy turn", () => {
     const source = [
       { id: "msg_z", type: "user", text: "existing", time: { created: 1 } },
@@ -305,6 +378,62 @@ describe("current session timeline rows", () => {
     expect(result.rows[2]).toMatchObject({ ref: { partID: "msg_tool_projection_assistant:reasoning:1" } })
   })
 
+  test("groups only directly adjacent standalone reasoning parts", () => {
+    const source = [
+      { id: "msg_user", type: "user", text: "think", time: { created: 1 } },
+      {
+        id: "msg_assistant_1",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "reasoning", text: "First", time: { created: 2, completed: 3 } }],
+        time: { created: 2, completed: 3 },
+      },
+      {
+        id: "msg_assistant_2",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [
+          { type: "reasoning", text: "Second", time: { created: 4, completed: 5 } },
+          { type: "text", text: "Visible answer" },
+          { type: "reasoning", text: "Third", time: { created: 6, completed: 7 } },
+          { type: "reasoning", text: "Fourth", time: { created: 8, completed: 9 } },
+          storyTool("execute_boundary", "execute", "completed", { code: "return true" }),
+          { type: "reasoning", text: "Fifth", time: { created: 10, completed: 11 } },
+          { type: "reasoning", text: "Sixth", time: { created: 12, completed: 13 } },
+        ],
+        time: { created: 4, completed: 13 },
+      },
+    ] satisfies SessionMessageInfo[]
+
+    const groups = Timeline.constructSessionMessageRows(source, true, { type: "idle" }).rows.flatMap((row) =>
+      row._tag === "AssistantPart" ? [row.group] : [],
+    )
+    expect(groups).toMatchObject([
+      {
+        type: "reasoning",
+        refs: [
+          { messageID: "msg_assistant_1", partID: "msg_assistant_1:reasoning:0" },
+          { messageID: "msg_assistant_2", partID: "msg_assistant_2:reasoning:0" },
+        ],
+      },
+      { type: "part", ref: { partID: "msg_assistant_2:text:0" } },
+      {
+        type: "context",
+        refs: [
+          { partID: "msg_assistant_2:reasoning:1" },
+          { partID: "msg_assistant_2:reasoning:2" },
+          { partID: "execute_boundary" },
+        ],
+      },
+      {
+        type: "reasoning",
+        refs: [{ partID: "msg_assistant_2:reasoning:3" }, { partID: "msg_assistant_2:reasoning:4" }],
+      },
+    ])
+  })
+
   test("keeps actual thinking with the active prompt above an undelivered prompt", () => {
     const document = storyDocument([{ type: "reasoning", text: "Active thought" }], true)
     const result = Timeline.constructSessionMessageRows(
@@ -326,10 +455,9 @@ describe("current session timeline rows", () => {
       true,
     )
     const result = Timeline.constructSessionMessageRows(document.messages, true, document.status)
-    expect(result.rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group.type] : []))).toEqual([
-      "part",
-      "part",
-    ])
+    expect(result.rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group.type] : []))).toEqual(
+      name === "execute" ? ["context"] : ["part", "part"],
+    )
   })
 
   test("keeps assistant errors and retries before later notices", () => {
@@ -609,7 +737,7 @@ describe("current session timeline rows", () => {
     const source = [
       { id: "msg_user", type: "user", text: "inspect", time: { created: 1 } },
       assistant("msg_assistant_1", "read"),
-      assistant("msg_assistant_2", "execute"),
+      assistant("msg_assistant_2", "shell"),
       assistant("msg_assistant_3", "grep"),
     ] satisfies SessionMessageInfo[]
 
@@ -823,7 +951,7 @@ describe("current session timeline rows", () => {
     expect(rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group.type] : []))).toEqual([...types])
   })
 
-  test.each(["shell", "execute", "subagent"])("keeps %s in an existing group throughout execution", (name) => {
+  test.each(["shell", "subagent"])("keeps %s in an existing group throughout execution", (name) => {
     const initial = createTimelineProjection({
       sessionMessages: storyDocument([storyTool("earlier", "read", "completed", {})]).messages,
       status: { type: "busy" },
@@ -865,9 +993,85 @@ describe("current session timeline rows", () => {
     }, initial.rows)
   })
 
+  test("groups contiguous reasoning and execute pairs in one disclosure", () => {
+    const rows = Timeline.constructSessionMessageRows(
+      storyDocument([
+        { type: "reasoning", text: "first thought", time: { created: 1, completed: 2 } },
+        storyTool("execute-1", "execute", "completed", {}),
+        { type: "reasoning", text: "second thought", time: { created: 3, completed: 4 } },
+        storyTool("execute-2", "execute", "completed", {}),
+      ]).messages,
+      true,
+      { type: "idle" },
+    ).rows
+
+    expect(rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group] : []))).toMatchObject([
+      {
+        type: "context",
+        refs: [
+          { partID: "msg_tool_projection_assistant:reasoning:0" },
+          { partID: "execute-1" },
+          { partID: "msg_tool_projection_assistant:reasoning:1" },
+          { partID: "execute-2" },
+        ],
+      },
+    ])
+  })
+
+  test("keeps execute in its own stable group throughout execution", () => {
+    const initial = createTimelineProjection({
+      sessionMessages: storyDocument([storyTool("earlier", "read", "completed", {})]).messages,
+      status: { type: "busy" },
+      reasoningMode: "hidden",
+    })
+    const phases = [
+      { status: "streaming" },
+      { status: "running" },
+      { status: "completed", metadata: { status: "running" } },
+      { status: "completed" },
+      { status: "error" },
+    ] as const
+    phases.reduce((previousRows, phase, index) => {
+      const result = createTimelineProjection({
+        sessionMessages: [
+          ...storyDocument([storyTool("earlier", "read", "completed", {})]).messages,
+          ...storyDocument([
+            storyTool("active", "execute", phase.status, {}, "metadata" in phase ? { metadata: phase.metadata } : {}),
+          ])
+            .messages.filter((message) => message.type === "assistant")
+            .map((message) => ({ ...message, id: "next-step" })),
+        ],
+        status: { type: "busy" },
+        reasoningMode: "hidden",
+        previousRows,
+      })
+      const groups = result.rows.filter((row) => row._tag === "AssistantPart")
+      expect(groups).toHaveLength(2)
+      expect(groups.map((group) => group.group)).toMatchObject([
+        { type: "context", refs: [{ messageID: "msg_tool_projection_assistant", partID: "earlier" }] },
+        { type: "context", refs: [{ messageID: "next-step", partID: "active" }] },
+      ])
+      expect(TimelineRow.key(groups[0])).toBe(TimelineRow.key(initial.rows[1]))
+      if (index > 0) expect(groups[1]).toBe(previousRows.filter((row) => row._tag === "AssistantPart")[1]!)
+      return result.rows
+    }, initial.rows)
+  })
+
+  test.each(["streaming", "running"] as const)("groups a standalone %s execute call as soon as it starts", (status) => {
+    const rows = Timeline.constructSessionMessageRows(
+      storyDocument([storyTool("active", "execute", status, {})], true).messages,
+      false,
+      { type: "busy" },
+    ).rows
+
+    expect(rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group] : []))).toMatchObject([
+      { type: "context", refs: [{ partID: "active" }] },
+    ])
+  })
+
   test.each([
     { name: "shell", expanded: true, types: ["context", "part"] },
-    { name: "execute", expanded: true, types: ["context", "part"] },
+    { name: "execute", expanded: true, types: ["context", "context"] },
     { name: "subagent", expanded: true, types: ["context"] },
     { name: "shell", separator: "text", types: ["context", "part", "part"] },
     { name: "shell", separator: "reasoning", showReasoning: true, types: ["context"] },

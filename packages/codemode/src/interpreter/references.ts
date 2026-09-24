@@ -16,16 +16,22 @@ import {
   PromiseNamespace,
   SearchFunction,
   SymbolNamespace,
+  ToolDefineReference,
+  ToolNamespace,
   UriFunction,
 } from "./model.js"
+import { ToolHandle } from "../tool-handle.js"
 import { ToolReference } from "../tool-runtime.js"
-import { isCodeModeValue, CodeModePromise } from "../values.js"
+import { CodeModePromise } from "../values.js"
 
 export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof CodeModeFunction ||
   value instanceof CodeModeGenerator ||
   value instanceof GeneratorMethodReference ||
   value instanceof ToolReference ||
+  value instanceof ToolHandle ||
+  value instanceof ToolNamespace ||
+  value instanceof ToolDefineReference ||
   value instanceof IntrinsicReference ||
   value instanceof GlobalNamespace ||
   value instanceof GlobalMethodReference ||
@@ -39,8 +45,7 @@ export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof SearchFunction ||
   value instanceof PromiseCapabilityFunction ||
   value instanceof ErrorConstructorReference ||
-  value instanceof SymbolNamespace ||
-  isCodeModeValue(value)
+  value instanceof SymbolNamespace
 
 function* childValues(value: object): Generator<unknown> {
   if (Array.isArray(value)) {
@@ -80,7 +85,6 @@ export const containsOpaqueReference = (value: unknown): boolean => {
       continue
     }
     const current = next.value
-    if (isCodeModeValue(current)) continue
     if (isRuntimeReference(current)) return true
     if (current === null || typeof current !== "object" || seen.has(current)) continue
     seen.add(current)
@@ -121,10 +125,14 @@ export const typeofValue = (value: unknown): string => {
     value instanceof PromiseNamespace ||
     value instanceof PromiseCapabilityFunction ||
     value instanceof ErrorConstructorReference ||
-    value instanceof SymbolNamespace
+    value instanceof SymbolNamespace ||
+    value instanceof ToolDefineReference
   )
     return "function"
-  if (value instanceof UriFunction || value instanceof SearchFunction) return "function"
+  if (value instanceof UriFunction || value instanceof SearchFunction || value instanceof ToolDefineReference)
+    return "function"
+  if (value instanceof ToolHandle) return "object"
+  if (value instanceof ToolNamespace) return "object"
   if (value instanceof ToolReference) return value.path.length > 0 ? "function" : "object"
   if (value instanceof GlobalNamespace) {
     return value.name === "Math" || value.name === "JSON" || value.name === "console" ? "object" : "function"

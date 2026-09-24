@@ -38,6 +38,61 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`codemode_binding\` (
+          \`session_id\` text NOT NULL,
+          \`name\` text NOT NULL,
+          \`value\` text NOT NULL,
+          \`message_seq\` integer NOT NULL,
+          \`execution_id\` text NOT NULL,
+          CONSTRAINT \`codemode_binding_pk\` PRIMARY KEY(\`session_id\`, \`name\`),
+          CONSTRAINT \`fk_codemode_binding_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`codemode_execution\` (
+          \`id\` text PRIMARY KEY,
+          \`session_id\` text NOT NULL,
+          \`assistant_message_id\` text NOT NULL,
+          \`tool_call_id\` text NOT NULL,
+          \`status\` text NOT NULL,
+          \`program\` text NOT NULL,
+          \`ir_version\` integer NOT NULL,
+          \`snapshot\` text NOT NULL,
+          \`saved\` text,
+          \`error\` text,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          \`time_completed\` integer,
+          CONSTRAINT \`fk_codemode_execution_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`codemode_journal\` (
+          \`execution_id\` text NOT NULL,
+          \`call_index\` integer NOT NULL,
+          \`tool\` text NOT NULL,
+          \`input\` text NOT NULL,
+          \`status\` text NOT NULL,
+          \`output\` text,
+          \`error\` text,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          \`time_completed\` integer,
+          CONSTRAINT \`codemode_journal_pk\` PRIMARY KEY(\`execution_id\`, \`call_index\`),
+          CONSTRAINT \`fk_codemode_journal_execution_id_codemode_execution_id_fk\` FOREIGN KEY (\`execution_id\`) REFERENCES \`codemode_execution\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`codemode_reservation\` (
+          \`session_id\` text NOT NULL,
+          \`name\` text NOT NULL,
+          \`execution_id\` text NOT NULL,
+          \`time_created\` integer NOT NULL,
+          CONSTRAINT \`codemode_reservation_pk\` PRIMARY KEY(\`session_id\`, \`name\`),
+          CONSTRAINT \`fk_codemode_reservation_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`credential\` (
           \`id\` text PRIMARY KEY,
           \`integration_id\` text,
@@ -66,6 +121,18 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`type\` text NOT NULL,
           \`data\` text NOT NULL,
           CONSTRAINT \`fk_event_aggregate_id_event_sequence_aggregate_id_fk\` FOREIGN KEY (\`aggregate_id\`) REFERENCES \`event_sequence\`(\`aggregate_id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`session_external\` (
+          \`session_id\` text PRIMARY KEY,
+          \`provider\` text NOT NULL,
+          \`directory\` text NOT NULL,
+          \`vendor_session_id\` text,
+          \`checkpoint\` text,
+          \`history_hash\` text,
+          \`status\` text NOT NULL,
+          CONSTRAINT \`fk_session_external_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
         );
       `)
       yield* tx.run(`
@@ -212,6 +279,8 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`time_idle\` integer,
           \`time_viewed\` integer,
           \`idle_outcome\` text,
+          \`idle_error_type\` text,
+          \`idle_error_message\` text,
           \`time_compacting\` integer,
           \`time_archived\` integer,
           \`time_suspended\` integer,
@@ -238,6 +307,15 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           CONSTRAINT \`fk_worktree_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
         );
       `)
+      yield* tx.run(
+        `CREATE INDEX \`codemode_binding_session_seq_idx\` ON \`codemode_binding\` (\`session_id\`,\`message_seq\`);`,
+      )
+      yield* tx.run(
+        `CREATE INDEX \`codemode_execution_session_created_idx\` ON \`codemode_execution\` (\`session_id\`,\`time_created\`);`,
+      )
+      yield* tx.run(
+        `CREATE INDEX \`codemode_reservation_execution_idx\` ON \`codemode_reservation\` (\`execution_id\`);`,
+      )
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)
       yield* tx.run(`CREATE INDEX \`event_aggregate_type_seq_idx\` ON \`event\` (\`aggregate_id\`,\`type\`,\`seq\`);`)
       yield* tx.run(

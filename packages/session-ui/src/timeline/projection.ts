@@ -1,3 +1,4 @@
+import { Delegation } from "@opencode-ai/schema/delegation"
 import type {
   ModelRef,
   SessionMessageAssistant,
@@ -155,6 +156,7 @@ export namespace Timeline {
     let current: Turn | undefined
 
     messages.forEach((message) => {
+      if (message.type === "synthetic" && message.metadata?.source === "codemode") return
       if (isNotice(message)) {
         if (current) current.entries.push({ type: "notice", message })
         if (!current) leading.push(message)
@@ -489,15 +491,22 @@ function groupContent(
   editToolDefaultOpen: boolean,
 ): PartGroup[] {
   const groups: PartGroup[] = []
-  let adjacent: { type: "context" | "patch" | "edit"; refs: PartRef[]; tools: boolean } | undefined
+  let adjacent:
+    | { type: "context" | "patch" | "edit"; refs: PartRef[]; tools: boolean; execute: boolean; isolated: boolean }
+    | undefined
   const flush = () => {
     const current = adjacent
     const first = current?.refs[0]
     if (!first) return
     if (!current.tools) {
-      groups.push(
-        ...current.refs.map((ref) => ({ type: "part" as const, key: `part:${ref.messageID}:${ref.partID}`, ref })),
-      )
+      if (current.refs.length === 1)
+        groups.push({ type: "part", key: `part:${first.messageID}:${first.partID}`, ref: first })
+      if (current.refs.length > 1)
+        groups.push({
+          type: "reasoning",
+          key: `reasoning:${first.messageID}:${first.partID}`,
+          refs: current.refs,
+        })
       adjacent = undefined
       return
     }
@@ -512,7 +521,7 @@ function groupContent(
     adjacent = undefined
   }
 
-  items.forEach((item) => {
+  items.forEach((item, index) => {
     const type =
       item.content.type === "tool"
         ? toolGroupType(
@@ -525,9 +534,30 @@ function groupContent(
           ? "context"
           : undefined
     if (type) {
-      if (adjacent?.type !== type) flush()
-      adjacent ??= { type, refs: [], tools: false }
+      const execute = item.content.type === "tool" && item.content.name === "execute"
+      const isolated =
+        item.content.type === "tool" &&
+        "metadata" in item.content.state &&
+        item.content.state.metadata?.executionKind === "custom-tool"
+      const next =
+        item.content.type === "reasoning"
+          ? items.slice(index + 1).find((candidate) => candidate.content.type !== "reasoning")
+          : undefined
+      const followedByExecute = next?.content.type === "tool" && next.content.name === "execute"
+      // Keep contiguous Code Mode thought/execution pairs together, but stop at unrelated tools or trailing thought.
+      if (
+        adjacent &&
+        (adjacent.type !== type ||
+          (execute && adjacent.tools && !adjacent.execute) ||
+          (!execute && adjacent.execute && (item.content.type === "tool" || !followedByExecute)) ||
+          isolated ||
+          adjacent.isolated)
+      )
+        flush()
+      adjacent ??= { type, refs: [], tools: false, execute, isolated: false }
       adjacent.tools ||= item.content.type === "tool"
+      adjacent.execute ||= execute
+      adjacent.isolated ||= isolated
       adjacent.refs.push({ messageID: item.messageID, partID: item.partID })
       return
     }
@@ -559,7 +589,7 @@ function toolGroupType(
     !hasContextGroup &&
     (content.state.status !== "completed" ||
       ("metadata" in content.state && content.state.metadata?.status === "running")) &&
-    (content.name === "shell" || content.name === "execute" || content.name === "subagent")
+    (content.name === "shell" || Delegation.isTool(content.name))
   )
     return undefined
   if (currentContentDefaultOpen(content, shellExpanded, editExpanded) !== true) return "context"

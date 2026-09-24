@@ -26,6 +26,7 @@ import { PersistentPty } from "@opencode-ai/schema/persistent-pty"
 import { Pty } from "@opencode-ai/schema/pty"
 import type { SessionHooks } from "@opencode-ai/plugin/effect/session"
 import { testEffect } from "../lib/effect"
+import { readCodeModeNotebook, seedToolSession, waitForCodeMode } from "../lib/tool"
 import { PluginTestLayer } from "./fixture"
 import { host } from "./host"
 
@@ -983,21 +984,28 @@ describe("fromPromise", () => {
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
       expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["acme.hello"])
       expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
-      expect(
-        yield* snapshot.execute({
-          sessionID: Session.ID.make("ses_promise_tool_options"),
-          agent: Agent.ID.make("build"),
-          messageID: SessionMessage.ID.make("msg_promise_tool_options"),
-          call: {
-            type: "tool-call",
-            id: "call_options",
-            name: "execute",
-            input: { code: "return await tools.acme.hello({})" },
-          },
-        }),
-      ).toMatchObject({
-        output: { output: "Hello", toolCalls: [{ tool: "acme.hello", status: "completed" }] },
+      const sessionID = Session.ID.make("ses_promise_tool_options")
+      const messageID = SessionMessage.ID.make("msg_promise_tool_options")
+      yield* seedToolSession(sessionID, messageID)
+      const execution = yield* snapshot.execute({
+        sessionID,
+        agent: Agent.ID.make("build"),
+        messageID,
+        call: {
+          type: "tool-call",
+          id: "call_options",
+          name: "execute",
+          input: { code: "const greeting = tools.acme.hello({})" },
+        },
       })
+      expect(
+        yield* waitForCodeMode(execution.output, {
+          sessionID,
+          assistantMessageID: messageID,
+          id: "call_options",
+        }),
+      ).toMatchObject({ status: "saved", saved: ["greeting"] })
+      expect(yield* readCodeModeNotebook(sessionID)).toMatchObject({ greeting: "Hello" })
     }),
   )
 
@@ -1027,36 +1035,49 @@ describe("fromPromise", () => {
       yield* PluginPromise.fromPromise(promisePlugin).effect(host)
 
       const toolSet = yield* registry.snapshot()
+      const sessionID = Session.ID.make("ses_content_only_tool")
+      const messageID = SessionMessage.ID.make("msg_content_only_tool")
+      yield* seedToolSession(sessionID, messageID)
       const throughCodeMode = yield* toolSet.execute({
-        sessionID: Session.ID.make("ses_content_only_tool"),
+        sessionID,
         agent: Agent.ID.make("build"),
-        messageID: SessionMessage.ID.make("msg_content_only_tool"),
+        messageID,
         call: {
           type: "tool-call",
           id: "call_content_only_tool",
           name: "execute",
-          input: { code: "return await tools.demo_status({})" },
+          input: { code: "const status = tools.demo_status({})" },
         },
       })
-      expect(throughCodeMode).toMatchObject({
-        output: { output: "hello", toolCalls: [{ tool: "demo_status", status: "completed" }] },
-        content: [{ type: "text", text: "hello" }],
+      expect(
+        yield* waitForCodeMode(throughCodeMode.output, {
+          sessionID,
+          assistantMessageID: messageID,
+          id: "call_content_only_tool",
+        }),
+      ).toMatchObject({ status: "saved", saved: ["status"] })
+      expect(yield* readCodeModeNotebook(sessionID)).toMatchObject({ status: "hello" })
+      const failed = yield* toolSet.execute({
+        sessionID,
+        agent: Agent.ID.make("build"),
+        messageID,
+        call: {
+          type: "tool-call",
+          id: "call_failed_tool",
+          name: "execute",
+          input: { code: "const failure = tools.demo_status({ fail: true })" },
+        },
       })
       expect(
-        yield* toolSet.execute({
-          sessionID: Session.ID.make("ses_content_only_tool"),
-          agent: Agent.ID.make("build"),
-          messageID: SessionMessage.ID.make("msg_content_only_tool"),
-          call: {
-            type: "tool-call",
-            id: "call_failed_tool",
-            name: "execute",
-            input: { code: "return await tools.demo_status({ fail: true })" },
-          },
+        yield* waitForCodeMode(failed.output, {
+          sessionID,
+          assistantMessageID: messageID,
+          id: "call_failed_tool",
         }),
       ).toMatchObject({
-        content: [{ type: "text", text: 'Expected string | null\n  at ["agent"]' }],
-        metadata: { error: true },
+        status: "failed",
+        saved: [],
+        error: expect.stringContaining('Expected string | null\n  at ["agent"]'),
       })
     }),
   )

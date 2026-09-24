@@ -236,19 +236,20 @@ const makeCrossSpawnSpawner = Effect.gen(function* () {
     out: ChildProcess.StdoutConfig,
     err: ChildProcess.StderrConfig,
   ) => {
-    let stdout = proc.stdout
-      ? NodeStream.fromReadable({
-          evaluate: () => proc.stdout!,
-          onError: (cause) => toPlatformError("fromReadable(stdout)", toError(cause), command),
-        })
-      : Stream.empty
-    let stderr = proc.stderr
-      ? NodeStream.fromReadable({
-          evaluate: () => proc.stderr!,
-          onError: (cause) => toPlatformError("fromReadable(stderr)", toError(cause), command),
-        })
-      : Stream.empty
+    const capture = (readable: NodeChildProcess.ChildProcess["stdout"], name: string) => {
+      if (!readable) return Stream.empty
+      // Bun resumes stdio on exit; retain bytes before the lazy Effect reader attaches.
+      const buffer = new PassThrough()
+      readable.on("error", (cause) => buffer.destroy(toError(cause)))
+      readable.pipe(buffer)
+      return NodeStream.fromReadable({
+        evaluate: () => buffer,
+        onError: (cause) => toPlatformError(`fromReadable(${name})`, toError(cause), command),
+      })
+    }
 
+    let stdout = capture(proc.stdout, "stdout")
+    let stderr = capture(proc.stderr, "stderr")
     if (Sink.isSink(out.stream)) stdout = Stream.transduce(stdout, out.stream)
     if (Sink.isSink(err.stream)) stderr = Stream.transduce(stderr, err.stream)
 

@@ -11,6 +11,7 @@ import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 import { toSessionError } from "@ocpp/core/session/to-session-error"
 import type { SessionError } from "@ocpp/schema/session-error"
 import { Tool } from "@ocpp/core/tool"
+import { effectiveName, execute } from "@ocpp/core/tool/runtime"
 import type { Context } from "@ocpp/plugin/effect/plugin"
 import { DateTime, Effect, Option, Schema, type Scope } from "effect"
 import { host } from "../plugin/host"
@@ -28,9 +29,19 @@ export const toolIdentity = {
 export const toolDefinitions = (registry: Tool.Interface, permissions?: Permission.Ruleset) =>
   registry.snapshot(permissions).pipe(Effect.map((toolSet) => toolSet.definitions))
 
+/** Paths of the tools reachable from `execute`, which is the only tool the model is offered. */
+export const codeModeTools = (registry: Tool.Interface, permissions?: Permission.Ruleset) =>
+  registry.snapshot(permissions).pipe(Effect.map((toolSet) => (toolSet.codeModeCatalog ?? []).map((tool) => tool.path)))
+
+/** Registered tools keyed by effective name, such as `acme_echo` for `tools.acme.echo`. */
+export const registeredTools = (registry: Tool.Interface, permissions?: Permission.Ruleset) =>
+  registry
+    .registrations(permissions)
+    .pipe(Effect.map((tools) => new Map(tools.map((tool) => [effectiveName(tool), tool]))))
+
 export function waitForTool(registry: Tool.Interface, name: string, remaining = 1000): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
-    if ((yield* toolDefinitions(registry)).some((tool) => tool.name === name)) return
+    if ((yield* registeredTools(registry)).has(name)) return
     if (remaining === 0) {
       yield* Effect.fail(new Error(`Timed out waiting for tool: ${name}`))
       return
@@ -191,13 +202,30 @@ export const seedToolSession = Effect.fnUntraced(function* (
     .pipe(Effect.orDie)
 })
 
+/**
+ * Runs `execute` through the model-facing snapshot, and any other registered tool through the leaf
+ * runtime that Code Mode calls. The model never calls a registered tool directly, so focused tool
+ * tests exercise the leaf without admitting a program.
+ */
 export const executeTool = (
   registry: Tool.Interface,
   input: Parameters<Tool.Snapshot["execute"]>[0],
 ): Effect.Effect<ToolExecution> =>
   Effect.gen(function* () {
     yield* seedToolSession(input.sessionID)
-    return yield* registry.snapshot().pipe(Effect.flatMap((tools) => tools.execute(input)))
+    if (input.call.name === "execute")
+      return yield* registry.snapshot().pipe(Effect.flatMap((tools) => tools.execute(input)))
+    const tool = (yield* registry.registrations(undefined, input.sessionID)).find(
+      (tool) => effectiveName(tool) === input.call.name,
+    )
+    if (!tool) return yield* new Tool.Error({ message: `Unknown tool: ${input.call.name}` })
+    return yield* execute(tool, input.call.input, {
+      sessionID: input.sessionID,
+      agent: input.agent,
+      messageID: input.messageID,
+      id: Tool.CallID.make(input.call.id),
+      progress: input.progress ?? (() => Effect.void),
+    })
   }).pipe(
     Effect.map((result) => ({ status: "completed" as const, ...result }) satisfies ToolExecution),
     Effect.catchTag("Tool.Error", (error) =>

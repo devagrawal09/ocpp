@@ -24,9 +24,6 @@ export class LocalConfig extends Schema.Class<LocalConfig>("Mcp.LocalConfig")({
   }),
   environment: Schema.Record(Schema.String, Schema.String).pipe(optional),
   disabled: Schema.Boolean.pipe(optional),
-  codemode: Schema.Boolean.pipe(optional).annotate({
-    description: "Expose this server's tools through Code Mode. Defaults to true.",
-  }),
   timeout: TimeoutConfig.pipe(optional),
 }) {}
 
@@ -44,9 +41,6 @@ export class RemoteConfig extends Schema.Class<RemoteConfig>("Mcp.RemoteConfig")
   headers: Schema.Record(Schema.String, Schema.String).pipe(optional),
   oauth: Schema.Union([OAuthConfig, Schema.Literal(false)]).pipe(optional),
   disabled: Schema.Boolean.pipe(optional),
-  codemode: Schema.Boolean.pipe(optional).annotate({
-    description: "Expose this server's tools through Code Mode. Defaults to true.",
-  }),
   timeout: TimeoutConfig.pipe(optional),
 }) {}
 

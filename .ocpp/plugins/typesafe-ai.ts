@@ -147,7 +147,7 @@ export default Plugin.define({
     await ctx.tool.transform((tools) => {
       tools.add({
         name: "systemOne",
-        options: { namespace: "jev", codemode: true },
+        options: { namespace: "jev" },
         description:
           "Run TypeSafe System One over named noul, choice, and score questions. Returns the SDK result unchanged.",
         input: SystemOneInput,
@@ -160,7 +160,7 @@ export default Plugin.define({
 
       tools.add({
         name: "list",
-        options: { namespace: "jev.models", codemode: true },
+        options: { namespace: "jev.models" },
         description: "List the TypeSafe models available to the configured account.",
         input: { type: "object", additionalProperties: false },
         output: ModelsOutput,

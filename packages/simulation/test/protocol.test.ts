@@ -167,7 +167,6 @@ test("decodes the simulated tool lifecycle", () => {
     },
     outputSchema: { type: "object" },
     permission: "lookup",
-    options: { codemode: false },
   }
   expect(
     Backend.decodeRequest({
@@ -218,9 +217,9 @@ test("decodes the simulated tool lifecycle", () => {
   ).toThrow()
   for (const invalid of [
     { ...registration, name: "1lookup" },
-    { ...registration, options: { namespace: "bad group", codemode: false } },
-    { ...registration, name: "execute", options: { codemode: false } },
-    { ...registration, options: { namespace: "a".repeat(64), codemode: false } },
+    { ...registration, options: { namespace: "bad group" } },
+    { ...registration, name: "search" },
+    { ...registration, options: { namespace: "a".repeat(64) } },
   ])
     expect(() =>
       Backend.decodeRequest({
@@ -237,8 +236,8 @@ test("decodes the simulated tool lifecycle", () => {
       method: "tool.attach",
       params: {
         tools: [
-          { ...registration, name: "b_c", options: { namespace: "a", codemode: false } },
-          { ...registration, name: "c", options: { namespace: "a.b", codemode: false } },
+          { ...registration, name: "b_c", options: { namespace: "a" } },
+          { ...registration, name: "c", options: { namespace: "a.b" } },
         ],
       },
     }),

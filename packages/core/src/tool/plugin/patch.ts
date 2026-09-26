@@ -77,7 +77,7 @@ export const Plugin = {
       .transform((draft) =>
         draft.add({
           name,
-          options: { codemode: false, permission: "edit" },
+          options: { permission: "edit" },
           description: DESCRIPTION,
           input: Input,
           output: Output,

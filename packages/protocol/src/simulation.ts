@@ -467,7 +467,6 @@ export namespace Backend {
     options: Schema.optionalKey(
       Schema.Struct({
         namespace: Schema.optionalKey(ToolNamespace),
-        codemode: Schema.optionalKey(Schema.Boolean),
       }),
     ),
   })
@@ -480,13 +479,8 @@ export namespace Backend {
         if (names.some((name) => !ProviderSafeName.test(name)))
           return "simulated tool names including namespaces must be provider-safe"
         if (new Set(names).size !== names.length) return "simulated tool registrations must have unique exposed names"
-        if (
-          tools.some(
-            (tool) =>
-              tool.name === "execute" && tool.options?.namespace === undefined && tool.options?.codemode === false,
-          )
-        )
-          return 'direct simulated tool name "execute" is reserved'
+        if (tools.some((tool) => tool.name === "search" && tool.options?.namespace === undefined))
+          return 'simulated tool name "search" is reserved for tool search'
         return undefined
       }),
     ),

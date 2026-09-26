@@ -1966,7 +1966,6 @@ export type ConfigEntry =
                   cwd?: string
                   environment?: { [x: string]: string }
                   disabled?: boolean
-                  codemode?: boolean
                   timeout?: { startup?: number; catalog?: number; execution?: number }
                 }
               | {
@@ -1983,7 +1982,6 @@ export type ConfigEntry =
                       }
                     | false
                   disabled?: boolean
-                  codemode?: boolean
                   timeout?: { startup?: number; catalog?: number; execution?: number }
                 }
           }
@@ -4597,7 +4595,6 @@ export type McpAddInput = {
           readonly cwd?: string
           readonly environment?: { readonly [x: string]: string }
           readonly disabled?: boolean
-          readonly codemode?: boolean
           readonly timeout?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         }
       | {
@@ -4614,7 +4611,6 @@ export type McpAddInput = {
               }
             | false
           readonly disabled?: boolean
-          readonly codemode?: boolean
           readonly timeout?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         }
   }["config"]

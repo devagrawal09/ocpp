@@ -89,7 +89,7 @@ describe("Instance vanilla", () => {
                 ),
                 instructions: yield* discovery.list(),
                 shell: Config.latest(entries, "shell"),
-                toolNames: (yield* tools.snapshot()).definitions.map((definition) => definition.name),
+                toolNames: ((yield* tools.snapshot()).codeModeCatalog ?? []).map((tool) => tool.path),
               }
             }).pipe(Effect.scoped, Effect.provide(locations.get(ref)))
 

@@ -233,7 +233,7 @@ export const connect = Effect.fnUntraced(function* (
       return yield* new ConnectError({ server, message: `Invalid MCP URL for "${server}"` })
     // Prefer raw tools for our Code Mode without changing the configured URL used for OAuth identity.
     const url = new URL(config.url)
-    const addedCodemode = config.codemode !== false && !url.searchParams.has("codemode")
+    const addedCodemode = !url.searchParams.has("codemode")
     if (addedCodemode) url.searchParams.set("codemode", "false")
     const open = (url: URL) =>
       initialize(

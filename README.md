@@ -11,6 +11,7 @@ OC++ is forked from [OpenCode](https://github.com/anomalyco/opencode). It is an 
 
 OC++ models Code Mode as an append-only durable notebook that a Session writes to by running code:
 
+- **One model tool:** The model is only ever offered `execute`. Built-in tools, MCP servers, subagents, external agents, and plugin tools are reachable only from the code it runs, as `tools.<namespace>.<name>(input)`.
 - **Automatic publication:** Every direct top-level `const` and `function` declaration is saved to the Session notebook and readable by name in later executions. There is no `export` syntax, and `return` is only a small preview.
 - **Immutable names with atomic admission:** A notebook name is written once and never reused. Names are verified and reserved before an execution ID exists, so conflicts are refused immediately and disjoint executions run concurrently without a global revision gate.
 - **All-or-nothing saving:** A successful program commits every declaration in one transaction; any failure, cancellation, revert, or restart saves nothing and releases its reservations.

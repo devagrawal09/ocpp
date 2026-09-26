@@ -29,6 +29,9 @@ flowchart LR
     Commit -->|bounded summary| Model
 ```
 
+OC++ offers the model exactly one tool, `execute`. Every host tool, MCP tool, subagent, and external
+agent is reachable only from code, so each action the model takes is a program with a visible trace.
+
 The interpreter never reaches around the tool registry. Filesystem, network, process, and
 application effects are available only when the host exposes a named tool that performs them.
 

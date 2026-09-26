@@ -140,7 +140,7 @@ export const Plugin = {
         })
         draft.add({
           name,
-          options: { codemode: "both", acceptsToolHandles: true },
+          options: { acceptsToolHandles: true },
           description,
           input: Input,
           output: Output,

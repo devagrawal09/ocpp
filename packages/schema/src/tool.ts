@@ -19,24 +19,13 @@ export interface Context {
   readonly progress: (update: Metadata) => Effect.Effect<void>
 }
 
-interface BaseOptions {
+export interface Options {
   readonly namespace?: string
   readonly permission?: string
   /** Allows this in-process tool boundary to receive opaque same-activation tool handles. */
   readonly acceptsToolHandles?: boolean
+  readonly pinned?: boolean
 }
-
-export type Options = BaseOptions &
-  (
-    | {
-        readonly codemode?: true | "both"
-        readonly pinned?: boolean
-      }
-    | {
-        readonly codemode: boolean
-        readonly pinned?: never
-      }
-  )
 
 export type ValueSchema<A = unknown> = Schema.Codec<A, any> | StandardSchemaV1<any, A> | JsonSchema.JsonSchema
 

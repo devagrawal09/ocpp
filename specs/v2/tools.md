@@ -70,7 +70,7 @@ interface Tools {
 }
 ```
 
-Registration replaces unsupported name characters with `_` and reserves `execute` for Code Mode.
+Registration replaces unsupported name characters with `_` and reserves `search` for Code Mode tool search. The model is only ever offered `execute`; registered tools are reachable only from its code.
 
 A Location plugin receives only the narrow `Tools` registration capability, not the internal registry. Each activation acquires the Location's services, constructs its tools, and registers them in a fresh plugin-owned Scope.
 

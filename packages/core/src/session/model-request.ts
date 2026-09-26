@@ -92,7 +92,7 @@ export const baseTranscript = (input: {
     system: [
       input.agent.system
         ? input.agent.system
-        : SessionSystemPrompt.make(input.tools.definitions.map((tool) => tool.name)),
+        : SessionSystemPrompt.make((input.tools.codeModeCatalog ?? []).map((entry) => entry.path)),
       input.initial,
     ]
       .filter((part) => part.length > 0)

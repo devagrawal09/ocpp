@@ -105,7 +105,7 @@ export function make(platform: { available: typeof available; driver: typeof dri
               name: provider,
               input: Input,
               output: Output,
-              options: { codemode: "both", acceptsToolHandles: true },
+              options: { acceptsToolHandles: true },
               description: `Run ${provider} in an OC++ child session. Use it when the user explicitly requests this provider, preserve any requested model and effort, and never silently substitute another provider or model; report availability and authentication failures directly. Supply an absolute root plus an exact objective, relevant paths or context, constraints, and expected output in the message. For reviews, request prioritized concrete findings rather than a general endorsement. Verify factual findings before presenting them and clearly attribute them to the worker. Never poll the spawned worker for status or results: launch it once in a separate execute invocation, continue other independent work, and let its completion notification deliver the result. Pass sessionID only for real follow-up work after completion, never to check whether it is done. Private input, custom tool.define handles and outputSchema use the same machine-only contract as subagent.`,
               execute: (input, context) =>
                 Effect.scoped(

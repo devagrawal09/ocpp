@@ -109,7 +109,6 @@ export const Plugin = {
       .transform((draft) =>
         draft.add({
           name,
-          options: { codemode: false },
           description,
           input: Input,
           output: Output,

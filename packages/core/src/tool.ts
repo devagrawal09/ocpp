@@ -11,7 +11,6 @@ import { CodeModeCatalog } from "./codemode/catalog.js"
 import { CodeModeStore } from "./codemode/store.js"
 import { CodeModeTool } from "./codemode/tool.js"
 import { Bus } from "./bus.js"
-import { Image } from "./image.js"
 import { Permission } from "./permission.js"
 import { PluginHooks } from "./plugin/hooks.js"
 import { PluginRuntime } from "./plugin/runtime.js"
@@ -72,7 +71,6 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
-    const image = yield* Image.Service
     const bus = yield* Bus.Service
     const codemodeStore = yield* CodeModeStore.Service
     const runtime = yield* PluginRuntime.Service
@@ -81,36 +79,6 @@ const layer = Layer.effect(
       SessionSchema.ID,
       Array<{ readonly token: symbol; readonly tools: ReadonlyMap<string, Tool.Info>; readonly input?: Schema.Json }>
     >()
-
-    type NormalizedItem = Tool.Content | "decode" | "size"
-    const normalizeImages = Effect.fnUntraced(function* (content: ReadonlyArray<Tool.Content>) {
-      const normalized = yield* Effect.forEach(content, (item): Effect.Effect<NormalizedItem> => {
-        if (item.type !== "file" || !item.mime.startsWith("image/")) return Effect.succeed(item)
-        const base64 = /^data:[^,]*;base64,(.*)$/s.exec(item.uri)?.[1]
-        if (base64 === undefined) return Effect.succeed(item)
-        const resource = item.name ?? `${item.mime} tool output`
-        return image.normalize(resource, { uri: resource, content: base64, encoding: "base64", mime: item.mime }).pipe(
-          Effect.map((result) => ({
-            ...item,
-            uri: `data:${result.mime};base64,${result.content}`,
-            mime: result.mime,
-          })),
-          Effect.catchTag("Image.ResizerUnavailableError", () => Effect.succeed(item)),
-          Effect.catchTag("Image.DecodeError", () => Effect.succeed("decode" as const)),
-          Effect.catchTag("Image.SizeError", () => Effect.succeed("size" as const)),
-        )
-      })
-      const note = (reason: "decode" | "size", text: string) => {
-        const count = normalized.filter((item) => item === reason).length
-        if (count === 0) return []
-        return [{ type: "text" as const, text: `[${count} image${count === 1 ? "" : "s"} omitted: ${text}]` }]
-      }
-      return [
-        ...normalized.filter((item) => typeof item !== "string"),
-        ...note("decode", "could not be decoded."),
-        ...note("size", "could not be resized below the image size limit."),
-      ]
-    })
 
     const beforeExecute = (name: string, input: unknown, context: Tool.Context) =>
       hooks.trigger("tool", "execute.before", {
@@ -159,10 +127,9 @@ const layer = Layer.effect(
         },
       }
       yield* hooks.trigger("tool", "execute.after", afterEvent)
-      const afterContent = yield* normalizeImages(normalizeContent(afterEvent.result.content, afterEvent.result.output))
       return {
         ...(afterEvent.result.output === undefined ? {} : { output: afterEvent.result.output }),
-        content: afterContent,
+        content: normalizeContent(afterEvent.result.content, afterEvent.result.output),
         ...(afterEvent.result.metadata === undefined ? {} : { metadata: afterEvent.result.metadata }),
       }
     })
@@ -289,34 +256,23 @@ const layer = Layer.effect(
       snapshot: Effect.fn("Tool.snapshot")((permissions, sessionID) =>
         Effect.sync(() => {
           const registrations = active(permissions, sessionID)
-          const rules = permissions ?? []
-          const direct = new Map(
-            Array.from(registrations).filter(
-              ([, tool]) => tool.options?.codemode === false || tool.options?.codemode === "both",
-            ),
-          )
-          const codemode = new Map(Array.from(registrations).filter(([, tool]) => tool.options?.codemode !== false))
-          const codemodeEnabled = !whollyDisabled("execute", rules)
-          const codemodeTool = codemodeEnabled
-            ? CodeModeTool.create(
-                codemode,
-                (name, tool, input, context) =>
-                  beforeExecute(name, input, context).pipe(
-                    Effect.flatMap((event) => executeTool(tool, name, event.input, context)),
-                  ),
-                { bus, jobs: runtime.job, sessions: runtime.session, store: codemodeStore, scope },
-                activeInput(sessionID),
-              )
-            : undefined
-          const codeModeCatalog = codemodeEnabled ? CodeModeTool.catalog(codemode) : undefined
+          // `execute` is the only tool the model ever sees. Every registered tool is reachable only from
+          // code, so an agent gets `execute` exactly when its permissions leave at least one tool to call.
+          const codemodeTool =
+            registrations.size === 0
+              ? undefined
+              : CodeModeTool.create(
+                  registrations,
+                  (name, tool, input, context) =>
+                    beforeExecute(name, input, context).pipe(
+                      Effect.flatMap((event) => executeTool(tool, name, event.input, context)),
+                    ),
+                  { bus, jobs: runtime.job, sessions: runtime.session, store: codemodeStore, scope },
+                  activeInput(sessionID),
+                )
           return {
-            ...(codeModeCatalog === undefined ? {} : { codeModeCatalog }),
-            definitions: [
-              ...Array.from(direct)
-                .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-                .map(([, tool]) => definition(tool)),
-              ...(codemodeTool ? [definition(codemodeTool)] : []),
-            ],
+            ...(codemodeTool === undefined ? {} : { codeModeCatalog: CodeModeTool.catalog(registrations) }),
+            definitions: codemodeTool ? [definition(codemodeTool)] : [],
             execute: Effect.fnUntraced(function* (input: Parameters<Snapshot["execute"]>[0]) {
               const context: Tool.Context = {
                 sessionID: input.sessionID,
@@ -328,13 +284,11 @@ const layer = Layer.effect(
               const event = yield* beforeExecute(input.call.name, input.call.input, context)
               const requested = input.definitions?.get(event.tool)
               // Preserve session context removal and alias resolution, now after the repair hook.
-              if (!requested && input.definitions && (direct.has(event.tool) || codemodeTool?.name === event.tool))
+              if (!requested && input.definitions && codemodeTool?.name === event.tool)
                 return yield* new Tool.Error({ message: `Tool is not available for this request: ${event.tool}` })
               const name = requested?.name ?? event.tool
               if (name === "execute" && codemodeTool)
                 return yield* executeTool(codemodeTool, name, event.input, context)
-              const tool = direct.get(name)
-              if (tool) return yield* executeTool(tool, name, event.input, context)
               return yield* new Tool.Error({ message: `Unknown tool: ${name}` })
             }),
           }
@@ -363,10 +317,7 @@ function registrationError(tool: Tool.Info) {
   const name = normalizedName(tool)
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) return new RegistrationError({ name, message: `Invalid tool name: ${name}` })
   const id = effectiveName(tool)
-  if ((tool.options?.codemode === false || tool.options?.codemode === "both") && id === "execute")
-    return new RegistrationError({ name: id, message: "Tool name is reserved for Code Mode: " + id })
-  if (tool.options?.codemode !== false && id === "search")
-    return new RegistrationError({ name: id, message: "Tool name is reserved for Code Mode: " + id })
+  if (id === "search") return new RegistrationError({ name: id, message: "Tool name is reserved for Code Mode: " + id })
   const result = Result.try({
     try: () => ToolDefinition.make(definition(tool)),
     catch: (error) =>
@@ -378,5 +329,5 @@ function registrationError(tool: Tool.Info) {
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node],
+  deps: [PluginHooks.node, PluginRuntime.node, Bus.node, CodeModeStore.node],
 })

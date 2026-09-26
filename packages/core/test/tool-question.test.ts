@@ -12,7 +12,15 @@ import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
 import { permissionLayer } from "./lib/permission"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { definition } from "@ocpp/core/tool/runtime"
+import {
+  toolIdentity,
+  codeModeTools,
+  executeTool,
+  registerToolPlugin,
+  registeredTools,
+  toolDefinitions,
+} from "./lib/tool"
 
 const sessionID = Session.ID.make("ses_question_tool_test")
 const assertions: Permission.AssertInput[] = []
@@ -77,12 +85,15 @@ describe("QuestionTool", () => {
     Effect.gen(function* () {
       captured = undefined
       const registry = yield* Tool.Service
-      const definition = (yield* toolDefinitions(registry)).find((tool) => tool.name === QuestionTool.name)
+      const question = (yield* registeredTools(registry)).get(QuestionTool.name)
+      expect(question).toBeDefined()
+      if (!question) return
+      const inputSchema = definition(question).inputSchema
 
-      expect(definition?.inputSchema).toHaveProperty("properties.questions.type", "array")
-      expect(definition?.inputSchema).toHaveProperty("properties.questions.minItems", 1)
-      expect(definition?.inputSchema).toHaveProperty("properties.questions.items")
-      expect(definition?.inputSchema).not.toHaveProperty("properties.questions.prefixItems")
+      expect(inputSchema).toHaveProperty("properties.questions.type", "array")
+      expect(inputSchema).toHaveProperty("properties.questions.minItems", 1)
+      expect(inputSchema).toHaveProperty("properties.questions.items")
+      expect(inputSchema).not.toHaveProperty("properties.questions.prefixItems")
       expect(
         yield* executeTool(registry, {
           sessionID,
@@ -108,11 +119,8 @@ describe("QuestionTool", () => {
       yield* Effect.addFinalizer(() => Effect.sync(() => (deny = false)))
       const registry = yield* Tool.Service
 
-      expect(
-        (yield* toolDefinitions(registry, [{ action: "question", resource: "*", effect: "deny" }])).map(
-          (tool) => tool.name,
-        ),
-      ).toEqual(["execute"])
+      expect(yield* toolDefinitions(registry, [{ action: "question", resource: "*", effect: "deny" }])).toEqual([])
+      expect(yield* codeModeTools(registry, [{ action: "question", resource: "*", effect: "deny" }])).toEqual([])
       expect(
         yield* executeTool(registry, {
           sessionID,
@@ -156,7 +164,8 @@ describe("QuestionTool", () => {
         },
       ]
 
-      expect((yield* toolDefinitions(registry)).map((definition) => definition.name)).toEqual(["question", "execute"])
+      expect((yield* toolDefinitions(registry)).map((definition) => definition.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(registry)).toEqual(["question"])
       expect(
         yield* executeTool(registry, {
           sessionID,

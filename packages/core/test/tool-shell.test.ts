@@ -40,16 +40,19 @@ import { Shell as ShellSchema } from "@ocpp/schema/shell"
 import { ShellTool } from "@ocpp/core/tool/plugin/shell"
 import { ToolOutput } from "@ocpp/core/tool-output"
 import { Tool } from "@ocpp/core/tool"
+import { definition } from "@ocpp/core/tool/runtime"
 import { tmpdir } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
 import { Expected } from "./lib/session-message"
 import {
+  codeModeTools,
   executeTool,
   readCodeModeNotebook,
   seedToolSession,
   registerToolPlugin,
+  registeredTools,
   toolDefinitions,
   toolIdentity,
   waitForCodeMode,
@@ -721,11 +724,6 @@ describe("ShellTool", () => {
         reset()
         return withSession(tmp.path, (registry) =>
           Effect.gen(function* () {
-            yield* registry.transform((draft) =>
-              draft.update("shell", (tool) => {
-                tool.options = { ...tool.options, codemode: true }
-              }),
-            )
             yield* seedToolSession(sessionID, toolIdentity.messageID)
             const command = isWindows ? helloCommand : `${helloCommand}; sleep 0.1`
             const inputs = ["one", "two"].map((text) => JSON.stringify({ command: command.replace("hello", text) }))
@@ -769,16 +767,18 @@ describe("ShellTool", () => {
           reset()
           return withSession(tmp.path, (registry) =>
             Effect.gen(function* () {
-              const definitions = yield* toolDefinitions(registry)
-              const definition = definitions.find((tool) => tool.name === "shell")
-              expect(definition?.description).toStartWith("Execute a shell command and return its output.")
-              expect(definition?.inputSchema).not.toHaveProperty("properties.timeout.maximum")
+              expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+              expect(yield* codeModeTools(registry)).toContain("shell")
+              const shell = (yield* registeredTools(registry)).get("shell")
+              expect(shell).toBeDefined()
+              if (!shell) return
+              const shellDefinition = definition(shell)
+              expect(shellDefinition.description).toStartWith("Execute a shell command and return its output.")
+              expect(shellDefinition.inputSchema).not.toHaveProperty("properties.timeout.maximum")
               // Code Mode receives the declared output schema, including the command output text.
-              expect(definition?.outputSchema).toHaveProperty("properties.output")
+              expect(shellDefinition.outputSchema).toHaveProperty("properties.output")
               expect(
-                (yield* toolDefinitions(registry, [{ action: "shell", resource: "*", effect: "deny" }])).map(
-                  (tool) => tool.name,
-                ),
+                yield* codeModeTools(registry, [{ action: "shell", resource: "*", effect: "deny" }]),
               ).not.toContain("shell")
 
               const settled = yield* executeTool(registry, call({ command: helloCommand }))

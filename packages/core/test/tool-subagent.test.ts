@@ -36,6 +36,7 @@ import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { Permission } from "@ocpp/core/permission"
 import { SubagentTool } from "@ocpp/core/tool/plugin/subagent"
 import { Tool } from "@ocpp/core/tool"
+import { execute } from "@ocpp/core/tool/runtime"
 import { tmpdir } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
@@ -43,6 +44,7 @@ import {
   executeTool,
   readCodeModeNotebook,
   registerToolPlugin,
+  registeredTools,
   seedToolSession,
   toolIdentity,
   waitForCodeMode,
@@ -225,7 +227,7 @@ describe("SubagentTool", () => {
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
           const snapshot = yield* registry.snapshot()
-          expect(snapshot.definitions.map((tool) => tool.name)).toContain(SubagentTool.name)
+          expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
           expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toContain(SubagentTool.name)
           expect(
             yield* executeTool(registry, {
@@ -913,17 +915,15 @@ describe("SubagentTool", () => {
           yield* withSubagent(parent.location)
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const subagent = (yield* registeredTools(registry)).get(SubagentTool.name)
+          if (!subagent) return yield* Effect.die("subagent is not registered")
           const fail = (id: string, input: Record<string, unknown>) =>
-            registry.snapshot().pipe(
-              Effect.flatMap((tools) =>
-                tools.execute({
-                  sessionID: parent.id,
-                  ...toolIdentity,
-                  call: { type: "tool-call", id, name: SubagentTool.name, input },
-                }),
-              ),
-              Effect.flip,
-            )
+            execute(subagent, input, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              id: Tool.CallID.make(id),
+              progress: () => Effect.void,
+            }).pipe(Effect.flip)
 
           // The child's own run fails: the runner error stays the message, the reason is data.
           const crashed = yield* fail("call-reason-child-failed", {

@@ -20,7 +20,7 @@ import { tmpdir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { testEffect } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const patchToolNode = makeLocationNode({
   name: "test/patch-tool-plugin",
@@ -167,7 +167,8 @@ describe("PatchTool", () => {
           Effect.andThen(
             withTool(tmp.path, (registry) =>
               Effect.gen(function* () {
-                expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["patch", "execute"])
+                expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+                expect(yield* codeModeTools(registry)).toEqual(["patch"])
                 const settled = yield* executeTool(
                   registry,
                   call(

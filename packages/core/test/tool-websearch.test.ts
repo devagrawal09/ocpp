@@ -16,7 +16,15 @@ import { Image } from "@ocpp/core/image"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
 import { permissionLayer } from "./lib/permission"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { execute } from "@ocpp/core/tool/runtime"
+import {
+  toolIdentity,
+  codeModeTools,
+  executeTool,
+  registerToolPlugin,
+  registeredTools,
+  toolDefinitions,
+} from "./lib/tool"
 import { webSearchHost } from "./plugin/host"
 import { TestWebSearch } from "./lib/websearch"
 
@@ -105,7 +113,8 @@ describe("WebSearchTool registration", () => {
       const registry = fixture.registry
       yield* fixture.websearch.select(WebSearch.ID.make("exa"))
 
-      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["websearch", "execute"])
+      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(registry)).toEqual(["websearch"])
       expect(
         yield* executeTool(registry, {
           sessionID,
@@ -353,7 +362,8 @@ describe("WebSearchTool registration", () => {
     Effect.gen(function* () {
       const fixture = yield* setup
       const registry = fixture.registry
-      const tools = yield* registry.snapshot()
+      const websearch = (yield* registeredTools(registry)).get("websearch")
+      if (!websearch) return yield* Effect.die("websearch is not registered")
       yield* fixture.websearch.select(WebSearch.ID.make("exa"))
 
       yield* Effect.forEach(
@@ -373,19 +383,16 @@ describe("WebSearchTool registration", () => {
               }),
             })
             const progress: Tool.Metadata[] = []
-            const error = yield* tools
-              .execute({
+            const error = yield* execute(
+              websearch,
+              { query: "effect" },
+              {
                 sessionID,
                 ...toolIdentity,
-                call: {
-                  type: "tool-call",
-                  id: `call-http-${index}`,
-                  name: "websearch",
-                  input: { query: "effect" },
-                },
+                id: Tool.CallID.make(`call-http-${index}`),
                 progress: (metadata) => Effect.sync(() => progress.push(metadata)),
-              })
-              .pipe(Effect.flip)
+              },
+            ).pipe(Effect.flip)
 
             const sessionError = toSessionError(error)
             expect(sessionError).toEqual({ type: "tool.execution", message })

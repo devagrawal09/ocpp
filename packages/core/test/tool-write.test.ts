@@ -20,7 +20,7 @@ import { tmpdir, withTempDir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { testEffect } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const writeToolNode = makeLocationNode({
   name: "test/write-tool-plugin",
@@ -109,7 +109,8 @@ describe("WriteTool", () => {
       const fixture = makeWriteFixture()
       return withTool(tmp.path, fixture, (registry) =>
         Effect.gen(function* () {
-          expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["write", "execute"])
+          expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+          expect(yield* codeModeTools(registry)).toEqual(["write"])
           const settled = yield* executeTool(registry, call({ path: "src/new.txt", content: "created" }))
           expect(settled).toEqual({
             status: "completed",

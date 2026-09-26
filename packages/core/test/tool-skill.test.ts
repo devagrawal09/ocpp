@@ -81,10 +81,10 @@ describe("SkillTool", () => {
 
           return yield* Effect.gen(function* () {
             const registry = yield* Tool.Service
-            expect((yield* toolDefinitions(registry))[0]).toMatchObject({
-              name: "skill",
-              description: SkillTool.description,
-            })
+            expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+            expect((yield* registry.snapshot()).codeModeCatalog).toEqual([
+              expect.objectContaining({ path: "skill", description: SkillTool.description }),
+            ])
             expect(
               yield* executeTool(registry, {
                 sessionID,

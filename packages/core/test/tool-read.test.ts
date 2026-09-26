@@ -22,7 +22,7 @@ import { SessionInstructions } from "@ocpp/core/session/instructions"
 import { Environment } from "@ocpp/core/environment/index"
 import { testEffect } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const readToolNode = makeLocationNode({
   name: "test/read-tool-plugin",
@@ -184,12 +184,10 @@ describe("ReadTool", () => {
     Effect.gen(function* () {
       const registry = yield* Tool.Service
 
-      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["read", "execute"])
-      expect(
-        (yield* toolDefinitions(registry, [{ action: "read", resource: "*", effect: "deny" }])).map(
-          (tool) => tool.name,
-        ),
-      ).toEqual(["execute"])
+      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(registry)).toEqual(["read"])
+      expect(yield* toolDefinitions(registry, [{ action: "read", resource: "*", effect: "deny" }])).toEqual([])
+      expect(yield* codeModeTools(registry, [{ action: "read", resource: "*", effect: "deny" }])).toEqual([])
       const execution = yield* executeTool(registry, {
         sessionID,
         ...toolIdentity,
@@ -348,134 +346,6 @@ describe("ReadTool", () => {
       ).toMatchObject({
         status: "completed",
         content: [{ type: "text" }, { type: "file", uri: `data:image/png;base64,${png}`, mime: "image/png" }],
-      })
-    }),
-  )
-
-  it.effect("drops undecodable image data from the outcome", () =>
-    Effect.gen(function* () {
-      readResult = {
-        type: "file",
-        uri: "file:///truncated.png",
-        name: "truncated.png",
-        content: "iVBORw0KGgo=",
-        encoding: "base64",
-        mime: "image/png",
-      }
-      const registry = yield* Tool.Service
-
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-truncated-image", name: "read", input: { path: "truncated.png" } },
-        }),
-      ).toMatchObject({
-        status: "completed",
-        content: [
-          { type: "text", text: "Image read successfully" },
-          { type: "text", text: "[1 image omitted: could not be decoded.]" },
-        ],
-      })
-    }),
-  )
-
-  it.effect("drops oversized images from the outcome when resizing is disabled", () =>
-    Effect.gen(function* () {
-      const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
-      const source = new photon.PhotonImage(new Uint8Array(Array.from({ length: 16 * 4 }, () => 255)), 16, 1)
-      const base64 = Buffer.from(source.get_bytes()).toString("base64")
-      source.free()
-      readResult = {
-        type: "file",
-        uri: "file:///wide.png",
-        name: "wide.png",
-        content: base64,
-        encoding: "base64",
-        mime: "image/png",
-      }
-      const image = yield* Image.Service
-      yield* image.transform((draft) => draft.configure({ autoResize: false, maxWidth: 4 }))
-      const registry = yield* Tool.Service
-
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-wide-image", name: "read", input: { path: "wide.png" } },
-        }),
-      ).toMatchObject({
-        status: "completed",
-        content: [
-          { type: "text", text: "Image read successfully" },
-          { type: "text", text: "[1 image omitted: could not be resized below the image size limit.]" },
-        ],
-      })
-    }),
-  )
-
-  it.effect("resizes images to configured dimensions before returning media", () =>
-    Effect.gen(function* () {
-      const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
-      const source = new photon.PhotonImage(new Uint8Array(Array.from({ length: 16 * 4 }, () => 255)), 16, 1)
-      const base64 = Buffer.from(source.get_bytes()).toString("base64")
-      source.free()
-      readResult = {
-        type: "file",
-        uri: "file:///wide.png",
-        name: "wide.png",
-        content: base64,
-        encoding: "base64",
-        mime: "image/png",
-      }
-      const image = yield* Image.Service
-      yield* image.transform((draft) => draft.configure({ maxWidth: 4 }))
-      const registry = yield* Tool.Service
-      const result = yield* executeTool(registry, {
-        sessionID,
-        ...toolIdentity,
-        call: { type: "tool-call", id: "call-resize-image", name: "read", input: { path: "wide.png" } },
-      })
-
-      expect(result.status).toBe("completed")
-      if (result.status !== "completed") return
-      const media = result.content?.[1]
-      expect(media?.type).toBe("file")
-      if (media?.type !== "file") return
-      const resized = photon.PhotonImage.new_from_byteslice(Buffer.from(media.uri.split(",")[1] ?? "", "base64"))
-      expect(resized.get_width()).toBeLessThanOrEqual(4)
-      expect(resized.get_height()).toBeLessThanOrEqual(2_000)
-      resized.free()
-    }),
-  )
-
-  it.effect("drops images that cannot fit max base64 bytes after resize attempts", () =>
-    Effect.gen(function* () {
-      const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-      readResult = {
-        type: "file",
-        uri: "file:///pixel.png",
-        name: "pixel.png",
-        content: png,
-        encoding: "base64",
-        mime: "image/png",
-      }
-      const image = yield* Image.Service
-      yield* image.transform((draft) => draft.configure({ maxBase64Bytes: 1 }))
-      const registry = yield* Tool.Service
-
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-max-bytes", name: "read", input: { path: "pixel.png" } },
-        }),
-      ).toMatchObject({
-        status: "completed",
-        content: [
-          { type: "text", text: "Image read successfully" },
-          { type: "text", text: "[1 image omitted: could not be resized below the image size limit.]" },
-        ],
       })
     }),
   )

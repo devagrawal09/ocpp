@@ -20,7 +20,7 @@ import { tmpdir, withTempDir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { testEffect } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const editToolNode = makeLocationNode({
   name: "test/edit-tool-plugin",
@@ -130,12 +130,10 @@ describe("EditTool", () => {
         Effect.andThen(
           withTool(tmp.path, edit, (registry) =>
             Effect.gen(function* () {
-              expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["edit", "execute"])
-              expect(
-                (yield* toolDefinitions(registry, [{ action: "edit", resource: "*", effect: "deny" }])).map(
-                  (tool) => tool.name,
-                ),
-              ).toEqual(["execute"])
+              expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+              expect(yield* codeModeTools(registry)).toEqual(["edit"])
+              expect(yield* toolDefinitions(registry, [{ action: "edit", resource: "*", effect: "deny" }])).toEqual([])
+              expect(yield* codeModeTools(registry, [{ action: "edit", resource: "*", effect: "deny" }])).toEqual([])
               const settled = yield* executeTool(
                 registry,
                 call({ path: "hello.txt", oldString: "before", newString: "after" }),

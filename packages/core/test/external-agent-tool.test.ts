@@ -27,8 +27,9 @@ import { SessionExecution } from "../src/session/execution"
 import { SessionEvent } from "../src/session/event"
 import { ExternalAgentTool } from "../src/tool/plugin/external-agent"
 import { Tool } from "../src/tool"
+import { execute } from "../src/tool/runtime"
 import { testEffect } from "./lib/effect"
-import { executeTool, registerToolPlugin, toolIdentity } from "./lib/tool"
+import { codeModeTools, executeTool, registerToolPlugin, registeredTools, toolIdentity } from "./lib/tool"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { eq } from "drizzle-orm"
@@ -275,9 +276,7 @@ describe("external-agent tools", () => {
       const env = yield* setup
       const count = checks.length
       for (let i = 0; i < 5; i++)
-        expect((yield* env.tools.snapshot()).definitions.map((tool) => tool.name)).toEqual(
-          expect.arrayContaining(["claude", "codex", "pi"]),
-        )
+        expect(yield* codeModeTools(env.tools)).toEqual(expect.arrayContaining(["claude", "codex", "pi"]))
       expect(checks.length).toBe(count)
     }),
   )
@@ -383,18 +382,14 @@ describe("external-agent tools", () => {
             agent.permissions.push({ action: "edit", resource: "file", effect: "deny" })
           }),
         )
-        const snapshot = yield* env.tools.snapshot()
+        const tool = (yield* registeredTools(env.tools)).get(provider)
+        if (!tool) return yield* Effect.die(`${provider} is not registered`)
         const result = yield* Effect.result(
-          snapshot.execute({
-            sessionID: env.parent.id,
-            ...toolIdentity,
-            call: {
-              type: "tool-call",
-              id: "deny",
-              name: provider,
-              input: { root: env.directory.path, description: "Denied edit", message: "native" },
-            },
-          }),
+          execute(
+            tool,
+            { root: env.directory.path, description: "Denied edit", message: "native" },
+            { sessionID: env.parent.id, ...toolIdentity, id: Tool.CallID.make("deny"), progress: () => Effect.void },
+          ),
         )
         expect(result._tag).toBe("Failure")
         if (result._tag === "Failure") expect(result.failure.metadata).toHaveProperty("sessionID")

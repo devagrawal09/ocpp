@@ -3,6 +3,7 @@ export * as Session from "./session.js"
 import { DateTime, Effect, Fiber, Layer, Schema, Scope } from "effect"
 import type { Agent } from "@ocpp/schema/agent"
 import type { Model } from "@ocpp/schema/model"
+import type { FileAttachment } from "@ocpp/schema/prompt"
 import { Event } from "@ocpp/schema/event"
 import { Bus } from "../bus.js"
 import { Location } from "../location.js"
@@ -282,6 +283,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
         id?: SessionMessage.ID
         text: string
         description?: string
+        files?: ReadonlyArray<FileAttachment>
         metadata?: Record<string, unknown>
         delivery?: SessionInbox.Delivery
         resume?: boolean
@@ -296,6 +298,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
             payload: SessionInbox.SyntheticPayload.make({
               text: input.text,
               description: input.description,
+              files: input.files,
               metadata: input.metadata,
             }),
             delivery: SessionInbox.Delivery.make(input.delivery ?? "steer"),

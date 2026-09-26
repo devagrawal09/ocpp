@@ -67,15 +67,6 @@ export type PromptFileSource = { type: "inline" } | { type: "uri"; uri: string }
 
 export type PromptMention = { start: number; end: number; text: string }
 
-export type SessionMessageSynthetic = {
-  id: string
-  metadata?: { [x: string]: JsonValue }
-  time: { created: number }
-  text: string
-  description?: string
-  type: "synthetic"
-}
-
 export type SessionMessageSystem = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -149,15 +140,11 @@ export type SessionActive = { type: "running" }
 
 export type SessionInboxDelivery = "steer" | "queue"
 
-export type SessionInboxSyntheticPayload = { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
-
 export type SessionInboxCompactionPayload = {}
 
 export type InstructionEntryKey = string
 
 export type SessionGenerateResponse = { data: { text: string } }
-
-export type SessionInboxSyntheticPayload1 = { text: string; description?: string; metadata?: { [x: string]: any } }
 
 export type ShellInfo = {
   id: string
@@ -536,15 +523,6 @@ export type SessionMessageCompactionFailed = {
   status: "failed"
   reason: "auto" | "manual"
   error: SessionStructuredError
-}
-
-export type SessionInboxSynthetic = {
-  id: string
-  sessionID: string
-  timeCreated: number
-  type: "synthetic"
-  payload: SessionInboxSyntheticPayload
-  delivery: SessionInboxDelivery
 }
 
 export type SessionInboxCompaction = {
@@ -1713,6 +1691,30 @@ export type SessionStatsInfo = {
   models: Array<SessionStatsModelUsage>
 }
 
+export type SessionMessageSynthetic = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  text: string
+  description?: string
+  files?: Array<PromptFileAttachment>
+  type: "synthetic"
+}
+
+export type SessionInboxSyntheticPayload = {
+  text: string
+  description?: string
+  files?: Array<PromptFileAttachment>
+  metadata?: { [x: string]: JsonValue }
+}
+
+export type SessionInboxSyntheticPayload1 = {
+  text: string
+  description?: string
+  files?: Array<PromptFileAttachment>
+  metadata?: { [x: string]: any }
+}
+
 export type SessionMessageUser = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -2069,6 +2071,15 @@ export type ConfigEntry =
   | { type: "claude"; path: string }
 
 export type SessionsResponse = { data: Array<SessionInfo>; cursor: { previous?: string | null; next?: string | null } }
+
+export type SessionInboxSynthetic = {
+  id: string
+  sessionID: string
+  timeCreated: number
+  type: "synthetic"
+  payload: SessionInboxSyntheticPayload
+  delivery: SessionInboxDelivery
+}
 
 export type SessionInboxUser = {
   id: string
@@ -2946,6 +2957,14 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly text: string
           readonly description?: string
+          readonly files?: ReadonlyArray<{
+            readonly data: string
+            readonly mime: string
+            readonly source: { readonly type: "inline" } | { readonly type: "uri"; readonly uri: string }
+            readonly name?: string
+            readonly description?: string
+            readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
           readonly type: "synthetic"
         }
       | {
@@ -3223,6 +3242,14 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly text: string
           readonly description?: string
+          readonly files?: ReadonlyArray<{
+            readonly data: string
+            readonly mime: string
+            readonly source: { readonly type: "inline" } | { readonly type: "uri"; readonly uri: string }
+            readonly name?: string
+            readonly description?: string
+            readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
           readonly type: "synthetic"
         }
       | {
@@ -3500,6 +3527,14 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly text: string
           readonly description?: string
+          readonly files?: ReadonlyArray<{
+            readonly data: string
+            readonly mime: string
+            readonly source: { readonly type: "inline" } | { readonly type: "uri"; readonly uri: string }
+            readonly name?: string
+            readonly description?: string
+            readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
           readonly type: "synthetic"
         }
       | {

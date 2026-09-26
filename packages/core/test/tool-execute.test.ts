@@ -46,6 +46,7 @@ const createCodeMode = (tools: ReadonlyMap<string, Info>) =>
       discard: () => Effect.die("Unavailable in catalog-only tests"),
       indeterminate: () => Effect.die("Unavailable in catalog-only tests"),
     },
+    image: { normalize: () => Effect.die("No tool returns media in these tests") },
     scope: Effect.runSync(Scope.make()),
   })
 
@@ -123,6 +124,7 @@ test("a refused execution names the running executions instead of only the cap",
       discard: (id) => Effect.sync(() => void discarded.push(id)),
       indeterminate: () => Effect.void,
     },
+    image: { normalize: () => Effect.die("No tool returns media in these tests") },
     scope: Effect.runSync(Scope.make()),
   })
 
@@ -191,6 +193,7 @@ test("a failed execution's completion carries a stable failure kind in its metad
       discard: () => Effect.void,
       indeterminate: () => Effect.void,
     },
+    image: { normalize: () => Effect.die("No tool returns media in these tests") },
     scope: Effect.runSync(Scope.make()),
   })
 
@@ -313,6 +316,7 @@ test("a Session deleted mid-execution still finishes the background notification
       discard: () => Effect.void,
       indeterminate: () => Effect.void,
     },
+    image: { normalize: () => Effect.die("No tool returns media in these tests") },
     scope: Effect.runSync(Scope.make()),
   })
 

@@ -17,6 +17,7 @@ import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { Money } from "@ocpp/schema/money"
+import { Base64, FileAttachment } from "@ocpp/schema/prompt"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionExecution } from "@ocpp/core/session/execution"
 import { fromRow } from "@ocpp/core/session/info"
@@ -402,6 +403,43 @@ describe("SessionProjector", () => {
         expected,
       )
     }).pipe(Effect.provide(sessionsLayer)),
+  )
+
+  it.effect("projects files attached to synthetic input at promotion", () =>
+    Effect.gen(function* () {
+      const db = yield* seedSession()
+      const bus = yield* Bus.Service
+      const inbox = yield* SessionInbox.Service
+      const id = SessionMessage.ID.make("msg_synthetic_media")
+      const file = FileAttachment.make({
+        data: Base64.make("AAECAw=="),
+        mime: "image/png",
+        source: { type: "inline" },
+        name: "frame.png",
+      })
+      const admitted = yield* inbox.admit({
+        id,
+        sessionID,
+        item: {
+          type: "synthetic",
+          payload: { text: "Execution completed.", files: [file], metadata: { source: "codemode" } },
+          delivery: "steer",
+        },
+      })
+      if (!admitted) return yield* Effect.die("Synthetic admission failed")
+
+      yield* bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: id })
+
+      const row = yield* db
+        .select()
+        .from(SessionMessageTable)
+        .where(eq(SessionMessageTable.id, id))
+        .get()
+        .pipe(Effect.orDie)
+      expect(
+        Schema.decodeUnknownSync(SessionMessage.Info)({ ...row?.data, id: row?.id, type: row?.type }),
+      ).toMatchObject({ type: "synthetic", text: "Execution completed.", files: [file] })
+    }),
   )
 
   it.effect("consumes the pending row and projects the message at promotion", () =>

@@ -84,6 +84,7 @@ export const Synthetic = Schema.Struct({
   ...Base,
   text: Schema.String,
   description: Schema.String.pipe(optional),
+  files: Prompt.fields.files,
   type: Schema.tag("synthetic"),
 }).annotate({ identifier: "Session.Message.Synthetic" })
 

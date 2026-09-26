@@ -669,6 +669,7 @@ const layer = Layer.effectDiscard(
                 type: "synthetic",
                 text: input.payload.text,
                 description: input.payload.description,
+                files: input.payload.files,
                 metadata: input.payload.metadata,
                 time: { created: DateTime.makeUnsafe(event.created) },
               },

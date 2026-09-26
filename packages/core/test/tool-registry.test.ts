@@ -6,6 +6,7 @@ import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { CodeModeExecutionTable } from "@ocpp/core/codemode/sql"
 import type { Permission } from "@ocpp/core/permission"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Image } from "@ocpp/core/image"
 import { Job } from "@ocpp/core/job"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
@@ -34,6 +35,30 @@ import { TestClock } from "effect/testing"
 import { z } from "zod"
 import { testEffect } from "./lib/effect"
 
+const imageStore = Layer.mock(Image.Service, {
+  normalize: (resource, content) => {
+    if (resource === "corrupt.png") return Effect.fail(new Image.DecodeError({ resource }))
+    if (resource === "too-large.png")
+      return Effect.fail(
+        new Image.SizeError({
+          resource,
+          width: 9_000,
+          height: 9_000,
+          bytes: content.content.length,
+          maxWidth: 2_000,
+          maxHeight: 2_000,
+          maxBytes: 5,
+        }),
+      )
+    return Effect.succeed({
+      ...content,
+      content: Buffer.from(`${Buffer.from(content.content, "base64").toString()} normalized`).toString("base64"),
+      mime: "image/jpeg",
+    })
+  },
+})
+/** Completion notifications, recorded before delivery parks so tests can read what the model would see. */
+const deliveries: Array<{ text: string; files?: ReadonlyArray<unknown>; metadata?: Record<string, unknown> }> = []
 let testJobs: Job.Interface | undefined
 const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
 const runtimeLayer = Layer.unwrap(
@@ -67,7 +92,7 @@ const runtimeLayer = Layer.unwrap(
         switchAgent: () => Effect.die("Unavailable in Tool registry tests"),
         switchModel: () => Effect.die("Unavailable in Tool registry tests"),
         interrupt: () => Effect.die("Unavailable in Tool registry tests"),
-        synthetic: () => Effect.never,
+        synthetic: (input) => Effect.sync(() => void deliveries.push(input)).pipe(Effect.andThen(Effect.never)),
         wait: () => Effect.die("Unavailable in Tool registry tests"),
         context: () => Effect.die("Unavailable in Tool registry tests"),
       },
@@ -81,7 +106,10 @@ const runtimeLayer = Layer.unwrap(
 ).pipe(Layer.provide(jobLayer))
 const registryLayer = AppNodeBuilder.build(
   LayerNode.group([Tool.node, PluginHooks.node, SessionModelRequest.node, Bus.node, Database.node, CodeModeStore.node]),
-  [[PluginRuntime.node, runtimeLayer]],
+  [
+    [Image.node, imageStore],
+    [PluginRuntime.node, runtimeLayer],
+  ],
 )
 const it = testEffect(registryLayer)
 const identity = {
@@ -122,6 +150,22 @@ const run = (snapshot: Tool.Snapshot, id: string, code: string) =>
   snapshot
     .execute({ ...call("execute", id), call: { type: "tool-call", id, name: "execute", input: { code } } })
     .pipe(Effect.flatMap((result) => waitCodeMode(result.output, id)))
+
+const deliveredFor = (executionID: string, remaining = 1000): Effect.Effect<(typeof deliveries)[number]> =>
+  Effect.gen(function* () {
+    const found = deliveries.find((item) => item.metadata?.executionID === executionID)
+    if (found) return found
+    if (remaining === 0) return yield* Effect.die(`No completion was delivered for ${executionID}`)
+    yield* Effect.promise(() => Bun.sleep(1))
+    return yield* deliveredFor(executionID, remaining - 1)
+  })
+
+const png = (name: string, text = "image") => ({
+  type: "file" as const,
+  uri: `data:image/png;base64,${Buffer.from(text).toString("base64")}`,
+  mime: "image/png",
+  name,
+})
 
 const make = (): Info => ({
   name: "echo",
@@ -1338,6 +1382,85 @@ describe("Tool", () => {
       expect(
         new TextEncoder().encode(JSON.stringify(log?.kind === "log" ? log.message : "")).length,
       ).toBeLessThanOrEqual(4 * 1024)
+    }),
+  )
+
+  it.effect("attaches images and PDFs returned by tool calls to the completion notification", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      yield* transform(service, {
+        capture: {
+          name: "capture",
+          description: "Return media",
+          input: Schema.Struct({ text: Schema.String }),
+          output: Schema.Struct({ text: Schema.String }),
+          execute: ({ text }) =>
+            Effect.succeed({
+              output: { text },
+              content: [
+                png("frame.png"),
+                png("corrupt.png", "corrupt"),
+                png("too-large.png", "large"),
+                {
+                  type: "file",
+                  uri: "data:application/pdf;base64,JVBERg==",
+                  mime: "application/pdf",
+                  name: "spec.pdf",
+                },
+                // Only inline images and PDFs attach; references and other types stay with the tool.
+                { type: "file", uri: "file:///project/remote.png", mime: "image/png", name: "remote.png" },
+                { type: "file", uri: "data:text/plain;base64,dGV4dA==", mime: "text/plain", name: "notes.txt" },
+                { type: "text", text },
+              ],
+            }),
+        },
+      })
+
+      // The second call returns the same files, which attach once.
+      const outcome = yield* run(
+        yield* service.snapshot(),
+        "call-media",
+        'const first = tools.capture({ text: "one" })\nconst again = tools.capture({ text: "two" })',
+      )
+      expect(outcome).toMatchObject({ status: "saved" })
+      const delivered = yield* deliveredFor(outcome.id)
+      expect(delivered.files).toEqual([
+        { data: "aW1hZ2Ugbm9ybWFsaXplZA==", mime: "image/jpeg", source: { type: "inline" }, name: "frame.png" },
+        { data: "JVBERg==", mime: "application/pdf", source: { type: "inline" }, name: "spec.pdf" },
+      ])
+      expect(delivered.text).toEndWith(
+        [
+          "Attached 2 files returned by tool calls: frame.png, spec.pdf.",
+          "1 file omitted: could not be decoded.",
+          "1 file omitted: could not be resized below the image size limit.",
+        ].join("\n"),
+      )
+    }),
+  )
+
+  it.effect("bounds the files attached to one completion notification", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      yield* transform(service, {
+        gallery: {
+          name: "gallery",
+          description: "Return many images",
+          input: Schema.Struct({}),
+          output: Schema.Null,
+          execute: () =>
+            Effect.succeed({
+              output: null,
+              content: Array.from({ length: 10 }, (_, index) => png(`image-${index}.png`, `image ${index}`)),
+            }),
+        },
+      })
+
+      const outcome = yield* run(yield* service.snapshot(), "call-gallery", "return tools.gallery({})")
+      const delivered = yield* deliveredFor(outcome.id)
+      expect(delivered.files).toHaveLength(8)
+      expect(delivered.text).toEndWith("2 files omitted: at most 8 files attach to one completion.")
     }),
   )
 

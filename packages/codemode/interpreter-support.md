@@ -321,6 +321,12 @@ lifecycle information for status and recovery:
 There is no `execution_result` tool, no result paging, no durable result blob, and no overflow file.
 An oversized declaration fails clearly instead of being truncated into the notebook.
 
+Images and PDFs cannot be notebook values, so OC++ Core collects the inline images and PDFs that tool
+calls return and attaches them to the completion notification, where the model sees them as media.
+Images are resized with the same limits as prompt attachments, duplicates attach once, at most eight
+files attach to one completion, and the notification names any file it had to omit. Attachments stay
+in memory until the notification is delivered, so a completion recovered after a restart carries none.
+
 ## Fork, Revert, And Restart
 
 Binding rows record the assistant-message sequence they were saved from, which is enough to rebuild

@@ -1,5 +1,6 @@
 export * as CodeModeCompletion from "./codemode-completion.js"
 
+import type { FileAttachment } from "@ocpp/schema/prompt"
 import { Effect } from "effect"
 import type { Job } from "../job.js"
 import type { Session } from "../session.js"
@@ -12,6 +13,8 @@ export const deliver = Effect.fnUntraced(function* (
     resume?: boolean
     /** Stable failure category for a failed execution, so consumers never parse the summary text. */
     kind?: string
+    /** Media returned by the execution's tool calls, which Code Mode values cannot carry to the model. */
+    attachments?: { readonly files: ReadonlyArray<FileAttachment>; readonly note: string }
   },
 ) {
   if (input.status === "running") return
@@ -31,8 +34,10 @@ export const deliver = Effect.fnUntraced(function* (
     ...(input.resume === false || input.status === "cancelled" ? { resume: false } : {}),
     description: "Execution completed",
     text:
-      (input.status === "completed" ? input.output : input.error) ??
-      "Execution " + input.id + " is " + state + " and saved nothing.",
+      ((input.status === "completed" ? input.output : input.error) ??
+        "Execution " + input.id + " is " + state + " and saved nothing.") +
+      (input.attachments ? "\n\n" + input.attachments.note : ""),
+    ...(input.attachments?.files.length ? { files: input.attachments.files } : {}),
     metadata: {
       source: "codemode",
       executionID: input.id,

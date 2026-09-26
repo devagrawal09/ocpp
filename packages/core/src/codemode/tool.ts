@@ -3,9 +3,11 @@ export * as CodeModeTool from "./tool.js"
 import { CodeMode, CompileError, Tool as CodeModeDefinition, toolError } from "@ocpp/codemode"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 import { ascending } from "@ocpp/schema/identifier"
+import { Base64, FileAttachment } from "@ocpp/schema/prompt"
 import { Tool } from "@ocpp/schema/tool"
 import { Deferred, Effect, Exit, Ref, Schema, Scope, Semaphore } from "effect"
 import type { Bus } from "../bus.js"
+import type { Image } from "../image.js"
 import type { Job } from "../job.js"
 import type { Session } from "../session.js"
 import { SessionEvent } from "../session/event.js"
@@ -32,6 +34,7 @@ const MAX_TRACE_EVENTS = 100
 const MAX_TOOL_EVENTS = 100
 const MAX_TOOL_EVENT_BYTES = 4 * 1024
 const MAX_CONCURRENT_EXECUTIONS = 10
+const MAX_ATTACHMENTS = 8
 
 type ExecutionServices = {
   readonly bus: Pick<Bus.Interface, "publish" | "listen">
@@ -40,6 +43,7 @@ type ExecutionServices = {
     "startLimited" | "active" | "wait" | "background" | "cancel" | "markBackgroundTerminal" | "completeBackground"
   >
   readonly sessions: Pick<Session.Interface, "message" | "synthetic">
+  readonly image: Pick<Image.Interface, "normalize">
   readonly store: Pick<
     CodeModeStore.Interface,
     "admit" | "running" | "scheduleCall" | "settleCall" | "commit" | "fail" | "indeterminate" | "discard"
@@ -122,6 +126,9 @@ export const create = (
         // Why the execution failed, as a stable category the completion notification carries
         // alongside its prose summary.
         const failureKind = yield* Ref.make<string | undefined>(undefined)
+        // Images and PDFs that tool calls return cannot become Code Mode values, so they are collected
+        // here and attached to the completion notification instead.
+        const media = yield* Ref.make<Media>({ files: [], omitted: 0 })
         const slots = yield* Ref.make<Array<number>>([])
         const toolCount = yield* Ref.make(0)
         const traceCount = yield* Ref.make(0)
@@ -226,6 +233,7 @@ export const create = (
                     typeof executed.content === "string"
                       ? [{ type: "text" as const, text: executed.content }]
                       : (executed.content ?? [])
+                  yield* Ref.update(media, (current) => content.filter(isAttachable).reduce(collect, current))
                   const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
                   const metadata = displayMetadata(executed.metadata)
                   yield* updateTool(index, (current) => ({
@@ -407,12 +415,14 @@ export const create = (
                       : info.status === "error"
                         ? ((yield* Ref.get(failureKind)) ?? "ExecutionFailure")
                         : undefined
+                  const attachments = yield* attach(yield* Ref.get(media), services.image)
                   // The Session can be deleted while the execution runs. Restart recovery already
                   // tolerates that, so finish the background bookkeeping instead of dying here.
                   yield* CodeModeCompletion.deliver(services.sessions, services.jobs, {
                     ...info,
                     recovery,
                     ...(kind === undefined ? {} : { kind }),
+                    ...(attachments === undefined ? {} : { attachments }),
                   }).pipe(
                     Effect.catchTag("Session.NotFoundError", () =>
                       info.notificationID ? services.jobs.completeBackground(info.notificationID) : Effect.void,
@@ -496,6 +506,73 @@ function runtime(
 function isToolSettlement(event: Bus.LogItem): event is SessionEvent.Tool.Success | SessionEvent.Tool.Failed {
   return event.type === SessionEvent.Tool.Success.type || event.type === SessionEvent.Tool.Failed.type
 }
+
+type Media = { readonly files: ReadonlyArray<Tool.FileContent>; readonly omitted: number }
+
+const isAttachable = (part: Tool.Content): part is Tool.FileContent =>
+  part.type === "file" &&
+  part.uri.startsWith("data:") &&
+  (part.mime.startsWith("image/") || part.mime === "application/pdf")
+
+/** Keeps the first distinct files up to the attachment limit and counts the rest. */
+function collect(media: Media, file: Tool.FileContent): Media {
+  if (media.files.some((existing) => existing.uri === file.uri)) return media
+  if (media.files.length >= MAX_ATTACHMENTS) return { ...media, omitted: media.omitted + 1 }
+  return { ...media, files: [...media.files, file] }
+}
+
+/** Converts collected media into completion attachments, resizing images exactly as prompt attachments are. */
+const attach = Effect.fnUntraced(function* (media: Media, image: Pick<Image.Interface, "normalize">) {
+  if (media.files.length === 0 && media.omitted === 0) return undefined
+  const converted = yield* Effect.forEach(media.files, (file) => toAttachment(file, image))
+  const files = converted.flatMap((item) => (typeof item === "string" ? [] : [item]))
+  const omission = (reason: string, count: number) =>
+    count === 0 ? [] : [count + (count === 1 ? " file" : " files") + " omitted: " + reason]
+  return {
+    files,
+    note: [
+      ...(files.length === 0
+        ? []
+        : [
+            "Attached " +
+              files.length +
+              (files.length === 1 ? " file" : " files") +
+              " returned by tool calls: " +
+              files.map((file) => neutralize(boundToolEventText(file.name ?? file.mime, 256))).join(", ") +
+              ".",
+          ]),
+      ...omission("could not be decoded.", converted.filter((item) => item === "decode").length),
+      ...omission(
+        "could not be resized below the image size limit.",
+        converted.filter((item) => item === "size").length,
+      ),
+      ...omission("at most " + MAX_ATTACHMENTS + " files attach to one completion.", media.omitted),
+    ].join("\n"),
+  }
+})
+
+const isBase64 = Schema.is(Base64)
+
+const toAttachment = Effect.fnUntraced(function* (file: Tool.FileContent, image: Pick<Image.Interface, "normalize">) {
+  const data = /^data:[^,]*;base64,(.*)$/s.exec(file.uri)?.[1]
+  if (data === undefined || !isBase64(data)) return "decode" as const
+  const label = file.name ?? file.mime + " tool output"
+  const content = { uri: label, content: data, encoding: "base64" as const, mime: file.mime }
+  const normalized = file.mime.startsWith("image/")
+    ? yield* image.normalize(label, content).pipe(
+        Effect.catchTag("Image.ResizerUnavailableError", () => Effect.succeed(content)),
+        Effect.catchTag("Image.DecodeError", () => Effect.succeed("decode" as const)),
+        Effect.catchTag("Image.SizeError", () => Effect.succeed("size" as const)),
+      )
+    : content
+  if (typeof normalized === "string") return normalized
+  return FileAttachment.create({
+    data: Base64.make(normalized.content),
+    mime: normalized.mime,
+    source: { type: "inline" },
+    name: file.name,
+  })
+})
 
 function qualifiedName(registration: Tool.Info) {
   const normalized = normalizedName(registration)

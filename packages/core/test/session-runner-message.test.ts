@@ -461,6 +461,42 @@ Recent work
     ])
   })
 
+  test("renders media attached to a synthetic notification after its text", () => {
+    const data = Base64.make("AAECAw==")
+    const messages = toLLMMessages(
+      [
+        SessionMessage.Synthetic.make({
+          id: id("codemode-media"),
+          type: "synthetic",
+          text: "Execution exe_1 completed.\n\nAttached 2 files returned by tool calls: shot.png, spec.pdf.",
+          files: [
+            FileAttachment.make({ data, mime: "image/png", source: { type: "inline" }, name: "shot.png" }),
+            FileAttachment.make({
+              data: Base64.make("JVBERg=="),
+              mime: "application/pdf",
+              source: { type: "inline" },
+              name: "spec.pdf",
+            }),
+          ],
+          metadata: { source: "codemode", executionID: "exe_1", state: "completed" },
+          time: { created },
+        }),
+      ],
+      model,
+    )
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.role).toBe("user")
+    expect(messages[0]?.content).toEqual([
+      {
+        type: "text",
+        text: "Execution exe_1 completed.\n\nAttached 2 files returned by tool calls: shot.png, spec.pdf.",
+      },
+      { type: "media", mediaType: "image/png", data, filename: "shot.png" },
+      { type: "media", mediaType: "application/pdf", data: "JVBERg==", filename: "spec.pdf" },
+    ])
+  })
+
   test("exposes admitted local image source paths before provider media", () => {
     const data = Base64.make("AAECAw==")
     const location = path.resolve("/project/IMG_3480.JPG")

@@ -22,6 +22,7 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
+import { Image } from "@ocpp/core/image"
 import { Event } from "@ocpp/schema/event"
 import { App } from "@ocpp/core/app"
 import { Permission } from "@ocpp/core/permission"
@@ -295,11 +296,11 @@ const layer = Layer.unwrap(
           Tool.node.implementation as Layer.Layer<
             Tool.Service,
             never,
-            PluginHooks.Service | PluginRuntime.Service | Bus.Service | CodeModeStore.Service
+            PluginHooks.Service | PluginRuntime.Service | Bus.Service | Image.Service | CodeModeStore.Service
           >,
         ),
       ),
-      deps: [PluginHooks.node, PluginRuntime.node, Bus.node, CodeModeStore.node],
+      deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node],
     })
     // Code Mode runs programs as Jobs and delivers their completions through the Session service.
     const runtime = PluginRuntime.makeCell()

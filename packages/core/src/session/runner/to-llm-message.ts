@@ -254,7 +254,15 @@ function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMe
         }),
       ]
     case "synthetic":
-      return [Message.make({ id: message.id, role: "user", content: message.text })]
+      return [
+        Message.make({
+          id: message.id,
+          role: "user",
+          content: message.files?.length
+            ? [Message.text(message.text), ...message.files.flatMap(attachmentContent)]
+            : message.text,
+        }),
+      ]
     case "skill":
       return [Message.make({ id: message.id, role: "user", content: message.text, metadata: message.metadata })]
     case "system":

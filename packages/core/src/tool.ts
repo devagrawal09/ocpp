@@ -11,6 +11,7 @@ import { CodeModeCatalog } from "./codemode/catalog.js"
 import { CodeModeStore } from "./codemode/store.js"
 import { CodeModeTool } from "./codemode/tool.js"
 import { Bus } from "./bus.js"
+import { Image } from "./image.js"
 import { Permission } from "./permission.js"
 import { PluginHooks } from "./plugin/hooks.js"
 import { PluginRuntime } from "./plugin/runtime.js"
@@ -72,6 +73,7 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
     const bus = yield* Bus.Service
+    const image = yield* Image.Service
     const codemodeStore = yield* CodeModeStore.Service
     const runtime = yield* PluginRuntime.Service
     const scope = yield* Scope.Scope
@@ -267,7 +269,7 @@ const layer = Layer.effect(
                     beforeExecute(name, input, context).pipe(
                       Effect.flatMap((event) => executeTool(tool, name, event.input, context)),
                     ),
-                  { bus, jobs: runtime.job, sessions: runtime.session, store: codemodeStore, scope },
+                  { bus, jobs: runtime.job, sessions: runtime.session, image, store: codemodeStore, scope },
                   activeInput(sessionID),
                 )
           return {
@@ -329,5 +331,5 @@ function registrationError(tool: Tool.Info) {
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, PluginRuntime.node, Bus.node, CodeModeStore.node],
+  deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node],
 })

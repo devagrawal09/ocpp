@@ -22,6 +22,7 @@ const reviewTabID = "session-side-panel-review-tab"
 const reviewTabPanelID = "session-side-panel-review-tabpanel"
 const fileBrowserTabPanelID = "session-side-panel-file-browser-tabpanel"
 import { SessionContextTab } from "@/session/files/session-context-tab"
+import { SessionSubagentsTab } from "@/session/files/session-subagents-tab"
 import { SortableTab } from "@/session/files/tab"
 import { OpenInAppButton } from "@/session/files/open-in-app-button"
 import { useCommand } from "@/shell/commands/command"
@@ -164,6 +165,7 @@ export function SessionSidePanel(props: {
     normalizeTab,
     review: reviewTab,
     hasReview: () => props.canReview,
+    subagents: () => true,
     fileBrowser: () => true,
   })
   const contextOpen = tabState.contextOpen
@@ -216,7 +218,7 @@ export function SessionSidePanel(props: {
   })
   const fileBrowserVisible = createMemo(() => {
     const active = activeTab()
-    return active !== "review" && active !== "context" && active !== "empty"
+    return active !== "review" && active !== "context" && active !== "subagents" && active !== "empty"
   })
   const openFileKeybind = createMemo(() => command.keybindParts("file.open"))
   const closeTabKeybind = createMemo(() => command.keybindParts("tab.close"))
@@ -245,7 +247,7 @@ export function SessionSidePanel(props: {
     <Show when={isDesktop() && !!params.id}>
       <aside
         id="review-panel"
-        aria-label={language.t("session.panel.reviewAndFiles")}
+        aria-label={language.t("session.panel.tabs")}
         aria-hidden={!open()}
         inert={!open()}
         class="relative min-w-0 flex overflow-hidden bg-v2-background-bg-base rounded-[10px] shadow-[var(--v2-elevation-raised)]"
@@ -343,6 +345,7 @@ export function SessionSidePanel(props: {
                               </div>
                             </Tabs.Trigger>
                           </Show>
+                          <Tabs.Trigger value="subagents">{language.t("session.tab.subagents")}</Tabs.Trigger>
                           <For each={panelTabs()}>
                             {(tab) => (
                               <Show
@@ -452,6 +455,12 @@ export function SessionSidePanel(props: {
                           <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                             <SessionContextTab />
                           </div>
+                        </Tabs.Content>
+                      </Show>
+
+                      <Show when={activeTab() === "subagents"}>
+                        <Tabs.Content value="subagents" class="flex flex-col h-full overflow-hidden contain-strict">
+                          <SessionSubagentsTab sessionID={params.id ?? ""} />
                         </Tabs.Content>
                       </Show>
 

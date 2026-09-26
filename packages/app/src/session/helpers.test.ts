@@ -191,6 +191,26 @@ describe("createSessionTabs", () => {
     })
   })
 
+  test("keeps the subagents tab active when available", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: "subagents" as string | undefined,
+        all: [],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: () => undefined,
+        normalizeTab: (tab) => tab,
+        subagents: () => true,
+      })
+
+      expect(result.activeTab()).toBe("subagents")
+      expect(result.closableTab()).toBeUndefined()
+      dispose()
+    })
+  })
+
   test("hides the Open File placeholder when the file browser is unavailable", () => {
     createRoot((dispose) => {
       const [state] = createStore({

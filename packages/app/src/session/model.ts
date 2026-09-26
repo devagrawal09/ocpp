@@ -81,6 +81,7 @@ export function useSessionModel() {
     normalizeTab,
     review: isDesktop,
     hasReview: canReview,
+    subagents: () => isDesktop() && !!sessionID(),
     fileBrowser: () => isDesktop() && !!sessionID(),
   })
 

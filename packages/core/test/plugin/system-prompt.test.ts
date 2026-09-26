@@ -14,7 +14,12 @@ import { Provider } from "@ocpp/schema/provider"
 import { Effect } from "effect"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
+import PROMPT_ANTHROPIC from "../../src/plugin/system-prompt/anthropic.txt"
+import PROMPT_CODEX from "../../src/plugin/system-prompt/codex.txt"
+import PROMPT_GPT from "../../src/plugin/system-prompt/gpt.txt"
+import PROMPT_KIMI from "../../src/plugin/system-prompt/kimi.txt"
 import PROMPT_META from "../../src/plugin/system-prompt/meta.txt"
+import PROMPT_TRINITY from "../../src/plugin/system-prompt/trinity.txt"
 
 const it = testEffect(PluginTestLayer)
 const fallback = SessionSystemPrompt.make([])
@@ -38,17 +43,39 @@ const context = (id: string, system = fallback): SessionHooks["context"] => ({
 
 describe("SystemPromptPlugin", () => {
   test("uses current vocabulary in the Meta prompt", () => {
-    expect(PROMPT_META).toContain("`webfetch` tool")
-    expect(PROMPT_META).toContain("`subagent` tool")
-    expect(PROMPT_META).toContain("Reserve `shell`")
-    expect(PROMPT_META).toContain("`read` for reading files")
-    expect(PROMPT_META).toContain("`edit` for editing")
-    expect(PROMPT_META).toContain("`write` for creating files")
+    expect(PROMPT_META).toContain("Your only tool is `execute`.")
+    expect(PROMPT_META).toContain("`tools.webfetch`")
+    expect(PROMPT_META).toContain("`tools.subagent`")
+    expect(PROMPT_META).toContain("Reserve `tools.shell`")
+    expect(PROMPT_META).toContain("`tools.read` instead of `cat`")
+    expect(PROMPT_META).toContain("`tools.edit` instead of `sed`")
+    expect(PROMPT_META).toContain("`tools.write` instead of `cat`")
     expect(PROMPT_META).toContain("Follow that reminder for the files you may edit")
     expect(PROMPT_META).toContain("https://ocpp.ai/v2/docs/")
     expect(PROMPT_META).not.toMatch(
-      /TodoWrite|Task tool|WebFetch|\bBash\b|including planning files|https:\/\/ocpp\.ai\/docs/,
+      /TodoWrite|Task tool|WebFetch|\bBash\b|including planning files|https:\/\/ocpp\.ai\/docs|the `\w+` tool/,
     )
+  })
+
+  // Each family prompt replaces the default system prompt, so each must state the Code Mode rules itself.
+  test("states that execute is the only tool in every model-lab prompt", () => {
+    const prompts = {
+      anthropic: PROMPT_ANTHROPIC,
+      codex: PROMPT_CODEX,
+      gpt: PROMPT_GPT,
+      kimi: PROMPT_KIMI,
+      meta: PROMPT_META,
+      trinity: PROMPT_TRINITY,
+    }
+    for (const [name, prompt] of Object.entries(prompts)) {
+      expect({ name, states: prompt.includes("Your only tool is `execute`.") }).toEqual({ name, states: true })
+      expect({
+        name,
+        direct: prompt.match(
+          /the `?(?:read|write|edit|patch|glob|grep|shell|subagent|question|skill|webfetch|websearch)`? tool\b|\b(?:use|uses) (?:read|grep|glob|edit|write|patch)\b/gi,
+        ),
+      }).toEqual({ name, direct: null })
+    }
   })
 
   test("uses granular IDs with a common prefix", () => {

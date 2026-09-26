@@ -82,8 +82,14 @@ describe("Config", () => {
         const global = path.join(tmp.path, "global")
         const home = path.join(global, "home")
         const project = path.join(home, "project")
-        const ambient = (entries: readonly { type: string }[]) =>
-          entries.filter((entry) => entry.type === "claude" || entry.type === "agents")
+        // Other suites can leave ecosystem directories in the shared test home above the fixture.
+        const ambient = (entries: readonly { type: string; path?: string }[]) =>
+          entries.filter(
+            (entry) =>
+              (entry.type === "claude" || entry.type === "agents") &&
+              entry.path !== undefined &&
+              inFixture(tmp.path, entry.path),
+          )
         return Effect.promise(() =>
           Promise.all([
             fs.mkdir(project, { recursive: true }),
@@ -819,9 +825,9 @@ describe("Config", () => {
               fs.mkdir(project, { recursive: true }),
             ]),
           )
-          const entries = yield* Config.Service.use((config) => config.entries()).pipe(
+          const entries = (yield* Config.Service.use((config) => config.entries()).pipe(
             Effect.provide(testLayer(project, global)),
-          )
+          )).filter((entry) => !entry.path || inFixture(tmp.path, entry.path))
 
           expect(entries.filter((entry) => entry.type === "claude").map((entry) => entry.path)).toEqual([
             AbsolutePath.make(path.join(home, ".claude")),
@@ -1158,7 +1164,6 @@ describe("Config", () => {
                   command: ["node", "./mcp/server.js"],
                   environment: { API_KEY: "secret" },
                   disabled: false,
-                  codemode: false,
                   timeout: { catalog: 10000 },
                 },
                 remote: {
@@ -1167,11 +1172,13 @@ describe("Config", () => {
                   headers: { Authorization: "Bearer token" },
                   oauth: { client_id: "client", scope: "read write", callback_port: 19876 },
                   disabled: true,
-                  codemode: false,
                   timeout: { startup: 15000 },
                 },
               },
             })
+            // Configs written while MCP servers accepted `codemode` still load, without carrying it.
+            expect(documents[0]?.info.mcp?.servers?.local).not.toHaveProperty("codemode")
+            expect(documents[0]?.info.mcp?.servers?.remote).not.toHaveProperty("codemode")
             expect(documents[0]?.info.compaction).toEqual({
               auto: true,
               keep: { tokens: 2000 },

@@ -3,6 +3,7 @@ import path from "path"
 import { describe, expect } from "bun:test"
 import { Config } from "@ocpp/schema/config"
 import { Money } from "@ocpp/schema/money"
+import { ExternalSession } from "@ocpp/schema/external-session"
 import {
   DateTime,
   Deferred,
@@ -43,7 +44,7 @@ import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { tmpdir } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
-import { toolDefinitions } from "./lib/tool"
+import { codeModeTools, toolDefinitions } from "./lib/tool"
 import { Database } from "../src/database/database"
 import { Bus } from "../src/bus"
 import { Reference } from "../src/reference"
@@ -715,7 +716,8 @@ describe("LocationServiceMap", () => {
               const registry = yield* Tool.Service
               return {
                 providers: yield* catalog.provider.all(),
-                tools: yield* toolDefinitions(registry),
+                definitions: (yield* toolDefinitions(registry)).map((tool) => tool.name),
+                tools: yield* codeModeTools(registry),
               }
             }).pipe(
               Effect.scoped,
@@ -724,13 +726,16 @@ describe("LocationServiceMap", () => {
               ),
             )
 
+          // External agents register only when their CLI is installed on this host.
+          const builtins = (tools: ReadonlyArray<string>) =>
+            tools.filter((tool) => !ExternalSession.Provider.literals.some((provider) => provider === tool)).toSorted()
           const blockedID = Provider.ID.make("blocked-location")
           const allowedID = Provider.ID.make("allowed-location")
           const blockedState = yield* update(blocked.path, blockedID)
           expect(blockedState.providers.some((provider) => provider.id === blockedID)).toBe(true)
           expect(blockedState.providers.some((provider) => provider.id === allowedID)).toBe(false)
-          const blockedTools = blockedState.tools.map((tool) => tool.name)
-          expect(blockedTools.filter((name) => name !== "execute").sort()).toEqual([
+          expect(blockedState.definitions).toEqual(["execute"])
+          expect(builtins(blockedState.tools)).toEqual([
             "edit",
             "glob",
             "grep",
@@ -740,6 +745,7 @@ describe("LocationServiceMap", () => {
             "shell",
             "skill",
             "subagent",
+            "subagent.models",
             "webfetch",
             "websearch",
             "write",
@@ -747,22 +753,8 @@ describe("LocationServiceMap", () => {
           const allowedState = yield* update(allowed.path, allowedID)
           expect(allowedState.providers.some((provider) => provider.id === allowedID)).toBe(true)
           expect(allowedState.providers.some((provider) => provider.id === blockedID)).toBe(false)
-          const allowedTools = allowedState.tools.map((tool) => tool.name)
-          expect(blockedTools.includes("execute")).toBe(allowedTools.includes("execute"))
-          expect(allowedTools.filter((name) => name !== "execute").sort()).toEqual([
-            "edit",
-            "glob",
-            "grep",
-            "patch",
-            "question",
-            "read",
-            "shell",
-            "skill",
-            "subagent",
-            "webfetch",
-            "websearch",
-            "write",
-          ])
+          expect(allowedState.definitions).toEqual(["execute"])
+          expect(allowedState.tools).toEqual(blockedState.tools)
         }),
       ),
     ),
@@ -970,19 +962,19 @@ describe("LocationServiceMap", () => {
               JSON.stringify({ mcp: { servers: { example: { type: "remote", url, disabled: true } } } }),
             ),
           )
-          const observed: Record<string, boolean | undefined> = {}
+          const observed: Record<string, number | undefined> = {}
           const sdk = yield* SdkPlugins.Service
           yield* sdk.register(
             EffectPlugin.define({
-              id: "mcp-codemode-policy",
+              id: "mcp-timeout-policy",
               effect: (ctx) =>
                 ctx.mcp
                   .transform((mcp) => {
                     for (const [name, server] of mcp.list()) {
                       if (server.type !== "remote" || new URL(server.url).hostname !== "example.com") continue
                       mcp.update(name, (current) => {
-                        current.codemode = false
-                        observed[name] = current.codemode
+                        current.timeout = { startup: 1000 }
+                        observed[name] = current.timeout.startup
                       })
                     }
                   })
@@ -994,13 +986,13 @@ describe("LocationServiceMap", () => {
             const supervisor = yield* PluginSupervisor.Service
             const mcp = yield* Mcp.Service
             yield* supervisor.flush
-            expect(observed.example).toBe(false)
+            expect(observed.example).toBe(1000)
             yield* mcp.add("dynamic", {
               type: "remote",
               url: "https://example.com/dynamic",
               disabled: true,
             })
-            expect(observed.dynamic).toBe(false)
+            expect(observed.dynamic).toBe(1000)
             expect((yield* mcp.servers()).map((server) => String(server.name))).toEqual(["dynamic", "example"])
           }).pipe(
             Effect.scoped,

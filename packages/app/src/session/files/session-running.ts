@@ -153,7 +153,15 @@ export function runningItems(input: {
   const shells = input.shells.flatMap((shell): RunningItem[] => {
     if (shell.status !== "running" || shell.metadata.sessionID !== input.sessionID) return []
     const owner = runs.find((run) => run.events.some((event) => event.metadata.shellID === shell.id))
+    // The user's own shell commands have a message; a background command outlives the execution that started it.
     const message = input.messages.find((item) => item.type === "shell" && item.shellID === shell.id)
+    const target =
+      owner?.item.target ??
+      (message
+        ? { messageID: message.id }
+        : input.messages
+            .flatMap(traces)
+            .find((trace) => trace.events.some((event) => event.metadata.shellID === shell.id))?.target)
     return [
       {
         id: shell.id,
@@ -161,7 +169,7 @@ export function runningItems(input: {
         label: firstLine(shell.command),
         started: shell.time.started,
         ...(owner ? { parent: owner.item.id } : {}),
-        ...(owner ? { target: owner.item.target } : message ? { target: { messageID: message.id } } : {}),
+        ...(target ? { target } : {}),
         stop: { type: "shell", shellID: shell.id, location: shell.location },
       },
     ]
@@ -211,6 +219,17 @@ export function formatElapsed(
     hours: Math.floor(minutes / 60),
     minutes: String(minutes % 60).padStart(2, "0"),
   })
+}
+
+/** Each execution a message shows, running or not, with the tool calls in its trace. */
+function traces(message: SessionMessageInfo) {
+  if (message.type === "invocation") return [{ target: { messageID: message.id }, events: toolEvents(message.events) }]
+  if (message.type !== "assistant") return []
+  return message.content.flatMap((part) =>
+    part.type === "tool" && part.name === "execute" && part.state.status !== "streaming"
+      ? [{ target: { messageID: message.id, partID: part.id }, events: toolEvents(part.state.metadata?.events) }]
+      : [],
+  )
 }
 
 function progress(events: readonly ToolEvent[], steps: number) {

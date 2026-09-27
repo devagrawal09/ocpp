@@ -209,6 +209,22 @@ describe("runningItems", () => {
           status: "running",
           time: { created: 500 },
         },
+        // The execution that started a background command settled while the command runs on.
+        assistant("msg_a", [
+          execute("call_bg", {
+            executionID: "exe_bg",
+            executionStatus: "completed",
+            events: [
+              {
+                type: "tool",
+                tool: "shell",
+                status: "completed",
+                input: { command: "bun run watch", background: true },
+                metadata: { status: "running", shellID: "sh_bg" },
+              },
+            ],
+          }),
+        ]),
       ],
       sessions: [
         session({ id: "ses_child", parentID: "ses_parent", title: "Background review", agent: "explore" }),
@@ -224,6 +240,7 @@ describe("runningItems", () => {
       shells: [
         shell({ id: "sh_user", command: "npm run dev", time: { started: 500 } }),
         shell({ id: "sh_other", metadata: { sessionID: "ses_elsewhere" } }),
+        shell({ id: "sh_bg", command: "bun run watch", time: { started: 1_300 } }),
       ],
     })
     expect(items).toEqual([
@@ -234,6 +251,14 @@ describe("runningItems", () => {
         started: 500,
         target: { messageID: "msg_shell" },
         stop: { type: "shell", shellID: "sh_user", location },
+      },
+      {
+        id: "sh_bg",
+        kind: "shell",
+        label: "bun run watch",
+        started: 1_300,
+        target: { messageID: "msg_a", partID: "call_bg" },
+        stop: { type: "shell", shellID: "sh_bg", location },
       },
       {
         id: "ses_child",

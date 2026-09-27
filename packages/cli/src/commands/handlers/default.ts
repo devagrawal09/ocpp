@@ -22,9 +22,13 @@ export default Runtime.handler(Commands, (input) =>
     const update = yield* updater.check().pipe(Effect.forkScoped)
     process.stdout.write(`OC++ is running at ${server.endpoint.url}\n`)
     const { default: open } = yield* Effect.promise(() => import("open"))
-    yield* Effect.promise(() => open(webAppURL(server.endpoint))).pipe(
-      Effect.catchCause(() => Effect.sync(() => process.stderr.write("Open the URL above in your browser.\n"))),
-    )
+    // `open` resolves once the launcher spawns, so it can't report whether a browser appeared.
+    yield* Effect.promise(() => open(webAppURL(server.endpoint))).pipe(Effect.catchCause(() => Effect.void))
+    if (server.endpoint.auth)
+      process.stdout.write(
+        `If your browser didn't open, go to that URL and sign in as ${server.endpoint.auth.username}` +
+          (server.service ? "; `ocpp service get password` prints the password.\n" : ".\n"),
+      )
     // A standalone server lives in this process, so keep it running until the user stops it.
     if (input.standalone) {
       process.stdout.write("Press Ctrl+C to stop the server.\n")
@@ -37,7 +41,6 @@ export default Runtime.handler(Commands, (input) =>
 /** The web app signs in with credentials passed once as `auth_token`, then removes them from its URL. */
 function webAppURL(endpoint: Endpoint) {
   const url = new URL(endpoint.url)
-  if (endpoint.auth)
-    url.searchParams.set("auth_token", btoa(endpoint.auth.username + ":" + endpoint.auth.password))
+  if (endpoint.auth) url.searchParams.set("auth_token", btoa(endpoint.auth.username + ":" + endpoint.auth.password))
   return url.toString()
 }

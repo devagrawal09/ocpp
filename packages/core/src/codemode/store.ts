@@ -5,6 +5,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { and, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database } from "../database/database.js"
+import { Job } from "../job.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
 import { SessionMessageTable } from "../session/sql.js"
@@ -96,9 +97,10 @@ export interface Interface {
   readonly indeterminate: (execution: Execution, error: string) => Effect.Effect<void>
   readonly discard: (executionID: string) => Effect.Effect<void>
   /**
-   * Settles executions that were admitted but never started, saving nothing and releasing their
-   * names. Runs at startup. Executions that were running are left to restart recovery, which resumes
-   * them by replay or settles them itself.
+   * Settles executions that restart recovery can never resume, saving nothing and releasing their
+   * names: those admitted but never started, and running ones without a pending background marker,
+   * such as one whose job ended without settling it. Runs at startup. Running executions with a
+   * marker are left to restart recovery, which resumes them by replay or settles them itself.
    */
   readonly recover: () => Effect.Effect<ReadonlyArray<string>>
   /**
@@ -129,6 +131,7 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const { db } = yield* Database.Service
+    const jobs = yield* Job.Service
 
     const readBindings: Interface["bindings"] = Effect.fnUntraced(function* (sessionID) {
       return Object.fromEntries(
@@ -512,12 +515,19 @@ const layer = Layer.effect(
     )
 
     const recover: Interface["recover"] = Effect.fn("CodeModeStore.recover")(function* () {
-      const orphaned = yield* db
-        .select({ id: CodeModeExecutionTable.id })
+      // Restart recovery resumes an execution only through the background marker its job wrote
+      // before the execution started running.
+      const pending = new Set(
+        (yield* jobs.pendingBackground).flatMap((background) =>
+          background.recovery.kind === "codemode" ? [background.id] : [],
+        ),
+      )
+      const orphaned = (yield* db
+        .select({ id: CodeModeExecutionTable.id, status: CodeModeExecutionTable.status })
         .from(CodeModeExecutionTable)
-        .where(eq(CodeModeExecutionTable.status, "scheduled"))
+        .where(inArray(CodeModeExecutionTable.status, ["scheduled", "running"]))
         .all()
-        .pipe(Effect.orDie)
+        .pipe(Effect.orDie)).filter((execution) => execution.status === "scheduled" || !pending.has(execution.id))
       yield* Effect.forEach(orphaned, (execution) => settle(execution.id, "indeterminate", RESTART_MESSAGE), {
         discard: true,
       })
@@ -652,4 +662,4 @@ function truncate(value: string, limit: number) {
   return new TextDecoder().decode(bytes.slice(0, end))
 }
 
-export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node] })
+export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node, Job.node] })

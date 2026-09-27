@@ -359,8 +359,11 @@ notebook state without a global revision gate:
   orphans. An execution whose initiating message is gone saves nothing.
 - Reusing a Session ID adopts its existing notebook.
 - An execution that was running when the host stopped, whether it crashed or shut down, resumes at
-  the next start, as described below. An execution that was admitted but never started settles
-  `indeterminate` at startup, saves nothing, and releases its reservations.
+  the next start as described below, whether the model, a command, or an event started it. Restart
+  recovery finds it through the background marker its job wrote before the execution started
+  running. An execution that was admitted but never started, or one still marked running without
+  such a marker, can never resume: it settles `indeterminate` at startup, saves nothing, and releases
+  its reservations.
 
 ### Resume After A Restart
 
@@ -390,13 +393,15 @@ sequenceDiagram
   logged failure as the same catchable error. A served call must match the journal exactly in call
   number, tool path, and input. The `time.now()` and `Math.random()` values the program read are fed
   back in the same order. Served calls never run again, and the trace marks them `replayed`.
+  `tools.search` is the exception: it runs inside the interpreter against the current catalog every
+  time, so it is matched against the journal but never served from it or marked `replayed`.
 - The first call without a settled result runs live, and so does everything after it.
 - The call that was in flight when the host stopped runs again only when its tool is read-only, such
-  as `read`, `glob`, `grep`, `webfetch`, `websearch`, `skill`, and `tools.search`. A subagent call
-  rejoins the child session it started, tells it to continue, and waits for its result instead of
-  starting another subagent. Any other in-flight call may or may not have taken effect, so the
-  execution is not resumed: it settles `indeterminate` with a message naming the call, and it saves
-  nothing. Side-effecting calls are never retried automatically.
+  as `read`, `glob`, `grep`, `webfetch`, `websearch`, `skill`, or a plugin tool registered with
+  `readOnly: true`. A subagent call rejoins the child session it started, tells it to continue, and
+  waits for its result instead of starting another subagent. Any other in-flight call may or may not
+  have taken effect, so the execution is not resumed: it settles `indeterminate` with a message
+  naming the call, and it saves nothing. Side-effecting calls are never retried automatically.
 - A call whose input or result exceeded the 256 KiB journal capture limit was stored as a
   placeholder, so it cannot be served. It runs again when its tool is read-only; otherwise the
   execution settles `indeterminate` instead of resuming.
@@ -404,8 +409,13 @@ sequenceDiagram
   a different number of impure reads, stops the run before its next tool call and settles it
   `indeterminate` with a message naming the first difference. Replay never guesses.
 - The completion notification reaches the model exactly as for a run that never stopped, notes how
-  many calls were served from the journal, and the timeline marks the run as resumed.
-- An execution resumes at most three times, so a program that stops its host cannot loop.
+  many calls were served from the journal, and the timeline marks the run as resumed. A run that a
+  command or event started resumes with the Session agent's tools, and its outcome waits in history
+  for the model's next turn without waking it, as it would have without the restart.
+- Replay waits for plugin, MCP, and OpenAPI tools to finish registering, so a tool whose server or
+  document is still loading at startup is not mistaken for one that no longer exists.
+- An execution resumes at most three times, so a program that stops its host cannot loop. The fourth
+  restart settles it `indeterminate` and says so in its completion notification.
 
 Replay cannot make the in-flight call exactly-once: nobody can know whether an external side effect
 happened at the moment the host stopped. It guarantees instead that no call that already completed

@@ -377,6 +377,9 @@ export const create = (
             // Work starts only after this tool result commits, so the execution ID is durably
             // visible before anything it does can settle.
             const unsubscribe = yield* services.bus.listen((event) => {
+              // An invocation has no outer tool result: its message commits right after admission instead.
+              if (isInvocationStart(event) && event.data.executionID === executionID)
+                return Deferred.succeed(gate, undefined)
               if (!isToolSettlement(event)) return Effect.void
               if (event.data.assistantMessageID !== context.messageID || event.data.id !== context.id)
                 return Effect.void
@@ -505,6 +508,10 @@ function runtime(
 
 function isToolSettlement(event: Bus.LogItem): event is SessionEvent.Tool.Success | SessionEvent.Tool.Failed {
   return event.type === SessionEvent.Tool.Success.type || event.type === SessionEvent.Tool.Failed.type
+}
+
+function isInvocationStart(event: Bus.LogItem): event is SessionEvent.Invocation.Started {
+  return event.type === SessionEvent.Invocation.Started.type
 }
 
 type Media = { readonly files: ReadonlyArray<Tool.FileContent>; readonly omitted: number }

@@ -8,6 +8,9 @@ import { Context, Effect, Scope } from "effect"
 import { HttpClient } from "effect/unstable/http"
 import { Agent } from "../agent.js"
 import { Catalog } from "../catalog.js"
+import { CodeModeCommand } from "../codemode/command.js"
+import { CodeModeEvent } from "../codemode/event.js"
+import { CodeModeInvocation } from "../codemode/invocation.js"
 import { Command } from "../command.js"
 import { Config } from "../config.js"
 import { Credential } from "../credential.js"
@@ -59,6 +62,9 @@ import { Skill } from "../skill.js"
 import { SkillDiscovery } from "../skill/discovery.js"
 import { Watcher } from "../filesystem/watcher.js"
 import { PatchTool } from "../tool/plugin/patch.js"
+import { CommandTool } from "../tool/plugin/command.js"
+import { EventTool } from "../tool/plugin/event.js"
+import { NotifyTool } from "../tool/plugin/notify.js"
 import { EditTool } from "../tool/plugin/edit.js"
 import { GlobTool } from "../tool/plugin/glob.js"
 import { GrepTool } from "../tool/plugin/grep.js"
@@ -96,6 +102,9 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const agent = yield* Agent.Service
   const processes = yield* AppProcess.Service
   const catalog = yield* Catalog.Service
+  const codemodeCommand = yield* CodeModeCommand.Service
+  const codemodeEvent = yield* CodeModeEvent.Service
+  const codemodeInvocation = yield* CodeModeInvocation.Service
   const command = yield* Command.Service
   const config = yield* Config.Service
   const credential = yield* Credential.Service
@@ -141,6 +150,9 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(Agent.Service, agent),
     Context.make(AppProcess.Service, processes),
     Context.make(Catalog.Service, catalog),
+    Context.make(CodeModeCommand.Service, codemodeCommand),
+    Context.make(CodeModeEvent.Service, codemodeEvent),
+    Context.make(CodeModeInvocation.Service, codemodeInvocation),
     Context.make(Command.Service, command),
     Context.make(Config.Service, config),
     Context.make(Credential.Service, credential),
@@ -193,6 +205,9 @@ export const requirements = LayerNode.group([
   Agent.node,
   AppProcess.node,
   Catalog.node,
+  CodeModeCommand.node,
+  CodeModeEvent.node,
+  CodeModeInvocation.node,
   Command.node,
   Config.node,
   Credential.node,
@@ -263,6 +278,9 @@ const pre = [
   WebFetchTool.Plugin,
   WebSearchTool.Plugin,
   WriteTool.Plugin,
+  CommandTool.Plugin,
+  EventTool.Plugin,
+  NotifyTool.Plugin,
   WarmingPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 

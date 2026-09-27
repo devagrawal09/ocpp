@@ -11,9 +11,11 @@ export interface Adapter {
   readonly getAssistant: (messageID: SessionMessage.ID) => Effect.Effect<SessionMessage.Assistant | undefined>
   readonly getShell: (shellID: SessionMessage.Shell["shellID"]) => Effect.Effect<SessionMessage.Shell | undefined>
   readonly getCompaction: () => Effect.Effect<SessionMessage.Compaction | undefined>
+  readonly getInvocation: (messageID: SessionMessage.ID) => Effect.Effect<SessionMessage.Invocation | undefined>
   readonly updateAssistant: (assistant: SessionMessage.Assistant) => Effect.Effect<void>
   readonly updateShell: (shell: SessionMessage.Shell) => Effect.Effect<void>
   readonly updateCompaction: (compaction: SessionMessage.Compaction) => Effect.Effect<void>
+  readonly updateInvocation: (invocation: SessionMessage.Invocation) => Effect.Effect<void>
   readonly appendMessage: (message: SessionMessage.Info) => Effect.Effect<void>
 }
 
@@ -48,6 +50,18 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
       const assistant = yield* adapter.getAssistant(messageID)
       if (!assistant) return
       yield* adapter.updateAssistant(produce(assistant, recipe))
+    })
+
+  // An execution belongs to either a model tool call or an invocation message; only one of these finds it.
+  // Restart recovery settles an execution without a trace, so an empty trace keeps the projected one.
+  const updateOwnedInvocation = (
+    messageID: SessionMessage.ID,
+    recipe: (draft: WritableDraft<SessionMessage.Invocation>) => void,
+  ) =>
+    Effect.gen(function* () {
+      const invocation = yield* adapter.getInvocation(messageID)
+      if (!invocation) return
+      yield* adapter.updateInvocation(produce(invocation, recipe))
     })
 
   const clearCurrentRetry = Effect.gen(function* () {
@@ -318,31 +332,59 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
         })
       },
       "session.codemode.started": () => Effect.void,
-      "session.codemode.completed": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestTool(draft, event.data.id)
-          if (!match || match.state.status === "streaming") return
-          match.state.metadata = castDraft({
-            ...match.state.metadata,
-            executionID: event.data.executionID,
-            executionStatus: "completed",
-            events: event.data.events,
+      "session.codemode.completed": (event) =>
+        Effect.gen(function* () {
+          yield* updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
+            const match = latestTool(draft, event.data.id)
+            if (!match || match.state.status === "streaming") return
+            match.state.metadata = castDraft({
+              ...match.state.metadata,
+              executionID: event.data.executionID,
+              executionStatus: "completed",
+              events: event.data.events,
+            })
           })
-        })
-      },
-      "session.codemode.failed": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestTool(draft, event.data.id)
-          if (!match || match.state.status === "streaming") return
-          match.state.metadata = castDraft({
-            ...match.state.metadata,
-            executionID: event.data.executionID,
-            executionStatus: event.data.status,
-            events: event.data.events,
-            error: event.data.error,
+          yield* updateOwnedInvocation(event.data.assistantMessageID, (draft) => {
+            if (draft.executionID !== event.data.executionID) return
+            draft.status = "completed"
+            if (event.data.events.length > 0) draft.events = castDraft(event.data.events)
+            draft.time.completed = created
           })
-        })
-      },
+        }),
+      "session.codemode.failed": (event) =>
+        Effect.gen(function* () {
+          yield* updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
+            const match = latestTool(draft, event.data.id)
+            if (!match || match.state.status === "streaming") return
+            match.state.metadata = castDraft({
+              ...match.state.metadata,
+              executionID: event.data.executionID,
+              executionStatus: event.data.status,
+              events: event.data.events,
+              error: event.data.error,
+            })
+          })
+          yield* updateOwnedInvocation(event.data.assistantMessageID, (draft) => {
+            if (draft.executionID !== event.data.executionID) return
+            draft.status = event.data.status
+            if (event.data.events.length > 0) draft.events = castDraft(event.data.events)
+            draft.error = event.data.error
+            draft.time.completed = created
+          })
+        }),
+      "session.invocation.started": (event) =>
+        adapter.appendMessage(
+          SessionMessage.Invocation.make({
+            id: SessionMessage.ID.fromEvent(event.id),
+            type: "invocation",
+            metadata: event.metadata,
+            trigger: event.data.trigger,
+            code: event.data.code,
+            executionID: event.data.executionID,
+            status: "running",
+            time: { created },
+          }),
+        ),
       // Terminal tool events are self-contained. The only preserved state is a
       // durable Code Mode terminal that raced ahead of this outer tool success.
       "session.tool.success": (event) => {

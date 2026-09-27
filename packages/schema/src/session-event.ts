@@ -592,6 +592,21 @@ export namespace CodeMode {
   export type Failed = typeof Failed.Type
 }
 
+export namespace Invocation {
+  /** A command or an event started a Code Mode execution outside the model. The message ID derives from this event ID. */
+  export const Started = Event.durable({
+    type: "session.invocation.started",
+    ...options,
+    schema: {
+      ...Base,
+      executionID: CodeModeExecution.ID,
+      trigger: SessionMessage.InvocationTrigger,
+      code: Schema.String,
+    },
+  })
+  export type Started = typeof Started.Type
+}
+
 export const RetryScheduled = Event.durable({
   type: "session.retry.scheduled",
   ...options,
@@ -710,6 +725,7 @@ export const Definitions = Event.inventory(
   CodeMode.Progress,
   CodeMode.Completed,
   CodeMode.Failed,
+  Invocation.Started,
   RetryScheduled,
   Compaction.Started,
   Compaction.Delta,

@@ -26,14 +26,31 @@ export const deliver = Effect.fnUntraced(function* (
     return
   }
   const state = input.status === "completed" ? "completed" : input.status === "cancelled" ? "cancelled" : "failed"
+  // A command or event ran this execution outside the model, so its outcome waits in history for the
+  // model's next turn instead of waking it.
+  const owner = yield* sessions.message({
+    sessionID: input.recovery.parentSessionID,
+    messageID: input.recovery.assistantMessageID,
+  })
+  const trigger = owner?.type === "invocation" ? owner.trigger : undefined
   // The job carries the bounded execution summary: saved notebook names, diagnostics, and a small
   // preview. The notebook itself holds the durable output.
   yield* sessions.synthetic({
     ...(input.notificationID ? { id: input.notificationID } : {}),
     sessionID: input.recovery.parentSessionID,
-    ...(input.resume === false || input.status === "cancelled" ? { resume: false } : {}),
-    description: "Execution completed",
+    ...(input.resume === false || input.status === "cancelled" || trigger ? { resume: false } : {}),
+    description:
+      trigger === undefined
+        ? "Execution completed"
+        : trigger.type === "command"
+          ? "/" + trigger.name
+          : "Event " + trigger.name,
     text:
+      (trigger === undefined
+        ? ""
+        : trigger.type === "command"
+          ? "The user ran the command /" + trigger.name + " with the text " + JSON.stringify(trigger.text) + ".\n"
+          : "The event " + trigger.name + " fired.\n") +
       ((input.status === "completed" ? input.output : input.error) ??
         "Execution " + input.id + " is " + state + " and saved nothing.") +
       (input.attachments ? "\n\n" + input.attachments.note : ""),

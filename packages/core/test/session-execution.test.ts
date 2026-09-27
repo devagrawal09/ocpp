@@ -6,6 +6,8 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
 import { Job } from "@ocpp/core/job"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
+import { CodeModeResume } from "@ocpp/core/codemode/resume"
+import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { KV } from "@ocpp/core/kv"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import type { LocationServices } from "@ocpp/core/location-services"
@@ -29,7 +31,16 @@ import { testEffect } from "./lib/effect"
 
 const it = testEffect(
   AppNodeBuilder.build(
-    LayerNode.group([Database.node, Bus.node, SessionStore.node, SessionInbox.node, Job.node, KV.node, Session.node]),
+    LayerNode.group([
+      Database.node,
+      Bus.node,
+      SessionStore.node,
+      SessionInbox.node,
+      Job.node,
+      KV.node,
+      Session.node,
+      CodeModeStore.node,
+    ]),
   ),
 )
 
@@ -1564,6 +1575,7 @@ function buildExecution(
     const store = yield* SessionStore.Service
     const jobs = overrideJobs ?? (yield* Job.Service)
     const sessions = yield* Session.Service
+    const codemode = yield* CodeModeStore.Service
     const sessionLayer = Layer.effect(
       Session.Service,
       Effect.gen(function* () {
@@ -1597,6 +1609,8 @@ function buildExecution(
         Layer.provideMerge(sessionLayer),
         Layer.provideMerge(Layer.fresh(SessionExecution.layer)),
         Layer.provide(ExternalAgentSession.layer),
+        Layer.provide(CodeModeResume.layer),
+        Layer.provide(Layer.succeed(CodeModeStore.Service, codemode)),
         Layer.provide(Layer.succeed(Database.Service, database)),
         Layer.provide(Layer.succeed(Bus.Service, bus)),
         Layer.provide(Layer.succeed(SessionStore.Service, store)),

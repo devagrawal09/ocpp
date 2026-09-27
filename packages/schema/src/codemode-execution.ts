@@ -25,6 +25,8 @@ export const ToolEvent = Schema.Struct({
   output: EventText.pipe(optional),
   metadata: EventRecord.pipe(optional),
   error: EventText.pipe(optional),
+  /** The result was served from the journal of a run resumed after a restart; the tool did not run again. */
+  replayed: Schema.Boolean.pipe(optional),
 }).annotate({ identifier: "CodeModeExecution.ToolEvent" })
 
 export type TraceEvent = typeof TraceEvent.Type

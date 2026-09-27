@@ -21,6 +21,12 @@ const NO_TEXT = "Subagent completed without a text response."
 
 const MAX_SUMMARY_KEYS = 20
 
+const CONTINUE_AFTER_RESTART =
+  "The server restarted while you were working on this task. Continue from where you left off without repeating completed work."
+
+/** Progress a subagent call records once its child holds the task, so a restart can rejoin that child. */
+const Attached = Schema.Struct({ sessionID: SessionSchema.ID })
+
 type Submission = { readonly message: string; readonly output: typeof Schema.Json.Type }
 
 export const Input = Schema.Struct({
@@ -116,7 +122,7 @@ export const Plugin = {
       .transform((draft) => {
         draft.add({
           name: "models",
-          options: { namespace: name },
+          options: { namespace: name, readOnly: true },
           description: "Lists model IDs and variants currently available to subagents.",
           input: Schema.Struct({}),
           output: ModelsOutput,
@@ -140,13 +146,24 @@ export const Plugin = {
         })
         draft.add({
           name,
-          options: { acceptsToolHandles: true },
+          options: { acceptsToolHandles: true, reattach: true },
           description,
           input: Input,
           output: Output,
           execute: (input, context) =>
             Effect.gen(function* () {
               const availableModels = input.model === undefined ? [] : yield* listModels()
+              // After a restart the call rejoins the child that already holds its task. Its checks
+              // passed and its prompt was admitted before the restart, so none of that repeats.
+              const reattached =
+                context.recovered === undefined
+                  ? undefined
+                  : yield* Schema.decodeUnknownEffect(Attached)(context.recovered).pipe(
+                      Effect.flatMap((attached) => runtime.session.get(attached.sessionID)),
+                      Effect.mapError(
+                        (error) => new ToolFailure({ message: "Subagent session to rejoin was not found", error }),
+                      ),
+                    )
 
               const parent = yield* runtime.session
                 .get(context.sessionID)
@@ -176,20 +193,21 @@ export const Plugin = {
               if (agent === undefined) return yield* new ToolFailure({ message: `Unknown agent: ${input.agent}` })
               if (agent.mode === "primary")
                 return yield* new ToolFailure({ message: `Agent ${input.agent} cannot run as a subagent` })
-              yield* permission
-                .assert({
-                  action: name,
-                  resources: [agent.id],
-                  save: [agent.id],
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source: {
-                    type: "tool",
-                    messageID: context.messageID,
-                    id: context.id,
-                  },
-                })
-                .pipe(Effect.mapError((error) => new ToolFailure({ message: `Subagent denied: ${agent.id}`, error })))
+              if (reattached === undefined)
+                yield* permission
+                  .assert({
+                    action: name,
+                    resources: [agent.id],
+                    save: [agent.id],
+                    sessionID: context.sessionID,
+                    agent: context.agent,
+                    source: {
+                      type: "tool",
+                      messageID: context.messageID,
+                      id: context.id,
+                    },
+                  })
+                  .pipe(Effect.mapError((error) => new ToolFailure({ message: `Subagent denied: ${agent.id}`, error })))
               const customTools = yield* SubagentCustomTool.validate(input.tools ?? []).pipe(
                 Effect.mapError((error) => new ToolFailure({ message: error.message, error })),
               )
@@ -220,7 +238,7 @@ export const Plugin = {
                       try: () => Model.Ref.parse(selectedModel),
                       catch: (error) => unsupportedModel(selectedModel, availableModels, error),
                     })
-              if (requestedModel !== undefined && selectedModel !== undefined) {
+              if (requestedModel !== undefined && selectedModel !== undefined && reattached === undefined) {
                 const resource = `${requestedModel.providerID}/${requestedModel.id}`
                 const available = availableModels.find((model) => model.id === resource)
                 if (
@@ -249,7 +267,8 @@ export const Plugin = {
               }
 
               const existing =
-                input.sessionID === undefined
+                reattached ??
+                (input.sessionID === undefined
                   ? undefined
                   : yield* runtime.session
                       .get(input.sessionID)
@@ -258,12 +277,16 @@ export const Plugin = {
                           (error) =>
                             new ToolFailure({ message: `Subagent session not found: ${input.sessionID}`, error }),
                         ),
-                      )
+                      ))
               if (existing !== undefined && existing.parentID !== context.sessionID)
                 return yield* new ToolFailure({
                   message: `Session ${existing.id} is not a child of the current session`,
                 })
-              if (existing !== undefined && (existing.agent !== agent.id || requestedModel !== undefined)) {
+              if (
+                reattached === undefined &&
+                existing !== undefined &&
+                (existing.agent !== agent.id || requestedModel !== undefined)
+              ) {
                 const model = requestedModel ?? (existing.agent !== agent.id ? agent.model : undefined)
                 yield* (
                   existing.agent === agent.id
@@ -335,7 +358,6 @@ export const Plugin = {
                     ]),
                 ...SubagentCustomTool.make(customTools),
               ]
-              yield* context.progress({ sessionID: child.id, status: "running" })
               // Register immediately before the run whose `ensuring` owns cleanup, so no interruptible
               // step can leak the registration between acquiring it and attaching its disposal.
               const registration =
@@ -387,35 +409,45 @@ export const Plugin = {
                   : Effect.void
               }
               const run = Effect.gen(function* () {
-                yield* runtime.session
-                  .prompt({
-                    sessionID: child.id,
-                    text: [
-                      ...(existing === undefined ? ["You are a subagent spawned by another session."] : []),
-                      ...(submitted === undefined
-                        ? []
-                        : [
-                            "You must finish by calling tools.submit_result({ message, output }) with output matching the requested schema. The message is shown to the caller in full; the output is returned to it only as machine data. Do not return the final result as plain text.",
-                          ]),
-                      ...(machine === undefined
-                        ? []
-                        : [
-                            `Machine input for this call is ${describe(machine)}. It is not shown here; use it directly as input in execute programs, for example input or input.dataset.`,
-                          ]),
-                      input.message,
-                    ].join("\n"),
-                    resume: false,
+                const promptFailed = (error: unknown) =>
+                  new ToolFailure({
+                    message: `Failed to prompt subagent: ${child.id}`,
+                    error,
+                    metadata: failure(child.id, "prompt-failed"),
                   })
-                  .pipe(
-                    Effect.mapError(
-                      (error) =>
-                        new ToolFailure({
-                          message: `Failed to prompt subagent: ${child.id}`,
-                          error,
-                          metadata: failure(child.id, "prompt-failed"),
-                        }),
-                    ),
-                  )
+                // A rejoined child already holds its task, so it is only told to continue.
+                yield* reattached === undefined
+                  ? runtime.session
+                      .prompt({
+                        sessionID: child.id,
+                        text: [
+                          ...(existing === undefined ? ["You are a subagent spawned by another session."] : []),
+                          ...(submitted === undefined
+                            ? []
+                            : [
+                                "You must finish by calling tools.submit_result({ message, output }) with output matching the requested schema. The message is shown to the caller in full; the output is returned to it only as machine data. Do not return the final result as plain text.",
+                              ]),
+                          ...(machine === undefined
+                            ? []
+                            : [
+                                `Machine input for this call is ${describe(machine)}. It is not shown here; use it directly as input in execute programs, for example input or input.dataset.`,
+                              ]),
+                          input.message,
+                        ].join("\n"),
+                        resume: false,
+                      })
+                      .pipe(Effect.mapError(promptFailed))
+                  : runtime.session
+                      .synthetic({
+                        sessionID: child.id,
+                        text: CONTINUE_AFTER_RESTART,
+                        description: "Continuing after restart",
+                        resume: false,
+                      })
+                      .pipe(Effect.mapError(promptFailed))
+                // Recorded only once the child holds the task, so a restart before this point never
+                // rejoins a child that has nothing to do.
+                yield* context.progress({ sessionID: child.id, status: "running" })
                 if (submitted === undefined) {
                   yield* resume()
                   const message = yield* latestAssistantText(child.id).pipe(

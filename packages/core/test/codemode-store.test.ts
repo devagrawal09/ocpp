@@ -310,13 +310,11 @@ describe("CodeModeStore", () => {
     }),
   )
 
-  it.effect("marks in-flight executions indeterminate on restart and releases their names", () =>
+  it.effect("settles executions that never started on restart and releases their names", () =>
     Effect.gen(function* () {
-      const db = yield* seed()
+      yield* seed()
       const store = yield* CodeModeStore.Service
       const execution = yield* admitted(store, { id: "exe_restart", source: "const pending = 1" })
-      yield* store.running(execution.id)
-      yield* store.scheduleCall({ executionID: execution.id, index: 0, tool: "blocked", input: null })
 
       expect(yield* store.recover()).toEqual([execution.id])
       expect(yield* store.get(execution.id)).toMatchObject({
@@ -326,13 +324,70 @@ describe("CodeModeStore", () => {
       })
       expect(yield* store.bindings(parent)).toEqual({})
       expect(yield* store.reservations(parent)).toEqual([])
-      expect(
-        yield* db
-          .select({ status: CodeModeJournalTable.status })
-          .from(CodeModeJournalTable)
-          .where(eq(CodeModeJournalTable.execution_id, execution.id))
-          .get(),
-      ).toEqual({ status: "indeterminate" })
+      expect(yield* store.resume(execution.id)).toBeUndefined()
+    }),
+  )
+
+  it.effect("leaves running executions to restart recovery and loads everything a replay needs", () =>
+    Effect.gen(function* () {
+      yield* seed()
+      const store = yield* CodeModeStore.Service
+      const earlier = yield* admitted(store, { id: "exe_earlier", source: "const seen = 1" })
+      yield* store.commit(earlier, { seen: 1 })
+      const execution = yield* store
+        .admit({
+          id: "exe_running",
+          sessionID: parent,
+          assistantMessageID: firstMessage,
+          toolCallID: "call_exe_running",
+          program: CodeMode.compile("const pending = tools.first({})"),
+          input: { dataset: [1, 2] },
+        })
+        .pipe(Effect.map((admission) => (admission.ok ? admission.execution : undefined)))
+      if (!execution) throw new Error("Expected admission")
+      // A value saved after admission is outside the snapshot the execution may see.
+      const later = yield* admitted(store, { id: "exe_later", source: "const unseen = 2" })
+      yield* store.commit(later, { unseen: 2 })
+      yield* store.running(execution.id)
+      yield* store.scheduleCall({
+        executionID: execution.id,
+        index: 0,
+        tool: "first",
+        input: { query: "a" },
+        impure: [1_700_000_000_000],
+      })
+      yield* store.settleCall({ executionID: execution.id, index: 0, outcome: "completed", output: { rows: 2 } })
+      yield* store.scheduleCall({ executionID: execution.id, index: 1, tool: "subagent", input: {} })
+      yield* store.progressCall({ executionID: execution.id, index: 1, progress: { sessionID: child } })
+
+      expect(yield* store.recover()).toEqual([])
+      expect(yield* store.get(execution.id)).toMatchObject({ status: "running" })
+      expect(yield* store.reservations(parent)).toEqual([{ name: "pending", owner: "exe_running" }])
+
+      const resumable = yield* store.resume(execution.id)
+      expect(resumable).toMatchObject({
+        execution: { id: "exe_running", input: { dataset: [1, 2] }, bindings: { seen: 1 } },
+        resumes: 1,
+        missing: [],
+        journal: [
+          {
+            index: 0,
+            tool: "first",
+            input: { query: "a" },
+            status: "completed",
+            output: { rows: 2 },
+            omitted: false,
+            impure: [1_700_000_000_000],
+          },
+          { index: 1, tool: "subagent", status: "scheduled", impure: [], progress: { sessionID: child } },
+        ],
+      })
+      expect(Object.keys(resumable?.execution.bindings ?? {})).toEqual(["seen"])
+      expect((yield* store.resume(execution.id))?.resumes).toBe(2)
+
+      yield* store.indeterminate(execution, "Replay diverged")
+      expect(yield* store.resume(execution.id)).toBeUndefined()
+      expect(yield* store.reservations(parent)).toEqual([])
     }),
   )
 
@@ -368,6 +423,14 @@ describe("CodeModeStore", () => {
         output: "[output omitted: capture limit exceeded]",
         error: expect.not.stringContaining("�"),
       })
+      // A placeholder can never be replayed as the call's real result.
+      expect(
+        yield* db
+          .select({ omitted: CodeModeJournalTable.omitted })
+          .from(CodeModeJournalTable)
+          .where(eq(CodeModeJournalTable.call_index, 0))
+          .get(),
+      ).toEqual({ omitted: true })
       expect(
         yield* db
           .select({ status: CodeModeJournalTable.status, error: CodeModeJournalTable.error })

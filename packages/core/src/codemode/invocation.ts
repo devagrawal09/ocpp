@@ -54,8 +54,7 @@ const layer = Layer.effect(
       const snapshot = yield* registry.snapshot(agent.info.permissions, input.sessionID)
       const eventID = Event.ID.create()
       const messageID = SessionMessage.ID.fromEvent(eventID)
-      // The input is written into the program so the stored plan alone reproduces the run.
-      const code = "return " + input.handler + "(" + JSON.stringify(input.input) + ")"
+      const code = SessionMessage.invocationCode(input.handler, input.input)
       // Admission and the invocation message form one start: the execution waits for the message.
       return yield* Effect.uninterruptible(
         Effect.gen(function* () {
@@ -71,7 +70,13 @@ const layer = Layer.effect(
           yield* bus
             .publish(
               SessionEvent.Invocation.Started,
-              { sessionID: input.sessionID, executionID, trigger: input.trigger, code },
+              {
+                sessionID: input.sessionID,
+                executionID,
+                trigger: input.trigger,
+                handler: input.handler,
+                input: input.input,
+              },
               { id: eventID },
             )
             .pipe(Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : jobs.cancel(executionID))))

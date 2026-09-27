@@ -944,7 +944,7 @@ export function createData(config: CreateDataInput) {
             id: messageIDFromEvent(event.id),
             type: "invocation",
             trigger: event.data.trigger,
-            code: event.data.code,
+            code: SessionMessage.invocationCode(event.data.handler, event.data.input),
             executionID: event.data.executionID,
             status: "running",
             metadata: event.metadata,
@@ -1123,6 +1123,11 @@ export function createData(config: CreateDataInput) {
           if (position === -1) return
           for (const item of draft.splice(position)) index.delete(item.id)
         })
+        // A revert removes the session commands whose notebook function it removed.
+        if (store.session.command[event.data.sessionID]) {
+          result.session.command.invalidate(event.data.sessionID)
+          void result.session.command.sync(event.data.sessionID)
+        }
         return
       case "session.compaction.delta":
         message.update(event.data.sessionID, (draft) => {

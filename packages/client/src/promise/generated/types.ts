@@ -800,7 +800,13 @@ export type SessionInvocationStarted = {
   type: "session.invocation.started"
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
-  data: { sessionID: string; executionID: string; trigger: SessionMessageInvocationTrigger; code: string }
+  data: {
+    sessionID: string
+    executionID: string
+    trigger: SessionMessageInvocationTrigger
+    handler: string
+    input: JsonValue
+  }
 }
 
 export type SessionRetryScheduled = {

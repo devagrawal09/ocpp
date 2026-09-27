@@ -1943,7 +1943,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                    }
+                  ]
                 }
               }
             }
@@ -1989,7 +1996,7 @@
             }
           }
         },
-        "description": "Execute a slash command callback immediately.",
+        "description": "Execute a slash command callback immediately. A command the agent defined for the session runs its notebook function with the text alone; it rejects files, agents, skills, and queue delivery.",
         "summary": "Run command",
         "requestBody": {
           "content": {

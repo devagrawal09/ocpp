@@ -760,6 +760,7 @@ export const dict = {
   "session.running.working": "Working",
   "session.running.waiting": "Waiting",
   "session.running.native": "{{driver}}, native tools",
+  "session.running.directory": "in {{directory}}",
   "session.running.finished": "Finished",
   "session.running.duration.hoursMinutes": "{{hours}}h {{minutes}}m",
   "session.running.show": "Show {{label}} in the timeline",

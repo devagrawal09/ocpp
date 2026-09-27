@@ -244,6 +244,39 @@ describe("runningItems", () => {
     expect(items.some((item) => item.id === "ses_legacy" || item.id === "call_a:3")).toBe(false)
   })
 
+  test("names the directory of a subagent that works outside the Session's own", () => {
+    const worktree: LocationRef = { directory: "/worktrees/feature" }
+    const items = derive({
+      messages: [
+        assistant("msg_a", [
+          execute("call_a", {
+            executionID: "exe_a",
+            executionStatus: "running",
+            events: [
+              {
+                type: "tool",
+                tool: "subagent",
+                status: "running",
+                input: { agent: "general", description: "Fix it in the worktree", root: worktree.directory },
+                metadata: { sessionID: "ses_rooted" },
+              },
+            ],
+          }),
+        ]),
+      ],
+      sessions: [
+        session({ id: "ses_parent" }),
+        session({ id: "ses_rooted", parentID: "ses_parent", location: worktree }),
+        session({ id: "ses_home", parentID: "ses_parent" }),
+      ],
+      running: ["ses_rooted", "ses_home"],
+    })
+    expect(items.find((item) => item.id === "ses_rooted")?.directory).toBe("/worktrees/feature")
+    // A subagent in the Session's own directory names none.
+    expect(items.find((item) => item.id === "ses_home")).toMatchObject({ kind: "subagent" })
+    expect(items.find((item) => item.id === "ses_home")?.directory).toBeUndefined()
+  })
+
   test("offers no stop for a subagent waiting on its own runs", () => {
     const items = derive({
       messages: [

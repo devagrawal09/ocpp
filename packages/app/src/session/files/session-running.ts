@@ -21,6 +21,8 @@ export type RunningItem = {
   title?: string
   /** The vendor agent that drives a subagent, and whether this call runs it in its native harness. */
   driver?: { id: ExternalSession.Provider; native: boolean }
+  /** The directory a subagent works in, when it is not the Session's own. */
+  directory?: string
   started: number
   /** Code Mode progress: the trace's step count and the tool it is calling now. */
   steps?: number
@@ -68,6 +70,9 @@ export function runningItems(input: {
       .filter((session) => session.parentID === input.sessionID && !session.fork)
       .map((session) => [session.id, session]),
   )
+  const home = input.sessions.find((session) => session.id === input.sessionID)?.location.directory
+  const elsewhere = (child: SessionInfo | undefined) =>
+    child && home !== undefined && child.location.directory !== home ? { directory: child.location.directory } : {}
   const runs = input.messages.flatMap((message): Run[] => {
     if (message.type === "invocation") {
       if (message.status !== "running") return []
@@ -130,6 +135,7 @@ export function runningItems(input: {
           agent: text(event.input.agent) ?? child?.agent,
           ...(child?.title && child.title !== label ? { title: child.title } : {}),
           ...vendor(driven, event.input.harness === "native"),
+          ...elsewhere(child),
           // A continued subagent's session is older than this call, which started within the execution.
           started: Math.max(run.item.started, child?.time.created ?? 0),
           ...(working === undefined ? {} : { working }),
@@ -153,6 +159,7 @@ export function runningItems(input: {
         ...(child.agent ? { agent: child.agent } : {}),
         // Without a subagent call to ask for another harness, a vendor child runs in the OC++ harness.
         ...vendor(child.model ? SessionDriver.of(child.model) : undefined, false),
+        ...elsewhere(child),
         started: child.time.created,
         working: true,
         child: child.id,

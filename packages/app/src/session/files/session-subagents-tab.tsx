@@ -1,5 +1,6 @@
 import type { SessionInfo } from "@ocpp/client/promise"
 import { SessionDriver } from "@ocpp/schema/session-driver"
+import { getFilename } from "@ocpp/util/path"
 import { useData } from "@ocpp/session-ui/context"
 import { useQuery } from "@tanstack/solid-query"
 import { For, Match, Show, Switch, createMemo } from "solid-js"
@@ -32,9 +33,21 @@ export function SessionSubagentsTab(props: { sessionID: string }) {
     refetchOnReconnect: true,
   }))
 
+  const home = createMemo(
+    () => server.ctx.data.session.list().find((session) => session.id === props.sessionID)?.location.directory,
+  )
   const agent = (session: SessionInfo) => {
     const driver = SessionDriver.of(session.model)
-    return [session.agent, driver === "ocpp" ? undefined : SessionDriver.names[driver]].filter(Boolean).join(" · ")
+    return [
+      session.agent,
+      driver === "ocpp" ? undefined : SessionDriver.names[driver],
+      // A subagent placed in another directory, such as a separate worktree.
+      home() === undefined || session.location.directory === home()
+        ? undefined
+        : language.t("session.running.directory", { directory: getFilename(session.location.directory) }),
+    ]
+      .filter(Boolean)
+      .join(" · ")
   }
 
   return (
@@ -75,7 +88,9 @@ export function SessionSubagentsTab(props: { sessionID: string }) {
                       </Show>
                     </div>
                     <Show when={server.ctx.data.session.status(session.id) === "running"}>
-                      <span class="shrink-0 text-12-regular text-text-weak">{language.t("session.subagents.running")}</span>
+                      <span class="shrink-0 text-12-regular text-text-weak">
+                        {language.t("session.subagents.running")}
+                      </span>
                     </Show>
                   </button>
                 )}

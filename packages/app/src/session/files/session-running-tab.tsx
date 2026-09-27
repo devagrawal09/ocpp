@@ -1,4 +1,5 @@
 import { SessionDriver } from "@ocpp/schema/session-driver"
+import { getFilename } from "@ocpp/util/path"
 import { useData } from "@ocpp/session-ui/context"
 import { Icon } from "@ocpp/ui/icon"
 import { IconButton } from "@ocpp/ui/icon-button"
@@ -157,6 +158,8 @@ function RunningRow(props: {
             ? language.t("session.running.native", { driver: SessionDriver.names[props.item.driver.id] })
             : SessionDriver.names[props.item.driver.id]),
         props.item.title,
+        props.item.directory &&
+          language.t("session.running.directory", { directory: getFilename(props.item.directory) }),
         props.item.working === undefined
           ? undefined
           : language.t(props.item.working ? "session.running.working" : "session.running.waiting"),
@@ -213,7 +216,9 @@ function RunningRow(props: {
           </span>
           <Show when={detail() || props.item.tool}>
             <span class="flex min-w-0 items-center gap-1 text-[12px] leading-text-compact text-v2-text-text-faint">
-              <span class="min-w-0 truncate">{detail()}</span>
+              <span class="min-w-0 truncate" title={props.item.directory}>
+                {detail()}
+              </span>
               <Show when={props.item.tool}>
                 {(tool) => (
                   <>

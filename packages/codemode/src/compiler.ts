@@ -154,9 +154,10 @@ const removedGlobals = new Map([
   [
     "URLSearchParams",
     {
-      message: "URLSearchParams is not a value; use url.parse(text).query and url.formatQuery(record)",
+      message: "URLSearchParams is not a value; use url.parseQuery(text) and url.formatQuery(entries)",
       suggestions: [
-        'url.parse(text).query reads the parameters as a record; url.formatQuery({ q: "term" }) builds a query string.',
+        "Read the parameters as [{ name, value }] records: url.parse(text).query for a URL, url.parseQuery(text) for a bare query string",
+        'Build a query string from those records: url.formatQuery([{ name: "q", value: "term" }])',
       ],
     },
   ],

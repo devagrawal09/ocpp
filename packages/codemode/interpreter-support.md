@@ -511,6 +511,7 @@ Check its exact signature with tools.search({ query: "tools.linear.create_issue"
 | `items.push(item)`, `items.sort(compare)` | `[...items, item]`, `items.toSorted(...)`                                    |
 | `record.count += 1`                       | `{ ...record, count: record.count + 1 }`                                     |
 | `new Date()`, `new Map()`, `new Set()`    | `time.*` helpers, records, arrays                                            |
+| `new URLSearchParams(text)`               | `url.parseQuery(text)` records; `url.formatQuery([{ name, value }])`         |
 | unknown tool path                         | close catalog paths, the namespace's tools, and `tools.search({ query })`    |
 | tool denied outright                      | an allowed tool from `tools.search`, or a permission change by the user      |
 

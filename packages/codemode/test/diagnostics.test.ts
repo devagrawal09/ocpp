@@ -251,6 +251,7 @@ describe("compile suggestions", () => {
     const after = (suggestion: string | undefined, marker: string) =>
       suggestion?.slice(suggestion.indexOf(marker) + marker.length) ?? ""
     const destructured = suggestions(`const { branch, files: changed } = status`)
+    const query = suggestions(`const params = new URLSearchParams(text)`) ?? []
     const programs = [
       'const line = "id-7"\nreturn ' + after(suggestions(`const ok = /^id-/.test(line)`)?.[0], " with "),
       'const text = "a  b c"\nreturn ' + after(suggestions(`const words = text.split(/\\s+/)`)?.[0], ": "),
@@ -262,6 +263,15 @@ describe("compile suggestions", () => {
         after(destructured?.[1], ": ") +
         "\nreturn [branch, changed]",
       "const seen = { draft: 1, kept: 2 }\nreturn " + after(suggestions(`let seen = {}\ndelete seen.draft`)?.[0], ": "),
+      ...after(query[0], ": ")
+        .split(", ")
+        .map(
+          (read, index) =>
+            (index === 0 ? 'const text = "https://example.com/?q=term"' : 'const text = "q=term"') +
+            "\nreturn " +
+            read.slice(0, read.indexOf(" for ")),
+        ),
+      "return " + after(query[1], ": "),
     ]
     const results = await Promise.all(programs.map((code) => run(code)))
     expect(results.map((result) => (result.ok ? result.value : result.error.message))).toEqual([
@@ -271,6 +281,9 @@ describe("compile suggestions", () => {
       ["main", ["a"]],
       ["main", ["a"]],
       { kept: 2 },
+      [{ name: "q", value: "term" }],
+      [{ name: "q", value: "term" }],
+      "q=term",
     ])
   })
 })

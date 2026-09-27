@@ -50,6 +50,16 @@ export interface Interface extends State.Transformable<Draft> {
     sessionID?: SessionSchema.ID,
   ) => Effect.Effect<ReadonlyArray<Tool.Info>>
   readonly snapshot: (permissions?: Permission.Ruleset, sessionID?: SessionSchema.ID) => Effect.Effect<Snapshot>
+  /**
+   * Resumes a Code Mode execution that was running when the host stopped, with the tools the agent
+   * that started it may use. Returns why it cannot resume safely instead of starting it.
+   */
+  readonly resume: (input: {
+    readonly permissions: Permission.Ruleset
+    readonly agent: Agent.ID
+    readonly resumable: CodeModeStore.Resumable
+    readonly notificationID: SessionMessage.ID
+  }) => Effect.Effect<string | undefined>
 }
 
 export interface Snapshot {
@@ -91,6 +101,7 @@ const layer = Layer.effect(
         id: context.id,
         input,
       })
+    const codemodeServices = { bus, jobs: runtime.job, sessions: runtime.session, image, store: codemodeStore, scope }
 
     const executeTool = Effect.fn("Tool.execute")(function* (
       tool: Tool.Info,
@@ -135,6 +146,9 @@ const layer = Layer.effect(
         ...(afterEvent.result.metadata === undefined ? {} : { metadata: afterEvent.result.metadata }),
       }
     })
+
+    const executeCodeModeTool = (name: string, tool: Tool.Info, input: unknown, context: Tool.Context) =>
+      beforeExecute(name, input, context).pipe(Effect.flatMap((event) => executeTool(tool, name, event.input, context)))
 
     const state: State.Interface<Data, Draft> = State.create<Data, Draft>({
       name: "tool",
@@ -260,6 +274,25 @@ const layer = Layer.effect(
       transform: state.transform,
       reload: state.reload,
       registerSession,
+      resume: Effect.fn("Tool.resume")((input) => {
+        const execution = input.resumable.execution
+        return CodeModeTool.resume(
+          active(input.permissions, execution.sessionID),
+          executeCodeModeTool,
+          codemodeServices,
+          {
+            context: {
+              sessionID: execution.sessionID,
+              agent: input.agent,
+              messageID: execution.assistantMessageID,
+              id: Tool.CallID.make(execution.toolCallID),
+              progress: () => Effect.void,
+            },
+            resumable: input.resumable,
+            notificationID: input.notificationID,
+          },
+        )
+      }),
       registrations: Effect.fn("Tool.registrations")((permissions, sessionID) =>
         Effect.sync(() => Array.from(active(permissions, sessionID).values())),
       ),
@@ -273,11 +306,8 @@ const layer = Layer.effect(
               ? undefined
               : CodeModeTool.create(
                   registrations,
-                  (name, tool, input, context) =>
-                    beforeExecute(name, input, context).pipe(
-                      Effect.flatMap((event) => executeTool(tool, name, event.input, context)),
-                    ),
-                  { bus, jobs: runtime.job, sessions: runtime.session, image, store: codemodeStore, scope },
+                  executeCodeModeTool,
+                  codemodeServices,
                   activeInput(sessionID),
                   denied(permissions, sessionID),
                 )

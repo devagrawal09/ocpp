@@ -181,8 +181,9 @@ sequenceDiagram
   the notebook has no global revision. Executions declaring the same name cannot.
 - Commit verifies that the execution still owns every reservation and that the assistant message it
   was admitted from still exists.
-- Runtime failure, tool failure, cancellation, reverted ownership, and restart recovery save nothing
-  and release the reservations.
+- Runtime failure, tool failure, cancellation, reverted ownership, and a restart the execution cannot
+  resume from save nothing and release the reservations. An execution the host resumes after a
+  restart keeps its reservations until it settles.
 
 ## Execution Lifecycle
 
@@ -211,11 +212,11 @@ design does not depend on exactly one scheduler wake.
 
 Terminal outcomes are:
 
-| Outcome         | Meaning                                                                           |
-| --------------- | --------------------------------------------------------------------------------- |
-| `saved`         | The program succeeded and every declaration was committed.                        |
-| `failed`        | Compilation, execution, a tool, a limit, or the commit failed. Nothing was saved. |
-| `indeterminate` | The host could not determine whether in-flight work finished. Nothing was saved.  |
+| Outcome         | Meaning                                                                                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `saved`         | The program succeeded and every declaration was committed.                                                             |
+| `failed`        | Compilation, execution, a tool, a limit, or the commit failed. Nothing was saved.                                      |
+| `indeterminate` | The host could not determine whether in-flight work finished, or a resumed run could not replay safely. Nothing saved. |
 
 Name collisions are admission errors, not asynchronous outcomes.
 
@@ -291,8 +292,13 @@ const tomorrow = time.format(time.add(at, { days: 1 }))
 const parsed = url.parse("https://example.dev/a?x=1&x=2#frag")
 ```
 
-`time.now()` reads host authority and is the only impure member; it does not masquerade as a pure
-function. Collections use ordinary immutable arrays and records with the usual non-mutating methods.
+`time.now()` and `Math.random()` are the only impure helpers; every other helper is a deterministic
+function of its arguments, and nothing else in the language reads the clock, randomness, or any other
+ambient state. They do not masquerade as pure functions: the host supplies their values through the
+`impure` execution option, so it can record them and feed the same values back when it replays an
+execution after a restart. `time.parse` reads a date-time without an offset in the host's local time
+zone and `localeCompare` uses the host's default locale; both are deterministic on one host.
+Collections use ordinary immutable arrays and records with the usual non-mutating methods.
 
 ### Regular Expressions Are Unavailable
 
@@ -323,7 +329,8 @@ lifecycle information for status and recovery:
 - saved names,
 - diagnostics,
 - bounded warnings, logs, and progress,
-- a bounded tool-call journal,
+- a tool-call journal that records each call before it runs and its result after, along with the
+  impure helper values the program read before it, so a run can resume after a restart,
 - an optional small preview of the returned value.
 
 There is no `execution_result` tool, no result paging, no durable result blob, and no overflow file.
@@ -333,7 +340,8 @@ Images and PDFs cannot be notebook values, so OC++ Core collects the inline imag
 calls return and attaches them to the completion notification, where the model sees them as media.
 Images are resized with the same limits as prompt attachments, duplicates attach once, at most eight
 files attach to one completion, and the notification names any file it had to omit. Attachments stay
-in memory until the notification is delivered, so a completion recovered after a restart carries none.
+in memory until the notification is delivered, so a completion recovered after a restart carries none,
+and a resumed run attaches only media from the calls it ran after the restart.
 
 ## Fork, Revert, And Restart
 
@@ -350,8 +358,61 @@ notebook state without a global revision gate:
 - A committed revert deletes values saved from its boundary onward and releases the reservations it
   orphans. An execution whose initiating message is gone saves nothing.
 - Reusing a Session ID adopts its existing notebook.
-- Restart marks uncertain in-flight executions `indeterminate`, saves nothing, and releases their
-  reservations. Arbitrary tool side effects are never replayed.
+- An execution that was running when the host stopped, whether it crashed or shut down, resumes at
+  the next start, as described below. An execution that was admitted but never started settles
+  `indeterminate` at startup, saves nothing, and releases its reservations.
+
+### Resume After A Restart
+
+Restart recovery resumes a running execution by deterministic replay rather than by trusting any
+in-memory state:
+
+```mermaid
+sequenceDiagram
+    participant R as Restart recovery
+    participant C as Core host
+    participant J as Tool-call journal
+    participant T as Tools
+
+    R->>C: resume execution (program, snapshot, input)
+    C->>C: run the stored program from the start
+    loop each call that settled before the restart
+        C->>J: same call number, tool path, and input?
+        J-->>C: logged result, served without calling the tool
+    end
+    C->>T: first call without a settled result, and every call after it
+    C-->>R: one completion notification, as for any run
+```
+
+- The stored program runs again from its start, against the notebook snapshot and machine `input`
+  it was admitted with, so values saved by later executions stay invisible to it.
+- Each call that settled before the restart is served from the journal: its logged result, or its
+  logged failure as the same catchable error. A served call must match the journal exactly in call
+  number, tool path, and input. The `time.now()` and `Math.random()` values the program read are fed
+  back in the same order. Served calls never run again, and the trace marks them `replayed`.
+- The first call without a settled result runs live, and so does everything after it.
+- The call that was in flight when the host stopped runs again only when its tool is read-only, such
+  as `read`, `glob`, `grep`, `webfetch`, `websearch`, `skill`, and `tools.search`. A subagent call
+  rejoins the child session it started, tells it to continue, and waits for its result instead of
+  starting another subagent. Any other in-flight call may or may not have taken effect, so the
+  execution is not resumed: it settles `indeterminate` with a message naming the call, and it saves
+  nothing. Side-effecting calls are never retried automatically.
+- A call whose input or result exceeded the 256 KiB journal capture limit was stored as a
+  placeholder, so it cannot be served. It runs again when its tool is read-only; otherwise the
+  execution settles `indeterminate` instead of resuming.
+- Any difference between the program and its journal, such as a different tool, different input, or
+  a different number of impure reads, stops the run before its next tool call and settles it
+  `indeterminate` with a message naming the first difference. Replay never guesses.
+- The completion notification reaches the model exactly as for a run that never stopped, notes how
+  many calls were served from the journal, and the timeline marks the run as resumed.
+- An execution resumes at most three times, so a program that stops its host cannot loop.
+
+Replay cannot make the in-flight call exactly-once: nobody can know whether an external side effect
+happened at the moment the host stopped. It guarantees instead that no call that already completed
+runs again. Two consequences follow from replaying by call number: a subagent's custom tools that
+called other tools during a completed subagent call shift the numbering, so replay past that call
+settles `indeterminate`; and a child session's execution that used custom tools from its parent
+settles `indeterminate` when it resumes before its parent's call rejoins it.
 
 ## Language
 
@@ -549,6 +610,7 @@ OC++ Core applies these fixed host limits. A program cannot raise or lower them.
 | Notebook values per Session       |       512 |
 | Notebook bytes per Session        |     8 MiB |
 | Captured journal input or output  |   256 KiB |
+| Impure values journaled per call  |     1,000 |
 | Model-facing preview              |     4 KiB |
 | Captured logs                     |     4 KiB |
 | Completion summary                |     8 KiB |
@@ -560,7 +622,12 @@ OC++ Core applies these fixed host limits. A program cannot raise or lower them.
 | Characters in one string          | 4,000,000 |
 
 There is no wall-clock limit. Core supplies no execution deadline, so a program runs until it
-settles, is cancelled, or the host restarts.
+settles or is cancelled; a host restart resumes it.
+
+The journal capture limit is also the replay limit: a call whose input or result exceeded it cannot be
+served from the journal after a restart. Likewise, a program that reads `time.now()` or `Math.random()`
+more than 1,000 times between two tool calls keeps running, but a restart cannot resume it past that
+point.
 
 Logs share the preview budget rather than owning an independent one: retained console output is
 whatever remains of the 4 KiB model-facing preview after the returned value is counted. Core also
@@ -646,10 +713,12 @@ previews and logs explicitly and neutralize spoofable markers and tags.
 - `src/stdlib/time.ts`, `src/stdlib/url.ts`: plain-data helpers.
 - `src/tool-runtime.ts`: schema boundaries, catalog lookup, call accounting, and host hooks.
 - `../core/src/codemode/store.ts`: admission, reservations, commit, journal, fork, revert, recovery.
+- `../core/src/codemode/replay.ts`: journal replay, impure value feedback, and divergence checks.
+- `../core/src/codemode/resume.ts`: restart recovery that resumes or settles running executions.
 - `../core/src/codemode/tool.ts`: the asynchronous `execute` tool, progress, and bounded summaries.
 - `../core/src/codemode/compile-check.ts`: compile refusals and the static tool-path check.
 - `../session-ui/src/tools/tool-renderer.tsx`: Session timeline rendering.
 
 Direct contract tests live in `test/notebook.test.ts`, compile suggestions in `test/diagnostics.test.ts`,
-and durable lifecycle tests in Core's `test/codemode-store.test.ts`, `test/tool-execute.test.ts`,
-`test/codemode-compile-check.test.ts`, and `test/tool-registry.test.ts`.
+and durable lifecycle tests in Core's `test/codemode-store.test.ts`, `test/codemode-resume.test.ts`,
+`test/tool-execute.test.ts`, `test/codemode-compile-check.test.ts`, and `test/tool-registry.test.ts`.

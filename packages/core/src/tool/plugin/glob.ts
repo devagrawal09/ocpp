@@ -52,6 +52,7 @@ export const Plugin = {
       .transform((draft) =>
         draft.add({
           name,
+          options: { readOnly: true },
           description: 'Search file paths using a glob pattern (examples: "**/*.ts", "src/**/*.tsx").',
           input: Input,
           output: Output,

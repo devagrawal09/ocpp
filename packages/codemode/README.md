@@ -101,7 +101,10 @@ runtime.executeCompiled(program) // the same, from a precompiled program
 Effect environment is inferred from the supplied tools. `onToolCallStart` observes admitted calls with
 decoded input; `onToolCallEnd` observes settled outcomes and duration. `onTrace` observes semantic
 JavaScript steps in execution order as `assignment`, `branch`, `operation`, `log`, and `return`
-events. All three hooks return Effects and must not fail.
+events. All three hooks return Effects and must not fail. `impure` supplies the values `time.now()` and
+`Math.random()` return, in the order the program reads them; they are the only helpers whose results
+the program and its tool results do not determine. A host that records these values alongside tool
+results can replay an execution deterministically, for example to resume it after a restart.
 
 ### Compiling ahead of execution
 

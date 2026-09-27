@@ -560,11 +560,15 @@ export namespace CodeMode {
   })
   export type Started = typeof Started.Type
 
+  /** Marks an execution that resumed after a restart by replaying its tool-call journal. */
+  const Resumed = { resumed: Schema.Boolean.pipe(optional) }
+
   export const Progress = Event.ephemeral({
     type: "session.codemode.progress",
     schema: {
       ...CodeModeBase,
       events: CodeModeExecution.Entries,
+      ...Resumed,
     },
   })
   export type Progress = typeof Progress.Type
@@ -575,6 +579,7 @@ export namespace CodeMode {
     schema: {
       ...CodeModeBase,
       events: CodeModeExecution.Entries,
+      ...Resumed,
     },
   })
   export type Completed = typeof Completed.Type
@@ -587,6 +592,7 @@ export namespace CodeMode {
       events: CodeModeExecution.Entries,
       status: Schema.Literals(["error", "cancelled"]),
       error: Schema.String,
+      ...Resumed,
     },
   })
   export type Failed = typeof Failed.Type

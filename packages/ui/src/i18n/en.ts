@@ -187,6 +187,8 @@ const source = {
   "ui.codemode.steps.other": "{{count}} steps",
   "ui.codemode.source": "Source",
   "ui.codemode.executionTrace": "Execution trace",
+  "ui.codemode.resumed": "Resumed after restart",
+  "ui.codemode.replayed": "Replayed from the journal after a restart; the tool did not run again",
   "ui.customTool.steps.one": "Custom tool: {{count}} step",
   "ui.customTool.steps.other": "Custom tool: {{count}} steps",
   "ui.codemode.trace.assignment": "Assigned",

@@ -17,6 +17,12 @@ export interface Context {
   readonly messageID: SessionMessage.ID
   readonly id: CallID
   readonly progress: (update: Metadata) => Effect.Effect<void>
+  /**
+   * The progress metadata this call reported before the host restarted. It is present only when a
+   * resumed Code Mode execution re-invokes an in-flight call of a tool declared with `reattach`, which
+   * must rejoin the work that metadata describes instead of starting it again.
+   */
+  readonly recovered?: Metadata
 }
 
 export interface Options {
@@ -25,6 +31,16 @@ export interface Options {
   /** Allows this in-process tool boundary to receive opaque same-activation tool handles. */
   readonly acceptsToolHandles?: boolean
   readonly pinned?: boolean
+  /**
+   * The tool only reads, so a call interrupted by a restart may safely run again. Tools without it
+   * are treated as side-effecting and are never re-run automatically.
+   */
+  readonly readOnly?: boolean
+  /**
+   * A call interrupted by a restart can rejoin the work it started from the progress metadata it
+   * reported, which it receives as `Context.recovered`.
+   */
+  readonly reattach?: boolean
 }
 
 export type ValueSchema<A = unknown> = Schema.Codec<A, any> | StandardSchemaV1<any, A> | JsonSchema.JsonSchema

@@ -109,6 +109,7 @@ export const Plugin = {
       .transform((draft) =>
         draft.add({
           name,
+          options: { readOnly: true },
           description,
           input: Input,
           output: Output,

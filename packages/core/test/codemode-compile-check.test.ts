@@ -56,6 +56,7 @@ const setup = (tools: ReadonlyArray<Info>, denied: ReadonlyArray<Info> = []) => 
         },
         running: () => Effect.void,
         scheduleCall: () => Effect.void,
+        progressCall: () => Effect.void,
         settleCall: () => Effect.void,
         commit: () => Effect.die("Unreached: the execution never runs here"),
         fail: () => Effect.void,

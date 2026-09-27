@@ -73,6 +73,10 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             options.bindings,
             input,
             parsed.declarations,
+            new Map(),
+            undefined,
+            [],
+            options.impure,
           )
           const executed = yield* interpreter.run(parsed.body)
           const result = copyOut(copyIn(executed.value, "Execution preview"), "nullify") as DataValue

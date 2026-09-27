@@ -327,6 +327,7 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             executionID: event.data.executionID,
             executionStatus: "completed",
             events: event.data.events,
+            ...(event.data.resumed === true ? { resumed: true } : {}),
           })
         })
       },
@@ -340,6 +341,7 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             executionStatus: event.data.status,
             events: event.data.events,
             error: event.data.error,
+            ...(event.data.resumed === true ? { resumed: true } : {}),
           })
         })
       },

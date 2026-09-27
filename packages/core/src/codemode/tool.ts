@@ -16,6 +16,7 @@ import { SessionMessage } from "../session/message.js"
 import { definition, normalizedName } from "../tool/runtime.js"
 import { CodeModeCompileCheck } from "./compile-check.js"
 import { limits } from "./limits.js"
+import { CodeModeReplay } from "./replay.js"
 import type { CodeModeStore } from "./store.js"
 
 type ExecuteCall = CodeModeExecution.ToolEvent
@@ -47,7 +48,15 @@ type ExecutionServices = {
   readonly image: Pick<Image.Interface, "normalize">
   readonly store: Pick<
     CodeModeStore.Interface,
-    "admit" | "running" | "scheduleCall" | "settleCall" | "commit" | "fail" | "indeterminate" | "discard"
+    | "admit"
+    | "running"
+    | "scheduleCall"
+    | "progressCall"
+    | "settleCall"
+    | "commit"
+    | "fail"
+    | "indeterminate"
+    | "discard"
   >
   readonly scope: Scope.Scope
 }
@@ -67,14 +76,16 @@ const description = [
     " executions may run at once per Session, including executions that are waiting on subagents. A refused call names the running executions; wait for one of their completion notifications before starting another instead of retrying immediately.",
 ].join("\n")
 
-export const create = (
-  registrations: ReadonlyMap<string, Tool.Info>,
-  executeTool: (
+type ExecuteToolFn = (
     name: string,
     tool: Tool.Info,
     input: unknown,
     context: Tool.Context,
-  ) => Effect.Effect<Tool.Result, Tool.Error>,
+) => Effect.Effect<Tool.Result, Tool.Error>
+
+export const create = (
+  registrations: ReadonlyMap<string, Tool.Info>,
+  executeTool: ExecuteToolFn,
   services: ExecutionServices,
   input?: CodeMode.DataValue,
   // Registered tools this agent's permission rules disable outright, so a call to one is refused
@@ -111,6 +122,7 @@ export const create = (
           assistantMessageID: context.messageID,
           toolCallID: context.id,
           program,
+          ...(input === undefined ? {} : { input }),
         })
         if (!admission.ok)
           return yield* new Tool.Error({
@@ -123,6 +135,133 @@ export const create = (
             },
           })
         const execution = admission.execution
+        return yield* Effect.gen(function* () {
+          const gate = yield* Deferred.make<void>()
+          const launched = yield* launch(registrations, executeTool, services, context, execution, {
+            gate,
+            notificationID: SessionMessage.ID.create(),
+          })
+          if (!launched) {
+            yield* services.store.discard(executionID)
+            // Name the executions holding the slots so the model can wait for one of their
+            // completion notifications instead of retrying blind.
+            const active = (yield* services.jobs.active({ ownerSessionID: context.sessionID, type: "codemode" })).map(
+              (item) => item.id,
+            )
+            return yield* new Tool.Error({
+              message:
+                "At most " +
+                MAX_CONCURRENT_EXECUTIONS +
+                " executions may run per Session, and " +
+                active.length +
+                " are running: " +
+                active.join(", ") +
+                ". Wait for one of their completion notifications before starting another execution; do not retry immediately.",
+              metadata: {
+                executionStatus: "refused",
+                kind: "ConcurrencyLimit",
+                limit: MAX_CONCURRENT_EXECUTIONS,
+                active,
+              },
+            })
+          }
+          return yield* Effect.gen(function* () {
+            yield* services.jobs.background(executionID)
+            yield* services.bus.publish(SessionEvent.CodeMode.Started, {
+              sessionID: context.sessionID,
+              assistantMessageID: context.messageID,
+              id: context.id,
+              executionID,
+            })
+            // Work starts only after this tool result commits, so the execution ID is durably
+            // visible before anything it does can settle.
+            const unsubscribe = yield* services.bus.listen((event) => {
+              if (!isToolSettlement(event)) return Effect.void
+              if (event.data.assistantMessageID !== context.messageID || event.data.id !== context.id)
+                return Effect.void
+              return event.type === SessionEvent.Tool.Success.type
+                ? Deferred.succeed(gate, undefined)
+                : services.jobs.cancel(executionID).pipe(Effect.asVoid)
+            })
+            yield* Scope.addFinalizer(services.scope, unsubscribe)
+            yield* services.jobs.wait({ id: executionID }).pipe(
+              Effect.tap(() => unsubscribe),
+              Effect.flatMap(launched.report),
+              Effect.forkIn(services.scope, { startImmediately: true }),
+            )
+            return {
+              output: { executionID, status: "running" as const },
+              content:
+                "Execution " +
+                executionID +
+                " started. Its outcome and saved notebook names arrive in a later notification.",
+              metadata: { executionID, executionStatus: "running", events: [] },
+            }
+          }).pipe(
+            Effect.onExit((exit) =>
+              Exit.isSuccess(exit) ? Effect.void : services.jobs.cancel(executionID).pipe(Effect.asVoid),
+            ),
+          )
+        }).pipe(Effect.onInterrupt(() => services.store.indeterminate(execution, INTERRUPTED)))
+      }),
+  }) satisfies Tool.Info
+
+/**
+ * Resumes an execution that was running when its host stopped, by replaying its journal: calls that
+ * settled are served from the journal and the first unsettled call runs live. Returns why the run
+ * cannot resume safely instead of starting it; nothing runs in that case.
+ */
+export const resume = (
+  registrations: ReadonlyMap<string, Tool.Info>,
+  executeTool: ExecuteToolFn,
+  services: ExecutionServices,
+  input: {
+    readonly context: Tool.Context
+    readonly resumable: CodeModeStore.Resumable
+    readonly notificationID: SessionMessage.ID
+  },
+) =>
+  Effect.gen(function* () {
+    const refused = CodeModeReplay.refusal(input.resumable.journal, policy(registrations))
+    if (refused !== undefined) return refused
+    const gate = yield* Deferred.make<void>()
+    yield* Deferred.succeed(gate, undefined)
+    const launched = yield* launch(registrations, executeTool, services, input.context, input.resumable.execution, {
+      gate,
+      notificationID: input.notificationID,
+      journal: input.resumable.journal,
+    })
+    if (!launched) return "Its Session already runs the maximum of " + MAX_CONCURRENT_EXECUTIONS + " executions."
+    yield* services.jobs.background(input.resumable.execution.id)
+    yield* services.jobs
+      .wait({ id: input.resumable.execution.id })
+      .pipe(Effect.flatMap(launched.report), Effect.forkIn(services.scope, { startImmediately: true }))
+    return undefined
+  })
+
+const INTERRUPTED = "Execution became indeterminate because it was interrupted before it settled."
+
+/**
+ * Starts an admitted execution as a background job once `gate` opens, and returns how to report its
+ * outcome to the Session. A journal marks a resumed execution, which replays it before running live.
+ * Undefined when the Session already runs its maximum of executions.
+ */
+const launch = (
+  registrations: ReadonlyMap<string, Tool.Info>,
+  executeTool: ExecuteToolFn,
+  services: ExecutionServices,
+  context: Tool.Context,
+  execution: CodeModeStore.Execution,
+  options: {
+    readonly gate: Deferred.Deferred<void>
+    readonly notificationID: SessionMessage.ID
+    readonly journal?: ReadonlyArray<CodeModeStore.JournalEntry>
+  },
+) =>
+  Effect.gen(function* () {
+    const executionID = decodeExecutionID(execution.id)
+    const resumed = options.journal === undefined ? {} : { resumed: true }
+    const replay = CodeModeReplay.make(options.journal ?? [], policy(registrations))
         const events = yield* Ref.make<Array<ExecuteEvent>>([])
         // Why the execution failed, as a stable category the completion notification carries
         // alongside its prose summary.
@@ -134,7 +273,6 @@ export const create = (
         const toolCount = yield* Ref.make(0)
         const traceCount = yield* Ref.make(0)
         const lock = Semaphore.makeUnsafe(1)
-        return yield* Effect.gen(function* () {
           const publish = (next: Array<ExecuteEvent>) =>
             services.bus.publish(SessionEvent.CodeMode.Progress, {
               sessionID: context.sessionID,
@@ -142,6 +280,7 @@ export const create = (
               id: context.id,
               executionID,
               events: decodeExecuteEvents(next),
+        ...resumed,
             })
           const captureFits = (next: Array<ExecuteEvent>) =>
             new TextEncoder().encode(JSON.stringify(next)).length <= limits.maxCaptureBytes
@@ -210,16 +349,31 @@ export const create = (
             )
           const run = Effect.gen(function* () {
             yield* services.store.running(executionID)
-            const result = yield* runtime(
+      const exit = yield* runtime(
               registrations,
               (name, tool, input, index) =>
                 Effect.gen(function* () {
+            const decision = yield* replay.call(index)
+            if (decision.type === "replay")
+              return decision.entry.status === "failed"
+                ? yield* Effect.fail(toolError(decision.entry.error ?? "Tool failed"))
+                : decision.entry.output
                   const executed = yield* executeTool(name, tool, input, {
                     ...context,
                     id: Tool.CallID.make(context.id + ":" + index),
+              ...(decision.recovered === undefined ? {} : { recovered: decision.recovered }),
                     progress: (metadata) => {
                       const shown = displayMetadata(metadata)
-                      return updateTool(index, (current) => ({ ...current, ...(shown ? { metadata: shown } : {}) }))
+                return Effect.all(
+                  [
+                    updateTool(index, (current) => ({ ...current, ...(shown ? { metadata: shown } : {}) })),
+                    // A call that can rejoin its work after a restart keeps where that work lives.
+                    tool.options?.reattach === true && isJsonMetadata(metadata)
+                      ? services.store.progressCall({ executionID, index, progress: metadata })
+                      : Effect.void,
+                  ],
+                  { discard: true },
+                )
                     },
                   }).pipe(
                     Effect.tapError((error) =>
@@ -248,25 +402,31 @@ export const create = (
                 }),
               {
                 bindings: execution.bindings,
-                input,
+          ...(execution.input === undefined ? {} : { input: execution.input }),
+          impure: replay.impure,
                 onToolCallStart: (call) =>
-                  Effect.all(
+            Effect.suspend(() => {
+              const started = replay.start(call)
+              return Effect.all(
                     [
                       services.store.scheduleCall({
                         executionID,
                         index: call.index,
                         tool: call.name,
-                        input: isJson(call.input) ? call.input : null,
+                    input: CodeModeReplay.journalValue(call.input),
+                    impure: started.impure,
                       }),
                       appendTool(call.index, {
                         type: "tool",
                         tool: boundToolEventText(call.name),
                         status: "running",
                         ...(displayInput(call.input) ? { input: displayInput(call.input) } : {}),
+                    ...(started.replayed ? { replayed: true } : {}),
                       }),
                     ],
                     { discard: true },
-                  ),
+              )
+            }),
                 onToolCallEnd: (call) =>
                   Effect.all(
                     [
@@ -274,11 +434,7 @@ export const create = (
                         executionID,
                         index: call.index,
                         outcome:
-                          call.outcome === "success"
-                            ? "completed"
-                            : call.outcome === "failure"
-                              ? "failed"
-                              : "indeterminate",
+                    call.outcome === "success" ? "completed" : call.outcome === "failure" ? "failed" : "indeterminate",
                         ...(isJson(call.output) ? { output: call.output } : {}),
                         ...(call.message ? { error: call.message } : {}),
                       }),
@@ -298,25 +454,47 @@ export const create = (
                   ),
                 onTrace: appendTrace,
               },
-            ).executeCompiled(execution.program)
+      )
+        .executeCompiled(execution.program)
+        .pipe(Effect.exit)
+      const notes =
+        options.journal === undefined
+          ? []
+          : [
+              "This execution resumed after a server restart and replayed " +
+                replay.replayed() +
+                " journaled tool " +
+                (replay.replayed() === 1 ? "call" : "calls") +
+                " without running them again.",
+            ]
+      // A replay that stops matching its journal must not save or report a result computed from a
+      // different history; the program is interrupted at its next tool call and settles here.
+      const diverged = replay.divergence()
+      if (diverged !== undefined) {
+        yield* Ref.set(failureKind, "Indeterminate")
+        yield* services.store.indeterminate(execution, diverged)
+        return {
+          saved: false,
+          summary: bound("Execution " + executionID + " is indeterminate and saved nothing. " + diverged),
+        }
+      }
+      const result = yield* exit
             // Completion is decided only after the declaration commit succeeds or fails.
             if (!result.ok) {
               yield* Ref.set(failureKind, result.error.kind)
               yield* services.store.fail(execution, result.error.message)
-              return { saved: false, summary: failureSummary(executionID, result) }
+        return { saved: false, summary: failureSummary(executionID, result, undefined, notes) }
             }
             const settlement = yield* services.store.commit(
               execution,
               result.declarations as Readonly<Record<string, CodeMode.NotebookValue>>,
             )
             if (settlement.status === "saved")
-              return { saved: true, summary: savedSummary(executionID, settlement.saved, result) }
+        return { saved: true, summary: savedSummary(executionID, settlement.saved, result, notes) }
             yield* Ref.set(failureKind, "CommitFailure")
-            return { saved: false, summary: failureSummary(executionID, result, settlement.error) }
+      return { saved: false, summary: failureSummary(executionID, result, settlement.error, notes) }
           })
 
-          const gate = yield* Deferred.make<void>()
-          const notificationID = SessionMessage.ID.create()
           const recovery = {
             kind: "codemode" as const,
             parentSessionID: context.sessionID,
@@ -328,70 +506,24 @@ export const create = (
             type: "codemode",
             ownerSessionID: context.sessionID,
             maxConcurrent: MAX_CONCURRENT_EXECUTIONS,
-            notificationID,
+      notificationID: options.notificationID,
             recovery,
-            run: Deferred.await(gate).pipe(
+      // Shutdown interrupts this run without settling it, so the next start resumes it. Explicit
+      // cancellation settles it when the job reports the cancellation below.
+      run: Deferred.await(options.gate).pipe(
               Effect.andThen(run),
               Effect.flatMap((settled) =>
                 settled.saved ? Effect.succeed(settled.summary) : Effect.fail(new Error(settled.summary)),
               ),
-              Effect.onInterrupt(() =>
-                services.store.indeterminate(
-                  execution,
-                  "Execution became indeterminate because it was interrupted before it settled.",
-                ),
-              ),
             ),
           })
-          if (!job) {
-            yield* services.store.discard(executionID)
-            // Name the executions holding the slots so the model can wait for one of their
-            // completion notifications instead of retrying blind.
-            const active = (yield* services.jobs.active({ ownerSessionID: context.sessionID, type: "codemode" })).map(
-              (item) => item.id,
-            )
-            return yield* new Tool.Error({
-              message:
-                "At most " +
-                MAX_CONCURRENT_EXECUTIONS +
-                " executions may run per Session, and " +
-                active.length +
-                " are running: " +
-                active.join(", ") +
-                ". Wait for one of their completion notifications before starting another execution; do not retry immediately.",
-              metadata: {
-                executionStatus: "refused",
-                kind: "ConcurrencyLimit",
-                limit: MAX_CONCURRENT_EXECUTIONS,
-                active,
-              },
-            })
-          }
-          return yield* Effect.gen(function* () {
-            yield* services.jobs.background(executionID)
-            yield* services.bus.publish(SessionEvent.CodeMode.Started, {
-              sessionID: context.sessionID,
-              assistantMessageID: context.messageID,
-              id: context.id,
-              executionID,
-            })
-            // Work starts only after this tool result commits, so the execution ID is durably
-            // visible before anything it does can settle.
-            const unsubscribe = yield* services.bus.listen((event) => {
-              if (!isToolSettlement(event)) return Effect.void
-              if (event.data.assistantMessageID !== context.messageID || event.data.id !== context.id)
-                return Effect.void
-              return event.type === SessionEvent.Tool.Success.type
-                ? Deferred.succeed(gate, undefined)
-                : services.jobs.cancel(executionID).pipe(Effect.asVoid)
-            })
-            yield* Scope.addFinalizer(services.scope, unsubscribe)
-            yield* services.jobs.wait({ id: executionID }).pipe(
-              Effect.tap(() => unsubscribe),
-              Effect.flatMap((settled) => {
+    if (!job) return undefined
+    return {
+      report: (settled: Job.WaitResult) => {
                 const info = settled.info
                 if (!info || info.status === "running") return Effect.void
                 return Effect.gen(function* () {
+          if (info.status === "cancelled") yield* services.store.indeterminate(execution, INTERRUPTED)
                   const trace = decodeExecuteEvents(yield* Ref.get(events))
                   const base = {
                     sessionID: context.sessionID,
@@ -399,16 +531,17 @@ export const create = (
                     id: context.id,
                     executionID,
                     events: trace,
+            ...resumed,
                   }
                   if (info.status === "completed")
                     yield* services.bus.publish(SessionEvent.CodeMode.Completed, base, {
-                      commit: () => services.jobs.markBackgroundTerminal(notificationID),
+              commit: () => services.jobs.markBackgroundTerminal(options.notificationID),
                     })
                   if (info.status === "error" || info.status === "cancelled")
                     yield* services.bus.publish(
                       SessionEvent.CodeMode.Failed,
                       { ...base, status: info.status, error: info.error ?? "Execution failed" },
-                      { commit: () => services.jobs.markBackgroundTerminal(notificationID) },
+              { commit: () => services.jobs.markBackgroundTerminal(options.notificationID) },
                     )
                   const kind =
                     info.status === "cancelled"
@@ -430,32 +563,20 @@ export const create = (
                     ),
                   )
                 })
-              }),
-              Effect.forkIn(services.scope, { startImmediately: true }),
-            )
-            return {
-              output: { executionID, status: "running" as const },
-              content:
-                "Execution " +
-                executionID +
-                " started. Its outcome and saved notebook names arrive in a later notification.",
-              metadata: { executionID, executionStatus: "running", events: [] },
+      },
             }
-          }).pipe(
-            Effect.onExit((exit) =>
-              Exit.isSuccess(exit) ? Effect.void : services.jobs.cancel(executionID).pipe(Effect.asVoid),
-            ),
+  })
+
+/** What a resumed run may do with each tool, from the tool's registration options. */
+const policy = (registrations: ReadonlyMap<string, Tool.Info>): CodeModeReplay.Policy => {
+  const rules = new Map(
+    Array.from(registrations.values()).map((registration) => [
+      qualifiedName(registration),
+      { readOnly: registration.options?.readOnly === true, reattach: registration.options?.reattach === true },
+    ]),
           )
-        }).pipe(
-          Effect.onInterrupt(() =>
-            services.store.indeterminate(
-              execution,
-              "Execution became indeterminate because it was interrupted before it settled.",
-            ),
-          ),
-        )
-      }),
-  }) satisfies Tool.Info
+  return (path) => rules.get(path)
+}
 
 export const catalog = (registrations: ReadonlyMap<string, Tool.Info>) => {
   const pinned = new Set(
@@ -475,6 +596,7 @@ function runtime(
     readonly bindings?: Readonly<Record<string, CodeMode.NotebookValue>>
     readonly input?: CodeMode.DataValue
     readonly onTrace?: CodeMode.TraceHook
+    readonly impure?: (helper: CodeMode.ImpureHelper) => number
   },
 ) {
   const tools: Record<string, CodeModeDefinition.Tool<never>> = {}
@@ -646,7 +768,12 @@ function displayOutput(output: unknown) {
 }
 
 /** Saved notebook names are the durable output; logs and the preview are bounded extras. */
-function savedSummary(executionID: string, saved: ReadonlyArray<string>, result: CodeMode.Success) {
+function savedSummary(
+  executionID: string,
+  saved: ReadonlyArray<string>,
+  result: CodeMode.Success,
+  notes: ReadonlyArray<string> = [],
+) {
   return bound(
     [
       "Execution " +
@@ -654,6 +781,7 @@ function savedSummary(executionID: string, saved: ReadonlyArray<string>, result:
         (saved.length === 0
           ? " completed and saved no notebook values."
           : " saved notebook values: " + saved.join(", ") + ". Read them by name in a later execution."),
+      ...notes,
       ...untrusted("Preview", previewText(result.value)),
       ...untrusted("Logs", result.logs?.join("\n")),
       ...(result.warnings ?? []).map((warning) => "Warning (" + warning.kind + "): " + warning.message),
@@ -661,13 +789,19 @@ function savedSummary(executionID: string, saved: ReadonlyArray<string>, result:
   )
 }
 
-function failureSummary(executionID: string, result: CodeMode.Result, commitError?: string) {
+function failureSummary(
+  executionID: string,
+  result: CodeMode.Result,
+  commitError?: string,
+  notes: ReadonlyArray<string> = [],
+) {
   return bound(
     [
       "Execution " +
         executionID +
         " failed and saved nothing: " +
         (commitError ?? (result.ok ? "the program did not settle" : result.error.kind + ": " + result.error.message)),
+      ...notes,
       ...(!result.ok && result.error.excerpt ? ["Source: " + result.error.excerpt] : []),
       ...(!result.ok && result.error.suggestions ? result.error.suggestions : []),
       ...untrusted("Logs", result.logs?.join("\n")),

@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "bca615cf-0e17-4f00-bddb-feb72a5b7bcb",
-  "prevIds": ["81c089f3-43e4-414b-bc9b-0c0e4454e001"],
+  "id": "36e524ac-59a6-4f66-b098-464b0058881e",
+  "prevIds": ["bca615cf-0e17-4f00-bddb-feb72a5b7bcb"],
   "ddl": [
     {
       "name": "account_state",
@@ -426,6 +426,16 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "input",
+      "entityType": "columns",
+      "table": "codemode_execution"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "saved",
       "entityType": "columns",
       "table": "codemode_execution"
@@ -437,6 +447,16 @@
       "default": null,
       "generated": null,
       "name": "error",
+      "entityType": "columns",
+      "table": "codemode_execution"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "resumes",
       "entityType": "columns",
       "table": "codemode_execution"
     },
@@ -537,6 +557,36 @@
       "default": null,
       "generated": null,
       "name": "error",
+      "entityType": "columns",
+      "table": "codemode_journal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "omitted",
+      "entityType": "columns",
+      "table": "codemode_journal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "impure",
+      "entityType": "columns",
+      "table": "codemode_journal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "progress",
       "entityType": "columns",
       "table": "codemode_journal"
     },

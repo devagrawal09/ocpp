@@ -3,8 +3,9 @@ import type { SafeObject } from "../tool-runtime.js"
 import { boundedData, coerceToNumber } from "./value.js"
 
 /**
- * Time is plain data: epoch milliseconds and ISO 8601 strings. `now` reads host authority and is the
- * only impure member; every other member is a deterministic transformation.
+ * Time is plain data: epoch milliseconds and ISO 8601 strings. `now` reads host authority through the
+ * interpreter's impure hook and is the only impure member; every other member is a deterministic
+ * transformation.
  */
 export const timeMethods = new Set(["now", "parse", "format", "parts", "fromParts", "add", "diff"])
 
@@ -46,8 +47,6 @@ const number = (source: Record<string, unknown>, key: string, fallback: number, 
 
 export const invokeTimeMethod = (name: string, args: Array<unknown>, node: AstNode): unknown => {
   switch (name) {
-    case "now":
-      return Date.now()
     case "parse": {
       if (typeof args[0] !== "string") throw fail("time.parse expects a date string.", node)
       const parsed = Date.parse(args[0])

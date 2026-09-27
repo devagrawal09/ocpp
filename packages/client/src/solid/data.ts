@@ -949,6 +949,7 @@ export function createData(config: CreateDataInput) {
                   : event.data.status,
             events: [...event.data.events],
             ...(event.type === "session.codemode.failed" ? { error: event.data.error } : {}),
+            ...(event.data.resumed === true ? { resumed: true } : {}),
           }
         })
         return

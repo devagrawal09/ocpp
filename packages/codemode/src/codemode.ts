@@ -60,7 +60,16 @@ export type ExecuteOptions<Provided extends Record<string, unknown> = {}> = {
   onToolCallEnd?: (call: ToolRuntime.ToolCallEnded) => Effect.Effect<void, never, Services<Provided>>
   /** Observes semantic JavaScript steps in execution order. */
   onTrace?: TraceHook<Services<Provided>>
+  /**
+   * Supplies each value the impure helpers return, in the order the program reads them. A host that
+   * records these values and supplies them again, alongside recorded tool results, replays the
+   * program deterministically. Defaults to the host clock and random source.
+   */
+  impure?: (helper: ImpureHelper) => number
 }
+
+/** The only helpers whose results are not determined by the program and its tool results. */
+export type ImpureHelper = "time.now" | "Math.random"
 
 /** A JSON value that can cross the confined interpreter boundary. */
 export type DataValue = Schema.Json

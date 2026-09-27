@@ -1,5 +1,6 @@
 import { Cause, Deferred, Effect, Exit } from "effect"
 import { coercionFunctions, errorConstructorNames, globalNamespaces, uriFunctions } from "../globals.js"
+import type { ImpureHelper } from "../codemode.js"
 import { ToolHandle } from "../tool-handle.js"
 import { isPromiseAllCall } from "../ir.js"
 import { isBlockedMember, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
@@ -265,6 +266,7 @@ export class Interpreter<R> {
   private readonly bindingOverrides: ReadonlyMap<Binding, Binding>
   private readonly allowedTools: ReadonlySet<string> | undefined
   private readonly handles: Array<ToolHandle>
+  private readonly impure: (helper: ImpureHelper) => number
   private generatorState?: GeneratorState
   private generatorAsync = false
   private readonly runner: CallbackRunner<R> & SyncIteratorRunner<R> = {
@@ -289,6 +291,7 @@ export class Interpreter<R> {
     bindingOverrides: ReadonlyMap<Binding, Binding> = new Map(),
     allowedTools?: ReadonlySet<string>,
     handles: Array<ToolHandle> = [],
+    impure: (helper: ImpureHelper) => number = (helper) => (helper === "time.now" ? Date.now() : Math.random()),
   ) {
     const globalScope = new Map<string, Binding>()
     this.scopes = new ScopeStack([globalScope])
@@ -305,6 +308,7 @@ export class Interpreter<R> {
     this.bindingOverrides = bindingOverrides
     this.allowedTools = allowedTools
     this.handles = handles
+    this.impure = impure
     // Built from the shared name lists so the compiler's reserved durable names cannot drift away
     // from what an activation actually binds.
     for (const name of globalNamespaces) globalScope.set(name, { mutable: false, value: new GlobalNamespace(name) })
@@ -1813,6 +1817,8 @@ export class Interpreter<R> {
       }
       if (callable instanceof GlobalMethodReference) {
         if (callable.namespace === "console") return yield* self.invokeConsole(callable.name, args, node)
+        if (callable.namespace === "time" && callable.name === "now") return self.impure("time.now")
+        if (callable.namespace === "Math" && callable.name === "random") return self.impure("Math.random")
         if (callable.namespace === "Object" && args[0] instanceof ToolReference) {
           return self.invokeObjectMethodOnTools(callable.name, args[0], node)
         }
@@ -1993,6 +1999,7 @@ export class Interpreter<R> {
       bindingOverrides,
       allowedTools,
       this.handles,
+      this.impure,
     )
     invocation.scopes = new ScopeStack([...fn.capturedScopes, new Map()], bindingOverrides)
     const run = Effect.gen(function* () {

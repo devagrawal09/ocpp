@@ -56,6 +56,37 @@ export const isPromiseAllCall = (node: AstNode): boolean => {
   )
 }
 
+/** A direct tool call and the canonical dotted path it names. */
+export type StaticToolCall = { readonly path: string; readonly node: AstNode }
+
+/**
+ * Every direct tool call in a subtree, in source order. Programs must name their tools with static
+ * paths, so this is exactly the set of tools the code itself can call. A saved notebook function it
+ * invokes carries its own paths, which are resolved and authorized again when it runs.
+ */
+export const staticToolCalls = (node: AstNode): ReadonlyArray<StaticToolCall> => {
+  const path = node.type === "CallExpression" && isAstNode(node.callee) ? staticToolPath(node.callee) : undefined
+  return [
+    ...(path?.length ? [{ path: path.join("."), node }] : []),
+    ...Object.entries(node).flatMap(([key, value]) =>
+      key === "loc" ? [] : (Array.isArray(value) ? value : [value]).filter(isAstNode).flatMap(staticToolCalls),
+    ),
+  ]
+}
+
+const isAstNode = (value: unknown): value is AstNode => isRecord(value) && typeof value.type === "string"
+
+const staticToolPath = (node: AstNode): ReadonlyArray<string> | undefined => {
+  if (node.type === "Identifier") return node.name === "tools" ? [] : undefined
+  if (node.type !== "MemberExpression" || node.optional === true || !isAstNode(node.object)) return
+  const parent = staticToolPath(node.object)
+  if (parent === undefined || !isRecord(node.property)) return
+  if (node.computed !== true && node.property.type === "Identifier" && typeof node.property.name === "string")
+    return [...parent, node.property.name]
+  if (node.computed === true && node.property.type === "Literal" && typeof node.property.value === "string")
+    return [...parent, node.property.value]
+}
+
 export type DecodedProgram =
   | { readonly ok: true; readonly program: Program }
   | { readonly ok: false; readonly message: string }

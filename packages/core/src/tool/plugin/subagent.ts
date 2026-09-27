@@ -614,8 +614,8 @@ export const Plugin = {
                       () => run,
                       (unsubscribe) => unsubscribe,
                     )
-              // A vendor child takes this call's harness and tools from its next drain on. One it is already running on its
-              // own (for a direct prompt or a late notification) finishes first, so this call's input starts a new one.
+              // A vendor child takes this call's harness and tools from its next drain on. A drain it is already
+              // running on its own (a direct prompt, a late notification) finishes first, so this call starts a new one.
               const result = yield* Effect.scoped(
                 (vendor
                   ? external.activate(child.id, { harness, tools: temporary, source }).pipe(

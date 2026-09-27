@@ -110,8 +110,8 @@ not apply:
 - Agent step limits, plan-mode reminders, per-step snapshots, and file diffs.
   Plan-mode permissions still apply inside `execute`.
 - Plugin hooks for session context, model requests, and HTTP requests.
-- Image and PDF attachments, and your own shell commands. These are not
-  forwarded to the vendor yet.
+- Image and PDF attachments. These are not forwarded to the vendor yet. A shell
+  command you run reaches the vendor with your next prompt.
 
 Cost and token usage come from the vendor. Titles are generated only when an
 OC++ provider model is available.

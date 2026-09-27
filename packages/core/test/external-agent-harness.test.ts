@@ -472,6 +472,22 @@ describe("vendor-driven session control", () => {
     }),
   )
 
+  it.live("the user's shell command reaches the vendor with the next prompt, as a model would see it", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = say("Hi")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "One" })
+      yield* env.sessions.wait(env.session.id)
+      yield* env.sessions.shell({ sessionID: env.session.id, command: "echo shell-marker" })
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Two" })
+      yield* env.sessions.wait(env.session.id)
+      const message = vendor.runs.at(-1)?.message ?? ""
+      expect(message).toContain("The following shell command was executed by the user")
+      expect(message).toContain("shell-marker")
+      expect(message.endsWith("Two")).toBe(true)
+    }),
+  )
+
   it.live("compaction is refused for a vendor-driven Session and leaves its inbox", () =>
     Effect.gen(function* () {
       const env = yield* setup(ref("claude", "sonnet"))

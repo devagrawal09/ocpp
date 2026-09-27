@@ -48,6 +48,7 @@ import { SessionGenerateNode } from "./session/generate-node.js"
 import { SessionPromptNode } from "./session/prompt-node.js"
 import { SessionRevertNode } from "./session/revert-node.js"
 import { McpTool } from "./tool/mcp.js"
+import { OpenApi } from "./openapi/index.js"
 import { ReadToolFileSystem } from "./tool/read-filesystem.js"
 import { Tool } from "./tool.js"
 import { ToolOutput } from "./tool-output.js"
@@ -98,6 +99,7 @@ const nodes = [
   SessionRevertNode.node,
   ReadToolFileSystem.node,
   McpTool.node,
+  OpenApi.node,
   SessionInstructions.node,
   SessionRunnerModel.node,
   SessionModelTransport.node,

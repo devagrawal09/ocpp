@@ -1927,6 +1927,9 @@ export type ConfigEntry =
                 }
           }
         }
+        openapi?: {
+          [x: string]: { spec: string; base_url?: string; headers?: { [x: string]: string }; disabled?: boolean }
+        }
         compaction?: { auto?: boolean; keep?: { tokens?: number }; buffer?: number }
         skills?: Array<string>
         commands?: {

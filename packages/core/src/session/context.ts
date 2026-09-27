@@ -13,6 +13,8 @@ import { InstructionBuiltIns } from "../instructions/builtins.js"
 import { Location } from "../location.js"
 import { McpInstructions } from "../mcp/instructions.js"
 import { McpTool } from "../tool/mcp.js"
+import { OpenApi } from "../openapi/index.js"
+import { OpenApiInstructions } from "../openapi/instructions.js"
 import { PluginSupervisor } from "../plugin/supervisor.js"
 import { ReferenceInstructions } from "../reference/instructions.js"
 import { SkillInstructions } from "../skill/instructions.js"
@@ -84,6 +86,8 @@ const layer = Layer.effect(
     const mcpInstructions = yield* McpInstructions.Service
     const mcpTools = yield* McpTool.Service
     const models = yield* SessionRunnerModel.Service
+    const openapi = yield* OpenApi.Service
+    const openapiInstructions = yield* OpenApiInstructions.Service
     const modelRequests = yield* SessionModelRequest.Service
     const plugins = yield* PluginSupervisor.Service
     const referenceInstructions = yield* ReferenceInstructions.Service
@@ -127,6 +131,7 @@ const layer = Layer.effect(
 
       yield* plugins.flush
       yield* mcpTools.flush
+      yield* openapi.flush
       const agent = yield* agents.select(session.agent)
       if (!agent.info) return yield* new AgentNotFoundError({ sessionID: session.id, agent: session.agent ?? agent.id })
       const loaded = yield* Effect.all(
@@ -137,6 +142,7 @@ const layer = Layer.effect(
           skills: skillInstructions.load(agent),
           references: referenceInstructions.load(),
           mcp: mcpInstructions.load(agent),
+          openapi: openapiInstructions.load(agent),
           entries: entries.load(sessionID),
         },
         { concurrency: "unbounded" },
@@ -151,6 +157,7 @@ const layer = Layer.effect(
           loaded.skills,
           loaded.references,
           loaded.mcp,
+          loaded.openapi,
           loaded.entries,
         ]),
         tools: loaded.tools,
@@ -190,6 +197,8 @@ export const node = makeLocationNode({
     Location.node,
     McpInstructions.node,
     McpTool.node,
+    OpenApi.node,
+    OpenApiInstructions.node,
     PluginSupervisor.node,
     ReferenceInstructions.node,
     SessionRunnerModel.node,

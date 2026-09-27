@@ -43,6 +43,7 @@ export const docsSections: DocsSection[] = [
           { title: "References", slug: "references" },
           { title: "Attachments", slug: "attachments" },
           { title: "MCP servers", slug: "mcp-servers" },
+          { title: "REST APIs", slug: "openapi" },
           { title: "Permissions", slug: "permissions" },
           { title: "Instructions", slug: "instructions" },
           { title: "Session sharing", slug: "sharing" },

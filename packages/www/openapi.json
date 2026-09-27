@@ -13626,6 +13626,12 @@
             },
             "additionalProperties": false
           },
+          "openapi": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Config.OpenAPI.EntryEncoded"
+            }
+          },
           "compaction": {
             "type": "object",
             "properties": {
@@ -13984,6 +13990,29 @@
             "additionalProperties": false
           }
         },
+        "additionalProperties": false
+      },
+      "Config.OpenAPI.EntryEncoded": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "type": "string",
+            "description": "HTTP(S) URL or file path of an OpenAPI 3.x document. Relative paths resolve from the configuration file's directory."
+          },
+          "base_url": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "disabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["spec"],
         "additionalProperties": false
       },
       "Config.Plugin.EntryEncoded": {

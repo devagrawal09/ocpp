@@ -11,6 +11,7 @@ import { ConfigFormatter } from "@ocpp/schema/config/formatter"
 import { ConfigLSP } from "@ocpp/schema/config/lsp"
 import { ConfigMedia } from "@ocpp/schema/config/media"
 import { ConfigMCP } from "@ocpp/schema/config/mcp"
+import { ConfigOpenAPI } from "@ocpp/schema/config/openapi"
 import { ConfigPlugin } from "@ocpp/schema/config/plugin"
 import { ConfigPolicy } from "@ocpp/schema/config/policy"
 import { ConfigProvider } from "@ocpp/schema/config/provider"
@@ -180,6 +181,8 @@ export function normalize(input: unknown): Result {
 
   normalizeSkills(input, encoded, diagnostics)
   normalizeMcp(input, encoded, diagnostics)
+  const openapi = decodeMap(input.openapi, ConfigOpenAPI.Entry, ["openapi"], diagnostics, decodeEncoded)
+  if (isRecord(input.openapi)) encoded.openapi = openapi
   normalizeCompaction(input, encoded, diagnostics)
   normalizeExperimental(input, encoded, diagnostics)
   normalizeWatcher(input, encoded, diagnostics)

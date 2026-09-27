@@ -1397,6 +1397,85 @@ describe("SessionTransfer", () => {
     }),
   )
 
+  it.effect("redacts files attached to user messages and Code Mode completions in a sanitized export", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const transfer = yield* SessionTransfer.Service
+      const template = yield* session.create({ location, title: "Media" })
+      const sessionID = Session.ID.create()
+      const userID = SessionMessage.ID.create()
+      const completionID = SessionMessage.ID.create()
+      const screenshot = Buffer.from("private screenshot pixels").toString("base64")
+      const pdf = Buffer.from("%PDF private contract").toString("base64")
+
+      yield* transfer.import({
+        data: {
+          info: { ...template, id: sessionID },
+          messages: [
+            {
+              id: userID,
+              type: "user",
+              text: "Look at this",
+              files: [
+                {
+                  data: screenshot,
+                  mime: "image/png",
+                  source: { type: "uri", uri: "file:///private/desktop.png" },
+                  name: "desktop.png",
+                  mention: { start: 0, end: 12, text: "@desktop.png" },
+                },
+              ],
+              time: { created: DateTime.makeUnsafe(1) },
+            },
+            {
+              id: completionID,
+              type: "synthetic",
+              text: "Execution exe_media completed.\n\nAttached 2 files returned by tool calls: checkout.png, contract.pdf.",
+              description: "Execution completed",
+              files: [
+                { data: screenshot, mime: "image/png", source: { type: "inline" }, name: "checkout.png" },
+                { data: pdf, mime: "application/pdf", source: { type: "inline" }, name: "contract.pdf" },
+              ],
+              metadata: { source: "codemode", executionID: "exe_media", state: "completed" },
+              time: { created: DateTime.makeUnsafe(2) },
+            },
+          ],
+        },
+        location,
+      })
+      const sanitized = yield* transfer.export({ sessionID, sanitize: true })
+
+      expect(sanitized.messages).toEqual([
+        expect.objectContaining({
+          id: userID,
+          files: [
+            {
+              data: "",
+              mime: "image/png",
+              source: { type: "inline" },
+              name: "[redacted:file-name:0]",
+              mention: { start: 0, end: 12, text: "[redacted:file-mention:0]" },
+            },
+          ],
+        }),
+        expect.objectContaining({
+          id: completionID,
+          text: `[redacted:synthetic:${completionID}]`,
+          metadata: { redacted: `message-metadata:${completionID}` },
+          files: [
+            { data: "", mime: "image/png", source: { type: "inline" }, name: "[redacted:file-name:0]" },
+            { data: "", mime: "application/pdf", source: { type: "inline" }, name: "[redacted:file-name:1]" },
+          ],
+        }),
+      ])
+      const serialized = JSON.stringify(sanitized)
+      expect(serialized).not.toContain(screenshot)
+      expect(serialized).not.toContain(pdf)
+      expect(serialized).not.toContain("checkout.png")
+      expect(serialized).not.toContain("/private/")
+    }),
+  )
+
   it.effect("rejects an existing session ID without changing its transcript", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service

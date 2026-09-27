@@ -3,6 +3,7 @@ import { Agent } from "@ocpp/core/agent"
 import { Bus } from "@ocpp/core/bus"
 import { Database } from "@ocpp/core/database/database"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
+import { CodeModeTool } from "@ocpp/core/codemode/tool"
 import { CodeModeExecutionTable } from "@ocpp/core/codemode/sql"
 import type { Permission } from "@ocpp/core/permission"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
@@ -37,6 +38,7 @@ import { testEffect } from "./lib/effect"
 
 const imageStore = Layer.mock(Image.Service, {
   normalize: (resource, content) => {
+    if (resource.startsWith("unresized")) return Effect.fail(new Image.ResizerUnavailableError())
     if (resource === "corrupt.png") return Effect.fail(new Image.DecodeError({ resource }))
     if (resource === "too-large.png")
       return Effect.fail(
@@ -1483,10 +1485,71 @@ describe("Tool", () => {
         },
       })
 
-      const outcome = yield* run(yield* service.snapshot(), "call-gallery", "return tools.gallery({})")
+      // The second call repeats every file, including the two past the limit, which still count once.
+      const outcome = yield* run(
+        yield* service.snapshot(),
+        "call-gallery",
+        "const first = tools.gallery({})\nreturn tools.gallery({})",
+      )
       const delivered = yield* deliveredFor(outcome.id)
       expect(delivered.files).toHaveLength(8)
       expect(delivered.text).toEndWith("2 files omitted: at most 8 files attach to one completion.")
+    }),
+  )
+
+  it.effect("lists only the files the model can receive as attached", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      const inline = (name: string, mime: string) => ({
+        type: "file" as const,
+        uri: `data:${mime};base64,${Buffer.from(name).toString("base64")}`,
+        mime,
+        name,
+      })
+      yield* transform(service, {
+        figures: {
+          name: "figures",
+          description: "Return figures",
+          input: Schema.Struct({}),
+          output: Schema.Null,
+          // Without a resizer every image keeps its type, and messages lower only PNG, JPEG, GIF, and WebP.
+          execute: () =>
+            Effect.succeed({
+              output: null,
+              content: [
+                inline("unresized.svg", "image/svg+xml"),
+                inline("unresized.bmp", "image/bmp"),
+                inline("unresized.png", "image/png"),
+              ],
+            }),
+        },
+      })
+
+      const outcome = yield* run(yield* service.snapshot(), "call-figures", "return tools.figures({})")
+      const delivered = yield* deliveredFor(outcome.id)
+      expect(delivered.files).toEqual([
+        {
+          data: Buffer.from("unresized.png").toString("base64"),
+          mime: "image/png",
+          source: { type: "inline" },
+          name: "unresized.png",
+        },
+      ])
+      expect(delivered.text).toEndWith(
+        [
+          "Attached 1 file returned by tool calls: unresized.png.",
+          "2 files omitted: not a PNG, JPEG, GIF, WebP, or PDF file.",
+        ].join("\n"),
+      )
+    }),
+  )
+
+  it.effect("shares one catalog between a snapshot and its execute calls", () =>
+    Effect.sync(() => {
+      const registrations = new Map([["echo", make()]])
+      expect(CodeModeTool.catalog(registrations)).toBe(CodeModeTool.catalog(registrations))
+      expect(CodeModeTool.catalog(new Map(registrations))).not.toBe(CodeModeTool.catalog(registrations))
     }),
   )
 

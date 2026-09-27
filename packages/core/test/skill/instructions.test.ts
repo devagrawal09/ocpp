@@ -58,7 +58,7 @@ describe("SkillInstructions", () => {
       expect(initialized.text).toBe(
         [
           "Skills provide specialized instructions and workflows for specific tasks.",
-          "Call `tools.skill` to load a skill when a task matches its description.",
+          "Call `tools.skill({ id })` to load a skill when a task matches its description. Its full instructions arrive as a separate message, no later than that execution's completion notification.",
           "<available_skills>",
           "  <skill>",
           "    <id>effect</id>",

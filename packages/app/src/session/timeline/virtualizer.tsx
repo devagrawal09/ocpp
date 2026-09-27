@@ -59,7 +59,8 @@ type Input = {
     row: TimelineRow.TimelineRow,
     disclosure: Readonly<Record<string, boolean | undefined>>,
   ) => boolean
-  setRevealMessage?: (fn: (id: string) => void) => void
+  /** Registers what scrolls to a turn, or to the row showing one part, and reports whether that row is loaded. */
+  setRevealMessage?: (fn: (id: string, partID?: string) => boolean) => void
   setScrollToEnd?: (fn: () => void) => void
 }
 
@@ -249,10 +250,20 @@ export function createTimelineVirtualizer(input: Input) {
   const virtualRowKeys = createMemo(() => virtualizer.getVirtualItems().map((item) => String(item.key)))
 
   createEffect(() => {
-    input.setRevealMessage?.((id) => {
-      const index = input.projection.messageRowIndex().get(id)
-      if (index === undefined) return
+    input.setRevealMessage?.((id, partID) => {
+      const index =
+        partID === undefined
+          ? input.projection.messageRowIndex().get(id)
+          : rows().findIndex(
+              (row) =>
+                row._tag === "AssistantPart" &&
+                (row.group.type === "part"
+                  ? row.group.ref.partID === partID
+                  : row.group.refs.some((ref) => ref.partID === partID)),
+            )
+      if (index === undefined || index < 0) return false
       virtualizer.scrollToIndex(index, { align: "center" })
+      return true
     })
     input.setScrollToEnd?.(() => {
       input.onPin()
@@ -554,7 +565,7 @@ export function createTimelineVirtualizer(input: Input) {
     contentObserver?.disconnect()
     viewportObserver?.disconnect()
     input.setScrollRef(undefined)
-    input.setRevealMessage?.(() => {})
+    input.setRevealMessage?.(() => false)
     input.setScrollToEnd?.(() => {})
   })
 

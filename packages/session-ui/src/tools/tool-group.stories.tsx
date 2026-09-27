@@ -82,6 +82,51 @@ export const CodeModeTrace = {
   },
 }
 
+export const ResumedCodeModeTrace = {
+  render: () => {
+    const [open, setOpen] = createSignal(true)
+    const execute = storyTool(
+      "codemode_resumed",
+      "execute",
+      "completed",
+      { code: 'const issues = tools.grep({ pattern: "TODO" })\nconst report = tools.subagent({ agent: "general" })' },
+      {
+        output: "Execution started",
+        metadata: {
+          executionStatus: "completed",
+          resumed: true,
+          events: [
+            {
+              type: "tool",
+              tool: "grep",
+              status: "completed",
+              input: { pattern: "TODO" },
+              output: "src/tool.ts:42",
+              replayed: true,
+            },
+            { type: "trace", kind: "assignment", target: "issues", value: "src/tool.ts:42" },
+            {
+              type: "tool",
+              tool: "subagent",
+              status: "completed",
+              input: { agent: "general", description: "Summarize TODOs" },
+              output: "Found one TODO in src/tool.ts.",
+            },
+            { type: "trace", kind: "assignment", target: "report", value: "{ message: Found one TODO }" },
+          ],
+        },
+      },
+    )
+    return (
+      <section style={{ width: "100%", "max-width": "720px", padding: "24px" }}>
+        <CurrentSessionProviders document={storyDocument([execute])}>
+          <CurrentContextToolGroup parts={[execute]} busy={false} open={open()} onOpenChange={setOpen} />
+        </CurrentSessionProviders>
+      </section>
+    )
+  },
+}
+
 export const CustomToolTrace = {
   render: () => {
     const [open, setOpen] = createSignal(true)

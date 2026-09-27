@@ -936,6 +936,7 @@ export type SessionLogOutput =
                   readonly output?: string | undefined
                   readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
                   readonly error?: string | undefined
+                  readonly replayed?: boolean | undefined
                 }
               | (
                   | {
@@ -961,6 +962,7 @@ export type SessionLogOutput =
                   | { readonly type: "trace"; readonly kind: "return"; readonly value: string }
                 )
             >
+            readonly resumed?: boolean | undefined
           }
         }
       | {
@@ -984,6 +986,7 @@ export type SessionLogOutput =
                   readonly output?: string | undefined
                   readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
                   readonly error?: string | undefined
+                  readonly replayed?: boolean | undefined
                 }
               | (
                   | {
@@ -1011,6 +1014,7 @@ export type SessionLogOutput =
             >
             readonly status: "error" | "cancelled"
             readonly error: string
+            readonly resumed?: boolean | undefined
           }
         }
       | {

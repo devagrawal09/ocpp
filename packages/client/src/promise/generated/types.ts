@@ -171,6 +171,7 @@ export type CodeModeExecutionToolEvent = {
   output?: string
   metadata?: { [x: string]: JsonValue }
   error?: string
+  replayed?: boolean
 }
 
 export type CodeModeExecutionTraceEvent =
@@ -2078,6 +2079,7 @@ export type SessionCodemodeCompleted = {
     id: string
     executionID: string
     events: CodeModeExecutionEntries
+    resumed?: boolean
   }
 }
 
@@ -2096,6 +2098,7 @@ export type SessionCodemodeFailed = {
     events: CodeModeExecutionEntries
     status: "error" | "cancelled"
     error: string
+    resumed?: boolean
   }
 }
 
@@ -2111,6 +2114,7 @@ export type SessionCodemodeProgress = {
     id: string
     executionID: string
     events: CodeModeExecutionEntries
+    resumed?: boolean
   }
 }
 

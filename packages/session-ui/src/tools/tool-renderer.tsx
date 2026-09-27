@@ -561,7 +561,11 @@ function executeEvents(value: unknown): Array<ExecuteToolEvent | ExecuteTraceEve
           status: event.status,
           input: jsonRecord(event.input) ? event.input : {},
           ...(typeof event.output === "string" ? { output: event.output } : {}),
-          metadata: jsonRecord(event.metadata) ? event.metadata : {},
+          // A call a resumed run served from its journal keeps the mark in its metadata.
+          metadata: {
+            ...(jsonRecord(event.metadata) ? event.metadata : {}),
+            ...(event.replayed === true ? { replayed: true } : {}),
+          },
           ...(typeof event.error === "string" ? { error: event.error } : {}),
         },
       ]
@@ -748,6 +752,11 @@ export function CurrentContextToolGroup(props: {
   const [sourceOpen, setSourceOpen] = createSignal(false)
   const [traceOpen, setTraceOpen] = createSignal(true)
   const codemode = createMemo(() => props.parts.some((part) => part.type === "tool" && part.name === "execute"))
+  const resumed = createMemo(() =>
+    props.parts.some(
+      (part) => part.type === "tool" && part.name === "execute" && currentToolMetadata(part).resumed === true,
+    ),
+  )
   const custom = createMemo(() =>
     props.parts.some((part) => part.type === "tool" && currentToolMetadata(part).executionKind === "custom-tool"),
   )
@@ -880,6 +889,9 @@ export function CurrentContextToolGroup(props: {
               <Show when={label().after}>
                 {(after) => <span data-slot="context-tool-group-prefix">{after()}</span>}
               </Show>
+              <Show when={resumed()}>
+                <span data-slot="codemode-resumed">{i18n.t("ui.codemode.resumed")}</span>
+              </Show>
             </span>
           </div>
         }
@@ -985,8 +997,13 @@ export function CurrentContextToolGroup(props: {
                         const loaded = createMemo(() =>
                           i18n.plural("ui.tool.loadedSkills", skills().length, { name: marker }),
                         )
+                        const replayed = createMemo(() => currentToolMetadata(tool()).replayed === true)
                         return (
-                          <div data-slot="context-tool-group-item">
+                          <div
+                            data-slot="context-tool-group-item"
+                            data-replayed={replayed() ? "" : undefined}
+                            title={replayed() ? i18n.t("ui.codemode.replayed") : undefined}
+                          >
                             <Show
                               when={
                                 tool().state.status !== "error" &&

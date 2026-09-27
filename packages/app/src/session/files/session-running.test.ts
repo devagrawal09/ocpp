@@ -171,6 +171,7 @@ describe("runningItems", () => {
         ]),
       ],
       sessions: [session({ id: "ses_child", parentID: "ses_parent", title: "Parser review", agent: "explore" })],
+      running: ["ses_child"],
       shells: [shell({ id: "sh_a" })],
     })
     expect(items.map((item) => [item.id, item.parent])).toEqual([
@@ -183,8 +184,7 @@ describe("runningItems", () => {
       label: "Review the parser",
       agent: "explore",
       title: "Parser review",
-      // The child has no step in flight, so it waits on its own runs.
-      working: false,
+      working: true,
       started: 1_500,
       child: "ses_child",
       target: { messageID: "msg_a", partID: "call_a" },
@@ -196,6 +196,33 @@ describe("runningItems", () => {
       target: { messageID: "msg_a", partID: "call_a" },
       stop: { type: "shell", shellID: "sh_a", location },
     })
+  })
+
+  test("offers no stop for a subagent waiting on its own runs", () => {
+    const items = derive({
+      messages: [
+        assistant("msg_a", [
+          execute("call_a", {
+            executionID: "exe_a",
+            executionStatus: "running",
+            events: [
+              {
+                type: "tool",
+                tool: "subagent",
+                status: "running",
+                input: { agent: "explore", description: "Review the parser" },
+                metadata: { sessionID: "ses_child" },
+              },
+            ],
+          }),
+        ]),
+      ],
+      sessions: [session({ id: "ses_child", parentID: "ses_parent" })],
+    })
+    expect(items[1]).toMatchObject({ id: "ses_child", working: false, child: "ses_child" })
+    // Interrupting an idle session does nothing; stopping the execution above it stops the call.
+    expect(items[1]?.stop).toBeUndefined()
+    expect(items[0]?.stop).toEqual({ type: "execution", sessionID: "ses_parent", executionID: "exe_a" })
   })
 
   test("lists work that runs on its own at the top level", () => {

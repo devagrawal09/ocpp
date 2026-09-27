@@ -115,6 +115,7 @@ export function runningItems(input: {
       if (!Delegation.isTool(event.tool) || event.status !== "running") return []
       const childID = typeof event.metadata.sessionID === "string" ? event.metadata.sessionID : undefined
       const child = childID ? children.get(childID) : undefined
+      const working = childID ? input.status(childID) === "running" : undefined
       const label = text(event.input.description) ?? text(event.input.prompt) ?? text(event.input.message)
       return [
         {
@@ -125,10 +126,12 @@ export function runningItems(input: {
           ...(child?.title && child.title !== label ? { title: child.title } : {}),
           // A continued subagent's session is older than this call, which started within the execution.
           started: Math.max(run.item.started, child?.time.created ?? 0),
-          ...(childID ? { working: input.status(childID) === "running" } : {}),
+          ...(working === undefined ? {} : { working }),
           parent: run.item.id,
           target: run.item.target,
-          ...(childID ? { child: childID, stop: { type: "subagent" as const, sessionID: childID } } : {}),
+          ...(childID ? { child: childID } : {}),
+          // Interrupting a child session stops its step; one waiting on its own runs has none to stop.
+          ...(childID && working ? { stop: { type: "subagent" as const, sessionID: childID } } : {}),
         },
       ]
     }),

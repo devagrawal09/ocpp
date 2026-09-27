@@ -1,6 +1,7 @@
 export * as CodeModeEvent from "./event.js"
 
 import { CodeModeEvent } from "@ocpp/schema/codemode-event"
+import type { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { and, asc, eq, sql } from "drizzle-orm"
 import type { SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core"
@@ -79,11 +80,11 @@ const layer = Layer.effect(
     const info = Effect.fnUntraced(function* (row: Definition) {
       const invocation = row.message_id ? (yield* sessions.message(row.message_id))?.message : undefined
       const run = invocation?.type === "invocation" ? invocation : undefined
-      const returned = run?.events?.findLast((event) => event.type === "trace" && event.kind === "return")
-      const summary =
-        row.error ??
-        run?.error ??
-        (returned?.type === "trace" && returned.kind === "return" ? returned.value : undefined)
+      const returned = run?.events?.findLast(
+        (event): event is Extract<CodeModeExecution.Entry, { kind: "return" }> =>
+          event.type === "trace" && event.kind === "return",
+      )
+      const summary = row.error ?? run?.error ?? returned?.value
       return Info.make({
         name: row.name,
         description: row.description,

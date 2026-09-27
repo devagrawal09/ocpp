@@ -24,6 +24,7 @@ import { Project } from "@ocpp/schema/project"
 import { AbsolutePath, RelativePath } from "../schema.js"
 import type { SessionSchema } from "./schema.js"
 import { ProjectTable } from "../project/sql.js"
+import { CodeModeHandler } from "../codemode/handler.js"
 import { CodeModeStore } from "../codemode/store.js"
 
 type DatabaseService = Database.Interface["db"]
@@ -228,6 +229,7 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
     to: event.data.sessionID,
     throughSeq: copiedSeq ?? -1,
   })
+  yield* CodeModeHandler.fork(db, { from: event.data.parentID, to: event.data.sessionID })
   if (event.data.instructions)
     yield* InstructionState.initialize(db, event.data.sessionID, event.durable.seq, event.data.instructions)
 })
@@ -834,6 +836,7 @@ const layer = Layer.effectDiscard(
           .run()
           .pipe(Effect.orDie)
         yield* codemode.revert({ sessionID: event.data.sessionID, beforeSeq: boundary.seq })
+        yield* CodeModeHandler.prune(db, event.data.sessionID)
         yield* InstructionState.reset(db, event.data.sessionID)
       }),
     )

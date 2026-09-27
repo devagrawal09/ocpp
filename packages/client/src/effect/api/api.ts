@@ -1028,7 +1028,8 @@ export type SessionLogOutput =
             readonly sessionID: Session.ID
             readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
             readonly trigger: SessionMessage.InvocationTrigger
-            readonly code: string
+            readonly handler: string
+            readonly input: Schema.Json
           }
         }
       | {

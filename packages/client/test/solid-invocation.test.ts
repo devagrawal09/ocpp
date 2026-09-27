@@ -38,7 +38,8 @@ test("projects an invocation and its Code Mode run", async () => {
         sessionID: "ses_invocation",
         executionID: "exe_invocation",
         trigger: { type: "command", name: "triage", text: "login fails" },
-        code: 'return triage({"text":"login fails","command":"triage"})',
+        handler: "triage",
+        input: { text: "login fails", command: "triage" },
       },
     })
     setup.publish({
@@ -66,10 +67,35 @@ test("projects an invocation and its Code Mode run", async () => {
     expect(setup.data.session.message.get("ses_invocation", "msg_invocation")).toMatchObject({
       type: "invocation",
       trigger: { type: "command", name: "triage", text: "login fails" },
+      // The event records the handler and input; the program they run is derived.
+      code: 'return triage({"text":"login fails","command":"triage"})',
       status: "completed",
       events: [{ type: "trace", kind: "return", value: "done" }],
       time: { created: 1, completed: 3 },
     })
+  } finally {
+    setup.dispose()
+  }
+})
+
+test("refreshes a session's commands after a revert", async () => {
+  const requests: Array<string> = []
+  const setup = harness(async (request) => {
+    if (!request.url.endsWith("/api/session/ses_revert/command")) throw new Error(`Unexpected request: ${request.url}`)
+    requests.push(request.url)
+    return Response.json({ data: [{ name: "triage", description: "", handler: "triage" }] })
+  })
+  try {
+    await setup.data.session.command.sync("ses_revert")
+    // A revert can remove commands whose handler it removed, so the list is fetched again.
+    setup.publish({
+      id: "evt_revert",
+      created: 1,
+      type: "session.revert.committed",
+      durable: { aggregateID: "ses_revert", seq: 1, version: 1 },
+      data: { sessionID: "ses_revert", to: "msg_revert" },
+    })
+    await wait(() => requests.length === 2)
   } finally {
     setup.dispose()
   }

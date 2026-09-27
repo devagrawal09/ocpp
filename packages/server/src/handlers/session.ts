@@ -357,6 +357,9 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                   }),
                 ),
               ),
+              Effect.catchTag("Session.CommandInputError", (error) =>
+                Effect.fail(new InvalidRequestError({ message: error.message, field: error.field })),
+              ),
             )
           return HttpApiSchema.NoContent.make()
         }),

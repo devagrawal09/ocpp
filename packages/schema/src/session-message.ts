@@ -131,6 +131,10 @@ export const InvocationTrigger = Schema.Union([
   .annotate({ identifier: "Session.Message.InvocationTrigger" })
 export type InvocationTrigger = typeof InvocationTrigger.Type
 
+/** The program an invocation runs. Its input is written into it, so the stored plan alone reproduces the run. */
+export const invocationCode = (handler: string, input: Schema.Json) =>
+  "return " + handler + "(" + JSON.stringify(input) + ")"
+
 /**
  * A Code Mode execution that a command or an event started outside the model. It is display
  * history: its outcome reaches the model through the execution's later completion notification.

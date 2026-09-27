@@ -6,6 +6,7 @@ import { Tool } from "@ocpp/schema/tool"
 import { Effect, Schema } from "effect"
 import { CodeModeEvent } from "../../codemode/event.js"
 import { CodeModeInvocation } from "../../codemode/invocation-service.js"
+import { Permission } from "../../permission.js"
 
 const namespace = "event"
 
@@ -17,6 +18,18 @@ export const Plugin = {
   effect: Effect.fn("EventTool.Plugin")(function* (ctx: Context) {
     const events = yield* CodeModeEvent.Service
     const invocations = yield* CodeModeInvocation.Service
+    const permission = yield* Permission.Service
+    const allowed = (action: string, name: string, context: Tool.Context) =>
+      permission
+        .assert({
+          action,
+          resources: [name],
+          save: ["*"],
+          sessionID: context.sessionID,
+          agent: context.agent,
+          source: { type: "tool", messageID: context.messageID, id: context.id },
+        })
+        .pipe(Effect.mapError((error) => new Tool.Error({ message: error.message })))
 
     const found = (name: string) => (info: CodeModeEvent.Info | undefined) =>
       info === undefined
@@ -30,8 +43,12 @@ export const Plugin = {
           options: { namespace },
           description: [
             'Define or replace an event that runs a saved notebook function on a schedule: `{ every: "5m" }`, `{ cron: "0 9 * * 1-5" }`, or `{ at: "<ISO time>" }`.',
-            "Each firing runs `return handler({ event, firedAt, input })` as its own execution with this Session's tools. A firing is skipped while the previous one still runs. You are not woken: firings show in the timeline, and their outcomes reach you as notifications on your next turn. Call `tools.session.notify` from the handler to wake yourself.",
-            "`handler` is the name of a top-level function in the notebook, which may be declared in the same program. Events keep firing across restarts; missed firings are not replayed.",
+            "`every` fires on a fixed grid counted from when the event is defined (at least 1s apart). `cron` follows the host's time zone (" +
+              CodeModeEvent.zone() +
+              "), so firings keep their local time across daylight saving changes. `at` fires once.",
+            "Each firing runs `return handler({ event, firedAt, input })` as its own execution with this Session's tools. A firing is skipped while the previous one still runs, also across a redefinition. You are not woken: firings show in the timeline, and each outcome reaches you as a notification on your next turn. Outcomes you have not seen yet merge into one notification that counts the firings and shows the latest. Call `tools.session.notify` from the handler to wake yourself.",
+            "`handler` is the name of a top-level function in the notebook, which may be declared in the same program. Events keep firing across restarts. Firings missed while the host was down are skipped, not replayed, except that an `at` time that passed fires once at startup.",
+            "Reverting the message that saved the handler removes the event. A fork copies events disabled, so they do not fire twice; enable them in the fork to run them there. Subagent Sessions cannot define events.",
           ].join("\n"),
           input: Schema.Struct({
             name: Name,
@@ -42,7 +59,8 @@ export const Plugin = {
           }),
           output: CodeModeEvent.Info,
           execute: (input, context) =>
-            events.define(context.sessionID, { ...input, description: input.description ?? "" }).pipe(
+            allowed("event_define", input.name, context).pipe(
+              Effect.andThen(events.define(context.sessionID, { ...input, description: input.description ?? "" })),
               Effect.map((info) => ({ output: info, content: describe(info) })),
               Effect.mapError((error) => new Tool.Error({ message: error.message })),
             ),
@@ -69,9 +87,10 @@ export const Plugin = {
           input: Named,
           output: CodeModeEvent.Info,
           execute: (input, context) =>
-            events
-              .setEnabled({ sessionID: context.sessionID, name: input.name }, true)
-              .pipe(Effect.flatMap(found(input.name))),
+            allowed("event_enable", input.name, context).pipe(
+              Effect.andThen(events.setEnabled({ sessionID: context.sessionID, name: input.name }, true)),
+              Effect.flatMap(found(input.name)),
+            ),
         })
         draft.add({
           name: "disable",
@@ -109,7 +128,8 @@ export const Plugin = {
             Schema.Struct({ status: Schema.Literal("skipped") }),
           ]),
           execute: (input, context) =>
-            invocations.fire({ sessionID: context.sessionID, ...input }).pipe(
+            allowed("event_trigger", input.name, context).pipe(
+              Effect.andThen(invocations.fire({ sessionID: context.sessionID, ...input })),
               Effect.map((firing) =>
                 firing.status === "skipped"
                   ? {

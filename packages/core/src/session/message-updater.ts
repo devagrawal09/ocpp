@@ -343,7 +343,7 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             type: "invocation",
             metadata: event.metadata,
             trigger: event.data.trigger,
-            code: event.data.code,
+            code: SessionMessage.invocationCode(event.data.handler, event.data.input),
             executionID: event.data.executionID,
             status: "running",
             time: { created },

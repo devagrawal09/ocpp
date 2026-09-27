@@ -599,7 +599,10 @@ export namespace CodeMode {
 }
 
 export namespace Invocation {
-  /** A command or an event started a Code Mode execution outside the model. The message ID derives from this event ID. */
+  /**
+   * A command or an event started a Code Mode execution outside the model. The message ID derives from
+   * this event ID, and the program it ran derives from the handler and input (`SessionMessage.invocationCode`).
+   */
   export const Started = Event.durable({
     type: "session.invocation.started",
     ...options,
@@ -607,7 +610,10 @@ export namespace Invocation {
       ...Base,
       executionID: CodeModeExecution.ID,
       trigger: SessionMessage.InvocationTrigger,
-      code: Schema.String,
+      /** Name of the notebook function the execution called. */
+      handler: Schema.String,
+      /** The value the handler received. */
+      input: Schema.Json,
     },
   })
   export type Started = typeof Started.Type

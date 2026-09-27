@@ -11,7 +11,8 @@ import { CodeModeInvocation } from "./invocation-service.js"
 /**
  * Fires enabled events on their schedules in this process, like other local execution. It starts at
  * boot from the stored definitions and follows later definition changes. Firings missed while the host
- * was down are not replayed; each event resumes at its next scheduled time.
+ * was down are not replayed; each event resumes at its next scheduled time, except that a one-time
+ * event whose time passed fires once. Events of archived Sessions do not fire.
  */
 export class Service extends Context.Service<Service, {}>()("@ocpp/CodeModeScheduler") {}
 
@@ -26,7 +27,7 @@ export const layer = Layer.effect(
 
     const fire = Effect.fnUntraced(function* (key: CodeModeEvent.Key) {
       const session = yield* sessions.get(key.sessionID)
-      if (!session) return
+      if (!session || session.time.archived) return
       yield* Effect.gen(function* () {
         const plugins = yield* PluginSupervisor.Service
         yield* plugins.flush
@@ -42,6 +43,8 @@ export const layer = Layer.effect(
       while (true) {
         const event = yield* events.get(key)
         if (!event?.enabled) return
+        // An archived Session stays archived, so its events stop instead of firing into it.
+        if ((yield* sessions.get(key.sessionID))?.time.archived) return yield* events.scheduled(key, undefined)
         const now = yield* Clock.currentTimeMillis
         const time = CodeModeEvent.next(event.schedule, {
           now,

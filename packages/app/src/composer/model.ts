@@ -15,6 +15,7 @@ import { useData } from "@/runtime/server/current"
 import { createSessionTabs } from "@/session/helpers"
 import { showToast } from "@/shell/notifications/toast"
 import { formatServerError } from "@/runtime/server/errors"
+import { Command } from "@ocpp/schema/command"
 import { Skill } from "@ocpp/schema/skill"
 import type { ComposerAdapter, ComposerControls, ComposerQueue } from "./adapter"
 import type { ImageAttachmentPart } from "./state"
@@ -218,15 +219,21 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       mention: { type: "file" as const, path, content: `@${path}`, start: 0, end: 0 },
     })),
   ])
-  // Commands the agent defined for this session shadow Location commands of the same name.
   const sessionID = () => (adapter.kind === "active-session" ? adapter.session().id : undefined)
   createEffect(() => {
     const id = sessionID()
     if (id) void data.session.command.sync(id).catch(() => undefined)
   })
+  const locationCommands = createMemo(() => data.location.command.list({ directory: sdk().directory }) ?? [])
+  // Commands the agent defined for this session never take a built-in or project command's name. The
+  // server refuses such a definition, and a project command added later wins when the name runs.
   const sessionCommands = createMemo(() => {
     const id = sessionID()
-    return id ? (data.session.command.list(id) ?? []) : []
+    return (id ? (data.session.command.list(id) ?? []) : []).filter(
+      (item) =>
+        !Command.Builtin.some((name) => name === item.name) &&
+        !locationCommands().some((command) => command.name === item.name),
+    )
   })
   const slashCommands = createMemo(() => [
     ...sessionCommands().map((item) => ({
@@ -236,15 +243,13 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       description: item.description || undefined,
       type: "custom" as const,
     })),
-    ...(data.location.command.list({ directory: sdk().directory }) ?? [])
-      .filter((item) => !sessionCommands().some((command) => command.name === item.name))
-      .map((item) => ({
-        id: `custom.${item.name}`,
-        trigger: item.name,
-        title: item.name,
-        description: item.description,
-        type: "custom" as const,
-      })),
+    ...locationCommands().map((item) => ({
+      id: `custom.${item.name}`,
+      trigger: item.name,
+      title: item.name,
+      description: item.description,
+      type: "custom" as const,
+    })),
     ...command.options
       .filter((item) => !item.disabled && !item.id.startsWith("suggested.") && item.slash)
       .map((item) => ({

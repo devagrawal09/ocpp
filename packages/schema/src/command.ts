@@ -13,7 +13,19 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "Command.Info" })
 
 /** Slash commands the web app handles itself. A Session command may not take one of these names. */
-export const Builtin = ["new", "undo", "redo", "compact", "fork", "export", "open", "terminal", "mcp", "model", "agent"] as const
+export const Builtin = [
+  "new",
+  "undo",
+  "redo",
+  "compact",
+  "fork",
+  "export",
+  "open",
+  "terminal",
+  "mcp",
+  "model",
+  "agent",
+] as const
 export type Builtin = (typeof Builtin)[number]
 
 export const Event = {

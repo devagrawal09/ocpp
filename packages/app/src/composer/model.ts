@@ -244,12 +244,12 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       type: "custom" as const,
     })),
     ...locationCommands().map((item) => ({
-        id: `custom.${item.name}`,
-        trigger: item.name,
-        title: item.name,
-        description: item.description,
-        type: "custom" as const,
-      })),
+      id: `custom.${item.name}`,
+      trigger: item.name,
+      title: item.name,
+      description: item.description,
+      type: "custom" as const,
+    })),
     ...command.options
       .filter((item) => !item.disabled && !item.id.startsWith("suggested.") && item.slash)
       .map((item) => ({

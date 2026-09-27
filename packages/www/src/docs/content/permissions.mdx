@@ -63,24 +63,25 @@ multiple files. OC++ denies the operation if any resource resolves to
 V2 action names are strings, so plugins may introduce additional actions. The
 current built-in actions use these resources:
 
-| Action                  | Resource matched                                                                                                 |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `read`                  | Location-relative path for an internal file or directory; canonical absolute path for an external target         |
-| `edit`                  | Target path for `edit`, `write`, and `patch`; all three tools share this action                                  |
-| `glob`                  | The requested glob pattern                                                                                       |
-| `grep`                  | The requested regular expression, not the search path                                                            |
-| `shell`                 | The complete raw shell command string                                                                            |
-| `subagent`              | The target agent ID                                                                                              |
-| `subagent_model`        | The `provider/model` a subagent on the OC++ runner selects, unless `subagent.models` allows it                   |
-| `claude`, `codex`, `pi` | The directory a subagent on that [session driver](/drivers) works in: its `root`, or the caller's directory      |
-| `model`                 | `<vendor>/<model>` a subagent on a session driver runs with, such as `claude/opus`                               |
-| `skill`                 | The skill ID                                                                                                     |
-| `question`              | `*`                                                                                                              |
-| `webfetch`              | The requested URL                                                                                                |
-| `websearch`             | The search query                                                                                                 |
-| `external_directory`    | A canonical external directory boundary, normally ending in `/*`                                                 |
-| `<server>_<tool>`       | `*` for an MCP tool; unsupported characters in both names become `_`                                             |
-| `execute`               | `*`; controls availability of the Code Mode dispatcher, while each nested tool still enforces its own permission |
+| Action                  | Resource matched                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`                  | Location-relative path for an internal file or directory; canonical absolute path for an external target                                          |
+| `edit`                  | Target path for `edit`, `write`, and `patch`; all three tools share this action                                                                   |
+| `glob`                  | The requested glob pattern                                                                                                                        |
+| `grep`                  | The requested regular expression, not the search path                                                                                             |
+| `shell`                 | The complete raw shell command string                                                                                                             |
+| `subagent`              | The target agent ID                                                                                                                               |
+| `subagent_model`        | The `provider/model` a subagent on the OC++ runner selects, unless `subagent.models` allows it                                                    |
+| `subagent_root`         | The directory a subagent is placed in with `root`, outside the caller's directory and project worktree; asks by default                           |
+| `claude`, `codex`, `pi` | The directory a subagent on that [session driver](/drivers) works in: its `root`, a continued subagent's own directory, or the caller's directory |
+| `model`                 | `<vendor>/<model>` a subagent on a session driver runs with, such as `claude/opus`                                                                |
+| `skill`                 | The skill ID                                                                                                                                      |
+| `question`              | `*`                                                                                                                                               |
+| `webfetch`              | The requested URL                                                                                                                                 |
+| `websearch`             | The search query                                                                                                                                  |
+| `external_directory`    | A canonical external directory boundary, normally ending in `/*`                                                                                  |
+| `<server>_<tool>`       | `*` for an MCP tool; unsupported characters in both names become `_`                                                                              |
+| `execute`               | `*`; controls availability of the Code Mode dispatcher, while each nested tool still enforces its own permission                                  |
 
 `doom_loop` and `lsp` are not current V2 Core permission actions.
 
@@ -158,8 +159,9 @@ With the flag disabled, the existing Tree-sitter path is unchanged.
 ## Defaults
 
 Every agent, including custom agents, starts with ordered defaults that allow
-tools, ask for external directories, ask for `.env` reads, and allow
-`.env.example` reads. Shipped agents then add their own policies:
+tools, ask for external directories, ask before placing a subagent in another
+directory (`subagent_root`), ask for `.env` reads, and allow `.env.example`
+reads. Shipped agents then add their own policies:
 
 | Agent                     | Effective default policy                                                                                                                |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |

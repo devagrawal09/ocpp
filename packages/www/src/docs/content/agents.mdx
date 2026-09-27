@@ -58,11 +58,14 @@ of the parent's permissions.
 
 A child session runs in its parent's directory unless the `subagent` call
 passes `root`, an existing absolute directory such as a separate git worktree.
-The child then runs with that directory's tools, files, permissions, and
-instructions, and keeps it when continued. A `root` outside the parent's
-directory needs `external_directory` permission. See
-[Session drivers](/drivers) for running subagents with Claude Code, Codex, or
-Pi.
+The child then runs under that directory's own configuration, not the
+parent's: its permissions, agents, models, MCP servers, plugins, and
+instructions. The agent must be defined there, and its model there decides the
+child's driver. The child keeps its directory when continued. A `root` outside
+the parent's directory and its project worktree asks for `external_directory`
+on the child's boundary and for `subagent_root` on the root, which no default
+rule allows. See [Session drivers](/drivers) for running subagents with Claude
+Code, Codex, or Pi.
 
 ## Configure agents
 

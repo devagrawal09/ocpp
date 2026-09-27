@@ -1,6 +1,7 @@
 export * as CodeModeCommand from "./command.js"
 
 import { CodeModeCommand } from "@ocpp/schema/codemode-command"
+import { Command } from "@ocpp/schema/command"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { and, asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
@@ -40,6 +41,9 @@ const layer = Layer.effect(
       define: Effect.fn("CodeModeCommand.define")(function* (sessionID, input) {
         const problem =
           CodeModeHandler.nameProblem(input.name) ??
+          (Command.Builtin.some((name) => name === input.name)
+            ? `/${input.name} is a built-in command of the app. Choose another name.`
+            : undefined) ??
           (yield* CodeModeHandler.problem(db, sessionID, input.handler, true))
         if (problem) return yield* new DefinitionError({ message: problem })
         yield* db

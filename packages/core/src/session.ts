@@ -56,6 +56,7 @@ import { Event } from "@ocpp/schema/event"
 import { Skill } from "./skill.js"
 import { Job } from "./job.js"
 import { Command } from "./command.js"
+import { CodeModeCommand } from "./codemode/command.js"
 import { CodeModeInvocation } from "./codemode/invocation-service.js"
 import { Global } from "@ocpp/util/global"
 import { SessionEnvironment } from "./session/environment.js"
@@ -141,6 +142,13 @@ export class DestinationNotDirectoryError extends Schema.TaggedError<Destination
   "Session.DestinationNotDirectoryError",
   { directory: AbsolutePath },
 ) {}
+
+/** A Session command received prompt input it cannot use. */
+export class CommandInputError extends Schema.TaggedError<CommandInputError>()("Session.CommandInputError", {
+  command: Schema.String,
+  field: Schema.String,
+  message: Schema.String,
+}) {}
 
 export class DestinationUnavailableError extends Schema.TaggedError<DestinationUnavailableError>()(
   "Session.DestinationUnavailableError",
@@ -230,7 +238,7 @@ export interface Interface {
     agents?: PromptInput.Prompt["agents"]
     skills?: PromptInput.Prompt["skills"]
     delivery?: SessionInbox.Delivery
-  }) => Effect.Effect<void, NotFoundError | Command.NotFoundError | Command.ExecutionError>
+  }) => Effect.Effect<void, NotFoundError | Command.NotFoundError | Command.ExecutionError | CommandInputError>
   readonly shell: (
     input: Parameters<Session.Handle["shell"]>[0] & { sessionID: SessionSchema.ID },
   ) => ReturnType<Session.Handle["shell"]>
@@ -283,6 +291,7 @@ const layer = Layer.effect(
     const sessions = yield* Session.make((ref) => locations.get(ref))
     const removing = new Set<SessionSchema.ID>()
     const admission = yield* SessionInbox.Service
+    const codemodeCommands = yield* CodeModeCommand.Service
     const closeTransport = Effect.fn("Session.closeTransport")(function* (session: SessionSchema.Info) {
       const location = Location.Ref.make({
         directory: session.location.directory,
@@ -527,19 +536,39 @@ const layer = Layer.effect(
           yield* plugins.flush
           return { commands: yield* Command.Service, invocations: yield* CodeModeInvocation.Service }
         }).pipe(Effect.provide(locations.get(session.location)))
-        // A command the agent defined for this Session shadows a Location command of the same name.
-        const invoked = yield* services.invocations
-          .command({ sessionID: input.sessionID, name: input.command, text: input.text })
-          .pipe(
-            Effect.mapError(
-              (error) =>
-                new Command.ExecutionError({
-                  command: input.command,
-                  message: `/${input.command} could not run: ${error.message}`,
-                }),
-            ),
-          )
-        if (invoked) return
+        // The user's commands keep their names: defining a Session command with one is refused, and a
+        // Location command added later takes the name back.
+        const defined = (yield* services.commands.get(input.command))
+          ? undefined
+          : yield* codemodeCommands.get(input.sessionID, input.command)
+        if (defined) {
+          // A Session command runs a notebook function with the text alone; it never prompts the model.
+          const unsupported = (["files", "agents", "skills"] as const).find((field) => input[field]?.length)
+          if (unsupported)
+            return yield* new CommandInputError({
+              command: input.command,
+              field: unsupported,
+              message: `/${input.command} runs the notebook function ${defined.handler} with text only, so it does not accept ${unsupported}.`,
+            })
+          if (input.delivery === "queue")
+            return yield* new CommandInputError({
+              command: input.command,
+              field: "delivery",
+              message: `/${input.command} runs the notebook function ${defined.handler} right away without prompting the model, so it cannot be queued.`,
+            })
+          const invoked = yield* services.invocations
+            .command({ sessionID: input.sessionID, name: input.command, text: input.text })
+            .pipe(
+              Effect.mapError(
+                (error) =>
+                  new Command.ExecutionError({
+                    command: input.command,
+                    message: `/${input.command} could not run: ${error.message}`,
+                  }),
+              ),
+            )
+          if (invoked) return
+        }
         const delivery = input.delivery ?? "steer"
         yield* services.commands.execute({
           name: input.command,
@@ -689,5 +718,6 @@ export const node = makeGlobalNode({
     FSUtil.node,
     Global.node,
     App.node,
+    CodeModeCommand.node,
   ],
 })

@@ -367,14 +367,15 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           delivery: SessionInbox.Delivery.pipe(Schema.optional),
         }),
         success: HttpApiSchema.NoContent,
-        error: [SessionNotFoundError, CommandNotFoundError, CommandExecutionError],
+        error: [SessionNotFoundError, CommandNotFoundError, CommandExecutionError, InvalidRequestError],
       })
         .middleware(sessionLocationMiddleware)
         .annotateMerge(
           OpenApi.annotations({
             identifier: "v2.session.command",
             summary: "Run command",
-            description: "Execute a slash command callback immediately.",
+            description:
+              "Execute a slash command callback immediately. A command the agent defined for the session runs its notebook function with the text alone; it rejects files, agents, skills, and queue delivery.",
           }),
         ),
     )

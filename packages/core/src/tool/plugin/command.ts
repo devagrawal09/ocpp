@@ -7,6 +7,7 @@ import { Bus } from "../../bus.js"
 import { CodeModeCommand } from "../../codemode/command.js"
 import { Command } from "../../command.js"
 import { Location } from "../../location.js"
+import { Permission } from "../../permission.js"
 
 const namespace = "command"
 
@@ -18,6 +19,8 @@ export const Plugin = {
     const bus = yield* Bus.Service
     const commands = yield* CodeModeCommand.Service
     const location = yield* Location.Service
+    const locationCommands = yield* Command.Service
+    const permission = yield* Permission.Service
     // The prompt input lists commands per Location, so it refreshes on the Location's command event.
     const updated = bus
       .publish(
@@ -34,8 +37,9 @@ export const Plugin = {
           options: { namespace },
           description: [
             "Define or replace a slash command that runs a saved notebook function instead of prompting you.",
-            "When the user submits `/name some text`, the Session runs `return handler({ text, command })` as its own execution, where `text` is everything after the command name. You are not woken: the run shows in the timeline, and its outcome reaches you as a notification on your next turn.",
-            "`handler` is the name of a top-level function in the notebook, which may be declared in the same program. Commands persist with the Session.",
+            "When the user submits `/name some text`, the Session runs `return handler({ text, command })` as its own execution, where `text` is everything after the command name. The command takes text only, not files or mentions. You are not woken: the run shows in the timeline, and its outcome reaches you as a notification on your next turn. If it runs again before you see that, you get one notification that counts the runs and shows the latest outcome.",
+            "`handler` is the name of a top-level function in the notebook, which may be declared in the same program. A name the app or this project already uses for a command (such as /compact, /undo, /fork, or a configured command) is refused.",
+            "Commands persist with the Session and are copied when it is forked. Reverting the message that saved the handler removes the command.",
           ].join("\n"),
           input: Schema.Struct({
             name: Name,
@@ -46,14 +50,31 @@ export const Plugin = {
           }),
           output: CodeModeCommand.Info,
           execute: (input, context) =>
-            commands.define(context.sessionID, { ...input, description: input.description ?? "" }).pipe(
-              Effect.tap(() => updated),
-              Effect.map((command) => ({
+            Effect.gen(function* () {
+              yield* permission.assert({
+                action: "command_define",
+                resources: [input.name],
+                save: ["*"],
+                metadata: { handler: input.handler },
+                sessionID: context.sessionID,
+                agent: context.agent,
+                source: { type: "tool", messageID: context.messageID, id: context.id },
+              })
+              // The user's commands keep their names; Session commands never shadow them.
+              if ((yield* locationCommands.list()).some((command) => command.name === input.name))
+                return yield* new Tool.Error({
+                  message: `/${input.name} is already a command in this project (configured, from a plugin, or built in). Choose another name.`,
+                })
+              const command = yield* commands.define(context.sessionID, {
+                ...input,
+                description: input.description ?? "",
+              })
+              yield* updated
+              return {
                 output: command,
                 content: `Command /${command.name} runs ${command.handler}({ text, command }).`,
-              })),
-              Effect.mapError((error) => new Tool.Error({ message: error.message })),
-            ),
+              }
+            }).pipe(Effect.mapError((error) => new Tool.Error({ message: error.message }))),
         })
         draft.add({
           name: "list",

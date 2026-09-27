@@ -188,8 +188,6 @@ function EventRow(props: {
     locale: language.intl(),
     now: props.now,
   })
-  const runs = () => Number(props.event.runCount)
-  const skips = () => Number(props.event.skipCount)
 
   return (
     <li
@@ -258,11 +256,10 @@ function EventRow(props: {
         </div>
       </Show>
       <div class="flex min-w-0 items-center gap-1">
-        <span class="min-w-0 flex-1 truncate text-[12px] leading-text-compact text-v2-text-text-faint">
-          {[
-            language.plural("session.events.runs", runs()),
-            ...(skips() > 0 ? [language.plural("session.events.skips", skips())] : []),
-          ].join(" · ")}
+        <span class="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] leading-text-compact text-v2-text-text-faint">
+          <span class="truncate">{language.plural("session.events.runs", Number(props.event.runCount))}</span>
+          <span aria-hidden="true">·</span>
+          <span class="truncate">{language.plural("session.events.skips", Number(props.event.skipCount))}</span>
         </span>
         <Button
           size="small"

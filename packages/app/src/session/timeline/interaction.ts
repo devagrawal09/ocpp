@@ -125,14 +125,12 @@ export function createSessionTimelineInteraction(session: SessionModel) {
     consumePendingMessage: (key) => layout.pendingMessage.consume(key),
   })
   // Scrolls to a turn, or to the row showing one of its parts, loading older history until it is found.
-  const reveal = async (target: { messageID: string; partID?: string }) => {
+  const reveal = async (target: { messageID: string; partID?: string }, pages = revealPages): Promise<void> => {
     if (!scroller) return
     unpin()
-    for (let page = 0; page <= revealPages; page++) {
-      if (revealMessage(target.messageID, target.partID)) return
-      if (!timeline.history.more()) return
-      await timeline.history.loadOlder()
-    }
+    if (revealMessage(target.messageID, target.partID) || pages === 0 || !timeline.history.more()) return
+    await timeline.history.loadOlder()
+    return reveal(target, pages - 1)
   }
   const resume = () => {
     setState("messageID", undefined)

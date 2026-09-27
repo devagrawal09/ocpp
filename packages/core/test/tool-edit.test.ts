@@ -146,7 +146,7 @@ describe("EditTool", () => {
                   text: "Edited hello.txt (1 replacement)",
                 },
               ])
-              // Compact UI metadata carries the file diffs the TUI renders.
+              // Compact UI metadata carries the file diffs the web app renders.
               expect(settled.metadata).toMatchObject({
                 files: [{ file: "hello.txt", status: "modified", additions: 1, deletions: 1 }],
               })

@@ -11,8 +11,7 @@ V2 has three intentional breaking changes:
 
 - [Plugins](#plugins) use a new plugin API.
 - The [server API and clients](#server-api-and-clients) have new contracts.
-- [Terminal client configuration](/cli/config) moves from layered `tui.json(c)` files to one global `cli.json` file (auto
-  migrated).
+- The [terminal UI](#terminal-ui) is replaced by the web app, and V1 `tui.json(c)` files are no longer read.
 
 Supported V1 functionality outside those areas is intended to remain compatible with V1. Some fields accepted by the V1
 schema never had a V2 equivalent and are intentionally ignored; these are listed under
@@ -33,7 +32,7 @@ beta compatibility bug rather than an expected migration requirement.
 
 ## Install the beta
 
-The V2 terminal client is published on the `beta` distribution tag. See the [terminal startup guide](/cli).
+The V2 CLI is published on the `beta` distribution tag. See the [CLI guide](/cli).
 
 ## Configuration
 
@@ -496,18 +495,11 @@ If a V1 setup relied on a `CLAUDE.md` fallback, move that guidance into the appl
 discovers `AGENTS.md`; because non-API V1 behavior is intended to remain compatible, also file a compatibility issue with
 the affected project details. See [Instructions](/instructions).
 
-## Terminal client configuration
+## Terminal UI
 
-V2 replaces layered V1 `tui.json(c)` files with one global terminal client configuration file:
-
-```text
-~/.config/ocpp/cli.json
-```
-
-The terminal client owns this file; the background service does not load it. When `cli.json` is absent, the first V2
-terminal client startup migrates supported global `tui.json` settings and persisted preferences while leaving V1 files
-unchanged. Project-local client configuration is not migrated because V2 client configuration is global. See
-[CLI config](/cli/config) for current client settings.
+V2 does not include a terminal UI. Running `ocpp` starts or reuses the background server and opens the web app in your
+browser; use [`ocpp run`](/cli#automation) to send prompts from the terminal or scripts. V2 does not read V1 `tui.json(c)`
+files and leaves them unchanged. Choose themes and keyboard shortcuts in the web app's settings.
 
 ## Plugins
 

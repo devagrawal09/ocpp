@@ -19,7 +19,7 @@ Do not use `git log` or author metadata when deciding attribution.
 Rules:
 
 - Write the final file with release sections in this order:
-  `## Core`, `## TUI`, `## Desktop`, `## SDK`, `## Extensions`
+  `## Core`, `## Web`, `## SDK`, `## Extensions`
 - Only include sections that have at least one notable entry
 - Within each release section, keep bug fixes grouped under `### Bugfixes`
 - Keep other notable entries under `### Improvements` when a section has bug fixes too
@@ -40,7 +40,7 @@ Rules:
 - Do not include the heading `## Community Contributors Input` in the final file
 - Focus on writing the least words to get your point across - users will skim read the changelog, so we should be precise
 
-**Importantly, the changelog is for users (who are at least slightly technical), they may use the TUI, Desktop, SDK, Plugins and so forth. Be thorough in understanding flow on effects may not be immediately apparent. e.g. a package upgrade looks internal but may patch a bug. Or a refactor may also stabilise some race condition that fixes bugs for users. The PR title/body + commit message will give you the authors context, usually containing the outcome not just technical detail**
+**Importantly, the changelog is for users (who are at least slightly technical), they may use the web app, CLI, SDK, Plugins and so forth. Be thorough in understanding flow on effects may not be immediately apparent. e.g. a package upgrade looks internal but may patch a bug. Or a refactor may also stabilise some race condition that fixes bugs for users. The PR title/body + commit message will give you the authors context, usually containing the outcome not just technical detail**
 
 <changelog_input>
 

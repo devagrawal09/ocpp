@@ -21,9 +21,6 @@
     "@ocpp/simulation#typecheck": {
       "dependsOn": ["@ocpp/core#typecheck"]
     },
-    "@ocpp/tui#typecheck": {
-      "dependsOn": ["@ocpp/core#typecheck"]
-    },
     "build": {
       "dependsOn": [],
       "outputs": ["dist/**"]
@@ -51,14 +48,6 @@
       "outputs": []
     },
     "@ocpp/cli#test": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "@ocpp/tui#test": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "@ocpp/latex#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },

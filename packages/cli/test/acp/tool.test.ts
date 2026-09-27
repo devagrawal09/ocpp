@@ -103,45 +103,6 @@ describe("acp tools", () => {
     ])
   })
 
-  test("unwraps read's JSON page envelope instead of showing model-facing formatting", () => {
-    expect(
-      completedToolUpdate({
-        toolCallId: "tool-read",
-        toolName: "read",
-        input: { path: "/tmp/file.ts" },
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { type: "text-page", content: "first\nsecond", mime: "text/plain", offset: 1, truncated: false },
-              null,
-              2,
-            ),
-          },
-        ],
-      }).content,
-    ).toEqual([{ type: "content", content: { type: "text", text: "first\nsecond" } }])
-
-    expect(
-      completedToolUpdate({
-        toolCallId: "tool-list",
-        toolName: "read",
-        input: { path: "/tmp" },
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              entries: [
-                { path: "a.ts", type: "file" },
-                { path: "src", type: "directory" },
-              ],
-            }),
-          },
-        ],
-      }).content,
-    ).toEqual([{ type: "content", content: { type: "text", text: "a.ts\nsrc" } }])
-  })
-
   test("sends completed tool calls as partial updates", () => {
     expect(
       pendingToolCall({

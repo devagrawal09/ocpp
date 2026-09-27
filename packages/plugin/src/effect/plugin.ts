@@ -50,7 +50,6 @@ export interface Context {
 
 export interface Plugin<R = Scope.Scope> {
   readonly id: string
-  readonly tui?: boolean
   readonly vcs?: VcsDiscovery
   readonly effect: (context: Context) => Effect.Effect<void, never, R>
 }

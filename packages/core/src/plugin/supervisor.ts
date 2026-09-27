@@ -60,7 +60,6 @@ const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
         source: pluginSource(operation.target),
         status: "failed",
         error: plugin.error,
-        tui: false,
       })
       continue
     }

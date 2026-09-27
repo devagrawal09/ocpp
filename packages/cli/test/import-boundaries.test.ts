@@ -17,55 +17,20 @@ describe("CLI frontend import boundaries", () => {
 
   test("exposes only the intentional package entrypoints", async () => {
     const run = await import("@ocpp/cli/run")
-    const mini = await import("@ocpp/tui/mini")
-    const tool = await import("@ocpp/tui/mini/tool")
     const cli = await Bun.file(path.join(root, "packages/cli/package.json")).json()
 
     expect(Object.keys(run).sort()).toEqual(["runNonInteractive", "runV1Bridge"])
-    expect(Object.keys(mini).sort()).toEqual(["runMiniFrontend"])
-    expect(Object.keys(tool).sort()).toEqual([
-      "nonEmptyToolContent",
-      "readDisplayText",
-      "toolInlineInfo",
-      "toolOutputText",
-    ])
     expect(Object.keys(cli.exports).filter((key) => key === "./mini" || key.startsWith("./mini/"))).toEqual([])
   })
 
-  test("keeps run and Mini on separate evaluation graphs", async () => {
+  test("keeps run free of interactive terminal UI", async () => {
     const run = await bundleInputs("packages/cli/src/commands/handlers/run.ts")
     expect(run).toContain("packages/cli/src/run/run.ts")
+    expect(run).toContain("packages/cli/src/run/tool-display.ts")
     expect(run).toContain("packages/cli/src/util/error.ts")
-    expect(run).toContain("packages/tui/src/mini/tool.ts")
     expect(run).not.toContain("packages/cli/src/ui/prompt.ts")
-    expect(run).not.toContain("packages/tui/src/mini/runtime.ts")
-    expect(run).not.toContain("packages/tui/src/mini/runtime.lifecycle.ts")
-    expect(run).not.toContain("packages/tui/src/mini/footer.ts")
-    expect(run).not.toContain("packages/tui/src/mini/scrollback.surface.ts")
-    expect(run).not.toContain("packages/tui/src/runtime.tsx")
-
-    const mini = await bundleInputs("packages/cli/src/commands/handlers/mini.ts")
-    expect(mini).toContain("packages/cli/src/mini.ts")
-    expect(mini).toContain("packages/tui/src/mini/index.ts")
-    expect(mini).toContain("packages/tui/src/mini/runtime.ts")
-    expect(mini).not.toContain("packages/cli/src/run/run.ts")
-    expect(mini).not.toContain("packages/cli/src/run/noninteractive.ts")
-    expect(mini).not.toContain("packages/cli/src/run/ui.ts")
-    expect(mini).not.toContain("packages/tui/src/runtime.tsx")
-  })
-
-  test("keeps TUI Mini independent from Core, Server, and CLI", async () => {
-    const glob = new Bun.Glob("**/*.{ts,tsx}")
-    const imports: string[] = []
-    for await (const file of glob.scan({ cwd: path.join(root, "packages/tui/src/mini") })) {
-      const source = await Bun.file(path.join(root, "packages/tui/src/mini", file)).text()
-      if (/["']@ocpp\/(?:core|server|cli)(?:\/[^"']*)?["']/.test(source)) imports.push(file)
-    }
-    expect(imports).toEqual([])
-
-    const graph = await bundleInputs("packages/tui/src/mini/index.ts")
-    expect(graph.filter((file) => file.startsWith("packages/core/"))).toEqual([])
-    expect(graph.filter((file) => file.startsWith("packages/cli/") || file.startsWith("packages/server/"))).toEqual([])
+    expect(run).not.toContain("packages/cli/src/ui/timeline.tsx")
+    expect(run.filter((file) => file.includes("@opentui/"))).toEqual([])
   })
 })
 

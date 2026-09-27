@@ -70,7 +70,7 @@ export const SettingsProviders: Component<{
     return items
   })
 
-  // Connection state comes from the integration list like the TUI: credential
+  // Connection state comes from the integration list: credential
   // connections mean an API key or OAuth grant, env connections mean detected
   // environment variables, and a connectionless integration is config-provided.
   const source = (item: ProviderItem): ProviderSource | undefined => {

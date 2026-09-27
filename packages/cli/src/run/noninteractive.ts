@@ -10,7 +10,7 @@ import type {
 import { SessionMessage } from "@ocpp/schema/session-message"
 import { EOL } from "node:os"
 import { readFile } from "node:fs/promises"
-import { nonEmptyToolContent, toolOutputText, type MiniToolPart } from "@ocpp/tui/mini/tool"
+import { nonEmptyToolContent, toolOutputText, type ToolPart } from "./tool-display"
 import { UI } from "./ui"
 
 type Model = {
@@ -364,7 +364,7 @@ export async function runNonInteractivePrompt(input: Input) {
           },
           time: { created: current.timestamp, ran: current.timestamp, completed: time },
         }
-        const part: MiniToolPart = {
+        const part: ToolPart = {
           partID: current.id,
           sessionID: input.sessionID,
           messageID: event.data.assistantMessageID,
@@ -374,7 +374,7 @@ export async function runNonInteractivePrompt(input: Input) {
           state: {
             status: "completed",
             input: current.input,
-            output: toolOutputText(current.tool, event.data.content),
+            output: toolOutputText(event.data.content),
             title: current.tool,
             metadata: {
               metadata: event.data.metadata,
@@ -413,7 +413,7 @@ export async function runNonInteractivePrompt(input: Input) {
           },
           time: { created: current.timestamp, ran: current.timestamp, completed: time },
         }
-        const part: MiniToolPart = {
+        const part: ToolPart = {
           partID: current.id,
           sessionID: input.sessionID,
           messageID: event.data.assistantMessageID,
@@ -436,7 +436,7 @@ export async function runNonInteractivePrompt(input: Input) {
         renderedTools.add(key)
         if (input.compatibility === "v1" && (permissionRejected || formCancelled)) continue
         if (!emit("tool_use", time, { part })) {
-          if (content && toolOutputText(current.tool, content).trim())
+          if (content && toolOutputText(content).trim())
             await input.renderTool({
               ...tool,
               state: {
@@ -574,7 +574,7 @@ export async function runNonInteractivePrompt(input: Input) {
 
         const key = toolKey(message.id, item.id)
         if (renderedTools.has(key) || item.state.status === "streaming" || item.state.status === "running") continue
-        const part: MiniToolPart = {
+        const part: ToolPart = {
           partID: projectedPartID(message.id, `tool-${item.id}`),
           sessionID: input.sessionID,
           messageID: message.id,
@@ -586,7 +586,7 @@ export async function runNonInteractivePrompt(input: Input) {
               ? {
                   status: "completed",
                   input: item.state.input,
-                  output: toolOutputText(item.name, item.state.content),
+                  output: toolOutputText(item.state.content),
                   title: item.name,
                   metadata: { metadata: item.state.metadata, content: item.state.content },
                   time: { start: item.time.ran ?? item.time.created, end: item.time.completed ?? timestamp },
@@ -605,7 +605,7 @@ export async function runNonInteractivePrompt(input: Input) {
           await input.renderTool(item)
           continue
         }
-        if (item.state.content && toolOutputText(item.name, item.state.content).trim()) {
+        if (item.state.content && toolOutputText(item.state.content).trim()) {
           await input.renderTool({
             ...item,
             state: {

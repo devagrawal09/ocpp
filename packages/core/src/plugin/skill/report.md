@@ -105,7 +105,7 @@ Keep the title short and searchable. Prefer the form:
 <area>: <specific failure or symptom>
 ```
 
-Examples: `tui: skills dialog crashes outside location provider`,
+Examples: `app: skills dialog crashes outside location provider`,
 `cli: local service config writes release filename`.
 
 ## Publishing With GitHub CLI

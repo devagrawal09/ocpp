@@ -29,7 +29,6 @@ export interface Interface {
     pkg: string,
     options?: { readonly subpaths?: readonly string[]; readonly refresh?: boolean },
   ) => Effect.Effect<EntryPoint, InstallFailedError | EffectFlock.LockError>
-  readonly resolve: (pkg: string, options?: { readonly subpaths?: readonly string[] }) => Effect.Effect<EntryPoint>
   readonly which: (pkg: string, bin?: string) => Effect.Effect<string | undefined>
 }
 
@@ -204,25 +203,6 @@ const layer = Layer.effect(
       return resolveEntryPoint(first.name, first.path, options?.subpaths)
     }, Effect.scoped)
 
-    const resolve = Effect.fn("Npm.resolve")(function* (
-      pkg: string,
-      options?: { readonly subpaths?: readonly string[] },
-    ) {
-      const { default: npa } = yield* Effect.promise(() => import("npm-package-arg"))
-      const parsedName = (() => {
-        try {
-          return npa(pkg).name ?? undefined
-        } catch {
-          return undefined
-        }
-      })()
-      const root = yield* directory(pkg)
-      const name = yield* installedName(pkg, root, parsedName)
-      const dir = path.join(root, "node_modules", name)
-      if (!(yield* afs.existsSafe(dir))) return { directory: dir }
-      return resolveEntryPoint(name, dir, options?.subpaths)
-    })
-
     const which = Effect.fn("Npm.which")(function* (pkg: string, bin?: string) {
       const dir = yield* directory(pkg)
       const binDir = path.join(dir, "node_modules", ".bin")
@@ -276,7 +256,6 @@ const layer = Layer.effect(
 
     return Service.of({
       add,
-      resolve,
       which,
     })
   }),
@@ -292,10 +271,6 @@ const { runPromise } = makeRuntime(Service, LayerNode.compile(node))
 
 export async function add(...args: Parameters<Interface["add"]>) {
   return runPromise((svc) => svc.add(...args))
-}
-
-export async function resolve(...args: Parameters<Interface["resolve"]>) {
-  return runPromise((svc) => svc.resolve(...args))
 }
 
 export async function which(...args: Parameters<Interface["which"]>) {

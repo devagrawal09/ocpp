@@ -1,6 +1,5 @@
 import { isAbsolute, resolve } from "node:path"
 import type { ToolCall, ToolCallContent, ToolCallLocation, ToolCallUpdate, ToolKind } from "@agentclientprotocol/sdk"
-import { readDisplayText } from "@ocpp/tui/mini/tool"
 
 export type ToolInput = Record<string, unknown>
 export type ToolContent = ReadonlyArray<
@@ -105,14 +104,8 @@ export function completedToolUpdate(input: {
   readonly metadata?: Readonly<Record<string, unknown>>
 }): ToolCallUpdate {
   const normalized = toolContent(input.content)
-  // Read's model content is a JSON page envelope; show the clean text instead.
-  const firstText = input.content.find((part) => part.type === "text")
-  const read = input.toolName.toLocaleLowerCase() === "read" && firstText ? readDisplayText(firstText.text) : undefined
   const images = normalized.filter((part) => part.type === "content" && part.content.type === "image")
-  const primary =
-    read === undefined
-      ? normalized.filter((part) => !images.includes(part))
-      : [{ type: "content" as const, content: { type: "text" as const, text: read } }]
+  const primary = normalized.filter((part) => !images.includes(part))
   const oldText = stringValue(input.input.oldString)
   const newText = stringValue(input.input.newString)
   const diff: ToolCallContent[] =

@@ -447,8 +447,8 @@ export type ProviderRequest = {
 export type PermissionRule = { action: string; resource: string; effect: PermissionEffect }
 
 export type PluginInfo =
-  | { id: string; source: PluginSource; status: "active"; tui: boolean }
-  | { id?: string; source: PluginSource; status: "failed"; error: string; tui: boolean }
+  | { id: string; source: PluginSource; status: "active" }
+  | { id?: string; source: PluginSource; status: "failed"; error: string }
 
 export type SessionMessageLocationSwitched = {
   id: string
@@ -1108,67 +1108,6 @@ export type SessionIdle = {
   created: number
   metadata?: { [x: string]: any }
   type: "session.idle"
-  location?: LocationRef
-  data: { sessionID: string }
-}
-
-export type TuiPromptAppend = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "tui.prompt.append"
-  location?: LocationRef
-  data: { text: string }
-}
-
-export type TuiCommandExecute = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "tui.command.execute"
-  location?: LocationRef
-  data: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.share"
-      | "session.interrupt"
-      | "session.background"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | (string & {})
-  }
-}
-
-export type TuiToastShow = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "tui.toast.show"
-  location?: LocationRef
-  data: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    duration?: number | undefined
-  }
-}
-
-export type TuiSessionSelect = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "tui.session.select"
   location?: LocationRef
   data: { sessionID: string }
 }
@@ -2408,10 +2347,6 @@ export type V2Event =
   | WebsearchUpdated
   | SessionStatusUpdated
   | SessionIdle
-  | TuiPromptAppend
-  | TuiCommandExecute
-  | TuiToastShow
-  | TuiSessionSelect
   | InstallationUpdated
   | InstallationUpdateAvailable
   | VcsBranchUpdated

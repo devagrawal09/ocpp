@@ -157,11 +157,11 @@ describe("Npm.add", () => {
       name: "fixture-provider",
       exports: {
         ".": "./index.js",
-        "./tui": "./tui.js",
+        "./server": "./server.js",
       },
     })
     await Bun.write(path.join(tmp.path, "fixture-provider", "index.js"), "export const fixture = true\n")
-    await Bun.write(path.join(tmp.path, "fixture-provider", "tui.js"), "export const tui = true\n")
+    await Bun.write(path.join(tmp.path, "fixture-provider", "server.js"), "export const server = true\n")
 
     const spec = `fixture-provider@file:${path.join(tmp.path, "fixture-provider")}`
     await fs.mkdir(path.join(tmp.path, "cache", "packages", Npm.sanitize(spec)), { recursive: true })
@@ -169,12 +169,12 @@ describe("Npm.add", () => {
     const entries = await Effect.gen(function* () {
       const npm = yield* Npm.Service
       return {
-        tui: yield* npm.add(spec, { subpaths: ["tui", ""] }),
+        server: yield* npm.add(spec, { subpaths: ["server", ""] }),
         fallback: yield* npm.add(spec, { subpaths: ["missing", ""] }),
       }
     }).pipe(Effect.scoped, Effect.provide(npmLayer(path.join(tmp.path, "cache"))), Effect.runPromise)
 
-    expect(entries.tui.entrypoint).toEndWith("/tui.js")
+    expect(entries.server.entrypoint).toEndWith("/server.js")
     expect(entries.fallback.entrypoint).toEndWith("/index.js")
   })
 
@@ -193,13 +193,11 @@ describe("Npm.add", () => {
         return {
           added: yield* npm.add(spec),
           cached: yield* npm.add(spec),
-          resolved: yield* npm.resolve(spec),
         }
       }).pipe(Effect.scoped, Effect.provide(npmLayer(cache)), Effect.runPromise)
 
       expect(entries.added.entrypoint).toEndWith("/index.js")
       expect(entries.cached).toEqual(entries.added)
-      expect(entries.resolved).toEqual(entries.added)
       expect(
         await fs.stat(path.join(path.dirname(entries.added.directory), "fixture-dependency", "package.json")),
       ).toBeTruthy()
@@ -264,32 +262,4 @@ describe("Npm.add", () => {
     }).pipe(Effect.scoped, Effect.provide(npmLayer(cache)), Effect.runPromise)
     expect(await Bun.file(path.join(offline.directory, "index.js")).text()).toContain('root: "second"')
   }, 30_000)
-})
-
-describe("Npm.resolve", () => {
-  test("resolves a TUI entrypoint only when the package is already cached", async () => {
-    await using tmp = await tmpdir()
-    const cache = path.join(tmp.path, "cache")
-    const spec = "fixture-plugin@1.0.0"
-    const directory = path.join(cache, "packages", Npm.sanitize(spec), "node_modules", "fixture-plugin")
-    const missing = await Effect.gen(function* () {
-      const npm = yield* Npm.Service
-      return yield* npm.resolve(spec, { subpaths: ["tui"] })
-    }).pipe(Effect.scoped, Effect.provide(npmLayer(cache)), Effect.runPromise)
-    expect(missing.entrypoint).toBeUndefined()
-
-    await fs.mkdir(directory, { recursive: true })
-    await writePackage(directory, {
-      name: "fixture-plugin",
-      exports: { ".": "./index.js", "./tui": "./tui.js" },
-    })
-    await Bun.write(path.join(directory, "index.js"), "export default {}\n")
-    await Bun.write(path.join(directory, "tui.js"), "export default {}\n")
-
-    const resolved = await Effect.gen(function* () {
-      const npm = yield* Npm.Service
-      return yield* npm.resolve(spec, { subpaths: ["tui"] })
-    }).pipe(Effect.scoped, Effect.provide(npmLayer(cache)), Effect.runPromise)
-    expect(resolved.entrypoint).toEndWith("/tui.js")
-  })
 })

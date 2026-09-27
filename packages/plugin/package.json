@@ -12,7 +12,6 @@
   "exports": {
     ".": "./src/promise/index.ts",
     "./effect": "./src/effect/index.ts",
-    "./tui": "./src/tui/index.ts",
     "./*": "./src/*.ts"
   },
   "files": [
@@ -28,34 +27,10 @@
     "effect": "catalog:",
     "zod": "catalog:"
   },
-  "peerDependencies": {
-    "@ocpp/theme": "workspace:*",
-    "@opentui/core": ">=0.5.9",
-    "@opentui/solid": ">=0.5.9",
-    "solid-js": ">=1.9.0"
-  },
-  "peerDependenciesMeta": {
-    "@ocpp/theme": {
-      "optional": true
-    },
-    "@opentui/core": {
-      "optional": true
-    },
-    "@opentui/solid": {
-      "optional": true
-    },
-    "solid-js": {
-      "optional": true
-    }
-  },
   "devDependencies": {
-    "@ocpp/theme": "workspace:*",
-    "@opentui/core": "catalog:",
-    "@opentui/solid": "catalog:",
     "@tsconfig/bun": "catalog:",
     "@tsconfig/node22": "catalog:",
     "@types/node": "catalog:",
-    "solid-js": "catalog:",
     "typescript": "catalog:",
     "@typescript/native-preview": "catalog:"
   }

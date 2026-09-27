@@ -224,7 +224,7 @@ export default defineConfig({
             "zh-CN": "使用",
             "zh-TW": "使用",
           },
-          items: ["go", "tui", "cli", "web", "ide", "zen", "share", "github", "gitlab"],
+          items: ["go", "web", "cli", "zen", "share", "github", "gitlab"],
         },
 
         {
@@ -254,8 +254,6 @@ export default defineConfig({
             "rules",
             "agents",
             "models",
-            "themes",
-            "keybinds",
             "commands",
             "formatters",
             "permissions",
@@ -317,7 +315,7 @@ function configSchema() {
     hooks: {
       "astro:build:done": async () => {
         console.log("generating config schema")
-        spawnSync("../ocpp/script/schema.ts", ["./dist/config.json", "./dist/tui.json"])
+        spawnSync("../ocpp/script/schema.ts", ["./dist/config.json"])
       },
     },
   }

@@ -8,7 +8,6 @@ import { Npm } from "@ocpp/util/npm"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
 import { resolveConfigPath } from "../mcp/add"
-import { Config } from "../../../config"
 
 export default Runtime.handler(
   Commands.commands.plugin.commands.add,
@@ -17,36 +16,18 @@ export default Runtime.handler(
       return yield* Effect.fail(new Error("Plugin target must be an npm registry package or Git package specifier"))
     const npm = yield* Npm.Service
     const installed = yield* npm.add(input.package, { subpaths: ["server", ""] })
-    const tui = yield* npm.resolve(input.package, { subpaths: ["tui"] })
-    const target = configurationTarget(installed.entrypoint, tui.entrypoint)
-    if (!target)
-      return yield* Effect.fail(new Error(`Plugin package has no server or TUI entrypoint: ${input.package}`))
-
-    if (target === "server") {
-      const global = yield* Global.Service
-      const configPath = yield* Effect.promise(() => resolveConfigPath(global.config))
-      const changed = yield* Effect.promise(() => writePluginConfig(configPath, input.package))
-      process.stdout.write(
-        changed
-          ? `Plugin "${input.package}" installed and added to ${configPath}${EOL}`
-          : `Plugin "${input.package}" is already configured in ${configPath}${EOL}`,
-      )
-      return
-    }
-
-    const config = yield* Config.Service
-    yield* config.update((draft) => {
-      if (configured(draft.plugins, input.package)) return
-      draft.plugins = [...(draft.plugins ?? []), input.package]
-    })
-    process.stdout.write(`TUI plugin "${input.package}" installed and added to ${config.path}${EOL}`)
+    if (!installed.entrypoint)
+      return yield* Effect.fail(new Error(`Plugin package has no server entrypoint: ${input.package}`))
+    const global = yield* Global.Service
+    const configPath = yield* Effect.promise(() => resolveConfigPath(global.config))
+    const changed = yield* Effect.promise(() => writePluginConfig(configPath, input.package))
+    process.stdout.write(
+      changed
+        ? `Plugin "${input.package}" installed and added to ${configPath}${EOL}`
+        : `Plugin "${input.package}" is already configured in ${configPath}${EOL}`,
+    )
   }),
 )
-
-export function configurationTarget(server?: string, tui?: string) {
-  if (server) return "server" as const
-  if (tui) return "tui" as const
-}
 
 export async function writePluginConfig(configPath: string, spec: string) {
   const text = await readFile(configPath, "utf8").catch((error) => {

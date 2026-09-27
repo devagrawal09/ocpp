@@ -124,7 +124,6 @@ const layer = Layer.effect(
                   source: definition.source ?? { type: "builtin" },
                   status: "failed",
                   error: loaded.error,
-                  tui: definition.tui ?? false,
                 })
 
                 if (!previous) continue
@@ -176,7 +175,6 @@ function activeInfo(plugin: Versioned): Plugin.Info {
     id: Plugin.ID.make(plugin.id),
     source: plugin.source ?? { type: "builtin" },
     status: "active",
-    tui: plugin.tui ?? false,
   }
 }
 

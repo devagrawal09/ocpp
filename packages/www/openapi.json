@@ -15525,9 +15525,6 @@
           "disabled": {
             "type": "boolean"
           },
-          "codemode": {
-            "type": "boolean"
-          },
           "timeout": {
             "type": "object",
             "properties": {
@@ -15601,9 +15598,6 @@
             ]
           },
           "disabled": {
-            "type": "boolean"
-          },
-          "codemode": {
             "type": "boolean"
           },
           "timeout": {
@@ -16488,12 +16482,9 @@
               "status": {
                 "type": "string",
                 "enum": ["active"]
-              },
-              "tui": {
-                "type": "boolean"
               }
             },
-            "required": ["id", "source", "status", "tui"],
+            "required": ["id", "source", "status"],
             "additionalProperties": false
           },
           {
@@ -16511,12 +16502,9 @@
               },
               "error": {
                 "type": "string"
-              },
-              "tui": {
-                "type": "boolean"
               }
             },
-            "required": ["source", "status", "error", "tui"],
+            "required": ["source", "status", "error"],
             "additionalProperties": false
           }
         ]
@@ -17290,6 +17278,12 @@
           },
           "description": {
             "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Prompt.FileAttachment"
+            }
           },
           "metadata": {
             "type": "object"
@@ -18102,6 +18096,12 @@
           },
           "description": {
             "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Prompt.FileAttachment"
+            }
           },
           "type": {
             "type": "string",

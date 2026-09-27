@@ -25,7 +25,7 @@ function command(password: string, options: Options) {
     env: { OCPP_PASSWORD: password },
     extendEnv: true,
     // The server treats EOF on this pipe as the end of its ownership lease.
-    // The OS closes it even when the TUI is killed before Effect finalizers run.
+    // The OS closes it even when the CLI is killed before Effect finalizers run.
     stdin: "pipe",
     stderr: process.env.OCPP_PRINT_LOGS === "1" ? "inherit" : "ignore",
     killSignal: "SIGTERM",

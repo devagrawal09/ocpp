@@ -18,10 +18,7 @@
   "exports": {
     "./backend": "./src/backend/index.ts",
     "./backend/*": "./src/backend/*.ts",
-    "./frontend": "./src/frontend/simulation.ts",
-    "./frontend/*": "./src/frontend/*.ts",
-    "./protocol": "./src/protocol/index.ts",
-    "./recording": "./src/recording.ts"
+    "./protocol": "./src/protocol/index.ts"
   },
   "scripts": {
     "build": "bun run script/build.ts",
@@ -34,7 +31,6 @@
     "@ocpp/plugin": "workspace:*",
     "@ocpp/protocol": "workspace:*",
     "@ocpp/util": "workspace:*",
-    "@opentui/core": "catalog:",
     "effect": "catalog:",
     "ws": "8.21.0"
   },

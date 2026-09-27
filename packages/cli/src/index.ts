@@ -10,7 +10,6 @@ import { OCPP_CHANNEL, OCPP_LOCAL, OCPP_VERSION } from "./version"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Global } from "@ocpp/util/global"
 import { AppProcess } from "@ocpp/util/process"
-import { Config } from "./config"
 import { Npm } from "@ocpp/util/npm"
 import { Heap } from "./heap"
 import { CpuProfile } from "./cpu-profile"
@@ -48,7 +47,6 @@ const Handlers = Runtime.handlers(Commands, {
   stats: () => import("./commands/handlers/stats"),
   export: () => import("./commands/handlers/export"),
   import: () => import("./commands/handlers/import"),
-  mini: () => import("./commands/handlers/mini"),
   run: () => import("./commands/handlers/run"),
   pair: () => import("./commands/handlers/pair"),
   service: {
@@ -96,7 +94,6 @@ Effect.gen(function* () {
     }).pipe(Effect.andThen(Effect.failCause(cause))),
   ),
   Effect.annotateLogs({ role: "cli" }),
-  Effect.provide(Config.layer),
   Effect.provide(Updater.layer),
   Effect.provide(
     LayerNode.compile(LayerNode.group([Global.node, AppProcess.node, Npm.node]), [

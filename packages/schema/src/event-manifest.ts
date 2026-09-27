@@ -30,7 +30,6 @@ import { Skill } from "./skill.js"
 import { SessionCompactionEvent } from "./session-compaction-event.js"
 import { SessionEvent } from "./session-event.js"
 import { SessionStatusEvent } from "./session-status-event.js"
-import { TuiEvent } from "./tui-event.js"
 import { VcsEvent } from "./vcs-event.js"
 import { WorkspaceEvent } from "./workspace-event.js"
 import { WorktreeEvent } from "./worktree-event.js"
@@ -67,9 +66,7 @@ const featureDefinitions = Event.inventory(
 export const ServerDefinitions = Event.inventory(
   ...foundationDefinitions,
   ...featureDefinitions,
-  // Current events the TUI consumes from the public stream.
   ...SessionStatusEvent.Definitions,
-  ...TuiEvent.Definitions,
   ...InstallationEvent.Definitions,
   ...VcsEvent.Definitions,
   McpEvent.StatusChanged,
@@ -84,7 +81,6 @@ export const Definitions = Event.inventory(
   ...InstallationEvent.Definitions,
   ...featureDefinitions,
   ...LspEvent.Definitions,
-  ...TuiEvent.Definitions,
   ...McpEvent.Definitions,
   ...LegacyEventV1.Definitions,
   ...FileSystemV1.Event.Definitions,

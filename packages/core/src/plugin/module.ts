@@ -19,13 +19,11 @@ const Definition = Schema.Struct({
   default: Schema.Union([
     Schema.Struct({
       id: Schema.String,
-      tui: Schema.optional(Schema.Boolean),
       vcs: Schema.optional(Discovery),
       effect: Schema.declare<Plugin["effect"]>((input): input is Plugin["effect"] => typeof input === "function"),
     }),
     Schema.Struct({
       id: Schema.String,
-      tui: Schema.optional(Schema.Boolean),
       vcs: Schema.optional(Discovery),
       setup: Schema.declare<Parameters<typeof PluginPromise.fromPromise>[0]["setup"]>(
         (input): input is Parameters<typeof PluginPromise.fromPromise>[0]["setup"] => typeof input === "function",
@@ -51,7 +49,6 @@ export const load = Effect.fn("PluginModule.load")(function* (
   const plugin = "effect" in value ? value : PluginPromise.fromPromise(value)
   return {
     id: plugin.id,
-    tui: plugin.tui,
     vcs: plugin.vcs,
     version: JSON.stringify(operation),
     source: path.isAbsolute(operation.target)

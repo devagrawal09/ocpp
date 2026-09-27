@@ -16,3 +16,10 @@ test("omits tool guidance when no tool is reachable", () => {
   expect(prompt).not.toContain("execute")
   expect(prompt).toContain("Read and follow them.\n\n# Communication")
 })
+
+test("explains commands and events only when their tools are reachable", () => {
+  expect(SessionSystemPrompt.make(["read", "command.define", "event.define"])).toContain(
+    "A saved function can also back a slash command the user runs (`tools.command.define`) or an event that runs on a schedule (`tools.event.define`).",
+  )
+  expect(SessionSystemPrompt.make(["read"])).not.toContain("tools.command.define")
+})

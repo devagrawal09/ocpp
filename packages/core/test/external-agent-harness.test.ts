@@ -246,6 +246,56 @@ describe("vendor-driven sessions", () => {
     }),
   )
 
+  it.live("orchestrates several executions: each completion reaches the vendor as it lands, in one vendor run", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = async (options, message) => {
+        if (message === "Fan out") {
+          await run(options, 'const slow = tools.shell({ command: "sleep 1; echo slow done" })')
+          await run(options, "const fast = 40 + 2")
+          return say("Launched both; waiting.")(options, message)
+        }
+        return say("Noted: " + (message.includes("slow") ? "slow" : "fast"))(options, message)
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Fan out" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs).toHaveLength(1)
+      // The fast result arrives first and is answered while the slow execution is still running.
+      expect(vendor.messages).toHaveLength(3)
+      expect(vendor.messages[1]).toContain("saved notebook values: fast")
+      expect(vendor.messages[2]).toContain("saved notebook values: slow")
+      expect(texts(yield* messages(env.session.id)).filter((text) => text.startsWith("Noted"))).toEqual([
+        "Noted: fast",
+        "Noted: slow",
+      ])
+      const store = yield* CodeModeStore.Service
+      expect(yield* store.bindings(env.session.id)).toMatchObject({ fast: 42 })
+    }),
+  )
+
+  it.live("a running turn receives steers, as Claude's streaming input does, while queued input waits", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      const midTurn: string[] = []
+      vendor.turn = async (options, message) => {
+        if (message !== "Start") return say("Later: " + message)(options, message)
+        await options.emit({ type: "step-start", id: "busy" })
+        await options.emit({ type: "text", id: "t", delta: "Working" })
+        // Still inside the turn: only steers are delivered now.
+        midTurn.push((await options.next(options.signal)) ?? "none")
+        await options.emit({ type: "step-end" })
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
+      while (vendor.messages.length === 0) yield* Effect.promise(() => Bun.sleep(5))
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Queued for later", delivery: "queue" })
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Steer now" })
+      yield* env.sessions.wait(env.session.id)
+      expect(midTurn).toEqual(["Steer now"])
+      expect(vendor.messages).toEqual(["Start", "Queued for later"])
+      expect(vendor.runs).toHaveLength(1)
+    }),
+  )
+
   it.live("an execute call is matched to a vendor announcement that arrives after the MCP call", () =>
     Effect.gen(function* () {
       const env = yield* setup(ref("codex", "gpt-5.6-sol"))

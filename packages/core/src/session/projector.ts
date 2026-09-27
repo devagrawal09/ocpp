@@ -195,6 +195,7 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
           sql`${SessionMessageTable.type} != 'assistant' or json_extract(${SessionMessageTable.data}, '$.time.completed') is not null`,
           sql`${SessionMessageTable.type} != 'shell' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
           sql`${SessionMessageTable.type} != 'compaction' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
+          sql`${SessionMessageTable.type} != 'invocation' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
         ),
       )
       .orderBy(asc(SessionMessageTable.seq))
@@ -423,9 +424,29 @@ function run(db: DatabaseService, event: MessageEvent) {
           return message.type === "compaction" ? message : undefined
         })
       },
+      getInvocation(messageID) {
+        return Effect.gen(function* () {
+          const row = yield* db
+            .select()
+            .from(SessionMessageTable)
+            .where(
+              and(
+                eq(SessionMessageTable.id, messageID),
+                eq(SessionMessageTable.session_id, event.data.sessionID),
+                eq(SessionMessageTable.type, "invocation"),
+              ),
+            )
+            .get()
+            .pipe(Effect.orDie)
+          if (!row) return
+          const message = decodeRow(row)
+          return message.type === "invocation" ? message : undefined
+        })
+      },
       updateAssistant: updateMessage,
       updateShell: updateMessage,
       updateCompaction: updateMessage,
+      updateInvocation: updateMessage,
       appendMessage,
     }
     yield* SessionMessageUpdater.update(adapter, event)
@@ -744,6 +765,7 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.CodeMode.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.CodeMode.Completed, (event) => run(db, event))
     yield* bus.project(SessionEvent.CodeMode.Failed, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Invocation.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Ended, (event) => run(db, event))
     yield* bus.project(SessionEvent.RetryScheduled, (event) => run(db, event))

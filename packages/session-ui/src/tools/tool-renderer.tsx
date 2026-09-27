@@ -44,6 +44,7 @@ import type {
   JsonValue,
   SessionMessageAssistantReasoning,
   SessionMessageAssistantTool,
+  SessionMessageInvocation,
   SessionMessageShell,
 } from "@ocpp/client/promise"
 import {
@@ -1983,6 +1984,57 @@ export function SessionShellMessage(props: {
       <Show when={error()}>
         {(error) => <ToolErrorCard tool="shell" error={error()} subtitle={props.message.command} />}
       </Show>
+    </div>
+  )
+}
+
+/**
+ * A Code Mode run that a command or event started. It renders as the execute run it is, under a label
+ * naming what started it.
+ */
+export function SessionInvocationMessage(props: {
+  message: SessionMessageInvocation
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSizeChange?: () => void
+}) {
+  const i18n = useI18n()
+  const command = () => (props.message.trigger.type === "command" ? props.message.trigger : undefined)
+  const part = createMemo((): SessionMessageAssistantTool => {
+    const input = { code: props.message.code }
+    const metadata = {
+      executionID: props.message.executionID,
+      executionStatus: props.message.status,
+      events: [...(props.message.events ?? [])],
+      ...(props.message.error === undefined ? {} : { error: props.message.error }),
+    }
+    const base = { type: "tool" as const, id: props.message.id, name: "execute", time: props.message.time }
+    if (props.message.status === "running") return { ...base, state: { status: "running", input, metadata } }
+    return { ...base, state: { status: "completed", input, metadata, content: [{ type: "text", text: "" }] } }
+  })
+  return (
+    <div data-component="session-invocation-message" data-timeline-part-id={props.message.id}>
+      <div data-slot="session-invocation-trigger" class="flex min-w-0 items-baseline gap-2 pb-1 text-13-regular">
+        <bdi dir="auto" class="shrink-0 text-13-medium text-text-strong">
+          {command()
+            ? "/" + props.message.trigger.name
+            : i18n.t("ui.sessionTimeline.invocation.event", { name: props.message.trigger.name })}
+        </bdi>
+        <Show when={command()?.text}>
+          {(text) => (
+            <bdi dir="auto" class="min-w-0 truncate text-text-weak">
+              {text()}
+            </bdi>
+          )}
+        </Show>
+      </div>
+      <CurrentContextToolGroup
+        parts={[part()]}
+        busy={props.message.status === "running"}
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        onSizeChange={props.onSizeChange}
+      />
     </div>
   )
 }

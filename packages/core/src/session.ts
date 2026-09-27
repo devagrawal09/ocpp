@@ -56,6 +56,7 @@ import { Event } from "@ocpp/schema/event"
 import { Skill } from "./skill.js"
 import { Job } from "./job.js"
 import { Command } from "./command.js"
+import { CodeModeInvocation } from "./codemode/invocation-service.js"
 import { Global } from "@ocpp/util/global"
 import { SessionEnvironment } from "./session/environment.js"
 import { SessionHistory } from "./session/history.js"
@@ -521,13 +522,26 @@ const layer = Layer.effect(
       }),
       command: Effect.fn("Session.command")(function* (input) {
         const session = yield* result.get(input.sessionID)
-        const commands = yield* Effect.gen(function* () {
+        const services = yield* Effect.gen(function* () {
           const plugins = yield* PluginSupervisor.Service
           yield* plugins.flush
-          return yield* Command.Service
+          return { commands: yield* Command.Service, invocations: yield* CodeModeInvocation.Service }
         }).pipe(Effect.provide(locations.get(session.location)))
+        // A command the agent defined for this Session shadows a Location command of the same name.
+        const invoked = yield* services.invocations
+          .command({ sessionID: input.sessionID, name: input.command, text: input.text })
+          .pipe(
+            Effect.mapError(
+              (error) =>
+                new Command.ExecutionError({
+                  command: input.command,
+                  message: `/${input.command} could not run: ${error.message}`,
+                }),
+            ),
+          )
+        if (invoked) return
         const delivery = input.delivery ?? "steer"
-        yield* commands.execute({
+        yield* services.commands.execute({
           name: input.command,
           invocation: {
             sessionID: input.sessionID,

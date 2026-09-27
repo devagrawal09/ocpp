@@ -24,6 +24,9 @@ import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { LocationActivity } from "@ocpp/core/location-activity"
 import { ModelsDev } from "@ocpp/core/models-dev"
 import { SessionRestart } from "@ocpp/core/session/execution/restart"
+import { CodeModeCommand } from "@ocpp/core/codemode/command"
+import { CodeModeEvent } from "@ocpp/core/codemode/event"
+import { CodeModeScheduler } from "@ocpp/core/codemode/scheduler"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { SdkPlugins } from "@ocpp/core/plugin/sdk"
 import { WellKnown } from "@ocpp/core/wellknown"
@@ -68,6 +71,9 @@ const applicationServiceNodes = [
   LocationServiceMap.node,
   LocationActivity.node,
   SessionRestart.node,
+  CodeModeCommand.node,
+  CodeModeEvent.node,
+  CodeModeScheduler.node,
   Workspace.node,
 ] as const
 const applicationServices = LayerNode.group(applicationServiceNodes)

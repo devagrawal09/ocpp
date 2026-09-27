@@ -13,6 +13,11 @@ const CODE_MODE = [
 export function make(tools: string[]) {
   if (tools.length === 0) return PROMPT.replace("${OCPP_TOOL_GUIDANCE}", "")
   const instructions: string[] = [...CODE_MODE]
+  if (tools.includes("command.define") || tools.includes("event.define")) {
+    instructions.push(
+      "- A saved function can also back a slash command the user runs (`tools.command.define`) or an event that runs on a schedule (`tools.event.define`). Those runs happen without you, and their outcomes reach you as notifications on your next turn.",
+    )
+  }
   if (tools.includes("write")) {
     instructions.push(
       "- Use `tools.write` to create files or completely replace their content. Prefer `tools.edit` for targeted changes.",

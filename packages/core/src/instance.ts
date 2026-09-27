@@ -2,6 +2,7 @@ import { Effect, Layer } from "effect"
 import { Agent } from "./agent.js"
 import { AISDK } from "./aisdk.js"
 import { Catalog } from "./catalog.js"
+import { CodeModeInvocation } from "./codemode/invocation.js"
 import { Command } from "./command.js"
 import { Config } from "./config.js"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -87,6 +88,7 @@ const nodes = [
   Mcp.node,
   Permission.node,
   Tool.node,
+  CodeModeInvocation.node,
   ToolOutput.node,
   Image.node,
   SkillInstructions.node,

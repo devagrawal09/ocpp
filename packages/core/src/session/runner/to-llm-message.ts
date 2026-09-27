@@ -278,6 +278,9 @@ function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMe
           metadata: message.metadata,
         }),
       ]
+    case "invocation":
+      // An invocation's outcome enters context once, through its execution's completion notification.
+      return []
     case "assistant":
       return assistant(message, model, providerMetadataKey)
     case "compaction":

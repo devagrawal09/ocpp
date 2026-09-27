@@ -77,6 +77,7 @@ export type ComposerSession = {
     session: {
       prompt: (input: Parameters<Data["session"]["prompt"]>[0]) => Promise<unknown>
       setStatus: Data["session"]["setStatus"]
+      command: Pick<Data["session"]["command"], "list">
     }
   }
   current: Accessor<{ agent?: string; model?: { id: string; providerID: string; variant?: string } } | undefined>

@@ -162,7 +162,8 @@ export const node = makeGlobalNode({
 
 function isSettled(message: SessionMessage.Info) {
   if (message.type === "assistant") return message.time.completed !== undefined
-  if (message.type === "shell" || message.type === "compaction") return message.status !== "running"
+  if (message.type === "shell" || message.type === "compaction" || message.type === "invocation")
+    return message.status !== "running"
   return true
 }
 
@@ -284,6 +285,18 @@ function sanitizeMessage(message: SessionMessage.Info): SessionMessage.Info {
           state: sanitizeToolState(message.id, content.state),
         }
       }),
+    }
+  if (message.type === "invocation")
+    return {
+      ...message,
+      metadata: meta,
+      trigger:
+        message.trigger.type === "command"
+          ? { ...message.trigger, text: redact("invocation-text", message.id, message.trigger.text) }
+          : message.trigger,
+      code: redact("invocation-code", message.id, message.code),
+      events: undefined,
+      error: message.error === undefined ? undefined : redact("invocation-error", message.id, message.error),
     }
   if (message.type === "compaction") {
     if (message.status === "failed")

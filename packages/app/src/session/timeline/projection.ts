@@ -52,7 +52,7 @@ export function createTimelineProjection(input: {
               : model,
         })
       }
-      if (message.type === "shell") userID = undefined
+      if (message.type === "shell" || message.type === "invocation") userID = undefined
       if (message.type !== "assistant") return
       agent = message.agent
       model = message.model
@@ -65,7 +65,7 @@ export function createTimelineProjection(input: {
     let userID: string | undefined
     input.sessionMessages().forEach((message) => {
       if (message.type === "user") userID = message.id
-      if (message.type === "shell") userID = undefined
+      if (message.type === "shell" || message.type === "invocation") userID = undefined
       if (message.type !== "assistant") return
       if (!userID) userID = message.id
       const messages = result.get(userID)

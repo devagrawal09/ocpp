@@ -1,4 +1,6 @@
 import { Session } from "@ocpp/core/session"
+import { CodeModeCommand } from "@ocpp/core/codemode/command"
+import { CodeModeEvent } from "@ocpp/core/codemode/event"
 import { SessionStats } from "@ocpp/core/session/stats"
 import { SessionTitle } from "@ocpp/core/session/title"
 import { SessionTransfer } from "@ocpp/core/session/transfer"
@@ -28,6 +30,8 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
   Effect.gen(function* () {
     const session = yield* Session.Service
     const transfer = yield* SessionTransfer.Service
+    const commands = yield* CodeModeCommand.Service
+    const events = yield* CodeModeEvent.Service
     const busySession = (error: Session.BusyError) =>
       new SessionBusyError({
         sessionID: error.sessionID,
@@ -666,6 +670,20 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
             ),
           )
           return { data: message }
+        }),
+      )
+      .handle(
+        "session.commands",
+        Effect.fn(function* (ctx) {
+          yield* session.get(ctx.params.sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          return { data: yield* commands.list(ctx.params.sessionID) }
+        }),
+      )
+      .handle(
+        "session.events",
+        Effect.fn(function* (ctx) {
+          yield* session.get(ctx.params.sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          return { data: yield* events.list(ctx.params.sessionID) }
         }),
       )
   }),

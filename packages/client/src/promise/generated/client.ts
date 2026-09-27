@@ -86,6 +86,10 @@ import type {
   SessionEnvironmentOutput,
   SessionViewInput,
   SessionViewOutput,
+  SessionCommandsInput,
+  SessionCommandsOutput,
+  SessionEventsInput,
+  SessionEventsOutput,
   MessageListInput,
   MessageListOutput,
   ModelListInput,
@@ -973,6 +977,28 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      commands: (input: SessionCommandsInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionCommandsOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/command`,
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      events: (input: SessionEventsInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionEventsOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/event`,
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
     },
     message: {
       list: (input: MessageListInput, requestOptions?: RequestOptions) =>

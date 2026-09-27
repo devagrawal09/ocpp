@@ -3,6 +3,7 @@ import type {
   ModelRef,
   SessionMessageAssistant,
   SessionMessageInfo,
+  SessionMessageInvocation,
   SessionMessageShell,
   SessionMessageUser,
   SessionStatus,
@@ -16,7 +17,7 @@ export { TimelineRow, type PartGroup, type PartRef, type TimelineRowMap }
 
 export type ReasoningMode = "hidden" | "compact" | "full"
 
-type Notice = Exclude<SessionMessageInfo, { type: "user" | "assistant" | "shell" }>
+type Notice = Exclude<SessionMessageInfo, { type: "user" | "assistant" | "shell" | "invocation" }>
 type Entry = { type: "assistant"; message: SessionMessageAssistant } | { type: "notice"; message: Notice }
 type Content = SessionMessageAssistant["content"][number]
 type GroupRow = Extract<TimelineRow.TimelineRow, { _tag: "AssistantPart" }>
@@ -147,6 +148,7 @@ export namespace Timeline {
       time: { created: number }
       user?: SessionMessageUser
       shell?: SessionMessageShell
+      invocation?: SessionMessageInvocation
       entries: Entry[]
     }
 
@@ -168,6 +170,13 @@ export namespace Timeline {
         current = turn
         return
       }
+      // A command or event run starts its own turn, like a user shell command.
+      if (message.type === "invocation") {
+        const turn: Turn = { id: message.id, time: message.time, invocation: message, entries: [] }
+        turns.push(turn)
+        current = turn
+        return
+      }
       if (message.type === "user") {
         if (turnByUserID.has(message.id)) return
         const turn: Turn = { id: message.id, time: message.time, user: message, entries: [] }
@@ -183,7 +192,7 @@ export namespace Timeline {
         current = existing
         return
       }
-      if (current && !current.user && !current.shell) {
+      if (current && !current.user && !current.shell && !current.invocation) {
         current.entries.push({ type: "assistant", message })
         return
       }
@@ -200,6 +209,16 @@ export namespace Timeline {
           (message) => new TimelineRow.Notice({ userMessageID: turns[0]?.id ?? message.id, messageID: message.id }),
         ),
         ...turns.flatMap((turn, index) => {
+          if (turn.invocation)
+            return [
+              ...(index > 0 ? [new TimelineRow.TurnGap({ userMessageID: turn.id })] : []),
+              new TimelineRow.Invocation({ userMessageID: turn.id, messageID: turn.invocation.id }),
+              ...turn.entries.flatMap((entry) =>
+                entry.type === "notice"
+                  ? [new TimelineRow.Notice({ userMessageID: turn.id, messageID: entry.message.id })]
+                  : [],
+              ),
+            ]
           if (turn.shell)
             return [
               ...(index > 0 ? [new TimelineRow.TurnGap({ userMessageID: turn.id })] : []),
@@ -412,7 +431,7 @@ function indexUserContext(messages: SessionMessageInfo[]) {
             : model,
       })
     }
-    if (message.type === "shell") userID = undefined
+    if (message.type === "shell" || message.type === "invocation") userID = undefined
     if (message.type !== "assistant") return
     agent = message.agent
     model = message.model
@@ -428,7 +447,7 @@ function indexAssistantMessages(messages: SessionMessageInfo[]) {
 
   messages.forEach((message) => {
     if (message.type === "user") userID = message.id
-    if (message.type === "shell") userID = undefined
+    if (message.type === "shell" || message.type === "invocation") userID = undefined
     if (message.type !== "assistant") return
     if (!userID) userID = message.id
     const existing = result.get(userID)
@@ -680,7 +699,13 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function isNotice(message: SessionMessageInfo): message is Notice {
-  if (message.type === "user" || message.type === "assistant" || message.type === "shell") return false
+  if (
+    message.type === "user" ||
+    message.type === "assistant" ||
+    message.type === "shell" ||
+    message.type === "invocation"
+  )
+    return false
   if (message.type !== "synthetic") return true
   return !!message.description?.trim()
 }

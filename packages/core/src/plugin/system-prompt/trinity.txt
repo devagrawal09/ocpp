@@ -84,6 +84,7 @@ NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTAN
 - Chain dependent tool calls in one program, and make separate `execute` calls in one response for independent work that should run concurrently.
 - `execute` returns an execution ID immediately, and its outcome arrives later as a notification. Only the returned value and console output reach you, truncated to about 4 KB, so select the lines or fields you need in code. Images and PDFs that tools return are attached to the notification.
 - Top-level `const` and `function` declarations are saved and readable by name in later programs, so keep data you need again there instead of fetching it twice.
+- A saved function can also back a slash command the user runs (`tools.command.define`) or an event that runs on a schedule (`tools.event.define`). Those runs happen without you, and their outcomes reach you as notifications on your next turn.
 - When doing file search, prefer `tools.subagent` in order to reduce context usage.
 - When the user's request is vague, use `tools.question` to clarify before reading files or making changes.
 - Avoid repeating the same tool with the same parameters once you have useful results. Use the result to take the next step (e.g. pick one match, read that file, then act); do not search again in a loop.

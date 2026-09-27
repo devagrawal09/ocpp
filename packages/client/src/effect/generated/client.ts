@@ -92,6 +92,10 @@ import type {
   SessionEnvironmentOutput,
   SessionViewInput,
   SessionViewOutput,
+  SessionCommandsInput,
+  SessionCommandsOutput,
+  SessionEventsInput,
+  SessionEventsOutput,
   MessageListInput,
   MessageListOutput,
   ModelListInput,
@@ -685,6 +689,22 @@ const EndpointSessionView = (raw: RawClient["server.session"]) => (input: Sessio
     ),
   )
 
+const EndpointSessionCommands = (raw: RawClient["server.session"]) => (input: SessionCommandsInput) =>
+  preserveEffect<SessionCommandsOutput>()(
+    raw["session.commands"]({ params: { sessionID: input["sessionID"] } }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
+const EndpointSessionEvents = (raw: RawClient["server.session"]) => (input: SessionEventsInput) =>
+  preserveEffect<SessionEventsOutput>()(
+    raw["session.events"]({ params: { sessionID: input["sessionID"] } }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
 const adaptGroupSession = (raw: RawClient["server.session"]) => ({
   list: EndpointSessionList(raw),
   stats: EndpointSessionStats(raw),
@@ -733,6 +753,8 @@ const adaptGroupSession = (raw: RawClient["server.session"]) => ({
   messageUpdate: EndpointSessionMessageUpdate(raw),
   environment: EndpointSessionEnvironment(raw),
   view: EndpointSessionView(raw),
+  commands: EndpointSessionCommands(raw),
+  events: EndpointSessionEvents(raw),
 })
 
 const EndpointMessageList = (raw: RawClient["server.message"]) => (input: MessageListInput) =>

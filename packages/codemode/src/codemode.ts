@@ -75,6 +75,7 @@ export type ImpureHelper = "time.now" | "Math.random"
 export type DataValue = Schema.Json
 
 export type { NotebookValue } from "./interpreter/durable.js"
+export { isFunctionValue } from "./interpreter/durable.js"
 
 /** Configuration shared by `CodeMode.make` and `CodeMode.execute`. */
 export type Options<Provided extends Record<string, unknown> = {}> = Omit<ExecuteOptions<Provided>, "code">

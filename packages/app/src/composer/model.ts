@@ -218,14 +218,33 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       mention: { type: "file" as const, path, content: `@${path}`, start: 0, end: 0 },
     })),
   ])
+  // Commands the agent defined for this session shadow Location commands of the same name.
+  const sessionID = () => (adapter.kind === "active-session" ? adapter.session().id : undefined)
+  createEffect(() => {
+    const id = sessionID()
+    if (id) void data.session.command.sync(id).catch(() => undefined)
+  })
+  const sessionCommands = createMemo(() => {
+    const id = sessionID()
+    return id ? (data.session.command.list(id) ?? []) : []
+  })
   const slashCommands = createMemo(() => [
-    ...(data.location.command.list({ directory: sdk().directory }) ?? []).map((item) => ({
-      id: `custom.${item.name}`,
+    ...sessionCommands().map((item) => ({
+      id: `session.${item.name}`,
       trigger: item.name,
       title: item.name,
-      description: item.description,
+      description: item.description || undefined,
       type: "custom" as const,
     })),
+    ...(data.location.command.list({ directory: sdk().directory }) ?? [])
+      .filter((item) => !sessionCommands().some((command) => command.name === item.name))
+      .map((item) => ({
+        id: `custom.${item.name}`,
+        trigger: item.name,
+        title: item.name,
+        description: item.description,
+        type: "custom" as const,
+      })),
     ...command.options
       .filter((item) => !item.disabled && !item.id.startsWith("suggested.") && item.slash)
       .map((item) => ({

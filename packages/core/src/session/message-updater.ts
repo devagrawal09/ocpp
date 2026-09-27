@@ -11,9 +11,11 @@ export interface Adapter {
   readonly getAssistant: (messageID: SessionMessage.ID) => Effect.Effect<SessionMessage.Assistant | undefined>
   readonly getShell: (shellID: SessionMessage.Shell["shellID"]) => Effect.Effect<SessionMessage.Shell | undefined>
   readonly getCompaction: () => Effect.Effect<SessionMessage.Compaction | undefined>
+  readonly getInvocation: (messageID: SessionMessage.ID) => Effect.Effect<SessionMessage.Invocation | undefined>
   readonly updateAssistant: (assistant: SessionMessage.Assistant) => Effect.Effect<void>
   readonly updateShell: (shell: SessionMessage.Shell) => Effect.Effect<void>
   readonly updateCompaction: (compaction: SessionMessage.Compaction) => Effect.Effect<void>
+  readonly updateInvocation: (invocation: SessionMessage.Invocation) => Effect.Effect<void>
   readonly appendMessage: (message: SessionMessage.Info) => Effect.Effect<void>
 }
 
@@ -48,6 +50,22 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
       const assistant = yield* adapter.getAssistant(messageID)
       if (!assistant) return
       yield* adapter.updateAssistant(produce(assistant, recipe))
+    })
+
+  // An execution belongs to either a model tool call or an invocation message; only one of them matches.
+  // Restart recovery settles an execution without a trace, so an empty trace keeps the projected one.
+  const settleInvocation = (event: SessionEvent.CodeMode.Completed | SessionEvent.CodeMode.Failed) =>
+    Effect.gen(function* () {
+      const invocation = yield* adapter.getInvocation(event.data.assistantMessageID)
+      if (invocation?.executionID !== event.data.executionID) return
+      yield* adapter.updateInvocation(
+        produce(invocation, (draft) => {
+          draft.status = event.type === "session.codemode.completed" ? "completed" : event.data.status
+          if (event.data.events.length > 0) draft.events = castDraft(event.data.events)
+          if (event.type === "session.codemode.failed") draft.error = event.data.error
+          draft.time.completed = created
+        }),
+      )
     })
 
   const clearCurrentRetry = Effect.gen(function* () {
@@ -318,6 +336,19 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
         })
       },
       "session.codemode.started": () => Effect.void,
+      "session.invocation.started": (event) =>
+        adapter.appendMessage(
+          SessionMessage.Invocation.make({
+            id: SessionMessage.ID.fromEvent(event.id),
+            type: "invocation",
+            metadata: event.metadata,
+            trigger: event.data.trigger,
+            code: event.data.code,
+            executionID: event.data.executionID,
+            status: "running",
+            time: { created },
+          }),
+        ),
       "session.codemode.completed": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
           const match = latestTool(draft, event.data.id)
@@ -329,7 +360,7 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             events: event.data.events,
             ...(event.data.resumed === true ? { resumed: true } : {}),
           })
-        })
+        }).pipe(Effect.andThen(settleInvocation(event)))
       },
       "session.codemode.failed": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
@@ -343,7 +374,7 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             error: event.data.error,
             ...(event.data.resumed === true ? { resumed: true } : {}),
           })
-        })
+        }).pipe(Effect.andThen(settleInvocation(event)))
       },
       // Terminal tool events are self-contained. The only preserved state is a
       // durable Code Mode terminal that raced ahead of this outer tool success.

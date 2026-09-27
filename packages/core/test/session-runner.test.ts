@@ -52,6 +52,9 @@ import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { SystemPromptPlugin } from "@ocpp/core/plugin/system-prompt"
 import { QuestionTool } from "@ocpp/core/tool/plugin/question"
+import { SkillTool } from "@ocpp/core/tool/plugin/skill"
+import { Skill } from "@ocpp/core/skill"
+import { SkillPlugin } from "@ocpp/core/plugin/skill"
 import { Agent } from "@ocpp/core/agent"
 import { Config } from "@ocpp/core/config"
 import { Document, Info } from "@ocpp/schema/config"
@@ -81,6 +84,8 @@ import { promptLocationNode } from "./fixture/prompt-location"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Expected } from "./lib/session-message"
 import { permissionLayer } from "./lib/permission"
+import { registerToolPlugin } from "./lib/tool"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { agentHost, catalogHost, host } from "./plugin/host"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
@@ -512,6 +517,7 @@ const layer = Layer.unwrap(
         SessionRunnerLLM.node,
         SessionExecution.node,
         Session.node,
+        PluginRuntime.node,
         PluginRuntime.providerNodeWithCell(runtime),
       ]),
       [
@@ -1321,6 +1327,60 @@ describe("SessionRunnerLLM", () => {
     expect(resized.get_height()).toBeLessThanOrEqual(4)
     resized.free()
     expect(userTexts(s.requests[2]).at(-1)).toContain("Attached 1 file returned by tool calls: screen.png.")
+  })
+
+  scenario("delivers a skill loaded from Code Mode to the model's next request in full", function* (s) {
+    s.directTools = false
+    const ocpp = Skill.Info.make({
+      id: Skill.ID.make("ocpp"),
+      name: Skill.Name.make("OC++"),
+      description: SkillPlugin.OcppDescription,
+      location: AbsolutePath.make("/builtin/ocpp.md"),
+      content: SkillPlugin.OcppContent,
+    })
+    // Larger than the 4 KiB preview and 8 KiB summary that bound what an execution returns to the model.
+    expect(new TextEncoder().encode(ocpp.content).length).toBeGreaterThan(10_000)
+    yield* registerToolPlugin(SkillTool.Plugin).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.mock(Skill.Service, {
+            get: (id) => Effect.succeed(id === ocpp.id ? ocpp : undefined),
+            list: () => Effect.succeed([ocpp]),
+          }),
+          AppNodeBuilder.build(FSUtil.node),
+          permissionLayer({ assert: () => Effect.void }),
+        ),
+      ),
+    )
+    yield* s.admit("How do I configure OC++?")
+    // The program waits on echo first, so the skill loads after the admitting turn has ended.
+    yield* s.llm.push(
+      TestLLM.tool("call-skill", "execute", {
+        code: 'const ready = tools.echo({ text: "ready" })\nreturn tools.skill({ id: "ocpp" })',
+      }),
+      [],
+    )
+    const tools = yield* s.blockTools()
+
+    yield* s.resume
+    yield* tools.release
+    yield* s.llm.wait(3)
+    yield* s.session.wait(sessionID)
+
+    const texts = userTexts(s.requests[2])
+    const instructions = Skill.toModelOutput(ocpp, [])
+    expect(texts).toContain(instructions)
+    // The completion notification follows the skill and carries only the small confirmation.
+    expect(texts.indexOf(instructions)).toBe(texts.length - 2)
+    expect(texts.at(-1)).toContain('"name":"OC++"')
+    expect(texts.at(-1)).not.toContain(ocpp.content.slice(0, 100))
+    expect(yield* s.messages).toContainEqual(
+      expect.objectContaining({
+        type: "synthetic",
+        description: "Loaded skill OC++",
+        metadata: { source: "skill", skill: "ocpp" },
+      }),
+    )
   })
 
   scenario("executes the tool advertised before a registry reload", function* (s) {

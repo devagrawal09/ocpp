@@ -25,7 +25,7 @@ const entries = (skills: ReadonlyArray<Summary>) =>
 const render = (skills: ReadonlyArray<Summary>) =>
   [
     "Skills provide specialized instructions and workflows for specific tasks.",
-    "Call `tools.skill` to load a skill when a task matches its description.",
+    "Call `tools.skill({ id })` to load a skill when a task matches its description. Its full instructions arrive as a separate message, no later than that execution's completion notification.",
     ...(skills.length === 0
       ? ["No skills are currently available."]
       : ["<available_skills>", ...entries(skills), "</available_skills>"]),

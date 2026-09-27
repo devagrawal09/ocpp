@@ -1046,13 +1046,13 @@ retried payload. Concurrent submissions can run hooks more than once before eith
 successful admission wins. Keep hooks retry-safe; they are not an exactly-once side-effect boundary. A failed or interrupted
 preparation admits no prompt. This hook transforms input and does not expose a typed rejection API.
 
-Modify assembled system instructions, messages, tools, generation settings, or provider options immediately before model
-dispatch.
+Modify assembled system instructions, messages, generation settings, or provider options immediately before model
+dispatch. The only tool the model is offered is `execute`; shape the tools reachable from its code with the tool
+`catalog` hook instead.
 
 ```ts
 await ctx.session.hook("context", (event) => {
   event.system.push({ text: "Keep the review focused on correctness." })
-  delete event.tools.write
   event.generation.temperature = 0.2
   event.generation.maxTokens = 8_000
 })
@@ -1276,12 +1276,27 @@ await ctx.tool.hook("execute.after", (event) => {
 })
 ```
 
+Shape the Code Mode catalog for each request, keyed by tool path. An edited description reaches the catalog and
+`tools.search`; a deleted entry is neither listed nor callable. `model` is absent for command and event handler runs.
+
+```ts
+await ctx.tool.hook("catalog", (event) => {
+  if (event.agent === "reviewer") delete event.tools.write
+})
+```
+
 #### Reference
 
 ```ts
 interface ToolHooks {
   "execute.before": ToolExecuteBefore
   "execute.after": ToolExecuteCompleted | ToolExecuteFailed
+  catalog: {
+    sessionID?: string
+    agent?: string
+    model?: { providerID: string; id: string; variant?: string }
+    tools: Record<string, { description: string }>
+  }
 }
 
 interface ToolHookContext {

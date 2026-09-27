@@ -107,6 +107,19 @@ yield *
   )
 ```
 
+Registered tools are reachable only from Code Mode, so shape them per request through the Code Mode catalog, keyed by path. An edited description reaches the catalog and `tools.search`; a deleted entry is neither listed nor callable:
+
+```ts
+yield *
+  ctx.tool.hook("catalog", (event) =>
+    Effect.sync(() => {
+      if (event.agent === "reviewer") delete event.tools["acme.deploy"]
+      const echo = event.tools.echo
+      if (echo) echo.description += "\nEcho preserves whitespace."
+    }),
+  )
+```
+
 ## Reloading A Domain
 
 When data captured by a transform changes, reload the affected domain:

@@ -107,6 +107,16 @@ await ctx.session.hook("retry", (event) => {
 })
 ```
 
+Registered tools are reachable only from Code Mode, so shape them per request through the Code Mode catalog, keyed by path. An edited description reaches the catalog and `tools.search`; a deleted entry is neither listed nor callable:
+
+```ts
+await ctx.tool.hook("catalog", (event) => {
+  if (event.agent === "reviewer") delete event.tools["acme.deploy"]
+  const echo = event.tools.echo
+  if (echo) echo.description += "\nEcho preserves whitespace."
+})
+```
+
 Promise tools use complete executable tool values with async executors. The model never calls a
 registered tool directly: every tool is reachable only from code through `execute`, as
 `tools.<namespace>.<name>(input)`.

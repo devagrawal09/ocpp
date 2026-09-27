@@ -182,7 +182,8 @@ export default {
     await ctx.tool.transform((tools) => {
       tools.add({
         name: "systemOne",
-        options: { namespace: "jev" },
+        // A query with no side effects, so a call a restart interrupted runs again when the run resumes.
+        options: { namespace: "jev", readOnly: true },
         description: [
           "Answer typed questions about a state with TypeSafe System One (Jev) and return probabilities.",
           "Each named question is a noul (answer.noul is P(yes)), a choice (answer.choice is the chosen criteria label, with confidence and per-label probabilities), or a score (2 to 10 rubric levels in criteria; answer.score is the expected level, with confidence, legend, and probabilities).",
@@ -201,7 +202,7 @@ export default {
 
       tools.add({
         name: "list",
-        options: { namespace: "jev.models" },
+        options: { namespace: "jev.models", readOnly: true },
         description: "List the TypeSafe models available to the configured account.",
         input: { type: "object", additionalProperties: false },
         output: ModelsOutput,

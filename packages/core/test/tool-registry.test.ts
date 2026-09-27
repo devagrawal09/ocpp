@@ -106,6 +106,7 @@ const runtimeLayer = Layer.unwrap(
       location: {
         agent: { list: () => Effect.die("Unavailable in Tool registry tests") },
         mcp: { list: () => Effect.die("Unavailable in Tool registry tests") },
+        tool: { registerSession: () => Effect.die("Unavailable in Tool registry tests") },
       },
     })
   }),

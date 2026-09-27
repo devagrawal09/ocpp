@@ -9,6 +9,7 @@ import { LocationServiceMap } from "../location-service-map.js"
 import { Mcp } from "../mcp/index.js"
 import { PersistentPty } from "../persistent-pty.js"
 import { Session } from "../session.js"
+import { Tool } from "../tool.js"
 
 export interface Interface {
   readonly session: Pick<
@@ -54,6 +55,13 @@ export interface Interface {
       readonly list: (
         ref: Location.Ref,
       ) => Effect.Effect<{ readonly location: Location.Info; readonly data: Mcp.ServerInfo[] }, unknown>
+    }
+    readonly tool: {
+      /** Registers Session tools in the Location the Session runs in, which may differ from the caller's. */
+      readonly registerSession: (
+        ref: Location.Ref,
+        ...input: Parameters<Tool.Interface["registerSession"]>
+      ) => ReturnType<Tool.Interface["registerSession"]>
     }
   }
 }
@@ -121,6 +129,10 @@ export const layerWithCell = (cell: Cell) =>
         mcp: {
           list: (ref) => require(cell, (runtime) => runtime.location.mcp.list(ref)),
         },
+        tool: {
+          registerSession: (ref, ...input) =>
+            require(cell, (runtime) => runtime.location.tool.registerSession(ref, ...input)),
+        },
       },
     }),
   )
@@ -166,6 +178,15 @@ export const providerLayerWithCell = (cell: Cell) =>
                   data: yield* mcp.servers(),
                 }
               }).pipe(Effect.provide(locations.get(ref))),
+          },
+          tool: {
+            // A Location that cannot be built is a defect here; a refused registration stays a typed failure.
+            registerSession: (ref, ...input) =>
+              Tool.Service.use((tools) => Effect.result(tools.registerSession(...input))).pipe(
+                Effect.provide(locations.get(ref)),
+                Effect.orDie,
+                Effect.flatMap(Effect.fromResult),
+              ),
           },
         },
       }

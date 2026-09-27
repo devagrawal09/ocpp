@@ -8,6 +8,7 @@ import { Money } from "@ocpp/schema/money"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Global } from "@ocpp/util/global"
 import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Database } from "@ocpp/core/database/database"
@@ -16,6 +17,7 @@ import { Catalog } from "@ocpp/core/catalog"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Config } from "@ocpp/core/config"
 import { Location } from "@ocpp/core/location"
+import { LocationMutation } from "@ocpp/core/location-mutation"
 import { Model } from "@ocpp/core/model"
 import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath } from "@ocpp/core/schema"
@@ -135,6 +137,8 @@ const subagentPluginSupervisor = makeLocationNode({
     Config.node,
     ExternalAgentDrivers.node,
     ExternalAgentSession.node,
+    FSUtil.node,
+    LocationMutation.node,
     Permission.node,
     PluginHooks.node,
     PluginRuntime.node,
@@ -351,7 +355,7 @@ describe("SubagentTool", () => {
           const system = modelRequests[0]?.system.map((part) => part.text).join("\n") ?? ""
           expect(system).toContain(
             [
-              "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent`.",
+              "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent`. Pass `root` to run one in another existing directory, such as a separate git worktree.",
               ...listedSubagents,
             ].join("\n"),
           )

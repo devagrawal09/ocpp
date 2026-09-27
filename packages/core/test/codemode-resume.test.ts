@@ -16,6 +16,7 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { Job } from "@ocpp/core/job"
 import { KV } from "@ocpp/core/kv"
 import { Location } from "@ocpp/core/location"
+import { LocationMutation } from "@ocpp/core/location-mutation"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Model } from "@ocpp/core/model"
 import { OpenApi } from "@ocpp/core/openapi/index"
@@ -38,6 +39,7 @@ import { ExternalAgentSession } from "@ocpp/core/external-agent/session"
 import { noVendorDrivers } from "./lib/drivers"
 import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Global } from "@ocpp/util/global"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdir } from "./fixture/tmpdir"
@@ -107,6 +109,8 @@ const supervisor = makeLocationNode({
     Config.node,
     ExternalAgentDrivers.node,
     ExternalAgentSession.node,
+    FSUtil.node,
+    LocationMutation.node,
     Permission.node,
     PluginRuntime.node,
     Tool.node,
@@ -623,6 +627,51 @@ describe("Code Mode crash recovery", () => {
         },
       },
     ])
+  })
+
+  test("a run in a subagent placed at another root resumes in that root's Location", async () => {
+    await using dir = await tmpdir()
+    await using worktree = await tmpdir()
+    const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+    const root = Location.Ref.make({ directory: AbsolutePath.make(worktree.path) })
+    const run = hostProcess(path.join(dir.path, "ocpp.db"))
+    const source = [
+      'const first = tools.test.write({ text: "first" })',
+      "const waited = tools.test.wait({ step: 1 })",
+    ].join("\n")
+
+    const before: Array<string> = []
+    const started = await run(
+      Effect.gen(function* () {
+        // Only the root's Location has the test tools, so a run resumed anywhere else could not call them.
+        const blocked = yield* registerBlocked(root, before)
+        const sessions = yield* Session.Service
+        const parent = yield* sessions.create({ location })
+        // Placed the way a subagent call with `root` places its child.
+        const child = yield* sessions.create({ parentID: parent.id, location: root })
+        yield* seedToolSession(child.id, toolIdentity.messageID)
+        const executionID = yield* start(root, child.id, "call_rooted", source)
+        yield* Deferred.await(blocked)
+        return { sessionID: child.id, executionID }
+      }),
+    )
+    expect(before).toEqual(["write:first", "wait:1"])
+
+    const after: Array<string> = []
+    const recovered = await run(
+      Effect.gen(function* () {
+        yield* register(root, testTools(after))
+        yield* restart
+        return {
+          info: yield* waitForCodeModeExecution(started.executionID),
+          notebook: yield* readCodeModeNotebook(started.sessionID),
+        }
+      }),
+    )
+    // The completed write is served from the journal; the interrupted wait runs again at the root.
+    expect(after).toEqual(["wait:1"])
+    expect(recovered.info.status).toBe("completed")
+    expect(recovered.notebook).toEqual({ first: { id: "w-first" }, waited: { value: "ready" } })
   })
 
   test("a command run stopped by a restart resumes and reports to history without waking the model", async () => {

@@ -76,7 +76,7 @@ const runtime = Layer.mock(PluginRuntime.Service, {
     completeBackground: unavailable,
   },
   persistentPty: { read: unavailable },
-  location: { agent: { list: unavailable }, mcp: { list: unavailable } },
+  location: { agent: { list: unavailable }, mcp: { list: unavailable }, tool: { registerSession: unavailable } },
 })
 
 describe("SkillTool", () => {

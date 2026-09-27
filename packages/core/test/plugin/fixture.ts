@@ -87,6 +87,7 @@ const runtimeLayer = Layer.unwrap(
       location: {
         agent: { list: () => Effect.die("Unavailable in Plugin tests") },
         mcp: { list: () => Effect.die("Unavailable in Plugin tests") },
+        tool: { registerSession: () => Effect.die("Unavailable in Plugin tests") },
       },
     })
   }),

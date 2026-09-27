@@ -19,7 +19,7 @@ type Summary = typeof Summary.Type
 // it accepts are listed here.
 const render = (subagents: ReadonlyArray<Summary>) =>
   [
-    "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent`.",
+    "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent`. Pass `root` to run one in another existing directory, such as a separate git worktree.",
     "Available subagents:",
     ...SubagentTool.listing(subagents),
   ].join("\n")

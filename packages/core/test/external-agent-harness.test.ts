@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect } from "bun:test"
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
 import { ToolHandle } from "@ocpp/codemode"
+import { LanguageModel } from "@ocpp/ai"
+import { OpenAIChat } from "@ocpp/ai/protocols"
+import { TestLLM } from "@ocpp/ai/testing"
+import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
+import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { Deferred, Effect, Fiber, Layer, Schema, Stream, type Types } from "effect"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { ExternalSession } from "@ocpp/schema/external-session"
@@ -88,33 +95,63 @@ const transport = Layer.succeed(
     closeAll: Effect.void,
   }),
 )
-const it = testEffect(
-  AppNodeBuilder.build(
-    LayerNode.group([
-      Database.node,
-      Bus.node,
-      SessionProjector.node,
-      SessionStore.node,
-      SessionEnvironment.node,
-      Job.node,
-      Session.node,
-      SessionExecution.node,
-      SessionRestart.node,
-      ExternalAgentSession.node,
-      LocationServiceMap.node,
-      PluginRuntime.providerNode,
-      CodeModeCommand.node,
-      CodeModeEvent.node,
-      CodeModeStore.node,
-      CodeModeResume.node,
-    ]),
+const nodes = LayerNode.group([
+  Database.node,
+  Bus.node,
+  SessionProjector.node,
+  SessionStore.node,
+  SessionEnvironment.node,
+  Job.node,
+  Session.node,
+  SessionExecution.node,
+  SessionRestart.node,
+  ExternalAgentSession.node,
+  LocationServiceMap.node,
+  PluginRuntime.providerNode,
+  CodeModeCommand.node,
+  CodeModeEvent.node,
+  CodeModeStore.node,
+  CodeModeResume.node,
+])
+const replacements = [
+  [Project.node, globalProjectNode],
+  [SessionModelTransport.node, transport],
+  [ExternalAgentDrivers.node, drivers],
+  [Bus.node, Bus.configured({ persist: true })],
+] satisfies LayerNode.Replacements
+const it = testEffect(AppNodeBuilder.build(nodes, replacements))
+// OC++-driven children on the real runner, whose scripted model reads a relative path and submits what it found.
+const runnerIt = testEffect(
+  AppNodeBuilder.build(nodes, [
+    ...replacements,
     [
-      [Project.node, globalProjectNode],
-      [SessionModelTransport.node, transport],
-      [ExternalAgentDrivers.node, drivers],
-      [Bus.node, Bus.configured({ persist: true })],
+      LayerNodePlatform.llmClient,
+      TestLLM.testLayer({
+        fallback: TestLLM.tool("call-read", "execute", {
+          code: [
+            'const found = tools.read({ path: "marker.txt" })',
+            'return tools.submit_result({ message: "read", output: { found: JSON.stringify(found) } })',
+          ].join("\n"),
+        }),
+      }),
     ],
-  ),
+    [
+      SessionRunnerModel.node,
+      Layer.succeed(SessionRunnerModel.Service, {
+        resolve: () =>
+          Effect.succeed(
+            SessionRunnerModel.resolved(
+              LanguageModel.make({ id: "child", provider: "test", route: OpenAIChat.route }),
+              {
+                capabilities: { tools: true, input: ["text"], output: ["text"] },
+                cost: [],
+                limit: { context: 200_000, output: 32_000 },
+              },
+            ),
+          ),
+      }),
+    ],
+  ]),
 )
 
 beforeEach(() => {
@@ -917,4 +954,154 @@ describe("subagent drivers", () => {
       expect((yield* Fiber.join(running))._tag).toBe("Success")
     }),
   )
+  describe("root", () => {
+    // A caller that may reach outside its directory, so each test sets only the rules it is about.
+    const reach = (
+      env: Effect.Success<ReturnType<typeof setup>>,
+      rules: ReadonlyArray<{ action: string; resource: string; effect: "allow" | "deny" | "ask" }> = [],
+    ) =>
+      configure(env, "build", (agent) => {
+        agent.permissions.push({ action: "external_directory", resource: "*", effect: "allow" }, ...rules)
+      })
+    const worktree = Effect.gen(function* () {
+      const outer = yield* tmpdirScoped()
+      const directory = path.join(outer.path, "worktrees", "feature")
+      yield* Effect.promise(() => mkdir(directory, { recursive: true }))
+      yield* Effect.promise(() => Bun.write(path.join(directory, "marker.txt"), "root-marker"))
+      return { outer: outer.path, directory }
+    })
+    const failure = (result: Effect.Success<ReturnType<typeof call>>) =>
+      result._tag === "Failure" ? result.failure.message : "succeeded"
+
+    it.live("a vendor child works in its root: the vendor's directory and its execute", () =>
+      Effect.gen(function* () {
+        const env = yield* setup()
+        const root = yield* worktree
+        yield* Effect.promise(() => Bun.write(path.join(env.directory.path, "marker.txt"), "parent-marker"))
+        yield* reach(env)
+        vendor.turn = async (options, message) => {
+          if (message.includes("Execution")) return
+          await run(options, 'const found = tools.read({ path: "marker.txt" })')
+        }
+        const result = yield* call(env, { driver: "claude", root: root.directory })
+        expect(result._tag).toBe("Success")
+        const sessionID = sessionOf(result)!
+        expect((yield* env.sessions.get(sessionID)).location.directory).toBe(AbsolutePath.make(root.directory))
+        expect(vendor.runs[0].directory).toBe(root.directory)
+        const store = yield* CodeModeStore.Service
+        const found = JSON.stringify((yield* store.bindings(sessionID)).found)
+        expect(found).toContain("root-marker")
+        expect(found).not.toContain("parent-marker")
+      }),
+    )
+
+    it.live("a root must be an existing absolute directory", () =>
+      Effect.gen(function* () {
+        const env = yield* setup(ref("claude", "opus"))
+        const root = yield* worktree
+        yield* reach(env)
+        expect(failure(yield* call(env, { root: "worktrees/feature" }))).toContain("must be an absolute directory path")
+        expect(failure(yield* call(env, { root: path.join(root.directory, "missing") }))).toContain("does not exist")
+        expect(failure(yield* call(env, { root: path.join(root.directory, "marker.txt") }))).toContain(
+          "is not a directory",
+        )
+        expect(vendor.runs).toHaveLength(0)
+        expect(yield* child(env)).toBeUndefined()
+      }),
+    )
+
+    it.live("a root outside the caller's directory asks for external_directory, and a denial blocks it", () =>
+      Effect.gen(function* () {
+        const env = yield* setup(ref("claude", "opus"))
+        const root = yield* worktree
+        vendor.turn = say("Done")
+        yield* configure(env, "build", (agent) => {
+          agent.permissions.push({ action: "external_directory", resource: "*", effect: "ask" })
+        })
+        const bus = yield* Bus.Service
+        const asked = yield* Deferred.make<Permission.Request>()
+        const unsubscribe = yield* bus.listen((event) =>
+          event.type === Permission.Event.Asked.type
+            ? Deferred.succeed(asked, event.data as Permission.Request).pipe(Effect.asVoid)
+            : Effect.void,
+        )
+        yield* Effect.addFinalizer(() => unsubscribe)
+        const running = yield* call(env, { root: root.directory }).pipe(Effect.forkChild)
+        const request = yield* Deferred.await(asked)
+        expect(request).toMatchObject({ action: "external_directory", resources: [root.directory + "/*"] })
+        yield* env.within(
+          Effect.gen(function* () {
+            const permissions = yield* Permission.Service
+            yield* permissions.reply({ requestID: request.id, reply: "once" })
+          }),
+        )
+        expect((yield* Fiber.join(running))._tag).toBe("Success")
+
+        yield* configure(env, "build", (agent) => {
+          agent.permissions.push({ action: "external_directory", resource: root.outer + "/*", effect: "deny" })
+        })
+        expect(failure(yield* call(env, { root: root.directory }))).toContain("Subagent directory denied")
+        expect(vendor.runs).toHaveLength(1)
+      }),
+    )
+
+    it.live("vendor rules match the child's directory, and the model rule its vendor model", () =>
+      Effect.gen(function* () {
+        const env = yield* setup(ref("claude", "opus"))
+        const root = yield* worktree
+        vendor.turn = say("Done")
+        yield* reach(env, [
+          { action: "claude", resource: "*", effect: "deny" },
+          { action: "claude", resource: root.outer + "/worktrees/*", effect: "allow" },
+          { action: "model", resource: "claude/haiku", effect: "deny" },
+        ])
+        expect((yield* call(env, { root: root.directory }))._tag).toBe("Success")
+        expect(vendor.runs[0].directory).toBe(root.directory)
+        // Without a root the child works in the caller's directory, which no allow rule names.
+        expect(failure(yield* call(env, {}))).toContain(`Claude Code denied in ${env.directory.path}`)
+        expect(failure(yield* call(env, { root: root.directory, model: "haiku" }))).toContain(
+          "Model denied: claude/haiku",
+        )
+        expect(vendor.runs).toHaveLength(1)
+      }),
+    )
+
+    runnerIt.live("an OC++ child works in its root: a relative path reads the root's file", () =>
+      Effect.gen(function* () {
+        const env = yield* setup()
+        const root = yield* worktree
+        yield* Effect.promise(() => Bun.write(path.join(env.directory.path, "marker.txt"), "parent-marker"))
+        yield* reach(env)
+        const result = yield* call(env, {
+          root: root.directory,
+          outputSchema: { type: "object", properties: { found: { type: "string" } }, required: ["found"] },
+        })
+        expect(result._tag).toBe("Success")
+        if (result._tag !== "Success") return
+        expect((yield* env.sessions.get(sessionOf(result)!)).location.directory).toBe(AbsolutePath.make(root.directory))
+        const found = JSON.stringify(result.success.output)
+        expect(found).toContain("root-marker")
+        expect(found).not.toContain("parent-marker")
+        expect(vendor.runs).toHaveLength(0)
+      }),
+    )
+
+    it.live("a continued child keeps its directory, and another root is refused", () =>
+      Effect.gen(function* () {
+        const env = yield* setup(ref("codex", "gpt-5.6-sol"))
+        const root = yield* worktree
+        const other = yield* tmpdirScoped()
+        yield* reach(env)
+        vendor.turn = say("Done")
+        const first = yield* call(env, { root: root.directory })
+        const sessionID = sessionOf(first)!
+        expect(failure(yield* call(env, { sessionID, root: other.path, message: "Continue" }))).toContain(
+          `runs in ${root.directory}`,
+        )
+        expect((yield* call(env, { sessionID, message: "Continue" }))._tag).toBe("Success")
+        expect((yield* call(env, { sessionID, root: root.directory, message: "Continue" }))._tag).toBe("Success")
+        expect(vendor.runs.map((item) => item.directory)).toEqual([root.directory, root.directory, root.directory])
+      }),
+    )
+  })
 })

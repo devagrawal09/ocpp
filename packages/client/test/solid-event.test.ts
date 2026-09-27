@@ -112,6 +112,50 @@ test("refreshes an event's latest outcome when its firing settles", async () => 
   }
 })
 
+test("refreshes the events when a firing settles before the list names it", async () => {
+  const server = served("ses_quick")
+  const setup = harness(async (request) => {
+    // The timeline's first page is empty; the firing arrives live.
+    if (new URL(request.url).pathname === "/api/session/ses_quick/message")
+      return Response.json({ data: [], cursor: {} })
+    return server.fetch(request)
+  })
+  try {
+    await setup.data.session.message.sync("ses_quick")
+    await setup.data.session.event.sync("ses_quick")
+    setup.publish({
+      id: "evt_quick",
+      created: 1,
+      type: "session.invocation.started",
+      durable: { aggregateID: "ses_quick", seq: 1, version: 1 },
+      data: {
+        sessionID: "ses_quick",
+        executionID: "exe_quick",
+        trigger: { type: "event", name: "poll" },
+        handler: "poll",
+        input: { event: "poll" },
+      },
+    })
+    server.state.current = [poll({ lastMessageID: "msg_quick", lastStatus: "completed", runCount: 1 })]
+    setup.publish({
+      id: "evt_done",
+      created: 2,
+      type: "session.codemode.completed",
+      durable: { aggregateID: "ses_quick", seq: 2, version: 1 },
+      data: {
+        sessionID: "ses_quick",
+        assistantMessageID: "msg_quick",
+        id: "msg_quick",
+        executionID: "exe_quick",
+        events: [],
+      },
+    })
+    await wait(() => setup.data.session.event.list("ses_quick")?.[0]?.lastStatus === "completed")
+  } finally {
+    setup.dispose()
+  }
+})
+
 test("refreshes a session's events after a revert", async () => {
   const server = served("ses_revert")
   const setup = harness(server.fetch)

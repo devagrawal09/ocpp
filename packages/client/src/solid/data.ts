@@ -990,9 +990,12 @@ export function createData(config: CreateDataInput) {
             ...(event.data.resumed === true ? { resumed: true } : {}),
           }
         })
-        // An event's latest outcome is read from the invocation of its latest firing, which just settled.
+        if (event.type === "session.codemode.progress" || !store.session.event[event.data.sessionID]) return
+        // An event's latest outcome is read from the invocation of its latest firing, which just settled. A
+        // quick firing can settle before the list names it, so an event's invocation settling counts too.
+        const settled = result.session.message.get(event.data.sessionID, event.data.assistantMessageID)
         if (
-          event.type !== "session.codemode.progress" &&
+          (settled?.type === "invocation" && settled.trigger.type === "event") ||
           store.session.event[event.data.sessionID]?.some(
             (item) => item.lastMessageID === event.data.assistantMessageID,
           )

@@ -554,6 +554,7 @@ OC++ Core applies these fixed host limits. A program cannot raise or lower them.
 | Notebook values per Session       |       512 |
 | Notebook bytes per Session        |     8 MiB |
 | Captured journal input or output  |   256 KiB |
+| Impure values journaled per call  |     1,000 |
 | Model-facing preview              |     4 KiB |
 | Captured logs                     |     4 KiB |
 | Completion summary                |     8 KiB |
@@ -568,7 +569,9 @@ There is no wall-clock limit. Core supplies no execution deadline, so a program 
 settles or is cancelled; a host restart resumes it.
 
 The journal capture limit is also the replay limit: a call whose input or result exceeded it cannot be
-served from the journal after a restart.
+served from the journal after a restart. Likewise, a program that reads `time.now()` or `Math.random()`
+more than 1,000 times between two tool calls keeps running, but a restart cannot resume it past that
+point.
 
 Logs share the preview budget rather than owning an independent one: retained console output is
 whatever remains of the 4 KiB model-facing preview after the returned value is counted. Core also

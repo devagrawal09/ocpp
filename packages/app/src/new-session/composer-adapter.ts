@@ -137,6 +137,7 @@ export function createNewSessionComposerAdapter(props: {
             location: data.location,
             session: {
               setStatus: data.session.setStatus,
+              command: data.session.command,
               prompt: (input) =>
                 data.session.prompt({
                   ...input,

@@ -1405,7 +1405,7 @@ export function createData(config: CreateDataInput) {
         },
       },
       command: {
-        list(sessionID: string) {
+        list(sessionID: string): CodeModeCommandInfo[] | undefined {
           return store.session.command[sessionID]
         },
         sync(sessionID: string) {

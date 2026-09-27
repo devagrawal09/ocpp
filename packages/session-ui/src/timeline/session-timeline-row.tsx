@@ -15,6 +15,7 @@ import {
   SessionAssistantContent,
   SessionContextToolGroup,
   SessionFileToolGroup,
+  SessionInvocationMessage,
   SessionShellMessage,
   SessionUserMessage,
   currentContentDefaultOpen,
@@ -380,6 +381,33 @@ export function createSessionTimelineRowRenderer(input: {
                   defaultOpen={input.shellToolDefaultOpen()}
                   open={input.disclosure.value(message().id)}
                   onOpenChange={(open) => input.disclosure.set(message().id, open)}
+                />
+              </div>
+            )}
+          </Show>
+        </Frame>
+      )
+    }
+    if (row()._tag === "Invocation") {
+      const current = () => {
+        const value = row()
+        if (value._tag !== "Invocation") throw new Error("Expected an invocation timeline row")
+        return value
+      }
+      const message = createMemo(() => {
+        const value = input.projection.messageByID().get(current().messageID)
+        return value?.type === "invocation" ? value : undefined
+      })
+      return (
+        <Frame row={current()}>
+          <Show when={message()}>
+            {(message) => (
+              <div data-slot="session-turn-message-container" class={`w-full ${padding()}`}>
+                <SessionInvocationMessage
+                  message={message()}
+                  open={input.disclosure.value(message().id) === true}
+                  onOpenChange={(open) => input.disclosure.set(message().id, open)}
+                  onSizeChange={onSizeChange}
                 />
               </div>
             )}

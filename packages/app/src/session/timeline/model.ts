@@ -89,7 +89,9 @@ export async function enrichLeadingTurn(input: {
 export function leadingTurnNeedsParent(messages: SessionMessageInfo[]) {
   const assistant = messages.findIndex((message) => message.type === "assistant")
   if (assistant === -1) return false
-  const boundary = messages.findIndex((message) => message.type === "user" || message.type === "shell")
+  const boundary = messages.findIndex(
+    (message) => message.type === "user" || message.type === "shell" || message.type === "invocation",
+  )
   return boundary === -1 || assistant < boundary
 }
 

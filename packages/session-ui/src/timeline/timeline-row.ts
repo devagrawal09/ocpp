@@ -41,6 +41,11 @@ export namespace TimelineRow {
     messageID: string
   }> {}
 
+  export class Invocation extends Data.TaggedClass("Invocation")<{
+    userMessageID: string
+    messageID: string
+  }> {}
+
   export class Notice extends Data.TaggedClass("Notice")<{
     userMessageID: string
     messageID: string
@@ -75,6 +80,7 @@ export namespace TimelineRow {
     | TurnGap
     | UserMessage
     | Shell
+    | Invocation
     | Notice
     | TurnDivider
     | AssistantPart
@@ -90,6 +96,8 @@ export namespace TimelineRow {
         return `user-message:${row.userMessageID}`
       case "Shell":
         return `shell:${row.messageID}`
+      case "Invocation":
+        return `invocation:${row.messageID}`
       case "Notice":
         return `notice:${row.messageID}`
       case "TurnDivider":
@@ -118,6 +126,7 @@ export type TimelineRowMap = {
   TurnGap: { userMessageID: string }
   UserMessage: { userMessageID: string }
   Shell: { userMessageID: string; messageID: string }
+  Invocation: { userMessageID: string; messageID: string }
   Notice: { userMessageID: string; messageID: string }
   TurnDivider: { userMessageID: string }
   AssistantPart: {

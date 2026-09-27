@@ -280,8 +280,11 @@ function findCommand(session: ComposerSession, text: string) {
   if (!text.startsWith("/")) return
   const [name, ...arguments_] = text.split(" ")
   const command = name.slice(1)
-  if (!session.data.location.command.list({ directory: session.directory })?.some((item) => item.name === command))
-    return
+  const known = [
+    ...(session.data.session.command.list(session.id) ?? []),
+    ...(session.data.location.command.list({ directory: session.directory }) ?? []),
+  ]
+  if (!known.some((item) => item.name === command)) return
   return { command, arguments: arguments_.join(" ") }
 }
 

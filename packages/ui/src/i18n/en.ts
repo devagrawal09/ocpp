@@ -267,6 +267,7 @@ const source = {
   "ui.sessionTimeline.notice.cancelled": "{{actor}} cancelled",
   "ui.sessionTimeline.notice.finished": "{{actor}} finished",
   "ui.sessionTimeline.notice.instructionsUpdated": "Instructions updated",
+  "ui.sessionTimeline.invocation.event": "Event {{name}}",
   "ui.message.queued": "Queued",
   "ui.message.attachment.alt": "attachment",
 

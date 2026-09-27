@@ -9,6 +9,7 @@ export function isolatedEnv(root: string, overrides: Record<string, string | und
     OCPP_DB: path.join(root, "ocpp.db"),
     OCPP_DISABLE_FILEWATCHER: "true",
     OCPP_DISABLE_MODELS_FETCH: "true",
+    OCPP_DISABLE_EXTERNAL_AGENTS: "true",
     OCPP_TEST_HOME: root,
     XDG_CACHE_HOME: path.join(root, "cache"),
     XDG_CONFIG_HOME: path.join(root, "xdg-config"),

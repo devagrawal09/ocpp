@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect } from "bun:test"
 import { ToolHandle } from "@ocpp/codemode"
-import { Effect, Layer, Schema, Stream } from "effect"
+import { Deferred, Effect, Fiber, Layer, Schema, Stream, type Types } from "effect"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionDriver } from "@ocpp/schema/session-driver"
@@ -19,6 +19,7 @@ import { Job } from "@ocpp/core/job"
 import { Location } from "@ocpp/core/location"
 import { LocationServiceMap } from "@ocpp/core/location-services"
 import { Model } from "@ocpp/core/model"
+import { Permission } from "@ocpp/core/permission"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor-service"
 import { Project } from "@ocpp/core/project"
@@ -428,8 +429,75 @@ describe("vendor-driven sessions", () => {
   )
 })
 
+describe("vendor-driven session control", () => {
+  it.live("an interrupt during an execution keeps the vendor session for the next prompt", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      const waiting = Promise.withResolvers<void>()
+      vendor.turn = async (options, message) => {
+        if (message !== "Start") return say("Answer")(options, message)
+        await run(options, 'const slow = tools.shell({ command: "sleep 5; echo done" })')
+        await say("Waiting for it.")(options, message)
+        waiting.resolve()
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
+      yield* Effect.promise(() => waiting.promise)
+      const first = vendor.runs[0]
+      yield* env.sessions.interrupt(env.session.id)
+      yield* env.sessions.wait(env.session.id)
+      // Cancelling the execution rewrites its trace on the execute part after the vendor checkpoint.
+      const settled = Effect.gen(function* () {
+        const parts = (yield* messages(env.session.id)).flatMap((message) =>
+          message.type === "assistant" ? message.content.filter((part) => part.type === "tool") : [],
+        )
+        return parts.some(
+          (part) =>
+            part.type === "tool" &&
+            part.state.status === "completed" &&
+            part.state.metadata?.executionStatus !== undefined &&
+            part.state.metadata.executionStatus !== "running",
+        )
+      })
+      while (!(yield* settled)) yield* Effect.promise(() => Bun.sleep(10))
+      const external = yield* ExternalAgentSession.Service
+      const linked = (yield* external.get(env.session.id))?.vendorSessionID
+      expect(linked).toBeString()
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Again" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs.length).toBeGreaterThan(1)
+      expect(first.vendorSessionID).toBeUndefined()
+      // Every later run continued the same vendor session instead of rebuilding it.
+      expect(vendor.runs.slice(1).map((item) => item.vendorSessionID)).toEqual(vendor.runs.slice(1).map(() => linked))
+      expect(vendor.runs.at(-1)?.message).toContain("Again")
+    }),
+  )
+
+  it.live("compaction is refused for a vendor-driven Session and leaves its inbox", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = say("Hi")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "One" })
+      yield* env.sessions.wait(env.session.id)
+      yield* env.sessions.compact({ sessionID: env.session.id })
+      yield* env.sessions.wait(env.session.id)
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      const failed = log.find((event) => event.type === SessionEvent.Compaction.Failed.type)
+      expect(failed?.type === SessionEvent.Compaction.Failed.type && failed.data.error.type).toBe(
+        "compaction.unsupported",
+      )
+      expect(log.filter((event) => event.type === SessionEvent.InboxDelivered.type)).toHaveLength(2)
+      // Refusing compaction never started the vendor.
+      expect(vendor.runs).toHaveLength(1)
+    }),
+  )
+})
+
 describe("subagent drivers", () => {
-  const call = (env: Effect.Success<ReturnType<typeof setup>>, input: Record<string, unknown>) =>
+  const call = (
+    env: Effect.Success<ReturnType<typeof setup>>,
+    input: Record<string, unknown>,
+    source = { messageID: SessionMessage.ID.create(), id: Tool.CallID.make(crypto.randomUUID()) },
+  ) =>
     env.within(
       Effect.gen(function* () {
         const registry = yield* Tool.Service
@@ -442,8 +510,7 @@ describe("subagent drivers", () => {
             {
               sessionID: env.session.id,
               agent: Agent.ID.make("build"),
-              messageID: SessionMessage.ID.create(),
-              id: Tool.CallID.make(crypto.randomUUID()),
+              ...source,
               progress: () => Effect.void,
             },
           ),
@@ -462,6 +529,29 @@ describe("subagent drivers", () => {
         .pipe(Effect.orDie)
       return row === undefined ? undefined : yield* env.sessions.get(Session.ID.make(row.id))
     })
+
+  const configure = (
+    env: Effect.Success<ReturnType<typeof setup>>,
+    id: string,
+    edit: (agent: Types.DeepMutable<Agent.Info>) => void,
+  ) =>
+    env.within(
+      Effect.gen(function* () {
+        const agents = yield* Agent.Service
+        yield* agents.transform((draft) => draft.update(Agent.ID.make(id), edit))
+      }),
+    )
+  const permit = (
+    env: Effect.Success<ReturnType<typeof setup>>,
+    rules: ReadonlyArray<{ action: string; resource: string; effect: "allow" | "deny" | "ask" }>,
+  ) =>
+    configure(env, "general", (agent) => {
+      agent.permissions.push({ action: "*", resource: "*", effect: "allow" }, ...rules)
+    })
+  const sessionOf = (result: Effect.Success<ReturnType<typeof call>>) =>
+    result._tag === "Success"
+      ? Schema.decodeUnknownSync(SubagentTool.Output)(result.success.output).sessionID
+      : undefined
 
   it.live("defaults to the parent's driver, and an explicit driver wins", () =>
     Effect.gen(function* () {
@@ -612,6 +702,203 @@ describe("subagent drivers", () => {
       expect(continued._tag).toBe("Success")
       expect(vendor.runs.at(-1)?.harness.type).toBe("ocpp")
       expect(vendor.runs.at(-1)?.gateway.definitions.map((tool) => tool.name)).toEqual(["execute"])
+    }),
+  )
+  it.live("a rebuilt vendor child replays what a model saw, never private input or a Code Mode trace", () =>
+    Effect.gen(function* () {
+      const env = yield* setup()
+      vendor.turn = async (options, message) => {
+        if (message.includes("Execution")) return
+        if (message.includes("Continue")) return say("Continued")(options, message)
+        await run(
+          options,
+          'const secret = input.token; const submitted = tools.submit_result({ message: "done", output: { token: input.token } })',
+        )
+      }
+      const first = yield* call(env, {
+        driver: "claude",
+        input: { token: "private-token" },
+        outputSchema: { type: "object", properties: { token: { type: "string" } }, required: ["token"] },
+      })
+      expect(first._tag).toBe("Success")
+      // Another vendor binds again, so its new vendor session is rebuilt from canonical OC++ history.
+      const continued = yield* call(env, { sessionID: sessionOf(first), driver: "codex", message: "Continue please" })
+      expect(continued._tag).toBe("Success")
+      const rebuilt = vendor.runs.find((item) => item.provider === "codex")!
+      expect(rebuilt.vendorSessionID).toBeUndefined()
+      const replayed = JSON.stringify(rebuilt.history)
+      // The model-visible call and result are replayed; the trace with assignment values and the submission is not.
+      expect(replayed).toContain("[execute call]")
+      expect(replayed).toContain("tools.submit_result")
+      expect(replayed).toContain("[execute result]")
+      expect(replayed).not.toContain("private-token")
+      expect(replayed).not.toContain("executionStatus")
+      expect(vendor.runs.every((item) => !JSON.stringify([item.history, item.message]).includes("private-token"))).toBe(
+        true,
+      )
+      expect(vendor.runs.at(-1)?.message).toContain("Continue please")
+    }),
+  )
+
+  it.live("a new child takes its agent's configured driver, and a model ID must fit the driver", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "opus"))
+      vendor.turn = say("Answered")
+      yield* configure(env, "general", (agent) => {
+        agent.model = ref("codex", "gpt-5.6-terra")
+      })
+      expect((yield* call(env, {}))._tag).toBe("Success")
+      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "gpt-5.6-terra" })
+
+      // A provider model on the agent selects the OC++ runner, whatever drives the caller.
+      yield* configure(env, "general", (agent) => {
+        agent.model = ref("openai", "gpt-5")
+      })
+      yield* call(env, {})
+      expect(SessionDriver.of((yield* child(env))?.model)).toBe("ocpp")
+      expect(vendor.runs).toHaveLength(1)
+
+      const failure = (result: Effect.Success<ReturnType<typeof call>>) =>
+        result._tag === "Failure" ? result.failure.message : "succeeded"
+      expect(failure(yield* call(env, { driver: "claude", model: "anthropic/claude-opus-4" }))).toContain(
+        "Claude Code models are named without a provider",
+      )
+      expect(failure(yield* call(env, { driver: "codex", model: "openai/gpt-5#high" }))).toContain(
+        "Codex models are named without a provider",
+      )
+      expect(failure(yield* call(env, { driver: "pi", model: "sonnet" }))).toContain(
+        "Pi models are named provider/model",
+      )
+      expect(vendor.runs).toHaveLength(1)
+    }),
+  )
+
+  it.live("a vendor child with no subagent call answers a direct prompt in the OC++ harness", () =>
+    Effect.gen(function* () {
+      const env = yield* setup()
+      vendor.turn = say("Child answer")
+      const first = yield* call(env, { driver: "claude", harness: "native" })
+      expect(first._tag).toBe("Success")
+      const sessionID = sessionOf(first)!
+      vendor.turn = say("Direct answer")
+      yield* env.sessions.prompt({ sessionID, text: "Hello child" })
+      yield* env.sessions.wait(sessionID)
+      expect(vendor.runs).toHaveLength(2)
+      expect(vendor.runs[1]).toMatchObject({ provider: "claude", harness: { type: "ocpp" } })
+      expect(vendor.runs[1].message).toContain("Hello child")
+      expect(texts(yield* messages(sessionID))).toContain("Direct answer")
+    }),
+  )
+
+  it.live("native: OC++'s own tools need no vendor permission, even for a read-only agent", () =>
+    Effect.gen(function* () {
+      const env = yield* setup()
+      const { permissionHooks } = yield* Effect.promise(() => import("../src/external-agent/claude.node"))
+      const decisions: string[] = []
+      vendor.turn = async (options) => {
+        // As Claude asks before each tool call, through the real hooks and the harness's authorization.
+        const hooks = permissionHooks(options.authorize)
+        for (const [name, input] of [
+          ["mcp__ocpp__submit_result", { message: "explored", output: { found: true } }],
+          ["Read", { file_path: "README.md" }],
+          ["Write", { file_path: "README.md" }],
+        ] as const)
+          decisions.push(
+            name +
+              ": " +
+              (await hooks.canUseTool!(name, input, { signal: options.signal, toolUseID: name, requestId: name }))
+                ?.behavior,
+          )
+        await Effect.runPromise(
+          options.gateway.invoke("submit_result", { message: "explored", output: { found: true } }),
+        )
+      }
+      const result = yield* call(env, {
+        agent: "explore",
+        driver: "claude",
+        harness: "native",
+        outputSchema: { type: "object", properties: { found: { type: "boolean" } }, required: ["found"] },
+      })
+      expect(result._tag).toBe("Success")
+      if (result._tag === "Success") expect(result.success.output).toMatchObject({ output: { found: true } })
+      expect(decisions).toEqual(["mcp__ocpp__submit_result: allow", "Read: allow", "Write: deny"])
+    }),
+  )
+
+  it.live("native: OC++ denials, outside directories and each command of a compound shell command hold", () =>
+    Effect.gen(function* () {
+      const env = yield* setup()
+      const outside = yield* tmpdirScoped()
+      yield* permit(env, [
+        { action: "edit", resource: "denied.txt", effect: "deny" },
+        { action: "external_directory", resource: outside.path + "/*", effect: "deny" },
+        { action: "shell", resource: "rm *", effect: "deny" },
+      ])
+      const decisions: Record<string, string> = {}
+      vendor.turn = async (options) => {
+        for (const [label, name, input] of [
+          ["edit allowed", "Write", { file_path: "allowed.txt" }],
+          ["edit denied", "Write", { file_path: "denied.txt" }],
+          ["outside", "Read", { file_path: outside.path + "/file" }],
+          ["shell allowed", "Bash", { command: "echo allowed" }],
+          ["compound", "Bash", { command: "echo allowed; rm forbidden" }],
+        ] as const)
+          decisions[label] = await options.authorize(name, input, options.signal).then(
+            () => "allowed",
+            () => "denied",
+          )
+        await say("Checked")(options, "")
+      }
+      for (const provider of ["claude", "pi"])
+        expect((yield* call(env, { driver: provider, harness: "native" }))._tag).toBe("Success")
+      expect(decisions).toEqual({
+        "edit allowed": "allowed",
+        "edit denied": "denied",
+        outside: "denied",
+        "shell allowed": "allowed",
+        compound: "denied",
+      })
+
+      // Codex has no per-call check, so a denial anywhere in its sandbox scope refuses the whole delegation.
+      vendor.turn = async (options) => {
+        await options.authorize(
+          "workspace",
+          { directory: options.directory, sandbox: "workspace-write" },
+          options.signal,
+        )
+      }
+      expect((yield* call(env, { driver: "codex", harness: "native" }))._tag).toBe("Failure")
+    }),
+  )
+
+  it.live("native: a permission request with no child tool part names the subagent call", () =>
+    Effect.gen(function* () {
+      const env = yield* setup()
+      yield* permit(env, [{ action: "read", resource: "*", effect: "ask" }])
+      vendor.turn = async (options) => {
+        await options.authorize("Read", { file_path: "README.md" }, options.signal)
+        await say("Read it")(options, "")
+      }
+      const bus = yield* Bus.Service
+      const asked = yield* Deferred.make<Permission.Request>()
+      const unsubscribe = yield* bus.listen((event) =>
+        event.type === Permission.Event.Asked.type
+          ? Deferred.succeed(asked, event.data as Permission.Request).pipe(Effect.asVoid)
+          : Effect.void,
+      )
+      yield* Effect.addFinalizer(() => unsubscribe)
+      const source = { messageID: SessionMessage.ID.create(), id: Tool.CallID.make("call_subagent") }
+      const running = yield* call(env, { driver: "claude", harness: "native" }, source).pipe(Effect.forkChild)
+      const request = yield* Deferred.await(asked)
+      expect(request.sessionID).toBe(env.session.id)
+      expect(request.source).toEqual({ type: "tool", ...source })
+      yield* env.within(
+        Effect.gen(function* () {
+          const permissions = yield* Permission.Service
+          yield* permissions.reply({ requestID: request.id, reply: "once" })
+        }),
+      )
+      expect((yield* Fiber.join(running))._tag).toBe("Success")
     }),
   )
 })

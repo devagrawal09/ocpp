@@ -4,7 +4,7 @@ import { available, driver } from "#external-agents"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
-import { Context, Effect, Layer } from "effect"
+import { Clock, Context, Duration, Effect, Layer } from "effect"
 import { Config } from "../config.js"
 import { ExternalAgentDriver } from "./driver.js"
 import { ExternalAgentEffort } from "./effort.js"
@@ -15,7 +15,8 @@ export interface Platform {
   readonly driver: (provider: ExternalSession.Provider) => Promise<ExternalAgentDriver.Driver>
 }
 
-const defaults = { claude: "sonnet", codex: "gpt-5.6-sol", pi: "anthropic/claude-sonnet-4-6" }
+/** Each vendor's model when `external_agents` names none. */
+export const defaults = { claude: "sonnet", codex: "gpt-5.6-sol", pi: "anthropic/claude-sonnet-4-6" }
 const suggested = {
   claude: ["opus", "sonnet", "haiku"],
   codex: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
@@ -49,11 +50,11 @@ export const layer = (platform: Platform) =>
     Service,
     Effect.gen(function* () {
       const config = yield* Config.Service
-      // Probes run the vendor CLI, so a result is reused for a while; signing in takes effect within five minutes.
+      // Probes run the vendor CLI. Only the first is awaited; signing in takes effect within about five minutes.
       const probes = {
-        claude: yield* Effect.cachedWithTTL(probe(platform, "claude"), "5 minutes"),
-        codex: yield* Effect.cachedWithTTL(probe(platform, "codex"), "5 minutes"),
-        pi: yield* Effect.cachedWithTTL(probe(platform, "pi"), "5 minutes"),
+        claude: yield* refreshed(probe(platform, "claude"), "5 minutes"),
+        codex: yield* refreshed(probe(platform, "codex"), "5 minutes"),
+        pi: yield* refreshed(probe(platform, "pi"), "5 minutes"),
       }
       const configured = Effect.fnUntraced(function* (provider: ExternalSession.Provider) {
         return Config.latest(yield* config.entries(), "external_agents")?.[provider]
@@ -106,6 +107,41 @@ export const layer = (platform: Platform) =>
       })
     }),
   )
+
+/**
+ * A check that is awaited once and then served from its last answer. An answer older than `ttl` is still served while
+ * one background check replaces it, so no caller waits on the check again.
+ */
+export const refreshed = Effect.fnUntraced(function* <E>(check: Effect.Effect<boolean, E>, ttl: Duration.Input) {
+  const scope = yield* Effect.scope
+  const state = { value: undefined as boolean | undefined, at: 0, refreshing: false }
+  const record = (value: boolean) =>
+    Clock.currentTimeMillis.pipe(
+      Effect.map((now) => {
+        state.value = value
+        state.at = now
+        return value
+      }),
+    )
+  const first = yield* Effect.cached(check.pipe(Effect.flatMap(record)))
+  const refresh = check.pipe(
+    Effect.flatMap(record),
+    Effect.ignore,
+    Effect.ensuring(
+      Effect.sync(() => {
+        state.refreshing = false
+      }),
+    ),
+  )
+  return Effect.gen(function* () {
+    if (state.value === undefined) return yield* first
+    if (!state.refreshing && (yield* Clock.currentTimeMillis) - state.at >= Duration.toMillis(ttl)) {
+      state.refreshing = true
+      yield* Effect.forkIn(refresh, scope)
+    }
+    return state.value
+  })
+})
 
 function probe(platform: Platform, provider: ExternalSession.Provider) {
   return Effect.promise(() => platform.available(provider).catch(() => false))

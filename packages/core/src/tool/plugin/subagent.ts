@@ -48,11 +48,11 @@ export const Input = Schema.Struct({
   }),
   model: Schema.optionalKey(Schema.String).annotate({
     description:
-      "Model to use. For the ocpp driver, provider/model with an optional variant after #. For a vendor driver, the vendor's own model name with an optional effort after #, such as opus#high",
+      "Model to use. For the ocpp driver, provider/model with an optional variant after #. For claude or codex, the vendor's own model name without a provider, with an optional effort after #, such as opus#high; for pi, Pi's provider/model",
   }),
   driver: Schema.optionalKey(SessionDriver.ID).annotate({
     description:
-      "What runs the child session: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi). Defaults to the calling session's driver; a continued session keeps its own",
+      "What runs the child session: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi). Defaults to the driver of the agent's configured model, else the calling session's; a continued session keeps its own",
   }),
   harness: Schema.optionalKey(SessionDriver.Harness).annotate({
     description:
@@ -92,7 +92,7 @@ export const Output = Schema.Struct({
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
   "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready.",
-  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. It defaults to the calling session's driver, and a continued session keeps its own. For a vendor driver, model is the vendor's model name with an optional effort after #, such as opus#high.",
+  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; for pi it is Pi's provider/model.",
   'Vendor-driven children run in the OC++ harness by default: their only tool is execute with this same catalog and notebook. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt instead; OC++ execute, tool.define handles and submit_result remain available to it over MCP.',
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
@@ -336,11 +336,20 @@ export const Plugin = {
                 const reason = yield* drivers.unavailable(provider)
                 if (reason !== undefined) return yield* new ToolFailure({ message: reason })
                 const requested = input.model?.split("#")
+                const named = requested?.[0]
+                // Claude Code and Codex name models without a provider; Pi names them provider/model.
+                if (named && (provider === "pi") !== named.includes("/"))
+                  return yield* new ToolFailure({
+                    message:
+                      provider === "pi"
+                        ? `Pi models are named provider/model, such as ${ExternalAgentDrivers.defaults.pi}: ${named}`
+                        : `${SessionDriver.names[provider]} models are named without a provider, such as ${ExternalAgentDrivers.defaults[provider]}: ${named}. A provider/model ID runs on the ocpp driver.`,
+                  })
                 const current = (existing === undefined ? [agent.model, parent.model] : [existing.model]).find(
                   (model) => model !== undefined && SessionDriver.of(model) === provider,
                 )
                 const settings = yield* drivers.settings(provider)
-                const id = requested?.[0] || (current?.id ?? settings.model)
+                const id = named || (current?.id ?? settings.model)
                 const inherited = current?.variant === "default" ? undefined : current?.variant
                 const effort =
                   requested === undefined ? (inherited ?? settings.effort) : (requested[1] ?? settings.effort)
@@ -371,8 +380,9 @@ export const Plugin = {
                   ...(effort === undefined ? {} : { variant: Model.VariantID.make(effort) }),
                 })
               })
-              // A continued child keeps its own driver; a new one takes its caller's, unless the call names one.
-              const driver = input.driver ?? SessionDriver.of((existing ?? parent).model)
+              // Unless the call names one: a continued child keeps its own driver, and a new one takes its agent's
+              // configured model's driver, else its caller's.
+              const driver = input.driver ?? SessionDriver.of(existing?.model ?? agent.model ?? parent.model)
               const harness = input.harness ?? "ocpp"
               if (harness === "native" && driver === "ocpp")
                 return yield* new ToolFailure({
@@ -604,12 +614,24 @@ export const Plugin = {
                       () => run,
                       (unsubscribe) => unsubscribe,
                     )
-              // A vendor child runs only while this call holds it, with the harness this call asked for.
+              // A vendor child takes this call's harness and tools from its next drain on. One it is already running on its
+              // own (for a direct prompt or a late notification) finishes first, so this call's input starts a new one.
               const result = yield* Effect.scoped(
-                (vendor ? external.activate(child.id, { harness, tools: temporary }) : Effect.void).pipe(
-                  Effect.mapError((error) => new ToolFailure({ message: error.error.message, error })),
-                  Effect.andThen(driven),
-                ),
+                (vendor
+                  ? external.activate(child.id, { harness, tools: temporary, source }).pipe(
+                      Effect.mapError((error) => new ToolFailure({ message: error.error.message, error })),
+                      Effect.andThen(
+                        runtime.session
+                          .wait(child.id)
+                          .pipe(
+                            Effect.mapError(
+                              (error) => new ToolFailure({ message: `Subagent session not found: ${child.id}`, error }),
+                            ),
+                          ),
+                      ),
+                    )
+                  : Effect.void
+                ).pipe(Effect.andThen(driven)),
               ).pipe(Effect.ensuring(cleanup))
               return {
                 output: { sessionID: child.id, status: "completed" as const, ...result },
@@ -647,8 +669,6 @@ export const Plugin = {
           "",
           "Available subagents:",
           ...listing(subagents),
-          "",
-          "Drivers (the default is the calling session's driver):",
           ...listDrivers(yield* drivers.list()),
         ].join("\n")
       }),
@@ -656,14 +676,17 @@ export const Plugin = {
   }),
 }
 
-/** Vendor drivers as the model reads them: ready ones with their default model, and why the rest are not offered. */
+/** The drivers a model may choose, as it reads them: the ready vendor drivers, or nothing when none is ready. */
 export function listDrivers(drivers: ReadonlyArray<SessionDriver.Info>) {
+  const ready = drivers.filter((driver) => driver.available)
+  if (ready.length === 0) return []
   return [
+    "",
+    "Drivers (the default is the agent's configured model's driver, else the calling session's):",
     "- ocpp: the OC++ runner with a provider model",
-    ...drivers.map((driver) =>
-      driver.available
-        ? `- ${driver.id}: ${driver.name}, default model ${driver.model} (efforts: ${driver.variants.join(", ")})`
-        : `- ${driver.id}: ${driver.name} is not available on this machine`,
+    ...ready.map(
+      (driver) =>
+        `- ${driver.id}: ${driver.name}, default model ${driver.model} (efforts: ${driver.variants.join(", ")})`,
     ),
   ]
 }

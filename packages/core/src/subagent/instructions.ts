@@ -54,7 +54,7 @@ type Driver = typeof Driver.Type
 
 const renderDrivers = (drivers: ReadonlyArray<Driver>) =>
   [
-    "`tools.subagent` takes a `driver`: `ocpp` runs the child with the OC++ runner and a provider model; a vendor driver runs it with that vendor's agent and the user's own login, in the OC++ harness unless you pass `harness: \"native\"`. The default is this session's own driver.",
+    "`tools.subagent` takes a `driver`: `ocpp` runs the child with the OC++ runner and a provider model; a vendor driver runs it with that vendor's agent and the user's own login, in the OC++ harness unless you pass `harness: \"native\"`. A new child takes its agent's configured model's driver, else this session's own.",
     "Ready vendor drivers:",
     ...drivers.map((driver) => `- ${driver.id}: ${driver.name}, default model ${driver.model}`),
   ].join("\n")

@@ -55,7 +55,6 @@ export function terminal(exit: Exit.Exit<void, SessionRunner.RunError>, reason?:
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const external = yield* ExternalAgentSession.Service
     const store = yield* SessionStore.Service
     const locations = yield* LocationServiceMap.Service
     const bus = yield* Bus.Service
@@ -92,8 +91,6 @@ export const layer = Layer.effect(
       const session = yield* store.get(sessionID)
       if (!session) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
       const driven = SessionDriver.of(session.model) !== "ocpp"
-      // A vendor-driven subagent runs only while a subagent call holds it; its input waits for the next call.
-      if (driven && session.parentID !== undefined && (yield* external.activation(sessionID)) === undefined) return
       const result = yield* Effect.suspend(
         (): Effect.Effect<
           SessionRunner.DrainResult,
@@ -190,6 +187,7 @@ export const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
+  // Vendor-driven Sessions need its projections of their vendor bindings.
   deps: [ExternalAgentSession.node, SessionStore.node, LocationServiceMap.node, Bus.node, Database.node, Job.node],
 })
 

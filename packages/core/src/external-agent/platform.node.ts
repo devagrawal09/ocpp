@@ -9,6 +9,8 @@ const packages = {
   pi: "@earendil-works/pi-coding-agent",
 }
 export async function available(provider: ExternalSession.Provider): Promise<boolean> {
+  // Offers no drivers without probing a vendor CLI or runtime; tests set it.
+  if (process.env.OCPP_DISABLE_EXTERNAL_AGENTS === "true") return false
   if (provider !== "pi" && !which(provider)) return false
   const resolved = await Promise.resolve()
     .then(() => import.meta.resolve(packages[provider]))

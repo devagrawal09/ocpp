@@ -2,6 +2,7 @@ export * as ExternalAgentSession from "./session.js"
 
 import { AbsolutePath } from "@ocpp/schema/schema"
 import { ExternalSession } from "@ocpp/schema/external-session"
+import type { Permission } from "@ocpp/schema/permission"
 import type { SessionDriver } from "@ocpp/schema/session-driver"
 import type { Tool } from "@ocpp/schema/tool"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
@@ -18,6 +19,8 @@ export interface Activation {
   readonly harness: SessionDriver.Harness
   /** Session-registered tools (tool.define handles, submit_result) the native harness also exposes over MCP. */
   readonly tools: ReadonlyArray<Tool.Info>
+  /** The subagent call, named by a native permission request that no child tool part explains. */
+  readonly source: Permission.Source
 }
 
 export const layer = Layer.effectContext(

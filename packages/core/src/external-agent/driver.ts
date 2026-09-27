@@ -46,6 +46,7 @@ export interface Options {
   readonly harness: Harness
   readonly gateway: ExternalAgentGateway.Gateway
   readonly signal: AbortSignal
+  /** Authorizes one of the vendor's native tool calls. Drivers never ask it about the gateway's own tools. */
   readonly authorize: (
     name: string,
     input: Record<string, unknown>,

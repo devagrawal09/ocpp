@@ -47,9 +47,7 @@ export const PiDriver: ExternalAgentDriver.Driver = {
             extensionFactories: [
               (api) => {
                 // Keep Pi's discovered extensions and their policies. This additional guard cannot turn a vendor denial into an allow.
-                api.on("tool_call", async (event, context) => {
-                  await options.authorize(event.toolName, event.input, options.signal, event.toolCallId, context.cwd)
-                })
+                api.on("tool_call", guard(options))
               },
             ],
           },
@@ -192,4 +190,19 @@ export async function normalize(event: AgentSessionEvent, emit: ExternalAgentDri
     return
   }
   await emit({ type: "diagnostic", name: event.type })
+}
+
+/**
+ * Authorizes each of Pi's own tool calls through OC++ in the native harness. OC++'s tools replace any Pi tool of the
+ * same name and are not asked about: execute enforces permissions inside, and tool.define handles and submit_result
+ * are capabilities the subagent call delegated.
+ */
+export function guard(options: Pick<ExternalAgentDriver.Options, "gateway" | "authorize" | "signal">) {
+  return async (
+    event: { readonly toolName: string; readonly input: Record<string, unknown>; readonly toolCallId: string },
+    context: { readonly cwd: string },
+  ) => {
+    if (options.gateway.definitions.some((tool) => tool.name === event.toolName)) return
+    await options.authorize(event.toolName, event.input, options.signal, event.toolCallId, context.cwd)
+  }
 }

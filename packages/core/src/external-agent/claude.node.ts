@@ -236,9 +236,13 @@ export async function normalize(
 
 /** Hook failures must return a denial: vendor hook exceptions are not an authorization decision. */
 export function permissionHooks(
-  authorize: ExternalAgentDriver.Options["authorize"],
+  check: ExternalAgentDriver.Options["authorize"],
 ): Pick<Options, "hooks" | "canUseTool"> {
   const authorized = new Map<string, { fingerprint: string; cwd: string }>()
+  // The in-process `ocpp` server's tools are OC++'s own: execute enforces permissions inside, and tool.define handles
+  // and submit_result are capabilities the subagent call delegated.
+  const authorize: ExternalAgentDriver.Options["authorize"] = (name, ...rest) =>
+    name.startsWith("mcp__ocpp__") ? Promise.resolve() : check(name, ...rest)
   return {
     hooks: {
       PreToolUse: [

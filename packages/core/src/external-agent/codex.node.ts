@@ -9,6 +9,9 @@ import { ExternalAgentEffort } from "./effort.js"
 import { ExternalAgentBridge } from "./bridge.node.js"
 import { CodexHistory } from "./codex-history.node.js"
 
+/** The environment variable that carries the MCP bridge credential to Codex. */
+const TOKEN = "OCPP_MCP_BEARER_TOKEN"
+
 /** Every Codex capability that is a model-facing tool or a vendor instruction source, off in the OC++ harness. */
 export const NATIVE_FEATURES = [
   "shell_tool",
@@ -44,11 +47,18 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
   inspect: (_directory, id, signal) => CodexHistory.read(id, signal),
   async run(options) {
     const { Codex } = await import("@openai/codex-sdk")
-    const bridge = await ExternalAgentBridge.open(options.gateway, options.signal)
-    const instructions = options.harness.type === "ocpp" ? await mkdtemp(path.join(tmpdir(), "ocpp-codex-")) : undefined
     const identity = { id: options.vendorSessionID, completed: false }
+    const owned = {
+      bridge: undefined as Awaited<ReturnType<typeof ExternalAgentBridge.open>> | undefined,
+      instructions: undefined as string | undefined,
+    }
     try {
       options.signal.throwIfAborted()
+      const bridge = await ExternalAgentBridge.open(options.gateway, options.signal)
+      owned.bridge = bridge
+      const instructions =
+        options.harness.type === "ocpp" ? await mkdtemp(path.join(tmpdir(), "ocpp-codex-")) : undefined
+      owned.instructions = instructions
       if (options.harness.type === "native")
         // Codex exec has no approval callback: authorize the bounded workspace delegation in OC++ and
         // keep its sandbox enabled. On-request permits configured MCP tools while unsandboxed escalation still fails.
@@ -71,6 +81,13 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
         apiKey: process.env.CODEX_API_KEY ?? process.env.OPENAI_API_KEY,
         codexPathOverride: "codex",
         config: settings.config,
+        // Codex reads the bridge credential from its environment, so it never appears on a command line.
+        env: {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+          ),
+          [TOKEN]: bridge.token,
+        },
       })
       const thread =
         options.vendorSessionID === undefined
@@ -103,8 +120,11 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
       }
       identity.completed = true
     } finally {
-      await bridge.close()
-      if (instructions !== undefined) await rm(instructions, { recursive: true, force: true })
+      // Each is released on its own, so a failed close cannot leave the other behind.
+      await Promise.allSettled([
+        owned.bridge?.close(),
+        owned.instructions === undefined ? undefined : rm(owned.instructions, { recursive: true, force: true }),
+      ])
       if (identity.id !== undefined) {
         // A run that fails or is interrupted before its first turn leaves an empty, unreadable rollout. That read
         // error must not replace the run's own error. No checkpoint is recorded, so the next resume rebuilds.
@@ -159,7 +179,7 @@ function codex(args: ReadonlyArray<string>, signal: AbortSignal, cwd?: string) {
 /** Codex configuration for one run. `workspace` holds the OC++ system prompt and model catalog in the OC++ harness. */
 export function configure(
   options: Pick<ExternalAgentDriver.Options, "directory" | "model" | "effort" | "harness">,
-  bridge: { readonly url: string; readonly token: string },
+  bridge: { readonly url: string },
   workspace?: string,
   disabled: ReadonlyArray<string> = [],
 ): { readonly config: NonNullable<CodexOptions["config"]>; readonly thread: ThreadOptions } {
@@ -168,7 +188,7 @@ export function configure(
     ...Object.fromEntries(disabled.map((name) => [name, { enabled: false }])),
     ocpp: {
       url: bridge.url,
-      http_headers: { Authorization: "Bearer " + bridge.token },
+      bearer_token_env_var: TOKEN,
       // Codex exec cannot ask anyone, so OC++'s tools are approved here and OC++ authorizes each one itself.
       default_tools_approval_mode: "approve",
     },
@@ -198,6 +218,8 @@ export function configure(
             model_instructions_file: path.join(workspace, "instructions.md"),
             model_catalog_json: path.join(workspace, "catalog.json"),
           }),
+      // No project AGENTS.md. Codex has no switch for the global $CODEX_HOME/AGENTS.md, which it still sends.
+      project_doc_max_bytes: 0,
       include_apps_instructions: false,
       include_permissions_instructions: false,
       include_environment_context: false,

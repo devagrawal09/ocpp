@@ -1,13 +1,14 @@
 export * as ExternalAgentHarnessNode from "./harness-node.js"
 
-import { Message } from "@ocpp/ai"
+import { Message, type ToolResultValue } from "@ocpp/ai"
 import { ExternalSession } from "@ocpp/schema/external-session"
+import type { Model } from "@ocpp/schema/model"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import type { SessionError } from "@ocpp/schema/session-error"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Hash } from "@ocpp/util/hash"
-import { Cause, Context, Deferred, Effect, Exit, FiberMap, Layer, Schema } from "effect"
+import { Cause, Deferred, Effect, Exit, FiberMap, Layer, Option, Schema } from "effect"
 import path from "path"
 import { Bus } from "../bus.js"
 import { Config } from "../config.js"
@@ -118,7 +119,7 @@ const layer = Layer.effect(
         const messages = yield* Effect.forEach(items, (item) => store.message(item.id))
         return messages
           .flatMap((stored) => (stored === undefined ? [] : toLLMMessages([stored.message], model)))
-          .map(render)
+          .map(lower)
           .filter((text) => text.length > 0)
           .join("\n\n")
       })
@@ -134,7 +135,7 @@ const layer = Layer.effect(
                 return undefined
               }
               if (next?.type === "compaction") {
-                yield* refuseCompaction(sessionID, next.id, provider)
+                yield* refuseCompaction(sessionID, scope, provider)
                 continue
               }
             }
@@ -215,7 +216,7 @@ const layer = Layer.effect(
           ]
         }),
       ])
-      const authorize = native({ session, provider, selection, permission, fs, config, stream })
+      const authorize = native({ session, provider, selection, permission, fs, config, stream, activation })
 
       const bind = Effect.fnUntraced(function* () {
         const record = yield* external.get(sessionID)
@@ -253,7 +254,7 @@ const layer = Layer.effect(
 
       const scope = { next: input.promotable ?? "input" }
       while (true) {
-        const history = canonical(yield* store.context(sessionID))
+        const history = canonical(yield* store.context(sessionID), model)
         const answered = history.findLastIndex((item) => item.role === "assistant") + 1
         const settled = history.slice(0, answered)
         // Input admitted before a restart or failure that the vendor never answered is delivered again, once.
@@ -296,7 +297,8 @@ const layer = Layer.effect(
           },
           // A run being aborted takes no further input: Effect evaluates a synchronous take before it observes an
           // already-aborted signal, which would hand the next call's input to the run it is replacing.
-          next: (signal) => (signal.aborted ? Promise.resolve(undefined) : Effect.runPromise(take("input"), { signal })),
+          next: (signal) =>
+            signal.aborted ? Promise.resolve(undefined) : Effect.runPromise(take("input"), { signal }),
           idle: () => {
             state.idle = true
             Effect.runSync(ring)
@@ -318,7 +320,7 @@ const layer = Layer.effect(
                   events: stream.diagnostics(),
                 })
               if (checkpoint.value === undefined) return
-              const history = canonical(yield* store.context(sessionID))
+              const history = canonical(yield* store.context(sessionID), model)
               yield* bus.publish(ExternalSession.Checkpointed, {
                 sessionID,
                 checkpoint: checkpoint.value,
@@ -336,28 +338,35 @@ const layer = Layer.effect(
       }
     }, Effect.scoped)
 
-    const refuseCompaction = Effect.fnUntraced(function* (
+    // Checked and consumed in one serialized block, like a move: the request may be cancelled until it is delivered.
+    const refuseCompaction = (
       sessionID: SessionSchema.ID,
-      inputID: SessionMessage.ID,
+      scope: SessionInbox.Promotable,
       provider: ExternalSession.Provider,
-    ) {
-      yield* SessionInbox.serialized(
+    ) =>
+      SessionInbox.serialized(
         sessionID,
-        bus.publishAll([
-          [SessionEvent.InboxDelivered, { sessionID, inboxID: inputID }],
-          [SessionEvent.Compaction.Started, { sessionID, reason: "manual", recent: "", inputID }],
-        ]),
+        Effect.gen(function* () {
+          const next = yield* SessionInbox.nextPromotable(db, sessionID, scope)
+          if (next?.type !== "compaction") return
+          yield* bus.publishAll([
+            [SessionEvent.InboxDelivered, { sessionID, inboxID: next.id }],
+            [SessionEvent.Compaction.Started, { sessionID, reason: "manual", recent: "", inputID: next.id }],
+            [
+              SessionEvent.Compaction.Failed,
+              {
+                sessionID,
+                reason: "manual",
+                error: {
+                  type: "compaction.unsupported",
+                  message: `${SessionDriver.names[provider]} manages its own context; OC++ compaction does not apply to this session.`,
+                },
+                inputID: next.id,
+              },
+            ],
+          ])
+        }),
       )
-      yield* bus.publish(SessionEvent.Compaction.Failed, {
-        sessionID,
-        reason: "manual",
-        error: {
-          type: "compaction.unsupported",
-          message: `${SessionDriver.names[provider]} manages its own context; OC++ compaction does not apply to this session.`,
-        },
-        inputID,
-      })
-    })
 
     return ExternalAgentHarness.Service.of({ drain })
   }),
@@ -372,6 +381,7 @@ function native(input: {
   readonly fs: FSUtil.Interface
   readonly config: Config.Interface
   readonly stream: ReturnType<typeof ExternalAgentStream.make>
+  readonly activation: ExternalAgentSession.Activation | undefined
 }) {
   const directory = input.session.location.directory
   const provider = input.provider
@@ -400,9 +410,11 @@ function native(input: {
               "Codex native tools require authorization for their entire sandbox scope because its execution SDK has no per-tool approval callback.",
           },
         })
-    const source = input.stream.source(toolID)
+    // A call the child's timeline shows is asked of the child; any other is asked of the caller, naming its subagent call.
+    const part = input.stream.source(toolID)
+    const source = part ?? input.activation?.source
     const common = {
-      sessionID: source === undefined ? owner : input.session.id,
+      sessionID: part === undefined ? owner : input.session.id,
       agent,
       ...(source === undefined ? {} : { source }),
       metadata: { provider, tool: name, directory },
@@ -481,19 +493,19 @@ function resource(directory: string, value: Record<string, unknown>) {
   return directory
 }
 
-/** Canonical OC++ history as the vendor reads it when a vendor session is rebuilt, and as its checkpoints hash it. */
-function canonical(messages: ReadonlyArray<SessionMessage.Info>): ExternalAgentDriver.History[] {
-  return messages.flatMap((message): ExternalAgentDriver.History[] => {
-    if (message.type === "user" || message.type === "synthetic") return [{ role: "user", text: message.text }]
-    if (message.type !== "assistant") return []
-    return [
-      {
-        role: "assistant",
-        text: message.content
-          .map((part) => (part.type === "text" || part.type === "reasoning" ? part.text : JSON.stringify(part)))
-          .join("\n"),
-      },
-    ]
+/**
+ * Canonical OC++ history as the vendor reads it when a vendor session is rebuilt, and as its checkpoints hash it: what
+ * the runner would show a model, reduced to text. Tool metadata never enters it: a Code Mode trace holds machine-only
+ * values (private input, submitted output), and a completing execution rewrites it after the checkpoint.
+ */
+function canonical(messages: ReadonlyArray<SessionMessage.Info>, model: Model.Ref): ExternalAgentDriver.History[] {
+  return toLLMMessages(messages, model).flatMap((message): ExternalAgentDriver.History[] => {
+    // Current instructions are rendered into each vendor run's system prompt instead.
+    if (message.role === "system") return []
+    const text = lower(message)
+    if (text.length === 0) return []
+    // A tool result belongs to the vendor turn that called the tool.
+    return [{ role: message.role === "user" ? "user" : "assistant", text }]
   })
 }
 
@@ -501,17 +513,47 @@ function isEnqueued(event: Bus.LogItem): event is SessionEvent.InboxEnqueued {
   return event.type === SessionEvent.InboxEnqueued.type
 }
 
-/** Delivered input as the native runner lowers it, reduced to text: media cannot cross the vendor boundary yet. */
-function render(message: Message) {
+/**
+ * A message as the native runner lowers it, reduced to text: text, each tool call's name and input, and each result's
+ * model-visible content. Reasoning stays with the vendor that produced it, and media cannot cross the vendor boundary yet.
+ */
+function lower(message: Message) {
   if (typeof message.content === "string") return message.content
   const media = message.content.filter((part) => part.type === "media").length
   return [
-    ...message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])),
+    message.content
+      .flatMap((part) => {
+        if (part.type === "text") return [part.text]
+        if (part.type === "tool-call") return [`\n[${part.name} call] ${JSON.stringify(part.input)}\n`]
+        if (part.type === "tool-result") return [`\n[${part.name} result] ${result(part.result)}\n`]
+        return []
+      })
+      .join("")
+      .trim(),
     ...(media === 0
       ? []
       : [`[${media} attached image or PDF ${media === 1 ? "file was" : "files were"} not forwarded]`]),
-  ].join("")
+  ]
+    .filter((text) => text.length > 0)
+    .join("\n")
 }
+
+function result(value: ToolResultValue) {
+  if (value.type === "content") return text(value.value)
+  if (value.type === "error")
+    return Option.match(failed(value.value), {
+      onNone: () => "Failed.",
+      onSome: (failure) => [failure.error.message, ...failure.content.flatMap((part) => part.text ?? [])].join("\n"),
+    })
+  return typeof value.value === "string" ? value.value : JSON.stringify(value.value)
+}
+// A failed call's model-visible result: its error message and whatever text it returned.
+const failed = Schema.decodeUnknownOption(
+  Schema.Struct({
+    error: Schema.Struct({ message: Schema.String }),
+    content: Schema.Array(Schema.Struct({ type: Schema.String, text: Schema.optional(Schema.String) })),
+  }),
+)
 
 function text(content: string | ReadonlyArray<Tool.Content> | undefined) {
   if (content === undefined) return "Completed."

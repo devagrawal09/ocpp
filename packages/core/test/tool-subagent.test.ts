@@ -294,13 +294,8 @@ describe("SubagentTool", () => {
           const described = [
             SubagentTool.description,
             "",
+            // No vendor driver is ready here, so none is offered.
             ...listedSubagents,
-            "",
-            "Drivers (the default is the calling session's driver):",
-            "- ocpp: the OC++ runner with a provider model",
-            "- claude: Claude Code is not available on this machine",
-            "- codex: Codex is not available on this machine",
-            "- pi: Pi is not available on this machine",
           ].join("\n")
           const subagentEntry = (snapshot: Tool.Snapshot) =>
             snapshot.codeModeCatalog?.find((tool) => tool.path === SubagentTool.name)?.description

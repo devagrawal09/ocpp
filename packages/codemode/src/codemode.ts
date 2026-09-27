@@ -106,7 +106,7 @@ export const Diagnostic = Schema.Struct({
   kind: DiagnosticKind,
   message: Schema.String,
   location: Schema.optionalKey(Schema.Struct({ line: Schema.Number, column: Schema.Number })),
-  /** The trimmed source line at `location`, present for parse failures. */
+  /** The source line at `location`, present for parse failures. */
   excerpt: Schema.optionalKey(Schema.String),
   suggestions: Schema.optionalKey(Schema.Array(Schema.String)),
 })

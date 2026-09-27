@@ -1,7 +1,16 @@
 import { parse } from "acorn"
 import { transpile } from "#transpile"
 import { reservedNames } from "./globals.js"
-import { IR_VERSION, isPromiseAllCall, isRecord, type AstNode, type Program, type ProgramNode } from "./ir.js"
+import {
+  IR_VERSION,
+  isPromiseAllCall,
+  isRecord,
+  type AstNode,
+  type Program,
+  type ProgramNode,
+  type SourcePosition,
+} from "./ir.js"
+import { SourceMap } from "./source-map.js"
 import { Suggestions } from "./suggestions.js"
 
 /**
@@ -16,7 +25,7 @@ export class CompileError extends Error {
     readonly suggestions?: ReadonlyArray<string>,
     /** One-based source position for diagnostics that have no AST node, such as parse failures. */
     readonly location?: { readonly line: number; readonly column: number },
-    /** The trimmed source line at `location`, so a host can show what failed without the program. */
+    /** The source line at `location`, so a host can show what failed without the program. */
     readonly excerpt?: string,
   ) {
     super(message)
@@ -26,20 +35,28 @@ export class CompileError extends Error {
 
 const MAX_EXCERPT_LENGTH = 200
 
-/** The trimmed source line at a one-based position, bounded so a diagnostic stays small. */
+/**
+ * The source line at a one-based position, bounded so a diagnostic stays small. Its indentation is
+ * kept so the reported column still counts from the start of the excerpt.
+ */
 export function excerptAt(source: string, location: { readonly line: number }): string | undefined {
-  const line = source.split("\n")[location.line - 1]?.trim()
-  if (line === undefined || line === "") return undefined
+  const line = source.split("\n")[location.line - 1]?.trimEnd()
+  if (line === undefined || line.trim() === "") return undefined
   return line.length > MAX_EXCERPT_LENGTH ? line.slice(0, MAX_EXCERPT_LENGTH) + "..." : line
 }
 
-// acorn reports positions as a one-based line with a zero-based column and appends "(line:column)"
-// to its message. The location is kept separately, so the suffix is dropped from the message.
-function parseError(source: string, error: unknown): CompileError {
-  const position =
+/** Maps a position in the transpiled output to the source as written, if the source produced it. */
+type Original = (position: SourcePosition) => SourcePosition | undefined
+
+// acorn reports positions in the transpiled output as a one-based line with a zero-based column and
+// appends "(line:column)" to its message. The location is kept separately, in the source as written,
+// so the suffix is dropped from the message.
+function parseError(source: string, error: unknown, original: Original): CompileError {
+  const found =
     error instanceof SyntaxError && isRecord(error) && isRecord(error.loc)
-      ? { line: Number(error.loc.line), column: Number(error.loc.column) + 1 }
+      ? original({ line: Number(error.loc.line), column: Number(error.loc.column) })
       : undefined
+  const position = found && { line: found.line, column: found.column + 1 }
   const message = error instanceof Error ? error.message.replace(/ \(\d+:\d+\)$/, "") : String(error)
   return new CompileError(
     "Failed to parse: " + message,
@@ -137,9 +154,10 @@ const removedGlobals = new Map([
   [
     "URLSearchParams",
     {
-      message: "URLSearchParams is not a value; use url.parse(text).query and url.formatQuery(record)",
+      message: "URLSearchParams is not a value; use url.parseQuery(text) and url.formatQuery(entries)",
       suggestions: [
-        'url.parse(text).query reads the parameters as a record; url.formatQuery({ q: "term" }) builds a query string.',
+        "Read the parameters as [{ name, value }] records: url.parse(text).query for a URL, url.parseQuery(text) for a bare query string",
+        'Build a query string from those records: url.formatQuery([{ name: "q", value: "term" }])',
       ],
     },
   ],
@@ -181,11 +199,14 @@ export function compile(code: string): Program {
       transpiled.location && excerptAt(code, transpiled.location),
     )
 
-  const parsed = parseSource(transpiled.outputText, code)
+  const original: Original =
+    transpiled.mappings === undefined ? (position) => position : SourceMap.originalPosition(transpiled.mappings)
+  const parsed = parseSource(transpiled.outputText, code, original)
   if (!isRecord(parsed) || parsed.type !== "Program" || !Array.isArray(parsed.body))
     throw new CompileError("Failed to compile script as a Program.", "ParseError")
 
   const program = parsed as ProgramNode
+  if (transpiled.mappings !== undefined) restorePositions(program, original)
   // Declared names come first so a bad notebook name reports its own diagnostic instead of the
   // generic one `validate` produces for the same identifier elsewhere in a program.
   const names = declarations(program)
@@ -221,9 +242,8 @@ export function compile(code: string): Program {
 }
 
 // acorn throws a bare SyntaxError, which is the only reason the compiler catches anything: the
-// failure is re-thrown as a positioned ParseError so hosts never see an unstructured throw. The
-// excerpt comes from the original source because transpilation preserves lines but not their text.
-function parseSource(transpiled: string, source: string): unknown {
+// failure is re-thrown as a positioned ParseError so hosts never see an unstructured throw.
+function parseSource(transpiled: string, source: string, original: Original): unknown {
   try {
     return parse(transpiled, {
       ecmaVersion: "latest",
@@ -232,7 +252,24 @@ function parseSource(transpiled: string, source: string): unknown {
       locations: true,
     })
   } catch (error) {
-    throw parseError(source, error)
+    throw parseError(source, error, original)
+  }
+}
+
+/**
+ * The transpiler re-prints the program: it splits statements onto their own lines, joins wrapped
+ * expressions, and drops type declarations. Each node's line and column are mapped back to the source
+ * as written, so every diagnostic, compile time or run time, points at the author's own line. Node
+ * offsets still index the transpiled `source`, which is the text the runtime slices.
+ */
+function restorePositions(node: AstNode, original: Original): void {
+  const start = node.loc && original(node.loc.start)
+  // Output that no source produced, such as the `export {}` left by an elided import, has no position.
+  if (node.loc) node.loc = start && { start, end: original(node.loc.end) ?? start }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "loc") continue
+    for (const item of Array.isArray(value) ? value : [value])
+      if (isRecord(item) && typeof item.type === "string") restorePositions(item as AstNode, original)
   }
 }
 

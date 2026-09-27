@@ -735,12 +735,22 @@ describe("LocationServiceMap", () => {
           expect(blockedState.providers.some((provider) => provider.id === allowedID)).toBe(false)
           expect(blockedState.definitions).toEqual(["execute"])
           expect(builtins(blockedState.tools)).toEqual([
+            "command.define",
+            "command.list",
+            "command.remove",
             "edit",
+            "event.define",
+            "event.disable",
+            "event.enable",
+            "event.list",
+            "event.remove",
+            "event.trigger",
             "glob",
             "grep",
             "patch",
             "question",
             "read",
+            "session.notify",
             "shell",
             "skill",
             "subagent",

@@ -72,7 +72,8 @@ current built-in actions use these resources:
 | `shell`                 | The complete raw shell command string                                                                            |
 | `subagent`              | The target agent ID                                                                                              |
 | `subagent_model`        | The `provider/model` a subagent on the OC++ runner selects, unless `subagent.models` allows it                   |
-| `claude`, `codex`, `pi` | The vendor model ID a subagent on that [session driver](/drivers) runs with, such as `opus`                      |
+| `claude`, `codex`, `pi` | The directory a subagent on that [session driver](/drivers) works in: its `root`, or the caller's directory      |
+| `model`                 | `<vendor>/<model>` a subagent on a session driver runs with, such as `claude/opus`                               |
 | `skill`                 | The skill ID                                                                                                     |
 | `question`              | `*`                                                                                                              |
 | `webfetch`              | The requested URL                                                                                                |

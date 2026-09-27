@@ -79,6 +79,13 @@ For Claude Code and Codex, `model` is the vendor's own model name without a
 provider, with an optional effort, for example `opus#high`. For Pi, it is Pi's
 `provider/model`. A model ID in the wrong form fails before any vendor starts.
 
+`root` runs a new subagent in another existing directory, for example a
+separate git worktree. It works with every driver, including `ocpp`. The child
+session is placed at that directory, so its tools, files, permissions, and
+instructions are that directory's, and a vendor agent works there. The path
+must be absolute and must be an existing directory. A continued subagent keeps
+its directory, and passing a different `root` for it fails.
+
 Every other subagent option works as usual, including `input`, `inputSchema`,
 `tool.define` handles, `outputSchema` with `submit_result`, and continuing by
 `sessionID`. A vendor subagent with no running call answers a direct prompt in
@@ -86,9 +93,17 @@ the OC++ harness.
 
 ## Permissions
 
-Starting a vendor subagent asks for the vendor's permission action, `claude`,
-`codex`, or `pi`. The resource is the model ID, for example `opus`. The
-`subagent.models` setting and the `subagent_model` permission apply only to
+A subagent whose directory is outside the calling session's directory needs
+`external_directory` for it, whatever its driver.
+
+Starting a vendor subagent also asks for two permissions:
+
+- The vendor's action, `claude`, `codex`, or `pi`, on the directory the child
+  works in: its `root`, or the calling session's directory without one. Rules
+  can allow or deny directory patterns, such as `/work/worktrees/*`.
+- `model` on `<vendor>/<model>`, for example `claude/opus`.
+
+The `subagent.models` setting and the `subagent_model` permission apply only to
 subagents on the `ocpp` driver.
 
 Native tool calls are checked against the child's agent. A request that the

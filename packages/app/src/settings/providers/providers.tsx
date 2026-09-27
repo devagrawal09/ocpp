@@ -2,6 +2,7 @@ import { Button } from "@ocpp/ui/button"
 import { Badge } from "@ocpp/ui/badge"
 import { useDialog } from "@ocpp/ui/context/dialog"
 import { ProviderIcon } from "@ocpp/ui/provider-icon"
+import { SessionDriver } from "@ocpp/schema/session-driver"
 import { showToast } from "@/shell/notifications/toast"
 import { popularProviders, useProviders } from "@/providers/catalog/providers"
 import { useIntegrations } from "@/providers/catalog/integrations"
@@ -52,12 +53,16 @@ export const SettingsProviders: Component<{
   }
 
   const connected = createMemo(() => {
-    return providers
-      .connected()
-      .filter(
-        (provider) =>
-          provider.id !== "opencode" || Object.values(provider.models).some((model) => model.cost.input > 0),
-      )
+    return (
+      providers
+        .connected()
+        // Session drivers use the vendor CLI's own login, which OC++ neither stores nor removes.
+        .filter((provider) => SessionDriver.of({ providerID: provider.id }) === "ocpp")
+        .filter(
+          (provider) =>
+            provider.id !== "opencode" || Object.values(provider.models).some((model) => model.cost.input > 0),
+        )
+    )
   })
 
   const popular = createMemo(() => {

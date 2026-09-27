@@ -226,7 +226,11 @@ describe("runningItems", () => {
       sessions: [
         session({ id: "ses_claude", parentID: "ses_parent", model: { providerID: "claude", id: "opus" } }),
         session({ id: "ses_ocpp", parentID: "ses_parent", model: { providerID: "anthropic", id: "claude-opus" } }),
-        session({ id: "ses_pi", parentID: "ses_parent", model: { providerID: "pi", id: "anthropic/claude-sonnet-4-6" } }),
+        session({
+          id: "ses_pi",
+          parentID: "ses_parent",
+          model: { providerID: "pi", id: "anthropic/claude-sonnet-4-6" },
+        }),
       ],
       running: ["ses_claude", "ses_pi"],
     })

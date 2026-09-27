@@ -365,11 +365,14 @@ describe("vendor-driven sessions", () => {
       vendor.turn = say("First answer")
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
       yield* env.sessions.wait(env.session.id)
-      const vendorSessionID = (yield* (yield* ExternalAgentSession.Service).get(env.session.id))?.vendorSessionID
+      const external = yield* ExternalAgentSession.Service
+      const store = yield* SessionStore.Service
+      const restart = yield* SessionRestart.Service
+      const vendorSessionID = (yield* external.get(env.session.id))?.vendorSessionID
       // A process that died mid-turn leaves its execution claim behind.
-      yield* (yield* SessionStore.Service).claim(env.session.id)
+      yield* store.claim(env.session.id)
       vendor.turn = say("Continuing")
-      yield* (yield* SessionRestart.Service).resumeSuspendedSessions
+      yield* restart.resumeSuspendedSessions
       while (vendor.runs.length < 2) yield* Effect.promise(() => Bun.sleep(5))
       yield* env.sessions.wait(env.session.id)
       expect(vendor.runs).toHaveLength(2)
@@ -543,9 +546,8 @@ describe("subagent drivers", () => {
         const continued = yield* call(env, { sessionID, message: "Continue please" })
         expect(continued._tag).toBe("Success")
         expect(vendor.runs.at(-1)?.provider).toBe("claude")
-        expect(vendor.runs.at(-1)?.vendorSessionID).toBe(
-          (yield* (yield* ExternalAgentSession.Service).get(sessionID))?.vendorSessionID,
-        )
+        const external = yield* ExternalAgentSession.Service
+        expect(vendor.runs.at(-1)?.vendorSessionID).toBe((yield* external.get(sessionID))?.vendorSessionID)
         expect(vendor.runs.at(-1)?.message).toContain("Continue please")
         if (continued._tag === "Success") expect(continued.success.output).toMatchObject({ message: "Continued" })
       }),

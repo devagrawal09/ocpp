@@ -145,7 +145,7 @@ export function withDrivers(catalog: ProviderListResponse, drivers: ReadonlyArra
           name: driver.name,
           source: "custom",
           env: [],
-          options: { driver: true },
+          options: {},
           models: Object.fromEntries(
             driver.models.map((id) => [
               id,

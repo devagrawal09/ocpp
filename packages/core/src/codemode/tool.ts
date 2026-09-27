@@ -98,7 +98,7 @@ export const create = (
               : new Tool.Error({ message: error instanceof Error ? error.message : String(error) }),
         })
         const unavailable = CodeModeCompileCheck.unavailableTools(program, code, {
-          available: Array.from(registrations.values(), qualifiedName),
+          available: catalog(registrations).map((entry) => entry.path),
           denied: denied.map(qualifiedName),
         })
         if (unavailable) return yield* unavailable

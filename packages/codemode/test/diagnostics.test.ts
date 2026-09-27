@@ -156,7 +156,9 @@ describe("compile suggestions", () => {
   })
 
   test("removed values and unsupported forms name their supported replacement", () => {
-    expect(suggestions(`const now = new Date()`)?.[0]).toStartWith("Use epoch milliseconds with the time helpers: time.now()")
+    expect(suggestions(`const now = new Date()`)?.[0]).toStartWith(
+      "Use epoch milliseconds with the time helpers: time.now()",
+    )
     expect(suggestions(`const seen = new Set(ids)`)?.[0]).toContain("items.includes(item)")
     expect(suggestions(`async function load(path) { return tools.fs.read({ path }) }`)).toEqual([
       "Remove async and await: tool calls block and return their value, e.g. function load(path) { return tools.fs.read({ path }) }",
@@ -190,9 +192,13 @@ describe("compile suggestions", () => {
       'const line = "id-7"\nreturn ' + after(suggestions(`const ok = /^id-/.test(line)`)?.[0], " with "),
       'const text = "a  b c"\nreturn ' + after(suggestions(`const words = text.split(/\\s+/)`)?.[0], ": "),
       'const name = "a-b-c"\nreturn ' + after(suggestions(`const clean = name.replace(/-/g, "_")`)?.[0], ": "),
-      'const status = { branch: "main", files: ["a"] }\n' + after(destructured?.[0], ": ") + "\nreturn [branch, changed]",
-      'const status = { branch: "main", files: ["a"] }\n' + after(destructured?.[1], ": ") + "\nreturn [branch, changed]",
-      'const seen = { draft: 1, kept: 2 }\nreturn ' + after(suggestions(`let seen = {}\ndelete seen.draft`)?.[0], ": "),
+      'const status = { branch: "main", files: ["a"] }\n' +
+        after(destructured?.[0], ": ") +
+        "\nreturn [branch, changed]",
+      'const status = { branch: "main", files: ["a"] }\n' +
+        after(destructured?.[1], ": ") +
+        "\nreturn [branch, changed]",
+      "const seen = { draft: 1, kept: 2 }\nreturn " + after(suggestions(`let seen = {}\ndelete seen.draft`)?.[0], ": "),
     ]
     const results = await Promise.all(programs.map((code) => run(code)))
     expect(results.map((result) => (result.ok ? result.value : result.error.message))).toEqual([

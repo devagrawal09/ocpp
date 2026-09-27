@@ -54,7 +54,8 @@ export function unavailableTools(
   // tools.search is built into the runtime rather than registered by the host.
   const available = ["search", ...catalog.available]
   const calls = staticToolCalls(program.body).filter(
-    (call, index, all) => !available.includes(call.path) && all.findIndex((other) => other.path === call.path) === index,
+    (call, index, all) =>
+      !available.includes(call.path) && all.findIndex((other) => other.path === call.path) === index,
   )
   if (calls.length === 0) return undefined
   return refusal(
@@ -106,7 +107,9 @@ function refusal(diagnostics: ReadonlyArray<Diagnostic>) {
           ...(diagnostic.suggestions ?? []),
         ].join("\n"),
       ),
-      ...(diagnostics.length > shown.length ? [diagnostics.length - shown.length + " more are not shown."] : []),
+      ...(diagnostics.length > shown.length
+        ? [diagnostics.length - shown.length + " more unavailable tool paths are not shown."]
+        : []),
     ].join("\n\n"),
     metadata: {
       executionStatus: "refused",
@@ -185,7 +188,11 @@ function distance(left: string, right: string) {
   for (let row = 1; row <= left.length; row++)
     for (let column = 1; column <= right.length; column++) {
       const cost = left[row - 1] === right[column - 1] ? 0 : 1
-      const best = Math.min(rows[row - 1]![column]! + 1, rows[row]![column - 1]! + 1, rows[row - 1]![column - 1]! + cost)
+      const best = Math.min(
+        rows[row - 1]![column]! + 1,
+        rows[row]![column - 1]! + 1,
+        rows[row - 1]![column - 1]! + cost,
+      )
       rows[row]![column] =
         row > 1 && column > 1 && left[row - 1] === right[column - 2] && left[row - 2] === right[column - 1]
           ? Math.min(best, rows[row - 2]![column - 2]! + 1)

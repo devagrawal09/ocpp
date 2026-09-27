@@ -70,16 +70,14 @@ const forbidden = new Map([
   [
     "ExportNamedDeclaration",
     {
-      message:
-        "export is not supported; direct top-level const and function declarations are published automatically",
+      message: "export is not supported; direct top-level const and function declarations are published automatically",
       suggestions: [autoPublish],
     },
   ],
   [
     "ExportDefaultDeclaration",
     {
-      message:
-        "export is not supported; direct top-level const and function declarations are published automatically",
+      message: "export is not supported; direct top-level const and function declarations are published automatically",
       suggestions: [autoPublish],
     },
   ],
@@ -389,7 +387,8 @@ function validate(node: AstNode): void {
         (identifierName(requireNode(requireArray(node.declarations, node)[0]).id) ?? "total") +
         " = ...",
     ])
-  if (node.type === "Literal" && isRecord(node.regex)) throw unsupported(regexUnavailable + ".", node, Suggestions.regex())
+  if (node.type === "Literal" && isRecord(node.regex))
+    throw unsupported(regexUnavailable + ".", node, Suggestions.regex())
   if (node.type === "AssignmentExpression") {
     const left = requireNode(node.left)
     if (hasMemberTarget(left))
@@ -459,7 +458,8 @@ function validate(node: AstNode): void {
         Suggestions.mutatingMethod(method, callee, requireArray(node.arguments, node)),
       )
   }
-  if (node.type === "Identifier" && node.name === "Promise") throw unsupported(promiseUnsupported, node, promiseSuggestions)
+  if (node.type === "Identifier" && node.name === "Promise")
+    throw unsupported(promiseUnsupported, node, promiseSuggestions)
   if (node.type === "Identifier" && node.name === "tools")
     throw unsupported(
       "Tools must be called through a direct static path such as tools.fs.read(...).",

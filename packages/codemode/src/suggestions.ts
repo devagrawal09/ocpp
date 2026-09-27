@@ -12,7 +12,15 @@ export const general =
   "Use synchronous functions, direct blocking tool calls, and immutable data. Direct top-level const and function declarations publish durable notebook names automatically."
 
 export const regex = (text = "text") => [
-  "Test " + text + " with " + text + '.includes("error"), ' + text + '.startsWith("id-"), or ' + text + '.endsWith(".ts")',
+  "Test " +
+    text +
+    " with " +
+    text +
+    '.includes("error"), ' +
+    text +
+    '.startsWith("id-"), or ' +
+    text +
+    '.endsWith(".ts")',
   "Extract parts with " + text + '.split(":"), ' + text + '.indexOf("="), and ' + text + ".slice(start, end)",
 ]
 
@@ -25,7 +33,9 @@ export const immutable =
   "Create an updated copy with spread, such as { ...record, key: value } or [...items, item], instead of changing a value in place."
 
 /** A rejected call that uses a regular expression, with rewrites that use string methods instead. */
-export function regexCall(call: AstNode): { readonly node: AstNode; readonly suggestions: ReadonlyArray<string> } | undefined {
+export function regexCall(
+  call: AstNode,
+): { readonly node: AstNode; readonly suggestions: ReadonlyArray<string> } | undefined {
   const callee = asNode(call.callee)
   if (callee?.type !== "MemberExpression" || callee.computed === true) return
   const method = identifier(callee.property)
@@ -52,7 +62,8 @@ export function destructuring(pattern: AstNode, init: unknown): ReadonlyArray<st
       "Or destructure with let, which keeps the values for this execution only: let { first, second } = result",
     ]
   const value = source(init) ?? "..."
-  const holder = ["result", "value", "data"].find((name) => !bindings.some((binding) => binding.name === name)) ?? "source"
+  const holder =
+    ["result", "value", "data"].find((name) => !bindings.some((binding) => binding.name === name)) ?? "source"
   const text =
     pattern.type === "ArrayPattern"
       ? "[" + bindings.map((binding) => binding.text).join(", ") + "]"
@@ -77,13 +88,27 @@ export function mutatingMethod(method: string, callee: AstNode, args: ReadonlyAr
   const values = args.map((arg) => source(arg) ?? "item").join(", ") || "item"
   if (method === "push")
     return [
-      "Build a new array instead: " + items + " = [..." + items + ", " + values + "] for a let binding, or const next = [..." + items + ", " + values + "]",
+      "Build a new array instead: " +
+        items +
+        " = [..." +
+        items +
+        ", " +
+        values +
+        "] for a let binding, or const next = [..." +
+        items +
+        ", " +
+        values +
+        "]",
     ]
   if (method === "unshift") return ["Build a new array instead: [" + values + ", ..." + items + "]"]
-  if (method === "pop") return ["Read the last item with " + items + ".at(-1) and keep the rest with " + items + ".slice(0, -1)"]
-  if (method === "shift") return ["Read the first item with " + items + "[0] and keep the rest with " + items + ".slice(1)"]
-  if (method === "splice") return ["Use " + items + ".toSpliced(start, deleteCount, ...inserted), which returns a new array"]
-  if (method === "sort") return ["Use " + items + ".toSorted(...) with the same comparator; it returns a new sorted array"]
+  if (method === "pop")
+    return ["Read the last item with " + items + ".at(-1) and keep the rest with " + items + ".slice(0, -1)"]
+  if (method === "shift")
+    return ["Read the first item with " + items + "[0] and keep the rest with " + items + ".slice(1)"]
+  if (method === "splice")
+    return ["Use " + items + ".toSpliced(start, deleteCount, ...inserted), which returns a new array"]
+  if (method === "sort")
+    return ["Use " + items + ".toSorted(...) with the same comparator; it returns a new sorted array"]
   if (method === "reverse") return ["Use " + items + ".toReversed(), which returns a new array"]
   if (method === "fill") return ["Build the array directly: Array.from({ length: " + items + ".length }, () => value)"]
   if (method === "assign")
@@ -98,7 +123,13 @@ export function memberAssignment(target: AstNode, value: string): ReadonlyArray<
   const property = asNode(target.property)
   if (target.computed !== true && property?.type === "Identifier")
     return [
-      "Create an updated copy: { ..." + object + ", " + property.name + ": " + value + " }, kept in a let binding or a new const",
+      "Create an updated copy: { ..." +
+        object +
+        ", " +
+        property.name +
+        ": " +
+        value +
+        " }, kept in a let binding or a new const",
     ]
   const key = source(property) ?? "key"
   return [
@@ -142,12 +173,7 @@ export function deletion(argument: unknown): ReadonlyArray<string> {
   ]
 }
 
-function regexRewrite(
-  method: string,
-  literal: AstNode,
-  subject: unknown,
-  replacement: unknown,
-): ReadonlyArray<string> {
+function regexRewrite(method: string, literal: AstNode, subject: unknown, replacement: unknown): ReadonlyArray<string> {
   const pattern = isRecord(literal.regex) ? literal.regex : {}
   const body = typeof pattern.pattern === "string" ? pattern.pattern : ""
   const flags = typeof pattern.flags === "string" ? pattern.flags : ""
@@ -283,7 +309,8 @@ function source(value: unknown): string | undefined {
     const object = source(node.object)
     const property = asNode(node.property)
     if (object === undefined || property === undefined) return
-    if (node.computed !== true) return identifier(property) && object + (node.optional ? "?." : ".") + identifier(property)
+    if (node.computed !== true)
+      return identifier(property) && object + (node.optional ? "?." : ".") + identifier(property)
     const key = source(property)
     return key && object + "[" + key + "]"
   }

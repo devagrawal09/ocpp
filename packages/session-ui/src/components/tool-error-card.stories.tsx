@@ -20,7 +20,10 @@ const refusal = {
     "Did you mean tools.fs.read?",
     'Check its exact signature with tools.search({ query: "tools.fs.read" })',
   ].join("\n"),
-  suggestions: ["Did you mean tools.fs.read?", 'Check its exact signature with tools.search({ query: "tools.fs.read" })'],
+  suggestions: [
+    "Did you mean tools.fs.read?",
+    'Check its exact signature with tools.search({ query: "tools.fs.read" })',
+  ],
 }
 
 const samples: {

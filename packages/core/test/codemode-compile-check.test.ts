@@ -93,7 +93,10 @@ test("an unknown tool is refused with its closest catalog path before an executi
     kind: "UnknownTool",
     location: { line: 2, column: 14 },
     excerpt: "const text = tools.fs.raed({ text: path })",
-    suggestions: ["Did you mean tools.fs.read?", 'Check its exact signature with tools.search({ query: "tools.fs.read" })'],
+    suggestions: [
+      "Did you mean tools.fs.read?",
+      'Check its exact signature with tools.search({ query: "tools.fs.read" })',
+    ],
     tools: ["fs.raed"],
   })
   expect(codemode.admitted).toEqual([])

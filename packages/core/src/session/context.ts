@@ -18,6 +18,7 @@ import { OpenApiInstructions } from "../openapi/instructions.js"
 import { PluginSupervisor } from "../plugin/supervisor.js"
 import { ReferenceInstructions } from "../reference/instructions.js"
 import { SkillInstructions } from "../skill/instructions.js"
+import { SubagentInstructions } from "../subagent/instructions.js"
 import { Tool } from "../tool.js"
 import { AgentNotFoundError } from "./error.js"
 import { SessionHistory } from "./history.js"
@@ -94,6 +95,7 @@ const layer = Layer.effect(
     const plugins = yield* PluginSupervisor.Service
     const referenceInstructions = yield* ReferenceInstructions.Service
     const skillInstructions = yield* SkillInstructions.Service
+    const subagentInstructions = yield* SubagentInstructions.Service
     const store = yield* SessionStore.Service
     const registry = yield* Tool.Service
 
@@ -146,6 +148,7 @@ const layer = Layer.effect(
           builtins: builtins.load(sessionID),
           discovery: discovery.load(),
           skills: skillInstructions.load(agent),
+          subagents: subagentInstructions.load(agent),
           references: referenceInstructions.load(),
           mcp: mcpInstructions.load(agent),
           openapi: openapiInstructions.load(agent),
@@ -162,6 +165,7 @@ const layer = Layer.effect(
           CodeModeInstructions.make(loaded.tools.codeModeCatalog),
           loaded.discovery,
           loaded.skills,
+          loaded.subagents,
           loaded.references,
           loaded.mcp,
           loaded.openapi,
@@ -212,6 +216,7 @@ export const node = makeLocationNode({
     SessionModelRequest.node,
     SessionStore.node,
     SkillInstructions.node,
+    SubagentInstructions.node,
     Tool.node,
   ],
 })

@@ -8,6 +8,8 @@ import type { SessionModel } from "../model"
 import { useSessionHashScroll } from "../use-session-hash-scroll"
 import { createTimelineModel } from "./model"
 
+const revealPages = 20
+
 export function createSessionTimelineInteraction(session: SessionModel) {
   const layout = useLayout()
   const location = useLocation()
@@ -38,7 +40,7 @@ export function createSessionTimelineInteraction(session: SessionModel) {
   }
   let scroller: HTMLDivElement | undefined
   let dockHeight = 0
-  let revealMessage = (_id: string) => {}
+  let revealMessage = (_id: string, _partID?: string) => false
   let scrollToEnd = () => {}
   let scrollMark = 0
   let messageMark = 0
@@ -122,6 +124,14 @@ export function createSessionTimelineInteraction(session: SessionModel) {
     scheduleScrollState,
     consumePendingMessage: (key) => layout.pendingMessage.consume(key),
   })
+  // Scrolls to a turn, or to the row showing one of its parts, loading older history until it is found.
+  const reveal = async (target: { messageID: string; partID?: string }, pages = revealPages): Promise<void> => {
+    if (!scroller) return
+    unpin()
+    if (revealMessage(target.messageID, target.partID) || pages === 0 || !timeline.history.more()) return
+    await timeline.history.loadOlder()
+    return reveal(target, pages - 1)
+  }
   const resume = () => {
     setState("messageID", undefined)
     pin()
@@ -291,6 +301,7 @@ export function createSessionTimelineInteraction(session: SessionModel) {
     actions: {
       navigateMessage,
       resume,
+      reveal,
       setActiveMessage,
     },
     lastUserMessage: timeline.lastUserMessage,
@@ -313,7 +324,7 @@ export function createSessionTimelineInteraction(session: SessionModel) {
       setDockRef: (element: HTMLDivElement | undefined) => {
         setState("refs", "dock", element)
       },
-      setRevealMessage: (reveal: (id: string) => void) => {
+      setRevealMessage: (reveal: (id: string, partID?: string) => boolean) => {
         revealMessage = reveal
       },
       setScrollRef,

@@ -201,6 +201,10 @@ export type CodeModeEventSchedule = { every: string } | { cron: string } | { at:
 
 export type CodeModeEventStatus = "running" | "completed" | "error" | "cancelled"
 
+export type SessionEventFiring = { status: "started"; executionID: string; messageID: string } | { status: "skipped" }
+
+export type SessionExecutionCancelResponse = { cancelled: boolean }
+
 export type ModelReasoningField = "reasoning" | "reasoning_content" | "reasoning_text" | (string & {})
 
 export type ModelMaxTokensField = "max_completion_tokens" | "max_tokens"
@@ -1053,6 +1057,15 @@ export type CommandUpdated = {
   data: {}
 }
 
+export type CodeModeEventUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "codemode.event.updated"
+  location?: LocationRef
+  data: { sessionID: string; name: string }
+}
+
 export type ConfigUpdated = {
   id: string
   created: number
@@ -1342,6 +1355,7 @@ export type CodeModeEventInfo = {
   nextFireAt?: string
   lastFiredAt?: string
   lastStatus?: CodeModeEventStatus
+  lastMessageID?: string
   lastSummary?: string
   runCount: number | "Infinity" | "-Infinity" | "NaN"
   skipCount: number | "Infinity" | "-Infinity" | "NaN"
@@ -2406,6 +2420,7 @@ export type V2Event =
   | WorktreeUpdated
   | WorktreeResolved
   | CommandUpdated
+  | CodeModeEventUpdated
   | ConfigUpdated
   | SkillUpdated
   | PtyCreated
@@ -2541,6 +2556,14 @@ export const isInstructionEntryValueTooLargeError = (value: unknown): value is I
   value !== null &&
   "_tag" in value &&
   value["_tag"] === "InstructionEntryValueTooLargeError"
+
+export type EventNotFoundError = {
+  readonly _tag: "EventNotFoundError"
+  readonly event: string
+  readonly message: string
+}
+export const isEventNotFoundError = (value: unknown): value is EventNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "EventNotFoundError"
 
 export type ProviderNotFoundError = {
   readonly _tag: "ProviderNotFoundError"
@@ -4529,6 +4552,42 @@ export type SessionCommandsOutput = { data: Array<CodeModeCommandInfo> }["data"]
 export type SessionEventsInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
 export type SessionEventsOutput = { data: Array<CodeModeEventInfo> }["data"]
+
+export type SessionEventEnableInput = {
+  readonly sessionID: { readonly sessionID: string; readonly name: string }["sessionID"]
+  readonly name: { readonly sessionID: string; readonly name: string }["name"]
+}
+
+export type SessionEventEnableOutput = { data: CodeModeEventInfo }["data"]
+
+export type SessionEventDisableInput = {
+  readonly sessionID: { readonly sessionID: string; readonly name: string }["sessionID"]
+  readonly name: { readonly sessionID: string; readonly name: string }["name"]
+}
+
+export type SessionEventDisableOutput = { data: CodeModeEventInfo }["data"]
+
+export type SessionEventTriggerInput = {
+  readonly sessionID: { readonly sessionID: string; readonly name: string }["sessionID"]
+  readonly name: { readonly sessionID: string; readonly name: string }["name"]
+  readonly input?: { readonly input?: JsonValue | undefined }["input"]
+}
+
+export type SessionEventTriggerOutput = { data: SessionEventFiring }["data"]
+
+export type SessionEventRemoveInput = {
+  readonly sessionID: { readonly sessionID: string; readonly name: string }["sessionID"]
+  readonly name: { readonly sessionID: string; readonly name: string }["name"]
+}
+
+export type SessionEventRemoveOutput = void
+
+export type SessionExecutionCancelInput = {
+  readonly sessionID: { readonly sessionID: string; readonly executionID: string }["sessionID"]
+  readonly executionID: { readonly sessionID: string; readonly executionID: string }["executionID"]
+}
+
+export type SessionExecutionCancelOutput = SessionExecutionCancelResponse
 
 export type MessageListInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]

@@ -6,6 +6,7 @@
 import type {
   AgentInfo,
   CodeModeCommandInfo,
+  CodeModeEventInfo,
   CommandInfo,
   FormCancelInput,
   FormInfo,
@@ -113,6 +114,8 @@ type Store = {
     pending: Record<string, SessionInboxInfo[]>
     // Slash commands the agent defined for each session, beside the Location's commands.
     command: Record<string, CodeModeCommandInfo[]>
+    // Scheduled events the agent defined for each session, with their next and latest firing.
+    event: Record<string, CodeModeEventInfo[]>
     input: Record<string, string[]>
     permission: Record<string, PermissionRequest[]>
     // Pending forms keyed by owner: a session ID or the temporary "global" elicitation sentinel.
@@ -206,6 +209,7 @@ export function createData(config: CreateDataInput) {
       messageLoading: {},
       pending: {},
       command: {},
+      event: {},
       input: {},
       permission: {},
       form: {},
@@ -514,6 +518,7 @@ export function createData(config: CreateDataInput) {
     sync.invalidate(`session.message:${sessionID}`)
     sync.invalidate(`session.permission:${sessionID}`)
     sync.invalidate(`session.form:${sessionID}:`)
+    sync.invalidate(`session.event:${sessionID}`)
     setStore(
       "session",
       produce((draft) => {
@@ -526,6 +531,7 @@ export function createData(config: CreateDataInput) {
         delete draft.input[sessionID]
         delete draft.permission[sessionID]
         delete draft.form[sessionID]
+        delete draft.event[sessionID]
         for (const [rootID, family] of Object.entries(draft.family)) {
           const next = family.filter((id) => id !== sessionID)
           if (next.length === 0) delete draft.family[rootID]
@@ -986,6 +992,19 @@ export function createData(config: CreateDataInput) {
             ...(event.data.resumed === true ? { resumed: true } : {}),
           }
         })
+        if (event.type === "session.codemode.progress" || !store.session.event[event.data.sessionID]) return
+        // An event's latest outcome is read from the invocation of its latest firing, which just settled. A
+        // quick firing can settle before the list names it, so an event's invocation settling counts too.
+        const settled = result.session.message.get(event.data.sessionID, event.data.assistantMessageID)
+        if (
+          (settled?.type === "invocation" && settled.trigger.type === "event") ||
+          store.session.event[event.data.sessionID]?.some(
+            (item) => item.lastMessageID === event.data.assistantMessageID,
+          )
+        ) {
+          result.session.event.invalidate(event.data.sessionID)
+          void result.session.event.sync(event.data.sessionID)
+        }
         return
       case "session.tool.success":
         message.update(event.data.sessionID, (draft, index) => {
@@ -1125,10 +1144,14 @@ export function createData(config: CreateDataInput) {
           if (position === -1) return
           for (const item of draft.splice(position)) index.delete(item.id)
         })
-        // A revert removes the session commands whose notebook function it removed.
+        // A revert removes the session commands and events whose notebook function it removed.
         if (store.session.command[event.data.sessionID]) {
           result.session.command.invalidate(event.data.sessionID)
           void result.session.command.sync(event.data.sessionID)
+        }
+        if (store.session.event[event.data.sessionID]) {
+          result.session.event.invalidate(event.data.sessionID)
+          void result.session.event.sync(event.data.sessionID)
         }
         return
       case "session.compaction.delta":
@@ -1207,6 +1230,11 @@ export function createData(config: CreateDataInput) {
       case "form.replied":
       case "form.cancelled":
         removeForm(event.data.sessionID, event.data.id, event.location)
+        return
+      case "codemode.event.updated":
+        if (!store.session.event[event.data.sessionID]) return
+        result.session.event.invalidate(event.data.sessionID)
+        void result.session.event.sync(event.data.sessionID)
         return
     }
 
@@ -1424,6 +1452,20 @@ export function createData(config: CreateDataInput) {
         },
         invalidate(sessionID: string) {
           sync.invalidate(`session.command:${sessionID}`)
+        },
+      },
+      event: {
+        list(sessionID: string): CodeModeEventInfo[] | undefined {
+          return store.session.event[sessionID]
+        },
+        sync(sessionID: string) {
+          return sync.run(`session.event:${sessionID}`, async () => {
+            const events = await api().session.events({ sessionID })
+            setStore("session", "event", sessionID, reconcile(events))
+          })
+        },
+        invalidate(sessionID: string) {
+          sync.invalidate(`session.event:${sessionID}`)
         },
       },
       // Optimistic session creation: admit a local record under a

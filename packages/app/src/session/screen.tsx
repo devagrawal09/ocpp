@@ -237,7 +237,11 @@ export function SessionScreen(props: { session: SessionModel }) {
                         setStore("sideReviewPresent", false)
                       }}
                     >
-                      <SessionDesktopReview review={review} present={store.sideReviewPresent} />
+                      <SessionDesktopReview
+                        review={review}
+                        present={store.sideReviewPresent}
+                        reveal={(target) => void timeline.actions.reveal(target)}
+                      />
                     </div>
                   </Show>
                 </div>

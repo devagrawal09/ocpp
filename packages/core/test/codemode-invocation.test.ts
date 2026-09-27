@@ -1,6 +1,6 @@
 import path from "path"
 import { afterAll, describe, expect, test } from "bun:test"
-import { Clock, Deferred, Effect, Exit, Fiber, Layer, Schema, Scope } from "effect"
+import { Clock, Deferred, Effect, Exit, Fiber, Layer, Schema, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { Agent } from "@ocpp/core/agent"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
@@ -885,6 +885,44 @@ describe("Code Mode events", () => {
       ])
       const third = yield* execute(context, 'return tools.event.trigger({ name: "slow" })')
       expect(third?.output).toContain('"status":"started"')
+    }),
+  )
+
+  it.live("announces each change to a session's events and points at the latest firing", () =>
+    Effect.gen(function* () {
+      const context = yield* setup
+      const bus = yield* Bus.Service
+      const events = yield* CodeModeEvent.Service
+      const announced: Array<{ readonly sessionID: string; readonly name: string }> = []
+      yield* bus.subscribe(CodeModeEvent.Updated).pipe(
+        Stream.runForEach((event) => Effect.sync(() => void announced.push(event.data))),
+        Effect.forkScoped,
+      )
+      yield* Effect.yieldNow
+      const announcements = (count: number) =>
+        eventually(Effect.sync(() => (announced.length === count ? announced : undefined)))
+      const key = { sessionID: context.session.id, name: "watch" }
+      yield* execute(
+        context,
+        [
+          "function watch(input) { return input.event }",
+          'tools.event.define({ name: "watch", schedule: { every: "1h" }, handler: "watch" })',
+        ].join("\n"),
+      )
+      yield* announcements(1)
+      yield* events.setEnabled(key, false)
+      yield* announcements(2)
+      const executionID = yield* fire(context, "watch")
+      yield* announcements(3)
+      const [invocation] = yield* invocations(context.session.id)
+      expect(invocation?.executionID).toBe(executionID)
+      expect((yield* events.list(context.session.id))[0]?.lastMessageID).toBe(invocation?.id)
+      yield* events.skipped(key, yield* Clock.currentTimeMillis)
+      yield* announcements(4)
+      yield* events.remove(key)
+      // Removing a missing event changes nothing, so it announces nothing.
+      yield* events.remove(key)
+      expect(yield* announcements(5)).toEqual(Array.from({ length: 5 }, () => key))
     }),
   )
 

@@ -15,6 +15,7 @@ import {
   ConflictError,
   CommandExecutionError,
   CommandNotFoundError,
+  EventNotFoundError,
   InvalidCursorError,
   InvalidRequestError,
   MessageNotFoundError,
@@ -32,6 +33,7 @@ import { SessionEvent } from "@ocpp/schema/session-event"
 import { EventLog } from "@ocpp/schema/event-log"
 import { CodeModeCommand } from "@ocpp/schema/codemode-command"
 import { CodeModeEvent } from "@ocpp/schema/codemode-event"
+import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 
 const ParentIDFilter = Schema.Union([
   Session.ID,
@@ -782,6 +784,94 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           summary: "List session events",
           description:
             "List the scheduled events the agent defined for this session, with their next firing and latest outcome.",
+        }),
+      ),
+    )
+    .add(
+      HttpApiEndpoint.post("session.event.enable", "/api/session/:sessionID/event/:name/enable", {
+        params: { sessionID: Session.ID, name: Schema.String },
+        success: Schema.Struct({ data: CodeModeEvent.Info }),
+        error: [SessionNotFoundError, EventNotFoundError],
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.event.enable",
+          summary: "Enable session event",
+          description: "Resume firing an event on its schedule, as tools.event.enable does for the agent.",
+        }),
+      ),
+    )
+    .add(
+      HttpApiEndpoint.post("session.event.disable", "/api/session/:sessionID/event/:name/disable", {
+        params: { sessionID: Session.ID, name: Schema.String },
+        success: Schema.Struct({ data: CodeModeEvent.Info }),
+        error: [SessionNotFoundError, EventNotFoundError],
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.event.disable",
+          summary: "Disable session event",
+          description:
+            "Stop firing an event until it is enabled again, as tools.event.disable does for the agent. A running firing continues.",
+        }),
+      ),
+    )
+    .add(
+      HttpApiEndpoint.post("session.event.trigger", "/api/session/:sessionID/event/:name/trigger", {
+        params: { sessionID: Session.ID, name: Schema.String },
+        payload: Schema.Struct({
+          input: Schema.Json.pipe(Schema.optional).annotate({
+            description: "Replaces the event's input for this firing.",
+          }),
+        }),
+        success: Schema.Struct({
+          data: Schema.Union([
+            Schema.Struct({
+              status: Schema.Literal("started"),
+              executionID: CodeModeExecution.ID,
+              messageID: SessionMessage.ID,
+            }),
+            Schema.Struct({ status: Schema.Literal("skipped") }),
+          ]).annotate({ identifier: "SessionEventFiring" }),
+        }),
+        error: [SessionNotFoundError, EventNotFoundError, ConflictError],
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.event.trigger",
+            summary: "Trigger session event",
+            description:
+              "Fire an event now, whether or not it is enabled, as tools.event.trigger does for the agent. Returns once the firing starts, with the invocation message the timeline shows, or is skipped because the previous firing is still running.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.delete("session.event.remove", "/api/session/:sessionID/event/:name", {
+        params: { sessionID: Session.ID, name: Schema.String },
+        success: HttpApiSchema.NoContent,
+        error: [SessionNotFoundError, EventNotFoundError],
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.event.remove",
+          summary: "Remove session event",
+          description: "Remove an event, as tools.event.remove does for the agent. Its handler stays in the notebook.",
+        }),
+      ),
+    )
+    .add(
+      HttpApiEndpoint.post("session.execution.cancel", "/api/session/:sessionID/execution/:executionID/cancel", {
+        params: { sessionID: Session.ID, executionID: CodeModeExecution.ID },
+        success: Schema.Struct({
+          cancelled: Schema.Boolean.annotate({
+            description: "Whether a running Code Mode execution of this session was cancelled.",
+          }),
+        }).annotate({ identifier: "SessionExecutionCancelResponse" }),
+        error: SessionNotFoundError,
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.execution.cancel",
+          summary: "Cancel Code Mode execution",
+          description:
+            "Cancel one running Code Mode execution of this session, as interrupting a busy session cancels all of them. Its outcome reaches the model as a cancelled notification without waking it. Returns cancelled=false when the execution is not running in this OC++ process.",
         }),
       ),
     )

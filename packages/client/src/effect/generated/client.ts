@@ -96,6 +96,16 @@ import type {
   SessionCommandsOutput,
   SessionEventsInput,
   SessionEventsOutput,
+  SessionEventEnableInput,
+  SessionEventEnableOutput,
+  SessionEventDisableInput,
+  SessionEventDisableOutput,
+  SessionEventTriggerInput,
+  SessionEventTriggerOutput,
+  SessionEventRemoveInput,
+  SessionEventRemoveOutput,
+  SessionExecutionCancelInput,
+  SessionExecutionCancelOutput,
   MessageListInput,
   MessageListOutput,
   ModelListInput,
@@ -707,6 +717,47 @@ const EndpointSessionEvents = (raw: RawClient["server.session"]) => (input: Sess
     ),
   )
 
+const EndpointSessionEventEnable = (raw: RawClient["server.session"]) => (input: SessionEventEnableInput) =>
+  preserveEffect<SessionEventEnableOutput>()(
+    raw["session.event.enable"]({ params: { sessionID: input["sessionID"], name: input["name"] } }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
+const EndpointSessionEventDisable = (raw: RawClient["server.session"]) => (input: SessionEventDisableInput) =>
+  preserveEffect<SessionEventDisableOutput>()(
+    raw["session.event.disable"]({ params: { sessionID: input["sessionID"], name: input["name"] } }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
+const EndpointSessionEventTrigger = (raw: RawClient["server.session"]) => (input: SessionEventTriggerInput) =>
+  preserveEffect<SessionEventTriggerOutput>()(
+    raw["session.event.trigger"]({
+      params: { sessionID: input["sessionID"], name: input["name"] },
+      payload: { input: input["input"] },
+    }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
+const EndpointSessionEventRemove = (raw: RawClient["server.session"]) => (input: SessionEventRemoveInput) =>
+  preserveEffect<SessionEventRemoveOutput>()(
+    raw["session.event.remove"]({ params: { sessionID: input["sessionID"], name: input["name"] } }).pipe(
+      Effect.mapError(mapClientError),
+    ),
+  )
+
+const EndpointSessionExecutionCancel = (raw: RawClient["server.session"]) => (input: SessionExecutionCancelInput) =>
+  preserveEffect<SessionExecutionCancelOutput>()(
+    raw["session.execution.cancel"]({
+      params: { sessionID: input["sessionID"], executionID: input["executionID"] },
+    }).pipe(Effect.mapError(mapClientError)),
+  )
+
 const adaptGroupSession = (raw: RawClient["server.session"]) => ({
   list: EndpointSessionList(raw),
   stats: EndpointSessionStats(raw),
@@ -757,6 +808,13 @@ const adaptGroupSession = (raw: RawClient["server.session"]) => ({
   view: EndpointSessionView(raw),
   commands: EndpointSessionCommands(raw),
   events: EndpointSessionEvents(raw),
+  event: {
+    enable: EndpointSessionEventEnable(raw),
+    disable: EndpointSessionEventDisable(raw),
+    trigger: EndpointSessionEventTrigger(raw),
+    remove: EndpointSessionEventRemove(raw),
+  },
+  execution: { cancel: EndpointSessionExecutionCancel(raw) },
 })
 
 const EndpointMessageList = (raw: RawClient["server.message"]) => (input: MessageListInput) =>

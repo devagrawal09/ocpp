@@ -3,6 +3,7 @@ export * as EventManifest from "./event-manifest.js"
 import { Schema } from "effect"
 import { Agent } from "./agent.js"
 import { Catalog } from "./catalog.js"
+import { CodeModeEvent } from "./codemode-event.js"
 import { Command } from "./command.js"
 import { Config } from "./config.js"
 import { Credential } from "./credential.js"
@@ -54,6 +55,7 @@ const featureDefinitions = Event.inventory(
   ...Project.Event.Definitions,
   ...Worktree.Event.Definitions,
   ...Command.Event.Definitions,
+  ...CodeModeEvent.Event.Definitions,
   ...Config.Event.Definitions,
   ...Skill.Event.Definitions,
   ...Pty.Event.Definitions,

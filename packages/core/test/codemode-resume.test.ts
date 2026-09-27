@@ -33,6 +33,9 @@ import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionStore } from "@ocpp/core/session/store"
 import { Tool } from "@ocpp/core/tool"
 import { SubagentTool } from "@ocpp/core/tool/plugin/subagent"
+import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
+import { ExternalAgentSession } from "@ocpp/core/external-agent/session"
+import { noVendorDrivers } from "./lib/drivers"
 import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Global } from "@ocpp/util/global"
@@ -97,7 +100,17 @@ const supervisor = makeLocationNode({
     PluginSupervisor.Service,
     registerToolPlugin(SubagentTool.Plugin).pipe(Effect.as(PluginSupervisor.Service.of({ flush: Effect.void }))),
   ),
-  deps: [Agent.node, Bus.node, Catalog.node, Config.node, Permission.node, PluginRuntime.node, Tool.node],
+  deps: [
+    Agent.node,
+    Bus.node,
+    Catalog.node,
+    Config.node,
+    ExternalAgentDrivers.node,
+    ExternalAgentSession.node,
+    Permission.node,
+    PluginRuntime.node,
+    Tool.node,
+  ],
 })
 
 const nodes = LayerNode.group([
@@ -120,6 +133,7 @@ const replacements = [
   [SessionExecution.node, executionNode],
   [Global.node, tempGlobalLayer],
   [PluginSupervisor.node, supervisor],
+  [ExternalAgentDrivers.node, noVendorDrivers],
 ] satisfies LayerNode.Replacements
 
 const it = testEffect(AppNodeBuilder.build(nodes, replacements))

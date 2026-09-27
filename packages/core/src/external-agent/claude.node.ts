@@ -1,11 +1,11 @@
-import type { Options, SDKMessage } from "@anthropic-ai/claude-agent-sdk"
+import type { McpServerConfig, Options, SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk"
 import { createHash } from "node:crypto"
 import { Schema } from "effect"
 import { ExternalAgentDriver } from "./driver.js"
+import { ExternalAgentEffort } from "./effort.js"
 import { which } from "../util/which.js"
 import { ExternalAgentBridge } from "./bridge.node.js"
 
-const Effort = Schema.Literals(["low", "medium", "high", "xhigh", "max"])
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
 
 export const ClaudeDriver: ExternalAgentDriver.Driver = {
@@ -23,48 +23,35 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
     const abort = () => controller.abort()
     options.signal.throwIfAborted()
     options.signal.addEventListener("abort", abort, { once: true })
+    // Streaming input keeps one vendor turn loop per drain: steers join the running turn at its next boundary.
+    const prompt = async function* (): AsyncGenerator<SDKUserMessage> {
+      yield message(ExternalAgentDriver.first(options))
+      while (true) {
+        const next = await options.next(controller.signal).catch(() => undefined)
+        if (next === undefined) return
+        yield message(next)
+      }
+    }
     const stream = query({
-      prompt: [
-        options.vendorSessionID === undefined && options.history.length > 0
-          ? "Restored canonical OC++ history:\n" + ExternalAgentDriver.replay(options.history)
-          : "",
-        options.message,
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-      options: {
-        pathToClaudeCodeExecutable: which("claude") ?? undefined,
-        cwd: options.directory,
-        model: options.model,
-        effort: options.effort === undefined ? undefined : Schema.decodeUnknownSync(Effort)(options.effort),
-        resume: options.vendorSessionID === undefined ? undefined : options.vendorSessionID,
-        abortController: controller,
-        includePartialMessages: true,
-        settingSources: ["user", "project", "local"],
-        permissionMode: "default",
-        sandbox: { enabled: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false },
-        mcpServers: { ocpp: mcp },
-        ...permissionHooks(options.authorize),
-      },
+      prompt: prompt(),
+      options: settings(options, mcp, controller, which("claude") ?? undefined),
     })
     const state = { outputTokens: 0 }
-    const identity = { id: options.vendorSessionID, submitted: false }
+    const identity = { id: options.vendorSessionID }
     try {
       for await (const event of stream) {
         if ("session_id" in event && event.session_id !== undefined && event.session_id !== identity.id) {
           identity.id = event.session_id
           await options.linked(event.session_id)
         }
-        await normalize(event, options.emit, state, identity.submitted)
-        if (!identity.submitted && event.type === "user" && options.gateway.result() !== undefined) {
-          identity.submitted = true
-          await stream.interrupt()
-        }
+        await normalize(event, options.emit, state)
+        if (event.type === "result") options.idle()
       }
       options.signal.throwIfAborted()
       if (identity.id === undefined) throw new Error("Claude returned no session ID")
     } finally {
       options.signal.removeEventListener("abort", abort)
+      controller.abort()
       stream.close()
       await mcp.instance.close()
       if (identity.id !== undefined)
@@ -75,6 +62,52 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
   },
 }
 
+function message(text: string): SDKUserMessage {
+  return { type: "user", message: { role: "user", content: text }, parent_tool_use_id: null, priority: "next" }
+}
+
+/** Vendor options for one run. The OC++ harness keeps nothing of Claude Code but its model loop and OC++'s execute. */
+export function settings(
+  options: Pick<
+    ExternalAgentDriver.Options,
+    "directory" | "model" | "effort" | "vendorSessionID" | "harness" | "authorize"
+  >,
+  mcp: McpServerConfig,
+  controller: AbortController,
+  executable?: string,
+): Options {
+  const common = {
+    pathToClaudeCodeExecutable: executable,
+    cwd: options.directory,
+    model: options.model,
+    effort:
+      options.effort === undefined ? undefined : Schema.decodeUnknownSync(ExternalAgentEffort.claude)(options.effort),
+    resume: options.vendorSessionID,
+    abortController: controller,
+    includePartialMessages: true,
+    mcpServers: { ocpp: mcp },
+  } satisfies Options
+  if (options.harness.type === "ocpp")
+    return {
+      ...common,
+      systemPrompt: options.harness.system,
+      tools: [],
+      settingSources: [],
+      strictMcpConfig: true,
+      skills: [],
+      allowedTools: ["mcp__ocpp__execute"],
+      // Nothing else may run, and there is nobody to ask.
+      permissionMode: "dontAsk",
+    }
+  return {
+    ...common,
+    settingSources: ["user", "project", "local"],
+    permissionMode: "default",
+    sandbox: { enabled: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false },
+    ...permissionHooks(options.authorize),
+  }
+}
+
 export async function normalize(
   event: SDKMessage,
   emit: ExternalAgentDriver.Options["emit"],
@@ -83,7 +116,6 @@ export async function normalize(
     textSeen?: boolean
     usage?: { input: number; output: number; cacheRead: number; cacheWrite: number }
   },
-  submitted = false,
 ) {
   const usage = (state.usage ??= { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
   if (event.type === "stream_event") {
@@ -193,10 +225,9 @@ export async function normalize(
       reasoning: totals.reasoning,
       cost: event.total_cost_usd,
     })
-    if (!submitted && event.subtype !== "success") throw new Error(event.errors.join("\n"))
-    if (!submitted && event.subtype === "success" && event.is_error) throw new Error(event.result)
-    if (!submitted && event.subtype === "success" && !state.textSeen && event.result)
-      await emit({ type: "text", id: "result", delta: event.result })
+    if (event.subtype !== "success") throw new Error(event.errors.join("\n"))
+    if (event.is_error) throw new Error(event.result)
+    if (!state.textSeen && event.result) await emit({ type: "text", id: "result", delta: event.result })
     await emit({ type: "step-end" })
     return
   }

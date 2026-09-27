@@ -23,11 +23,96 @@ function collector() {
 }
 
 describe("external SDK drivers", () => {
-  test("exports separate lazy drivers and rejects an unknown or divergent checkpoint", () => {
+  test("exports separate lazy drivers and replays canonical history only into a new vendor session", () => {
     expect([ClaudeDriver.provider, CodexDriver.provider, PiDriver.provider]).toEqual(["claude", "codex", "pi"])
-    expect(() => ExternalAgentDriver.check(undefined, "a")).toThrow("diverged")
-    expect(() => ExternalAgentDriver.check("a", "b")).toThrow("diverged")
-    expect(() => ExternalAgentDriver.check("a", "a")).not.toThrow()
+    const history = [
+      { role: "user" as const, text: "One" },
+      { role: "assistant" as const, text: "Two" },
+    ]
+    expect(ExternalAgentDriver.first({ history, message: "Three" })).toBe(
+      "Restored canonical OC++ history:\nuser:\nOne\n\nassistant:\nTwo\n\nThree",
+    )
+    expect(ExternalAgentDriver.first({ history, message: "Three", vendorSessionID: "vendor" })).toBe("Three")
+  })
+
+  test("Claude in the OC++ harness keeps only its model loop, OC++'s prompt and OC++'s execute", async () => {
+    const { settings } = await import("../src/external-agent/claude.node")
+    const mcp = { type: "sdk" as const, name: "ocpp", instance: undefined as never }
+    const controller = new AbortController()
+    const harnessed = settings(
+      {
+        directory: "/work",
+        model: "opus",
+        effort: "high",
+        harness: { type: "ocpp", system: "OC++ system prompt" },
+        authorize: async () => {},
+      },
+      mcp,
+      controller,
+    )
+    expect(harnessed).toMatchObject({
+      cwd: "/work",
+      model: "opus",
+      effort: "high",
+      systemPrompt: "OC++ system prompt",
+      tools: [],
+      settingSources: [],
+      strictMcpConfig: true,
+      skills: [],
+      allowedTools: ["mcp__ocpp__execute"],
+      permissionMode: "dontAsk",
+      mcpServers: { ocpp: mcp },
+    })
+    expect(harnessed.hooks).toBeUndefined()
+    expect(harnessed.sandbox).toBeUndefined()
+    const native = settings(
+      { directory: "/work", model: "opus", harness: { type: "native" }, authorize: async () => {} },
+      mcp,
+      controller,
+      "/bin/claude",
+    )
+    expect(native).toMatchObject({
+      pathToClaudeCodeExecutable: "/bin/claude",
+      settingSources: ["user", "project", "local"],
+      permissionMode: "default",
+      sandbox: { enabled: true, allowUnsandboxedCommands: false },
+      mcpServers: { ocpp: mcp },
+    })
+    expect(native.systemPrompt).toBeUndefined()
+    expect(native.tools).toBeUndefined()
+    expect(native.hooks?.PreToolUse).toHaveLength(1)
+    expect(native.canUseTool).toBeFunction()
+  })
+
+  test("Codex in the OC++ harness turns off native tool features and replaces its instructions", async () => {
+    const { configure, NATIVE_FEATURES } = await import("../src/external-agent/codex.node")
+    const bridge = { url: "http://127.0.0.1:1/mcp", token: "secret" }
+    const harnessed = configure(
+      { directory: "/work", model: "gpt-5.6-sol", effort: "high", harness: { type: "ocpp", system: "OC++" } },
+      bridge,
+      "/tmp/instructions.md",
+    )
+    expect(NATIVE_FEATURES).toEqual(expect.arrayContaining(["shell_tool", "unified_exec", "multi_agent", "apps"]))
+    expect(harnessed.config).toMatchObject({
+      model_instructions_file: "/tmp/instructions.md",
+      include_permissions_instructions: false,
+      include_environment_context: false,
+      skills: { include_instructions: false, bundled: { enabled: false } },
+      mcp_servers: { ocpp: { url: bridge.url, http_headers: { Authorization: "Bearer secret" } } },
+    })
+    expect(Object.values(harnessed.config.features as Record<string, boolean>).every((value) => value === false)).toBe(
+      true,
+    )
+    expect(harnessed.thread).toMatchObject({
+      sandboxMode: "read-only",
+      webSearchMode: "disabled",
+      approvalPolicy: "on-request",
+      networkAccessEnabled: false,
+      modelReasoningEffort: "high",
+    })
+    const native = configure({ directory: "/work", model: "gpt-5.6-sol", harness: { type: "native" } }, bridge)
+    expect(native.config).toEqual({ features: { multi_agent: true }, mcp_servers: harnessed.config.mcp_servers })
+    expect(native.thread).toMatchObject({ sandboxMode: "workspace-write", webSearchMode: "live" })
   })
 
   test("Claude maps partial text, thinking, progress, vendor denials and diagnostics", async () => {
@@ -87,11 +172,23 @@ describe("external SDK drivers", () => {
     ])
   })
 
-  test("Claude's installed in-process MCP server uses the same schema-enforcing gateway", async () => {
+  test("Claude's in-process MCP server offers the gateway and names the tool_use each call answers", async () => {
     const { createSdkMcpServer } = await import("@anthropic-ai/claude-agent-sdk")
-    const gateway = await Effect.runPromise(
-      ExternalAgentGateway.make({ input: { token: "private" }, outputSchema: { type: "string" } }),
-    )
+    const calls: Array<{ input: Record<string, unknown>; id?: string }> = []
+    const gateway = ExternalAgentGateway.make([
+      {
+        name: "execute",
+        description: "Run code",
+        inputSchema: { type: "object", properties: { code: { type: "string" } }, required: ["code"] },
+        invoke: (input, id) =>
+          input.code === "fail"
+            ? Effect.fail("CompileError: bad program")
+            : Effect.sync(() => {
+                calls.push({ input, id })
+                return "Execution exe_1 started."
+              }),
+      },
+    ])
     const mcp = createSdkMcpServer({ name: "ocpp", tools: [] })
     ExternalAgentBridge.handlers(mcp.instance.server, gateway, new AbortController().signal)
     const pair = InMemoryTransport.createLinkedPair()
@@ -99,22 +196,23 @@ describe("external SDK drivers", () => {
     await mcp.instance.server.connect(pair[0])
     await client.connect(pair[1])
     try {
-      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(["submit_result", "execute"])
+      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(["execute"])
       expect(
         await client.callTool({
           name: "execute",
-          arguments: { code: 'const submitted = tools.submit_result({message: "done", output: input.token})' },
+          arguments: { code: "const a = 1" },
+          _meta: { "claudecode/toolUseId": "toolu_1" },
         }),
-      ).not.toHaveProperty("isError", true)
-      expect(gateway.result()).toEqual({ message: "done", output: "private" })
-      expect(await client.callTool({ name: "submit_result", arguments: { message: "bad", output: 3 } })).toHaveProperty(
-        "isError",
-        true,
-      )
+      ).toEqual({ content: [{ type: "text", text: "Execution exe_1 started." }] })
+      expect(calls).toEqual([{ input: { code: "const a = 1" }, id: "toolu_1" }])
+      expect(await client.callTool({ name: "execute", arguments: { code: "fail" } })).toEqual({
+        isError: true,
+        content: [{ type: "text", text: "CompileError: bad program" }],
+      })
+      expect(await client.callTool({ name: "shell", arguments: {} })).toHaveProperty("isError", true)
     } finally {
       await client.close()
       await mcp.instance.close()
-      gateway.close()
     }
   })
 
@@ -238,7 +336,6 @@ if (process.argv[2] === "app-server") {
 `,
     )
     await chmod(path.join(dir.path, "codex"), 0o755)
-    const gateway = await Effect.runPromise(ExternalAgentGateway.make({}))
     const previous = process.env.PATH
     process.env.PATH = dir.path + path.delimiter + previous
     try {
@@ -252,7 +349,8 @@ if (process.argv[2] === "app-server") {
               model: "fixture",
               history: [],
               message,
-              gateway,
+              harness: { type: "native" },
+              gateway: ExternalAgentGateway.make([]),
               authorize: async () => {},
               emit: stream.emit,
               linked: async (id) => {
@@ -261,6 +359,8 @@ if (process.argv[2] === "app-server") {
               checkpointed: async (checkpoint) => {
                 calls.checkpointed.push(checkpoint)
               },
+              next: async () => undefined,
+              idle: () => {},
             }),
           ),
         )
@@ -277,7 +377,99 @@ if (process.argv[2] === "app-server") {
       expect(completed.calls.checkpointed).toEqual([])
     } finally {
       process.env.PATH = previous
-      gateway.close()
+    }
+  })
+
+  test("Codex runs the OC++ harness turn by turn through exec and exec resume", async () => {
+    await using dir = await tmpdir()
+    const record = path.join(dir.path, "invocations.jsonl")
+    // Records each exec invocation with the instructions file it was given, then answers one turn.
+    await Bun.write(
+      path.join(dir.path, "codex"),
+      `#!${process.execPath}
+const fs = require("node:fs")
+const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n")
+if (process.argv[2] === "app-server") {
+  for await (const line of console) {
+    const message = JSON.parse(line)
+    if (message.id === undefined) continue
+    if (message.method === "initialize") write({ id: message.id, result: {} })
+    else if (message.method === "thread/resume")
+      write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [] } } })
+    else write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [{ id: "t" }] } } })
+  }
+} else {
+  const args = process.argv.slice(2)
+  const file = args.map((arg) => /^model_instructions_file="(.*)"$/.exec(arg)?.[1]).find(Boolean)
+  const prompt = await Bun.stdin.text()
+  fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify({ args, prompt, instructions: file && fs.readFileSync(file, "utf8") }) + "\\n")
+  write({ type: "thread.started", thread_id: "fake-thread" })
+  write({ type: "turn.started" })
+  write({ type: "item.completed", item: { id: "a" + args.length, type: "agent_message", text: "answered " + prompt } })
+  write({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1, reasoning_output_tokens: 0 } })
+}
+`,
+    )
+    await chmod(path.join(dir.path, "codex"), 0o755)
+    const previous = process.env.PATH
+    process.env.PATH = dir.path + path.delimiter + previous
+    try {
+      const stream = collector()
+      const queue = ["Execution exe_1 saved notebook values: total."]
+      const idles: number[] = []
+      const checkpoints: string[] = []
+      await Effect.runPromise(
+        ExternalAgentDriver.execute(CodexDriver, {
+          directory: dir.path,
+          model: "gpt-5.6-sol",
+          history: [],
+          message: "Add numbers",
+          harness: { type: "ocpp", system: "OC++ system prompt for Codex" },
+          gateway: ExternalAgentGateway.make([]),
+          authorize: async () => {
+            throw new Error("The OC++ harness has no native tools to authorize")
+          },
+          emit: stream.emit,
+          linked: async () => {},
+          checkpointed: async (checkpoint) => {
+            checkpoints.push(checkpoint)
+          },
+          next: async () => queue.shift(),
+          idle: () => {
+            idles.push(Date.now())
+          },
+        }),
+      )
+      const invocations = (await Bun.file(record).text())
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { args: string[]; prompt: string; instructions?: string })
+      expect(invocations).toHaveLength(2)
+      expect(invocations.map((item) => item.prompt)).toEqual([
+        "Add numbers",
+        "Execution exe_1 saved notebook values: total.",
+      ])
+      expect(invocations[1].args.slice(-2)).toEqual(["resume", "fake-thread"])
+      for (const invocation of invocations) {
+        expect(invocation.instructions).toBe("OC++ system prompt for Codex")
+        expect(invocation.args).toEqual(
+          expect.arrayContaining([
+            "features.shell_tool=false",
+            "features.unified_exec=false",
+            "features.multi_agent=false",
+            "read-only",
+            'web_search="disabled"',
+            'approval_policy="on-request"',
+          ]),
+        )
+      }
+      expect(idles).toHaveLength(2)
+      expect(checkpoints).toHaveLength(1)
+      expect(
+        stream.events.filter((event) => event.type === "text").map((event) => event.type === "text" && event.delta),
+      ).toEqual(["answered Add numbers", "answered Execution exe_1 saved notebook values: total."])
+    } finally {
+      process.env.PATH = previous
     }
   })
 
@@ -344,8 +536,8 @@ if (process.argv[2] === "app-server") {
     expect(stream.events[2]).toHaveProperty("error", true)
   })
 
-  test("interruption waits for asynchronous SDK cleanup before releasing the activation", async () => {
-    const gateway = await Effect.runPromise(ExternalAgentGateway.make({}))
+  test("interruption waits for asynchronous SDK cleanup before settling the drain", async () => {
+    const gateway = ExternalAgentGateway.make([])
     const started = Promise.withResolvers<void>()
     const cleanup = Promise.withResolvers<void>()
     const stopped = Promise.withResolvers<void>()
@@ -373,11 +565,14 @@ if (process.argv[2] === "app-server") {
         model: "fixture",
         history: [],
         message: "wait",
+        harness: { type: "ocpp", system: "" },
         gateway,
         authorize: async () => {},
         emit: async () => {},
         linked: async () => {},
         checkpointed: async () => {},
+        next: async () => undefined,
+        idle: () => {},
       }),
     )
     await started.promise
@@ -541,8 +736,4 @@ test("Claude accounts for auxiliary usage without double-counting streamed token
   const fallback = collector()
   await normalize(event, fallback.emit, { outputTokens: 0 })
   expect(fallback.events).toContainEqual({ type: "text", id: "result", delta: "final answer" })
-  const submitted = collector()
-  await normalize(event, submitted.emit, { outputTokens: 0 }, true)
-  expect(submitted.events.some((event) => event.type === "text")).toBe(false)
-  expect(submitted.events[0]).toMatchObject({ type: "usage", input: 5, output: 3, cost: 0.1 })
 })

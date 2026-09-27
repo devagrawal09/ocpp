@@ -73,7 +73,7 @@ import { ReadToolFileSystem } from "../tool/read-filesystem.js"
 import { ReadTool } from "../tool/plugin/read.js"
 import { ShellTool } from "../tool/plugin/shell.js"
 import { SkillTool } from "../tool/plugin/skill.js"
-import { ExternalAgentTool } from "../tool/plugin/external-agent.js"
+import { ExternalAgentDrivers } from "../external-agent/drivers.js"
 import { ExternalAgentSession } from "../external-agent/session.js"
 import { SubagentTool } from "../tool/plugin/subagent.js"
 import { Tool } from "../tool.js"
@@ -99,6 +99,7 @@ import { WellKnownPlugin } from "../wellknown/plugin.js"
 
 const services = Effect.fn("PluginInternal.services")(function* () {
   const external = yield* ExternalAgentSession.Service
+  const drivers = yield* ExternalAgentDrivers.Service
   const agent = yield* Agent.Service
   const processes = yield* AppProcess.Service
   const catalog = yield* Catalog.Service
@@ -147,6 +148,7 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const wellknown = yield* WellKnown.Service
   return Context.mergeAll(
     Context.make(ExternalAgentSession.Service, external),
+    Context.make(ExternalAgentDrivers.Service, drivers),
     Context.make(Agent.Service, agent),
     Context.make(AppProcess.Service, processes),
     Context.make(Catalog.Service, catalog),
@@ -202,6 +204,7 @@ export type Requirements = ContextServices<Effect.Success<ReturnType<typeof serv
 
 export const requirements = LayerNode.group([
   ExternalAgentSession.node,
+  ExternalAgentDrivers.node,
   Agent.node,
   AppProcess.node,
   Catalog.node,
@@ -274,7 +277,6 @@ const pre = [
   ShellTool.Plugin,
   SkillTool.Plugin,
   SubagentTool.Plugin,
-  ExternalAgentTool.Plugin,
   WebFetchTool.Plugin,
   WebSearchTool.Plugin,
   WriteTool.Plugin,

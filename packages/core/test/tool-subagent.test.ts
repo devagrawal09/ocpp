@@ -36,6 +36,9 @@ import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { Permission } from "@ocpp/core/permission"
 import { SubagentTool } from "@ocpp/core/tool/plugin/subagent"
+import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
+import { ExternalAgentSession } from "@ocpp/core/external-agent/session"
+import { noVendorDrivers } from "./lib/drivers"
 import { Tool } from "@ocpp/core/tool"
 import { execute } from "@ocpp/core/tool/runtime"
 import { tmpdir } from "./fixture/tmpdir"
@@ -130,6 +133,8 @@ const subagentPluginSupervisor = makeLocationNode({
     Bus.node,
     Catalog.node,
     Config.node,
+    ExternalAgentDrivers.node,
+    ExternalAgentSession.node,
     Permission.node,
     PluginHooks.node,
     PluginRuntime.node,
@@ -150,6 +155,7 @@ const nodes = LayerNode.group([
 const replacements = [
   [SessionExecution.node, executionNode],
   [Global.node, tempGlobalLayer],
+  [ExternalAgentDrivers.node, noVendorDrivers],
 ] satisfies LayerNode.Replacements
 const productionIt = testEffect(AppNodeBuilder.build(nodes, replacements))
 const it = testEffect(AppNodeBuilder.build(nodes, [...replacements, [PluginSupervisor.node, subagentPluginSupervisor]]))
@@ -167,6 +173,7 @@ const completionIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([nodes, SessionRestart.node, KV.node]), [
     [Global.node, tempGlobalLayer],
     [PluginSupervisor.node, subagentPluginSupervisor],
+    [ExternalAgentDrivers.node, noVendorDrivers],
     [
       LayerNodePlatform.llmClient,
       TestLLM.testLayer({
@@ -187,6 +194,7 @@ const requestIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([nodes, SessionRestart.node, KV.node]), [
     [Global.node, tempGlobalLayer],
     [PluginSupervisor.node, subagentPluginSupervisor],
+    [ExternalAgentDrivers.node, noVendorDrivers],
     [
       LayerNodePlatform.llmClient,
       TestLLM.testLayer({
@@ -283,7 +291,17 @@ describe("SubagentTool", () => {
           const caller = yield* Agent.Service.use((agents) => agents.get(toolIdentity.agent)).pipe(
             Effect.provide(locations.get(parent.location)),
           )
-          const described = [SubagentTool.description, "", ...listedSubagents].join("\n")
+          const described = [
+            SubagentTool.description,
+            "",
+            ...listedSubagents,
+            "",
+            "Drivers (the default is the calling session's driver):",
+            "- ocpp: the OC++ runner with a provider model",
+            "- claude: Claude Code is not available on this machine",
+            "- codex: Codex is not available on this machine",
+            "- pi: Pi is not available on this machine",
+          ].join("\n")
           const subagentEntry = (snapshot: Tool.Snapshot) =>
             snapshot.codeModeCatalog?.find((tool) => tool.path === SubagentTool.name)?.description
 
@@ -503,11 +521,16 @@ describe("SubagentTool", () => {
               id: "call-subagent-models",
             }),
           ).toMatchObject({ status: "saved", saved: ["availableModels"] })
-          expect((yield* readCodeModeNotebook(parent.id)).availableModels).toEqual({
+          expect((yield* readCodeModeNotebook(parent.id)).availableModels).toMatchObject({
             models: [
               { id: "test/child", variants: [] },
               { id: "test/parent", variants: [] },
               { id: "test/override", variants: ["high"] },
+            ],
+            drivers: [
+              { id: "claude", name: "Claude Code", available: false, model: "sonnet" },
+              { id: "codex", name: "Codex", available: false, model: "gpt-5.6-sol" },
+              { id: "pi", name: "Pi", available: false },
             ],
           })
 

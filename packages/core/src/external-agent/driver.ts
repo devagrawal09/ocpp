@@ -27,14 +27,23 @@ export interface History {
   readonly role: "user" | "assistant"
   readonly text: string
 }
+
+/**
+ * `ocpp`: the gateway's `execute` is the vendor's only capability, under the OC++ `system` prompt, with no vendor
+ * settings, skills, or MCP servers of the user's. `native`: the vendor's own tools, prompt, and settings, with OC++
+ * authorizing each native call; the gateway's tools are added over MCP.
+ */
+export type Harness = { readonly type: "ocpp"; readonly system: string } | { readonly type: "native" }
+
 export interface Options {
   readonly directory: string
   readonly model: string
   readonly effort?: string
+  /** Resumes this vendor session; absent, a new one starts from `history`. */
   readonly vendorSessionID?: string
-  readonly checkpoint?: string
   readonly history: ReadonlyArray<History>
   readonly message: string
+  readonly harness: Harness
   readonly gateway: ExternalAgentGateway.Gateway
   readonly signal: AbortSignal
   readonly authorize: (
@@ -47,6 +56,13 @@ export interface Options {
   readonly emit: (event: Event) => Promise<void>
   readonly linked: (id: string) => Promise<void>
   readonly checkpointed: (checkpoint: string) => Promise<void>
+  /**
+   * The next input for this vendor session. While a turn runs it resolves only with steers; after `idle` it
+   * resolves with any pending input, or undefined to end the run. Turn-end drivers call it only after `idle`.
+   */
+  readonly next: (signal: AbortSignal) => Promise<string | undefined>
+  /** The vendor finished answering its input. */
+  readonly idle: () => void
 }
 export interface Driver {
   readonly provider: ExternalSession.Provider
@@ -59,9 +75,16 @@ export function replay(history: ReadonlyArray<History>) {
   return history.map((item) => `${item.role}:\n${item.text}`).join("\n\n")
 }
 
-export function check(expected: string | undefined, actual: string) {
-  if (expected === undefined || expected !== actual)
-    throw new Error({ message: "Vendor history diverged from the last OC++ checkpoint. Resume was refused." })
+/** The first vendor message: canonical history when a new vendor session replaces a missing one, then the input. */
+export function first(options: Pick<Options, "vendorSessionID" | "history" | "message">) {
+  return [
+    options.vendorSessionID === undefined && options.history.length > 0
+      ? "Restored canonical OC++ history:\n" + replay(options.history)
+      : "",
+    options.message,
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 }
 
 /** Interruption waits for the SDK to relinquish its tools and subprocesses. */

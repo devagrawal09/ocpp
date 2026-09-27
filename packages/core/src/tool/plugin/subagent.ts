@@ -2,12 +2,18 @@ export * as SubagentTool from "./subagent.js"
 
 import { ToolFailure } from "@ocpp/ai"
 import type { Context } from "@ocpp/plugin/effect/plugin"
+import { ExternalSession } from "@ocpp/schema/external-session"
 import { Model } from "@ocpp/schema/model"
+import { Provider } from "@ocpp/schema/provider"
+import { SessionDriver } from "@ocpp/schema/session-driver"
 import { Deferred, Effect, Schema } from "effect"
 import { Agent } from "../../agent.js"
 import { Bus } from "../../bus.js"
 import { Catalog } from "../../catalog.js"
 import { Config } from "../../config.js"
+import { ExternalAgentDrivers } from "../../external-agent/drivers.js"
+import { ExternalAgentEffort } from "../../external-agent/effort.js"
+import { ExternalAgentSession } from "../../external-agent/session.js"
 import { PluginRuntime } from "../../plugin/runtime.js"
 import { Permission } from "../../permission.js"
 import { SessionEvent } from "../../session/event.js"
@@ -41,7 +47,16 @@ export const Input = Schema.Struct({
     description: "JSON Schema that input must satisfy",
   }),
   model: Schema.optionalKey(Schema.String).annotate({
-    description: "Model to use, optionally including a variant after #",
+    description:
+      "Model to use. For the ocpp driver, provider/model with an optional variant after #. For a vendor driver, the vendor's own model name with an optional effort after #, such as opus#high",
+  }),
+  driver: Schema.optionalKey(SessionDriver.ID).annotate({
+    description:
+      "What runs the child session: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi). Defaults to the calling session's driver; a continued session keeps its own",
+  }),
+  harness: Schema.optionalKey(SessionDriver.Harness).annotate({
+    description:
+      "Vendor drivers only. ocpp (default): the vendor's only tool is OC++ execute with this catalog, under the OC++ system prompt. native: the vendor's own tools and prompt, plus OC++ execute, tool.define handles and submit_result over MCP",
   }),
   outputSchema: Schema.optionalKey(SubagentCustomTool.JSONSchema).annotate({
     description:
@@ -63,6 +78,7 @@ const ModelsOutput = Schema.Struct({
       variants: Schema.Array(Schema.String),
     }),
   ),
+  drivers: Schema.Array(SessionDriver.Info),
 })
 
 export const Output = Schema.Struct({
@@ -75,7 +91,9 @@ export const Output = Schema.Struct({
 })
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
-  "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents.",
+  "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready.",
+  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. It defaults to the calling session's driver, and a continued session keeps its own. For a vendor driver, model is the vendor's model name with an optional effort after #, such as opus#high.",
+  'Vendor-driven children run in the OC++ harness by default: their only tool is execute with this same catalog and notebook. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt instead; OC++ execute, tool.define handles and submit_result remain available to it over MCP.',
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "The subagent runs to completion and returns its final response as message. With outputSchema it must call tools.submit_result({ message, output }): message is returned in full, and output is returned only as machine data with a short summary in metadata.",
@@ -95,6 +113,8 @@ export const Plugin = {
     const config = yield* Config.Service
     const permission = yield* Permission.Service
     const tools = yield* Tool.Service
+    const drivers = yield* ExternalAgentDrivers.Service
+    const external = yield* ExternalAgentSession.Service
     const listModels = Effect.fn("SubagentTool.listModels")(function* () {
       return (yield* catalog.model.available()).map((model) => ({
         id: `${model.providerID}/${model.id}`,
@@ -123,14 +143,15 @@ export const Plugin = {
         draft.add({
           name: "models",
           options: { namespace: name, readOnly: true },
-          description: "Lists model IDs and variants currently available to subagents.",
+          description:
+            "Lists model IDs and variants currently available to ocpp subagents, and the vendor drivers with their models.",
           input: Schema.Struct({}),
           output: ModelsOutput,
           execute: () =>
-            listModels().pipe(
-              Effect.map((models) => ({
-                output: { models },
-                content:
+            Effect.all([listModels(), drivers.list()]).pipe(
+              Effect.map(([models, vendors]) => ({
+                output: { models, drivers: vendors },
+                content: [
                   models.length === 0
                     ? "No subagent models are currently available."
                     : models
@@ -140,6 +161,9 @@ export const Plugin = {
                             : `${model.id} (variants: ${model.variants.map((variant) => `#${variant}`).join(", ")})`,
                         )
                         .join("\n"),
+                  "Drivers:",
+                  ...listDrivers(vendors),
+                ].join("\n"),
                 metadata: { count: models.length },
               })),
             ),
@@ -152,7 +176,6 @@ export const Plugin = {
           output: Output,
           execute: (input, context) =>
             Effect.gen(function* () {
-              const availableModels = input.model === undefined ? [] : yield* listModels()
               // After a restart the call rejoins the child that already holds its task. Its checks
               // passed and its prompt was admitted before the restart, so none of that repeats.
               const reattached =
@@ -230,24 +253,49 @@ export const Plugin = {
                   ),
                 )
               }
-              const selectedModel = input.model
-              const requestedModel =
-                selectedModel === undefined
-                  ? undefined
-                  : yield* Effect.try({
-                      try: () => Model.Ref.parse(selectedModel),
-                      catch: (error) => unsupportedModel(selectedModel, availableModels, error),
+              const source = { type: "tool" as const, messageID: context.messageID, id: context.id }
+              // The model for an OC++-run child: requested, else a provider model its agent or caller already uses.
+              const runnerModel = Effect.fnUntraced(function* () {
+                const inherited = [
+                  ...(existing === undefined || existing.agent !== agent.id ? [agent.model] : []),
+                  ...(existing === undefined ? [parent.model] : []),
+                ].find((model) => model !== undefined && SessionDriver.of(model) === "ocpp")
+                const requested = input.model
+                if (requested === undefined) {
+                  if (existing === undefined || SessionDriver.of(existing.model) === "ocpp") return inherited
+                  // A vendor child handed back to the runner needs a provider model.
+                  const fallback =
+                    inherited ??
+                    (SessionDriver.of(parent.model) === "ocpp" ? parent.model : undefined) ??
+                    (yield* catalog.model
+                      .default()
+                      .pipe(
+                        Effect.map((model) =>
+                          model === undefined
+                            ? undefined
+                            : Model.Ref.make({ providerID: model.providerID, id: model.id }),
+                        ),
+                      ))
+                  if (fallback === undefined)
+                    return yield* new ToolFailure({
+                      message: "Pass model to choose a provider model for the ocpp driver.",
                     })
-              if (requestedModel !== undefined && selectedModel !== undefined && reattached === undefined) {
-                const resource = `${requestedModel.providerID}/${requestedModel.id}`
-                const available = availableModels.find((model) => model.id === resource)
+                  return fallback
+                }
+                const availableModels = yield* listModels()
+                const model = yield* Effect.try({
+                  try: () => Model.Ref.parse(requested),
+                  catch: (error) => unsupportedModel(requested, availableModels, error),
+                })
+                const resource = `${model.providerID}/${model.id}`
+                const available = availableModels.find((item) => item.id === resource)
                 if (
                   available === undefined ||
-                  (requestedModel.variant !== undefined &&
-                    requestedModel.variant !== "default" &&
-                    !available.variants.includes(requestedModel.variant))
+                  (model.variant !== undefined &&
+                    model.variant !== "default" &&
+                    !available.variants.includes(model.variant))
                 )
-                  return yield* unsupportedModel(selectedModel, availableModels)
+                  return yield* unsupportedModel(requested, availableModels)
                 const allowed = Config.latest(yield* config.entries(), "subagent")?.models?.includes(resource) === true
                 if (!allowed)
                   yield* permission
@@ -257,15 +305,56 @@ export const Plugin = {
                       save: [],
                       sessionID: context.sessionID,
                       agent: context.agent,
-                      source: { type: "tool", messageID: context.messageID, id: context.id },
+                      source,
                     })
                     .pipe(
                       Effect.mapError(
-                        (error) => new ToolFailure({ message: `Subagent model denied: ${selectedModel}`, error }),
+                        (error) => new ToolFailure({ message: `Subagent model denied: ${requested}`, error }),
                       ),
                     )
-              }
-
+                return model
+              })
+              // The model for a vendor-run child: requested as name#effort, else what the child, its agent or its
+              // caller already uses with this vendor, else the vendor's configured default.
+              const vendorModel = Effect.fnUntraced(function* (provider: ExternalSession.Provider) {
+                const reason = yield* drivers.unavailable(provider)
+                if (reason !== undefined) return yield* new ToolFailure({ message: reason })
+                const requested = input.model?.split("#")
+                const current = (existing === undefined ? [agent.model, parent.model] : [existing.model]).find(
+                  (model) => model !== undefined && SessionDriver.of(model) === provider,
+                )
+                const settings = yield* drivers.settings(provider)
+                const id = requested?.[0] || (current?.id ?? settings.model)
+                const inherited = current?.variant === "default" ? undefined : current?.variant
+                const effort =
+                  requested === undefined ? (inherited ?? settings.effort) : (requested[1] ?? settings.effort)
+                if (
+                  effort !== undefined &&
+                  !(ExternalAgentEffort[provider].literals as ReadonlyArray<string>).includes(effort)
+                )
+                  return yield* new ToolFailure({
+                    message: `Unsupported ${SessionDriver.names[provider]} effort: ${effort}. Use one of: ${ExternalAgentEffort[provider].literals.join(", ")}.`,
+                  })
+                yield* permission
+                  .assert({
+                    action: provider,
+                    resources: [id],
+                    save: [id],
+                    sessionID: context.sessionID,
+                    agent: context.agent,
+                    source,
+                  })
+                  .pipe(
+                    Effect.mapError(
+                      (error) => new ToolFailure({ message: `${SessionDriver.names[provider]} denied: ${id}`, error }),
+                    ),
+                  )
+                return Model.Ref.make({
+                  providerID: Provider.ID.make(provider),
+                  id: Model.ID.make(id),
+                  ...(effort === undefined ? {} : { variant: Model.VariantID.make(effort) }),
+                })
+              })
               const existing =
                 reattached ??
                 (input.sessionID === undefined
@@ -282,28 +371,37 @@ export const Plugin = {
                 return yield* new ToolFailure({
                   message: `Session ${existing.id} is not a child of the current session`,
                 })
-              if (
-                reattached === undefined &&
-                existing !== undefined &&
-                (existing.agent !== agent.id || requestedModel !== undefined)
-              ) {
-                const model = requestedModel ?? (existing.agent !== agent.id ? agent.model : undefined)
+              // A continued child keeps its own driver; a new one takes its caller's, unless the call names one.
+              const driver = input.driver ?? SessionDriver.of((existing ?? parent).model)
+              const harness = input.harness ?? "ocpp"
+              if (harness === "native" && driver === "ocpp")
+                return yield* new ToolFailure({
+                  message:
+                    'harness "native" applies only to the claude, codex and pi drivers. The ocpp driver runs the OC++ runner.',
+                })
+              const selected =
+                reattached !== undefined
+                  ? undefined
+                  : driver === "ocpp"
+                    ? yield* runnerModel()
+                    : yield* vendorModel(driver)
+              if (reattached === undefined && existing !== undefined)
                 yield* (
                   existing.agent === agent.id
                     ? Effect.void
                     : runtime.session.switchAgent({ sessionID: existing.id, agent: agent.id })
                 ).pipe(
                   Effect.andThen(
-                    model === undefined ? Effect.void : runtime.session.switchModel({ sessionID: existing.id, model }),
+                    selected === undefined
+                      ? Effect.void
+                      : runtime.session.switchModel({ sessionID: existing.id, model: selected }),
                   ),
                   Effect.mapError(
                     (error) =>
                       new ToolFailure({ message: `Failed to configure subagent session: ${existing.id}`, error }),
                   ),
                 )
-              }
 
-              const model = requestedModel ?? agent.model ?? parent.model
               const child =
                 existing ??
                 (yield* runtime.session
@@ -311,13 +409,14 @@ export const Plugin = {
                     parentID: context.sessionID,
                     title: input.description,
                     agent: Agent.ID.make(input.agent),
-                    model,
+                    model: selected,
                   })
                   .pipe(
                     Effect.mapError(
                       (error) => new ToolFailure({ message: `Parent session not found: ${context.sessionID}`, error }),
                     ),
                   ))
+              const vendor = SessionDriver.of(selected ?? existing?.model) !== "ocpp"
 
               const submitted = outputCodec === undefined ? undefined : yield* Deferred.make<Submission>()
               // Resolves once the execution that carried a submission has committed its declarations,
@@ -505,7 +604,13 @@ export const Plugin = {
                       () => run,
                       (unsubscribe) => unsubscribe,
                     )
-              const result = yield* driven.pipe(Effect.ensuring(cleanup))
+              // A vendor child runs only while this call holds it, with the harness this call asked for.
+              const result = yield* Effect.scoped(
+                (vendor ? external.activate(child.id, { harness, tools: temporary }) : Effect.void).pipe(
+                  Effect.mapError((error) => new ToolFailure({ message: error.error.message, error })),
+                  Effect.andThen(driven),
+                ),
+              ).pipe(Effect.ensuring(cleanup))
               return {
                 output: { sessionID: child.id, status: "completed" as const, ...result },
                 structured: outputCodec !== undefined,
@@ -537,10 +642,30 @@ export const Plugin = {
         if (!selected) return
         const subagents = available(yield* agents.list(), selected.permissions)
         if (subagents.length === 0) return
-        tool.description = [tool.description, "", "Available subagents:", ...listing(subagents)].join("\n")
+        tool.description = [
+          tool.description,
+          "",
+          "Available subagents:",
+          ...listing(subagents),
+          "",
+          "Drivers (the default is the calling session's driver):",
+          ...listDrivers(yield* drivers.list()),
+        ].join("\n")
       }),
     )
   }),
+}
+
+/** Vendor drivers as the model reads them: ready ones with their default model, and why the rest are not offered. */
+export function listDrivers(drivers: ReadonlyArray<SessionDriver.Info>) {
+  return [
+    "- ocpp: the OC++ runner with a provider model",
+    ...drivers.map((driver) =>
+      driver.available
+        ? `- ${driver.id}: ${driver.name}, default model ${driver.model} (efforts: ${driver.variants.join(", ")})`
+        : `- ${driver.id}: ${driver.name} is not available on this machine`,
+    ),
+  ]
 }
 
 /** The subagents a caller with these permissions may start: never primary or hidden agents. */

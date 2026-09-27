@@ -9,6 +9,8 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Node } from "@ocpp/util/effect/app-node"
 import { FileMutation } from "./file-mutation.js"
 import { Environment } from "./environment/index.js"
+import { ExternalAgentDrivers } from "./external-agent/drivers.js"
+import { ExternalAgentHarnessNode } from "./external-agent/harness-node.js"
 import { Formatter } from "./formatter.js"
 import { FileSystem } from "./filesystem.js"
 import { FileSystemSearch } from "./filesystem/search.js"
@@ -109,6 +111,8 @@ const nodes = [
   SessionTitle.node,
   Snapshot.node,
   SessionRunnerLLM.node,
+  ExternalAgentDrivers.node,
+  ExternalAgentHarnessNode.node,
   Vcs.node,
   // Start repository watches only after boot-critical filesystem and Git work.
   LocationWatcher.node,

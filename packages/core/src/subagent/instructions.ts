@@ -3,6 +3,7 @@ export * as SubagentInstructions from "./instructions.js"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Agent } from "../agent.js"
+import { ExternalAgentDrivers } from "../external-agent/drivers.js"
 import { Instructions } from "../instructions/index.js"
 import { Tool } from "../tool.js"
 import { SubagentTool } from "../tool/plugin/subagent.js"
@@ -48,6 +49,16 @@ const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary
   ].join("\n")
 }
 
+const Driver = Schema.Struct({ id: Schema.String, name: Schema.String, model: Schema.String })
+type Driver = typeof Driver.Type
+
+const renderDrivers = (drivers: ReadonlyArray<Driver>) =>
+  [
+    "`tools.subagent` takes a `driver`: `ocpp` runs the child with the OC++ runner and a provider model; a vendor driver runs it with that vendor's agent and the user's own login, in the OC++ harness unless you pass `harness: \"native\"`. The default is this session's own driver.",
+    "Ready vendor drivers:",
+    ...drivers.map((driver) => `- ${driver.id}: ${driver.name}, default model ${driver.model}`),
+  ].join("\n")
+
 export interface Interface {
   readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.List>
 }
@@ -59,6 +70,7 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const agents = yield* Agent.Service
     const tools = yield* Tool.Service
+    const drivers = yield* ExternalAgentDrivers.Service
 
     return Service.of({
       load: Effect.fn("SubagentInstructions.load")(function* (selection) {
@@ -68,7 +80,26 @@ const layer = Layer.effect(
           (tool) => effectiveName(tool) === SubagentTool.name,
         )
         const subagents = callable ? SubagentTool.available(yield* agents.list(), agent.permissions) : []
-        return Instructions.make<ReadonlyArray<Summary>>({
+        const ready = callable
+          ? (yield* drivers.list())
+              .filter((driver) => driver.available)
+              .map((driver) => ({ id: driver.id, name: driver.name, model: driver.model }))
+          : []
+        const guidance = Instructions.make<ReadonlyArray<Driver>>({
+          key: Instructions.Key.make("core/subagent-drivers"),
+          codec: Schema.toCodecJson(Schema.Array(Driver)),
+          read: Effect.succeed(ready.length === 0 ? Instructions.removed : ready),
+          render: {
+            initial: renderDrivers,
+            changed: (_previous, current) =>
+              [
+                "The ready subagent drivers have changed. This list supersedes the previous one.",
+                renderDrivers(current),
+              ].join("\n"),
+            removed: () => "No vendor drivers are ready anymore. Use only the ocpp driver for subagents.",
+          },
+        })
+        const listing = Instructions.make<ReadonlyArray<Summary>>({
           key: Instructions.Key.make("core/subagent-guidance"),
           codec: Schema.toCodecJson(Schema.Array(Summary)),
           read: Effect.succeed(subagents.length === 0 ? Instructions.removed : subagents),
@@ -78,9 +109,14 @@ const layer = Layer.effect(
             removed: () => "No subagents are available anymore. Do not call `tools.subagent`.",
           },
         })
+        return Instructions.combine([listing, guidance])
       }),
     })
   }),
 )
 
-export const node = makeLocationNode({ service: Service, layer, deps: [Agent.node, Tool.node] })
+export const node = makeLocationNode({
+  service: Service,
+  layer,
+  deps: [Agent.node, Tool.node, ExternalAgentDrivers.node],
+})

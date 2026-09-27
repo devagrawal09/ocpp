@@ -21,19 +21,16 @@ export function handlers(
     })),
   }))
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    // Claude names the tool_use block each MCP call answers, which pins the call to its transcript part.
+    const id = request.params._meta?.["claudecode/toolUseId"]
     const result = await Effect.runPromise(
-      Effect.result(gateway.invoke(request.params.name, request.params.arguments ?? {})),
+      Effect.result(
+        gateway.invoke(request.params.name, request.params.arguments ?? {}, typeof id === "string" ? id : undefined),
+      ),
       { signal },
     )
-    if (result._tag === "Failure") return { isError: true, content: [{ type: "text", text: String(result.failure) }] }
-    return {
-      content: [
-        {
-          type: "text",
-          text: typeof result.success === "string" ? result.success : (JSON.stringify(result.success) ?? "Completed."),
-        },
-      ],
-    }
+    if (result._tag === "Failure") return { isError: true, content: [{ type: "text", text: result.failure }] }
+    return { content: [{ type: "text", text: result.success }] }
   })
 }
 

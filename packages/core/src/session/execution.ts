@@ -1,6 +1,8 @@
 export * as SessionExecution from "./execution.js"
 
 import { Cause, Context, Effect, Exit, Layer } from "effect"
+import { SessionDriver } from "@ocpp/schema/session-driver"
+import { ExternalAgentHarness } from "../external-agent/harness.js"
 import { ExternalAgentSession } from "../external-agent/session.js"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
@@ -89,9 +91,18 @@ export const layer = Layer.effect(
     ): Effect.fn.Return<void, SessionRunner.RunError> {
       const session = yield* store.get(sessionID)
       if (!session) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
-      if (yield* external.get(sessionID)) return yield* external.drain(sessionID)
-      const result = yield* SessionRunner.Service.use((runner) =>
-        runner.drain({ sessionID, force, continuation, promotable }),
+      const driven = SessionDriver.of(session.model) !== "ocpp"
+      // A vendor-driven subagent runs only while a subagent call holds it; its input waits for the next call.
+      if (driven && session.parentID !== undefined && (yield* external.activation(sessionID)) === undefined) return
+      const result = yield* Effect.suspend(
+        (): Effect.Effect<
+          SessionRunner.DrainResult,
+          SessionRunner.RunError,
+          ExternalAgentHarness.Service | SessionRunner.Service
+        > =>
+          driven
+            ? ExternalAgentHarness.Service.use((harness) => harness.drain({ sessionID, force, promotable }))
+            : SessionRunner.Service.use((runner) => runner.drain({ sessionID, force, continuation, promotable })),
       ).pipe(
         Effect.provide(locations.get(session.location)),
         Effect.tapCause((cause) =>

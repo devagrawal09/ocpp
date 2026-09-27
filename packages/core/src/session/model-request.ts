@@ -79,6 +79,19 @@ interface PrepareInput {
   readonly webSocket?: "session"
 }
 
+/** The agent's system prompt, or OC++'s for its Code Mode catalog, followed by the rendered instructions. */
+export const systemPrompt = (input: {
+  readonly agent: Agent.Info
+  readonly tools: Tool.Snapshot
+  readonly initial: string
+}) =>
+  [
+    input.agent.system
+      ? input.agent.system
+      : SessionSystemPrompt.make((input.tools.codeModeCatalog ?? []).map((entry) => entry.path)),
+    input.initial,
+  ].filter((part) => part.length > 0)
+
 export const baseTranscript = (input: {
   readonly agent: Agent.Info
   readonly model: SessionRunnerModel.Resolved
@@ -89,14 +102,7 @@ export const baseTranscript = (input: {
   const providerMetadataKey = input.model.model.route.providerMetadataKey ?? input.model.model.provider
   return {
     providerMetadataKey,
-    system: [
-      input.agent.system
-        ? input.agent.system
-        : SessionSystemPrompt.make((input.tools.codeModeCatalog ?? []).map((entry) => entry.path)),
-      input.initial,
-    ]
-      .filter((part) => part.length > 0)
-      .map(SystemPart.make),
+    system: systemPrompt(input).map(SystemPart.make),
     messages: toLLMMessages(input.messages, input.model.ref, providerMetadataKey),
   }
 }

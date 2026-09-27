@@ -2,25 +2,31 @@ export * as ExternalAgentSession from "./session.js"
 
 import { AbsolutePath } from "@ocpp/schema/schema"
 import { ExternalSession } from "@ocpp/schema/external-session"
+import type { SessionDriver } from "@ocpp/schema/session-driver"
+import type { Tool } from "@ocpp/schema/tool"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { eq } from "drizzle-orm"
-import { Context, Deferred, Effect, Layer, Scope } from "effect"
+import { Context, Effect, Layer, Scope } from "effect"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { StepFailedError } from "../session/error.js"
 import { SessionEvent } from "../session/event.js"
 import { ExternalSessionTable } from "./sql.js"
 
+/** A running subagent call that drives a vendor child: its harness and the tools it lends the child. */
+export interface Activation {
+  readonly harness: SessionDriver.Harness
+  /** Session-registered tools (tool.define handles, submit_result) the native harness also exposes over MCP. */
+  readonly tools: ReadonlyArray<Tool.Info>
+}
+
 export const layer = Layer.effectContext(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const bus = yield* Bus.Service
     const db = database.db
-    const reserved = new Set<ExternalSession.Info["sessionID"]>()
-    const activations = new Map<
-      ExternalSession.Info["sessionID"],
-      { run: Effect.Effect<void, StepFailedError>; started: boolean; done: Deferred.Deferred<void> }
-    >()
+    const activations = new Map<ExternalSession.Info["sessionID"], Activation>()
+    // Binding again (another vendor or directory) starts a new vendor session rebuilt from canonical history.
     yield* bus.project(ExternalSession.Bound, (event) =>
       db
         .insert(ExternalSessionTable)
@@ -29,6 +35,16 @@ export const layer = Layer.effectContext(
           provider: event.data.provider,
           directory: event.data.directory,
           status: "idle",
+        })
+        .onConflictDoUpdate({
+          target: ExternalSessionTable.session_id,
+          set: {
+            provider: event.data.provider,
+            directory: event.data.directory,
+            vendor_session_id: null,
+            checkpoint: null,
+            history_hash: null,
+          },
         })
         .run()
         .pipe(Effect.orDie),
@@ -94,72 +110,36 @@ export const layer = Layer.effectContext(
                   },
             ),
           ),
-      reserve: (sessionID) =>
-        Effect.acquireRelease(
-          Effect.suspend(() => {
-            if (reserved.has(sessionID))
-              return Effect.fail(
-                new StepFailedError({
-                  error: { type: "external.busy", message: "External session already has an active call" },
-                }),
-              )
-            reserved.add(sessionID)
-            return Effect.void
-          }),
-          () =>
-            Effect.sync(() => {
-              reserved.delete(sessionID)
-            }),
-        ),
-      activate: (sessionID, run) =>
+      activate: (sessionID, activation) =>
         Effect.acquireRelease(
           Effect.suspend(() => {
             if (activations.has(sessionID))
               return Effect.fail(
                 new StepFailedError({
-                  error: { type: "external.busy", message: "External session already has an active call" },
+                  error: { type: "external.busy", message: "This vendor session already has an active subagent call" },
                 }),
               )
-            activations.set(sessionID, { run, started: false, done: Deferred.makeUnsafe<void>() })
+            activations.set(sessionID, activation)
             return Effect.void
           }),
           () =>
-            Effect.gen(function* () {
-              const activation = activations.get(sessionID)
-              if (activation?.started) yield* Deferred.await(activation.done)
+            Effect.sync(() => {
               activations.delete(sessionID)
             }),
         ),
-      drain: (sessionID) =>
-        Effect.suspend(() => {
-          const activation = activations.get(sessionID)
-          if (activation !== undefined) {
-            if (activation.started) return Effect.void
-            activation.started = true
-            return activation.run.pipe(Effect.ensuring(Deferred.succeed(activation.done, undefined)))
-          }
-          return Effect.fail(
-            new StepFailedError({
-              error: {
-                type: "external.activation-unavailable",
-                message:
-                  "Continue this external session through its external-agent tool with fresh private input and tool handles.",
-              },
-            }),
-          )
-        }),
+      activation: (sessionID) => Effect.sync(() => activations.get(sessionID)),
     })
   }),
 )
 
 export interface Interface {
   readonly get: (sessionID: ExternalSession.Info["sessionID"]) => Effect.Effect<ExternalSession.Info | undefined>
-  readonly reserve: (sessionID: ExternalSession.Info["sessionID"]) => Effect.Effect<void, StepFailedError, Scope.Scope>
+  /** Holds the subagent call's activation for a vendor child until the scope closes. */
   readonly activate: (
     sessionID: ExternalSession.Info["sessionID"],
-    run: Effect.Effect<void, StepFailedError>,
+    activation: Activation,
   ) => Effect.Effect<void, StepFailedError, Scope.Scope>
-  readonly drain: (sessionID: ExternalSession.Info["sessionID"]) => Effect.Effect<void, StepFailedError>
+  readonly activation: (sessionID: ExternalSession.Info["sessionID"]) => Effect.Effect<Activation | undefined>
 }
 export class Service extends Context.Service<Service, Interface>()("@ocpp/ExternalAgentSession") {}
 export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node, Bus.node] })

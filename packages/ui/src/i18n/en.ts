@@ -223,6 +223,7 @@ const source = {
   "ui.basicTool.called": "Called `{{tool}}`",
   "ui.toolErrorCard.failed": "Failed",
   "ui.toolErrorCard.copyError": "Copy error",
+  "ui.toolErrorCard.suggestions": "Suggestions",
 
   "ui.common.file.one": "file",
   "ui.common.file.other": "files",

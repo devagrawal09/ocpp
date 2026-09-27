@@ -1810,7 +1810,25 @@ ToolRegistry.register({
     const i18n = useI18n()
     const code = createMemo(() => (typeof props.input.code === "string" ? props.input.code : ""))
     const failed = createMemo(() => toolDisplayError(props, i18n.t("ui.toolErrorCard.failed")))
-    return <Show when={failed()}>{(error) => <ToolErrorCard tool="execute" error={error()} subtitle={code()} />}</Show>
+    // A program refused before it ran carries the compiler's suggestions; they open with the card.
+    const suggestions = createMemo(() => {
+      const value = props.metadata.suggestions
+      if (props.metadata.executionStatus !== "refused" || !Array.isArray(value)) return []
+      return value.filter((item): item is string => typeof item === "string")
+    })
+    return (
+      <Show when={failed()}>
+        {(error) => (
+          <ToolErrorCard
+            tool="execute"
+            error={error()}
+            subtitle={code()}
+            suggestions={suggestions()}
+            defaultOpen={suggestions().length > 0}
+          />
+        )}
+      </Show>
+    )
   },
 })
 

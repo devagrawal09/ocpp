@@ -1,4 +1,5 @@
 import type { CodexOptions, ModelReasoningEffort, ThreadEvent, ThreadOptions } from "@openai/codex-sdk"
+import { execFile } from "node:child_process"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -56,9 +57,11 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
           sandbox: "workspace-write",
           network: false,
         })
-      if (instructions !== undefined && options.harness.type === "ocpp")
+      if (instructions !== undefined && options.harness.type === "ocpp") {
         await writeFile(path.join(instructions, "instructions.md"), options.harness.system)
-      const settings = configure(options, bridge, instructions && path.join(instructions, "instructions.md"))
+        await writeFile(path.join(instructions, "catalog.json"), await catalog(options.signal))
+      }
+      const settings = configure(options, bridge, instructions)
       const codex = new Codex({
         apiKey: process.env.CODEX_API_KEY ?? process.env.OPENAI_API_KEY,
         codexPathOverride: "codex",
@@ -68,18 +71,25 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
         options.vendorSessionID === undefined
           ? codex.startThread(settings.thread)
           : codex.resumeThread(options.vendorSessionID, settings.thread)
-      const seen = new Map<string, string>()
-      const turn = { message: ExternalAgentDriver.first(options) as string | undefined }
+      const turn = { message: ExternalAgentDriver.first(options) as string | undefined, count: 0 }
       // Codex's exec SDK takes input only between turns, so steers and notifications wait for the turn to end.
       while (turn.message !== undefined) {
         const stream = await thread.runStreamed(turn.message, { signal: options.signal })
+        // Each exec invocation numbers its items from zero again.
+        const prefix = `${++turn.count}:`
+        const seen = new Map<string, string>()
         for await (const event of stream.events) {
           if (event.type === "thread.started") {
             identity.id = event.thread_id
             await options.linked(event.thread_id)
             continue
           }
-          await normalize(event, options.emit, seen)
+          await normalize(
+            event,
+            (item) =>
+              options.emit("id" in item && item.type !== "step-start" ? { ...item, id: prefix + item.id } : item),
+            seen,
+          )
           // Drain the SDK completion: its aggregate usage is emitted only at the terminal boundary.
         }
         if (thread.id === null) throw new Error("Codex returned no thread ID")
@@ -103,13 +113,47 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
   },
 }
 
-/** Codex configuration for one run. `instructions` is the file holding the OC++ system prompt in the OC++ harness. */
+/**
+ * Codex's own model catalog with the per-model switches that force its JavaScript code mode, its sub-agent tools and
+ * deferred tool search turned off, so OC++'s execute is offered to the model directly.
+ */
+async function catalog(signal: AbortSignal) {
+  const output = await new Promise<string>((resolve, reject) =>
+    execFile("codex", ["debug", "models"], { signal, timeout: 30_000, maxBuffer: 64 * 1024 * 1024 }, (error, stdout) =>
+      error ? reject(error) : resolve(stdout),
+    ),
+  )
+  const parsed = Schema.decodeUnknownSync(Catalog)(output)
+  return JSON.stringify({
+    ...parsed,
+    models: parsed.models.map((model) => ({
+      ...Object.fromEntries(
+        Object.entries(model).filter(([key]) => key !== "tool_mode" && key !== "multi_agent_version"),
+      ),
+      supports_search_tool: false,
+    })),
+  })
+}
+const Catalog = Schema.fromJsonString(
+  Schema.StructWithRest(Schema.Struct({ models: Schema.Array(Schema.Record(Schema.String, Schema.Json)) }), [
+    Schema.Record(Schema.String, Schema.Json),
+  ]),
+)
+
+/** Codex configuration for one run. `workspace` holds the OC++ system prompt and model catalog in the OC++ harness. */
 export function configure(
   options: Pick<ExternalAgentDriver.Options, "directory" | "model" | "effort" | "harness">,
   bridge: { readonly url: string; readonly token: string },
-  instructions?: string,
+  workspace?: string,
 ): { readonly config: NonNullable<CodexOptions["config"]>; readonly thread: ThreadOptions } {
-  const mcp = { ocpp: { url: bridge.url, http_headers: { Authorization: "Bearer " + bridge.token } } }
+  const mcp = {
+    ocpp: {
+      url: bridge.url,
+      http_headers: { Authorization: "Bearer " + bridge.token },
+      // Codex exec cannot ask anyone, so OC++'s tools are approved here and OC++ authorizes each one itself.
+      default_tools_approval_mode: "approve",
+    },
+  }
   const effort: ModelReasoningEffort | undefined =
     options.effort === undefined ? undefined : Schema.decodeUnknownSync(ExternalAgentEffort.codex)(options.effort)
   const common = {
@@ -129,7 +173,12 @@ export function configure(
   return {
     config: {
       features: Object.fromEntries(NATIVE_FEATURES.map((feature) => [feature, false])),
-      ...(instructions === undefined ? {} : { model_instructions_file: instructions }),
+      ...(workspace === undefined
+        ? {}
+        : {
+            model_instructions_file: path.join(workspace, "instructions.md"),
+            model_catalog_json: path.join(workspace, "catalog.json"),
+          }),
       include_apps_instructions: false,
       include_permissions_instructions: false,
       include_environment_context: false,

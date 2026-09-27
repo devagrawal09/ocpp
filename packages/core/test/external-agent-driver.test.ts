@@ -90,15 +90,22 @@ describe("external SDK drivers", () => {
     const harnessed = configure(
       { directory: "/work", model: "gpt-5.6-sol", effort: "high", harness: { type: "ocpp", system: "OC++" } },
       bridge,
-      "/tmp/instructions.md",
+      "/tmp/ocpp-codex",
     )
     expect(NATIVE_FEATURES).toEqual(expect.arrayContaining(["shell_tool", "unified_exec", "multi_agent", "apps"]))
     expect(harnessed.config).toMatchObject({
-      model_instructions_file: "/tmp/instructions.md",
+      model_instructions_file: "/tmp/ocpp-codex/instructions.md",
+      model_catalog_json: "/tmp/ocpp-codex/catalog.json",
       include_permissions_instructions: false,
       include_environment_context: false,
       skills: { include_instructions: false, bundled: { enabled: false } },
-      mcp_servers: { ocpp: { url: bridge.url, http_headers: { Authorization: "Bearer secret" } } },
+      mcp_servers: {
+        ocpp: {
+          url: bridge.url,
+          http_headers: { Authorization: "Bearer secret" },
+          default_tools_approval_mode: "approve",
+        },
+      },
     })
     expect(Object.values(harnessed.config.features as Record<string, boolean>).every((value) => value === false)).toBe(
       true,
@@ -371,7 +378,7 @@ if (process.argv[2] === "app-server") {
       expect(crashed.error).not.toContain("is empty")
       expect(crashed.calls).toEqual({ linked: ["fake-thread"], checkpointed: [] })
       const completed = await run("finish")
-      expect(completed.events).toContainEqual({ type: "text", id: "a", delta: "done" })
+      expect(completed.events).toContainEqual({ type: "text", id: "1:a", delta: "done" })
       expect(completed.events.filter((event) => event.type === "diagnostic")).toHaveLength(2)
       expect(completed.error).toContain("is empty")
       expect(completed.calls.checkpointed).toEqual([])
@@ -398,11 +405,16 @@ if (process.argv[2] === "app-server") {
       write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [] } } })
     else write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [{ id: "t" }] } } })
   }
+} else if (process.argv[2] === "debug") {
+  write({ models: [{ slug: "gpt-5.6-sol", tool_mode: "code_mode_only", multi_agent_version: "v2", supports_search_tool: true }] })
 } else {
   const args = process.argv.slice(2)
-  const file = args.map((arg) => /^model_instructions_file="(.*)"$/.exec(arg)?.[1]).find(Boolean)
+  const read = (key) => {
+    const file = args.map((arg) => new RegExp("^" + key + '="(.*)"$').exec(arg)?.[1]).find(Boolean)
+    return file && fs.readFileSync(file, "utf8")
+  }
   const prompt = await Bun.stdin.text()
-  fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify({ args, prompt, instructions: file && fs.readFileSync(file, "utf8") }) + "\\n")
+  fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify({ args, prompt, instructions: read("model_instructions_file"), catalog: read("model_catalog_json") }) + "\\n")
   write({ type: "thread.started", thread_id: "fake-thread" })
   write({ type: "turn.started" })
   write({ type: "item.completed", item: { id: "a" + args.length, type: "agent_message", text: "answered " + prompt } })
@@ -443,7 +455,7 @@ if (process.argv[2] === "app-server") {
       const invocations = (await Bun.file(record).text())
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line) as { args: string[]; prompt: string; instructions?: string })
+        .map((line) => JSON.parse(line) as { args: string[]; prompt: string; instructions?: string; catalog?: string })
       expect(invocations).toHaveLength(2)
       expect(invocations.map((item) => item.prompt)).toEqual([
         "Add numbers",
@@ -452,6 +464,10 @@ if (process.argv[2] === "app-server") {
       expect(invocations[1].args.slice(-2)).toEqual(["resume", "fake-thread"])
       for (const invocation of invocations) {
         expect(invocation.instructions).toBe("OC++ system prompt for Codex")
+        // The catalog stops Codex from wrapping tools in its own code mode, sub-agents and deferred search.
+        expect(JSON.parse(invocation.catalog!)).toEqual({
+          models: [{ slug: "gpt-5.6-sol", supports_search_tool: false }],
+        })
         expect(invocation.args).toEqual(
           expect.arrayContaining([
             "features.shell_tool=false",
@@ -460,6 +476,7 @@ if (process.argv[2] === "app-server") {
             "read-only",
             'web_search="disabled"',
             'approval_policy="on-request"',
+            'mcp_servers.ocpp.default_tools_approval_mode="approve"',
           ]),
         )
       }

@@ -1,7 +1,7 @@
 export * as SessionContext from "./context.js"
 
 import { Model } from "@ocpp/schema/model"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Result } from "effect"
 import { Agent } from "../agent.js"
 import { Catalog } from "../catalog.js"
 import { CodeModeInstructions } from "../codemode/instructions.js"
@@ -31,6 +31,8 @@ import { SessionStore } from "./store.js"
 export interface Selection {
   readonly session: SessionSchema.Info
   readonly agent: Agent.Selection & { readonly info: Agent.Info }
+  /** Resolved while selecting because tool catalog hooks depend on it; `load` reports a failure. */
+  readonly model: Result.Result<SessionRunnerModel.Resolved, SessionRunnerModel.Error>
   readonly instructions: Instructions.List
   readonly tools: Tool.Snapshot
 }
@@ -134,9 +136,13 @@ const layer = Layer.effect(
       yield* openapi.flush
       const agent = yield* agents.select(session.agent)
       if (!agent.info) return yield* new AgentNotFoundError({ sessionID: session.id, agent: session.agent ?? agent.id })
+      const model = yield* resolveModel(session).pipe(Effect.result)
       const loaded = yield* Effect.all(
         {
-          tools: registry.snapshot(agent.info.permissions, session.id),
+          tools: registry.snapshot(agent.info.permissions, session.id, {
+            agent: agent.id,
+            ...(Result.isSuccess(model) ? { model: model.success.ref } : {}),
+          }),
           builtins: builtins.load(sessionID),
           discovery: discovery.load(),
           skills: skillInstructions.load(agent),
@@ -150,6 +156,7 @@ const layer = Layer.effect(
       return {
         session,
         agent: { ...agent, info: agent.info },
+        model,
         instructions: Instructions.combine([
           loaded.builtins,
           CodeModeInstructions.make(loaded.tools.codeModeCatalog),
@@ -165,7 +172,7 @@ const layer = Layer.effect(
     })
 
     const load = Effect.fn("SessionContext.load")(function* (selection: Selection) {
-      const model = yield* resolveModel(selection.session)
+      const model = yield* Effect.fromResult(selection.model)
       const history = yield* SessionHistory.entriesForRunner(db, selection.session.id, selection.instructions)
       return {
         session: selection.session,

@@ -3,6 +3,7 @@ export type { Metadata, Options, Result } from "@ocpp/schema/tool"
 
 import { Tool } from "@ocpp/schema/tool"
 import type { Agent } from "@ocpp/schema/agent"
+import type { Model } from "@ocpp/schema/model"
 import type { Session } from "@ocpp/schema/session"
 import type { SessionMessage } from "@ocpp/schema/session-message"
 import type { Types } from "effect"
@@ -59,6 +60,19 @@ interface ToolHooks {
         error: Tool.Error
       }
   )
+  /**
+   * Shapes the Code Mode catalog an agent's programs run against, before the model sees it. Entries are
+   * keyed by Code Mode path, such as `shell` or `subagent.models`. Edit a description to change what the
+   * catalog and `tools.search` show, or delete an entry to make that tool unavailable: it is neither
+   * listed nor callable.
+   */
+  readonly catalog: {
+    readonly sessionID?: Session.ID
+    readonly agent?: Agent.ID
+    /** Absent when no model request is involved, such as a command or event handler run. */
+    readonly model?: Model.Ref
+    tools: Record<string, { description: string }>
+  }
 }
 
 export interface ToolDomain {

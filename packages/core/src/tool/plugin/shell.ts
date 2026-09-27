@@ -267,7 +267,7 @@ export const Plugin = {
       )
       .pipe(Effect.orDie)
 
-    yield* ctx.session.hook("context", (event) =>
+    yield* ctx.tool.hook("catalog", (event) =>
       Effect.gen(function* () {
         const tool = event.tools[name]
         if (!tool) return

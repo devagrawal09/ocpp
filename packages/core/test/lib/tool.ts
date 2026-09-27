@@ -10,6 +10,7 @@ import { SessionMessage } from "@ocpp/core/session/message"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 import { toSessionError } from "@ocpp/core/session/to-session-error"
 import type { SessionError } from "@ocpp/schema/session-error"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { Tool } from "@ocpp/core/tool"
 import { effectiveName, execute } from "@ocpp/core/tool/runtime"
 import type { Context } from "@ocpp/plugin/effect/plugin"
@@ -121,8 +122,8 @@ export function waitForCodeModeTool(
 
 /**
  * Registers a core tool plugin's tools against the real registry without booting the
- * full plugin host. Only the tool domain is live; focused tool tests exercise
- * registration, snapshots, and execution through the same path production uses.
+ * full plugin host. Only the tool domain is live, including its catalog hooks; focused tool
+ * tests exercise registration, snapshots, and execution through the same path production uses.
  */
 export const registerToolPlugin = <R>(
   plugin: {
@@ -133,6 +134,8 @@ export const registerToolPlugin = <R>(
 ): Effect.Effect<void, never, R | Tool.Service | Scope.Scope> =>
   Effect.gen(function* () {
     const tools = yield* Tool.Service
+    // Only plugins that customize the catalog need hooks, so only their tests list PluginHooks.node.
+    const hooks = Option.getOrUndefined(yield* Effect.serviceOption(PluginHooks.Service))
     const context = host({
       ...overrides,
       session: {
@@ -141,7 +144,10 @@ export const registerToolPlugin = <R>(
       tool: {
         transform: tools.transform,
         reload: tools.reload,
-        hook: () => Effect.die("registerToolPlugin does not support tool hooks"),
+        hook: (name, callback) =>
+          hooks === undefined
+            ? Effect.die("registerToolPlugin registers tool hooks only when PluginHooks.node is a dependency")
+            : hooks.register("tool", name, callback),
       },
     })
     yield* plugin.effect(context)

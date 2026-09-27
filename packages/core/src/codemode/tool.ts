@@ -704,7 +704,8 @@ const toAttachment = Effect.fnUntraced(function* (file: Tool.FileContent, image:
   })
 })
 
-function qualifiedName(registration: Tool.Info) {
+/** The Code Mode path a registration is called by, such as `subagent.models`. */
+export function qualifiedName(registration: Tool.Info) {
   const normalized = normalizedName(registration)
   if (registration.options?.namespace === undefined) return normalized
   return registration.options.namespace + "." + normalized

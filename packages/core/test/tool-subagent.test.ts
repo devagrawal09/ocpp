@@ -31,6 +31,7 @@ import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { SessionStore } from "@ocpp/core/session/store"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { Permission } from "@ocpp/core/permission"
@@ -124,7 +125,16 @@ const subagentPluginSupervisor = makeLocationNode({
     PluginSupervisor.Service,
     registerToolPlugin(SubagentTool.Plugin).pipe(Effect.as(PluginSupervisor.Service.of({ flush: Effect.void }))),
   ),
-  deps: [Agent.node, Bus.node, Catalog.node, Config.node, Permission.node, PluginRuntime.node, Tool.node],
+  deps: [
+    Agent.node,
+    Bus.node,
+    Catalog.node,
+    Config.node,
+    Permission.node,
+    PluginHooks.node,
+    PluginRuntime.node,
+    Tool.node,
+  ],
 })
 
 const nodes = LayerNode.group([

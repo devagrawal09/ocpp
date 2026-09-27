@@ -185,3 +185,90 @@ test("unsupported syntax is refused with its position, source line, and a concre
   })
   expect(codemode.admitted).toEqual([])
 })
+
+// TypeScript re-prints a program before it is checked: it splits statements onto their own lines,
+// joins wrapped calls, and drops type declarations. A refusal still names the line the model wrote.
+test("a call wrapped onto its own line is refused at that line, with that line as its source", async () => {
+  const codemode = setup([echo("create_issue", "linear"), echo("list_issues", "linear")])
+  const error = await codemode.refuse(
+    [
+      "const filed = crashes.map((crash) =>",
+      "  tools.linear.create_issues({",
+      '    team: "ENG",',
+      "    title: crash.title,",
+      "  })",
+      ")",
+    ].join("\n"),
+  )
+
+  expect(error.message).toBe(
+    [
+      "Unknown tool tools.linear.create_issues; this agent has no tool at that path. (line 2, col 3)",
+      "Source:   tools.linear.create_issues({",
+      "Did you mean tools.linear.create_issue?",
+      'Check its exact signature with tools.search({ query: "tools.linear.create_issue" })',
+    ].join("\n"),
+  )
+  expect(error.metadata).toMatchObject({
+    kind: "UnknownTool",
+    location: { line: 2, column: 3 },
+    excerpt: "  tools.linear.create_issues({",
+    tools: ["linear.create_issues"],
+  })
+})
+
+test("statements sharing a line and type declarations above a call keep the call's own position", async () => {
+  const codemode = setup([echo("read", "fs")], [echo("shell")])
+  const shared = await codemode.refuse('let n = 0; const text = tools.fs.raed({ text: "a.ts" })')
+  expect(shared.metadata).toMatchObject({
+    kind: "UnknownTool",
+    location: { line: 1, column: 25 },
+    excerpt: 'let n = 0; const text = tools.fs.raed({ text: "a.ts" })',
+  })
+
+  const typed = await codemode.refuse(
+    ["type Row = {", "  id: string", "}", 'const listing = tools.shell({ text: "ls" })'].join("\n"),
+  )
+  expect(typed.message.split("\n").slice(0, 2)).toEqual([
+    "Tool tools.shell is denied for this agent: its permission rules deny it outright, so no call to it can succeed. (line 4, col 17)",
+    'Source: const listing = tools.shell({ text: "ls" })',
+  ])
+})
+
+test("generic calls and type assertions keep the columns of the code around them", async () => {
+  const codemode = setup([echo("read", "fs")])
+  const error = await codemode.refuse(
+    [
+      "const pick = <T,>(items: Array<T>): T => items[0]",
+      'const file = pick<string>(["a.ts"]) as string; const text = tools.fs.raed<{ text: string }>({ text: file })',
+    ].join("\n"),
+  )
+  expect(error.metadata).toMatchObject({
+    kind: "UnknownTool",
+    location: { line: 2, column: 61 },
+    excerpt:
+      'const file = pick<string>(["a.ts"]) as string; const text = tools.fs.raed<{ text: string }>({ text: file })',
+  })
+})
+
+test("unsupported syntax and parse errors below type declarations name their own line", async () => {
+  const codemode = setup([echo("read", "fs")])
+  const unsupported = await codemode.refuse(
+    ["interface Row { id: string }", "type Rows = Array<Row>", "let n = 0; let lines = text.split(/\\r?\\n/)"].join(
+      "\n",
+    ),
+  )
+  expect(unsupported.metadata).toMatchObject({
+    kind: "UnsupportedSyntax",
+    location: { line: 3, column: 35 },
+    excerpt: "let n = 0; let lines = text.split(/\\r?\\n/)",
+  })
+
+  const parse = await codemode.refuse(["type Id = string", "const a = 1", "const a = 2"].join("\n"))
+  expect(parse.metadata).toMatchObject({
+    kind: "ParseError",
+    location: { line: 3, column: 7 },
+    excerpt: "const a = 2",
+  })
+  expect(codemode.admitted).toEqual([])
+})

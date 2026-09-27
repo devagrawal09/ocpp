@@ -20,8 +20,8 @@ const MAX_REPORTED = 5
 const MAX_LISTED = 5
 
 /**
- * The refusal for a program the compiler rejected. Syntax errors are positioned by AST node, and
- * transpilation keeps line numbers, so the excerpt is read from the model's own source.
+ * The refusal for a program the compiler rejected. The compiler positions every node in the code as
+ * the model wrote it, even where transpilation re-printed it, so the excerpt is read from that code.
  */
 export function compileFailure(error: CompileError, code: string) {
   const location =
@@ -60,12 +60,9 @@ export function unavailableTools(
   if (calls.length === 0) return undefined
   return refusal(
     calls.map((call) => {
-      const location = {
-        line: call.node.loc?.start.line ?? 1,
-        column: (call.node.loc?.start.column ?? 0) + 1,
-      }
-      const excerpt = excerptAt(code, location)
-      const base = { location, ...(excerpt ? { excerpt } : {}), tool: call.path }
+      const location = call.node.loc && { line: call.node.loc.start.line, column: call.node.loc.start.column + 1 }
+      const excerpt = location && excerptAt(code, location)
+      const base = { ...(location ? { location } : {}), ...(excerpt ? { excerpt } : {}), tool: call.path }
       if (catalog.denied.includes(call.path))
         return {
           ...base,

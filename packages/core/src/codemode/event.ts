@@ -27,7 +27,10 @@ export type Definition = typeof CodeModeEventTable.$inferSelect
 export type Key = { readonly sessionID: SessionSchema.ID; readonly name: string }
 
 export interface Interface {
-  /** Defines or replaces an event. A replaced event starts over: it has not fired yet. */
+  /**
+   * Defines or replaces an event. A replaced event starts over as if it had not fired, except that a
+   * firing still running keeps the new definition from overlapping it.
+   */
   readonly define: (
     sessionID: SessionSchema.ID,
     input: {
@@ -104,7 +107,12 @@ const layer = Layer.effect(
 
     return Service.of({
       define: Effect.fn("CodeModeEvent.define")(function* (sessionID, input) {
+        // A subagent's Session ends with its task, so nothing would ever see its events' outcomes.
+        const session = yield* sessions.get(sessionID)
         const problem =
+          (session?.parentID
+            ? "Events cannot be defined in a subagent Session, which ends with its task. Define the event in the top-level Session instead."
+            : undefined) ??
           CodeModeHandler.nameProblem(input.name) ??
           scheduleProblem(input.schedule) ??
           (yield* CodeModeHandler.problem(db, sessionID, input.handler, true))
@@ -114,7 +122,12 @@ const layer = Layer.effect(
         const row = yield* db
           .transaction((tx) =>
             Effect.gen(function* () {
-              yield* tx.delete(CodeModeEventTable).where(where(key)).run()
+              // A replaced event keeps its running firing, so its new handler cannot overlap the old one.
+              const replaced = yield* tx
+                .delete(CodeModeEventTable)
+                .where(where(key))
+                .returning({ execution_id: CodeModeEventTable.execution_id })
+                .get()
               return yield* tx
                 .insert(CodeModeEventTable)
                 .values({
@@ -125,6 +138,7 @@ const layer = Layer.effect(
                   handler: input.handler,
                   input: input.input ?? null,
                   enabled: true,
+                  execution_id: replaced?.execution_id ?? null,
                   time_next: next(input.schedule, { now, anchor: now }) ?? null,
                   time_created: now,
                   time_updated: now,
@@ -202,7 +216,7 @@ export function scheduleProblem(schedule: Schedule) {
     return undefined
   }
   if ("cron" in schedule) {
-    const parsed = Cron.parse(schedule.cron)
+    const parsed = Cron.parse(schedule.cron, zone())
     return Result.isFailure(parsed)
       ? `Invalid cron expression ${JSON.stringify(schedule.cron)}: ${parsed.failure.message}`
       : undefined
@@ -214,26 +228,32 @@ export function scheduleProblem(schedule: Schedule) {
 
 /**
  * The next fire time after `now`, or undefined when the schedule has nothing left. An interval keeps
- * its cadence from the latest firing, or from `anchor` before the first one, and never catches up on
- * firings missed while the host was down. A time in the past fires once, as soon as possible.
+ * the grid its anchor starts, so latency never shifts later firings, and firings missed while the host
+ * was down are skipped rather than caught up. A cron expression follows the host's time zone, so its
+ * firings keep their wall-clock time across daylight saving changes. A time in the past fires once,
+ * as soon as possible. The latest firing bounds the result too, so a schedule never fires twice for
+ * one slot.
  */
 export function next(
   schedule: Schedule,
   input: { readonly now: number; readonly anchor: number; readonly fired?: number },
 ) {
+  const after = Math.max(input.now, input.fired ?? input.now)
   if ("every" in schedule) {
     const step = interval(schedule.every)
     if (step === undefined) return undefined
-    const base = input.fired ?? input.anchor
-    return base + Math.max(1, Math.floor((input.now - base) / step) + 1) * step
+    return input.anchor + Math.max(1, Math.floor((after - input.anchor) / step) + 1) * step
   }
   if ("cron" in schedule) {
-    const parsed = Cron.parse(schedule.cron)
-    return Result.isFailure(parsed) ? undefined : Cron.next(parsed.success, new Date(input.now)).getTime()
+    const parsed = Cron.parse(schedule.cron, zone())
+    return Result.isFailure(parsed) ? undefined : Cron.next(parsed.success, new Date(after)).getTime()
   }
   if (input.fired !== undefined) return undefined
   return Math.max(Date.parse(schedule.at), input.now)
 }
+
+/** The host's named time zone, such as "Europe/Berlin", which cron expressions follow. */
+export const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const units = new Map([
   ["ms", 1],

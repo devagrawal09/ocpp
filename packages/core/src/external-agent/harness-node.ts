@@ -216,7 +216,16 @@ const layer = Layer.effect(
           ]
         }),
       ])
-      const authorize = native({ session, provider, selection, permission, fs, config, stream, activation })
+      const caller = session.parentID === undefined ? undefined : yield* store.get(session.parentID)
+      // Requests no child tool part explains are asked of a caller that shares this Location. A child placed in
+      // another Location is asked itself: its Location holds the request, and replies are routed by Session.
+      const owner =
+        caller !== undefined &&
+        caller.location.directory === session.location.directory &&
+        caller.location.workspaceID === session.location.workspaceID
+          ? caller.id
+          : session.id
+      const authorize = native({ session, owner, provider, selection, permission, fs, config, stream, activation })
 
       const bind = Effect.fnUntraced(function* () {
         const record = yield* external.get(sessionID)
@@ -375,6 +384,8 @@ const layer = Layer.effect(
 /** Authorizes the vendor's own tool calls in the native harness, through OC++ permissions. */
 function native(input: {
   readonly session: SessionSchema.Info
+  /** The Session asked when no child tool part explains a request. */
+  readonly owner: SessionSchema.ID
   readonly provider: ExternalSession.Provider
   readonly selection: SessionContext.Selection
   readonly permission: Permission.Interface
@@ -386,8 +397,7 @@ function native(input: {
   const directory = input.session.location.directory
   const provider = input.provider
   const agent = input.selection.agent.id
-  // Session-wide grants are asked of the caller, like the subagent call that requested the native harness.
-  const owner = input.session.parentID ?? input.session.id
+  const owner = input.owner
   return Effect.fnUntraced(function* (name: string, value: Record<string, unknown>, toolID?: string, cwd?: string) {
     const entries = yield* input.config.entries()
     if (provider === "codex" && name === "workspace")
@@ -396,6 +406,7 @@ function native(input: {
           action,
           sessionID: owner,
           agent,
+          ...(input.activation === undefined ? {} : { source: input.activation.source }),
           save: [],
           resources: [
             "*",
@@ -410,7 +421,7 @@ function native(input: {
               "Codex native tools require authorization for their entire sandbox scope because its execution SDK has no per-tool approval callback.",
           },
         })
-    // A call the child's timeline shows is asked of the child; any other is asked of the caller, naming its subagent call.
+    // A call the child's timeline shows is asked of the child; any other is asked of the owner, naming the subagent call.
     const part = input.stream.source(toolID)
     const source = part ?? input.activation?.source
     const common = {

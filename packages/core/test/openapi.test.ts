@@ -115,7 +115,6 @@ const runtimeLayer = Layer.unwrap(
       location: {
         agent: { list: () => Effect.die("Unavailable in OpenAPI tests") },
         mcp: { list: () => Effect.die("Unavailable in OpenAPI tests") },
-        tool: { registerSession: () => Effect.die("Unavailable in OpenAPI tests") },
       },
     })
   }),

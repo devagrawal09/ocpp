@@ -20,6 +20,7 @@ import { SessionMessage } from "./session/message.js"
 import { SessionSchema } from "./session/schema.js"
 import { State } from "./state.js"
 import { definition, effectiveName, execute, normalizedName, normalizeContent } from "./tool/runtime.js"
+import { ToolSessionTools } from "./tool/session-tools.js"
 import { Wildcard } from "./util/wildcard.js"
 
 export class RegistrationError extends Schema.TaggedError<RegistrationError>()("Tool.RegistrationError", {
@@ -96,10 +97,8 @@ const layer = Layer.effect(
     const codemodeStore = yield* CodeModeStore.Service
     const runtime = yield* PluginRuntime.Service
     const scope = yield* Scope.Scope
-    const sessionTools = new Map<
-      SessionSchema.ID,
-      Array<{ readonly token: symbol; readonly tools: ReadonlyMap<string, Tool.Info>; readonly input?: Schema.Json }>
-    >()
+    // Shared by every Location, so a Session placed in another Location than its caller's sees what it lends.
+    const sessionTools = (yield* ToolSessionTools.Service).bySession
 
     const beforeExecute = (name: string, input: unknown, context: Tool.Context) =>
       hooks.trigger("tool", "execute.before", {
@@ -402,5 +401,5 @@ function registrationError(tool: Tool.Info) {
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node],
+  deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node, ToolSessionTools.node],
 })

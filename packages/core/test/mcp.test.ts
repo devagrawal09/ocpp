@@ -411,7 +411,6 @@ const runtimeLayer = Layer.unwrap(
       location: {
         agent: { list: () => Effect.die("Unavailable in MCP tests") },
         mcp: { list: () => Effect.die("Unavailable in MCP tests") },
-        tool: { registerSession: () => Effect.die("Unavailable in MCP tests") },
       },
     })
   }),

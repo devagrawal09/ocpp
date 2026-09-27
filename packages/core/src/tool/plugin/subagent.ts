@@ -8,6 +8,7 @@ import { Provider } from "@ocpp/schema/provider"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Deferred, Effect, Schema } from "effect"
+import { realpath, stat } from "node:fs/promises"
 import path from "path"
 import { Agent } from "../../agent.js"
 import { Bus } from "../../bus.js"
@@ -76,7 +77,7 @@ export const Input = Schema.Struct({
   }),
   root: Schema.optionalKey(Schema.String).annotate({
     description:
-      "Existing absolute directory the child session runs in, such as a separate git worktree. Its tools, files, permissions and instructions are those of that directory. Defaults to the calling session's directory; a continued session keeps its own",
+      "Existing absolute directory the child session runs in, such as a separate git worktree. The child runs under that directory's own config: its permissions, agents, models, MCP servers, plugins and instructions, so placing it outside this project asks the user. Defaults to the calling session's directory; a continued session keeps its own",
   }),
 })
 
@@ -103,7 +104,7 @@ export const description = [
   "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready.",
   "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; for pi it is Pi's provider/model.",
   'Vendor-driven children run in the OC++ harness by default: their only tool is execute with this same catalog and notebook. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt instead; OC++ execute, tool.define handles and submit_result remain available to it over MCP.',
-  "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child keeps that directory when continued.",
+  "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child runs under that directory's own config (permissions, agents, MCP servers, plugins, instructions), so a root outside this project asks the user first, and the agent must be defined there. The child keeps that directory when continued.",
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "The subagent runs to completion and returns its final response as message. With outputSchema it must call tools.submit_result({ message, output }): message is returned in full, and output is returned only as machine data with a short summary in metadata.",
@@ -122,7 +123,7 @@ export const Plugin = {
     const catalog = yield* Catalog.Service
     const config = yield* Config.Service
     const permission = yield* Permission.Service
-    const fs = yield* FSUtil.Service
+    const tools = yield* Tool.Service
     const mutation = yield* LocationMutation.Service
     const drivers = yield* ExternalAgentDrivers.Service
     const external = yield* ExternalAgentSession.Service
@@ -222,25 +223,7 @@ export const Plugin = {
                 return yield* new ToolFailure({
                   message: `Subagent depth limit reached (${limit}). Increase "experimental.subagent_depth" to allow nested subagents.`,
                 })
-              const agent = yield* agents.resolve(input.agent)
-              if (agent === undefined) return yield* new ToolFailure({ message: `Unknown agent: ${input.agent}` })
-              if (agent.mode === "primary")
-                return yield* new ToolFailure({ message: `Agent ${input.agent} cannot run as a subagent` })
-              if (reattached === undefined)
-                yield* permission
-                  .assert({
-                    action: name,
-                    resources: [agent.id],
-                    save: [agent.id],
-                    sessionID: context.sessionID,
-                    agent: context.agent,
-                    source: {
-                      type: "tool",
-                      messageID: context.messageID,
-                      id: context.id,
-                    },
-                  })
-                  .pipe(Effect.mapError((error) => new ToolFailure({ message: `Subagent denied: ${agent.id}`, error })))
+              // The call's own input is checked before anything is asked of the user.
               const customTools = yield* SubagentCustomTool.validate(input.tools ?? []).pipe(
                 Effect.mapError((error) => new ToolFailure({ message: error.message, error })),
               )
@@ -280,43 +263,77 @@ export const Plugin = {
                   message: `Session ${existing.id} is not a child of the current session`,
                 })
               const source = { type: "tool" as const, messageID: context.messageID, id: context.id }
-              const root = input.root === undefined ? undefined : yield* requireRoot(fs, input.root)
-              if (root !== undefined && existing !== undefined && root !== existing.location.directory)
-                return yield* new ToolFailure({
-                  message: `Subagent session ${existing.id} runs in ${existing.location.directory}. A continued session keeps its directory; omit root or pass that directory.`,
-                })
-              // Where the child runs: its own directory once it exists, else `root`, else the caller's.
-              const directory = existing?.location.directory ?? root ?? parent.location.directory
-              // A directory outside the caller's Location needs the same approval as any tool reaching outside it.
+              const location = yield* place(input.root, existing?.location ?? parent.location, existing !== undefined)
+              const directory = location.directory
+              // A new child placed elsewhere loads that directory's config, agents and plugins, which only an approved
+              // placement may do; every other child's agent is already loaded where it runs.
+              const placed = existing === undefined && !same(location, parent.location)
               const outside = (yield* mutation
                 .resolve({ path: directory, kind: "directory" })
                 .pipe(
                   Effect.mapError(
-                    (error) => new ToolFailure({ message: `Subagent root is unreadable: ${directory}`, error }),
+                    (error) => new ToolFailure({ message: `Subagent root cannot be read: ${directory}`, error }),
                   ),
                 )).externalDirectory
-              if (reattached === undefined && outside !== undefined)
-                yield* permission
-                  .assert({
-                    ...LocationMutation.externalDirectoryPermission(outside),
-                    sessionID: context.sessionID,
-                    agent: context.agent,
-                    source,
+
+              // What the child is: its agent where it runs, its driver, harness and model. Checking it asks nothing.
+              const agentAt = Effect.fnUntraced(function* () {
+                const found = same(location, parent.location)
+                  ? yield* agents.resolve(input.agent)
+                  : (yield* runtime.location.agent.list(location)).data.find((item) => item.id === input.agent)
+                if (found === undefined)
+                  return yield* new ToolFailure({
+                    message: same(location, parent.location)
+                      ? `Unknown agent: ${input.agent}`
+                      : `Unknown agent: ${input.agent} is not defined in ${directory}`,
                   })
-                  .pipe(
-                    Effect.mapError(
-                      (error) => new ToolFailure({ message: `Subagent directory denied: ${directory}`, error }),
-                    ),
-                  )
+                if (found.mode === "primary")
+                  return yield* new ToolFailure({ message: `Agent ${input.agent} cannot run as a subagent` })
+                return found
+              })
+              // What the call alone decides, so a mistake fails before any prompt even when the agent is not yet known.
+              const precheck = Effect.fnUntraced(function* (driver: SessionDriver.ID | undefined) {
+                if (input.harness === "native" && driver === "ocpp")
+                  return yield* new ToolFailure({
+                    message:
+                      'harness "native" applies only to the claude, codex and pi drivers. The ocpp driver runs the OC++ runner.',
+                  })
+                if (driver === undefined || driver === "ocpp") return
+                const reason = yield* drivers.unavailable(driver)
+                if (reason !== undefined) return yield* new ToolFailure({ message: reason })
+                const named = input.model?.split("#")[0]
+                // Claude Code and Codex name models without a provider; Pi names them provider/model.
+                if (named && (driver === "pi") !== named.includes("/"))
+                  return yield* new ToolFailure({
+                    message:
+                      driver === "pi"
+                        ? `Pi models are named provider/model, such as ${ExternalAgentDrivers.defaults.pi}: ${named}`
+                        : `${SessionDriver.names[driver]} models are named without a provider, such as ${ExternalAgentDrivers.defaults[driver]}: ${named}. A provider/model ID runs on the ocpp driver.`,
+                  })
+              })
+              const choose = Effect.fnUntraced(function* (agent: Agent.Info) {
+                // Unless the call names one: a continued child keeps its own driver, and a new one takes its agent's
+                // configured model's driver, else its caller's.
+                const driver = input.driver ?? SessionDriver.of(existing?.model ?? agent.model ?? parent.model)
+                yield* precheck(driver)
+                const selected =
+                  reattached !== undefined
+                    ? undefined
+                    : driver === "ocpp"
+                      ? yield* runnerModel(agent)
+                      : yield* vendorModel(driver, agent)
+                return { agent, driver, harness: input.harness ?? "ocpp", selected }
+              })
               // The model for an OC++-run child: requested, else a provider model its agent or caller already uses.
-              const runnerModel = Effect.fnUntraced(function* () {
+              const runnerModel = Effect.fnUntraced(function* (agent: Agent.Info) {
                 const inherited = [
                   ...(existing === undefined || existing.agent !== agent.id ? [agent.model] : []),
                   ...(existing === undefined ? [parent.model] : []),
                 ].find((model) => model !== undefined && SessionDriver.of(model) === "ocpp")
                 const requested = input.model
                 if (requested === undefined) {
-                  if (existing === undefined || SessionDriver.of(existing.model) === "ocpp") return inherited
+                  if (existing === undefined || SessionDriver.of(existing.model) === "ocpp")
+                    return { model: inherited, requested: false }
                   // A vendor child handed back to the runner needs a provider model.
                   const fallback =
                     inherited ??
@@ -334,15 +351,14 @@ export const Plugin = {
                     return yield* new ToolFailure({
                       message: "Pass model to choose a provider model for the ocpp driver.",
                     })
-                  return fallback
+                  return { model: fallback, requested: false }
                 }
                 const availableModels = yield* listModels()
                 const model = yield* Effect.try({
                   try: () => Model.Ref.parse(requested),
                   catch: (error) => unsupportedModel(requested, availableModels, error),
                 })
-                const resource = `${model.providerID}/${model.id}`
-                const available = availableModels.find((item) => item.id === resource)
+                const available = availableModels.find((item) => item.id === `${model.providerID}/${model.id}`)
                 if (
                   available === undefined ||
                   (model.variant !== undefined &&
@@ -350,44 +366,17 @@ export const Plugin = {
                     !available.variants.includes(model.variant))
                 )
                   return yield* unsupportedModel(requested, availableModels)
-                const allowed = Config.latest(yield* config.entries(), "subagent")?.models?.includes(resource) === true
-                if (!allowed)
-                  yield* permission
-                    .assert({
-                      action: "subagent_model",
-                      resources: [resource],
-                      save: [],
-                      sessionID: context.sessionID,
-                      agent: context.agent,
-                      source,
-                    })
-                    .pipe(
-                      Effect.mapError(
-                        (error) => new ToolFailure({ message: `Subagent model denied: ${requested}`, error }),
-                      ),
-                    )
-                return model
+                return { model, requested: true }
               })
               // The model for a vendor-run child: requested as name#effort, else what the child, its agent or its
               // caller already uses with this vendor, else the vendor's configured default.
-              const vendorModel = Effect.fnUntraced(function* (provider: ExternalSession.Provider) {
-                const reason = yield* drivers.unavailable(provider)
-                if (reason !== undefined) return yield* new ToolFailure({ message: reason })
+              const vendorModel = Effect.fnUntraced(function* (provider: ExternalSession.Provider, agent: Agent.Info) {
                 const requested = input.model?.split("#")
-                const named = requested?.[0]
-                // Claude Code and Codex name models without a provider; Pi names them provider/model.
-                if (named && (provider === "pi") !== named.includes("/"))
-                  return yield* new ToolFailure({
-                    message:
-                      provider === "pi"
-                        ? `Pi models are named provider/model, such as ${ExternalAgentDrivers.defaults.pi}: ${named}`
-                        : `${SessionDriver.names[provider]} models are named without a provider, such as ${ExternalAgentDrivers.defaults[provider]}: ${named}. A provider/model ID runs on the ocpp driver.`,
-                  })
                 const current = (existing === undefined ? [agent.model, parent.model] : [existing.model]).find(
                   (model) => model !== undefined && SessionDriver.of(model) === provider,
                 )
                 const settings = yield* drivers.settings(provider)
-                const id = named || (current?.id ?? settings.model)
+                const id = requested?.[0] || (current?.id ?? settings.model)
                 const inherited = current?.variant === "default" ? undefined : current?.variant
                 const effort =
                   requested === undefined ? (inherited ?? settings.effort) : (requested[1] ?? settings.effort)
@@ -398,55 +387,68 @@ export const Plugin = {
                   return yield* new ToolFailure({
                     message: `Unsupported ${SessionDriver.names[provider]} effort: ${effort}. Use one of: ${ExternalAgentEffort[provider].literals.join(", ")}.`,
                   })
-                // The vendor is authorized for the directory it works in, and separately for the model it runs.
-                yield* permission
-                  .assert({
-                    action: provider,
-                    resources: [directory],
-                    save: [directory],
-                    sessionID: context.sessionID,
-                    agent: context.agent,
-                    source,
-                  })
-                  .pipe(
-                    Effect.mapError(
-                      (error) =>
-                        new ToolFailure({ message: `${SessionDriver.names[provider]} denied in ${directory}`, error }),
-                    ),
-                  )
-                yield* permission
-                  .assert({
-                    action: "model",
-                    resources: [`${provider}/${id}`],
-                    save: [],
-                    sessionID: context.sessionID,
-                    agent: context.agent,
-                    source,
-                  })
-                  .pipe(
-                    Effect.mapError((error) => new ToolFailure({ message: `Model denied: ${provider}/${id}`, error })),
-                  )
-                return Model.Ref.make({
-                  providerID: Provider.ID.make(provider),
-                  id: Model.ID.make(id),
-                  ...(effort === undefined ? {} : { variant: Model.VariantID.make(effort) }),
-                })
+                return {
+                  model: Model.Ref.make({
+                    providerID: Provider.ID.make(provider),
+                    id: Model.ID.make(id),
+                    ...(effort === undefined ? {} : { variant: Model.VariantID.make(effort) }),
+                  }),
+                  requested: true,
+                }
               })
-              // Unless the call names one: a continued child keeps its own driver, and a new one takes its agent's
-              // configured model's driver, else its caller's.
-              const driver = input.driver ?? SessionDriver.of(existing?.model ?? agent.model ?? parent.model)
-              const harness = input.harness ?? "ocpp"
-              if (harness === "native" && driver === "ocpp")
-                return yield* new ToolFailure({
-                  message:
-                    'harness "native" applies only to the claude, codex and pi drivers. The ocpp driver runs the OC++ runner.',
-                })
-              const selected =
-                reattached !== undefined
-                  ? undefined
-                  : driver === "ocpp"
-                    ? yield* runnerModel()
-                    : yield* vendorModel(driver)
+              const ask = (
+                request: {
+                  readonly action: string
+                  readonly resources: ReadonlyArray<string>
+                  readonly save: ReadonlyArray<string>
+                },
+                denied: string,
+              ) =>
+                permission
+                  .assert({ ...request, sessionID: context.sessionID, agent: context.agent, source })
+                  .pipe(Effect.mapError((error) => new ToolFailure({ message: denied, error })))
+
+              if (placed) yield* precheck(input.driver)
+              const known = placed ? undefined : yield* choose(yield* agentAt())
+              if (reattached === undefined && outside !== undefined) {
+                // The boundary the child can reach without asking: the root's project worktree when it holds the root.
+                yield* ask(
+                  { action: "external_directory", resources: [outside.save], save: [outside.save] },
+                  `Subagent directory denied: ${directory}`,
+                )
+                // The child runs under that directory's own config: its permissions, agents, MCP servers, plugins and
+                // instructions. No default rule allows this, unlike the boundary above.
+                yield* ask(
+                  { action: "subagent_root", resources: [directory], save: [directory] },
+                  `Subagent root denied: ${directory}`,
+                )
+              }
+              const chosen = known ?? (yield* choose(yield* agentAt()))
+              const agent = chosen.agent
+              const driver = chosen.driver
+              const harness = chosen.harness
+              if (reattached === undefined)
+                yield* ask({ action: name, resources: [agent.id], save: [agent.id] }, `Subagent denied: ${agent.id}`)
+              const selected = chosen.selected?.model
+              if (chosen.selected !== undefined && driver === "ocpp" && chosen.selected.requested && selected) {
+                const resource = `${selected.providerID}/${selected.id}`
+                if (Config.latest(yield* config.entries(), "subagent")?.models?.includes(resource) !== true)
+                  yield* ask(
+                    { action: "subagent_model", resources: [resource], save: [] },
+                    `Subagent model denied: ${input.model}`,
+                  )
+              }
+              // A vendor is authorized for the directory it works in, and separately for the model it runs.
+              if (chosen.selected !== undefined && driver !== "ocpp" && selected) {
+                yield* ask(
+                  { action: driver, resources: [directory], save: [directory] },
+                  `${SessionDriver.names[driver]} denied in ${directory}`,
+                )
+                yield* ask(
+                  { action: "model", resources: [`${driver}/${selected.id}`], save: [] },
+                  `Model denied: ${driver}/${selected.id}`,
+                )
+              }
               if (reattached === undefined && existing !== undefined)
                 yield* (
                   existing.agent === agent.id
@@ -473,9 +475,7 @@ export const Plugin = {
                     agent: Agent.ID.make(input.agent),
                     model: selected,
                     // Otherwise the child inherits the caller's Location, workspace included.
-                    ...(directory === parent.location.directory
-                      ? {}
-                      : { location: Location.Ref.make({ directory: AbsolutePath.make(directory) }) }),
+                    ...(same(location, parent.location) ? {} : { location }),
                   })
                   .pipe(
                     Effect.mapError(
@@ -524,18 +524,13 @@ export const Plugin = {
                 ...SubagentCustomTool.make(customTools),
               ]
               // Register immediately before the run whose `ensuring` owns cleanup, so no interruptible
-              // step can leak the registration between acquiring it and attaching its disposal. The tools
-              // belong to the Location the child runs in, which `root` may have placed elsewhere.
+              // step can leak the registration between acquiring it and attaching its disposal. Registrations
+              // are shared by every Location, so a child placed elsewhere sees them too.
               const registration =
                 temporary.length === 0 && machine === undefined
                   ? undefined
-                  : yield* runtime.location.tool
-                      .registerSession(
-                        child.location,
-                        child.id,
-                        temporary,
-                        machine === undefined ? undefined : { input: machine },
-                      )
+                  : yield* tools
+                      .registerSession(child.id, temporary, machine === undefined ? undefined : { input: machine })
                       .pipe(
                         Effect.mapError(
                           (error) => new ToolFailure({ message: `Invalid subagent tool: ${error.message}`, error }),
@@ -738,17 +733,56 @@ export const Plugin = {
   }),
 }
 
-/** A subagent root: an existing absolute directory, resolved through symlinks. */
-const requireRoot = Effect.fnUntraced(function* (fs: FSUtil.Interface, root: string) {
+/**
+ * Where a child runs: `root`'s Location, or the Location it has (a continued child) or would inherit (a new one). A root
+ * naming that same directory, through any spelling, keeps that Location, workspace included.
+ */
+const place = Effect.fnUntraced(function* (root: string | undefined, own: Location.Ref, continued: boolean) {
+  if (root === undefined) return own
   if (!path.isAbsolute(root))
     return yield* new ToolFailure({ message: `Subagent root must be an absolute directory path: ${root}` })
-  const resolved = yield* fs.resolve(root)
-  if (!(yield* fs.existsSafe(resolved)))
-    return yield* new ToolFailure({ message: `Subagent root does not exist: ${root}` })
-  if (!(yield* fs.isDir(resolved)))
-    return yield* new ToolFailure({ message: `Subagent root is not a directory: ${root}` })
-  return AbsolutePath.make(resolved)
+  // A workspace directory exists only inside that workspace, so the local filesystem cannot place or compare it.
+  if (own.workspaceID !== undefined) {
+    if (path.resolve(root) === path.resolve(own.directory)) return own
+    return yield* new ToolFailure({
+      message: `Subagent root is not available in a workspace yet; a subagent runs in ${own.directory}: ${root}`,
+    })
+  }
+  const resolved = yield* requireDirectory(root)
+  if (resolved === (yield* requireDirectory(own.directory).pipe(Effect.orElseSucceed(() => own.directory)))) return own
+  if (continued)
+    return yield* new ToolFailure({
+      message: `Subagent session runs in ${own.directory}. A continued session keeps its directory; omit root or pass that directory: ${root}`,
+    })
+  return Location.Ref.make({ directory: AbsolutePath.make(resolved) })
 })
+
+/** An existing directory's real path, with each way it can fail named. */
+const requireDirectory = Effect.fnUntraced(function* (directory: string) {
+  const resolved = yield* Effect.tryPromise({
+    try: () => realpath(FSUtil.windowsPath(directory)),
+    catch: (error) => new ToolFailure({ message: unresolved(error, directory), error }),
+  })
+  const info = yield* Effect.tryPromise({
+    try: () => stat(resolved),
+    catch: (error) => new ToolFailure({ message: unresolved(error, directory), error }),
+  })
+  if (!info.isDirectory()) return yield* new ToolFailure({ message: `Subagent root is not a directory: ${directory}` })
+  return resolved
+})
+
+function unresolved(error: unknown, directory: string) {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined
+  if (code === "ENOENT") return `Subagent root does not exist: ${directory}`
+  if (code === "ENOTDIR") return `Subagent root is not a directory: ${directory}`
+  if (code === "ELOOP") return `Subagent root cannot be resolved: too many symbolic links: ${directory}`
+  if (code === "EACCES" || code === "EPERM") return `Subagent root cannot be read: permission denied: ${directory}`
+  return `Subagent root cannot be resolved: ${directory}`
+}
+
+function same(a: Location.Ref, b: Location.Ref) {
+  return a.directory === b.directory && a.workspaceID === b.workspaceID
+}
 
 /** The drivers a model may choose, as it reads them: the ready vendor drivers, or nothing when none is ready. */
 export function listDrivers(drivers: ReadonlyArray<SessionDriver.Info>) {

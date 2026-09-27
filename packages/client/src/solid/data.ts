@@ -993,7 +993,9 @@ export function createData(config: CreateDataInput) {
         // An event's latest outcome is read from the invocation of its latest firing, which just settled.
         if (
           event.type !== "session.codemode.progress" &&
-          store.session.event[event.data.sessionID]?.some((item) => item.lastMessageID === event.data.assistantMessageID)
+          store.session.event[event.data.sessionID]?.some(
+            (item) => item.lastMessageID === event.data.assistantMessageID,
+          )
         ) {
           result.session.event.invalidate(event.data.sessionID)
           void result.session.event.sync(event.data.sessionID)

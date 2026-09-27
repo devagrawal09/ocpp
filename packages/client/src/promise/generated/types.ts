@@ -221,6 +221,8 @@ export type ModelVariant = {
 
 export type MoneyUSDPerMillionTokens = number
 
+export type ExternalSessionProvider = "claude" | "codex" | "pi"
+
 export type GenerateTextResponse = { data: { text: string } }
 
 export type ProviderInfo = {
@@ -1359,6 +1361,15 @@ export type ModelCost = {
   input: MoneyUSDPerMillionTokens
   output: MoneyUSDPerMillionTokens
   cache: { read: MoneyUSDPerMillionTokens; write: MoneyUSDPerMillionTokens }
+}
+
+export type SessionDriverInfo = {
+  id: ExternalSessionProvider
+  name: string
+  available: boolean
+  model: string
+  models: Array<string>
+  variants: Array<string>
 }
 
 export type FormNumberField = {
@@ -4560,6 +4571,17 @@ export type ModelDefaultInput = {
 export type ModelDefaultOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: ModelInfo | null
+}
+
+export type ModelDriversInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ModelDriversOutput = {
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
+  data: Array<SessionDriverInfo>
 }
 
 export type GenerateTextInput = {

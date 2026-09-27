@@ -55,8 +55,6 @@ export const layer = (platform: Platform) =>
         codex: yield* Effect.cachedWithTTL(probe(platform, "codex"), "5 minutes"),
         pi: yield* Effect.cachedWithTTL(probe(platform, "pi"), "5 minutes"),
       }
-      // Warm the probes so the first catalog or subagent call does not wait on a vendor CLI.
-      yield* Effect.all(Object.values(probes), { concurrency: "unbounded" }).pipe(Effect.forkScoped)
       const configured = Effect.fnUntraced(function* (provider: ExternalSession.Provider) {
         return Config.latest(yield* config.entries(), "external_agents")?.[provider]
       })
@@ -73,25 +71,28 @@ export const layer = (platform: Platform) =>
           ...(selected?.effort === undefined ? {} : { effort: selected.effort }),
         }
       })
+      const list = Effect.fn("ExternalAgentDrivers.list")(function* () {
+        return yield* Effect.forEach(
+          ExternalSession.Provider.literals,
+          (provider) =>
+            Effect.gen(function* () {
+              const model = (yield* settings(provider)).model
+              return {
+                id: provider,
+                name: SessionDriver.names[provider],
+                available: (yield* unavailable(provider)) === undefined,
+                model,
+                models: [...new Set([model, ...suggested[provider]])],
+                variants: [...ExternalAgentEffort[provider].literals],
+              }
+            }),
+          { concurrency: "unbounded" },
+        )
+      })
+      // Warm the enabled vendors' probes so the first catalog or subagent call does not wait on a vendor CLI.
+      yield* list().pipe(Effect.forkScoped)
       return Service.of({
-        list: Effect.fn("ExternalAgentDrivers.list")(function* () {
-          return yield* Effect.forEach(
-            ExternalSession.Provider.literals,
-            (provider) =>
-              Effect.gen(function* () {
-                const model = (yield* settings(provider)).model
-                return {
-                  id: provider,
-                  name: SessionDriver.names[provider],
-                  available: (yield* unavailable(provider)) === undefined,
-                  model,
-                  models: [...new Set([model, ...suggested[provider]])],
-                  variants: [...ExternalAgentEffort[provider].literals],
-                }
-              }),
-            { concurrency: "unbounded" },
-          )
-        }),
+        list,
         settings,
         unavailable,
         driver: Effect.fn("ExternalAgentDrivers.driver")(function* (provider: ExternalSession.Provider) {

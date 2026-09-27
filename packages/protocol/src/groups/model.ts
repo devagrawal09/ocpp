@@ -1,4 +1,5 @@
 import { Model } from "@ocpp/schema/model"
+import { SessionDriver } from "@ocpp/schema/session-driver"
 import { Location } from "@ocpp/schema/location"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
@@ -34,6 +35,22 @@ export const ModelGroup = HttpApiGroup.make("server.model")
           identifier: "v2.model.default",
           summary: "Get default model",
           description: "Retrieve the model used when a session has no explicit model selection.",
+        }),
+      ),
+  )
+  .add(
+    HttpApiEndpoint.get("model.drivers", "/api/model/driver", {
+      query: LocationQuery,
+      success: Location.response(Schema.Array(SessionDriver.Info)),
+      error: ServiceUnavailableError,
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.model.drivers",
+          summary: "List session drivers",
+          description:
+            "Retrieve the vendor agents that can drive a session through the user's local CLI login, and whether each is ready. A session whose model provider is a driver ID, such as claude/sonnet, is driven by that vendor in the OC++ harness.",
         }),
       ),
   )

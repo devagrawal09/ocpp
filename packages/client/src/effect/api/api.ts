@@ -1301,9 +1301,26 @@ export type ModelDefaultInput = {
 export type ModelDefaultOutput = { readonly location: Location.Info; readonly data: Model.Info | undefined }
 export type ModelDefaultOperation<E = never> = (input?: ModelDefaultInput) => Effect.Effect<ModelDefaultOutput, E>
 
+export type ModelDriversInput = {
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+}
+export type ModelDriversOutput = {
+  readonly location: Location.Info
+  readonly data: ReadonlyArray<{
+    readonly id: "claude" | "codex" | "pi"
+    readonly name: string
+    readonly available: boolean
+    readonly model: string
+    readonly models: ReadonlyArray<string>
+    readonly variants: ReadonlyArray<string>
+  }>
+}
+export type ModelDriversOperation<E = never> = (input?: ModelDriversInput) => Effect.Effect<ModelDriversOutput, E>
+
 export interface ModelApi<E = never> {
   readonly list: ModelListOperation<E>
   readonly default: ModelDefaultOperation<E>
+  readonly drivers: ModelDriversOperation<E>
 }
 
 export type GenerateTextInput = { readonly prompt: string; readonly model?: Model.Ref | undefined }

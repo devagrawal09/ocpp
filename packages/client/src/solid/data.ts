@@ -31,6 +31,7 @@ import type {
   SessionInfo,
   SessionInboxInfo,
   SessionInboxCompaction,
+  SessionDriverInfo,
   ShellInfo,
   SkillInfo,
   VcsInfo,
@@ -82,6 +83,7 @@ type LocationData = {
   vcs?: VcsInfo
   agent?: AgentInfo[]
   command?: CommandInfo[]
+  driver?: SessionDriverInfo[]
   integration?: IntegrationInfo[]
   mcp?: {
     server?: McpServer[]
@@ -1879,6 +1881,7 @@ export function createData(config: CreateDataInput) {
         result.location.vcs.invalidate(location)
         result.location.agent.invalidate(location)
         result.location.command.invalidate(location)
+        result.location.driver.invalidate(location)
         result.location.integration.invalidate(location)
         result.location.mcp.server.invalidate(location)
         result.location.mcp.resource.invalidate(location)
@@ -1935,6 +1938,24 @@ export function createData(config: CreateDataInput) {
         },
         invalidate(ref?: LocationRef) {
           sync.invalidate(`location.command:${locationKey(ref ?? defaultLocation())}`)
+        },
+      },
+      // Vendor agents that can drive a session, selected through a model whose provider is the driver ID.
+      driver: {
+        list(location?: LocationRef) {
+          return store.location[locationKey(location ?? defaultLocation())]?.driver
+        },
+        sync(ref?: LocationRef) {
+          const id = locationKey(ref ?? defaultLocation())
+          return sync.run(`location.driver:${id}`, async () => {
+            const response = await api().model.drivers({ location: locationQuery(ref ?? defaultLocation()) })
+            const key = locationKey(response.location)
+            setStore("location", key, { ...store.location[key], driver: response.data })
+            if (key !== id) setStore("location", id, { ...store.location[id], driver: response.data })
+          })
+        },
+        invalidate(ref?: LocationRef) {
+          sync.invalidate(`location.driver:${locationKey(ref ?? defaultLocation())}`)
         },
       },
       integration: {

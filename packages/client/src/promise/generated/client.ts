@@ -96,6 +96,8 @@ import type {
   ModelListOutput,
   ModelDefaultInput,
   ModelDefaultOutput,
+  ModelDriversInput,
+  ModelDriversOutput,
   GenerateTextInput,
   GenerateTextOutput,
   ProviderListInput,
@@ -1032,6 +1034,18 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/api/model/default`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      drivers: (input?: ModelDriversInput, requestOptions?: RequestOptions) =>
+        request<ModelDriversOutput>(
+          {
+            method: "GET",
+            path: `/api/model/driver`,
             query: { location: input?.["location"] },
             successStatus: 200,
             declaredStatuses: [503, 401, 400],

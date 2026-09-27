@@ -102,6 +102,8 @@ import type {
   ModelListOutput,
   ModelDefaultInput,
   ModelDefaultOutput,
+  ModelDriversInput,
+  ModelDriversOutput,
   GenerateTextInput,
   GenerateTextOutput,
   ProviderListInput,
@@ -777,9 +779,15 @@ const EndpointModelDefault = (raw: RawClient["server.model"]) => (input?: ModelD
     raw["model.default"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
   )
 
+const EndpointModelDrivers = (raw: RawClient["server.model"]) => (input?: ModelDriversInput) =>
+  preserveEffect<ModelDriversOutput>()(
+    raw["model.drivers"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
+  )
+
 const adaptGroupModel = (raw: RawClient["server.model"]) => ({
   list: EndpointModelList(raw),
   default: EndpointModelDefault(raw),
+  drivers: EndpointModelDrivers(raw),
 })
 
 const EndpointGenerateText = (raw: RawClient["server.generate"]) => (input: GenerateTextInput) =>

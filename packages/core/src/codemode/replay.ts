@@ -128,7 +128,8 @@ export function make(journal: ReadonlyArray<CodeModeStore.JournalEntry>, policy:
         diverge(mismatch)
         return { impure, replayed: false }
       }
-      if (!inFlight(entry) && !entry.omitted) {
+      // tools.search runs inside the interpreter on every run, so it is never served from the journal.
+      if (!inFlight(entry) && !entry.omitted && entry.tool !== "search") {
         replayed++
         decisions.set(call.index, { type: "replay", entry })
         return { impure, replayed: true }

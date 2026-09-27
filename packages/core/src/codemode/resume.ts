@@ -4,6 +4,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer } from "effect"
 import { Agent } from "../agent.js"
 import { LocationServiceMap } from "../location-service-map.js"
+import { OpenApi } from "../openapi/index.js"
 import { PluginSupervisor } from "../plugin/supervisor.js"
 import { SessionMessage } from "../session/message.js"
 import { SessionStore } from "../session/store.js"
@@ -49,19 +50,23 @@ export const layer = Layer.effect(
         const session = yield* sessions.get(execution.sessionID)
         if (session === undefined) return "Its Session no longer exists."
         const started = (yield* sessions.message(execution.assistantMessageID))?.message
-        if (started?.type !== "assistant") return "The message that started it no longer exists."
+        if (started?.type !== "assistant" && started?.type !== "invocation")
+          return "The message that started it no longer exists."
         return yield* Effect.gen(function* () {
           const plugins = yield* PluginSupervisor.Service
           const mcp = yield* McpTool.Service
+          const openapi = yield* OpenApi.Service
           const agents = yield* Agent.Service
           const tools = yield* Tool.Service
-          // Replay needs every tool the execution could call, including plugin and MCP tools.
+          // Replay needs every tool the execution could call, including plugin, MCP, and OpenAPI tools.
           yield* plugins.flush
           yield* mcp.flush
-          const agent = yield* agents.get(started.agent)
-          if (agent === undefined) return "Its agent " + started.agent + " no longer exists."
+          yield* openapi.flush
+          // A command or event runs with the Session agent's tools, as it did when it started.
+          const agent = yield* agents.select(started.type === "assistant" ? started.agent : session.agent)
+          if (agent.info === undefined) return "Its agent " + agent.id + " no longer exists."
           return yield* tools.resume({
-            permissions: agent.permissions,
+            permissions: agent.info.permissions,
             agent: agent.id,
             resumable,
             notificationID: input.notificationID,

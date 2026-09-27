@@ -1,12 +1,13 @@
-import { describe, expect, test } from "bun:test"
+import { afterAll, describe, expect, test } from "bun:test"
 import path from "path"
 import { CodeMode } from "@ocpp/codemode"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 import { Money } from "@ocpp/schema/money"
-import { Deferred, Effect, Layer, Schema } from "effect"
+import { Deferred, Effect, Layer, Schema, type Scope } from "effect"
 import { Agent } from "@ocpp/core/agent"
 import { Bus } from "@ocpp/core/bus"
 import { Catalog } from "@ocpp/core/catalog"
+import { CodeModeCommand } from "@ocpp/core/codemode/command"
 import { CodeModeResume } from "@ocpp/core/codemode/resume"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Config } from "@ocpp/core/config"
@@ -17,6 +18,7 @@ import { KV } from "@ocpp/core/kv"
 import { Location } from "@ocpp/core/location"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Model } from "@ocpp/core/model"
+import { OpenApi } from "@ocpp/core/openapi/index"
 import { Permission } from "@ocpp/core/permission"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
@@ -48,6 +50,8 @@ import {
 
 const childText = "child review done"
 const tokens = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+/** Sessions whose model a notification woke. */
+const wakes: Array<Session.ID> = []
 
 // Drains complete in one scripted step, so a rejoined child answers without a model.
 const executionNode = makeGlobalNode({
@@ -78,7 +82,7 @@ const executionNode = makeGlobalNode({
         active: Effect.succeed(new Set()),
         isActive: () => Effect.succeed(false),
         resume: answer,
-        wake: () => Effect.void,
+        wake: (sessionID) => Effect.sync(() => void wakes.push(sessionID)),
         interrupt: () => Effect.succeed(false),
         awaitIdle: () => Effect.void,
       })
@@ -99,6 +103,7 @@ const supervisor = makeLocationNode({
 const nodes = LayerNode.group([
   Database.node,
   Bus.node,
+  CodeModeCommand.node,
   CodeModeStore.node,
   CodeModeResume.node,
   Job.node,
@@ -469,12 +474,82 @@ describe("Code Mode resume", () => {
   )
 })
 
+/**
+ * A host process over one database file: each call boots a fresh runtime and tears it down when the
+ * effect ends, which stops every running execution the way a shutdown does.
+ */
+const hostProcess = (file: string) => {
+  const runtime = AppNodeBuilder.build(nodes, [...replacements, [Database.node, Database.configured({ path: file })]])
+  return <A, E>(effect: Effect.Effect<A, E, Layer.Success<typeof runtime> | Scope.Scope>) =>
+    Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(runtime)))
+}
+
+/** Registers the test tools with a `tools.test.wait` that never returns, and a signal that opens on its first call. */
+const registerBlocked = (location: Location.Ref, ran: Array<string>) =>
+  Effect.gen(function* () {
+    const blocked = yield* Deferred.make<void>()
+    yield* register(location, testTools(ran, Deferred.succeed(blocked, undefined).pipe(Effect.andThen(Effect.never))))
+    return blocked
+  })
+
+/** Starts a program the way the runner starts a model's `execute` call, and returns its execution ID. */
+const start = (location: Location.Ref, sessionID: Session.ID, id: string, code: string) =>
+  Effect.gen(function* () {
+    const locations = yield* LocationServiceMap.Service
+    const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(location)))
+    const toolSet = yield* registry.snapshot(undefined, sessionID)
+    const launched = yield* toolSet.execute({
+      sessionID,
+      ...toolIdentity,
+      call: { type: "tool-call", id, name: "execute", input: { code } },
+    })
+    return yield* activateCodeMode(launched.output, { sessionID, assistantMessageID: toolIdentity.messageID, id })
+  })
+
+/** Creates a Session with the assistant message that model-started executions belong to. */
+const createSession = (location: Location.Ref) =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ location })
+    yield* seedToolSession(session.id, toolIdentity.messageID)
+    return session.id
+  })
+
+/** Runs restart recovery the way a host does at boot. */
+const restart = Effect.gen(function* () {
+  const recovery = yield* SessionRestart.Service
+  yield* recovery.resumeSuspendedSessions
+})
+
+const inbox = (sessionID: Session.ID) =>
+  Effect.gen(function* () {
+    const database = yield* Database.Service
+    return yield* SessionInbox.list(database.db, sessionID)
+  })
+
+// Serves the demo store document only after a delay, like a spec server that is slow at startup, and
+// records every API request.
+const storeRequests: Array<string> = []
+const specs = Bun.serve({
+  hostname: "127.0.0.1",
+  port: 0,
+  async fetch(request) {
+    const url = new URL(request.url)
+    if (url.pathname === "/openapi.json") {
+      await Bun.sleep(500)
+      return new Response(Bun.file(path.join(import.meta.dir, "fixtures", "openapi-store.json")))
+    }
+    storeRequests.push(request.method + " " + url.pathname + url.search)
+    return Response.json([{ id: "1", name: "desk" }])
+  },
+})
+afterAll(() => specs.stop(true))
+
 describe("Code Mode crash recovery", () => {
   test("a run torn down mid-call resumes on a fresh runtime without calling completed tools again", async () => {
     await using dir = await tmpdir()
-    const file = path.join(dir.path, "ocpp.db")
     const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
-    const runtime = AppNodeBuilder.build(nodes, [...replacements, [Database.node, Database.configured({ path: file })]])
+    const run = hostProcess(path.join(dir.path, "ocpp.db"))
     const source = [
       "const at = time.now()",
       'const first = tools.test.write({ text: "first@" + at })',
@@ -483,52 +558,32 @@ describe("Code Mode crash recovery", () => {
     ].join("\n")
 
     const before: Array<string> = []
-    const started = await Effect.runPromise(
+    const started = await run(
       Effect.gen(function* () {
-        const blocked = yield* Deferred.make<void>()
-        yield* register(
-          location,
-          testTools(before, Deferred.succeed(blocked, undefined).pipe(Effect.andThen(Effect.never))),
-        )
-        const sessions = yield* Session.Service
-        const session = yield* sessions.create({ location })
-        yield* seedToolSession(session.id, toolIdentity.messageID)
-        const locations = yield* LocationServiceMap.Service
-        const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(location)))
-        const toolSet = yield* registry.snapshot(undefined, session.id)
-        const launched = yield* toolSet.execute({
-          sessionID: session.id,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call_crash", name: "execute", input: { code: source } },
-        })
-        const executionID = yield* activateCodeMode(launched.output, {
-          sessionID: session.id,
-          assistantMessageID: toolIdentity.messageID,
-          id: "call_crash",
-        })
+        const blocked = yield* registerBlocked(location, before)
+        const sessionID = yield* createSession(location)
+        const executionID = yield* start(location, sessionID, "call_crash", source)
         // The runtime is torn down while the program waits inside its second call.
         yield* Deferred.await(blocked)
-        return { sessionID: session.id, executionID }
-      }).pipe(Effect.scoped, Effect.provide(runtime)),
+        return { sessionID, executionID }
+      }),
     )
     expect(before).toEqual([expect.stringMatching(/^write:first@\d+$/), "wait:1"])
 
     const after: Array<string> = []
-    const recovered = await Effect.runPromise(
+    const recovered = await run(
       Effect.gen(function* () {
         yield* register(location, testTools(after))
-        const restart = yield* SessionRestart.Service
-        yield* restart.resumeSuspendedSessions
+        yield* restart
         const info = yield* waitForCodeModeExecution(started.executionID)
         const store = yield* CodeModeStore.Service
-        const database = yield* Database.Service
         return {
           info,
           execution: yield* store.get(started.executionID),
           notebook: yield* readCodeModeNotebook(started.sessionID),
-          inbox: yield* SessionInbox.list(database.db, started.sessionID),
+          inbox: yield* inbox(started.sessionID),
         }
-      }).pipe(Effect.scoped, Effect.provide(runtime)),
+      }),
     )
 
     // The completed write is served from the journal; only the interrupted read-only wait and the
@@ -555,4 +610,218 @@ describe("Code Mode crash recovery", () => {
       },
     ])
   })
+
+  test("a command run stopped by a restart resumes and reports to history without waking the model", async () => {
+    await using dir = await tmpdir()
+    const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+    const run = hostProcess(path.join(dir.path, "ocpp.db"))
+
+    const before: Array<string> = []
+    const started = await run(
+      Effect.gen(function* () {
+        const blocked = yield* registerBlocked(location, before)
+        const sessionID = yield* createSession(location)
+        const defined = yield* start(
+          location,
+          sessionID,
+          "call_define",
+          [
+            "function slow(input) {",
+            "  const found = tools.test.lookup({ query: input.text })",
+            "  return tools.test.wait({ step: found.rows })",
+            "}",
+          ].join("\n"),
+        )
+        expect((yield* waitForCodeModeExecution(defined)).status).toBe("completed")
+        const commands = yield* CodeModeCommand.Service
+        yield* commands.define(sessionID, {
+          name: "slow",
+          description: "Looks up the text, then waits.",
+          handler: "slow",
+        })
+        const sessions = yield* Session.Service
+        yield* sessions.command({ sessionID, command: "slow", text: "go" })
+        // The runtime is torn down while the command's handler waits inside its second call.
+        yield* Deferred.await(blocked)
+        const invocation = (yield* sessions.messages({ sessionID, order: "asc" })).find(
+          (message) => message.type === "invocation",
+        )
+        if (invocation?.type !== "invocation") return yield* Effect.die("Expected an invocation message")
+        return { sessionID, executionID: invocation.executionID }
+      }),
+    )
+    expect(before).toEqual(["lookup:go", "wait:2"])
+
+    const after: Array<string> = []
+    wakes.length = 0
+    const recovered = await run(
+      Effect.gen(function* () {
+        yield* register(location, testTools(after))
+        yield* restart
+        const info = yield* waitForCodeModeExecution(started.executionID)
+        const store = yield* CodeModeStore.Service
+        const sessions = yield* Session.Service
+        return {
+          info,
+          execution: yield* store.get(started.executionID),
+          invocation: (yield* sessions.messages({ sessionID: started.sessionID, order: "asc" })).find(
+            (message) => message.type === "invocation",
+          ),
+          inbox: yield* inbox(started.sessionID),
+        }
+      }),
+    )
+
+    // The lookup is served from the journal and only the interrupted read-only wait runs again.
+    expect(after).toEqual(["wait:2"])
+    expect(recovered.info.status).toBe("completed")
+    expect(recovered.execution).toMatchObject({ status: "saved" })
+    expect(recovered.invocation).toMatchObject({ type: "invocation", status: "completed" })
+    // The outcome waits in the inbox for the model's next turn, as for a command that never stopped.
+    expect(
+      recovered.inbox.find(
+        (item) => item.type === "synthetic" && item.payload.metadata?.executionID === started.executionID,
+      ),
+    ).toMatchObject({
+      type: "synthetic",
+      payload: {
+        description: "/slow",
+        text: expect.stringMatching(
+          /^The user ran the command \/slow with the text "go"\.\n.*replayed 1 journaled tool call/s,
+        ),
+        metadata: { source: "codemode", state: "completed" },
+      },
+    })
+    expect(wakes).not.toContain(started.sessionID)
+  })
+
+  test("stops resuming a run after three restarts that each stopped it again", async () => {
+    await using dir = await tmpdir()
+    const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+    const run = hostProcess(path.join(dir.path, "ocpp.db"))
+    const ran: Array<string> = []
+
+    const started = await run(
+      Effect.gen(function* () {
+        const blocked = yield* registerBlocked(location, ran)
+        const sessionID = yield* createSession(location)
+        const executionID = yield* start(
+          location,
+          sessionID,
+          "call_loop",
+          ['const found = tools.test.lookup({ query: "q" })', "const waited = tools.test.wait({ step: 1 })"].join("\n"),
+        )
+        yield* Deferred.await(blocked)
+        return { sessionID, executionID }
+      }),
+    )
+    // Each restart resumes the run, which stops again inside the same read-only call.
+    for (const _ of [1, 2, 3])
+      await run(
+        Effect.gen(function* () {
+          const blocked = yield* registerBlocked(location, ran)
+          yield* restart
+          yield* Deferred.await(blocked)
+        }),
+      )
+    const settled = await run(
+      Effect.gen(function* () {
+        yield* register(location, testTools(ran))
+        yield* restart
+        const store = yield* CodeModeStore.Service
+        return {
+          execution: yield* store.get(started.executionID),
+          reservations: yield* store.reservations(started.sessionID),
+          inbox: yield* inbox(started.sessionID),
+        }
+      }),
+    )
+
+    expect(ran).toEqual(["lookup:q", "wait:1", "wait:1", "wait:1", "wait:1"])
+    expect(settled.execution).toMatchObject({
+      status: "indeterminate",
+      saved: [],
+      error: expect.stringContaining("It was already resumed 3 times without settling."),
+    })
+    expect(settled.reservations).toEqual([])
+    expect(settled.inbox).toMatchObject([
+      {
+        type: "synthetic",
+        payload: {
+          text: expect.stringContaining("It was already resumed 3 times without settling."),
+          metadata: { source: "codemode", executionID: started.executionID, state: "failed" },
+        },
+      },
+    ])
+  })
+
+  test("a run that called an OpenAPI tool resumes once its document loads, and searches the catalog live", async () => {
+    await using dir = await tmpdir()
+    const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+    const run = hostProcess(path.join(dir.path, "ocpp.db"))
+    await Bun.write(
+      path.join(dir.path, "ocpp.json"),
+      JSON.stringify({
+        openapi: {
+          store: {
+            spec: "http://127.0.0.1:" + specs.port + "/openapi.json",
+            base_url: "http://127.0.0.1:" + specs.port,
+            headers: { "X-Api-Key": "demo-key" },
+          },
+        },
+      }),
+    )
+    storeRequests.length = 0
+    const source = [
+      'const found = tools.search({ namespace: "store" })',
+      "const items = tools.store.listItems({ limit: 1 })",
+      "const waited = tools.test.wait({ step: items.length })",
+    ].join("\n")
+
+    const before: Array<string> = []
+    const started = await run(
+      Effect.gen(function* () {
+        const blocked = yield* registerBlocked(location, before)
+        const locations = yield* LocationServiceMap.Service
+        yield* Effect.gen(function* () {
+          const openapi = yield* OpenApi.Service
+          yield* openapi.flush
+        }).pipe(Effect.provide(locations.get(location)))
+        const sessionID = yield* createSession(location)
+        const executionID = yield* start(location, sessionID, "call_openapi", source)
+        yield* Deferred.await(blocked)
+        return { sessionID, executionID }
+      }),
+    )
+    expect(storeRequests).toEqual(["GET /items?limit=1"])
+
+    const after: Array<string> = []
+    const recovered = await run(
+      Effect.gen(function* () {
+        // The document is still loading when recovery starts, so resuming must wait for it.
+        yield* register(location, testTools(after))
+        const seen = yield* terminals
+        yield* restart
+        const info = yield* waitForCodeModeExecution(started.executionID)
+        return { info, seen, notebook: yield* readCodeModeNotebook(started.sessionID) }
+      }),
+    )
+
+    expect(storeRequests).toEqual(["GET /items?limit=1"])
+    expect(after).toEqual(["wait:1"])
+    expect(recovered.info).toMatchObject({
+      status: "completed",
+      output: expect.stringContaining("replayed 1 journaled tool call "),
+    })
+    expect(recovered.notebook).toMatchObject({ items: [{ id: "1", name: "desk" }], waited: { value: "ready" } })
+    // tools.search runs inside the interpreter again, so it is neither served nor counted as replayed.
+    const calls = recovered.seen[0]?.data.events.flatMap((event) => (event.type === "tool" ? [event] : []))
+    expect(calls).toMatchObject([
+      { tool: "search", status: "completed" },
+      { tool: "store.listItems", status: "completed", replayed: true },
+      { tool: "test.wait", status: "completed" },
+    ])
+    expect(calls?.[0]).not.toHaveProperty("replayed")
+    expect(calls?.[2]).not.toHaveProperty("replayed")
+  }, 30_000)
 })

@@ -356,19 +356,19 @@ describe("Tool", () => {
         summary: expect.stringContaining('{"text":"hello"}'),
       })
       expect(seen).toEqual(["run_code", "echo"])
-      const unknown = yield* snapshot.execute({
-        ...call("execute"),
-        call: {
-          type: "tool-call",
-          id: "unknown",
-          name: "execute",
-          input: { code: "return tools.missing({})" },
-        },
-      })
-      expect(yield* waitCodeMode(unknown.output, "unknown")).toMatchObject({
-        status: "failed",
-        error: expect.stringContaining("missing"),
-      })
+      // An unknown path is refused when the program compiles, so no hook ever sees it.
+      const unknown = yield* snapshot
+        .execute({
+          ...call("execute"),
+          call: {
+            type: "tool-call",
+            id: "unknown",
+            name: "execute",
+            input: { code: "return tools.missing({})" },
+          },
+        })
+        .pipe(Effect.flip)
+      expect(unknown.metadata).toMatchObject({ executionStatus: "refused", kind: "UnknownTool", tools: ["missing"] })
       expect(seen).toEqual(["run_code", "echo", "execute"])
     }),
   )
@@ -983,6 +983,32 @@ describe("Tool", () => {
       yield* transform(service, { second: shared }, { permission: "edit" })
 
       expect(yield* codeModeTools(service, [{ action: "edit", resource: "*", effect: "deny" }])).toEqual(["first"])
+    }),
+  )
+
+  it.effect("refuses denied and unknown tool paths before an execution exists", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      yield* transform(service, { echo: make(), shell: make() })
+      const snapshot = yield* service.snapshot([{ action: "shell", resource: "*", effect: "deny" }], sessionID)
+      const refuse = (id: string, code: string) =>
+        snapshot
+          .execute({ ...call("execute", id), call: { type: "tool-call", id, name: "execute", input: { code } } })
+          .pipe(Effect.flip)
+
+      const denied = yield* refuse("call-denied", 'const listing = tools.shell({ text: "ls" })')
+      expect(denied.metadata).toMatchObject({ executionStatus: "refused", kind: "ToolDenied", tools: ["shell"] })
+      const unknown = yield* refuse("call-unknown", 'const said = tools.ehco({ text: "hi" })')
+      expect(unknown.metadata).toMatchObject({ executionStatus: "refused", kind: "UnknownTool", tools: ["ehco"] })
+      expect(unknown.message).toContain("Did you mean tools.echo?")
+      const db = (yield* Database.Service).db
+      expect(yield* db.select({ id: CodeModeExecutionTable.id }).from(CodeModeExecutionTable).all()).toEqual([])
+
+      expect(yield* run(snapshot, "call-allowed", 'return tools.echo({ text: "hi" })')).toMatchObject({
+        status: "saved",
+        summary: expect.stringContaining('{"text":"hi"}'),
+      })
     }),
   )
 

@@ -17,7 +17,7 @@ The implementation has two deliberate layers:
 flowchart LR
     Model[Model] -->|execute code| Core[OC++ Core host]
     Core -->|source| Compiler[Compiler]
-    Compiler -->|versioned IR + declared names| Admission[Admission]
+    Compiler -->|versioned IR + declared names + tool paths| Admission[Admission]
     Admission -->|reserve names, snapshot notebook| Store[(Durable notebook)]
     Admission -->|execution ID| Model
     Admission --> Runtime[Confined interpreter]
@@ -41,7 +41,7 @@ application effects are available only when the host exposes a named tool that p
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Automatic publication  | Direct top-level `const` and `function` declarations are saved. No `export` syntax exists.                                                |
 | Immutable names        | A notebook name is written once and can never be redefined or reused.                                                                     |
-| Admission              | Names are verified and reserved before an execution ID exists. Conflicts refuse immediately.                                              |
+| Admission              | Tool paths and names are checked before an execution ID exists. Unavailable tools and name conflicts refuse immediately.                  |
 | Fixed snapshots        | An execution sees exactly the completed notebook captured when it was admitted.                                                           |
 | All-or-nothing saving  | Success saves every declaration in one transaction; any failure saves none.                                                               |
 | Durable functions      | Closures are saved with their compiled body and exact captures, and re-authorize tools on call.                                           |
@@ -137,9 +137,10 @@ const later = first.content.length
 
 ## Admission And Name Reservation
 
-Before returning an execution ID the host compiles the source, extracts every durable name, captures
-the current completed notebook, verifies and reserves all candidate names atomically, and persists
-the admitted execution with its compiled IR, its ownership identity, and its snapshot. Compilation is
+Before returning an execution ID the host compiles the source, checks every tool path the program
+calls against the agent's catalog, extracts every durable name, captures the current completed
+notebook, verifies and reserves all candidate names atomically, and persists the admitted execution
+with its compiled IR, its ownership identity, and its snapshot. Compilation is
 source in and versioned IR out: the compiler knows nothing about Sessions, tools, authorization, or
 storage, and the persisted IR keeps its canonical source so a later compiler can recompile it.
 
@@ -154,7 +155,10 @@ sequenceDiagram
     participant N as Notebook
 
     M->>C: execute(code)
-    C->>C: compile, extract declared names
+    C->>C: compile, extract declared names and tool paths
+    alt unsupported syntax, or a tool this agent cannot use
+        C-->>M: compile error with suggestions, no execution ID, no tool calls
+    end
     C->>N: verify and reserve every name (atomic)
     alt name already defined or reserved
         N-->>C: conflict
@@ -165,6 +169,10 @@ sequenceDiagram
     end
 ```
 
+- Unsupported syntax produces an immediate `ParseError` or `UnsupportedSyntax` error with its
+  position, the failing source line, and concrete suggestions. See [Compile-Time Checks](#compile-time-checks).
+- A tool path outside the agent's catalog produces an immediate `UnknownTool` error, and a path whose
+  tool the agent's permission rules deny outright produces `ToolDenied`.
 - An existing binding produces an immediate `NameAlreadyDefined` error.
 - An active reservation produces an immediate `NameReserved` error that names the owning execution.
 - A refused program receives **no execution ID** and performs **no tool calls**.
@@ -379,11 +387,59 @@ notebook state without a global revision gate:
 - Member assignment, member updates, `delete`, destructuring into members, and loop assignment into
   members.
 - Mutating Array and Object methods.
-- Classes and evaluator syntax not explicitly implemented.
+- Classes and `this`.
+- Other evaluator syntax not explicitly implemented, such as tagged templates.
 - Ambient filesystem, process, network, timer, `fetch`, module-loading, or cryptographic authority.
 
-The compiler catches unsupported forms before execution. Runtime checks provide a second boundary for
-computed mutator names and evaluator references.
+The compiler catches unsupported forms before execution and suggests the supported rewrite. Runtime
+checks provide a second boundary for computed mutator names and evaluator references.
+
+## Compile-Time Checks
+
+`execute` rejects a program before it has an execution ID, and before any tool runs, when:
+
+- the source cannot be parsed or uses syntax outside the supported subset, or
+- it calls a tool path this agent cannot use at all.
+
+Calls must name their tool with a static path (dynamic dispatch is rejected), so the compiler knows
+every tool a program can call. `staticToolCalls(program.body)` lists them, including calls inside
+functions and tool handles that never run. OC++ Core refuses a path that is not in the agent's
+catalog as `UnknownTool`, and a path whose tool the agent's permission rules disable outright as
+`ToolDenied`. The check reuses the rule that builds the catalog, so a tool allowed for some
+resources is not refused. Permissions that depend on arguments, such as a shell command pattern or a
+file path computed at runtime, cannot be decided statically; each tool still checks those when it is
+called. A saved notebook function keeps its own tool paths, which are authorized again when it runs.
+
+Every refusal carries `suggestions`: short, concrete rewrites that reuse the program's own names where
+they are simple. The model sees the message, its position, the failing source line, and each
+suggestion on its own line:
+
+```text
+Unknown tool tools.fs.raed; this agent has no tool at that path. (line 2, col 14)
+Source: const text = tools.fs.raed({ path })
+Did you mean tools.fs.read?
+Check its exact signature with tools.search({ query: "tools.fs.read" })
+```
+
+```text
+Regular expressions are not available; match text with string methods such as includes, startsWith, indexOf, slice, and split. (line 1, col 36)
+Source: const ids = lines.filter((line) => /^id-/.test(line))
+Replace /^id-/.test(line) with line.startsWith("id-")
+```
+
+| Rejected                                  | Suggested                                                                    |
+| ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `/^id-/.test(line)`                       | `line.startsWith("id-")`; `includes` and `endsWith` for other anchors        |
+| `text.split(/\s+/)`                       | `text.split(" ").filter((part) => part !== "")`                              |
+| `name.replace(/-/g, "_")`                 | `name.replaceAll("-", "_")`                                                  |
+| `const inspect = tool.define(...)`        | `let inspect = tool.define(...)`, or create the handle inside a function     |
+| `const { branch, files } = status`        | `const result = status; const branch = result.branch; ...`, or `let { ... }` |
+| `tools[name](input)`                      | `tools.search({ query })`, then a direct path or an explicit branch          |
+| `items.push(item)`, `items.sort(compare)` | `[...items, item]`, `items.toSorted(...)`                                    |
+| `record.count += 1`                       | `{ ...record, count: record.count + 1 }`                                     |
+| `new Date()`, `new Map()`, `new Set()`    | `time.*` helpers, records, arrays                                            |
+| unknown tool path                         | close catalog paths, the namespace's tools, and `tools.search({ query })`    |
+| tool denied outright                      | an allowed tool from `tools.search`, or a permission change by the user      |
 
 ## Immutability Model
 
@@ -559,15 +615,18 @@ const wide = "ab".repeat(3_000_000_000) // InvalidDataValue, before the native r
 | `Truncated`             | Warning only: output was cut by the output limit.                                                                            |
 
 Admission errors are reported by the host with a stable `kind` of `NameAlreadyDefined`,
-`NameReserved`, or `NotebookLimitExceeded`, plus the names involved. Compiler diagnostics include a one-based
-`location` when available, and a `ParseError` also carries an `excerpt` of the failing source line
-so the failure can be understood without the whole program. Host failures preserve their useful
+`NameReserved`, or `NotebookLimitExceeded`, plus the names involved. The host's compile-time tool
+check reports `UnknownTool` or `ToolDenied` with the rejected paths. Compiler diagnostics include a
+one-based `location` when available and `suggestions` for rejected syntax, and a `ParseError` also
+carries an `excerpt` of the failing source line so the failure can be understood without the whole
+program. OC++ Core adds the excerpt for every compile refusal. Host failures preserve their useful
 messages, and interruption remains interruption rather than a generic failure.
 
 ## Authorization And Trust Boundaries
 
 Code Mode does not invent a second permission system. The host controls authority by exposing only
-the tools available to the current request, running normal domain authorization inside each tool,
+the tools available to the current request, refusing at compile time a program that calls a tool
+outside that catalog, running normal domain authorization inside each tool,
 marking the few tools allowed to receive opaque handles, and applying the same hooks and permission
 flow used by native tool calls. Saved closures re-resolve and re-authorize their tool paths in the
 execution that invokes them, so authority is never captured.
@@ -579,6 +638,7 @@ previews and logs explicitly and neutralize spoofable markers and tags.
 
 - `src/ir.ts`: the versioned data-only program representation and the `decodeProgram` boundary.
 - `src/compiler.ts`: transpilation, versioned IR, declaration extraction, and rejected syntax.
+- `src/suggestions.ts`: concrete rewrites attached to rejected syntax.
 - `src/interpreter/captures.ts`: lexical free-variable analysis for durable closures.
 - `src/interpreter/durable.ts`: notebook value encoding, decoding, and limits.
 - `src/interpreter/runtime.ts`: evaluator, immutability, closures, handles, and capability enforcement.
@@ -587,7 +647,9 @@ previews and logs explicitly and neutralize spoofable markers and tags.
 - `src/tool-runtime.ts`: schema boundaries, catalog lookup, call accounting, and host hooks.
 - `../core/src/codemode/store.ts`: admission, reservations, commit, journal, fork, revert, recovery.
 - `../core/src/codemode/tool.ts`: the asynchronous `execute` tool, progress, and bounded summaries.
+- `../core/src/codemode/compile-check.ts`: compile refusals and the static tool-path check.
 - `../session-ui/src/tools/tool-renderer.tsx`: Session timeline rendering.
 
-Direct contract tests live in `test/notebook.test.ts`, with durable lifecycle tests in Core's
-`test/codemode-store.test.ts`, `test/tool-execute.test.ts`, and `test/tool-registry.test.ts`.
+Direct contract tests live in `test/notebook.test.ts`, compile suggestions in `test/diagnostics.test.ts`,
+and durable lifecycle tests in Core's `test/codemode-store.test.ts`, `test/tool-execute.test.ts`,
+`test/codemode-compile-check.test.ts`, and `test/tool-registry.test.ts`.

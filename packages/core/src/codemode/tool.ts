@@ -81,10 +81,10 @@ const description = [
 ].join("\n")
 
 type ExecuteToolFn = (
-    name: string,
-    tool: Tool.Info,
-    input: unknown,
-    context: Tool.Context,
+  name: string,
+  tool: Tool.Info,
+  input: unknown,
+  context: Tool.Context,
 ) => Effect.Effect<Tool.Result, Tool.Error>
 
 export const create = (
@@ -269,108 +269,108 @@ const launch = (
     const executionID = decodeExecutionID(execution.id)
     const resumed = options.journal === undefined ? {} : { resumed: true }
     const replay = CodeModeReplay.make(options.journal ?? [], policy(registrations))
-        const events = yield* Ref.make<Array<ExecuteEvent>>([])
-        // Why the execution failed, as a stable category the completion notification carries
-        // alongside its prose summary.
-        const failureKind = yield* Ref.make<string | undefined>(undefined)
-        // Images and PDFs that tool calls return cannot become Code Mode values, so they are collected
-        // here and attached to the completion notification instead.
-        const media = yield* Ref.make<Media>({ files: [], omitted: new Set() })
-        const slots = yield* Ref.make<Array<number>>([])
-        const toolCount = yield* Ref.make(0)
-        const traceCount = yield* Ref.make(0)
-        const lock = Semaphore.makeUnsafe(1)
-          const publish = (next: Array<ExecuteEvent>) =>
-            services.bus.publish(SessionEvent.CodeMode.Progress, {
-              sessionID: context.sessionID,
-              assistantMessageID: context.messageID,
-              id: context.id,
-              executionID,
-              events: decodeExecuteEvents(next),
+    const events = yield* Ref.make<Array<ExecuteEvent>>([])
+    // Why the execution failed, as a stable category the completion notification carries
+    // alongside its prose summary.
+    const failureKind = yield* Ref.make<string | undefined>(undefined)
+    // Images and PDFs that tool calls return cannot become Code Mode values, so they are collected
+    // here and attached to the completion notification instead.
+    const media = yield* Ref.make<Media>({ files: [], omitted: new Set() })
+    const slots = yield* Ref.make<Array<number>>([])
+    const toolCount = yield* Ref.make(0)
+    const traceCount = yield* Ref.make(0)
+    const lock = Semaphore.makeUnsafe(1)
+    const publish = (next: Array<ExecuteEvent>) =>
+      services.bus.publish(SessionEvent.CodeMode.Progress, {
+        sessionID: context.sessionID,
+        assistantMessageID: context.messageID,
+        id: context.id,
+        executionID,
+        events: decodeExecuteEvents(next),
         ...resumed,
-            })
-          const captureFits = (next: Array<ExecuteEvent>) =>
-            new TextEncoder().encode(JSON.stringify(next)).length <= limits.maxCaptureBytes
-          const appendTool = (index: number, event: ExecuteCall) =>
-            lock.withPermit(
-              Effect.gen(function* () {
-                const count = yield* Ref.getAndUpdate(toolCount, (value) => value + 1)
-                if (count >= MAX_TOOL_EVENTS) return
-                const items = yield* Ref.get(events)
-                const next = [...items, event]
-                if (!captureFits(next)) return
-                yield* Ref.update(slots, (current) => {
-                  const slots = [...current]
-                  slots[index] = items.length
-                  return slots
-                })
-                yield* Ref.set(events, next)
-                yield* publish(next)
-              }),
-            )
-          const appendTrace = (event: CodeMode.TraceEvent) =>
-            Effect.flatMap(
-              Ref.getAndUpdate(traceCount, (value) => value + 1),
-              (count) =>
-                count >= MAX_TRACE_EVENTS
-                  ? Effect.void
-                  : lock.withPermit(
-                      Effect.gen(function* () {
-                        const items = yield* Ref.get(events)
-                        const next = [...items, executeTrace(event)]
-                        if (!captureFits(next)) return
-                        yield* Ref.set(events, next)
-                        yield* publish(next)
-                      }),
-                    ),
-            )
-          const updateTool = (index: number, update: (event: ExecuteCall) => ExecuteCall) =>
-            lock.withPermit(
-              Effect.gen(function* () {
-                const slot = (yield* Ref.get(slots))[index]
-                if (slot === undefined) return
-                const items = yield* Ref.get(events)
-                const current = items[slot]
-                if (!current || current.type !== "tool") return
-                const updated = update(current)
-                const next = [...items]
-                next[slot] = updated
-                const bounded = captureFits(next)
-                  ? next
-                  : items.map((item, position) =>
-                      position !== slot
-                        ? item
-                        : updated.status === "error"
-                          ? {
-                              type: "tool" as const,
-                              tool: updated.tool,
-                              status: "error" as const,
-                              error: "Output omitted",
-                            }
-                          : { type: "tool" as const, tool: updated.tool, status: updated.status },
-                    )
-                if (!captureFits(bounded)) return
-                yield* Ref.set(events, bounded)
-                yield* publish(bounded)
-              }),
-            )
-          const run = Effect.gen(function* () {
-            yield* services.store.running(executionID)
-      const exit = yield* runtime(
-              registrations,
-              (name, tool, input, index) =>
+      })
+    const captureFits = (next: Array<ExecuteEvent>) =>
+      new TextEncoder().encode(JSON.stringify(next)).length <= limits.maxCaptureBytes
+    const appendTool = (index: number, event: ExecuteCall) =>
+      lock.withPermit(
+        Effect.gen(function* () {
+          const count = yield* Ref.getAndUpdate(toolCount, (value) => value + 1)
+          if (count >= MAX_TOOL_EVENTS) return
+          const items = yield* Ref.get(events)
+          const next = [...items, event]
+          if (!captureFits(next)) return
+          yield* Ref.update(slots, (current) => {
+            const slots = [...current]
+            slots[index] = items.length
+            return slots
+          })
+          yield* Ref.set(events, next)
+          yield* publish(next)
+        }),
+      )
+    const appendTrace = (event: CodeMode.TraceEvent) =>
+      Effect.flatMap(
+        Ref.getAndUpdate(traceCount, (value) => value + 1),
+        (count) =>
+          count >= MAX_TRACE_EVENTS
+            ? Effect.void
+            : lock.withPermit(
                 Effect.gen(function* () {
+                  const items = yield* Ref.get(events)
+                  const next = [...items, executeTrace(event)]
+                  if (!captureFits(next)) return
+                  yield* Ref.set(events, next)
+                  yield* publish(next)
+                }),
+              ),
+      )
+    const updateTool = (index: number, update: (event: ExecuteCall) => ExecuteCall) =>
+      lock.withPermit(
+        Effect.gen(function* () {
+          const slot = (yield* Ref.get(slots))[index]
+          if (slot === undefined) return
+          const items = yield* Ref.get(events)
+          const current = items[slot]
+          if (!current || current.type !== "tool") return
+          const updated = update(current)
+          const next = [...items]
+          next[slot] = updated
+          const bounded = captureFits(next)
+            ? next
+            : items.map((item, position) =>
+                position !== slot
+                  ? item
+                  : updated.status === "error"
+                    ? {
+                        type: "tool" as const,
+                        tool: updated.tool,
+                        status: "error" as const,
+                        error: "Output omitted",
+                      }
+                    : { type: "tool" as const, tool: updated.tool, status: updated.status },
+              )
+          if (!captureFits(bounded)) return
+          yield* Ref.set(events, bounded)
+          yield* publish(bounded)
+        }),
+      )
+    const run = Effect.gen(function* () {
+      yield* services.store.running(executionID)
+      const exit = yield* runtime(
+        registrations,
+        (name, tool, input, index) =>
+          Effect.gen(function* () {
             const decision = yield* replay.call(index)
             if (decision.type === "replay")
               return decision.entry.status === "failed"
                 ? yield* Effect.fail(toolError(decision.entry.error ?? "Tool failed"))
                 : decision.entry.output
-                  const executed = yield* executeTool(name, tool, input, {
-                    ...context,
-                    id: Tool.CallID.make(context.id + ":" + index),
+            const executed = yield* executeTool(name, tool, input, {
+              ...context,
+              id: Tool.CallID.make(context.id + ":" + index),
               ...(decision.recovered === undefined ? {} : { recovered: decision.recovered }),
-                    progress: (metadata) => {
-                      const shown = displayMetadata(metadata)
+              progress: (metadata) => {
+                const shown = displayMetadata(metadata)
                 return Effect.all(
                   [
                     updateTool(index, (current) => ({ ...current, ...(shown ? { metadata: shown } : {}) })),
@@ -381,86 +381,86 @@ const launch = (
                   ],
                   { discard: true },
                 )
-                    },
-                  }).pipe(
-                    Effect.tapError((error) =>
-                      updateTool(index, (current) => ({
-                        ...current,
-                        status: "error",
-                        error: boundToolEventText(error.message),
-                      })),
-                    ),
-                  )
-                  const content =
-                    typeof executed.content === "string"
-                      ? [{ type: "text" as const, text: executed.content }]
-                      : (executed.content ?? [])
-                  yield* Ref.update(media, (current) => content.filter(isAttachable).reduce(collect, current))
-                  const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
-                  const metadata = displayMetadata(executed.metadata)
-                  yield* updateTool(index, (current) => ({
-                    ...current,
-                    status: "completed",
-                    ...(text ? { output: boundToolEventText(text) } : {}),
-                    ...(metadata ? { metadata } : {}),
-                  }))
-                  if (executed.output !== undefined) return executed.output
-                  return text === "" ? null : text
-                }),
-              {
-                bindings: execution.bindings,
+              },
+            }).pipe(
+              Effect.tapError((error) =>
+                updateTool(index, (current) => ({
+                  ...current,
+                  status: "error",
+                  error: boundToolEventText(error.message),
+                })),
+              ),
+            )
+            const content =
+              typeof executed.content === "string"
+                ? [{ type: "text" as const, text: executed.content }]
+                : (executed.content ?? [])
+            yield* Ref.update(media, (current) => content.filter(isAttachable).reduce(collect, current))
+            const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+            const metadata = displayMetadata(executed.metadata)
+            yield* updateTool(index, (current) => ({
+              ...current,
+              status: "completed",
+              ...(text ? { output: boundToolEventText(text) } : {}),
+              ...(metadata ? { metadata } : {}),
+            }))
+            if (executed.output !== undefined) return executed.output
+            return text === "" ? null : text
+          }),
+        {
+          bindings: execution.bindings,
           ...(execution.input === undefined ? {} : { input: execution.input }),
           impure: replay.impure,
-                onToolCallStart: (call) =>
+          onToolCallStart: (call) =>
             Effect.suspend(() => {
               const started = replay.start(call)
               return Effect.all(
-                    [
-                      services.store.scheduleCall({
-                        executionID,
-                        index: call.index,
-                        tool: call.name,
+                [
+                  services.store.scheduleCall({
+                    executionID,
+                    index: call.index,
+                    tool: call.name,
                     input: CodeModeReplay.journalValue(call.input),
                     impure: started.impure,
-                      }),
-                      appendTool(call.index, {
-                        type: "tool",
-                        tool: boundToolEventText(call.name),
-                        status: "running",
-                        ...(displayInput(call.input) ? { input: displayInput(call.input) } : {}),
+                  }),
+                  appendTool(call.index, {
+                    type: "tool",
+                    tool: boundToolEventText(call.name),
+                    status: "running",
+                    ...(displayInput(call.input) ? { input: displayInput(call.input) } : {}),
                     ...(started.replayed ? { replayed: true } : {}),
-                      }),
-                    ],
-                    { discard: true },
+                  }),
+                ],
+                { discard: true },
               )
             }),
-                onToolCallEnd: (call) =>
-                  Effect.all(
-                    [
-                      services.store.settleCall({
-                        executionID,
-                        index: call.index,
-                        outcome:
+          onToolCallEnd: (call) =>
+            Effect.all(
+              [
+                services.store.settleCall({
+                  executionID,
+                  index: call.index,
+                  outcome:
                     call.outcome === "success" ? "completed" : call.outcome === "failure" ? "failed" : "indeterminate",
-                        ...(isJson(call.output) ? { output: call.output } : {}),
-                        ...(call.message ? { error: call.message } : {}),
-                      }),
-                      updateTool(call.index, (current) =>
-                        call.outcome === "success"
-                          ? current.status === "completed"
-                            ? current
-                            : { ...current, status: "completed", output: displayOutput(call.output) }
-                          : {
-                              ...current,
-                              status: "error",
-                              error: boundToolEventText(call.message ?? "Tool execution interrupted"),
-                            },
-                      ),
-                    ],
-                    { discard: true },
-                  ),
-                onTrace: appendTrace,
-              },
+                  ...(isJson(call.output) ? { output: call.output } : {}),
+                  ...(call.message ? { error: call.message } : {}),
+                }),
+                updateTool(call.index, (current) =>
+                  call.outcome === "success"
+                    ? current.status === "completed"
+                      ? current
+                      : { ...current, status: "completed", output: displayOutput(call.output) }
+                    : {
+                        ...current,
+                        status: "error",
+                        error: boundToolEventText(call.message ?? "Tool execution interrupted"),
+                      },
+                ),
+              ],
+              { discard: true },
+            ),
+          onTrace: appendTrace,
+        },
       )
         .executeCompiled(execution.program)
         .pipe(Effect.exit)
@@ -486,92 +486,92 @@ const launch = (
         }
       }
       const result = yield* exit
-            // Completion is decided only after the declaration commit succeeds or fails.
-            if (!result.ok) {
-              yield* Ref.set(failureKind, result.error.kind)
-              yield* services.store.fail(execution, result.error.message)
+      // Completion is decided only after the declaration commit succeeds or fails.
+      if (!result.ok) {
+        yield* Ref.set(failureKind, result.error.kind)
+        yield* services.store.fail(execution, result.error.message)
         return { saved: false, summary: failureSummary(executionID, result, undefined, notes) }
-            }
-            const settlement = yield* services.store.commit(
-              execution,
-              result.declarations as Readonly<Record<string, CodeMode.NotebookValue>>,
-            )
-            if (settlement.status === "saved")
+      }
+      const settlement = yield* services.store.commit(
+        execution,
+        result.declarations as Readonly<Record<string, CodeMode.NotebookValue>>,
+      )
+      if (settlement.status === "saved")
         return { saved: true, summary: savedSummary(executionID, settlement.saved, result, notes) }
-            yield* Ref.set(failureKind, "CommitFailure")
+      yield* Ref.set(failureKind, "CommitFailure")
       return { saved: false, summary: failureSummary(executionID, result, settlement.error, notes) }
-          })
+    })
 
-          const recovery = {
-            kind: "codemode" as const,
-            parentSessionID: context.sessionID,
-            assistantMessageID: context.messageID,
-            toolCallID: context.id,
-          }
-          const job = yield* services.jobs.startLimited({
-            id: executionID,
-            type: "codemode",
-            ownerSessionID: context.sessionID,
-            maxConcurrent: MAX_CONCURRENT_EXECUTIONS,
+    const recovery = {
+      kind: "codemode" as const,
+      parentSessionID: context.sessionID,
+      assistantMessageID: context.messageID,
+      toolCallID: context.id,
+    }
+    const job = yield* services.jobs.startLimited({
+      id: executionID,
+      type: "codemode",
+      ownerSessionID: context.sessionID,
+      maxConcurrent: MAX_CONCURRENT_EXECUTIONS,
       notificationID: options.notificationID,
-            recovery,
+      recovery,
       // Shutdown interrupts this run without settling it, so the next start resumes it. Explicit
       // cancellation settles it when the job reports the cancellation below.
       run: Deferred.await(options.gate).pipe(
-              Effect.andThen(run),
-              Effect.flatMap((settled) =>
-                settled.saved ? Effect.succeed(settled.summary) : Effect.fail(new Error(settled.summary)),
-              ),
-            ),
-          })
+        Effect.andThen(run),
+        Effect.flatMap((settled) =>
+          settled.saved ? Effect.succeed(settled.summary) : Effect.fail(new Error(settled.summary)),
+        ),
+      ),
+    })
     if (!job) return undefined
     return {
       report: (settled: Job.WaitResult) => {
-                const info = settled.info
-                if (!info || info.status === "running") return Effect.void
-                return Effect.gen(function* () {
+        const info = settled.info
+        if (!info || info.status === "running") return Effect.void
+        return Effect.gen(function* () {
           if (info.status === "cancelled") yield* services.store.indeterminate(execution, INTERRUPTED)
-                  const trace = decodeExecuteEvents(yield* Ref.get(events))
-                  const base = {
-                    sessionID: context.sessionID,
-                    assistantMessageID: context.messageID,
-                    id: context.id,
-                    executionID,
-                    events: trace,
+          const trace = decodeExecuteEvents(yield* Ref.get(events))
+          const base = {
+            sessionID: context.sessionID,
+            assistantMessageID: context.messageID,
+            id: context.id,
+            executionID,
+            events: trace,
             ...resumed,
-                  }
-                  if (info.status === "completed")
-                    yield* services.bus.publish(SessionEvent.CodeMode.Completed, base, {
+          }
+          if (info.status === "completed")
+            yield* services.bus.publish(SessionEvent.CodeMode.Completed, base, {
               commit: () => services.jobs.markBackgroundTerminal(options.notificationID),
-                    })
-                  if (info.status === "error" || info.status === "cancelled")
-                    yield* services.bus.publish(
-                      SessionEvent.CodeMode.Failed,
-                      { ...base, status: info.status, error: info.error ?? "Execution failed" },
+            })
+          if (info.status === "error" || info.status === "cancelled")
+            yield* services.bus.publish(
+              SessionEvent.CodeMode.Failed,
+              { ...base, status: info.status, error: info.error ?? "Execution failed" },
               { commit: () => services.jobs.markBackgroundTerminal(options.notificationID) },
-                    )
-                  const kind =
-                    info.status === "cancelled"
-                      ? "Cancelled"
-                      : info.status === "error"
-                        ? ((yield* Ref.get(failureKind)) ?? "ExecutionFailure")
-                        : undefined
-                  const attachments = yield* attach(yield* Ref.get(media), services.image)
-                  // The Session can be deleted while the execution runs. Restart recovery already
-                  // tolerates that, so finish the background bookkeeping instead of dying here.
-                  yield* CodeModeCompletion.deliver(services.sessions, services.jobs, {
-                    ...info,
-                    recovery,
-                    ...(kind === undefined ? {} : { kind }),
-                    ...(attachments === undefined ? {} : { attachments }),
-                  }).pipe(
-                    Effect.catchTag("Session.NotFoundError", () =>
-                      info.notificationID ? services.jobs.completeBackground(info.notificationID) : Effect.void,
-                    ),
-                  )
-                })
+            )
+          const kind =
+            info.status === "cancelled"
+              ? "Cancelled"
+              : info.status === "error"
+                ? ((yield* Ref.get(failureKind)) ?? "ExecutionFailure")
+                : undefined
+          const attachments = yield* attach(yield* Ref.get(media), services.image)
+          // The Session can be deleted while the execution runs. Restart recovery already
+          // tolerates that, so finish the background bookkeeping instead of dying here.
+          yield* CodeModeCompletion.deliver(services.sessions, services.jobs, {
+            ...info,
+            recovery,
+            ...(kind === undefined ? {} : { kind }),
+            ...(attachments === undefined ? {} : { attachments }),
+          }).pipe(
+            Effect.catchTag("Session.NotFoundError", () =>
+              info.notificationID ? services.jobs.completeBackground(info.notificationID) : Effect.void,
+            ),
+          )
+        })
       },
-            }
+    }
   })
 
 /** What a resumed run may do with each tool, from the tool's registration options. */
@@ -581,7 +581,7 @@ const policy = (registrations: ReadonlyMap<string, Tool.Info>): CodeModeReplay.P
       qualifiedName(registration),
       { readOnly: registration.options?.readOnly === true, reattach: registration.options?.reattach === true },
     ]),
-          )
+  )
   return (path) => rules.get(path)
 }
 

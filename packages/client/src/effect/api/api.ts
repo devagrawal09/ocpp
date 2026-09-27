@@ -1017,6 +1017,20 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.invocation.started"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: {
+            readonly sessionID: Session.ID
+            readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+            readonly trigger: SessionMessage.InvocationTrigger
+            readonly code: string
+          }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session.retry.scheduled"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined
@@ -1174,6 +1188,34 @@ export type SessionViewInput = { readonly sessionID: Session.ID; readonly idle: 
 export type SessionViewOutput = void
 export type SessionViewOperation<E = never> = (input: SessionViewInput) => Effect.Effect<SessionViewOutput, E>
 
+export type SessionCommandsInput = { readonly sessionID: Session.ID }
+export type SessionCommandsOutput = ReadonlyArray<{
+  readonly name: string
+  readonly description: string
+  readonly handler: string
+}>
+export type SessionCommandsOperation<E = never> = (
+  input: SessionCommandsInput,
+) => Effect.Effect<SessionCommandsOutput, E>
+
+export type SessionEventsInput = { readonly sessionID: Session.ID }
+export type SessionEventsOutput = ReadonlyArray<{
+  readonly name: string
+  readonly description: string
+  readonly schedule: { readonly every: string } | { readonly cron: string } | { readonly at: string }
+  readonly handler: string
+  readonly input?: Schema.Json | undefined
+  readonly enabled: boolean
+  readonly nextFireAt?: string | undefined
+  readonly lastFiredAt?: string | undefined
+  readonly lastStatus?: ("running" | "completed" | "error" | "cancelled") | undefined
+  readonly lastSummary?: string | undefined
+  readonly runCount: number
+  readonly skipCount: number
+  readonly lastSkippedAt?: string | undefined
+}>
+export type SessionEventsOperation<E = never> = (input: SessionEventsInput) => Effect.Effect<SessionEventsOutput, E>
+
 export interface SessionApi<E = never> {
   readonly list: SessionListOperation<E>
   readonly stats: SessionStatsOperation<E>
@@ -1222,6 +1264,8 @@ export interface SessionApi<E = never> {
   readonly messageUpdate: SessionMessageUpdateOperation<E>
   readonly environment: SessionEnvironmentOperation<E>
   readonly view: SessionViewOperation<E>
+  readonly commands: SessionCommandsOperation<E>
+  readonly events: SessionEventsOperation<E>
 }
 
 export type MessageListInput = {

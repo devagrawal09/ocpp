@@ -5,6 +5,7 @@
 
 import type {
   AgentInfo,
+  CodeModeCommandInfo,
   CommandInfo,
   FormCancelInput,
   FormInfo,
@@ -108,6 +109,8 @@ type Store = {
     messageCursor: Record<string, string | undefined>
     messageLoading: Record<string, boolean>
     pending: Record<string, SessionInboxInfo[]>
+    // Slash commands the agent defined for each session, beside the Location's commands.
+    command: Record<string, CodeModeCommandInfo[]>
     input: Record<string, string[]>
     permission: Record<string, PermissionRequest[]>
     // Pending forms keyed by owner: a session ID or the temporary "global" elicitation sentinel.
@@ -200,6 +203,7 @@ export function createData(config: CreateDataInput) {
       messageCursor: {},
       messageLoading: {},
       pending: {},
+      command: {},
       input: {},
       permission: {},
       form: {},
@@ -411,6 +415,11 @@ export function createData(config: CreateDataInput) {
       const position = index.get(messageID)
       const item = position === undefined ? undefined : messages[position]
       return item?.type === "assistant" ? item : undefined
+    },
+    invocation(messages: SessionMessageInfo[], index: Map<string, number>, messageID: string) {
+      const position = index.get(messageID)
+      const item = position === undefined ? undefined : messages[position]
+      return item?.type === "invocation" ? item : undefined
     },
     shell(messages: SessionMessageInfo[], shellID: string) {
       const item = messages.findLast((item) => item.type === "shell" && item.shellID === shellID)
@@ -929,10 +938,33 @@ export function createData(config: CreateDataInput) {
         return
       case "session.codemode.started":
         return
+      case "session.invocation.started":
+        message.update(event.data.sessionID, (draft, index) => {
+          message.append(draft, index, {
+            id: messageIDFromEvent(event.id),
+            type: "invocation",
+            trigger: event.data.trigger,
+            code: event.data.code,
+            executionID: event.data.executionID,
+            status: "running",
+            metadata: event.metadata,
+            time: { created: event.created },
+          })
+        })
+        return
       case "session.codemode.progress":
       case "session.codemode.completed":
       case "session.codemode.failed":
         message.update(event.data.sessionID, (draft, index) => {
+          const invocation = message.invocation(draft, index, event.data.assistantMessageID)
+          if (invocation?.executionID === event.data.executionID) {
+            if (event.data.events.length > 0) invocation.events = [...event.data.events]
+            if (event.type === "session.codemode.progress") return
+            invocation.status = event.type === "session.codemode.completed" ? "completed" : event.data.status
+            if (event.type === "session.codemode.failed") invocation.error = event.data.error
+            invocation.time.completed = event.created
+            return
+          }
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
             event.data.id,
@@ -1215,6 +1247,11 @@ export function createData(config: CreateDataInput) {
       case "command.updated":
         result.location.command.invalidate(location)
         void result.location.command.sync(location)
+        // Session commands change through the same event, published at the Session's Location.
+        Object.keys(store.session.command).forEach((sessionID) => {
+          result.session.command.invalidate(sessionID)
+          void result.session.command.sync(sessionID)
+        })
         break
       case "skill.updated":
         result.location.skill.invalidate(location)
@@ -1365,6 +1402,20 @@ export function createData(config: CreateDataInput) {
         },
         invalidate(sessionID: string) {
           sync.invalidate(`session.pending:${sessionID}`)
+        },
+      },
+      command: {
+        list(sessionID: string) {
+          return store.session.command[sessionID]
+        },
+        sync(sessionID: string) {
+          return sync.run(`session.command:${sessionID}`, async () => {
+            const commands = await api().session.commands({ sessionID })
+            setStore("session", "command", sessionID, reconcile(commands))
+          })
+        },
+        invalidate(sessionID: string) {
+          sync.invalidate(`session.command:${sessionID}`)
         },
       },
       // Optimistic session creation: admit a local record under a

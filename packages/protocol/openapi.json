@@ -2039,6 +2039,76 @@
           },
           "required": true
         }
+      },
+      "get": {
+        "tags": ["session"],
+        "operationId": "v2.session.commands",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CodeModeCommand.Info"
+                      }
+                    }
+                  },
+                  "required": ["data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "List the slash commands the agent defined for this session. Running one calls its notebook function instead of prompting the model.",
+        "summary": "List session commands"
       }
     },
     "/api/session/{sessionID}/skill": {
@@ -4255,6 +4325,78 @@
           },
           "required": true
         }
+      }
+    },
+    "/api/session/{sessionID}/event": {
+      "get": {
+        "tags": ["session"],
+        "operationId": "v2.session.events",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CodeModeEvent.Info"
+                      }
+                    }
+                  },
+                  "required": ["data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "List the scheduled events the agent defined for this session, with their next firing and latest outcome.",
+        "summary": "List session events"
       }
     },
     "/api/session/{sessionID}/message": {
@@ -13147,6 +13289,288 @@
         "required": ["_tag", "agentID", "message"],
         "additionalProperties": false
       },
+      "CodeModeCommand.Info": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "handler": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "description", "handler"],
+        "additionalProperties": false
+      },
+      "CodeModeEvent.Info": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/CodeModeEvent.Schedule"
+          },
+          "handler": {
+            "type": "string"
+          },
+          "input": {},
+          "enabled": {
+            "type": "boolean"
+          },
+          "nextFireAt": {
+            "type": "string"
+          },
+          "lastFiredAt": {
+            "type": "string"
+          },
+          "lastStatus": {
+            "$ref": "#/components/schemas/CodeModeEvent.Status"
+          },
+          "lastSummary": {
+            "type": "string"
+          },
+          "runCount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "skipCount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "lastSkippedAt": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "description", "schedule", "handler", "enabled", "runCount", "skipCount"],
+        "additionalProperties": false
+      },
+      "CodeModeEvent.Schedule": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "every": {
+                "type": "string"
+              }
+            },
+            "required": ["every"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "cron": {
+                "type": "string"
+              }
+            },
+            "required": ["cron"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string"
+              }
+            },
+            "required": ["at"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "CodeModeEvent.Status": {
+        "type": "string",
+        "enum": ["running", "completed", "error", "cancelled"]
+      },
+      "CodeModeExecution.Entries": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CodeModeExecution.Entry"
+        },
+        "maxItems": 200
+      },
+      "CodeModeExecution.Entry": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CodeModeExecution.ToolEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodeModeExecution.TraceEvent"
+          }
+        ]
+      },
+      "CodeModeExecution.ToolEvent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["tool"]
+          },
+          "tool": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "completed", "error"]
+          },
+          "input": {
+            "type": "object"
+          },
+          "output": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "error": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": ["type", "tool", "status"],
+        "additionalProperties": false
+      },
+      "CodeModeExecution.TraceEvent": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["trace"]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["assignment"]
+              },
+              "target": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "value": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["type", "kind", "target", "value"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["trace"]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["branch"]
+              },
+              "expression": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "result": {
+                "type": "boolean"
+              }
+            },
+            "required": ["type", "kind", "expression", "result"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["trace"]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["operation"]
+              },
+              "operation": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "input": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "output": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["type", "kind", "operation", "input", "output"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["trace"]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["log"]
+              },
+              "method": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["type", "kind", "method", "message"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["trace"]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["return"]
+              },
+              "value": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["type", "kind", "value"],
+            "additionalProperties": false
+          }
+        ]
+      },
       "Command.Info": {
         "type": "object",
         "properties": {
@@ -17851,10 +18275,99 @@
             "$ref": "#/components/schemas/Session.Message.Shell"
           },
           {
+            "$ref": "#/components/schemas/Session.Message.Invocation"
+          },
+          {
             "$ref": "#/components/schemas/Session.Message.Assistant"
           },
           {
             "$ref": "#/components/schemas/Session.Message.Compaction"
+          }
+        ]
+      },
+      "Session.Message.Invocation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^msg_"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              },
+              "completed": {
+                "type": "number"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["invocation"]
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/Session.Message.InvocationTrigger"
+          },
+          "code": {
+            "type": "string"
+          },
+          "executionID": {
+            "type": "string",
+            "pattern": "^exe_"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "completed", "error", "cancelled"]
+          },
+          "events": {
+            "$ref": "#/components/schemas/CodeModeExecution.Entries"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "time", "type", "trigger", "code", "executionID", "status"],
+        "additionalProperties": false
+      },
+      "Session.Message.InvocationTrigger": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["command"]
+              },
+              "name": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "name", "text"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["event"]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "name"],
+            "additionalProperties": false
           }
         ]
       },

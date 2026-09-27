@@ -30,6 +30,8 @@ import { Model } from "@ocpp/schema/model"
 import { Location } from "@ocpp/schema/location"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import { EventLog } from "@ocpp/schema/event-log"
+import { CodeModeCommand } from "@ocpp/schema/codemode-command"
+import { CodeModeEvent } from "@ocpp/schema/codemode-event"
 
 const ParentIDFilter = Schema.Union([
   Session.ID,
@@ -751,6 +753,34 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           identifier: "v2.session.view",
           summary: "View session",
           description: "Mark the idle transition observed by the viewer as viewed.",
+        }),
+      ),
+    )
+    .add(
+      HttpApiEndpoint.get("session.commands", "/api/session/:sessionID/command", {
+        params: { sessionID: Session.ID },
+        success: Schema.Struct({ data: Schema.Array(CodeModeCommand.Info) }),
+        error: SessionNotFoundError,
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.commands",
+          summary: "List session commands",
+          description:
+            "List the slash commands the agent defined for this session. Running one calls its notebook function instead of prompting the model.",
+        }),
+      ),
+    )
+    .add(
+      HttpApiEndpoint.get("session.events", "/api/session/:sessionID/event", {
+        params: { sessionID: Session.ID },
+        success: Schema.Struct({ data: Schema.Array(CodeModeEvent.Info) }),
+        error: SessionNotFoundError,
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.events",
+          summary: "List session events",
+          description:
+            "List the scheduled events the agent defined for this session, with their next firing and latest outcome.",
         }),
       ),
     )

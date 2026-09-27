@@ -15,7 +15,7 @@ import { CodeModeInvocation } from "./invocation-service.js"
  */
 export class Service extends Context.Service<Service, {}>()("@ocpp/CodeModeScheduler") {}
 
-const layer = Layer.effect(
+export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* CodeModeEvent.Service

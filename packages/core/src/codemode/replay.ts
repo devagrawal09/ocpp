@@ -15,6 +15,13 @@ export type Decision =
 
 const live: Decision = { type: "live" }
 
+/**
+ * Impure values journaled between two tool calls. A program that reads more, such as a busy-wait on
+ * `time.now()`, keeps running normally but cannot be replayed past that point: replay sees more reads
+ * than the journal holds and stops instead of guessing.
+ */
+const MAX_IMPURE_READS = 1000
+
 /** `tools.search` runs inside the interpreter against the catalog, so running it again has no effect. */
 const search = { readOnly: true, reattach: false }
 
@@ -79,7 +86,7 @@ export function make(journal: ReadonlyArray<CodeModeStore.JournalEntry>, policy:
       if (entry !== undefined)
         diverge("the program read " + helper + "() more often before " + describe(entry) + " than it did originally.")
       const value = helper === "time.now" ? Date.now() : Math.random()
-      pending.push(value)
+      if (pending.length < MAX_IMPURE_READS) pending.push(value)
       return value
     },
     /**

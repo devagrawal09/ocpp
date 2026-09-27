@@ -44,7 +44,7 @@ const layer = Layer.effect(
         if (problem) return yield* new DefinitionError({ message: problem })
         yield* db
           .insert(CodeModeCommandTable)
-          .values({ session_id: sessionID, ...input })
+          .values({ session_id: sessionID, name: input.name, description: input.description, handler: input.handler })
           .onConflictDoUpdate({
             target: [CodeModeCommandTable.session_id, CodeModeCommandTable.name],
             set: { description: input.description, handler: input.handler, time_updated: Date.now() },

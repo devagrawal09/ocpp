@@ -235,10 +235,17 @@ export function next(
   return Math.max(Date.parse(schedule.at), input.now)
 }
 
-const units = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const
+const units = new Map([
+  ["ms", 1],
+  ["s", 1000],
+  ["m", 60_000],
+  ["h", 3_600_000],
+  ["d", 86_400_000],
+])
 
 function interval(every: string) {
   const match = /^(\d+)\s*(ms|s|m|h|d)$/.exec(every.trim())
-  if (!match) return undefined
-  return Number(match[1]) * units[match[2] as keyof typeof units]
+  const unit = match ? units.get(match[2]) : undefined
+  if (!match || unit === undefined) return undefined
+  return Number(match[1]) * unit
 }

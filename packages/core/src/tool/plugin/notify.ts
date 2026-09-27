@@ -23,7 +23,7 @@ export const Plugin = {
               .synthetic({
                 sessionID: context.sessionID,
                 text: input.text,
-                description: input.text.split("\n", 1)[0]!.slice(0, 120),
+                description: input.text.split("\n", 1)[0].slice(0, 120),
                 metadata: { source: "notify" },
               })
               .pipe(

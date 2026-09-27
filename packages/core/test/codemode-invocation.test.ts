@@ -291,8 +291,8 @@ describe("Code Mode commands", () => {
         code: 'return triage({"text":"login fails","command":"triage"})',
         status: "completed",
       })
-      expect(invocation!.events).toContainEqual({ type: "trace", kind: "return", value: "triaged triage: login fails" })
-      const outcome = yield* notification(session.id, invocation!.executionID)
+      expect(invocation.events).toContainEqual({ type: "trace", kind: "return", value: "triaged triage: login fails" })
+      const outcome = yield* notification(session.id, invocation.executionID)
       expect(outcome.text).toContain('The user ran the command /triage with the text "login fails".')
       expect(outcome.text).toContain("triaged triage: login fails")
       expect(outcome.description).toBe("/triage")
@@ -342,8 +342,8 @@ describe("Code Mode events", () => {
       expect(triggered?.output).toContain('"status":"started"')
       const [invocation] = yield* settled(context.session.id, 1)
       expect(invocation).toMatchObject({ trigger: { type: "event", name: "watch" }, status: "completed" })
-      expect(invocation!.code).toStartWith('return watch({"event":"watch","firedAt":"')
-      const outcome = yield* notification(context.session.id, invocation!.executionID)
+      expect(invocation.code).toStartWith('return watch({"event":"watch","firedAt":"')
+      const outcome = yield* notification(context.session.id, invocation.executionID)
       expect(outcome.text).toContain("The event watch fired.")
       expect(outcome.text).toContain("watch saw ocpp")
       // Only the program that triggered the event woke the model; the firing did not.
@@ -361,6 +361,34 @@ describe("Code Mode events", () => {
         runCount: 2,
         skipCount: 0,
       })
+    }),
+  )
+
+  it.live("wakes the model when a handler notifies it", () =>
+    Effect.gen(function* () {
+      const context = yield* setup
+      const sessions = yield* Session.Service
+      yield* execute(
+        context,
+        [
+          'function alert(input) { return tools.session.notify({ text: "Sentry reports 3 new errors" }) }',
+          'tools.command.define({ name: "alert", handler: "alert" })',
+        ].join("\n"),
+      )
+      wakes.length = 0
+      yield* sessions.command({ sessionID: context.session.id, command: "alert", text: "" })
+      yield* settled(context.session.id, 1)
+      const notice = yield* eventually(
+        sessions
+          .inbox(context.session.id)
+          .pipe(
+            Effect.map((items) =>
+              items.find((item) => item.type === "synthetic" && item.payload.metadata?.source === "notify"),
+            ),
+          ),
+      )
+      expect(notice.type === "synthetic" && notice.payload.text).toBe("Sentry reports 3 new errors")
+      expect(wakes).toContain(context.session.id)
     }),
   )
 

@@ -605,6 +605,13 @@ describe("subagent drivers", () => {
         message.type === "assistant" ? message.content.filter((part) => part.type === "tool") : [],
       )
       expect(tools.map((tool) => tool.type === "tool" && tool.name)).toContain("command_execution")
+
+      // The harness belongs to the call: continuing the same child without it runs in the OC++ harness.
+      vendor.turn = say("Harnessed again")
+      const continued = yield* call(env, { sessionID, message: "Continue" })
+      expect(continued._tag).toBe("Success")
+      expect(vendor.runs.at(-1)?.harness.type).toBe("ocpp")
+      expect(vendor.runs.at(-1)?.gateway.definitions.map((tool) => tool.name)).toEqual(["execute"])
     }),
   )
 })

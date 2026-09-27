@@ -294,7 +294,9 @@ const layer = Layer.effect(
           checkpointed: async (value) => {
             checkpoint.value = value
           },
-          next: (signal) => Effect.runPromise(take("input"), { signal }),
+          // A run being aborted takes no further input: Effect evaluates a synchronous take before it observes an
+          // already-aborted signal, which would hand the next call's input to the run it is replacing.
+          next: (signal) => (signal.aborted ? Promise.resolve(undefined) : Effect.runPromise(take("input"), { signal })),
           idle: () => {
             state.idle = true
             Effect.runSync(ring)

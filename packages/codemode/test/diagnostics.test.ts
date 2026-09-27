@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { CodeMode, compile, CompileError } from "../src/index.js"
+import { CodeMode, compile, CompileError, staticToolCalls } from "../src/index.js"
 
 const run = (code: string) => Effect.runPromise(CodeMode.execute({ code }))
 
@@ -60,6 +60,69 @@ describe("compile diagnostics", () => {
     if (!(error instanceof CompileError)) throw new Error("Expected a CompileError")
     expect(error.excerpt?.length).toBe(203)
     expect(error.excerpt?.endsWith("...")).toBe(true)
+  })
+})
+
+// TypeScript re-prints a program before it is parsed: it splits statements onto their own lines, joins
+// wrapped calls, and drops type declarations. Every position must still name the line the model wrote.
+describe("positions in the source as written", () => {
+  test("a tool call wrapped onto the next line is positioned on that line", () => {
+    const code = [
+      "const filed = crashes.map((crash) =>",
+      "  tools.linear.create_issues({",
+      '    team: "ENG",',
+      "    title: crash.title,",
+      "  })",
+      ")",
+    ].join("\n")
+    expect(staticToolCalls(compile(code).body).map((call) => [call.path, call.node.loc?.start])).toEqual([
+      ["linear.create_issues", { line: 2, column: 2 }],
+    ])
+  })
+
+  test("a statement after another on the same line keeps its line and column", async () => {
+    const result = await run("let n = 0; let when = new Date()")
+    expect(result).toMatchObject({ ok: false, error: { kind: "UnsupportedSyntax", location: { line: 1, column: 23 } } })
+  })
+
+  test("type declarations before a failing line do not shift it", async () => {
+    const code = ["type Row = {", "  id: string", "}", "interface Page { rows: Array<Row> }", "let pattern = /x/"].join(
+      "\n",
+    )
+    expect(await run(code)).toMatchObject({
+      ok: false,
+      error: { kind: "UnsupportedSyntax", location: { line: 5, column: 15 } },
+    })
+    expect(rejection(["type Id = string", "const a = 1", "const a = 2"].join("\n"))).toMatchObject({
+      kind: "ParseError",
+      location: { line: 3, column: 7 },
+      excerpt: "const a = 2",
+    })
+  })
+
+  test("generics, annotations, and assertions keep the columns of the code around them", async () => {
+    const code = [
+      "const first = <T,>(items: Array<T>): T => items[0]",
+      'const name = first<string>(["a"]) as string; let seen = new Set<string>()',
+    ].join("\n")
+    expect(await run(code)).toMatchObject({
+      ok: false,
+      error: { kind: "UnsupportedSyntax", location: { line: 2, column: 57 } },
+    })
+  })
+
+  test("a runtime failure is positioned in the source as written", async () => {
+    const code = ["type Row = { id: string }", "const rows: Array<Row> = []", "let n = 0; const id = rows[0].id"].join(
+      "\n",
+    )
+    const result = await run(code)
+    expect(result).toMatchObject({ ok: false, error: { location: { line: 3, column: 23 } } })
+  })
+
+  test("an excerpt keeps its indentation so the column counts from its start", () => {
+    const error = rejection(["function load() {", "  return {,}", "}"].join("\n"))
+    expect(error.location).toEqual({ line: 2, column: 11 })
+    expect(error.excerpt).toBe("  return {,}")
   })
 })
 

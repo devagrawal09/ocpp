@@ -488,6 +488,18 @@ Source: const ids = lines.filter((line) => /^id-/.test(line))
 Replace /^id-/.test(line) with line.startsWith("id-")
 ```
 
+Positions and source lines are those of the program as the model wrote it. TypeScript transpilation
+re-prints the program, splitting statements onto their own lines, joining wrapped calls, and dropping
+type declarations, so the compiler maps every node back through the transpiler's source map. The
+source line keeps its indentation, so the column counts from its start:
+
+```text
+Unknown tool tools.linear.create_issues; this agent has no tool at that path. (line 2, col 3)
+Source:   tools.linear.create_issues({
+Did you mean tools.linear.create_issue?
+Check its exact signature with tools.search({ query: "tools.linear.create_issue" })
+```
+
 | Rejected                                  | Suggested                                                                    |
 | ----------------------------------------- | ---------------------------------------------------------------------------- |
 | `/^id-/.test(line)`                       | `line.startsWith("id-")`; `includes` and `endsWith` for other anchors        |
@@ -683,11 +695,12 @@ const wide = "ab".repeat(3_000_000_000) // InvalidDataValue, before the native r
 
 Admission errors are reported by the host with a stable `kind` of `NameAlreadyDefined`,
 `NameReserved`, or `NotebookLimitExceeded`, plus the names involved. The host's compile-time tool
-check reports `UnknownTool` or `ToolDenied` with the rejected paths. Compiler diagnostics include a
-one-based `location` when available and `suggestions` for rejected syntax, and a `ParseError` also
-carries an `excerpt` of the failing source line so the failure can be understood without the whole
-program. OC++ Core adds the excerpt for every compile refusal. Host failures preserve their useful
-messages, and interruption remains interruption rather than a generic failure.
+check reports `UnknownTool` or `ToolDenied` with the rejected paths. Compiler and runtime diagnostics
+include a one-based `location` in the source as written when available, and `suggestions` for
+rejected syntax. A `ParseError` also carries an `excerpt` of the failing source line so the failure
+can be understood without the whole program. OC++ Core adds the excerpt for every compile refusal.
+Host failures preserve their useful messages, and interruption remains interruption rather than a
+generic failure.
 
 ## Authorization And Trust Boundaries
 
@@ -705,6 +718,7 @@ previews and logs explicitly and neutralize spoofable markers and tags.
 
 - `src/ir.ts`: the versioned data-only program representation and the `decodeProgram` boundary.
 - `src/compiler.ts`: transpilation, versioned IR, declaration extraction, and rejected syntax.
+- `src/source-map.ts`: maps transpiled positions back to the source as written.
 - `src/suggestions.ts`: concrete rewrites attached to rejected syntax.
 - `src/interpreter/captures.ts`: lexical free-variable analysis for durable closures.
 - `src/interpreter/durable.ts`: notebook value encoding, decoding, and limits.

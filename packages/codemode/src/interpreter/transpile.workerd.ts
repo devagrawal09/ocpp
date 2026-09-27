@@ -3,6 +3,8 @@ export interface TranspileResult {
   readonly error?: string
   /** One-based source position of the first error diagnostic, when the compiler reports one. */
   readonly location?: { readonly line: number; readonly column: number }
+  /** Source map `mappings` from `outputText` back to the source, when the output was re-printed. */
+  readonly mappings?: string
 }
 
 // workerd profile: the typescript compiler is ~11 MiB and probes node

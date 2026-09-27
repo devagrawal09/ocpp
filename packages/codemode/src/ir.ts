@@ -29,8 +29,10 @@ export type ProgramNode = AstNode & {
 export type Program = {
   readonly version: typeof IR_VERSION
   /**
-   * Canonical source of the compiled program. Node positions refer to it, and it is retained beside
-   * the IR so a later compiler can recompile a persisted program instead of rejecting it.
+   * Canonical source of the compiled program: the transpiled JavaScript. Node offsets (`start` and
+   * `end`) index it, while each node's `loc` gives the line and column in the code as submitted, so
+   * diagnostics point at the author's own lines. It is retained beside the IR so a later compiler can
+   * recompile a persisted program instead of rejecting it.
    */
   readonly source: string
   readonly body: ProgramNode

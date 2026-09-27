@@ -329,7 +329,7 @@ describe("ModelsDev Service", () => {
       yield* ModelsDev.Service.use((service) => service.get()).pipe(
         Effect.provide(buildLayer(state, cache, { url: "", fetch: true, snapshot: false })),
       )
-      expect((yield* Ref.get(state)).calls[0]?.url).toBe("https://models.ocpp.ai/api.json")
+      expect((yield* Ref.get(state)).calls[0]?.url).toBe("https://models.opencode.ai/api.json")
     }),
   )
 

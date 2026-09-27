@@ -546,9 +546,9 @@ const Cache = Schema.Struct({
   digest: Schema.optional(Schema.String),
   body: CatalogJson,
 })
-const defaultSource = "https://models.ocpp.ai"
+const defaultSource = "https://models.opencode.ai"
 
-// Bundled snapshot of https://models.ocpp.ai/api.json, committed at
+// Bundled snapshot of https://models.opencode.ai/api.json, committed at
 // packages/core/src/models-dev/snapshot.txt and refreshed via
 // `bun run script/update-models-snapshot.ts`. Decoded and normalized once per
 // isolate: the snapshot is a multi-MB module-level constant and one isolate can

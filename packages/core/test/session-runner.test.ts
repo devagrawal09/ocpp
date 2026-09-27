@@ -1278,6 +1278,51 @@ describe("SessionRunnerLLM", () => {
     expect(userTexts(s.requests[2]).at(-1)).toContain('{"answer":"HELLO"}')
   })
 
+  scenario("resizes an oversized tool image with the real resizer before the model receives it", function* (s) {
+    s.directTools = false
+    const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
+    // Wider than the 2000 pixel prompt attachment limit.
+    const source = new photon.PhotonImage(new Uint8Array(2_400 * 4 * 4).fill(255), 2_400, 4)
+    const screenshot = Buffer.from(source.get_bytes()).toString("base64")
+    source.free()
+    const registry = yield* Tool.Service
+    yield* transformTools(registry, {
+      screenshot: {
+        name: "screenshot",
+        description: "Capture the screen",
+        input: Schema.Struct({}),
+        output: Schema.Null,
+        execute: () =>
+          s.awaitToolBarrier.pipe(
+            Effect.as({
+              output: null,
+              content: [
+                { type: "file", uri: `data:image/png;base64,${screenshot}`, mime: "image/png", name: "screen.png" },
+              ],
+            }),
+          ),
+      },
+    })
+    yield* s.admit("Take a screenshot")
+    yield* s.llm.push(TestLLM.tool("call-screenshot", "execute", { code: "return tools.screenshot({})" }), [])
+    const tools = yield* s.blockTools()
+
+    yield* s.resume
+    yield* tools.release
+    yield* s.llm.wait(3)
+    yield* s.session.wait(sessionID)
+
+    const media = s.requests[2]?.messages
+      .flatMap((message) => (message.role === "user" ? message.content : []))
+      .filter((part) => part.type === "media")
+    expect(media).toMatchObject([{ type: "media", mediaType: "image/png", filename: "screen.png" }])
+    const resized = photon.PhotonImage.new_from_byteslice(Buffer.from(String(media?.[0]?.data), "base64"))
+    expect(resized.get_width()).toBe(2_000)
+    expect(resized.get_height()).toBeLessThanOrEqual(4)
+    resized.free()
+    expect(userTexts(s.requests[2]).at(-1)).toContain("Attached 1 file returned by tool calls: screen.png.")
+  })
+
   scenario("executes the tool advertised before a registry reload", function* (s) {
     s.directTools = false
     const registry = yield* Tool.Service

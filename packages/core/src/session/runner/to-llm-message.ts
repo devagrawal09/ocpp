@@ -5,7 +5,7 @@ import { fileURLToPath } from "url"
 import { SessionMessage } from "../message.js"
 import type { FileAttachment } from "@ocpp/schema/prompt"
 
-const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
+export const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
 
 const media = (file: FileAttachment): ContentPart => ({
   type: "media",

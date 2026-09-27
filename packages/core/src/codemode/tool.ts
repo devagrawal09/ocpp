@@ -5,6 +5,7 @@ import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 import { ascending } from "@ocpp/schema/identifier"
 import { Base64, FileAttachment } from "@ocpp/schema/prompt"
 import { Tool } from "@ocpp/schema/tool"
+import { Hash } from "@ocpp/util/hash"
 import { Deferred, Effect, Exit, Ref, Schema, Scope, Semaphore } from "effect"
 import type { Bus } from "../bus.js"
 import type { Image } from "../image.js"
@@ -13,7 +14,9 @@ import type { Session } from "../session.js"
 import { SessionEvent } from "../session/event.js"
 import { CodeModeCompletion } from "../session/codemode-completion.js"
 import { SessionMessage } from "../session/message.js"
+import { imageMimes } from "../session/runner/to-llm-message.js"
 import { definition, normalizedName } from "../tool/runtime.js"
+import type { CodeModeCatalog } from "./catalog.js"
 import { CodeModeCompileCheck } from "./compile-check.js"
 import { limits } from "./limits.js"
 import { CodeModeReplay } from "./replay.js"
@@ -271,7 +274,7 @@ const launch = (
         const failureKind = yield* Ref.make<string | undefined>(undefined)
         // Images and PDFs that tool calls return cannot become Code Mode values, so they are collected
         // here and attached to the completion notification instead.
-        const media = yield* Ref.make<Media>({ files: [], omitted: 0 })
+        const media = yield* Ref.make<Media>({ files: [], omitted: new Set() })
         const slots = yield* Ref.make<Array<number>>([])
         const toolCount = yield* Ref.make(0)
         const traceCount = yield* Ref.make(0)
@@ -581,15 +584,22 @@ const policy = (registrations: ReadonlyMap<string, Tool.Info>): CodeModeReplay.P
   return (path) => rules.get(path)
 }
 
+// A snapshot builds its catalog once, and every `execute` call against the same registrations reuses it.
+const catalogs = new WeakMap<ReadonlyMap<string, Tool.Info>, ReadonlyArray<CodeModeCatalog.Entry>>()
+
 export const catalog = (registrations: ReadonlyMap<string, Tool.Info>) => {
+  const cached = catalogs.get(registrations)
+  if (cached) return cached
   const pinned = new Set(
     Array.from(registrations.values())
       .filter((registration) => registration.options?.pinned === true)
       .map(qualifiedName),
   )
-  return runtime(registrations, () => Effect.fail(toolError("Execute context is unavailable")))
+  const entries = runtime(registrations, () => Effect.fail(toolError("Execute context is unavailable")))
     .catalog()
     .map((entry) => ({ ...entry, pinned: pinned.has(entry.path) }))
+  catalogs.set(registrations, entries)
+  return entries
 }
 
 function runtime(
@@ -637,7 +647,11 @@ function isInvocationStart(event: Bus.LogItem): event is SessionEvent.Invocation
   return event.type === SessionEvent.Invocation.Started.type
 }
 
-type Media = { readonly files: ReadonlyArray<Tool.FileContent>; readonly omitted: number }
+type Media = {
+  readonly files: ReadonlyArray<Tool.FileContent>
+  /** Hashes of the distinct files past the attachment limit, so a repeat counts once without keeping its data. */
+  readonly omitted: ReadonlySet<string>
+}
 
 const isAttachable = (part: Tool.Content): part is Tool.FileContent =>
   part.type === "file" &&
@@ -647,13 +661,14 @@ const isAttachable = (part: Tool.Content): part is Tool.FileContent =>
 /** Keeps the first distinct files up to the attachment limit and counts the rest. */
 function collect(media: Media, file: Tool.FileContent): Media {
   if (media.files.some((existing) => existing.uri === file.uri)) return media
-  if (media.files.length >= MAX_ATTACHMENTS) return { ...media, omitted: media.omitted + 1 }
+  if (media.files.length >= MAX_ATTACHMENTS)
+    return { ...media, omitted: new Set(media.omitted).add(Hash.fast(file.uri)) }
   return { ...media, files: [...media.files, file] }
 }
 
 /** Converts collected media into completion attachments, resizing images exactly as prompt attachments are. */
 const attach = Effect.fnUntraced(function* (media: Media, image: Pick<Image.Interface, "normalize">) {
-  if (media.files.length === 0 && media.omitted === 0) return undefined
+  if (media.files.length === 0 && media.omitted.size === 0) return undefined
   const converted = yield* Effect.forEach(media.files, (file) => toAttachment(file, image))
   const files = converted.flatMap((item) => (typeof item === "string" ? [] : [item]))
   const omission = (reason: string, count: number) =>
@@ -676,7 +691,8 @@ const attach = Effect.fnUntraced(function* (media: Media, image: Pick<Image.Inte
         "could not be resized below the image size limit.",
         converted.filter((item) => item === "size").length,
       ),
-      ...omission("at most " + MAX_ATTACHMENTS + " files attach to one completion.", media.omitted),
+      ...omission("not a PNG, JPEG, GIF, WebP, or PDF file.", converted.filter((item) => item === "type").length),
+      ...omission("at most " + MAX_ATTACHMENTS + " files attach to one completion.", media.omitted.size),
     ].join("\n"),
   }
 })
@@ -696,6 +712,9 @@ const toAttachment = Effect.fnUntraced(function* (file: Tool.FileContent, image:
       )
     : content
   if (typeof normalized === "string") return normalized
+  // Messages lower only these types to model media. Without the resizer, or when an image already fits,
+  // an SVG or BMP keeps its type and would be listed as attached without ever reaching the model.
+  if (normalized.mime !== "application/pdf" && !imageMimes.has(normalized.mime)) return "type" as const
   return FileAttachment.create({
     data: Base64.make(normalized.content),
     mime: normalized.mime,

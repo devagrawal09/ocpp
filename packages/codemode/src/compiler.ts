@@ -404,7 +404,7 @@ function validate(node: AstNode): void {
     hasMemberTarget(requireNode(node.left))
   )
     throw unsupported("Arrays and objects are immutable; assign a new value instead.", requireNode(node.left), [
-      "Loop with a local let binding, e.g. for (const item of items) { ... }, and build a new value from it.",
+      "Loop with a fresh binding, e.g. for (const item of items) { ... }, and build a new value from it.",
     ])
   if (node.type === "UpdateExpression" && requireNode(node.argument).type === "MemberExpression")
     throw unsupported(

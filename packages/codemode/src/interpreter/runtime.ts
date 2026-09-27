@@ -1,7 +1,7 @@
 import { Cause, Deferred, Effect, Exit } from "effect"
 import { coercionFunctions, errorConstructorNames, globalNamespaces, uriFunctions } from "../globals.js"
 import { ToolHandle } from "../tool-handle.js"
-import { isPromiseAllCall } from "../ir.js"
+import { isPromiseAllCall, staticToolCalls } from "../ir.js"
 import { isBlockedMember, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
 import {
   type AstNode,
@@ -1912,7 +1912,7 @@ export class Interpreter<R> {
         throw new InterpreterRuntimeError("Tool handles require a synchronous execute function.", node).as("TypeError")
       }
       const execute = definition.execute
-      const capabilities = collectToolCapabilities(execute.body)
+      const capabilities = [...new Set(staticToolCalls(execute.body).map((call) => call.path))].sort()
       const bindings = snapshotBindings(execute)
       const context = yield* Effect.context<R>()
       const handle = new ToolHandle(
@@ -2689,29 +2689,6 @@ function isJsonSchema(value: unknown): value is ToolHandle["definition"]["inputS
   return isRecord(value)
 }
 
-function collectToolCapabilities(node: AstNode) {
-  const capabilities = new Set<string>()
-  const visit = (current: AstNode): void => {
-    if (current.type === "CallExpression") {
-      const callee = current.callee
-      if (isRecord(callee) && typeof callee.type === "string") {
-        const path = staticToolPath(callee as AstNode)
-        if (path?.length) capabilities.add(path.join("."))
-      }
-    }
-    for (const [key, value] of Object.entries(current)) {
-      if (key === "loc") continue
-      if (Array.isArray(value)) {
-        for (const item of value) if (isRecord(item) && typeof item.type === "string") visit(item as AstNode)
-        continue
-      }
-      if (isRecord(value) && typeof value.type === "string") visit(value as AstNode)
-    }
-  }
-  visit(node)
-  return [...capabilities].sort()
-}
-
 function snapshotBindings(fn: CodeModeFunction) {
   const overrides = new Map<Binding, Binding>()
   const visited = new Set<object>()
@@ -2744,15 +2721,4 @@ function immutableMethod(name: string, node?: AstNode) {
     node,
     "UnsupportedSyntax",
   )
-}
-
-function staticToolPath(node: AstNode): ReadonlyArray<string> | undefined {
-  if (node.type === "Identifier") return node.name === "tools" ? [] : undefined
-  if (node.type !== "MemberExpression" || node.optional === true || !isRecord(node.object)) return
-  const parent = staticToolPath(node.object as AstNode)
-  if (parent === undefined || !isRecord(node.property)) return
-  if (node.computed !== true && node.property.type === "Identifier" && typeof node.property.name === "string")
-    return [...parent, node.property.name]
-  if (node.computed === true && node.property.type === "Literal" && typeof node.property.value === "string")
-    return [...parent, node.property.value]
 }

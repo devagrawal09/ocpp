@@ -1,4 +1,4 @@
-import { type ComponentProps, createMemo, Show, splitProps } from "solid-js"
+import { type ComponentProps, createMemo, For, Show, splitProps } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Card, CardDescription } from "@ocpp/ui/card"
 import { Collapsible } from "@ocpp/ui/collapsible"
@@ -17,6 +17,8 @@ export interface ToolErrorCardProps extends Omit<ComponentProps<typeof Card>, "c
   subtitle?: string
   href?: string
   onSubtitleClick?: (event: MouseEvent) => void
+  /** Concrete fixes listed below the error. Error lines that repeat one are not shown twice. */
+  suggestions?: ReadonlyArray<string>
 }
 
 export function ToolErrorCard(props: ToolErrorCardProps) {
@@ -37,6 +39,7 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
     "subtitle",
     "href",
     "onSubtitleClick",
+    "suggestions",
   ])
   const setOpen = (value: boolean) => {
     if (props.open === undefined) setState("open", value)
@@ -70,16 +73,21 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
     return value
   })
 
+  // The summary comes from the first line only; a multi-line error such as a compiler diagnostic
+  // keeps its remaining lines, and its whole first line, in the expanded detail.
+  const lines = createMemo(() => tail().split("\n"))
   const summary = createMemo(() => {
-    const head = (tail().split(": ")[0] ?? "").trim()
+    const head = (lines()[0]?.split(": ")[0] ?? "").trim()
     if (!head) return i18n.t("ui.toolErrorCard.failed")
     return head[0].toUpperCase() + head.slice(1)
   })
 
   const detail = createMemo(() => {
-    const parts = tail().split(": ")
-    if (parts.length <= 1) return ""
-    return parts.slice(1).join(": ").trim()
+    const [first = "", ...rest] = lines()
+    const shown = rest.filter((line) => !split.suggestions?.includes(line))
+    const index = first.indexOf(": ")
+    if (index === -1) return (shown.length === 0 ? "" : [first, ...shown].join("\n")).trim()
+    return [first.slice(index + 2), ...shown].join("\n").trim()
   })
 
   const copy = async () => {
@@ -132,7 +140,7 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
             <Collapsible.Arrow />
           </div>
         </Collapsible.Trigger>
-        <Show when={detail()}>
+        <Show when={detail() || split.suggestions?.length}>
           <Collapsible.Content>
             <div data-slot="tool-error-card-content">
               <Show when={open()}>
@@ -157,7 +165,17 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
                   </Tooltip>
                 </div>
               </Show>
-              <CardDescription>{detail()}</CardDescription>
+              <Show when={detail()}>
+                <CardDescription>{detail()}</CardDescription>
+              </Show>
+              <Show when={split.suggestions?.length}>
+                <div data-slot="tool-error-card-suggestions">
+                  <span data-slot="tool-error-card-suggestions-label">{i18n.t("ui.toolErrorCard.suggestions")}</span>
+                  <ul>
+                    <For each={split.suggestions}>{(suggestion) => <li>{suggestion}</li>}</For>
+                  </ul>
+                </div>
+              </Show>
             </div>
           </Collapsible.Content>
         </Show>

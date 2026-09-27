@@ -14,6 +14,7 @@ import { SessionEvent } from "../session/event.js"
 import { CodeModeCompletion } from "../session/codemode-completion.js"
 import { SessionMessage } from "../session/message.js"
 import { definition, normalizedName } from "../tool/runtime.js"
+import { CodeModeCompileCheck } from "./compile-check.js"
 import { limits } from "./limits.js"
 import type { CodeModeStore } from "./store.js"
 
@@ -76,6 +77,9 @@ export const create = (
   ) => Effect.Effect<Tool.Result, Tool.Error>,
   services: ExecutionServices,
   input?: CodeMode.DataValue,
+  // Registered tools this agent's permission rules disable outright, so a call to one is refused
+  // as denied rather than unknown.
+  denied: ReadonlyArray<Tool.Info> = [],
 ) =>
   ({
     name: "execute",
@@ -90,17 +94,14 @@ export const create = (
           try: () => CodeMode.compile(code),
           catch: (error) =>
             error instanceof CompileError
-              ? new Tool.Error({
-                  message: compileFailureText(error),
-                  metadata: {
-                    executionStatus: "refused",
-                    kind: error.kind,
-                    ...(error.location ? { location: error.location } : {}),
-                    ...(error.excerpt ? { excerpt: error.excerpt } : {}),
-                  },
-                })
+              ? CodeModeCompileCheck.compileFailure(error, code)
               : new Tool.Error({ message: error instanceof Error ? error.message : String(error) }),
         })
+        const unavailable = CodeModeCompileCheck.unavailableTools(program, code, {
+          available: catalog(registrations).map((entry) => entry.path),
+          denied: denied.map(qualifiedName),
+        })
+        if (unavailable) return yield* unavailable
         const executionID = decodeExecutionID("exe_" + ascending())
         // Admission compiles, reserves every declared name, and captures the notebook snapshot
         // before any tool runs. A refused program never receives an execution ID.
@@ -672,15 +673,6 @@ function failureSummary(executionID: string, result: CodeMode.Result, commitErro
       ...untrusted("Logs", result.logs?.join("\n")),
     ].join("\n"),
   )
-}
-
-/** The compile diagnostic the model sees: its message, then position and the failing line. */
-function compileFailureText(error: CompileError) {
-  return [
-    error.message + (error.location ? " (line " + error.location.line + ", col " + error.location.column + ")" : ""),
-    ...(error.excerpt ? ["Source: " + error.excerpt] : []),
-    ...(error.suggestions ?? []),
-  ].join("\n")
 }
 
 function previewText(value: CodeMode.DataValue) {

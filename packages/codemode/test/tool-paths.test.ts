@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Schema } from "effect"
-import { CodeMode, Tool } from "../src/index.js"
+import { CodeMode, compile, staticToolCalls, Tool } from "../src/index.js"
 
 const echo = (description: string, result: string) =>
   Tool.make({
@@ -202,5 +202,24 @@ describe("canonical path collisions", () => {
     expect(await value(runtime, `return tools.issues.list({})`)).toBe("second")
     expect(await value(runtime, `return tools.issues.get({})`)).toBe("got")
     expect(await value(runtime, `return tools.issues.close({})`)).toBe("closed")
+  })
+})
+
+describe("static tool calls", () => {
+  test("every direct call is collected in source order, including calls in functions and handles", () => {
+    const program = compile(
+      [
+        'const first = tools.fs.read({ path: "a" })',
+        'function list() { return tools["mcp.linear"].issues({}) }',
+        "let inspect = tool.define({ name: 'inspect', execute: (input) => tools.fs.read(input) })",
+        'return tools.search({ query: "read" })',
+      ].join("\n"),
+    )
+    expect(staticToolCalls(program.body).map((call) => [call.path, call.node.loc?.start.line])).toEqual([
+      ["fs.read", 1],
+      ["mcp.linear.issues", 2],
+      ["fs.read", 3],
+      ["search", 4],
+    ])
   })
 })

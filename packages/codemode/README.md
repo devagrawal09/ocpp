@@ -30,8 +30,9 @@ isolate-based approach.
 - **Top-level declarations are durable.** Every direct top-level `const` and `function` declaration is
   saved to the notebook the host provides. `return` is only a preview.
 
-Unsupported syntax returns an `UnsupportedSyntax` diagnostic with a source location. The supported and
-rejected forms are listed in the [complete guide](./interpreter-support.md).
+Unsupported syntax returns an `UnsupportedSyntax` diagnostic with a source location and concrete
+`suggestions`, such as `line.startsWith("id-")` for `/^id-/.test(line)`. The supported and rejected
+forms are listed in the [complete guide](./interpreter-support.md).
 
 ## Quick Start
 
@@ -187,6 +188,9 @@ validation or copying error. Interruption propagates without becoming an error d
 signature — for every visible tool. Hosts render their own model-facing instructions from these
 descriptors; `CodeMode.searchSignature` and `CodeMode.toolExpression(path)` supply the exact callable
 forms.
+
+`staticToolCalls(program.body)` lists every direct tool call in a compiled program, so a host can
+check the paths against its own catalog or policy before anything runs.
 
 The synchronous `tools.search(...)` built-in is always available. It supports exact-path lookup,
 namespace-scoped search, empty-query browsing, and pagination, and returns callable paths with full

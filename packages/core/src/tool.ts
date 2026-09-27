@@ -204,6 +204,14 @@ const layer = Layer.effect(
       return tools
     }
 
+    // The registered tools the same rules remove from the catalog, so Code Mode can refuse a call to
+    // one as denied instead of unknown.
+    const denied = (permissions?: Permission.Ruleset, sessionID?: SessionSchema.ID) =>
+      [
+        ...state.get().tools,
+        ...(sessionID === undefined ? [] : (sessionTools.get(sessionID) ?? []).flatMap((item) => [...item.tools])),
+      ].flatMap(([name, tool]) => (whollyDisabled(tool.options?.permission ?? name, permissions ?? []) ? [tool] : []))
+
     const activeInput = (sessionID?: SessionSchema.ID) =>
       sessionID === undefined
         ? undefined
@@ -271,6 +279,7 @@ const layer = Layer.effect(
                     ),
                   { bus, jobs: runtime.job, sessions: runtime.session, image, store: codemodeStore, scope },
                   activeInput(sessionID),
+                  denied(permissions, sessionID),
                 )
           return {
             ...(codemodeTool === undefined ? {} : { codeModeCatalog: CodeModeTool.catalog(registrations) }),

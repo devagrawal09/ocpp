@@ -6,6 +6,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { and, asc, eq, sql } from "drizzle-orm"
 import type { SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core"
 import { Clock, Context, Cron, Effect, Layer, PubSub, Result, Schema, Scope } from "effect"
+import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
@@ -17,6 +18,7 @@ export const Info = CodeModeEvent.Info
 export type Info = CodeModeEvent.Info
 export const Schedule = CodeModeEvent.Schedule
 export type Schedule = CodeModeEvent.Schedule
+export const Updated = CodeModeEvent.Event.Updated
 
 export class DefinitionError extends Schema.TaggedError<DefinitionError>()("CodeModeEvent.DefinitionError", {
   message: Schema.String,
@@ -58,7 +60,10 @@ export interface Interface {
     ),
   ) => Effect.Effect<void>
   readonly skipped: (key: Key, at: number) => Effect.Effect<void>
-  /** Announces definition changes the scheduler must apply. Subscribe before reading definitions. */
+  /**
+   * Announces definition changes the scheduler must apply. Subscribe before reading definitions. Every
+   * change to a listing, including the scheduler's own records, is also published on the bus.
+   */
   readonly changes: Effect.Effect<PubSub.Subscription<Key>, never, Scope.Scope>
 }
 
@@ -71,13 +76,20 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const { db } = yield* Database.Service
+    const bus = yield* Bus.Service
     const sessions = yield* SessionStore.Service
     const pubsub = yield* PubSub.unbounded<Key>()
     const where = (key: Key) =>
       and(eq(CodeModeEventTable.session_id, key.sessionID), eq(CodeModeEventTable.name, key.name))
     const get = (key: Key) => db.select().from(CodeModeEventTable).where(where(key)).get().pipe(Effect.orDie)
+    const updated = (key: Key) => bus.publish(Updated, key).pipe(Effect.asVoid)
     const update = (key: Key, set: SQLiteUpdateSetSource<typeof CodeModeEventTable>) =>
-      db.update(CodeModeEventTable).set(set).where(where(key)).run().pipe(Effect.orDie, Effect.asVoid)
+      db
+        .update(CodeModeEventTable)
+        .set(set)
+        .where(where(key))
+        .run()
+        .pipe(Effect.orDie, Effect.andThen(updated(key)))
 
     // The latest run's outcome is read from its invocation message, which restart recovery also settles.
     const info = Effect.fnUntraced(function* (row: Definition) {
@@ -98,6 +110,7 @@ const layer = Layer.effect(
         ...(row.time_next === null ? {} : { nextFireAt: new Date(row.time_next).toISOString() }),
         ...(row.time_fired === null ? {} : { lastFiredAt: new Date(row.time_fired).toISOString() }),
         ...(row.error !== null ? { lastStatus: "error" as const } : run ? { lastStatus: run.status } : {}),
+        ...(row.message_id === null ? {} : { lastMessageID: row.message_id }),
         ...(summary === undefined ? {} : { lastSummary: summary.slice(0, SUMMARY_LENGTH) }),
         runCount: row.run_count,
         skipCount: row.skip_count,
@@ -149,6 +162,7 @@ const layer = Layer.effect(
           )
           .pipe(Effect.orDie)
         yield* PubSub.publish(pubsub, key)
+        yield* updated(key)
         return yield* info(row)
       }),
       list: Effect.fn("CodeModeEvent.list")(function* (sessionID) {
@@ -178,6 +192,7 @@ const layer = Layer.effect(
           .get()
           .pipe(Effect.orDie)
         yield* PubSub.publish(pubsub, key)
+        if (removed) yield* updated(key)
         return removed !== undefined
       }),
       enabled: Effect.fn("CodeModeEvent.enabled")(() =>
@@ -204,7 +219,7 @@ const layer = Layer.effect(
   }),
 )
 
-export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node, SessionStore.node] })
+export const node = makeGlobalNode({ service: Service, layer, deps: [Bus.node, Database.node, SessionStore.node] })
 
 /** Why a schedule is invalid, or undefined when it is valid. */
 export function scheduleProblem(schedule: Schedule) {

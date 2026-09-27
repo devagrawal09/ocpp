@@ -90,6 +90,16 @@ import type {
   SessionCommandsOutput,
   SessionEventsInput,
   SessionEventsOutput,
+  SessionEventEnableInput,
+  SessionEventEnableOutput,
+  SessionEventDisableInput,
+  SessionEventDisableOutput,
+  SessionEventTriggerInput,
+  SessionEventTriggerOutput,
+  SessionEventRemoveInput,
+  SessionEventRemoveOutput,
+  SessionExecutionCancelInput,
+  SessionExecutionCancelOutput,
   MessageListInput,
   MessageListOutput,
   ModelListInput,
@@ -999,6 +1009,66 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ).then((value) => value.data),
+      event: {
+        enable: (input: SessionEventEnableInput, requestOptions?: RequestOptions) =>
+          request<{ readonly data: SessionEventEnableOutput }>(
+            {
+              method: "POST",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/event/${encodeURIComponent(input.name)}/enable`,
+              successStatus: 200,
+              declaredStatuses: [404, 401, 400],
+              empty: false,
+            },
+            requestOptions,
+          ).then((value) => value.data),
+        disable: (input: SessionEventDisableInput, requestOptions?: RequestOptions) =>
+          request<{ readonly data: SessionEventDisableOutput }>(
+            {
+              method: "POST",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/event/${encodeURIComponent(input.name)}/disable`,
+              successStatus: 200,
+              declaredStatuses: [404, 401, 400],
+              empty: false,
+            },
+            requestOptions,
+          ).then((value) => value.data),
+        trigger: (input: SessionEventTriggerInput, requestOptions?: RequestOptions) =>
+          request<{ readonly data: SessionEventTriggerOutput }>(
+            {
+              method: "POST",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/event/${encodeURIComponent(input.name)}/trigger`,
+              body: { input: input["input"] },
+              successStatus: 200,
+              declaredStatuses: [404, 409, 400, 401],
+              empty: false,
+            },
+            requestOptions,
+          ).then((value) => value.data),
+        remove: (input: SessionEventRemoveInput, requestOptions?: RequestOptions) =>
+          request<SessionEventRemoveOutput>(
+            {
+              method: "DELETE",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/event/${encodeURIComponent(input.name)}`,
+              successStatus: 204,
+              declaredStatuses: [404, 401, 400],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
+      execution: {
+        cancel: (input: SessionExecutionCancelInput, requestOptions?: RequestOptions) =>
+          request<SessionExecutionCancelOutput>(
+            {
+              method: "POST",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/execution/${encodeURIComponent(input.executionID)}/cancel`,
+              successStatus: 200,
+              declaredStatuses: [404, 401, 400],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     message: {
       list: (input: MessageListInput, requestOptions?: RequestOptions) =>

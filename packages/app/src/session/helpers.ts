@@ -8,6 +8,9 @@ export { SESSION_OPEN_FILE_TAB } from "@/shell/state/session-tabs"
 
 const emptyTabs: string[] = []
 
+/** Tabs the side panel always offers: what runs in the session now, its events, and its subagents. */
+export const SESSION_ACTIVITY_TABS = ["running", "events", "subagents"] as const
+
 type Tabs = {
   active: Accessor<string | undefined>
   all: Accessor<string[]>
@@ -19,7 +22,7 @@ type TabsInput = {
   normalizeTab: (tab: string) => string
   review?: Accessor<boolean>
   hasReview?: Accessor<boolean>
-  subagents?: Accessor<boolean>
+  activity?: Accessor<boolean>
   fileBrowser?: Accessor<boolean>
 }
 
@@ -30,7 +33,7 @@ export function shouldShowFileTree(input: { visible: boolean; opened: boolean })
 export const createSessionTabs = (input: TabsInput) => {
   const review = input.review ?? (() => false)
   const hasReview = input.hasReview ?? (() => false)
-  const subagents = input.subagents ?? (() => false)
+  const activity = input.activity ?? (() => false)
   const fileBrowser = input.fileBrowser ?? (() => false)
   const contextOpen = createMemo(() => input.tabs().active() === "context" || input.tabs().all().includes("context"))
   const openFileOpen = createMemo(
@@ -64,7 +67,7 @@ export const createSessionTabs = (input: TabsInput) => {
     if (active === "context") return active
     if (active === SESSION_OPEN_FILE_TAB && openFileOpen()) return active
     if (active === "review" && review()) return active
-    if (active === "subagents" && subagents()) return active
+    if (active && SESSION_ACTIVITY_TABS.some((tab) => tab === active) && activity()) return active
     if (active && input.pathFromTab(active)) return input.normalizeTab(active)
 
     const first = openedTabs()[0]

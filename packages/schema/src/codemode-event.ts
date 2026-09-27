@@ -1,7 +1,10 @@
 export * as CodeModeEvent from "./codemode-event.js"
 
 import { Schema } from "effect"
+import { ephemeral, inventory } from "./event.js"
 import { optional } from "./schema.js"
+import { SessionID } from "./session-id.js"
+import { SessionMessage } from "./session-message.js"
 
 /** When an event fires: a repeating interval such as "30s", "5m", or "1h", a cron expression, or one ISO time. */
 export const Schedule = Schema.Union([
@@ -29,6 +32,8 @@ export const Info = Schema.Struct({
   nextFireAt: Schema.String.pipe(optional),
   lastFiredAt: Schema.String.pipe(optional),
   lastStatus: Status.pipe(optional),
+  /** The invocation message the latest firing started, which the timeline shows as its run. */
+  lastMessageID: SessionMessage.ID.pipe(optional),
   /** A short result preview or error from the latest firing. */
   lastSummary: Schema.String.pipe(optional),
   runCount: Schema.Number,
@@ -36,3 +41,16 @@ export const Info = Schema.Struct({
   skipCount: Schema.Number,
   lastSkippedAt: Schema.String.pipe(optional),
 }).annotate({ identifier: "CodeModeEvent.Info" })
+
+/**
+ * A Session's events changed: a definition, its enabled state, its next firing, or its latest firing and
+ * counts. Read the list again for the current state. The latest firing's outcome settles with its
+ * invocation message instead.
+ */
+const Updated = ephemeral({
+  type: "codemode.event.updated",
+  identifier: "CodeModeEvent.Updated",
+  schema: { sessionID: SessionID, name: Schema.String },
+})
+
+export const Event = { Updated, Definitions: inventory(Updated) }

@@ -1214,12 +1214,86 @@ export type SessionEventsOutput = ReadonlyArray<{
   readonly nextFireAt?: string | undefined
   readonly lastFiredAt?: string | undefined
   readonly lastStatus?: ("running" | "completed" | "error" | "cancelled") | undefined
+  readonly lastMessageID?: SessionMessage.ID | undefined
   readonly lastSummary?: string | undefined
   readonly runCount: number
   readonly skipCount: number
   readonly lastSkippedAt?: string | undefined
 }>
 export type SessionEventsOperation<E = never> = (input: SessionEventsInput) => Effect.Effect<SessionEventsOutput, E>
+
+export type SessionEventEnableInput = { readonly sessionID: Session.ID; readonly name: string }
+export type SessionEventEnableOutput = {
+  readonly name: string
+  readonly description: string
+  readonly schedule: { readonly every: string } | { readonly cron: string } | { readonly at: string }
+  readonly handler: string
+  readonly input?: Schema.Json | undefined
+  readonly enabled: boolean
+  readonly nextFireAt?: string | undefined
+  readonly lastFiredAt?: string | undefined
+  readonly lastStatus?: ("running" | "completed" | "error" | "cancelled") | undefined
+  readonly lastMessageID?: SessionMessage.ID | undefined
+  readonly lastSummary?: string | undefined
+  readonly runCount: number
+  readonly skipCount: number
+  readonly lastSkippedAt?: string | undefined
+}
+export type SessionEventEnableOperation<E = never> = (
+  input: SessionEventEnableInput,
+) => Effect.Effect<SessionEventEnableOutput, E>
+
+export type SessionEventDisableInput = { readonly sessionID: Session.ID; readonly name: string }
+export type SessionEventDisableOutput = {
+  readonly name: string
+  readonly description: string
+  readonly schedule: { readonly every: string } | { readonly cron: string } | { readonly at: string }
+  readonly handler: string
+  readonly input?: Schema.Json | undefined
+  readonly enabled: boolean
+  readonly nextFireAt?: string | undefined
+  readonly lastFiredAt?: string | undefined
+  readonly lastStatus?: ("running" | "completed" | "error" | "cancelled") | undefined
+  readonly lastMessageID?: SessionMessage.ID | undefined
+  readonly lastSummary?: string | undefined
+  readonly runCount: number
+  readonly skipCount: number
+  readonly lastSkippedAt?: string | undefined
+}
+export type SessionEventDisableOperation<E = never> = (
+  input: SessionEventDisableInput,
+) => Effect.Effect<SessionEventDisableOutput, E>
+
+export type SessionEventTriggerInput = {
+  readonly sessionID: Session.ID
+  readonly name: string
+  readonly input?: Schema.Json | undefined
+}
+export type SessionEventTriggerOutput =
+  | {
+      readonly status: "started"
+      readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+      readonly messageID: SessionMessage.ID
+    }
+  | { readonly status: "skipped" }
+export type SessionEventTriggerOperation<E = never> = (
+  input: SessionEventTriggerInput,
+) => Effect.Effect<SessionEventTriggerOutput, E>
+
+export type SessionEventRemoveInput = { readonly sessionID: Session.ID; readonly name: string }
+export type SessionEventRemoveOutput = void
+export type SessionEventRemoveOperation<E = never> = (
+  input: SessionEventRemoveInput,
+) => Effect.Effect<SessionEventRemoveOutput, E>
+
+export type SessionExecutionCancelInput = {
+  readonly sessionID: Session.ID
+  readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+}
+export type SessionExecutionCancelOutput = { readonly cancelled: boolean }
+export type SessionExecutionCancelOperation<E = never> = (
+  input: SessionExecutionCancelInput,
+) => Effect.Effect<SessionExecutionCancelOutput, E>
 
 export interface SessionApi<E = never> {
   readonly list: SessionListOperation<E>
@@ -1271,6 +1345,13 @@ export interface SessionApi<E = never> {
   readonly view: SessionViewOperation<E>
   readonly commands: SessionCommandsOperation<E>
   readonly events: SessionEventsOperation<E>
+  readonly event: {
+    readonly enable: SessionEventEnableOperation<E>
+    readonly disable: SessionEventDisableOperation<E>
+    readonly trigger: SessionEventTriggerOperation<E>
+    readonly remove: SessionEventRemoveOperation<E>
+  }
+  readonly execution: { readonly cancel: SessionExecutionCancelOperation<E> }
 }
 
 export type MessageListInput = {

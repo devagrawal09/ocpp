@@ -126,6 +126,15 @@ export class CommandNotFoundError extends Schema.TaggedError<CommandNotFoundErro
   { httpApiStatus: 404 },
 ) {}
 
+export class EventNotFoundError extends Schema.TaggedError<EventNotFoundError>()(
+  "EventNotFoundError",
+  {
+    event: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
 export class CommandExecutionError extends Schema.TaggedError<CommandExecutionError>()(
   "CommandExecutionError",
   {

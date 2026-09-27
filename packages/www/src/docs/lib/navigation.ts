@@ -33,6 +33,7 @@ export const docsSections: DocsSection[] = [
           { title: "LSP", slug: "lsp" },
           { title: "Agents", slug: "agents" },
           { title: "Models", slug: "models" },
+          { title: "Session drivers", slug: "drivers" },
           { title: "Skills", slug: "skills" },
           { title: "Commands", slug: "commands" },
           { title: "Plugins", slug: "plugins" },

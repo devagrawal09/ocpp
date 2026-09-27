@@ -169,11 +169,27 @@ The equivalent expanded form is:
 }
 ```
 
-This is the preferred model when the agent is activated. A child session uses
-its subagent's configured model, or inherits the parent session's model when
-none is configured. The session's selected model is stored separately;
-creating or switching a primary session with only an agent ID does not itself
-change that session model.
+This is the preferred model when the agent is activated. The session's selected
+model is stored separately; creating or switching a primary session with only
+an agent ID does not itself change that session model.
+
+A new child session takes its driver from its agent's configured model: a
+`claude/`, `codex/`, or `pi/` model runs the child with that
+[session driver](/drivers), and any other provider runs it with the OC++ runner.
+An agent with no configured model gets the parent session's driver, and on the
+OC++ runner it inherits the parent's model. A `subagent` call can name another
+`driver` or `model`, and a continued child keeps its own driver.
+
+```jsonc
+{
+  "agents": {
+    "reviewer": {
+      // Runs as Claude Code with high effort.
+      "model": "claude/opus#high",
+    },
+  },
+}
+```
 
 ### `system`
 

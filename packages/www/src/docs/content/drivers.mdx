@@ -1,0 +1,141 @@
+---
+title: "Session drivers"
+---
+
+A session driver runs a session instead of OC++'s own runner, using your local
+login for a vendor agent. OC++ supports three drivers:
+
+| Driver   | Runs the session with | Ready when                                                    |
+| -------- | --------------------- | ------------------------------------------------------------- |
+| `claude` | Claude Code           | The `claude` CLI is installed and `claude auth status` passes |
+| `codex`  | Codex                 | The `codex` CLI is installed and `codex login status` passes  |
+| `pi`     | Pi                    | A Pi model provider has configured authentication             |
+
+Any other session runs on the `ocpp` driver: the OC++ runner with a provider
+model.
+
+## Choose a driver
+
+A session's driver is its model's provider, so choosing a driver means choosing
+a model. `claude/opus` runs on Claude Code, `codex/gpt-5.6-sol` on Codex, and
+`pi/anthropic/claude-sonnet-4-6` on Pi. The model variant is the vendor's
+reasoning effort, for example `claude/opus#high`.
+
+The web app lists the ready drivers in the model picker. Over HTTP,
+`GET /api/model/driver` lists every driver with its readiness, default model,
+suggested models, and efforts. Select one when you create a session or switch
+its model.
+
+Configure each vendor under `external_agents`:
+
+```jsonc title="ocpp.jsonc"
+{
+  "$schema": "https://ocpp.ai/config.json",
+  "external_agents": {
+    "claude": { "model": "sonnet", "effort": "high" },
+    "codex": { "model": "gpt-5.6-sol" },
+    "pi": { "enabled": false },
+  },
+}
+```
+
+`model` and `effort` are the defaults when a session or subagent names none.
+`enabled: false` hides a vendor and refuses sessions that use it.
+
+## Harnesses
+
+A driver runs in one of two harnesses.
+
+- **OC++ harness.** This is the default, and the only harness for a top-level
+  session. The vendor keeps its model loop, but its only tool is OC++'s
+  `execute`. Code Mode, permissions, the notebook, and the timeline work as they
+  do for a provider model. The vendor's own system prompt, settings, skills, and
+  MCP servers are replaced by the OC++ prompt.
+- **Native harness.** This is for subagents only, and only when a subagent call
+  asks for it. The vendor keeps its own tools, prompt, and settings, and OC++
+  adds `execute`, the call's `tool.define` handles, and `submit_result` over
+  MCP. OC++ still authorizes the vendor's tool calls: Claude and Pi calls are
+  checked one at a time. Codex has no per-call check, so its whole `read`,
+  `edit`, and `shell` scope is authorized up front, and it runs in a
+  workspace-write sandbox without network access. The child's timeline shows
+  the vendor's own tool calls.
+
+Prompts, steers, and Code Mode completion notifications reach the vendor
+through the session inbox. Claude Code receives steers and notifications during
+a turn. Codex and Pi receive them when their turn ends.
+
+## Subagents
+
+`tools.subagent` takes two options for vendor agents:
+
+- `driver`: `ocpp`, `claude`, `codex`, or `pi`. A continued subagent keeps its
+  own driver. A new one takes the driver of its agent's configured model, or
+  the calling session's driver when the agent has no model.
+- `harness`: `ocpp` (the default) or `native`. The harness applies only to the
+  current call and is never inherited. `native` with the `ocpp` driver is
+  refused.
+
+For Claude Code and Codex, `model` is the vendor's own model name without a
+provider, with an optional effort, for example `opus#high`. For Pi, it is Pi's
+`provider/model`. A model ID in the wrong form fails before any vendor starts.
+
+Every other subagent option works as usual, including `input`, `inputSchema`,
+`tool.define` handles, `outputSchema` with `submit_result`, and continuing by
+`sessionID`. A vendor subagent with no running call answers a direct prompt in
+the OC++ harness.
+
+## Permissions
+
+Starting a vendor subagent asks for the vendor's permission action, `claude`,
+`codex`, or `pi`. The resource is the model ID, for example `opus`. The
+`subagent.models` setting and the `subagent_model` permission apply only to
+subagents on the `ocpp` driver.
+
+Native tool calls are checked against the child's agent. A request that the
+child's timeline can explain is asked in the child session. Any other request,
+such as Codex's up-front scope, is asked in the calling session and names the
+subagent call. OC++'s own tools are not checked as vendor tools: `execute`
+checks each nested tool, and `tool.define` handles and `submit_result` were
+delegated by the call.
+
+## What driver sessions lack
+
+The vendor manages its own context and model calls, so these OC++ behaviors do
+not apply:
+
+- Step retries, overflow compaction, and manual compaction. A compaction request
+  is refused with a message.
+- Instruction epochs. Current instructions are rendered into each vendor run's
+  system prompt instead.
+- Agent step limits, plan-mode reminders, per-step snapshots, and file diffs.
+  Plan-mode permissions still apply inside `execute`.
+- Plugin hooks for session context, model requests, and HTTP requests.
+- Image and PDF attachments, and your own shell commands. These are not
+  forwarded to the vendor yet.
+
+Cost and token usage come from the vendor. Titles are generated only when an
+OC++ provider model is available.
+
+## Continuation and restarts
+
+OC++ resumes a vendor session only when the vendor's history matches what OC++
+last recorded. Otherwise, it starts a new vendor session and replays the
+session's history as a model saw it: messages, tool calls, and their visible
+results. Private subagent input and Code Mode traces are never replayed. After
+a restart, a session that was running continues with the same vendor session.
+
+## Known limits
+
+- Claude Code adds one identity line and its own environment reminders to the
+  OC++ prompt.
+- Codex keeps `apply_patch` in the OC++ harness, but a read-only sandbox rejects
+  every write. It also keeps three MCP resource tools, which have nothing to
+  read, and `request_user_input` in Plan mode.
+- Codex reads your global `$CODEX_HOME/AGENTS.md` even in the OC++ harness.
+  Codex has no setting to turn this off. Pointing `CODEX_HOME` elsewhere would
+  need a copy of your credentials, and a token refresh in that copy could sign
+  you out of Codex. Project `AGENTS.md` files are not sent.
+- On Linux, native Claude Code needs `bubblewrap` and `socat` for its sandbox.
+  Without them, it stops with "Sandbox required but unavailable".
+- Set `OCPP_DISABLE_EXTERNAL_AGENTS=true` to offer no drivers and skip checking
+  vendor CLIs.

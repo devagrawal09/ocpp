@@ -59,6 +59,7 @@ import { Agent } from "@ocpp/core/agent"
 import { Config } from "@ocpp/core/config"
 import { Document, Info } from "@ocpp/schema/config"
 import { ConfigCompaction } from "@ocpp/schema/config/compaction"
+import { ToolSessionTools } from "@ocpp/core/tool/session-tools"
 import { Tool } from "@ocpp/core/tool"
 import type { Info as ToolInfo } from "@ocpp/schema/tool"
 import { InstructionStateTable, SessionInboxTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
@@ -301,11 +302,16 @@ const layer = Layer.unwrap(
           Tool.node.implementation as Layer.Layer<
             Tool.Service,
             never,
-            PluginHooks.Service | PluginRuntime.Service | Bus.Service | Image.Service | CodeModeStore.Service
+            | PluginHooks.Service
+            | PluginRuntime.Service
+            | Bus.Service
+            | Image.Service
+            | CodeModeStore.Service
+            | ToolSessionTools.Service
           >,
         ),
       ),
-      deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node],
+      deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node, ToolSessionTools.node],
     })
     // Code Mode runs programs as Jobs and delivers their completions through the Session service.
     const runtime = PluginRuntime.makeCell()

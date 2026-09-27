@@ -10,6 +10,8 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import { filesystem } from "@ocpp/util/effect/app-node-platform"
 import { Database } from "@ocpp/core/database/database"
+import { CodeModeCatalog } from "@ocpp/core/codemode/catalog"
+import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Bus } from "@ocpp/core/bus"
 import { Config } from "@ocpp/core/config"
@@ -148,6 +150,7 @@ const shellPluginSupervisor = makeLocationNode({
     Environment.node,
     LocationMutation.node,
     Permission.node,
+    PluginHooks.node,
     PluginRuntime.node,
     Shell.node,
     ShellSelect.node,
@@ -717,6 +720,54 @@ describe("ShellTool ordinary shell syntax", () => {
 })
 
 describe("ShellTool", () => {
+  it.live("names the OS and shell in the description the catalog and tools.search show", () =>
+    Effect.acquireUseRelease(
+      Effect.promise(() => tmpdir()),
+      (tmp) => {
+        reset()
+        return withSession(tmp.path, (registry) =>
+          Effect.gen(function* () {
+            const selection = yield* ShellSelect.Service
+            yield* selection.transform((draft) => draft.configure("sh"))
+            const shell = ShellSelect.name(yield* selection.resolve({ priority: "compat" }))
+            const snapshot = yield* registry.snapshot()
+            const described = snapshot.codeModeCatalog?.find((tool) => tool.path === ShellTool.name)?.description ?? ""
+            expect(described).toMatch(
+              new RegExp(`^Execute a shell command and return its output\\. Commands run on \\S+ using ${shell}\\. `),
+            )
+            // The catalog shows the first 120 characters of the description, which include the line.
+            expect(CodeModeInstructions.render(CodeModeCatalog.summarize(snapshot.codeModeCatalog ?? []))).toContain(
+              "// " + described.slice(0, 80),
+            )
+
+            yield* seedToolSession(sessionID, toolIdentity.messageID)
+            const started = yield* snapshot.execute({
+              sessionID,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id: "call-search-shell",
+                name: "execute",
+                input: { code: 'const shellSearch = tools.search({ query: "tools.shell" })' },
+              },
+            })
+            expect(
+              yield* waitForCodeMode(started.output, {
+                sessionID,
+                assistantMessageID: toolIdentity.messageID,
+                id: "call-search-shell",
+              }),
+            ).toMatchObject({ status: "saved", saved: ["shellSearch"] })
+            expect((yield* readCodeModeNotebook(sessionID)).shellSearch).toMatchObject({
+              items: [{ path: "tools.shell", description: described }],
+            })
+          }),
+        )
+      },
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]().then(() => undefined)),
+    ),
+  )
+
   it.live("returns both sequential Code Mode shell results", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),

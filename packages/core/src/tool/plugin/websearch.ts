@@ -196,7 +196,7 @@ export const Plugin = {
       )
       .pipe(Effect.orDie)
 
-    yield* ctx.session.hook("context", (event) =>
+    yield* ctx.tool.hook("catalog", (event) =>
       Effect.gen(function* () {
         const disabled = yield* websearch.default().pipe(
           Effect.as(false),

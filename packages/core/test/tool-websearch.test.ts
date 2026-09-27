@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -11,6 +11,7 @@ import { Session } from "@ocpp/core/session"
 import { toSessionError } from "@ocpp/core/session/to-session-error"
 import { Tool } from "@ocpp/core/tool"
 import { WebSearchTool } from "@ocpp/core/tool/plugin/websearch"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Image } from "@ocpp/core/image"
 import { testEffect } from "./lib/effect"
@@ -36,7 +37,7 @@ const webSearchToolNode = makeLocationNode({
       yield* registerToolPlugin(WebSearchTool.Plugin, { websearch: webSearchHost(websearch) })
     }),
   ),
-  deps: [Tool.node, Permission.node, WebSearch.node, Form.node],
+  deps: [Tool.node, PluginHooks.node, Permission.node, WebSearch.node, Form.node],
 })
 
 const sessionID = Session.ID.make("ses_websearch_test")
@@ -146,6 +147,43 @@ describe("WebSearchTool registration", () => {
         },
       ])
       expect(fixture.events).toEqual(["permission", "query"])
+    }),
+  )
+
+  it.effect("leaves websearch out of the catalog and refuses calls to it while web search is disabled", () =>
+    Effect.gen(function* () {
+      const fixture = yield* setup
+      const registry = fixture.registry
+      // Another tool keeps execute on offer while websearch is hidden.
+      yield* registry.transform((draft) =>
+        draft.add({
+          name: "echo",
+          description: "Echo text",
+          input: Schema.Struct({ text: Schema.String }),
+          execute: ({ text }) => Effect.succeed({ content: text }),
+        }),
+      )
+      yield* fixture.websearch.select(false)
+
+      const snapshot = yield* registry.snapshot()
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo"])
+      const refused = yield* snapshot
+        .execute({
+          sessionID,
+          ...toolIdentity,
+          call: {
+            type: "tool-call",
+            id: "call-disabled-search",
+            name: "execute",
+            input: { code: 'const found = tools.websearch({ query: "effect typescript" })' },
+          },
+        })
+        .pipe(Effect.flip)
+      expect(refused.metadata).toMatchObject({ executionStatus: "refused", kind: "UnknownTool", tools: ["websearch"] })
+      expect(fixture.events).toEqual([])
+
+      yield* fixture.websearch.select(WebSearch.ID.make("exa"))
+      expect(yield* codeModeTools(registry)).toEqual(["echo", "websearch"])
     }),
   )
 

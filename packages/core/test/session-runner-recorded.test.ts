@@ -184,7 +184,6 @@ describe("SessionRunnerLLM recorded", () => {
       yield* agents.transform((draft) =>
         draft.update(Agent.ID.make("build"), (agent) => {
           agent.mode = "primary"
-          agent.permissions.push({ action: "execute", resource: "*", effect: "deny" })
         }),
       )
       const pluginHost = host({
@@ -291,7 +290,6 @@ describe("SessionModelRequest HTTP bridge", () => {
       yield* agents.transform((draft) =>
         draft.update(Agent.ID.make("build"), (agent) => {
           agent.mode = "primary"
-          agent.permissions.push({ action: "execute", resource: "*", effect: "deny" })
         }),
       )
       const pluginHost = host({

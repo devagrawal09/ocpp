@@ -1,6 +1,8 @@
 import { describe, expect } from "bun:test"
 import { Agent } from "@ocpp/core/agent"
 import { Bus } from "@ocpp/core/bus"
+import { CodeModeCatalog } from "@ocpp/core/codemode/catalog"
+import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
 import { Database } from "@ocpp/core/database/database"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { CodeModeTool } from "@ocpp/core/codemode/tool"
@@ -11,6 +13,8 @@ import { Image } from "@ocpp/core/image"
 import { Job } from "@ocpp/core/job"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
+import { Model } from "@ocpp/core/model"
+import { Provider } from "@ocpp/core/provider"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionMessage } from "@ocpp/core/session/message"
@@ -1010,6 +1014,65 @@ describe("Tool", () => {
       expect(yield* run(snapshot, "call-allowed", 'return tools.echo({ text: "hi" })')).toMatchObject({
         status: "saved",
         summary: expect.stringContaining('{"text":"hi"}'),
+      })
+    }),
+  )
+
+  it.effect("shapes each request's catalog, tools.search, and compile check through catalog hooks", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      const hooks = yield* PluginHooks.Service
+      yield* transform(service, { echo: make() })
+      yield* transform(service, { deploy: make() }, { namespace: "acme" })
+      const seen: unknown[] = []
+      yield* hooks.register("tool", "catalog", (event) =>
+        Effect.sync(() => {
+          seen.push({ ...event, tools: Object.keys(event.tools) })
+          const echo = event.tools.echo
+          if (echo) echo.description = "Echo text for " + (event.model?.id ?? "no model")
+          delete event.tools["acme.deploy"]
+        }),
+      )
+      const model = Model.Ref.make({ id: Model.ID.make("gpt-5"), providerID: Provider.ID.make("openai") })
+      const snapshot = yield* service.snapshot(undefined, sessionID, { agent: identity.agent, model })
+
+      expect(seen).toEqual([{ sessionID, agent: identity.agent, model, tools: ["echo", "acme.deploy"] }])
+      expect(snapshot.codeModeCatalog?.map((entry) => [entry.path, entry.description])).toEqual([
+        ["echo", "Echo text for gpt-5"],
+      ])
+      expect(CodeModeInstructions.render(CodeModeCatalog.summarize(snapshot.codeModeCatalog ?? []))).toContain(
+        "// Echo text for gpt-5",
+      )
+      // Hooks shape one request's view; the registrations themselves are unchanged.
+      expect((yield* service.registrations()).map((tool) => tool.description)).toEqual(["Echo text", "Echo text"])
+      expect((yield* service.snapshot()).codeModeCatalog?.map((entry) => entry.description)).toEqual([
+        "Echo text for no model",
+      ])
+
+      const refused = yield* snapshot
+        .execute({
+          ...call("execute", "call-hooked-removed"),
+          call: {
+            type: "tool-call",
+            id: "call-hooked-removed",
+            name: "execute",
+            input: { code: 'const deployed = tools.acme.deploy({ text: "now" })' },
+          },
+        })
+        .pipe(Effect.flip)
+      expect(refused.metadata).toMatchObject({
+        executionStatus: "refused",
+        kind: "UnknownTool",
+        tools: ["acme.deploy"],
+      })
+
+      expect(
+        yield* run(snapshot, "call-hooked-search", 'const hookedSearch = tools.search({ query: "echo" })'),
+      ).toMatchObject({ status: "saved" })
+      expect((yield* readCodeModeNotebook(sessionID)).hookedSearch).toMatchObject({
+        items: [{ path: "tools.echo", description: "Echo text for gpt-5" }],
+        remaining: 0,
       })
     }),
   )

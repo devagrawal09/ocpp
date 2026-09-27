@@ -298,8 +298,10 @@ export const Plugin = {
       )
       .pipe(Effect.orDie)
 
-    yield* ctx.session.hook("context", (event) =>
+    yield* ctx.tool.hook("catalog", (event) =>
       Effect.sync(() => {
+        // Without a model request, such as a command handler run, every file tool stays callable.
+        if (event.model === undefined) return
         const usePatch =
           event.model.id.includes("gpt-") && !event.model.id.includes("oss") && !event.model.id.includes("gpt-4")
         if (usePatch) {

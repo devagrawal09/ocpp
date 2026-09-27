@@ -13,7 +13,12 @@ import { Permission } from "@ocpp/core/permission"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { Tool } from "@ocpp/core/tool"
+import { EditTool } from "@ocpp/core/tool/plugin/edit"
 import { PatchTool } from "@ocpp/core/tool/plugin/patch"
+import { WriteTool } from "@ocpp/core/tool/plugin/write"
+import { Model } from "@ocpp/core/model"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { Provider } from "@ocpp/core/provider"
 import { transformEnvironmentFiles } from "./fixture/environment"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
@@ -25,6 +30,24 @@ import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefin
 const patchToolNode = makeLocationNode({
   name: "test/patch-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(PatchTool.Plugin)),
+  deps: [
+    Tool.node,
+    PluginHooks.node,
+    LocationMutation.node,
+    FileMutation.node,
+    Environment.node,
+    Formatter.node,
+    Location.node,
+    Permission.node,
+  ],
+})
+
+// Edit and write register beside patch so the per-model selection has every file tool to choose from.
+const editWriteToolNode = makeLocationNode({
+  name: "test/edit-write-tool-plugins",
+  layer: Layer.effectDiscard(
+    Effect.all([registerToolPlugin(EditTool.Plugin), registerToolPlugin(WriteTool.Plugin)], { discard: true }),
+  ),
   deps: [
     Tool.node,
     LocationMutation.node,
@@ -154,6 +177,61 @@ const withTempTool = <A, E, R>(body: (directory: string, registry: Tool.Interfac
   )
 
 describe("PatchTool", () => {
+  it.live("offers patch to GPT models and edit and write to other models", () =>
+    Effect.acquireUseRelease(
+      Effect.promise(() => tmpdir()),
+      (tmp) =>
+        Effect.gen(function* () {
+          reset()
+          const registry = yield* Tool.Service
+          const request = (id: string, providerID: string) => ({
+            agent: toolIdentity.agent,
+            model: Model.Ref.make({ id: Model.ID.make(id), providerID: Provider.ID.make(providerID) }),
+          })
+          const paths = (input?: ReturnType<typeof request>) =>
+            registry
+              .snapshot(undefined, sessionID, input)
+              .pipe(Effect.map((snapshot) => snapshot.codeModeCatalog?.map((tool) => tool.path)))
+
+          expect(yield* paths(request("gpt-5", "openai"))).toEqual(["patch"])
+          expect(yield* paths(request("gpt-4.1", "openai"))).toEqual(["edit", "write"])
+          expect(yield* paths(request("gpt-oss-120b", "openrouter"))).toEqual(["edit", "write"])
+          expect(yield* paths(request("claude-sonnet-4-5", "anthropic"))).toEqual(["edit", "write"])
+          // Command and event handler runs involve no model, so every file tool stays callable.
+          expect(yield* paths()).toEqual(["edit", "patch", "write"])
+
+          const refused = yield* (yield* registry.snapshot(undefined, sessionID, request("gpt-5", "openai")))
+            .execute({
+              sessionID,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id: "call-edit-for-gpt",
+                name: "execute",
+                input: { code: 'const edited = tools.edit({ filePath: "a.txt", oldString: "a", newString: "b" })' },
+              },
+            })
+            .pipe(Effect.flip)
+          expect(refused.metadata).toMatchObject({ executionStatus: "refused", kind: "UnknownTool", tools: ["edit"] })
+        }).pipe(
+          Effect.provide(
+            AppNodeBuilder.build(LayerNode.group([Tool.node, patchToolNode, editWriteToolNode]), [
+              [
+                Location.node,
+                Layer.succeed(
+                  Location.Service,
+                  Location.Service.of(location({ directory: AbsolutePath.make(tmp.path) })),
+                ),
+              ],
+              [Formatter.node, formatter],
+              [Permission.node, permission],
+            ]),
+          ),
+        ),
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
+    ),
+  )
+
   it.live("registers and sequentially applies add, update, and delete hunks", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),

@@ -7,6 +7,7 @@ import { Tool } from "@ocpp/schema/tool"
 import { Context, Effect, Layer, Result, Schema, SchemaIssue, Scope, Types } from "effect"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import type { Agent } from "./agent.js"
+import type { Model } from "./model.js"
 import { CodeModeCatalog } from "./codemode/catalog.js"
 import { CodeModeStore } from "./codemode/store.js"
 import { CodeModeTool } from "./codemode/tool.js"
@@ -49,7 +50,15 @@ export interface Interface extends State.Transformable<Draft> {
     permissions?: Permission.Ruleset,
     sessionID?: SessionSchema.ID,
   ) => Effect.Effect<ReadonlyArray<Tool.Info>>
-  readonly snapshot: (permissions?: Permission.Ruleset, sessionID?: SessionSchema.ID) => Effect.Effect<Snapshot>
+  /**
+   * The tools one request may call, shaped by `tool` `catalog` hooks. `request` names the agent and model
+   * those hooks shape the catalog for; the model is absent when no model request is involved.
+   */
+  readonly snapshot: (
+    permissions?: Permission.Ruleset,
+    sessionID?: SessionSchema.ID,
+    request?: { readonly agent: Agent.ID; readonly model?: Model.Ref },
+  ) => Effect.Effect<Snapshot>
   /**
    * Resumes a Code Mode execution that was running when the host stopped, with the tools the agent
    * that started it may use. Returns why it cannot resume safely instead of starting it.
@@ -226,6 +235,32 @@ const layer = Layer.effect(
         ...(sessionID === undefined ? [] : (sessionTools.get(sessionID) ?? []).flatMap((item) => [...item.tools])),
       ].flatMap(([name, tool]) => (whollyDisabled(tool.options?.permission ?? name, permissions ?? []) ? [tool] : []))
 
+    // Plugins shape each request's Code Mode catalog: an edited description reaches the catalog and
+    // tools.search, and a removed entry is neither listed nor callable.
+    const catalogued = Effect.fnUntraced(function* (
+      registrations: ReadonlyMap<string, Tool.Info>,
+      sessionID?: SessionSchema.ID,
+      request?: { readonly agent: Agent.ID; readonly model?: Model.Ref },
+    ) {
+      const paths = new Map(
+        Array.from(registrations, ([name, tool]) => [CodeModeTool.qualifiedName(tool), { name, tool }]),
+      )
+      const event = yield* hooks.trigger("tool", "catalog", {
+        ...(sessionID === undefined ? {} : { sessionID }),
+        ...request,
+        tools: Object.fromEntries(
+          Array.from(paths, ([path, entry]) => [path, { description: entry.tool.description }]),
+        ),
+      })
+      return new Map(
+        Array.from(paths).flatMap(([path, entry]) => {
+          const description = event.tools[path]?.description
+          if (description === undefined) return []
+          return [[entry.name, description === entry.tool.description ? entry.tool : { ...entry.tool, description }]]
+        }),
+      )
+    })
+
     const activeInput = (sessionID?: SessionSchema.ID) =>
       sessionID === undefined
         ? undefined
@@ -296,45 +331,42 @@ const layer = Layer.effect(
       registrations: Effect.fn("Tool.registrations")((permissions, sessionID) =>
         Effect.sync(() => Array.from(active(permissions, sessionID).values())),
       ),
-      snapshot: Effect.fn("Tool.snapshot")((permissions, sessionID) =>
-        Effect.sync(() => {
-          const registrations = active(permissions, sessionID)
-          // `execute` is the only tool the model ever sees. Every registered tool is reachable only from
-          // code, so an agent gets `execute` exactly when its permissions leave at least one tool to call.
-          const codemodeTool =
-            registrations.size === 0
-              ? undefined
-              : CodeModeTool.create(
-                  registrations,
-                  executeCodeModeTool,
-                  codemodeServices,
-                  activeInput(sessionID),
-                  denied(permissions, sessionID),
-                )
-          return {
-            ...(codemodeTool === undefined ? {} : { codeModeCatalog: CodeModeTool.catalog(registrations) }),
-            definitions: codemodeTool ? [definition(codemodeTool)] : [],
-            execute: Effect.fnUntraced(function* (input: Parameters<Snapshot["execute"]>[0]) {
-              const context: Tool.Context = {
-                sessionID: input.sessionID,
-                agent: input.agent,
-                messageID: input.messageID,
-                id: Tool.CallID.make(input.call.id),
-                progress: input.progress ?? (() => Effect.void),
-              }
-              const event = yield* beforeExecute(input.call.name, input.call.input, context)
-              const requested = input.definitions?.get(event.tool)
-              // Preserve session context removal and alias resolution, now after the repair hook.
-              if (!requested && input.definitions && codemodeTool?.name === event.tool)
-                return yield* new Tool.Error({ message: `Tool is not available for this request: ${event.tool}` })
-              const name = requested?.name ?? event.tool
-              if (name === "execute" && codemodeTool)
-                return yield* executeTool(codemodeTool, name, event.input, context)
-              return yield* new Tool.Error({ message: `Unknown tool: ${name}` })
-            }),
-          }
-        }),
-      ),
+      snapshot: Effect.fn("Tool.snapshot")(function* (permissions, sessionID, request) {
+        const registrations = yield* catalogued(active(permissions, sessionID), sessionID, request)
+        // `execute` is the only tool the model ever sees. Every registered tool is reachable only from
+        // code, so an agent gets `execute` exactly when its permissions leave at least one tool to call.
+        const codemodeTool =
+          registrations.size === 0
+            ? undefined
+            : CodeModeTool.create(
+                registrations,
+                executeCodeModeTool,
+                codemodeServices,
+                activeInput(sessionID),
+                denied(permissions, sessionID),
+              )
+        return {
+          ...(codemodeTool === undefined ? {} : { codeModeCatalog: CodeModeTool.catalog(registrations) }),
+          definitions: codemodeTool ? [definition(codemodeTool)] : [],
+          execute: Effect.fnUntraced(function* (input: Parameters<Snapshot["execute"]>[0]) {
+            const context: Tool.Context = {
+              sessionID: input.sessionID,
+              agent: input.agent,
+              messageID: input.messageID,
+              id: Tool.CallID.make(input.call.id),
+              progress: input.progress ?? (() => Effect.void),
+            }
+            const event = yield* beforeExecute(input.call.name, input.call.input, context)
+            const requested = input.definitions?.get(event.tool)
+            // Preserve session context removal and alias resolution, now after the repair hook.
+            if (!requested && input.definitions && codemodeTool?.name === event.tool)
+              return yield* new Tool.Error({ message: `Tool is not available for this request: ${event.tool}` })
+            const name = requested?.name ?? event.tool
+            if (name === "execute" && codemodeTool) return yield* executeTool(codemodeTool, name, event.input, context)
+            return yield* new Tool.Error({ message: `Unknown tool: ${name}` })
+          }),
+        }
+      }),
     })
   }),
 )

@@ -527,33 +527,38 @@ export const Plugin = {
       })
       .pipe(Effect.orDie)
 
-    yield* ctx.session.hook("context", (event) =>
+    // The catalog lists only each description's first line, so SubagentInstructions shows the same
+    // list up front; this copy is what tools.search returns.
+    yield* ctx.tool.hook("catalog", (event) =>
       Effect.gen(function* () {
         const tool = event.tools[name]
-        if (!tool) return
+        if (!tool || !event.agent) return
         const selected = yield* agents.resolve(event.agent)
         if (!selected) return
-        const available = (yield* agents.list())
-          .filter(
-            (agent) =>
-              agent.mode !== "primary" &&
-              !agent.hidden &&
-              Permission.evaluate(name, agent.id, selected.permissions).effect !== "deny",
-          )
-          .toSorted((a, b) => a.id.localeCompare(b.id))
-        if (available.length === 0) return
-        tool.description = [
-          tool.description,
-          "",
-          "Available subagents:",
-          ...available.map(
-            (agent) =>
-              `- ${agent.id}: ${agent.description ?? "This subagent should only be called when explicitly requested."}`,
-          ),
-        ].join("\n")
+        const subagents = available(yield* agents.list(), selected.permissions)
+        if (subagents.length === 0) return
+        tool.description = [tool.description, "", "Available subagents:", ...listing(subagents)].join("\n")
       }),
     )
   }),
+}
+
+/** The subagents a caller with these permissions may start: never primary or hidden agents. */
+export function available(agents: ReadonlyArray<Agent.Info>, permissions: Permission.Ruleset) {
+  return agents
+    .filter(
+      (agent) =>
+        agent.mode !== "primary" && !agent.hidden && Permission.evaluate(name, agent.id, permissions).effect !== "deny",
+    )
+    .toSorted((a, b) => a.id.localeCompare(b.id))
+    .map((agent) => ({
+      id: agent.id,
+      description: agent.description ?? "This subagent should only be called when explicitly requested.",
+    }))
+}
+
+export function listing(subagents: ReadonlyArray<{ readonly id: string; readonly description: string }>) {
+  return subagents.map((agent) => `- ${agent.id}: ${agent.description}`)
 }
 
 /**

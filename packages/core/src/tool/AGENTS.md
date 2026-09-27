@@ -32,6 +32,8 @@ Leaves own resolution, permission, and side-effect ordering. Translate only expe
 
 Built-ins, plugins, and MCP install tools through `Tool.Service.transform`, adding complete tool objects to the draft. A tool may provide a namespace, which places it at `tools.<namespace>.<tool>` in Code Mode. The model is only ever offered one tool, `execute`: every registered tool is reachable only from code, and an agent receives `execute` exactly when its permissions leave at least one tool callable. Do not add a way to put a registered tool on the provider's tool list.
 
+Session `context` hooks see only `execute`, so per-request tool customization belongs in the `tool` `catalog` hook. `Tool.snapshot` runs it with the Session, agent, and model (the model is absent for command and event handler runs), keyed by Code Mode path: an edited description reaches the catalog and `tools.search`, and a removed entry is neither listed nor callable. The catalog instructions show only each description's first line, so information the model needs up front, such as the subagent list, also needs an instruction source.
+
 The service uses shared `State` to replay synchronous transforms in registration order against a fresh draft. `Tool.Service.reload()` rebuilds from captured source data without changing registration precedence. Registrations are scoped and return a real, idempotent `dispose` Effect:
 
 - The latest valid active registration for the same effective name wins.
@@ -50,6 +52,8 @@ Type safety ends at registration. The registry validates model input and declare
 The registry has no `Permission.Service` dependency and performs no execution authorization. Registration options may attach a permission action solely to preserve whole-tool definition filtering. Most registrations default to their effective name; `edit`, `write`, and `patch` use the shared `edit` action.
 
 Tool filtering is catalog visibility, not execution authorization. A call still executes the captured tool's leaf policy if it reaches execution.
+
+`execute` is not a permission action: a rule for it matches no registered tool and has no effect. To leave an agent without `execute`, deny the tools themselves, for example with `*`.
 
 ## Output
 

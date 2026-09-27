@@ -34,6 +34,8 @@ import { WebSearch } from "@ocpp/core/websearch"
 import { Effect, Layer } from "effect"
 import { tempLocationLayer } from "../fixture/location"
 import { emptyMcpLayer } from "../fixture/mcp"
+import { noVendorDrivers } from "../lib/drivers"
+import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
 
 const npmLayer = Layer.succeed(
   Npm.Service,
@@ -110,6 +112,7 @@ export const PluginTestLayer = Layer.merge(
       AISDK.node,
       Catalog.node,
       Command.node,
+      ExternalAgentDrivers.node,
       Integration.node,
       KV.node,
       Mcp.node,
@@ -132,6 +135,7 @@ export const PluginTestLayer = Layer.merge(
       [Generate.node, generateLayer],
       [Permission.node, permissionLayer],
       [PluginRuntime.node, runtimeLayer],
+      [ExternalAgentDrivers.node, noVendorDrivers],
     ],
   ),
   jobLayer,

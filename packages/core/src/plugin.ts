@@ -10,6 +10,7 @@ import { Agent } from "./agent.js"
 import { AISDK } from "./aisdk.js"
 import { Catalog } from "./catalog.js"
 import { Command } from "./command.js"
+import { ExternalAgentDrivers } from "./external-agent/drivers.js"
 import { Bus } from "./bus.js"
 import { Integration } from "./integration.js"
 import { KV } from "./kv.js"
@@ -188,6 +189,7 @@ export const node = makeLocationNode({
     AISDK.node,
     Catalog.node,
     Command.node,
+    ExternalAgentDrivers.node,
     Integration.node,
     KV.node,
     Mcp.node,

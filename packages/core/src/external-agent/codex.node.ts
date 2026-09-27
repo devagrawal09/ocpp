@@ -61,7 +61,12 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
         await writeFile(path.join(instructions, "instructions.md"), options.harness.system)
         await writeFile(path.join(instructions, "catalog.json"), await catalog(options.signal))
       }
-      const settings = configure(options, bridge, instructions)
+      const settings = configure(
+        options,
+        bridge,
+        instructions,
+        options.harness.type === "ocpp" ? await servers(options.directory, options.signal) : [],
+      )
       const codex = new Codex({
         apiKey: process.env.CODEX_API_KEY ?? process.env.OPENAI_API_KEY,
         codexPathOverride: "codex",
@@ -118,12 +123,7 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
  * deferred tool search turned off, so OC++'s execute is offered to the model directly.
  */
 async function catalog(signal: AbortSignal) {
-  const output = await new Promise<string>((resolve, reject) =>
-    execFile("codex", ["debug", "models"], { signal, timeout: 30_000, maxBuffer: 64 * 1024 * 1024 }, (error, stdout) =>
-      error ? reject(error) : resolve(stdout),
-    ),
-  )
-  const parsed = Schema.decodeUnknownSync(Catalog)(output)
+  const parsed = Schema.decodeUnknownSync(Catalog)(await codex(["debug", "models"], signal))
   return JSON.stringify({
     ...parsed,
     models: parsed.models.map((model) => ({
@@ -140,13 +140,32 @@ const Catalog = Schema.fromJsonString(
   ]),
 )
 
+/** The user's own MCP servers, as Codex resolves its configuration layers for this directory. */
+async function servers(directory: string, signal: AbortSignal) {
+  return Schema.decodeUnknownSync(Servers)(await codex(["mcp", "list", "--json"], signal, directory))
+    .map((server) => server.name)
+    .filter((name) => name !== "ocpp")
+}
+const Servers = Schema.fromJsonString(Schema.Array(Schema.Struct({ name: Schema.String })))
+
+function codex(args: ReadonlyArray<string>, signal: AbortSignal, cwd?: string) {
+  return new Promise<string>((resolve, reject) =>
+    execFile("codex", args, { signal, cwd, timeout: 30_000, maxBuffer: 64 * 1024 * 1024 }, (error, stdout) =>
+      error ? reject(error) : resolve(stdout),
+    ),
+  )
+}
+
 /** Codex configuration for one run. `workspace` holds the OC++ system prompt and model catalog in the OC++ harness. */
 export function configure(
   options: Pick<ExternalAgentDriver.Options, "directory" | "model" | "effort" | "harness">,
   bridge: { readonly url: string; readonly token: string },
   workspace?: string,
+  disabled: ReadonlyArray<string> = [],
 ): { readonly config: NonNullable<CodexOptions["config"]>; readonly thread: ThreadOptions } {
   const mcp = {
+    // The user's own MCP servers stay off in the OC++ harness.
+    ...Object.fromEntries(disabled.map((name) => [name, { enabled: false }])),
     ocpp: {
       url: bridge.url,
       http_headers: { Authorization: "Bearer " + bridge.token },

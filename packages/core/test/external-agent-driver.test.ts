@@ -407,6 +407,8 @@ if (process.argv[2] === "app-server") {
   }
 } else if (process.argv[2] === "debug") {
   write({ models: [{ slug: "gpt-5.6-sol", tool_mode: "code_mode_only", multi_agent_version: "v2", supports_search_tool: true }] })
+} else if (process.argv[2] === "mcp") {
+  write([{ name: "personal", enabled: true }, { name: "ocpp", enabled: true }])
 } else {
   const args = process.argv.slice(2)
   const read = (key) => {
@@ -477,6 +479,8 @@ if (process.argv[2] === "app-server") {
             'web_search="disabled"',
             'approval_policy="on-request"',
             'mcp_servers.ocpp.default_tools_approval_mode="approve"',
+            // The user's own MCP servers stay off in the OC++ harness.
+            "mcp_servers.personal.enabled=false",
           ]),
         )
       }

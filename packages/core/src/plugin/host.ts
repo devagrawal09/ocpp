@@ -11,6 +11,7 @@ import { AISDK } from "../aisdk.js"
 import { Catalog } from "../catalog.js"
 import { Command } from "../command.js"
 import { Credential } from "../credential.js"
+import { ExternalAgentDrivers } from "../external-agent/drivers.js"
 import { Bus } from "../bus.js"
 import { Integration } from "../integration.js"
 import { KV } from "../kv.js"
@@ -37,6 +38,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
   const agents = yield* Agent.Service
   const aisdk = yield* AISDK.Service
   const catalog = yield* Catalog.Service
+  const drivers = yield* ExternalAgentDrivers.Service
   const commands = yield* Command.Service
   const bus = yield* Bus.Service
   const integration = yield* Integration.Service
@@ -159,6 +161,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
       model: {
         list: () => response(catalog.model.available()),
         default: () => response(catalog.model.default()),
+        drivers: () => response(drivers.list()),
       },
       reload: catalog.reload,
       transform: (callback) =>

@@ -158,6 +158,7 @@ export function fromPromise(plugin: Plugin) {
             model: {
               list: adaptApiMethod(ModelEndpoints["model.list"], host.catalog.model.list),
               default: adaptApiMethod(ModelEndpoints["model.default"], host.catalog.model.default),
+              drivers: adaptApiMethod(ModelEndpoints["model.drivers"], host.catalog.model.drivers),
             },
             transform: transform(host.catalog),
             reload: () => run(host.catalog.reload()),

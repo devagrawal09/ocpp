@@ -46,6 +46,7 @@ export function host(overrides: Overrides = {}): Plugin.Context {
       model: {
         list: () => Effect.die("unused catalog.model.list"),
         default: () => Effect.die("unused catalog.model.default"),
+        drivers: () => Effect.die("unused catalog.model.drivers"),
       },
       transform: () => Effect.die("unused catalog.transform"),
       reload: () => Effect.die("unused catalog.reload"),
@@ -227,6 +228,7 @@ export function catalogHost(catalog: Catalog.Interface): Plugin.Context["catalog
           })),
         ),
       default: () => Effect.die("unused catalog.model.default"),
+      drivers: () => Effect.die("unused catalog.model.drivers"),
     },
     reload: catalog.reload,
     transform: (callback) =>

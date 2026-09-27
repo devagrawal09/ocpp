@@ -253,6 +253,22 @@ export const Plugin = {
                   ),
                 )
               }
+              const existing =
+                reattached ??
+                (input.sessionID === undefined
+                  ? undefined
+                  : yield* runtime.session
+                      .get(input.sessionID)
+                      .pipe(
+                        Effect.mapError(
+                          (error) =>
+                            new ToolFailure({ message: `Subagent session not found: ${input.sessionID}`, error }),
+                        ),
+                      ))
+              if (existing !== undefined && existing.parentID !== context.sessionID)
+                return yield* new ToolFailure({
+                  message: `Session ${existing.id} is not a child of the current session`,
+                })
               const source = { type: "tool" as const, messageID: context.messageID, id: context.id }
               // The model for an OC++-run child: requested, else a provider model its agent or caller already uses.
               const runnerModel = Effect.fnUntraced(function* () {
@@ -355,22 +371,6 @@ export const Plugin = {
                   ...(effort === undefined ? {} : { variant: Model.VariantID.make(effort) }),
                 })
               })
-              const existing =
-                reattached ??
-                (input.sessionID === undefined
-                  ? undefined
-                  : yield* runtime.session
-                      .get(input.sessionID)
-                      .pipe(
-                        Effect.mapError(
-                          (error) =>
-                            new ToolFailure({ message: `Subagent session not found: ${input.sessionID}`, error }),
-                        ),
-                      ))
-              if (existing !== undefined && existing.parentID !== context.sessionID)
-                return yield* new ToolFailure({
-                  message: `Session ${existing.id} is not a child of the current session`,
-                })
               // A continued child keeps its own driver; a new one takes its caller's, unless the call names one.
               const driver = input.driver ?? SessionDriver.of((existing ?? parent).model)
               const harness = input.harness ?? "ocpp"

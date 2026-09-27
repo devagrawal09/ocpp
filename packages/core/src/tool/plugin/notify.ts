@@ -88,7 +88,9 @@ export const Plugin = {
                     (from.executionID
                       ? (count === 1 ? " (execution " : " (latest from execution ") + from.executionID + ")"
                       : "") +
-                    ", sent by code with tools.session.notify. It did not come from the user." +
+                    ", sent by code with tools.session.notify. " +
+                    (count === 1 ? "It" : "They") +
+                    " did not come from the user." +
                     (notices.length === 1 ? "" : " The latest " + notices.length + " follow, oldest first."),
                   ...notices.flatMap((notice) => untrusted("Notice", notice)),
                 ].join("\n"),

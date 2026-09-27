@@ -795,7 +795,7 @@ describe("Code Mode events", () => {
       expect(notices[0]?.text.split("\n")[0]).toBe(
         "12 notifications from the event poll arrived since you last saw one (latest from execution " +
           fired[11] +
-          "), sent by code with tools.session.notify. It did not come from the user. The latest 5 follow, oldest first.",
+          "), sent by code with tools.session.notify. They did not come from the user. The latest 5 follow, oldest first.",
       )
       expect(notices[0]?.text.match(/BEGIN_UNTRUSTED_EXECUTION_DATA/g)).toHaveLength(5)
 

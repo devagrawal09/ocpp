@@ -1,5 +1,6 @@
 import type { LocationRef, SessionInfo, SessionMessageInfo, ShellInfo } from "@ocpp/client/promise"
-import { Delegation } from "@ocpp/schema/delegation"
+import { ExternalSession } from "@ocpp/schema/external-session"
+import { SessionDriver } from "@ocpp/schema/session-driver"
 
 /** How the Running view stops an item, through a cancel path that already exists for it. */
 export type RunningStop =
@@ -18,6 +19,8 @@ export type RunningItem = {
   agent?: string
   /** The child session's title, when it differs from the label. */
   title?: string
+  /** The vendor agent that drives a subagent, and whether this call runs it in its native harness. */
+  driver?: { id: ExternalSession.Provider; native: boolean }
   started: number
   /** Code Mode progress: the trace's step count and the tool it is calling now. */
   steps?: number
@@ -112,9 +115,11 @@ export function runningItems(input: {
 
   const subagents = runs.flatMap((run) =>
     run.events.flatMap((event, index): RunningItem[] => {
-      if (!Delegation.isTool(event.tool) || event.status !== "running") return []
+      if (event.tool !== "subagent" || event.status !== "running") return []
       const childID = typeof event.metadata.sessionID === "string" ? event.metadata.sessionID : undefined
       const child = childID ? children.get(childID) : undefined
+      // The child's model names its driver once it exists; until then the call's explicit choice does.
+      const driven = child?.model ? SessionDriver.of(child.model) : text(event.input.driver)
       const working = childID ? input.status(childID) === "running" : undefined
       const label = text(event.input.description) ?? text(event.input.prompt) ?? text(event.input.message)
       return [
@@ -122,8 +127,9 @@ export function runningItems(input: {
           id: childID ?? `${run.item.id}:${index}`,
           kind: "subagent",
           label: label ? firstLine(label) : (child?.title ?? event.tool),
-          agent: text(event.input.agent) ?? (event.tool === "subagent" ? child?.agent : event.tool),
+          agent: text(event.input.agent) ?? child?.agent,
           ...(child?.title && child.title !== label ? { title: child.title } : {}),
+          ...vendor(driven, event.input.harness === "native"),
           // A continued subagent's session is older than this call, which started within the execution.
           started: Math.max(run.item.started, child?.time.created ?? 0),
           ...(working === undefined ? {} : { working }),
@@ -145,6 +151,8 @@ export function runningItems(input: {
         kind: "subagent",
         label: child.title ?? child.id,
         ...(child.agent ? { agent: child.agent } : {}),
+        // Without a subagent call to ask for another harness, a vendor child runs in the OC++ harness.
+        ...vendor(child.model ? SessionDriver.of(child.model) : undefined, false),
         started: child.time.created,
         working: true,
         child: child.id,
@@ -233,6 +241,11 @@ function traces(message: SessionMessageInfo) {
       ? [{ target: { messageID: message.id, partID: part.id }, events: toolEvents(part.state.metadata?.events) }]
       : [],
   )
+}
+
+function vendor(driver: string | undefined, native: boolean): Pick<RunningItem, "driver"> {
+  const id = ExternalSession.Provider.literals.find((provider) => provider === driver)
+  return id === undefined ? {} : { driver: { id, native } }
 }
 
 function progress(events: readonly ToolEvent[], steps: number) {

@@ -1,4 +1,5 @@
 import type { SessionInfo } from "@ocpp/client/promise"
+import { SessionDriver } from "@ocpp/schema/session-driver"
 import { useData } from "@ocpp/session-ui/context"
 import { useQuery } from "@tanstack/solid-query"
 import { For, Match, Show, Switch, createMemo } from "solid-js"
@@ -7,8 +8,6 @@ import { useServer } from "@/runtime/server/current"
 import { useServerSDK } from "@/runtime/server/client"
 import { listAllSessions } from "@/session/list"
 import { sessionLabel } from "@/session/title"
-
-const externalProviders = new Set(["claude", "codex", "pi"])
 
 export function SessionSubagentsTab(props: { sessionID: string }) {
   const language = useLanguage()
@@ -34,8 +33,8 @@ export function SessionSubagentsTab(props: { sessionID: string }) {
   }))
 
   const agent = (session: SessionInfo) => {
-    if (session.model && externalProviders.has(session.model.providerID)) return session.model.providerID
-    return session.agent
+    const driver = SessionDriver.of(session.model)
+    return [session.agent, driver === "ocpp" ? undefined : SessionDriver.names[driver]].filter(Boolean).join(" · ")
   }
 
   return (

@@ -2,7 +2,6 @@ export * as SessionDriver from "./session-driver.js"
 
 import { Schema } from "effect"
 import { ExternalSession } from "./external-session.js"
-import type { Model } from "./model.js"
 
 /**
  * What runs a Session: the OC++ runner (`ocpp`), or a vendor agent. A vendor model reference such as
@@ -37,7 +36,7 @@ export const names: Record<ExternalSession.Provider, string> = { claude: "Claude
 
 const vendor = Schema.is(ExternalSession.Provider)
 
-export function of(model: Pick<Model.Ref, "providerID"> | undefined): ID {
+export function of(model: { readonly providerID: string } | undefined): ID {
   const provider = model?.providerID
   return vendor(provider) ? provider : "ocpp"
 }

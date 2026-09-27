@@ -198,6 +198,48 @@ describe("runningItems", () => {
     })
   })
 
+  test("names a subagent's vendor driver and a native harness, and ignores retired vendor tools", () => {
+    const call = (tool: string, input: Record<string, JsonValue>, sessionID?: string): JsonValue => ({
+      type: "tool",
+      tool,
+      status: "running",
+      input: { description: tool + " task", ...input },
+      metadata: sessionID === undefined ? {} : { sessionID },
+    })
+    const items = derive({
+      messages: [
+        assistant("msg_a", [
+          execute("call_a", {
+            executionID: "exe_a",
+            executionStatus: "running",
+            events: [
+              call("subagent", { agent: "explore", harness: "native" }, "ses_claude"),
+              // Before the child exists, the call's explicit driver names it.
+              call("subagent", { agent: "general", driver: "codex" }),
+              call("subagent", { agent: "general" }, "ses_ocpp"),
+              // The retired tools.claude and tools.codex no longer run.
+              call("claude", {}, "ses_legacy"),
+            ],
+          }),
+        ]),
+      ],
+      sessions: [
+        session({ id: "ses_claude", parentID: "ses_parent", model: { providerID: "claude", id: "opus" } }),
+        session({ id: "ses_ocpp", parentID: "ses_parent", model: { providerID: "anthropic", id: "claude-opus" } }),
+        session({ id: "ses_pi", parentID: "ses_parent", model: { providerID: "pi", id: "anthropic/claude-sonnet-4-6" } }),
+      ],
+      running: ["ses_claude", "ses_pi"],
+    })
+    const driver = (id: string) => items.find((item) => item.id === id)?.driver
+    expect(driver("ses_claude")).toEqual({ id: "claude", native: true })
+    expect(driver("call_a:1")).toEqual({ id: "codex", native: false })
+    expect(items.find((item) => item.id === "ses_ocpp")).toMatchObject({ kind: "subagent", agent: "general" })
+    expect(driver("ses_ocpp")).toBeUndefined()
+    // A vendor child running without a subagent call is harnessed.
+    expect(driver("ses_pi")).toEqual({ id: "pi", native: false })
+    expect(items.some((item) => item.id === "ses_legacy" || item.id === "call_a:3")).toBe(false)
+  })
+
   test("offers no stop for a subagent waiting on its own runs", () => {
     const items = derive({
       messages: [

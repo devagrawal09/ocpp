@@ -759,6 +759,7 @@ export const dict = {
   "session.running.starting": "Starting",
   "session.running.working": "Working",
   "session.running.waiting": "Waiting",
+  "session.running.native": "{{driver}}, native tools",
   "session.running.finished": "Finished",
   "session.running.duration.hoursMinutes": "{{hours}}h {{minutes}}m",
   "session.running.show": "Show {{label}} in the timeline",

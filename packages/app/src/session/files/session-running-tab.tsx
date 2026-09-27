@@ -1,3 +1,4 @@
+import { SessionDriver } from "@ocpp/schema/session-driver"
 import { useData } from "@ocpp/session-ui/context"
 import { Icon } from "@ocpp/ui/icon"
 import { IconButton } from "@ocpp/ui/icon-button"
@@ -151,6 +152,10 @@ function RunningRow(props: {
     if (props.item.kind === "subagent")
       return [
         props.item.agent,
+        props.item.driver &&
+          (props.item.driver.native
+            ? language.t("session.running.native", { driver: SessionDriver.names[props.item.driver.id] })
+            : SessionDriver.names[props.item.driver.id]),
         props.item.title,
         props.item.working === undefined
           ? undefined

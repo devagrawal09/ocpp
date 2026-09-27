@@ -842,7 +842,7 @@ effect: (ctx) =>
         description: "Create a greeting",
         input: Schema.Struct({ name: Schema.String }),
         output: Schema.Struct({ greeting: Schema.String }),
-        options: { namespace: "acme", codemode: true },
+        options: { namespace: "acme" },
         execute: ({ name }, context) =>
           Effect.gen(function* () {
             yield* context.progress({ status: "greeting" })

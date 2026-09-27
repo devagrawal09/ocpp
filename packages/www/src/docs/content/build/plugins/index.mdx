@@ -807,7 +807,7 @@ const registration = await ctx.tool.transform((draft) => {
       required: ["name"],
       additionalProperties: false,
     },
-    options: { namespace: "acme", codemode: true },
+    options: { namespace: "acme" },
     execute: async (input, tool) => {
       await tool.progress({ status: "greeting" })
       return { content: `Hello ${(input as { name: string }).name}!` }

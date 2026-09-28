@@ -1,8 +1,9 @@
-import type { AgentSessionEvent, ToolDefinition } from "@earendil-works/pi-coding-agent"
+import type { AgentSessionEvent, PromptOptions, ToolDefinition } from "@earendil-works/pi-coding-agent"
 import { createHash } from "node:crypto"
 import { Effect, Schema } from "effect"
 import { ExternalAgentDriver } from "./driver.js"
 import { ExternalAgentEffort } from "./effort.js"
+import { imageMimes } from "../session/runner/to-llm-message.js"
 
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
 
@@ -85,10 +86,11 @@ export const PiDriver: ExternalAgentDriver.Driver = {
     try {
       options.signal.throwIfAborted()
       await options.linked(manager.getSessionId())
-      const turn = { message: ExternalAgentDriver.first(options) as string | undefined }
+      const turn = { message: ExternalAgentDriver.first(options) as ExternalAgentDriver.Input | undefined }
       // Input waits for the end of each prompt, like Codex.
       while (turn.message !== undefined) {
-        await result.session.prompt(turn.message)
+        const input = prompt(turn.message)
+        await result.session.prompt(input.text, { images: input.images })
         await queue.pending
         options.signal.throwIfAborted()
         options.idle()
@@ -101,6 +103,22 @@ export const PiDriver: ExternalAgentDriver.Driver = {
       await options.checkpointed(fingerprint(manager.buildSessionContext().messages))
     }
   },
+}
+
+/** Input as Pi's prompt takes it: the text, then each image. Pi has no PDF input. */
+export function prompt(input: ExternalAgentDriver.Input): { text: string; images: PromptOptions["images"] } {
+  const parts = input.map((part) =>
+    part.type === "media" && !imageMimes.has(part.mime)
+      ? ExternalAgentDriver.omitted(part, "Pi takes only images")
+      : part,
+  )
+  return {
+    text: parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n"),
+    images: parts.flatMap(
+      (part): NonNullable<PromptOptions["images"]> =>
+        part.type === "media" ? [{ type: "image", data: part.data, mimeType: part.mime }] : [],
+    ),
+  }
 }
 
 export async function normalize(event: AgentSessionEvent, emit: ExternalAgentDriver.Options["emit"]) {

@@ -58,23 +58,48 @@ type Turn = (options: ExternalAgentDriver.Options, message: string) => Promise<v
 /** A scripted vendor: one run per drain, one `turn` per delivered message, like the Claude, Codex and Pi drivers. */
 const vendor = {
   ready: { claude: true, codex: true, pi: true } as Record<ExternalSession.Provider, boolean>,
-  runs: [] as Array<ExternalAgentDriver.Options & { readonly provider: ExternalSession.Provider }>,
+  runs: [] as Array<
+    Omit<ExternalAgentDriver.Options, "message"> & {
+      readonly provider: ExternalSession.Provider
+      readonly message: string
+      readonly input: ExternalAgentDriver.Input
+    }
+  >,
   messages: [] as string[],
+  /** Each delivered input as the real driver hands it to its SDK. */
+  wire: [] as unknown[],
   sessions: new Map<string, string>(),
   turn: (async () => {}) as Turn,
+}
+/** Delivered input as text, each attachment by its type. */
+const plain = (input: ExternalAgentDriver.Input) =>
+  input.map((part) => (part.type === "text" ? part.text : `[${part.mime}]`)).join("\n\n")
+/** Input in the provider's SDK format, from the real driver's conversion. Codex's images are written to `directory`. */
+const wire = async (provider: ExternalSession.Provider, delivered: ExternalAgentDriver.Input, directory: string) => {
+  if (provider === "claude") {
+    const { message } = await import("@ocpp/core/external-agent/claude.node")
+    return message(delivered)
+  }
+  if (provider === "codex") {
+    const { input } = await import("@ocpp/core/external-agent/codex.node")
+    return input(delivered, directory)
+  }
+  const { prompt } = await import("@ocpp/core/external-agent/pi.node")
+  return prompt(delivered)
 }
 const fake = (provider: ExternalSession.Provider): ExternalAgentDriver.Driver => ({
   provider,
   inspect: async (_directory, id) => vendor.sessions.get(id),
   async run(options) {
-    vendor.runs.push({ ...options, provider })
+    vendor.runs.push({ ...options, provider, message: plain(options.message), input: options.message })
     const id = options.vendorSessionID ?? provider + "-" + crypto.randomUUID()
     await options.linked(id)
     try {
-      const pending = { message: options.message as string | undefined }
+      const pending = { message: options.message as ExternalAgentDriver.Input | undefined }
       while (pending.message !== undefined) {
-        vendor.messages.push(pending.message)
-        await vendor.turn(options, pending.message)
+        vendor.messages.push(plain(pending.message))
+        vendor.wire.push(await wire(provider, pending.message, options.directory))
+        await vendor.turn(options, plain(pending.message))
         options.idle()
         pending.message = await options.next(options.signal)
       }
@@ -171,6 +196,7 @@ beforeEach(() => {
   vendor.ready = { claude: true, codex: true, pi: true }
   vendor.runs = []
   vendor.messages = []
+  vendor.wire = []
   vendor.turn = async () => {}
 })
 
@@ -350,7 +376,8 @@ describe("vendor-driven sessions", () => {
         await options.emit({ type: "step-start", id: "busy" })
         await options.emit({ type: "text", id: "t", delta: "Working" })
         // Still inside the turn: only steers are delivered now.
-        midTurn.push((await options.next(options.signal)) ?? "none")
+        const steer = await options.next(options.signal)
+        midTurn.push(steer === undefined ? "none" : plain(steer))
         await options.emit({ type: "step-end" })
       }
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
@@ -571,6 +598,176 @@ describe("vendor-driven session control", () => {
       expect(log.filter((event) => event.type === SessionEvent.InboxDelivered.type)).toHaveLength(2)
       // Refusing compaction never started the vendor.
       expect(vendor.runs).toHaveLength(1)
+    }),
+  )
+})
+
+// A 1x1 PNG, which prompt admission keeps byte for byte, and bytes that detect as a PDF.
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+const PDF = Buffer.from("%PDF-1.4\n%OC++ attachment\n").toString("base64")
+const image = { uri: "data:image/png;base64," + PNG, name: "shot.png" }
+const pdf = { uri: "data:application/pdf;base64," + PDF, name: "report.pdf" }
+const vendors = [ref("claude", "sonnet"), ref("codex", "gpt-5.6-sol"), ref("pi", "anthropic/claude-sonnet-4-6")]
+
+describe("vendor attachments", () => {
+  it.live("an image prompt reaches each vendor in its SDK's format, after the text", () =>
+    Effect.gen(function* () {
+      for (const model of vendors) {
+        const env = yield* setup(model)
+        vendor.turn = say("Seen")
+        yield* env.sessions.prompt({ sessionID: env.session.id, text: "Describe this", files: [image] })
+        yield* env.sessions.wait(env.session.id)
+      }
+      expect(vendor.wire[0]).toEqual({
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this" },
+            { type: "image", source: { type: "base64", media_type: "image/png", data: PNG } },
+          ],
+        },
+        parent_tool_use_id: null,
+        priority: "next",
+      })
+      // Codex exec takes images as files, which it reads when the turn starts.
+      expect(vendor.wire[1]).toEqual([
+        { type: "text", text: "Describe this" },
+        { type: "local_image", path: expect.stringMatching(/\.png$/) },
+      ])
+      const codex = vendor.wire[1] as ReadonlyArray<{ readonly path: string }>
+      expect((yield* Effect.promise(() => Bun.file(codex[1].path).bytes())).toBase64()).toBe(PNG)
+      expect(vendor.wire[2]).toEqual({
+        text: "Describe this",
+        images: [{ type: "image", data: PNG, mimeType: "image/png" }],
+      })
+    }),
+  )
+
+  it.live("a PDF reaches Claude as a document, while Codex and Pi get a note naming it", () =>
+    Effect.gen(function* () {
+      for (const model of vendors) {
+        const env = yield* setup(model)
+        vendor.turn = say("Read")
+        yield* env.sessions.prompt({ sessionID: env.session.id, text: "Summarize", files: [pdf] })
+        yield* env.sessions.wait(env.session.id)
+      }
+      expect(vendor.wire[0]).toMatchObject({
+        message: {
+          content: [
+            { type: "text", text: "Summarize" },
+            {
+              type: "document",
+              source: { type: "base64", media_type: "application/pdf", data: PDF },
+              title: "report.pdf",
+            },
+          ],
+        },
+      })
+      expect(vendor.wire[1]).toEqual([
+        { type: "text", text: "Summarize" },
+        {
+          type: "text",
+          text: "[Attached file report.pdf (application/pdf) was not forwarded: Codex takes only images]",
+        },
+      ])
+      expect(vendor.wire[2]).toEqual({
+        text: "Summarize\n\n[Attached file report.pdf (application/pdf) was not forwarded: Pi takes only images]",
+        images: [],
+      })
+    }),
+  )
+
+  it.live("a steer with an image joins Claude's running turn as content blocks", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      const midTurn: unknown[] = []
+      vendor.turn = async (options, message) => {
+        if (message !== "Start") return say("Later")(options, message)
+        await options.emit({ type: "step-start", id: "busy" })
+        const steer = await options.next(options.signal)
+        if (steer !== undefined) midTurn.push(await wire("claude", steer, options.directory))
+        await say("Both seen")(options, message)
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
+      while (vendor.messages.length === 0) yield* Effect.promise(() => Bun.sleep(5))
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Also this one", files: [image] })
+      yield* env.sessions.wait(env.session.id)
+      expect(midTurn).toEqual([
+        {
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              { type: "text", text: "Also this one" },
+              { type: "image", source: { type: "base64", media_type: "image/png", data: PNG } },
+            ],
+          },
+          parent_tool_use_id: null,
+          priority: "next",
+        },
+      ])
+      expect(vendor.runs).toHaveLength(1)
+    }),
+  )
+
+  it.live("an image a Code Mode run reads reaches the vendor with the run's completion", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      yield* Effect.promise(() => Bun.write(path.join(env.directory.path, "shot.png"), Buffer.from(PNG, "base64")))
+      vendor.turn = async (options, message) => {
+        if (message.includes("saved notebook values")) return say("A single pixel")(options, message)
+        await run(options, 'const shot = tools.read({ path: "shot.png" })')
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "What is in shot.png?" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.messages).toHaveLength(2)
+      expect(vendor.wire[1]).toMatchObject({
+        message: {
+          content: [
+            { type: "text", text: expect.stringContaining("shot.png") },
+            { type: "image", source: { type: "base64", media_type: "image/png" } },
+          ],
+        },
+      })
+    }),
+  )
+
+  it.live("a rebuilt vendor session names an earlier attachment instead of sending it again", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = say("Seen")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Describe this", files: [image] })
+      yield* env.sessions.wait(env.session.id)
+      yield* env.sessions.switchModel({ sessionID: env.session.id, model: ref("codex", "gpt-5.6-sol") })
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "And now?" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs[1].vendorSessionID).toBeUndefined()
+      expect(vendor.runs[1].history).toEqual([
+        { role: "user", text: "Describe this\n[Attached file shot.png (image/png), not re-sent]" },
+        { role: "assistant", text: "Seen" },
+      ])
+      expect(vendor.runs[1].input).toEqual([{ type: "text", text: "And now?" }])
+    }),
+  )
+
+  it.live("input the vendor never answered is delivered again with its attachments", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = async () => {
+        throw new Error("vendor crashed")
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Describe this", files: [image] })
+      yield* env.sessions.wait(env.session.id)
+      expect((yield* env.sessions.get(env.session.id)).outcome).toBe("failed")
+      vendor.turn = say("Seen")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Try again" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs[1].input).toEqual([
+        { type: "text", text: "Describe this" },
+        { type: "media", mime: "image/png", data: PNG, name: "shot.png" },
+        { type: "text", text: "Try again" },
+      ])
     }),
   )
 })

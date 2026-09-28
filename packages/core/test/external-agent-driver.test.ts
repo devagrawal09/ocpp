@@ -34,10 +34,11 @@ describe("external SDK drivers", () => {
       { role: "user" as const, text: "One" },
       { role: "assistant" as const, text: "Two" },
     ]
-    expect(ExternalAgentDriver.first({ history, message: "Three" })).toBe(
-      "Restored canonical OC++ history:\nuser:\nOne\n\nassistant:\nTwo\n\nThree",
-    )
-    expect(ExternalAgentDriver.first({ history, message: "Three", vendorSessionID: "vendor" })).toBe("Three")
+    const message = [{ type: "text" as const, text: "Three" }]
+    expect(ExternalAgentDriver.first({ history, message })).toEqual([
+      { type: "text", text: "Restored canonical OC++ history:\nuser:\nOne\n\nassistant:\nTwo\n\nThree" },
+    ])
+    expect(ExternalAgentDriver.first({ history, message, vendorSessionID: "vendor" })).toEqual(message)
   })
 
   test("Claude in the OC++ harness keeps only its model loop, OC++'s prompt and OC++'s execute", async () => {
@@ -369,7 +370,7 @@ if (process.argv[2] === "app-server") {
               directory: dir.path,
               model: "fixture",
               history: [],
-              message,
+              message: [{ type: "text", text: message }],
               harness: { type: "native" },
               gateway: ExternalAgentGateway.make([]),
               emit: stream.emit,
@@ -447,14 +448,14 @@ if (process.argv[2] === "app-server") {
     process.env.TMPDIR = temporary
     try {
       const stream = collector()
-      const queue = ["Execution exe_1 saved notebook values: total."]
+      const queue = [[{ type: "text" as const, text: "Execution exe_1 saved notebook values: total." }]]
       const idles: number[] = []
       const checkpoints: string[] = []
       const options = {
         directory: dir.path,
         model: "gpt-5.6-sol",
         history: [],
-        message: "Add numbers",
+        message: [{ type: "text" as const, text: "Add numbers" }],
         harness: { type: "ocpp" as const, system: "OC++ system prompt for Codex" },
         gateway: ExternalAgentGateway.make([]),
         emit: stream.emit,
@@ -623,7 +624,7 @@ if (process.argv[2] === "app-server") {
         directory: "/tmp",
         model: "fixture",
         history: [],
-        message: "wait",
+        message: [{ type: "text", text: "wait" }],
         harness: { type: "ocpp", system: "" },
         gateway,
         emit: async () => {},

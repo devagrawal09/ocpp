@@ -38,7 +38,17 @@ for (const provider of ExternalSession.Provider.literals)
       for (const round of [1, 2]) {
         const events: ExternalAgentDriver.Event[] = []
         const signal = AbortSignal.timeout(180_000)
-        const queue = round === 1 ? ["Execution exe_live saved notebook values: answer. Reply with the word done."] : []
+        const queue =
+          round === 1
+            ? [
+                [
+                  {
+                    type: "text" as const,
+                    text: "Execution exe_live saved notebook values: answer. Reply with the word done.",
+                  },
+                ],
+              ]
+            : []
         if (identity.id !== undefined)
           expect(await sdk.inspect(dir.path, identity.id, signal)).toBe(identity.checkpoint)
         await sdk.run({
@@ -50,10 +60,15 @@ for (const provider of ExternalSession.Provider.literals)
             system:
               "You are testing the OC++ harness. Your only tool is `execute`, which runs a JavaScript program such as `const answer = 42`. Keep replies to one word.",
           },
-          message:
-            round === 1
-              ? "Call execute once with the code `const answer = 42`, then wait for its notification."
-              : "Reply with the word again.",
+          message: [
+            {
+              type: "text",
+              text:
+                round === 1
+                  ? "Call execute once with the code `const answer = 42`, then wait for its notification."
+                  : "Reply with the word again.",
+            },
+          ],
           gateway,
           signal,
           vendorSessionID: identity.id,

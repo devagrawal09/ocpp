@@ -1,4 +1,4 @@
-import type { CodexOptions, ModelReasoningEffort, ThreadEvent, ThreadOptions } from "@openai/codex-sdk"
+import type { CodexOptions, ModelReasoningEffort, ThreadEvent, ThreadOptions, UserInput } from "@openai/codex-sdk"
 import { execFile } from "node:child_process"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -8,6 +8,7 @@ import { ExternalAgentDriver } from "./driver.js"
 import { ExternalAgentEffort } from "./effort.js"
 import { ExternalAgentBridge } from "./bridge.node.js"
 import { CodexHistory } from "./codex-history.node.js"
+import { imageMimes } from "../session/runner/to-llm-message.js"
 
 /** The environment variable that carries the MCP bridge credential to Codex. */
 const TOKEN = "OCPP_MCP_BEARER_TOKEN"
@@ -50,23 +51,23 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
     const identity = { id: options.vendorSessionID, completed: false }
     const owned = {
       bridge: undefined as Awaited<ReturnType<typeof ExternalAgentBridge.open>> | undefined,
-      instructions: undefined as string | undefined,
+      workspace: undefined as string | undefined,
     }
     try {
       options.signal.throwIfAborted()
       const bridge = await ExternalAgentBridge.open(options.gateway, options.signal)
       owned.bridge = bridge
-      const instructions =
-        options.harness.type === "ocpp" ? await mkdtemp(path.join(tmpdir(), "ocpp-codex-")) : undefined
-      owned.instructions = instructions
-      if (instructions !== undefined && options.harness.type === "ocpp") {
-        await writeFile(path.join(instructions, "instructions.md"), options.harness.system)
-        await writeFile(path.join(instructions, "catalog.json"), await catalog(options.signal))
+      // Holds the OC++ harness's instructions and the images delivered during this run.
+      const workspace = await mkdtemp(path.join(tmpdir(), "ocpp-codex-"))
+      owned.workspace = workspace
+      if (options.harness.type === "ocpp") {
+        await writeFile(path.join(workspace, "instructions.md"), options.harness.system)
+        await writeFile(path.join(workspace, "catalog.json"), await catalog(options.signal))
       }
       const settings = configure(
         options,
         bridge,
-        instructions,
+        workspace,
         options.harness.type === "ocpp" ? await servers(options.directory, options.signal) : [],
       )
       const codex = new Codex({
@@ -85,10 +86,10 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
         options.vendorSessionID === undefined
           ? codex.startThread(settings.thread)
           : codex.resumeThread(options.vendorSessionID, settings.thread)
-      const turn = { message: ExternalAgentDriver.first(options) as string | undefined, count: 0 }
+      const turn = { message: ExternalAgentDriver.first(options) as ExternalAgentDriver.Input | undefined, count: 0 }
       // Codex's exec SDK takes input only between turns, so steers and notifications wait for the turn to end.
       while (turn.message !== undefined) {
-        const stream = await thread.runStreamed(turn.message, { signal: options.signal })
+        const stream = await thread.runStreamed(await input(turn.message, workspace), { signal: options.signal })
         // Each exec invocation numbers its items from zero again.
         const prefix = `${++turn.count}:`
         const seen = new Map<string, string>()
@@ -115,7 +116,8 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
       // Each is released on its own, so a failed close cannot leave the other behind.
       await Promise.allSettled([
         owned.bridge?.close(),
-        owned.instructions === undefined ? undefined : rm(owned.instructions, { recursive: true, force: true }),
+        // Codex reads each image when its turn starts and keeps it in the thread, so none outlives the run.
+        owned.workspace === undefined ? undefined : rm(owned.workspace, { recursive: true, force: true }),
       ])
       if (identity.id !== undefined) {
         // A run that fails or is interrupted before its first turn leaves an empty, unreadable rollout. That read
@@ -128,6 +130,22 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
       }
     }
   },
+}
+
+/**
+ * Input as Codex exec takes it: text, and each image as a file in `directory`, which Codex reads when the turn starts.
+ * Codex has no PDF input.
+ */
+export function input(message: ExternalAgentDriver.Input, directory: string) {
+  return Promise.all(
+    message.map(async (part): Promise<UserInput> => {
+      if (part.type === "text") return part
+      if (!imageMimes.has(part.mime)) return ExternalAgentDriver.omitted(part, "Codex takes only images")
+      const file = path.join(directory, crypto.randomUUID() + "." + part.mime.slice("image/".length))
+      await writeFile(file, Buffer.from(part.data, "base64"))
+      return { type: "local_image", path: file }
+    }),
+  )
 }
 
 /**

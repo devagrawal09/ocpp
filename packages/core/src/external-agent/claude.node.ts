@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 import { Schema } from "effect"
 import { ExternalAgentDriver } from "./driver.js"
 import { ExternalAgentEffort } from "./effort.js"
+import { imageMimes } from "../session/runner/to-llm-message.js"
 import { which } from "../util/which.js"
 import { ExternalAgentBridge } from "./bridge.node.js"
 
@@ -62,8 +63,37 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
   },
 }
 
-function message(text: string): SDKUserMessage {
-  return { type: "user", message: { role: "user", content: text }, parent_tool_use_id: null, priority: "next" }
+/** Input as Claude Code's streaming input takes it: images and PDFs are Anthropic content blocks beside the text. */
+export function message(input: ExternalAgentDriver.Input): SDKUserMessage {
+  return {
+    type: "user",
+    message: {
+      role: "user",
+      content: input.length === 1 && input[0].type === "text" ? input[0].text : input.map(block),
+    },
+    parent_tool_use_id: null,
+    priority: "next",
+  }
+}
+
+type Block = Exclude<SDKUserMessage["message"]["content"], string>[number]
+type ImageType = Extract<Extract<Block, { type: "image" }>["source"], { type: "base64" }>["media_type"]
+
+function block(part: ExternalAgentDriver.Input[number]): Block {
+  if (part.type === "text") return part
+  if (part.mime === "application/pdf")
+    return {
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: part.data },
+      ...(part.name === undefined ? {} : { title: part.name }),
+    }
+  if (isImage(part.mime)) return { type: "image", source: { type: "base64", media_type: part.mime, data: part.data } }
+  return ExternalAgentDriver.omitted(part, "Claude Code takes only PNG, JPEG, GIF and WebP images and PDFs")
+}
+
+// The image types OC++ lowers to model media, which are the ones Anthropic takes.
+function isImage(mime: string): mime is ImageType {
+  return imageMimes.has(mime)
 }
 
 /** Vendor options for one run. The OC++ harness keeps nothing of Claude Code but its model loop and OC++'s execute. */

@@ -1,6 +1,7 @@
 export * as ExternalAgentHarnessNode from "./harness-node.js"
 
 import { Message, type ToolResultValue } from "@ocpp/ai"
+import { ProviderShared } from "@ocpp/ai/protocols/shared"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import type { Model } from "@ocpp/schema/model"
 import { SessionDriver } from "@ocpp/schema/session-driver"
@@ -108,14 +109,12 @@ const layer = Layer.effect(
 
       const deliver = Effect.fnUntraced(function* (items: ReadonlyArray<SessionInbox.Info>) {
         const messages = yield* Effect.forEach(items, (item) => store.message(item.id))
-        return messages
-          .flatMap((stored) => (stored === undefined ? [] : toLLMMessages([stored.message], model)))
-          .map(lower)
-          .filter((text) => text.length > 0)
-          .join("\n\n")
+        return ExternalAgentDriver.join(
+          messages.flatMap((stored) => (stored === undefined ? [] : toLLMMessages([stored.message], model))).map(lower),
+        )
       })
       // Steers join a running vendor turn; at idle, queued input and control items are handled as the runner does.
-      const take = (scope: SessionInbox.Promotable): Effect.Effect<string | undefined> =>
+      const take = (scope: SessionInbox.Promotable): Effect.Effect<ExternalAgentDriver.Input | undefined> =>
         Effect.gen(function* () {
           while (true) {
             const rung = bell.current
@@ -244,17 +243,17 @@ const layer = Layer.effect(
       const scope = { next: input.promotable ?? "input" }
       while (true) {
         const history = canonical(yield* store.context(sessionID), model)
-        const answered = history.findLastIndex((item) => item.role === "assistant") + 1
-        const settled = history.slice(0, answered)
-        // Input admitted before a restart or failure that the vendor never answered is delivered again, once.
-        const unanswered = state.started ? [] : history.slice(answered).map((item) => item.text)
+        const settled = answered(history)
+        // Input admitted before a restart or failure that the vendor never answered is delivered again, once, with
+        // its attachments.
+        const unanswered = state.started ? [] : history.slice(settled.length).map((item) => item.input)
         state.started = true
         const record = yield* bind()
         const vendorSessionID = yield* resumable(record, Hash.sha256(JSON.stringify(settled)))
         const next = yield* take(scope.next)
         scope.next = "input"
         if (state.moved) return yield* move
-        const message = [...unanswered, ...(next === undefined ? [] : [next])].join("\n\n")
+        const message = ExternalAgentDriver.join([...unanswered, next ?? []])
         if (message.length === 0) return DrainResult.Complete()
         state.idle = false
         if (!session.parentID && SessionTitle.isUntitled(session))
@@ -307,13 +306,10 @@ const layer = Layer.effect(
                   events: stream.diagnostics(),
                 })
               if (checkpoint.value === undefined) return
-              const history = canonical(yield* store.context(sessionID), model)
               yield* bus.publish(ExternalSession.Checkpointed, {
                 sessionID,
                 checkpoint: checkpoint.value,
-                historyHash: Hash.sha256(
-                  JSON.stringify(history.slice(0, history.findLastIndex((item) => item.role === "assistant") + 1)),
-                ),
+                historyHash: Hash.sha256(JSON.stringify(answered(canonical(yield* store.context(sessionID), model)))),
               })
             }),
           ),
@@ -360,19 +356,35 @@ const layer = Layer.effect(
 )
 
 /**
- * Canonical OC++ history as the vendor reads it when a vendor session is rebuilt, and as its checkpoints hash it: what
- * the runner would show a model, reduced to text. Tool metadata never enters it: a Code Mode trace holds machine-only
- * values (private input, submitted output), and a completing execution rewrites it after the checkpoint.
+ * Canonical OC++ history: what the runner would show a model, lowered as the vendor receives input. Tool metadata never
+ * enters it: a Code Mode trace holds machine-only values (private input, submitted output), and a completing execution
+ * rewrites it after the checkpoint.
  */
-function canonical(messages: ReadonlyArray<SessionMessage.Info>, model: Model.Ref): ExternalAgentDriver.History[] {
-  return toLLMMessages(messages, model).flatMap((message): ExternalAgentDriver.History[] => {
+function canonical(messages: ReadonlyArray<SessionMessage.Info>, model: Model.Ref) {
+  return toLLMMessages(messages, model).flatMap((message) => {
     // Current instructions are rendered into each vendor run's system prompt instead.
     if (message.role === "system") return []
-    const text = lower(message)
-    if (text.length === 0) return []
+    const input = lower(message)
+    if (input.length === 0) return []
     // A tool result belongs to the vendor turn that called the tool.
-    return [{ role: message.role === "user" ? "user" : "assistant", text }]
+    return [{ role: message.role === "user" ? ("user" as const) : ("assistant" as const), input }]
   })
+}
+
+/**
+ * The canonical history up to the vendor's last answer, as text: what a rebuilt vendor session replays and what its
+ * checkpoint hashes. An earlier attachment is named where it was, not sent again: the vendor answered it once, and
+ * replaying every image and PDF of a long Session into one message would outgrow what a vendor accepts.
+ */
+function answered(history: ReturnType<typeof canonical>): ExternalAgentDriver.History[] {
+  return history.slice(0, history.findLastIndex((item) => item.role === "assistant") + 1).map((item) => ({
+    role: item.role,
+    text: item.input
+      .map((part) =>
+        part.type === "text" ? part.text : `[Attached file ${part.name ?? "(unnamed)"} (${part.mime}), not re-sent]`,
+      )
+      .join("\n"),
+  }))
 }
 
 function isEnqueued(event: Bus.LogItem): event is SessionEvent.InboxEnqueued {
@@ -380,28 +392,32 @@ function isEnqueued(event: Bus.LogItem): event is SessionEvent.InboxEnqueued {
 }
 
 /**
- * A message as the native runner lowers it, reduced to text: text, each tool call's name and input, and each result's
- * model-visible content. Reasoning stays with the vendor that produced it, and media cannot cross the vendor boundary yet.
+ * A message as the native runner lowers it: text, each tool call's name and input, each result's model-visible
+ * content, and each image or PDF attachment where it appears, with the bytes the runner would send. Reasoning stays
+ * with the vendor that produced it.
  */
-function lower(message: Message) {
-  if (typeof message.content === "string") return message.content
-  const media = message.content.filter((part) => part.type === "media").length
-  return [
+function lower(message: Message): ExternalAgentDriver.Input {
+  return (
     message.content
-      .flatMap((part) => {
+      .flatMap((part): Array<string | ExternalAgentDriver.Media> => {
         if (part.type === "text") return [part.text]
         if (part.type === "tool-call") return [`\n[${part.name} call] ${JSON.stringify(part.input)}\n`]
         if (part.type === "tool-result") return [`\n[${part.name} result] ${result(part.result)}\n`]
-        return []
+        if (part.type !== "media") return []
+        const media = ProviderShared.normalizeMedia(part)
+        return [{ type: "media", mime: media.mime, data: media.base64, name: part.filename }]
       })
-      .join("")
-      .trim(),
-    ...(media === 0
-      ? []
-      : [`[${media} attached image or PDF ${media === 1 ? "file was" : "files were"} not forwarded]`]),
-  ]
-    .filter((text) => text.length > 0)
-    .join("\n")
+      // Text between attachments runs together, as a message's text always has.
+      .reduce<Array<string | ExternalAgentDriver.Media>>((runs, part) => {
+        const last = runs.at(-1)
+        if (typeof part !== "string" || typeof last !== "string") return [...runs, part]
+        return [...runs.slice(0, -1), last + part]
+      }, [])
+      .flatMap((run): ExternalAgentDriver.Input => {
+        if (typeof run !== "string") return [run]
+        return run.trim().length === 0 ? [] : [{ type: "text", text: run.trim() }]
+      })
+  )
 }
 
 function result(value: ToolResultValue) {

@@ -28,6 +28,17 @@ export interface History {
   readonly text: string
 }
 
+/** An image or PDF attached to delivered input, as base64. */
+export interface Media {
+  readonly type: "media"
+  readonly mime: string
+  readonly data: string
+  readonly name?: string
+}
+
+/** Input delivered to the vendor, in message order. */
+export type Input = ReadonlyArray<{ readonly type: "text"; readonly text: string } | Media>
+
 /**
  * `ocpp`: the gateway's `execute` is the vendor's only capability, under the OC++ `system` prompt, with no vendor
  * settings, skills, or MCP servers of the user's. `native`: the vendor's own tools, prompt, settings and sandbox,
@@ -42,7 +53,7 @@ export interface Options {
   /** Resumes this vendor session; absent, a new one starts from `history`. */
   readonly vendorSessionID?: string
   readonly history: ReadonlyArray<History>
-  readonly message: string
+  readonly message: Input
   readonly harness: Harness
   readonly gateway: ExternalAgentGateway.Gateway
   readonly signal: AbortSignal
@@ -53,7 +64,7 @@ export interface Options {
    * The next input for this vendor session. While a turn runs it resolves only with steers; after `idle` it
    * resolves with any pending input, or undefined to end the run. Turn-end drivers call it only after `idle`.
    */
-  readonly next: (signal: AbortSignal) => Promise<string | undefined>
+  readonly next: (signal: AbortSignal) => Promise<Input | undefined>
   /** The vendor finished answering its input. */
   readonly idle: () => void
 }
@@ -70,14 +81,29 @@ export function replay(history: ReadonlyArray<History>) {
 
 /** The first vendor message: canonical history when a new vendor session replaces a missing one, then the input. */
 export function first(options: Pick<Options, "vendorSessionID" | "history" | "message">) {
-  return [
+  return join([
     options.vendorSessionID === undefined && options.history.length > 0
-      ? "Restored canonical OC++ history:\n" + replay(options.history)
-      : "",
+      ? [{ type: "text", text: "Restored canonical OC++ history:\n" + replay(options.history) }]
+      : [],
     options.message,
-  ]
-    .filter(Boolean)
-    .join("\n\n")
+  ])
+}
+
+/** Inputs as one, in order. Text that meets text is separated by a blank line, as separate messages always were. */
+export function join(inputs: ReadonlyArray<Input>): Input {
+  return inputs.flat().reduce<Input>((joined, part) => {
+    const last = joined.at(-1)
+    if (part.type !== "text" || last?.type !== "text") return [...joined, part]
+    return [...joined.slice(0, -1), { type: "text", text: last.text + "\n\n" + part.text }]
+  }, [])
+}
+
+/** Text in place of an attachment the vendor cannot take, naming the file and why. */
+export function omitted(media: Media, reason: string) {
+  return {
+    type: "text" as const,
+    text: `[Attached file ${media.name ?? "(unnamed)"} (${media.mime}) was not forwarded: ${reason}]`,
+  }
 }
 
 /** Interruption waits for the SDK to relinquish its tools and subprocesses. */

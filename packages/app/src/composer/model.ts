@@ -352,8 +352,6 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       return () => command.trigger(selected.id, "slash")
     },
     attachments: {
-      picker: platform.openAttachmentPickerDialog,
-      directory: () => sdk().directory,
       isDialogActive: () => !!dialog.active,
       warn: () =>
         showToast({
@@ -361,14 +359,6 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
           description: language.t("prompt.toast.pasteUnsupported.description"),
         }),
       duplicate: () => showToast({ title: language.t("prompt.toast.attachmentDuplicate.title") }),
-      onError: (error) =>
-        showToast({
-          variant: "error",
-          title: language.t("common.requestFailed"),
-          description: error instanceof Error ? error.message : String(error),
-        }),
-      readClipboardImage: platform.readClipboardImage,
-      getPathForFile: platform.getPathForFile,
       store: platform.draftStore?.putBlob,
     },
     view: {

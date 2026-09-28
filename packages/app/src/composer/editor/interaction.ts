@@ -99,7 +99,7 @@ export function createComposerEditor(input: {
       input.view.add?.onAttach()
       return
     }
-    attachments.pick(() => fileInput?.click())
+    fileInput?.click()
   }
   const contextList = useFilteredList<ComposerSuggestion>({
     items: async (query) => {

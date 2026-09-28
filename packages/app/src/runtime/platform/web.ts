@@ -8,7 +8,6 @@ export function createWebPlatform(version: string) {
   const currentServerUrl = getCurrentServerUrl()
   const storedServerUrl = readDefaultServerUrl()
   const platform: Platform = {
-    platform: "web",
     draftStore: createBrowserDraftStore(),
     version,
     openExternal(value) {

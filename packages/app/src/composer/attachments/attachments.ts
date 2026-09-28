@@ -2,64 +2,6 @@ import { onMount } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import type { ComposerAttachment, ComposerPrompt } from "../types"
 
-const accepted = [
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "application/pdf",
-  "text/*",
-  "application/json",
-  "application/ld+json",
-  "application/toml",
-  "application/x-toml",
-  "application/x-yaml",
-  "application/xml",
-  "application/yaml",
-  ".c",
-  ".cc",
-  ".cjs",
-  ".conf",
-  ".cpp",
-  ".css",
-  ".csv",
-  ".cts",
-  ".env",
-  ".go",
-  ".gql",
-  ".graphql",
-  ".h",
-  ".hh",
-  ".hpp",
-  ".htm",
-  ".html",
-  ".ini",
-  ".java",
-  ".js",
-  ".json",
-  ".jsx",
-  ".log",
-  ".md",
-  ".mdx",
-  ".mjs",
-  ".mts",
-  ".py",
-  ".rb",
-  ".rs",
-  ".sass",
-  ".scss",
-  ".sh",
-  ".sql",
-  ".toml",
-  ".ts",
-  ".tsx",
-  ".txt",
-  ".xml",
-  ".yaml",
-  ".yml",
-  ".zsh",
-]
-
 type PromptTarget = {
   current: () => ComposerPrompt
   cursor: () => number | undefined
@@ -67,17 +9,9 @@ type PromptTarget = {
 }
 
 export type ComposerAttachmentConfig = {
-  picker?: (
-    options: { defaultPath?: string; multiple?: boolean; accept?: string[] },
-    onFile: (file: File) => Promise<unknown>,
-  ) => Promise<void>
-  directory: () => string
   isDialogActive: () => boolean
   warn: () => void
   duplicate: () => void
-  onError: (error: unknown) => void
-  readClipboardImage?: () => Promise<File | null>
-  getPathForFile?: (file: File) => string
   store?: (file: File) => Promise<{ id: string; url: string }>
 }
 
@@ -96,7 +30,7 @@ export function createComposerAttachments(
     if (!editor) return
     return { prompt, cursor: prompt.cursor() ?? cursorPosition(editor) }
   }
-  const add = async (file: File, toast = true, target = capture(), clipboard = false) => {
+  const add = async (file: File, toast = true, target = capture()) => {
     if (!target) return false
     const mime = await attachmentMime(file)
     if (!mime) {
@@ -104,19 +38,9 @@ export function createComposerAttachments(
       return false
     }
     const blob = input.store ? await input.store(file) : await blobReference(file)
-    const sourcePath = input.getPathForFile?.(file) || undefined
-    // Native clipboard images arrive with a fresh timestamped filename on every paste, so identical
-    // clipboard content is matched on bytes alone.
     const duplicate = target.prompt
       .current()
-      .some(
-        (part) =>
-          part.type === "image" &&
-          part.blob.id === blob.id &&
-          (sourcePath
-            ? part.sourcePath === sourcePath
-            : !part.sourcePath && (clipboard || part.filename === file.name)),
-      )
+      .some((part) => part.type === "image" && part.blob.id === blob.id && part.filename === file.name)
     if (duplicate) {
       input.duplicate()
       return true
@@ -125,7 +49,6 @@ export function createComposerAttachments(
       type: "image",
       id: crypto.randomUUID(),
       filename: file.name,
-      sourcePath,
       mime,
       blob,
     }
@@ -157,10 +80,6 @@ export function createComposerAttachments(
       return
     }
     const plainText = clipboardData.getData("text/plain") ?? ""
-    if (input.readClipboardImage && !plainText) {
-      const file = await input.readClipboardImage()
-      if (file && (await add(file, true, target, true))) return
-    }
     if (!plainText) return
     const text = plainText.includes("\r") ? plainText.replace(/\r\n?/g, "\n") : plainText
     const put = () => {
@@ -207,15 +126,6 @@ export function createComposerAttachments(
     addAttachments,
     handlePaste,
     handleDrop,
-    pick(fallback: () => void) {
-      if (!input.picker) {
-        fallback()
-        return
-      }
-      void input
-        .picker({ defaultPath: input.directory(), multiple: true, accept: accepted }, (file) => add(file))
-        .catch(input.onError)
-    },
   }
 }
 

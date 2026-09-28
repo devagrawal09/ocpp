@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./desktop": "./src/desktop.ts",
     "./i18n/desktop-native": "./src/runtime/i18n/desktop-native.ts",
     "./vite": "./vite.js",
     "./index.css": "./src/index.css"

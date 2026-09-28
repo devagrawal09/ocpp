@@ -5,9 +5,8 @@ import { type LocalProject } from "@/shell/state/layout"
 import { useLanguage } from "@/runtime/i18n/language"
 import { usePlatform } from "@/runtime/platform/platform"
 import { ServerConnection } from "@/runtime/server/registry"
-import { closeHomeProject, errorMessage, homeProjectDirectories } from "@/shell/layout/helpers"
+import { closeHomeProject, homeProjectDirectories } from "@/shell/layout/helpers"
 import { Persist, persisted } from "@/runtime/persistence/storage"
-import { showToast } from "@/shell/notifications/toast"
 import { useDialog } from "@ocpp/ui/context/dialog"
 import { createResource } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -33,10 +32,6 @@ export function createHomeProjectsController(home: HomeController) {
   )
   function directories(project: LocalProject) {
     return [project.worktree, ...(project.sandboxes ?? [])]
-  }
-
-  function canRevealProject(conn: ServerConnection.Any) {
-    return platform.platform === "desktop" && !!platform.openPath && ServerConnection.local(conn)
   }
 
   return {
@@ -112,16 +107,6 @@ export function createHomeProjectsController(home: HomeController) {
       },
       move: (conn: ServerConnection.Any, worktree: string, index: number) => {
         home.server.context(conn).projects.move(worktree, index)
-      },
-      canReveal: canRevealProject,
-      reveal: (conn: ServerConnection.Any, project: LocalProject) => {
-        if (!platform.openPath || !canRevealProject(conn)) return
-        platform.openPath(project.worktree).catch((cause: unknown) =>
-          showToast({
-            title: language.t("common.requestFailed"),
-            description: errorMessage(cause, language.t("common.requestFailed")),
-          }),
-        )
       },
     },
     utility: {

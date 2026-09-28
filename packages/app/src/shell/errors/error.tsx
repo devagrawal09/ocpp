@@ -224,43 +224,17 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
   const language = useLanguage()
   const formattedError = () => formatError(props.error, language.t)
   const status = () => errorStatus(props.error)
-  let recordedFatalError: Promise<void> | undefined
   const [store, setStore] = createStore({
-    actionError: undefined as string | undefined,
     captureException: undefined as typeof captureException | undefined,
   })
 
-  function ensureFatalErrorRecorded() {
-    recordedFatalError ??=
-      platform.recordFatalRendererError?.({
-        error: formattedError(),
-        url: location.href,
-        version: platform.version,
-        platform: platform.platform,
-        os: platform.os,
-      }) ?? Promise.resolve()
-    return recordedFatalError
-  }
-
   onMount(() => {
-    void ensureFatalErrorRecorded().catch(() => undefined)
     void import("@sentry/solid")
       .then(({ captureException, isEnabled }) => {
         if (isEnabled()) setStore("captureException", () => captureException)
       })
       .catch(() => undefined)
   })
-
-  async function exportDebugLogs() {
-    const exportLogs = platform.exportDebugLogs
-    if (!exportLogs) return
-    await ensureFatalErrorRecorded()
-      .then(() => exportLogs())
-      .then(() => setStore("actionError", undefined))
-      .catch((err) => {
-        setStore("actionError", formatError(err, language.t))
-      })
-  }
 
   return (
     <div
@@ -289,13 +263,8 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
         />
         <div class="flex flex-row items-center justify-center gap-3 flex-wrap max-w-64">
           <Button size="large" onClick={platform.restart}>
-            {language.t(platform.platform === "web" ? "error.page.action.reload" : "error.page.action.restart")}
+            {language.t("error.page.action.reload")}
           </Button>
-          <Show when={platform.platform === "desktop" && platform.exportDebugLogs}>
-            <Button size="large" variant="ghost" onClick={exportDebugLogs}>
-              {language.t("error.page.action.exportLogs")}
-            </Button>
-          </Show>
           <Show when={store.captureException}>
             {(capture) => {
               const [reported, setReported] = createSignal(false)
@@ -314,9 +283,6 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
             }}
           </Show>
         </div>
-        <Show when={store.actionError}>
-          {(message) => <p class="text-xs text-text-danger-base text-center max-w-2xl">{message()}</p>}
-        </Show>
         <div class="flex flex-col items-center gap-2 text-xs text-center">
           <div class="flex flex-wrap items-center justify-center gap-1">
             {language.t("error.page.report.prefix")}

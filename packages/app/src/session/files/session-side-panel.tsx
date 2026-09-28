@@ -26,12 +26,10 @@ import { SessionSubagentsTab } from "@/session/files/session-subagents-tab"
 import { SessionEventsTab } from "@/session/files/session-events-tab"
 import { SessionRunningTab, createSessionRunning } from "@/session/files/session-running-tab"
 import { SortableTab } from "@/session/files/tab"
-import { OpenInAppButton } from "@/session/files/open-in-app-button"
 import { useCommand } from "@/shell/commands/command"
 import { useFile, type SelectedLineRange } from "@/workspaces/files/model"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useLayout } from "@/shell/state/layout"
-import { useWorkspaceLocation } from "@/workspaces/location"
 import { useSettings } from "@/settings/model"
 import { createFileTabListSync } from "@/session/files/file-tab-scroll"
 import {
@@ -77,9 +75,7 @@ export function SessionSidePanel(props: {
   const file = useFile()
   const language = useLanguage()
   const command = useCommand()
-  const sdk = useWorkspaceLocation()
   const { sessionKey, tabs, view, params } = useSessionLayout()
-  const projectDirectory = createMemo(() => sdk().directory)
 
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const shown = settings.visibility.fileTree
@@ -284,8 +280,7 @@ export function SessionSidePanel(props: {
                         activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
                         preventActivation: (event) =>
                           event.target instanceof Element &&
-                          (!!event.target.closest('[data-slot="tabs-trigger-close-button"]') ||
-                            !!event.target.closest(".session-review-v2-open-in-app-slot")),
+                          !!event.target.closest('[data-slot="tabs-trigger-close-button"]'),
                       }),
                     ]}
                     modifiers={[
@@ -436,13 +431,6 @@ export function SessionSidePanel(props: {
                             </Tooltip>
                           </div>
                         </Tabs.List>
-                        <div
-                          class="session-review-v2-open-in-app-slot shrink-0 flex items-center pr-3"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <OpenInAppButton directory={projectDirectory} />
-                        </div>
                       </div>
 
                       <Show when={reviewTab() && props.canReview && activeTab() === "review"}>

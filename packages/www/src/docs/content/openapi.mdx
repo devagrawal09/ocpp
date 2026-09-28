@@ -45,11 +45,11 @@ Query-parameter and cookie API keys are not supported. An operation whose securi
 
 Each operation becomes one tool. Its path comes from the `operationId`, with dots creating nested namespaces; an operation without an `operationId` gets a name derived from its method and path.
 
-| Operation                                  | Code Mode path             | Permission action    |
-| ------------------------------------------ | -------------------------- | -------------------- |
-| `GET /items`, `operationId: listItems`     | `tools.store.listItems`    | `store_listItems`    |
-| `POST /items`, `operationId: items.create` | `tools.store.items.create` | `store_items_create` |
-| `GET /items/{id}`, no `operationId`        | `tools.store.getItemsById` | `store_getItemsById` |
+| Operation                                  | Code Mode path             |
+| ------------------------------------------ | -------------------------- |
+| `GET /items`, `operationId: listItems`     | `tools.store.listItems`    |
+| `POST /items`, `operationId: items.create` | `tools.store.items.create` |
+| `GET /items/{id}`, no `operationId`        | `tools.store.getItemsById` |
 
 Path, query, and header parameters are top-level input fields, and a JSON request body is the `body` field:
 

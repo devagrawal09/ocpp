@@ -163,17 +163,16 @@ Avoid duplicate IDs unless an override is intentional.
 
 ## Runtime loading
 
-At each model step, OC++ advertises permitted skills that have a
-description and do not set `ocpp/autoinvoke` to `false`. The advertisement
-contains only each skill's ID, name, and description; it does not add every
-skill body to the prompt.
+At each model step, OC++ advertises the skills that have a description and do
+not set `ocpp/autoinvoke` to `false`, when the agent's [tool list](/tools)
+includes `tools.skill`. The advertisement contains only each skill's ID, name,
+and description; it does not add every skill body to the prompt.
 
 When the model calls `tools.skill({ id })` from Code Mode with an exact ID, OC++:
 
 1. Resolves the current winning definition for that ID
-2. Checks the `skill` permission for the selected agent
-3. Adds the Markdown body, without frontmatter and cut at 50 KiB, to the conversation as a separate message
-4. Provides the skill's base directory and a sample of up to ten supporting file paths
+2. Adds the Markdown body, without frontmatter and cut at 50 KiB, to the conversation as a separate message
+3. Provides the skill's base directory and a sample of up to ten supporting file paths
 
 The message arrives no later than the execution's completion notification. The
 value `tools.skill` returns only confirms the load with the skill's name and base

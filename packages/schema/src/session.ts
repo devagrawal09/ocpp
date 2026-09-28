@@ -40,8 +40,8 @@ export const Info = Schema.Struct({
   agent: Agent.ID.pipe(optional),
   model: Model.Ref.pipe(optional),
   /**
-   * The Code Mode paths a subagent may call, as its caller passed them. Absent for a top-level Session, whose
-   * tools come from init.ts for its agent.
+   * The Code Mode paths the Session may call: a subagent's as its caller passed them, and a fork's as its parent
+   * stored them. Absent for any other top-level Session, whose tools come from init.ts for its agent.
    */
   tools: Schema.Array(Schema.String).pipe(optional),
   cost: Money.USD,

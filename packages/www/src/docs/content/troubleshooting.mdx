@@ -103,8 +103,8 @@ Follow the log while reproducing the problem:
 tail -f ~/.local/share/ocpp/log/ocpp.log
 ```
 
-Each line includes a process `run` ID and a `role` field. Use `role=server` for session, provider, plugin, permission, and
-tool activity.
+Each line includes a process `run` ID and a `role` field. Use `role=server` for session, provider, plugin, and tool
+activity.
 
 ```bash
 grep 'role=server' ~/.local/share/ocpp/log/ocpp.log

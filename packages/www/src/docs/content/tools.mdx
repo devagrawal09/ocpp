@@ -22,11 +22,13 @@ A session with an empty list has no `execute` at all.
 A top-level session takes its tools from `init.ts`, a Code Mode program that
 returns one tool list per primary agent. OC++ looks for it in two places:
 
-- `.ocpp/init.ts` in the project
+- `.ocpp/init.ts` in the project: the nearest one from the session's directory
+  up to the repository root
 - `~/.config/ocpp/init.ts` for every project
 
 The project's file wins. The two are not merged, so a project `init.ts` must
-list everything its agents need.
+list everything its agents need. OC++ looks for the file at every request, so
+a new or edited `init.ts` applies from the next request without a restart.
 
 ```ts
 let safeShell = tool.define({
@@ -68,7 +70,8 @@ return {
 - **`tool.define` handles**, which wrap tools with your own logic. A handle may
   call any registered tool, including tools that are not on the list, so
   `safeShell` above gives the agent a restricted shell without `tools.shell`
-  itself.
+  itself. When a handle throws, the call fails with its message, such as
+  `git push is not allowed here`.
 
 A list is the agent's whole catalog. `tools.search` is always available and
 needs no entry.
@@ -76,21 +79,25 @@ needs no entry.
 ### How it runs
 
 `init.ts` is evaluated again for every execution, so each execution gets its own
-live handles, which close when it ends. It may not call tools while it builds
-its lists, only inside handles, so the lists never depend on what a tool
-returns. Each execution records the `init.ts` it started with: after a restart,
-a resumed execution evaluates that same program and gets the same tools, even
-if the file changed in the meantime.
+live handles, which close when it ends. While it builds its lists it may not
+call tools, read `time.now()`, or read `Math.random()`; handles may, when they
+run. The lists therefore come out the same every time. Each execution records
+the `init.ts` it started with: after a restart, a resumed execution evaluates
+that same program and gets the same tools, even if the file changed in the
+meantime.
 
-Bind tool references with `let` rather than a top-level `const`: they exist only
-for one execution and cannot be saved.
+`init.ts` is never saved, so a top-level `const` is an ordinary binding there,
+unlike in `execute`. A tool reference such as `tools.shell` is a value to put
+in a list or hand on; a handle calls a tool by its full path, as
+`tools.shell(...)`, never through a variable that holds the reference.
 
 ### Problems
 
 If `init.ts` does not compile, throws, returns something other than
-`{ agent: [tools] }`, or has no list for the session's agent, that session gets
-**no tools** until the file is fixed. The reason appears in the session's
-timeline and in the web app, once per problem.
+`{ agent: [tools] }`, has no list for the session's agent, or does not return
+within three seconds, that session gets **no tools** until the file is fixed.
+The reason, with the path of the file, appears in the session's timeline and in
+the web app, once per problem.
 
 A listed path that no tool provides, such as a disconnected MCP server's
 namespace, is reported the same way, but the rest of the list still applies.
@@ -127,7 +134,8 @@ const found = tools.subagent({
   `outputSchema` it still gets `tools.submit_result`.
 - The agent is a prompt and model preset. It grants no tools.
 - A continued child (`sessionID`) keeps its tools unless the call passes new
-  ones.
+  ones, less any tool the caller no longer has, such as after switching to
+  plan mode. The call's result names the dropped tools in `notice`.
 - A child placed with `root` resolves the same paths in that directory. The
   call fails if a passed tool does not exist there.
 

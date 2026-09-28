@@ -431,7 +431,8 @@ if (process.argv[2] === "app-server") {
     return file && fs.readFileSync(file, "utf8")
   }
   const prompt = await Bun.stdin.text()
-  fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify({ args, prompt, token: process.env.OCPP_MCP_BEARER_TOKEN, instructions: read("model_instructions_file"), catalog: read("model_catalog_json") }) + "\\n")
+  const images = args.flatMap((arg, index) => (args[index - 1] === "--image" ? [fs.readFileSync(arg).toString("base64")] : []))
+  fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify({ args, prompt, images, token: process.env.OCPP_MCP_BEARER_TOKEN, instructions: read("model_instructions_file"), catalog: read("model_catalog_json") }) + "\\n")
   write({ type: "thread.started", thread_id: "fake-thread" })
   write({ type: "turn.started" })
   write({ type: "item.completed", item: { id: "a" + args.length, type: "agent_message", text: "answered " + prompt } })
@@ -448,7 +449,16 @@ if (process.argv[2] === "app-server") {
     process.env.TMPDIR = temporary
     try {
       const stream = collector()
-      const queue = [[{ type: "text" as const, text: "Execution exe_1 saved notebook values: total." }]]
+      const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+      const queue: ExternalAgentDriver.Input[] = [
+        [{ type: "text", text: "Execution exe_1 saved notebook values: total." }],
+        // A user's image on its own, and a PDF, which Codex cannot take.
+        [
+          { type: "media", mime: "image/png", data: png, name: "shot.png" },
+          { type: "media", mime: "application/pdf", data: "JVBERi0=", name: "report.pdf" },
+        ],
+        [{ type: "media", mime: "image/png", data: png, name: "shot.png" }],
+      ]
       const idles: number[] = []
       const checkpoints: string[] = []
       const options = {
@@ -478,17 +488,24 @@ if (process.argv[2] === "app-server") {
             JSON.parse(line) as {
               args: string[]
               prompt: string
+              images: string[]
               token?: string
               instructions?: string
               catalog?: string
             },
         )
-      expect(invocations).toHaveLength(2)
+      expect(invocations).toHaveLength(4)
       expect(invocations.map((item) => item.prompt)).toEqual([
         "Add numbers",
         "Execution exe_1 saved notebook values: total.",
+        "[Attached file report.pdf (application/pdf) was not forwarded: Codex takes only images]",
+        // Codex exec refuses a turn without text.
+        "[Attached shot.png]",
       ])
+      // Each image is a file Codex reads when its turn starts; the run's directory is gone afterwards.
+      expect(invocations.map((item) => item.images)).toEqual([[], [], [png], [png]])
       expect(invocations[1].args.slice(-2)).toEqual(["resume", "fake-thread"])
+      expect(invocations[3].args).toEqual(expect.arrayContaining(["resume", "fake-thread", "--image"]))
       for (const invocation of invocations) {
         expect(invocation.instructions).toBe("OC++ system prompt for Codex")
         // The catalog stops Codex from wrapping tools in its own code mode, sub-agents and deferred search.
@@ -513,11 +530,16 @@ if (process.argv[2] === "app-server") {
         expect(invocation.token).toMatch(/^[0-9a-f]{64}$/)
         expect(invocation.args.join(" ")).not.toContain(String(invocation.token))
       }
-      expect(idles).toHaveLength(2)
+      expect(idles).toHaveLength(4)
       expect(checkpoints).toHaveLength(1)
       expect(
         stream.events.filter((event) => event.type === "text").map((event) => event.type === "text" && event.delta),
-      ).toEqual(["answered Add numbers", "answered Execution exe_1 saved notebook values: total."])
+      ).toEqual([
+        "answered Add numbers",
+        "answered Execution exe_1 saved notebook values: total.",
+        "answered [Attached file report.pdf (application/pdf) was not forwarded: Codex takes only images]",
+        "answered [Attached shot.png]",
+      ])
 
       // A run that fails while preparing still removes its instructions directory and closes its bridge.
       process.env.FAKE_CODEX_CATALOG_FAILS = "1"

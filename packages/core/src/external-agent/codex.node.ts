@@ -136,8 +136,8 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
  * Input as Codex exec takes it: text, and each image as a file in `directory`, which Codex reads when the turn starts.
  * Codex has no PDF input.
  */
-export function input(message: ExternalAgentDriver.Input, directory: string) {
-  return Promise.all(
+export async function input(message: ExternalAgentDriver.Input, directory: string): Promise<UserInput[]> {
+  const parts = await Promise.all(
     message.map(async (part): Promise<UserInput> => {
       if (part.type === "text") return part
       if (!imageMimes.has(part.mime)) return ExternalAgentDriver.omitted(part, "Codex takes only images")
@@ -146,6 +146,10 @@ export function input(message: ExternalAgentDriver.Input, directory: string) {
       return { type: "local_image", path: file }
     }),
   )
+  if (parts.some((part) => part.type === "text")) return parts
+  // Codex exec refuses a turn without text, as when a user sends an image on its own.
+  const names = message.flatMap((part) => (part.type === "media" ? [part.name ?? part.mime] : []))
+  return [...parts, { type: "text", text: `[Attached ${names.join(", ")}]` }]
 }
 
 /**

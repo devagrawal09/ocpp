@@ -173,10 +173,6 @@ export const dict = {
   "ui.common.submit": "ส่ง",
   "ui.common.showMore": "แสดงเพิ่มเติม",
 
-  "ui.permission.deny": "ปฏิเสธ",
-  "ui.permission.allowAlways": "อนุญาตเสมอ",
-  "ui.permission.allowOnce": "อนุญาตครั้งเดียว",
-
   "ui.message.expand": "ขยายข้อความ",
   "ui.message.collapse": "ย่อข้อความ",
   "ui.message.copy": "คัดลอก",

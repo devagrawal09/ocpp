@@ -1,13 +1,11 @@
 import { createEffect, createMemo } from "solid-js"
-import { createStore } from "solid-js/store"
-import type { FormInfo, PermissionRequest } from "@ocpp/client/promise"
+import type { FormInfo } from "@ocpp/client/promise"
 import { useParams } from "@solidjs/router"
 import { showToast } from "@/shell/notifications/toast"
 import { useServerSDK } from "@/runtime/server/client"
 import { useLanguage } from "@/runtime/i18n/language"
-import { useSettings } from "@/settings/model"
 import { useWorkspaceLocation } from "@/workspaces/location"
-import { sessionPermissionRequest, sessionQuestionForm } from "@/session/requests/session-request-tree"
+import { sessionQuestionForm } from "@/session/requests/session-request-tree"
 import { createSessionBackground } from "@/session/requests/background"
 import { useData } from "@/runtime/server/current"
 
@@ -17,30 +15,22 @@ export function createSessionRequestModel() {
   const serverSDK = useServerSDK()
   const data = useData()
   const language = useLanguage()
-  const settings = useSettings()
   createEffect(() => {
     const id = params.id
     if (!id || serverSDK.connection.status() !== "connected") return
-    void Promise.all([
-      data.shell.sync({ directory: sdk().directory }),
-      data.session.permission.sync(id),
-      data.session.form.sync(id),
-    ]).catch(() => undefined)
+    void Promise.all([data.shell.sync({ directory: sdk().directory }), data.session.form.sync(id)]).catch(
+      () => undefined,
+    )
   })
 
   const questionRequest = createMemo((): FormInfo | undefined => {
     return sessionQuestionForm(data.session.list(), data.session.form.list, params.id)
   })
 
-  const permissionRequest = createMemo((): PermissionRequest | undefined => {
-    if (settings.permissions.autoApprove()) return undefined
-    return sessionPermissionRequest(data.session.list(), data.session.permission.list, params.id)
-  })
-
   const blocked = createMemo(() => {
     const id = params.id
     if (!id) return false
-    return !!permissionRequest() || !!questionRequest()
+    return !!questionRequest()
   })
 
   const primary = () => {
@@ -66,44 +56,14 @@ export function createSessionRequestModel() {
     })
   }
 
-  const [store, setStore] = createStore({
-    responding: undefined as string | undefined,
-  })
-
-  const permissionResponding = createMemo(() => {
-    const perm = permissionRequest()
-    if (!perm) return false
-    return store.responding === perm.id
-  })
-
-  const decide = (response: "once" | "always" | "reject") => {
-    const perm = permissionRequest()
-    if (!perm) return
-    if (store.responding === perm.id) return
-
-    setStore("responding", perm.id)
-    serverSDK.api.permission
-      .reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
-      .catch((err: unknown) => {
-        const description = err instanceof Error ? err.message : String(err)
-        showToast({ title: language.t("common.requestFailed"), description })
-      })
-      .finally(() => {
-        setStore("responding", (id) => (id === perm.id ? undefined : id))
-      })
-  }
-
   return {
     blocked,
     questionRequest,
-    permissionRequest,
-    permissionResponding,
     background: {
       blocking: background.blocking,
       tasks: background.tasks,
       move: moveToBackground,
     },
-    decide,
   }
 }
 

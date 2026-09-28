@@ -185,10 +185,6 @@ export const dict: Record<string, string> = {
   "ui.common.submit": "Kirim",
   "ui.common.showMore": "Tampilkan lebih banyak",
 
-  "ui.permission.deny": "Tolak",
-  "ui.permission.allowAlways": "Izinkan selalu",
-  "ui.permission.allowOnce": "Izinkan sekali",
-
   "ui.message.expand": "Bentangkan pesan",
   "ui.message.collapse": "Ciutkan pesan",
   "ui.message.copy": "Salin",

@@ -18,11 +18,6 @@ const soundSettings = {
     title: "settings.general.sounds.agent.title",
     description: "settings.general.sounds.agent.description",
   },
-  permissions: {
-    action: "settings-sounds-permissions",
-    title: "settings.general.sounds.permissions.title",
-    description: "settings.general.sounds.permissions.description",
-  },
   errors: {
     action: "settings-sounds-errors",
     title: "settings.general.sounds.errors.title",
@@ -31,7 +26,7 @@ const soundSettings = {
 } as const
 
 const SoundSetting: Component<{
-  kind: "agent" | "permissions" | "errors"
+  kind: "agent" | "errors"
   channel: SoundSettingsController["agent"]
 }> = (props) => {
   const language = useLanguage()
@@ -88,18 +83,6 @@ export const SettingsNotifications: Component = () => {
             </SettingsRow>
 
             <SettingsRow
-              title={language.t("settings.general.notifications.permissions.title")}
-              description={language.t("settings.general.notifications.permissions.description")}
-            >
-              <div data-action="settings-notifications-permissions">
-                <Switch
-                  checked={settings.notifications.permissions()}
-                  onChange={(checked) => settings.notifications.setPermissions(checked)}
-                />
-              </div>
-            </SettingsRow>
-
-            <SettingsRow
               title={language.t("settings.general.notifications.errors.title")}
               description={language.t("settings.general.notifications.errors.description")}
             >
@@ -117,7 +100,6 @@ export const SettingsNotifications: Component = () => {
           <h3 class="settings-section-title">{language.t("settings.general.section.sounds")}</h3>
           <SettingsList>
             <SoundSetting kind="agent" channel={sounds.agent} />
-            <SoundSetting kind="permissions" channel={sounds.permissions} />
             <SoundSetting kind="errors" channel={sounds.errors} />
           </SettingsList>
         </div>

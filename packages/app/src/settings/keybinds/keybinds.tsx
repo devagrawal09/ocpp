@@ -56,7 +56,6 @@ function groupFor(id: string): KeybindGroup {
   if (
     id.startsWith("session.") ||
     id.startsWith("message.") ||
-    id.startsWith("permissions.") ||
     id.startsWith("steps.") ||
     id.startsWith("review.")
   )

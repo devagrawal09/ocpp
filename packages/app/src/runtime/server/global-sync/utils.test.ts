@@ -14,7 +14,6 @@ describe("normalizeAgentList", () => {
         model: { id: "gpt-5", providerID: "openai", variant: "high" },
         request: { settings: { temperature: 0.2, topP: 0.9 }, headers: {}, body: {} },
         system: "Build software",
-        permissions: [{ action: "read", resource: "*", effect: "allow" }],
       },
     ] as AgentListOutput["data"])
 
@@ -27,7 +26,6 @@ describe("normalizeAgentList", () => {
         temperature: 0.2,
         topP: 0.9,
         color: "primary",
-        permission: [{ permission: "read", pattern: "*", action: "allow" }],
         model: { providerID: "openai", modelID: "gpt-5" },
         variant: "high",
         prompt: "Build software",

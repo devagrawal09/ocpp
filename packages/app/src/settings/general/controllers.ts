@@ -128,12 +128,6 @@ export function createSoundSettingsController() {
       (value) => settings.sounds.setAgentEnabled(value),
       (id) => settings.sounds.setAgent(id),
     ),
-    permissions: channel(
-      settings.sounds.permissionsEnabled,
-      settings.sounds.permissions,
-      (value) => settings.sounds.setPermissionsEnabled(value),
-      (id) => settings.sounds.setPermissions(id),
-    ),
     errors: channel(
       settings.sounds.errorsEnabled,
       settings.sounds.errors,

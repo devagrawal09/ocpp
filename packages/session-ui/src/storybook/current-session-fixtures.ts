@@ -3,7 +3,6 @@ import type {
   FormInfo,
   JsonValue,
   ModelRef,
-  PermissionRequest,
   SessionMessageAssistant,
   SessionMessageAssistantTool,
   SessionMessageInfo,
@@ -668,11 +667,11 @@ export const requestHistoryDocument = document([
         metadata: { answers: [["Canary"]] },
       }),
       failedTool({
-        id: "tool_permission_release",
+        id: "tool_publish_release",
         name: "shell",
         offset: 43_000,
         args: { command: "npm publish --tag canary" },
-        message: "Permission was denied for npm publish --tag canary",
+        message: "npm publish --tag canary failed: 403 Forbidden",
       }),
     ],
   }),
@@ -864,25 +863,6 @@ export const instructionsUpdatedMultipleDocument = document([
     time: { created: STORY_TIME + 89_000 },
   },
 ] satisfies SessionMessageInfo[])
-
-export const permissionPendingDocument = document(
-  [
-    user("msg_user_permission_pending", "Publish the verified preview build to the canary channel.", 83_000),
-    assistant({
-      id: "msg_assistant_permission_pending",
-      offset: 84_000,
-      content: [
-        runningTool({
-          id: "tool_permission_pending",
-          name: "shell",
-          offset: 84_100,
-          args: { command: "npm publish --tag canary" },
-        }),
-      ],
-    }),
-  ] satisfies SessionMessageInfo[],
-  { type: "busy" },
-)
 
 export const questionPendingDocument = document(
   [
@@ -1179,12 +1159,3 @@ export const largeCompletedDocument = {
     },
   ],
 } satisfies SessionDocument
-
-export const activePermissionRequest = {
-  id: "permission_publish_canary",
-  sessionID: CURRENT_SESSION_ID,
-  action: "shell",
-  resources: ["npm publish --tag canary"],
-  save: ["npm publish *"],
-  source: { type: "tool", messageID: "msg_assistant_permission_pending", id: "tool_permission_pending" },
-} satisfies PermissionRequest

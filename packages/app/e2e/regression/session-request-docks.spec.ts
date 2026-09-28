@@ -79,37 +79,6 @@ test("shows a pending question dock", async ({ page }) => {
   expect((await reply).postDataJSON()).toEqual({ answer: { q0: "minimal" } })
 })
 
-test("shows a pending permission dock", async ({ page }) => {
-  await mockServer(page, {
-    permissions: [
-      {
-        id: "permission-request",
-        sessionID,
-        permission: "shell",
-        patterns: ["git status", "git diff"],
-        metadata: {},
-        always: [],
-      },
-    ],
-  })
-
-  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
-  await expectSessionTitle(page, title)
-
-  const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
-  await expect(permission).toBeVisible()
-  await expect(permission.getByText("git status")).toBeVisible()
-  await expect(permission.getByText("git diff")).toBeVisible()
-  await expect(permission.locator('[data-slot="permission-footer-actions"] button')).toHaveCount(3)
-  await expect(page.locator('[data-component="session-composer"]')).toHaveCount(0)
-
-  const reply = page.waitForRequest((request) => request.method() === "POST")
-  await permission.getByRole("button", { name: "Allow once" }).click()
-  const request = await reply
-  expect(new URL(request.url()).pathname).toBe(`/api/session/${sessionID}/permission/permission-request/reply`)
-  expect(request.postDataJSON()).toEqual({ reply: "once" })
-})
-
 test("restores the draft caret after a locationless request dock closes", async ({ page }) => {
   const transport = await installSseTransport(page, {
     server,
@@ -182,7 +151,6 @@ test("restores the draft caret after a locationless request dock closes", async 
 async function mockServer(
   page: Page,
   requests: {
-    permissions?: unknown[] | (() => unknown[])
     forms?: unknown[] | (() => unknown[])
     sessionStatus?: Record<string, unknown>
   },
@@ -226,7 +194,6 @@ async function mockServer(
       },
     ],
     pageMessages: () => ({ items: [] }),
-    permissions: requests.permissions,
     forms: requests.forms,
     sessionStatus: requests.sessionStatus,
   })

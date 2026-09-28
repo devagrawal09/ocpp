@@ -93,7 +93,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const viewCommand = withCategory(language.t("command.category.view"))
   const terminalCommand = withCategory(language.t("command.category.terminal"))
   const mcpCommand = withCategory(language.t("command.category.mcp"))
-  const permissionsCommand = withCategory(language.t("command.category.permissions"))
 
   const exportSession = async () => {
     const sessionID = actions.session.identity.params.id
@@ -211,19 +210,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       () => import("@/providers/connect/mcp-dialog"),
       (x) => dialog.show(() => <x.DialogSelectMcp />),
     )
-  }
-
-  const toggleAutoAccept = () => {
-    const active = !settings.permissions.autoApprove()
-    settings.permissions.setAutoApprove(active)
-    showToast({
-      title: active
-        ? language.t("toast.permissions.autoaccept.on.title")
-        : language.t("toast.permissions.autoaccept.off.title"),
-      description: active
-        ? language.t("toast.permissions.autoaccept.on.description")
-        : language.t("toast.permissions.autoaccept.off.description"),
-    })
   }
 
   const undo = actions.revert.undo
@@ -437,18 +423,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     }),
   ]
 
-  const permissionsCmds = () => [
-    permissionsCommand({
-      id: "permissions.autoaccept",
-      title: settings.permissions.autoApprove()
-        ? language.t("command.permissions.autoaccept.disable")
-        : language.t("command.permissions.autoaccept.enable"),
-      keybind: "mod+shift+a",
-      disabled: false,
-      onSelect: toggleAutoAccept,
-    }),
-  ]
-
   command.register("session", () => [
     ...sessionCmds(),
     ...projectCmds(),
@@ -458,6 +432,5 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     ...terminalCmds(),
     ...messageCmds(),
     ...mcpCmds(),
-    ...permissionsCmds(),
   ])
 }

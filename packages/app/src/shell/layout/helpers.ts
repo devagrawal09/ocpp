@@ -27,13 +27,6 @@ export const sortedRootSessions = (store: SessionStore, _now: number) => roots(s
 export const latestRootSession = (stores: SessionStore[], _now: number) =>
   stores.flatMap(roots).sort(compareSessionTime)[0]
 
-export function hasProjectPermissions<T>(
-  request: Record<string, T[] | undefined> | undefined,
-  include: (item: T) => boolean = () => true,
-) {
-  return Object.values(request ?? {}).some((list) => list?.some(include))
-}
-
 export const childSessionOnPath = (sessions: SessionInfo[] | undefined, rootID: string, activeID?: string) => {
   if (!activeID || activeID === rootID) return
   const map = new Map((sessions ?? []).map((session) => [session.id, session]))

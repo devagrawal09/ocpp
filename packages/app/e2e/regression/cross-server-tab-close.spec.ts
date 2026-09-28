@@ -71,7 +71,7 @@ async function mockServers(page: Page, requests: string[]) {
       return json(route, { location: { directory: current.directory }, data: [] })
     if (url.pathname === "/api/model/default")
       return json(route, { location: { directory: current.directory }, data: null })
-    if (url.pathname === "/api/permission/request" || url.pathname === "/api/question/request")
+    if (url.pathname === "/api/question/request")
       return json(route, { location: { directory: current.directory }, data: [] })
     if (url.pathname === "/api/mcp") return json(route, { location: { directory: current.directory }, data: [] })
     if (url.pathname === "/api/mcp/resource")

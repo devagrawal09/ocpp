@@ -30,7 +30,6 @@ export interface MockServerConfig {
   onRevertStage?: (input: { sessionID: string; messageID: string }) => void
   events?: () => OcppEvent[]
   eventRetry?: number
-  permissions?: unknown[] | (() => unknown[])
   forms?: unknown[] | (() => unknown[])
   fileList?: (path: string) => unknown | Promise<unknown>
   fileContent?: (path: string) => unknown | Promise<unknown>
@@ -229,7 +228,6 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
                 mode: "primary",
                 hidden: false,
                 request: { settings: {}, headers: {}, body: {} },
-                permissions: [],
               },
             ],
           }),
@@ -287,13 +285,6 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
         worktreeRemove: () => noContent,
         worktreeRefresh: () => noContent,
         location: () => Effect.succeed(location(config)),
-        permissionRequests: () =>
-          Effect.succeed({
-            location: location(config),
-            data: (typeof config.permissions === "function" ? config.permissions() : (config.permissions ?? [])).map(
-              currentPermission,
-            ),
-          }),
         formRequests: () =>
           Effect.succeed({
             location: location(config),
@@ -440,16 +431,6 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
           ).pipe(Effect.andThen(noContent)),
         sessionSwitchAgent: () => noContent,
         sessionSwitchModel: () => noContent,
-        sessionPermission: (ctx) => {
-          const permissions =
-            typeof config.permissions === "function" ? config.permissions() : (config.permissions ?? [])
-          return Effect.succeed({
-            data: permissions
-              .map(currentPermission)
-              .filter((permission) => permission.sessionID === ctx.params.sessionID),
-          })
-        },
-        sessionPermissionReply: () => noContent,
         sessionRename: () => noContent,
         sessionInterrupt: () => noContent,
         sessionRevertStage: (ctx) => {
@@ -578,24 +559,6 @@ function currentDefaultModel(value: unknown) {
   const selected = value.default
   const models = currentModels(value)
   return models.find((model) => model.providerID === selected.providerID && model.id === selected.modelID) ?? null
-}
-
-function currentPermission(value: unknown) {
-  const permission = value as Record<string, unknown>
-  if (permission.action) return permission
-  const tool = permission.tool as { messageID?: string; callID?: string; id?: string } | undefined
-  return {
-    id: permission.id,
-    sessionID: permission.sessionID,
-    action: permission.permission,
-    resources: permission.patterns ?? [],
-    save: permission.always,
-    metadata: permission.metadata,
-    source:
-      tool?.messageID && (tool.id || tool.callID)
-        ? { type: "tool", messageID: tool.messageID, id: tool.id ?? tool.callID }
-        : undefined,
-  }
 }
 
 export function currentSession(session: { id: string } & Record<string, unknown>, fallbackDirectory?: string) {

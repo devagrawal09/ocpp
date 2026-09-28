@@ -175,10 +175,6 @@ export const dict = {
   "ui.common.submit": "提交",
   "ui.common.showMore": "顯示更多",
 
-  "ui.permission.deny": "拒絕",
-  "ui.permission.allowAlways": "永遠允許",
-  "ui.permission.allowOnce": "允許一次",
-
   "ui.message.expand": "展開訊息",
   "ui.message.collapse": "收合訊息",
   "ui.message.copy": "複製",

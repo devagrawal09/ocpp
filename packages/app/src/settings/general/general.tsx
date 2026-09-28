@@ -52,23 +52,6 @@ const fontSettings = {
     input: "setTerminal",
   },
 } as const
-const AutoApprovePermissionsSetting: Component = () => {
-  const language = useLanguage()
-  const settings = useSettings()
-  return (
-    <SettingsRow
-      title={language.t("command.permissions.autoaccept.enable")}
-      description={language.t("toast.permissions.autoaccept.on.description")}
-    >
-      <div data-action="settings-auto-accept-permissions">
-        <Switch
-          checked={settings.permissions.autoApprove()}
-          onChange={(checked) => settings.permissions.setAutoApprove(checked)}
-        />
-      </div>
-    </SettingsRow>
-  )
-}
 
 const WorkspaceDestinationSetting: Component = () => {
   const language = useLanguage()
@@ -354,7 +337,6 @@ export const SettingsGeneral: Component<{
         <LanguageSetting />
 
         <WorkspaceDestinationSetting />
-        <AutoApprovePermissionsSetting />
 
         <ShellSetting controller={shell} />
         <TerminalPlacementSetting />
@@ -474,18 +456,6 @@ export const SettingsGeneral: Component<{
             <Switch
               checked={settings.notifications.agent()}
               onChange={(checked) => settings.notifications.setAgent(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.notifications.permissions.title")}
-          description={language.t("settings.general.notifications.permissions.description")}
-        >
-          <div data-action="settings-notifications-permissions">
-            <Switch
-              checked={settings.notifications.permissions()}
-              onChange={(checked) => settings.notifications.setPermissions(checked)}
             />
           </div>
         </SettingsRow>

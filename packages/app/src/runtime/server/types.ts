@@ -55,7 +55,6 @@ export type Agent = {
   topP?: number
   temperature?: number
   color?: string
-  permission: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>
   model?: { modelID: string; providerID: string }
   variant?: string
   prompt?: string
@@ -157,10 +156,6 @@ export type Config = {
   agent?: Record<string, unknown>
   command?: Record<string, unknown>
   instructions?: string[]
-  disabled_providers?: string[]
-  enabled_providers?: string[]
-  permission?: string | Record<string, unknown>
-  tools?: Record<string, boolean>
   experimental?: Record<string, unknown>
   [key: string]: unknown
 }

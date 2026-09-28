@@ -181,10 +181,6 @@ export const dict = {
   "ui.common.submit": "Pošalji",
   "ui.common.showMore": "Prikaži više",
 
-  "ui.permission.deny": "Odbij",
-  "ui.permission.allowAlways": "Uvijek dozvoli",
-  "ui.permission.allowOnce": "Dozvoli jednom",
-
   "ui.message.expand": "Proširi poruku",
   "ui.message.collapse": "Sažmi poruku",
   "ui.message.copy": "Kopiraj",

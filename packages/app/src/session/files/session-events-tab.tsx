@@ -45,7 +45,7 @@ export function SessionEventsTab(props: {
     void data.session.event.sync(sessionID).catch(() => setState("failed", true))
   })
 
-  // User actions skip the agent's permission rules; the server announces the change and the list follows.
+  // The server announces the change and the list follows.
   const act = (name: string, request: () => Promise<unknown>) => {
     if (state.pending[name]) return
     setState("pending", name, true)

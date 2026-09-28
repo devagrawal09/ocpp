@@ -246,10 +246,6 @@ const source = {
   "ui.common.moreCount.one": "+{{count}} more",
   "ui.common.moreCount.other": "+{{count}} more",
 
-  "ui.permission.deny": "Deny",
-  "ui.permission.allowAlways": "Allow always",
-  "ui.permission.allowOnce": "Allow once",
-
   "ui.message.expand": "Expand message",
   "ui.message.collapse": "Collapse message",
   "ui.message.copy": "Copy",

@@ -96,7 +96,6 @@ const Group = HttpApiGroup.make("mock")
     }),
   )
   .add(HttpApiEndpoint.get("location", "/api/location", { success: Json }))
-  .add(HttpApiEndpoint.get("permissionRequests", "/api/permission/request", { success: Json }))
   .add(HttpApiEndpoint.get("formRequests", "/api/form/request", { success: Json }))
   .add(HttpApiEndpoint.get("vcs", "/api/vcs", { success: Json }))
   .add(HttpApiEndpoint.get("vcsStatus", "/api/vcs/status", { success: Json }))
@@ -205,19 +204,6 @@ const Group = HttpApiGroup.make("mock")
   .add(
     HttpApiEndpoint.post("sessionInboxSteer", "/api/session/:sessionID/inbox/:inboxID/steer", {
       params: { ...SessionParams, inboxID: Schema.String },
-      success: NoContent,
-    }),
-  )
-  .add(
-    HttpApiEndpoint.get("sessionPermission", "/api/session/:sessionID/permission", {
-      params: SessionParams,
-      success: Json,
-    }),
-  )
-  .add(
-    HttpApiEndpoint.post("sessionPermissionReply", "/api/session/:sessionID/permission/:permissionID/reply", {
-      params: { ...SessionParams, permissionID: Schema.String },
-      payload: JsonPayload,
       success: NoContent,
     }),
   )

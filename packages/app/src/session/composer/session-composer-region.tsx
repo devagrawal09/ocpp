@@ -1,24 +1,13 @@
 import { Show, type JSX } from "solid-js"
 import { useLanguage } from "@/runtime/i18n/language"
-import { SessionPermissionDock } from "@/session/requests/session-permission-dock"
 import { SessionQuestionDock } from "@/session/requests/session-question-dock"
 import type { SessionComposerRegionController } from "./session-composer-region-controller"
 
-type SessionComposerRegionState = Pick<
-  SessionComposerRegionController["state"],
-  "questionRequest" | "permissionRequest" | "permissionResponding" | "decide" | "blocked"
->
+type SessionComposerRegionState = Pick<SessionComposerRegionController["state"], "questionRequest" | "blocked">
 
 export type SessionComposerRegionViewController = Pick<
   SessionComposerRegionController,
-  | "centered"
-  | "onResponseSubmit"
-  | "openParent"
-  | "setPromptRef"
-  | "setDockRef"
-  | "parentID"
-  | "child"
-  | "showComposer"
+  "centered" | "onResponseSubmit" | "openParent" | "setPromptRef" | "setDockRef" | "parentID" | "child" | "showComposer"
 > & { state: SessionComposerRegionState }
 
 export function SessionComposerRegion(props: {
@@ -47,31 +36,13 @@ export function SessionComposerRegion(props: {
           )}
         </Show>
 
-        <Show when={controller.state.permissionRequest()} keyed>
-          {(request) => (
-            <div>
-              <SessionPermissionDock
-                request={request}
-                responding={controller.state.permissionResponding()}
-                onDecide={(response) => {
-                  controller.onResponseSubmit()
-                  controller.state.decide(response)
-                }}
-              />
-            </div>
-          )}
-        </Show>
-
         <Show when={controller.showComposer()}>
           <div
             classList={{
               "relative z-[70]": true,
             }}
           >
-            <Show
-              when={controller.child()}
-              fallback={<Show when={!controller.state.blocked()}>{props.composer}</Show>}
-            >
+            <Show when={controller.child()} fallback={<Show when={!controller.state.blocked()}>{props.composer}</Show>}>
               <div
                 ref={controller.setPromptRef}
                 class="w-full rounded-[12px] border border-border-weak-base bg-background-base p-3 text-16-regular text-text-weak"

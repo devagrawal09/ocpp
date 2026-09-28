@@ -7,7 +7,7 @@ import {
   type SessionComposerRegionViewController,
 } from "@/session/composer/session-composer-region"
 import { SessionPanelFrame, SessionRouteFrame } from "@/session/session-frame"
-import type { FormInfo, PermissionRequest, SessionStatus } from "@ocpp/client/promise"
+import type { FormInfo, SessionStatus } from "@ocpp/client/promise"
 import type { SessionDocument } from "@ocpp/session-ui/document"
 import { CurrentSessionProviders, STORY_MODEL } from "@ocpp/session-ui/storybook"
 import { SessionTimeline } from "@ocpp/session-ui/timeline"
@@ -82,7 +82,7 @@ export type SessionPreviewProps = {
   description: string
   document: SessionDocument
   draft?: string
-  request?: { type: "permission"; value: PermissionRequest } | { type: "question"; value: FormInfo }
+  request?: { type: "question"; value: FormInfo }
   reviewOpened?: boolean
   child?: { parentID: string }
   terminal?: { title: string; lines: string[] }
@@ -189,12 +189,6 @@ function SessionSurfaceState(props: SessionPreviewProps & { onReset: () => void 
   const region = {
     state: {
       questionRequest: () => (state.request?.type === "question" ? state.request.value : undefined),
-      permissionRequest: () => (state.request?.type === "permission" ? state.request.value : undefined),
-      permissionResponding: () => false,
-      decide: (response) => {
-        setState("request", undefined)
-        setState("activity", `Permission response: ${response}`)
-      },
       blocked: () => state.request !== undefined,
     },
     centered: () => true,

@@ -1,12 +1,10 @@
 import {
-  activePermissionRequest,
   activeQuestionRequest,
   attachmentsAndCommentsDocument,
   compactionDocument,
   editThenTestDocument,
   emptySessionDocument,
   largeCompletedDocument,
-  permissionPendingDocument,
   questionPendingDocument,
   retryDocument,
   streamingDocument,
@@ -114,17 +112,6 @@ export const StreamingSession = {
 
 export const EditThenShellTest = {
   render: implementAndVerify,
-}
-
-export const PermissionRequest = {
-  render: () => (
-    <SessionPreview
-      title="Publish canary preview"
-      description={description}
-      document={permissionPendingDocument}
-      request={{ type: "permission", value: activePermissionRequest }}
-    />
-  ),
 }
 
 export const QuestionRequest = {

@@ -87,7 +87,6 @@ Built-ins use the same tool API while capturing trusted Location services:
 
 ```ts
 const filesystem = yield * FileSystem.Service
-const permission = yield * PermissionV2.Service
 const tools = yield * Tools.Service
 
 yield *
@@ -96,31 +95,16 @@ yield *
       description: "Search file contents",
       input: Input,
       output: Output,
-      execute: (input, context) =>
+      execute: (input) =>
         Effect.gen(function* () {
           const root = yield* filesystem.resolveRoot(input)
-
-          yield* permission.assert({
-            sessionID: context.sessionID,
-            agent: context.agent,
-            source: {
-              type: "tool",
-              messageID: context.messageID,
-              callID: context.callID,
-            },
-            action: "grep",
-            resources: [input.pattern],
-            save: ["*"],
-            metadata: { root: root.resource },
-          })
-
           return yield* filesystem.grep(input, root)
         }).pipe(/* translate expected typed errors to ToolFailure */),
     }),
   })
 ```
 
-Trusted tools formulate and sequence permission requests. `PermissionV2` evaluates policy and manages approval. The registry does not inject an `assertPermission` helper.
+Nothing authorizes a call: every tool on a Session's tool list runs. Each Session's catalog is exactly its tool list, from `init.ts` for a top-level Session's agent or the tools its caller passed to a subagent, and a program that calls a tool off the list is refused before it starts. A tool an agent should not have belongs off its list, or behind a `tool.define` wrapper in `init.ts`. The registry does not inject an authorization helper.
 
 Sharing a tool type does not imply equal authority. Built-ins and trusted Location plugins may capture services that are not available to application tools.
 

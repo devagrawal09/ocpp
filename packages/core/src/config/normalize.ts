@@ -58,6 +58,7 @@ const removedTopLevel = [
   ["tools", removedTools],
   ["enabled_providers", removedProviders],
   ["disabled_providers", removedProviders],
+  ["subagent", "ignored removed subagent model allowlist; subagents may select any available model"],
 ] as const
 const removedAgent = ["permission", "permissions", "tools"] as const
 const unsupportedModel = ["release_date", "attachment", "reasoning", "temperature", "experimental"] as const
@@ -207,7 +208,6 @@ export function normalize(input: unknown): Result {
     tool_output: Info.fields.tool_output,
     websearch: Info.fields.websearch,
     warming: Info.fields.warming,
-    subagent: Info.fields.subagent,
     external_agents: Info.fields.external_agents,
   }
   Object.entries(nativeAtomic).forEach(([key, schema]) => {

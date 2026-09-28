@@ -14127,19 +14127,6 @@
             },
             "additionalProperties": false
           },
-          "subagent": {
-            "type": "object",
-            "properties": {
-              "models": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "pattern": "^[^/#]+\\/[^#]+$"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
           "providers": {
             "type": "object",
             "additionalProperties": {

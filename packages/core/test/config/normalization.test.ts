@@ -395,13 +395,16 @@ describe("ConfigNormalize", () => {
     ])
   })
 
-  test("preserves the subagent model allowlist", () => {
-    expect(
-      normalized({
-        subagent: { models: ["opencode/gpt-5.6-luna", "opencode/gpt-5.6-sol"] },
-      }).encoded.subagent,
-    ).toEqual({ models: ["opencode/gpt-5.6-luna", "opencode/gpt-5.6-sol"] })
-    expect(normalized({ subagent: { models: ["opencode/gpt-5.6-luna#high"] } }).encoded.subagent).toBeUndefined()
+  test("ignores the removed subagent model allowlist", () => {
+    const result = normalized({ subagent: { models: ["opencode/gpt-5.6-luna", "opencode/gpt-5.6-sol"] } })
+    expect(result.encoded).toEqual({})
+    expect(result.diagnostics).toEqual([
+      {
+        kind: "unsupported",
+        path: ["subagent"],
+        message: "ignored removed subagent model allowlist; subagents may select any available model",
+      },
+    ])
   })
 
   test("reports unsupported legacy settings without including their values", () => {

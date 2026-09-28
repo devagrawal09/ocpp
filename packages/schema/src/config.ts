@@ -21,7 +21,6 @@ import { ConfigToolOutput } from "./config/tool-output.js"
 import { ConfigWatcher } from "./config/watcher.js"
 import { ConfigWarming } from "./config/warming.js"
 import { ConfigExternalAgent } from "./config/external-agent.js"
-import { ConfigSubagent } from "./config/subagent.js"
 
 export class Info extends Schema.Class<Info>("Config.Info")({
   $schema: optional(Schema.String).annotate({
@@ -107,9 +106,6 @@ export class Info extends Schema.Class<Info>("Config.Info")({
     description: "Keep recently active sessions warm with transient model requests (default: false)",
   }),
   external_agents: ConfigExternalAgent.Info.pipe(optional),
-  subagent: ConfigSubagent.Info.pipe(optional).annotate({
-    description: "Control model selection for delegated subagents",
-  }),
   providers: Schema.Record(Schema.String, ConfigProvider.Info).pipe(optional),
   experimental: ConfigExperimental.Info.pipe(optional),
 }) {}

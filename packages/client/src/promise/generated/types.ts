@@ -1927,7 +1927,6 @@ export type ConfigEntry =
           codex?: { enabled?: boolean; model?: string; effort?: string }
           pi?: { enabled?: boolean; model?: string; effort?: string }
         }
-        subagent?: { models?: Array<string> }
         providers?: {
           [x: string]: {
             name?: string

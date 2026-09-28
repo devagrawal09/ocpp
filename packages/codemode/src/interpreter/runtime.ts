@@ -2,8 +2,8 @@ import { Cause, Deferred, Effect, Exit } from "effect"
 import { coercionFunctions, errorConstructorNames, globalNamespaces, uriFunctions } from "../globals.js"
 import type { ImpureHelper } from "../codemode.js"
 import { ToolHandle } from "../tool-handle.js"
-import { isPromiseAllCall, staticToolCalls } from "../ir.js"
-import { isBlockedMember, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
+import { isPromiseAllCall, staticToolCalls, staticToolPath } from "../ir.js"
+import { isBlockedMember, toolExpression, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
 import {
   type AstNode,
   AsyncIteratorSymbol,
@@ -1772,6 +1772,12 @@ export class Interpreter<R> {
       if ((callable === null || callable === undefined) && node.optional === true) return OptionalShortCircuit
 
       const args = yield* self.evaluateCallArguments(argNodes)
+      // Only a call that names its tool by a static path runs it, so the compile check has seen every tool a
+      // program calls. A reference reached any other way is a value to pass on, which invokeCallable refuses.
+      if (callable instanceof ToolReference && staticToolPath(callee) !== undefined) {
+        if (callable.path.length === 0) throw new InterpreterRuntimeError("The tools root is not callable.", callee)
+        return yield* self.executeToolCall(callable.path, args)
+      }
       return yield* self.invokeCallable(callable, args, node, callee)
     })
   }
@@ -1787,8 +1793,15 @@ export class Interpreter<R> {
     const self = this
     return Effect.gen(function* () {
       if (callable instanceof ToolReference) {
-        if (callable.path.length === 0) throw new InterpreterRuntimeError("The tools root is not callable.", callee)
-        return yield* self.executeToolCall(callable.path, args)
+        const tool = toolExpression(callable.path.join("."))
+        throw new InterpreterRuntimeError(
+          `${tool} is a tool reference here, which can only be passed to a tool that hands tools on, such as tools.subagent. Call the tool by its static path instead: ${tool}(...).`,
+          callee,
+          "UnsupportedSyntax",
+          [
+            `Write the call as ${tool}(input), naming the tool directly rather than through a variable, parameter or callback.`,
+          ],
+        )
       }
       if (callable instanceof PromiseMethodReference) {
         return yield* invokePromiseMethod(self.runner, self.promises, callable, args, node)
@@ -2464,6 +2477,16 @@ export class Interpreter<R> {
       if (objectValue instanceof ToolReference) {
         if (typeof key !== "string") {
           throw new InterpreterRuntimeError("Tool paths must use string property names.", propertyNode)
+        }
+        // A tool path is written out in full, so a reference held in a variable cannot reach further tools.
+        if (staticToolPath(node) === undefined) {
+          const tool = toolExpression([...objectValue.path, key].join("."))
+          throw new InterpreterRuntimeError(
+            `A tool reference cannot be extended with a member; name the tool by its full static path, such as ${tool}.`,
+            propertyNode,
+            "UnsupportedSyntax",
+            [`Write the path out in full, as in ${tool}(input), rather than reading it from a variable.`],
+          )
         }
         return new ToolReference([...objectValue.path, key])
       }

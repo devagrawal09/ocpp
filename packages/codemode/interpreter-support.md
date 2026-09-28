@@ -117,7 +117,9 @@ Deterministic rules keep extraction precise:
 - `let`, nested declarations, and declarations inside control flow are activation-local.
 - `export` in any form is rejected: publication is automatic.
 - `const handle = tool.define(...)` is rejected before execution, because a live handle cannot be
-  saved. Bind it with `let`, or create it inside a function.
+  saved. Bind it with `let`, or create it inside a function. The same goes for a
+  [tool reference](#tool-references), and for a handle or reference inside the value, such as
+  `const readers = { read: tools.fs.read }`, so nothing runs before the declaration would fail.
 - A durable name may not be a runtime global such as `time`, `url`, `console`, `JSON`, `Object`,
   `Math`, `Array`, `String`, `Error`, `tools`, or `tool`. A notebook name is permanent, so
   shadowing a builtin would hide it from every later execution in the Session. Nested bindings are
@@ -451,8 +453,9 @@ settles `indeterminate` when it resumes before its parent's call rejoins it.
 - `Promise` other than compatibility `Promise.all`, `async`, generators, `yield`, and `for await...of`.
 - `Date`, `RegExp`, `Map`, `Set`, `URL`, `URLSearchParams`, regular-expression literals, and the
   `regex` namespace.
-- Dynamic tool dispatch such as `tools[name](input)`, detached tool references, and namespace
-  enumeration.
+- Dynamic tool dispatch: a computed path such as `tools[name](input)`, optional chaining inside a
+  tool path, and calling a [tool reference](#tool-references) held in a variable, parameter, or
+  callback, or extending one with a member.
 - Imports, dynamic imports, re-exports, and ambient modules.
 - `var`.
 - Member assignment, member updates, `delete`, destructuring into members, and loop assignment into
@@ -473,7 +476,8 @@ checks provide a second boundary for computed mutator names and evaluator refere
 - it calls a tool path this agent cannot use at all.
 
 Calls must name their tool with a static path (dynamic dispatch is rejected), so the compiler knows
-every tool a program can call. `staticToolCalls(program.body)` lists them, including calls inside
+every tool a program can call: the runtime runs a tool only for a call whose callee is written as a
+static path, and refuses a tool reference reached any other way. `staticToolCalls(program.body)` lists them, including calls inside
 functions and tool handles that never run, and `staticToolReferences(program.body)` lists the paths a
 program passes as [tool references](#tool-references). OC++ Core's catalog is exactly the agent's
 tool list, and Core refuses a called or referenced path outside it as `UnknownTool` ("it is not
@@ -605,16 +609,29 @@ const review = tools.subagent({
 
 - A reference must name a static path, like a call. The `tools` root and computed names are not
   values.
+- A reference is a value to hand on, never a tool to call. It may be bound with `let`, passed as a
+  call argument, and placed in arrays and records, but only a call written as a static path, such as
+  `tools.fs.read(input)`, runs a tool. Calling a reference through a variable, parameter, or callback,
+  or extending one with a member, as in `let linear = tools.linear` followed by `linear.create(input)`
+  or `linear[name](input)`, is refused. The compiler refuses the forms it can see, a call or member of
+  a name that only a reference binds; the runtime refuses the rest before the tool runs. The compile
+  check therefore still sees every tool a program can call.
 - The compile check covers references too, and the runtime refuses a reference whose path names no
   tool in the catalog before the receiving tool runs.
-- References are opaque like handles: they are not data for other tools, cannot be saved, and are
-  refused as a top-level `const`. Bind one with `let`.
+- References are opaque like handles: they are not data for other tools and cannot be saved. A
+  top-level `const` holding one, directly or inside an array, record, or conditional, is refused
+  before the program runs. Bind one with `let`.
 - A receiving tool gets the reference's path and the calling execution's catalog, and decides what
   the path means. `tools.subagent` gives the child exactly those tools.
 
 `CodeMode.evaluate` runs a program for its returned value instead of an execution: references and
-handles stay live in the value, and handles stay callable until the caller's scope closes. OC++ Core
-evaluates `init.ts` this way to build each agent's tool list.
+handles stay live in the value, and handles stay callable until the caller's scope closes. Nothing is
+saved, so the program is compiled with `compile(code, { notebook: false })`: its top-level `const`
+declarations are ordinary bindings, free of the notebook's durable-name rules. A `timeoutMs` limit
+bounds the program's own run and reports `TimeoutExceeded`; later calls to its handles are not under
+that deadline. OC++ Core evaluates `init.ts` this way to build each agent's tool list, with a
+three-second deadline and an `impure` hook that refuses `time.now()` and `Math.random()` until the lists
+are built, so every evaluation of one file gives the same lists.
 
 ## Subagent Data Plane
 

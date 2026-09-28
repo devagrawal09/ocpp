@@ -186,7 +186,16 @@ const mutatingMethods = new Set([
   "unshift",
 ])
 
-export function compile(code: string): Program {
+export type CompileOptions = {
+  /**
+   * False compiles a program that is no notebook cell, such as a configuration file a host evaluates for its
+   * value: its top-level declarations are ordinary bindings, never saved, so the notebook's durable-name rules
+   * do not apply to them. Defaults to true.
+   */
+  readonly notebook?: boolean
+}
+
+export function compile(code: string, options?: CompileOptions): Program {
   if (code.trim().length === 0) throw new CompileError("Code cannot be empty.", "ParseError")
   const transpiled = transpile(code)
   if (transpiled.error !== undefined)
@@ -209,9 +218,11 @@ export function compile(code: string): Program {
   if (transpiled.mappings !== undefined) restorePositions(program, original)
   // Declared names come first so a bad notebook name reports its own diagnostic instead of the
   // generic one `validate` produces for the same identifier elsewhere in a program.
-  const names = declarations(program)
+  const notebook = options?.notebook !== false
+  const names = notebook ? declarations(program) : []
   validate(program)
-  rejectEarlyReturns(program)
+  rejectReferenceDispatch(program)
+  if (notebook) rejectEarlyReturns(program)
   const warnings = [
     ...(containsNode(program, (node) => node.type === "AwaitExpression")
       ? [
@@ -380,9 +391,147 @@ function declarations(program: ProgramNode): ReadonlyArray<string> {
           item,
           ["Bind it with let so it lives for this execution only: let " + id.name + " = tools." + reference.join(".")],
         )
+      // A reference or handle inside the value, such as { read: tools.fs.read }, fails the same way, so it is
+      // refused here before the program's earlier statements can run.
+      const held = heldValues(requireNode(init)).find(
+        (value) =>
+          (value.type === "CallExpression" && isToolDefine(requireNode(value.callee))) ||
+          (value.type === "MemberExpression" && (toolPath(value)?.length ?? 0) > 0),
+      )
+      if (held !== undefined)
+        throw unsupported(
+          "'" +
+            id.name +
+            "' would hold a " +
+            (held.type === "CallExpression" ? "tool handle" : "tool reference") +
+            ", which exists only for one execution and cannot be saved; bind '" +
+            id.name +
+            "' with let.",
+          held,
+          ["Bind it with let so it lives for this execution only: let " + id.name + " = ..."],
+        )
       return durableName(id.name, id)
     })
   })
+}
+
+// The expressions whose values become part of a declaration's value: array elements, record values, and the
+// branches of conditional and logical expressions. What a call returns is not visible here.
+function heldValues(node: AstNode): ReadonlyArray<AstNode> {
+  if (node.type === "ArrayExpression")
+    return requireArray(node.elements, node).flatMap((value) => (value === null ? [] : heldValues(requireNode(value))))
+  if (node.type === "ObjectExpression")
+    return requireArray(node.properties, node).flatMap((value) => {
+      const property = requireNode(value)
+      return heldValues(requireNode(property.type === "Property" ? property.value : property.argument))
+    })
+  if (node.type === "SpreadElement") return heldValues(requireNode(node.argument))
+  if (node.type === "ConditionalExpression")
+    return [...heldValues(requireNode(node.consequent)), ...heldValues(requireNode(node.alternate))]
+  if (node.type === "LogicalExpression")
+    return [...heldValues(requireNode(node.left)), ...heldValues(requireNode(node.right))]
+  if (node.type === "SequenceExpression") return heldValues(requireNode(requireArray(node.expressions, node).at(-1)))
+  return [node]
+}
+
+/**
+ * A tool reference held in a variable is a value to hand on, never a tool to call or a namespace to extend: a
+ * call names its tool by a static path, so the compiler sees every tool a program can call. The runtime refuses
+ * both forms wherever they appear; this refuses the ones visible here, a call or member of a name that only a
+ * declaration of a static tool path binds.
+ */
+function rejectReferenceDispatch(program: ProgramNode): void {
+  const nodes = descendants(program)
+  const bound = nodes.flatMap(bindingNames)
+  const references = new Map(
+    nodes.flatMap((node) => {
+      const id = node.type === "VariableDeclarator" ? requireNode(node.id) : undefined
+      const init = node.type === "VariableDeclarator" && isRecord(node.init) ? requireNode(node.init) : undefined
+      const path = init?.type === "MemberExpression" ? toolPath(init) : undefined
+      return id?.type === "Identifier" && typeof id.name === "string" && path !== undefined && path.length > 0
+        ? [[id.name, path.join(".")] as const]
+        : []
+    }),
+  )
+  const aliased = (value: unknown) => {
+    const name = identifierName(value)
+    return name !== undefined && references.has(name) && bound.filter((item) => item === name).length === 1
+      ? name
+      : undefined
+  }
+  for (const node of nodes) {
+    const called = node.type === "CallExpression" ? aliased(node.callee) : undefined
+    if (called !== undefined) {
+      const tool = "tools." + references.get(called)
+      throw unsupported(
+        "'" +
+          called +
+          "' holds the tool reference " +
+          tool +
+          ", which can only be passed to a tool that hands tools on, such as tools.subagent. Call the tool by its static path instead.",
+        requireNode(node.callee),
+        ["Call it directly: " + tool + "(input)"],
+      )
+    }
+    const extended = node.type === "MemberExpression" ? aliased(node.object) : undefined
+    if (extended !== undefined) {
+      const tool = "tools." + references.get(extended)
+      throw unsupported(
+        "'" +
+          extended +
+          "' holds the tool reference " +
+          tool +
+          ", which cannot be extended with a member; name the tool by its full static path.",
+        node,
+        ["Write the path out in full, such as " + tool + ".name(input)"],
+      )
+    }
+  }
+}
+
+// Every name a declaration, function, parameter or catch clause binds, once per binding.
+function bindingNames(node: AstNode): ReadonlyArray<string> {
+  if (node.type === "VariableDeclarator") return patternNames(requireNode(node.id))
+  if (node.type === "CatchClause") return isRecord(node.param) ? patternNames(requireNode(node.param)) : []
+  if (
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "ArrowFunctionExpression"
+  )
+    return [
+      ...(isRecord(node.id) ? patternNames(requireNode(node.id)) : []),
+      ...requireArray(node.params, node).flatMap((value) => patternNames(requireNode(value))),
+    ]
+  return []
+}
+
+function patternNames(node: AstNode): ReadonlyArray<string> {
+  if (node.type === "Identifier") return typeof node.name === "string" ? [node.name] : []
+  if (node.type === "AssignmentPattern") return patternNames(requireNode(node.left))
+  if (node.type === "RestElement") return patternNames(requireNode(node.argument))
+  if (node.type === "ArrayPattern")
+    return requireArray(node.elements, node).flatMap((value) =>
+      value === null ? [] : patternNames(requireNode(value)),
+    )
+  if (node.type === "ObjectPattern")
+    return requireArray(node.properties, node).flatMap((value) => {
+      const property = requireNode(value)
+      return patternNames(requireNode(property.type === "RestElement" ? property.argument : property.value))
+    })
+  return []
+}
+
+function descendants(node: AstNode): ReadonlyArray<AstNode> {
+  return [
+    node,
+    ...Object.entries(node).flatMap(([key, value]) =>
+      key === "loc"
+        ? []
+        : (Array.isArray(value) ? value : [value]).flatMap((item) =>
+            isRecord(item) && typeof item.type === "string" ? descendants(item as AstNode) : [],
+          ),
+    ),
+  ]
 }
 
 // A notebook name is permanent, so shadowing a builtin at the top level would hide it from every
@@ -502,6 +651,12 @@ function validate(node: AstNode): void {
         Suggestions.mutatingMethod(method, callee, requireArray(node.arguments, node)),
       )
   }
+  if (node.type === "MemberExpression" && node.optional === true && toolPath(requireNode(node.object)) !== undefined)
+    throw unsupported(
+      "Tool paths cannot use optional chaining; name the tool by its full static path, such as tools.fs.read(...).",
+      node,
+      Suggestions.dynamicTool,
+    )
   // A static path that is not called is a tool reference: a value naming that tool, or every tool in that
   // namespace, which a tool such as tools.subagent receives to hand those tools on.
   if (node.type === "MemberExpression") {

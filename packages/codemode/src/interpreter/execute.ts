@@ -166,7 +166,8 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
 /**
  * Runs a program for its returned value with tool references and tool.define handles kept, for a host
  * that reads configuration from a program rather than data. The handles stay callable, and the work
- * they start stays owned, until the ambient scope closes.
+ * they start stays owned, until the ambient scope closes. `timeoutMs` bounds the program's own run, not
+ * the later calls to its handles.
  */
 export const evaluateWithLimits = <const Provided extends Record<string, unknown>>(
   options: ExecuteOptions<Provided>,
@@ -185,8 +186,8 @@ export const evaluateWithLimits = <const Provided extends Record<string, unknown
     const handles: Array<ToolHandle> = []
     const scope = yield* Scope.fork(yield* Scope.Scope, "parallel")
     yield* Effect.addFinalizer(() => Effect.sync(() => handles.forEach((handle) => handle.close())))
-    return yield* Effect.gen(function* () {
-      const parsed = decoded?.program ?? compile(options.code)
+    const run = Effect.gen(function* () {
+      const parsed = decoded?.program ?? compile(options.code, { notebook: false })
       const executed = yield* new Interpreter<Services<Provided>>(
         tools.execute,
         tools.search,
@@ -210,7 +211,22 @@ export const evaluateWithLimits = <const Provided extends Record<string, unknown
         ...(logs.length > 0 ? { logs: [...logs] } : {}),
         toolCalls: tools.calls,
       } as const
-    }).pipe(
+    })
+    const timeoutMs = limits.timeoutMs
+    return yield* (
+      timeoutMs === undefined
+        ? run
+        : Effect.map(raceDeadline(Effect.sleep(Duration.millis(timeoutMs)), run), (outcome) =>
+            outcome.kind === "completed"
+              ? outcome.value
+              : ({
+                  ok: false,
+                  error: { kind: "TimeoutExceeded", message: `Evaluation timed out after ${timeoutMs}ms.` },
+                  ...(logs.length > 0 ? { logs: [...logs] } : {}),
+                  toolCalls: tools.calls,
+                } as const),
+          )
+    ).pipe(
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.interrupt

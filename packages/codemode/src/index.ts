@@ -12,6 +12,7 @@ export {
   type Program,
   type StaticToolCall,
 } from "./ir.js"
+export { normalizeError } from "./interpreter/errors.js"
 export { ToolError, toolError } from "./tool-error.js"
 export { isToolHandle, ToolHandle, type ToolHandleDefinition } from "./tool-handle.js"
 export { isToolReference, ToolReference } from "./tool-runtime.js"

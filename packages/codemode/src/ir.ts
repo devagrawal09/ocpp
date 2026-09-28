@@ -93,7 +93,8 @@ export const staticToolReferences = (node: AstNode): ReadonlyArray<StaticToolCal
 
 const isAstNode = (value: unknown): value is AstNode => isRecord(value) && typeof value.type === "string"
 
-const staticToolPath = (node: AstNode): ReadonlyArray<string> | undefined => {
+/** The path a static tool expression such as `tools.fs.read` names, `[]` for the `tools` root, else undefined. */
+export const staticToolPath = (node: AstNode): ReadonlyArray<string> | undefined => {
   if (node.type === "Identifier") return node.name === "tools" ? [] : undefined
   if (node.type !== "MemberExpression" || node.optional === true || !isAstNode(node.object)) return
   const parent = staticToolPath(node.object)

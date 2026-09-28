@@ -335,15 +335,6 @@ export const Terminal = (props: TerminalProps) => {
     scheduleFit()
   })
 
-  let zoom = platform.webviewZoom?.()
-  createEffect(() => {
-    const next = platform.webviewZoom?.()
-    if (next === undefined) return
-    if (next === zoom) return
-    zoom = next
-    scheduleFit()
-  })
-
   const focusTerminal = () => {
     const t = term
     if (!t) return

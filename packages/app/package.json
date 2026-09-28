@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./desktop": "./src/desktop.ts",
-    "./desktop-menu": "./src/shell/commands/desktop-menu.ts",
     "./i18n/desktop-native": "./src/runtime/i18n/desktop-native.ts",
     "./updater": "./src/shell/updates/types.ts",
     "./wsl/types": "./src/servers/wsl/types.ts",

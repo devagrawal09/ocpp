@@ -8,11 +8,9 @@ import { Keybind } from "@ocpp/ui/keybind"
 import { Tooltip } from "@ocpp/ui/tooltip"
 
 import { LayoutRoute, useLayout } from "@/shell/state/layout"
-import { usePlatform } from "@/runtime/platform/platform"
 import { useCommand } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useSettings } from "@/settings/model"
-import { WindowsAppMenu } from "./windows-menu"
 import { applyPath, backPath, forwardPath } from "./history"
 import { TitlebarTabStrip } from "@/shell/titlebar/tab-strip"
 import { makeEventListener } from "@solid-primitives/event-listener"
@@ -26,12 +24,6 @@ import "./titlebar.css"
 import { newTabTooltipKeybind } from "@/shell/commands/tooltip-keybind"
 import { TitlebarRightMount } from "@/shell/titlebar/right-slot"
 
-const titlebarHeight = 36
-const windowsTitlebarHeight = 44 // Includes the content inset; matches the native Windows overlay.
-const minTitlebarZoom = 0.25
-const windowsControlsBaseWidth = 138 // 3 native Windows caption buttons at 46px each.
-const macTrafficLightsBaseWidth = 84
-
 export type TitlebarUpdate = {
   version: string | undefined
   installing: boolean
@@ -43,7 +35,6 @@ export function Titlebar(props: {
   debugTools?: { visible: boolean; toggle: () => void }
   verticalTabs?: { mount?: HTMLElement }
 }) {
-  const platform = usePlatform()
   const command = useCommand()
   const language = useLanguage()
   const settings = useSettings()
@@ -51,19 +42,6 @@ export function Titlebar(props: {
   const location = useLocation()
   const mobile = createMediaQuery("(max-width: 767px)")
   const bottom = createMemo(() => mobile() && settings.general.mobileTitlebarPosition() === "bottom")
-
-  const mac = createMemo(() => platform.platform === "desktop" && platform.os === "macos")
-  const windows = createMemo(() => platform.platform === "desktop" && platform.os === "windows")
-  const linux = createMemo(() => platform.platform === "desktop" && platform.os === "linux")
-  const macTrafficLights = createMemo(() => mac() && !platform.windowFullscreen?.())
-  const zoom = () => platform.webviewZoom?.() ?? 1
-  const titlebarZoom = () => (windows() ? Math.max(zoom(), minTitlebarZoom) : zoom())
-  const minHeight = () => {
-    if (mac()) return `${titlebarHeight / zoom()}px`
-    if (windows()) return `env(titlebar-area-height, ${windowsTitlebarHeight / Math.min(titlebarZoom(), 1)}px)`
-    return undefined
-  }
-  const windowsControlsWidth = () => `${windowsControlsBaseWidth / Math.max(titlebarZoom(), 1)}px`
 
   const [history, setHistory] = createStore({
     stack: [] as string[],
@@ -137,16 +115,6 @@ export function Titlebar(props: {
         "shrink-0 relative flex flex-row h-9 bg-v2-background-bg-deep overflow-visible": true,
         "order-last": bottom(),
       }}
-      style={{
-        "min-height": minHeight(),
-        // Keep native macOS traffic lights clear even when the desktop window is narrow.
-        "padding-left": macTrafficLights() ? `${macTrafficLightsBaseWidth / zoom()}px` : 0,
-        width: windows() ? `env(titlebar-area-width, calc(100vw - ${windowsControlsWidth()}))` : undefined,
-        "max-width": windows() ? `env(titlebar-area-width, calc(100vw - ${windowsControlsWidth()}))` : undefined,
-        // Native Windows caption controls remain on the physical right in both writing directions.
-        "margin-right": windows() ? "auto" : undefined,
-      }}
-      data-tauri-drag-region
     >
       <Switch>
         <Match when>
@@ -338,18 +306,13 @@ export function Titlebar(props: {
 
             return (
               <div
-                class="h-full flex-1 overflow-hidden flex flex-row items-center gap-1.5 px-2 md:pr-3"
+                class="h-full flex-1 overflow-hidden flex flex-row items-center gap-1.5 px-2 md:pl-4 md:pr-3"
                 classList={{
-                  "pt-2": !bottom() && !windows(),
+                  "pt-2": !bottom(),
                   "pb-2": bottom(),
-                  "md:pl-2": macTrafficLights(),
-                  "md:pl-4": !macTrafficLights(),
                 }}
               >
                 <ChannelIndicator debugTools={props.debugTools} />
-                <Show when={windows() || linux()}>
-                  <WindowsAppMenu command={command} platform={platform} />
-                </Show>
                 <Tooltip
                   placement="bottom"
                   value={

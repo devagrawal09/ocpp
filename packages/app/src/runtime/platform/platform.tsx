@@ -1,6 +1,4 @@
 import { createSimpleContext } from "@ocpp/ui/context"
-import type { Accessor } from "solid-js"
-import type { DesktopMenuAction } from "@/shell/commands/desktop-menu"
 import { ServerConnection } from "@/runtime/server/registry"
 import type { WslServersPlatform } from "@/servers/wsl/types"
 import type { UpdaterPlatform } from "@/shell/updates/types"
@@ -79,20 +77,11 @@ type PlatformBase = {
   /** Manage WSL sidecar servers (Electron on Windows only) */
   wslServers?: WslServersPlatform
 
-  /** Webview zoom level (desktop only) */
-  webviewZoom?: Accessor<number>
-
-  /** Whether the native desktop window is fullscreen */
-  windowFullscreen?: Accessor<boolean>
-
   /** Get whether native pinch/Ctrl-scroll zoom gestures are enabled (desktop only) */
   getPinchZoomEnabled?(): Promise<boolean> | boolean
 
   /** Allow native pinch/Ctrl-scroll zoom gestures (desktop only) */
   setPinchZoomEnabled?(enabled: boolean): Promise<void> | void
-
-  /** Run a desktop-only menu action from the app chrome */
-  runDesktopMenuAction?(action: DesktopMenuAction): Promise<void> | void
 
   /** Check if an editor app exists (desktop only) */
   checkAppExists?(appName: string): Promise<boolean>

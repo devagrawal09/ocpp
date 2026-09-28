@@ -4,7 +4,7 @@ export function SessionRouteFrame(props: ParentProps<{ padded?: boolean }>) {
   return (
     <div
       class="relative flex size-full flex-col overflow-hidden"
-      classList={{ "px-2 pb-2 pt-[var(--shell-top-inset,8px)]": props.padded }}
+      classList={{ "p-2": props.padded }}
     >
       {props.children}
     </div>

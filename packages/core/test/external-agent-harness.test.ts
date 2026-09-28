@@ -2,7 +2,7 @@ import { beforeEach, describe, expect } from "bun:test"
 import { mkdir, realpath, symlink } from "node:fs/promises"
 import path from "node:path"
 import { ToolHandle, ToolReference } from "@ocpp/codemode"
-import { LanguageModel } from "@ocpp/ai"
+import { LanguageModel, type LLMRequest } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols"
 import { TestLLM } from "@ocpp/ai/testing"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
@@ -129,12 +129,17 @@ const projectIt = testEffect(
   ),
 )
 // OC++-driven children on the real runner, whose scripted model reads a relative path and submits what it found.
+const runnerRequests: Array<LLMRequest> = []
 const runnerIt = testEffect(
   AppNodeBuilder.build(nodes, [
     ...replacements,
     [
       LayerNodePlatform.llmClient,
       TestLLM.testLayer({
+        transformRequest: (request) => {
+          runnerRequests.push(request)
+          return request
+        },
         fallback: TestLLM.tool("call-read", "execute", {
           code: [
             'const found = tools.read({ path: "marker.txt" })',
@@ -259,6 +264,23 @@ describe("vendor-driven sessions", () => {
         checkpoint: "1",
       })
       expect((yield* env.sessions.get(env.session.id)).outcome).toBe("succeeded")
+    }),
+  )
+
+  it.live("a step shows an init.ts that fails in the Session timeline, naming the file, and offers no tools", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      const file = path.join(env.directory.path, ".ocpp", "init.ts")
+      yield* Effect.promise(() => Bun.write(file, 'throw new Error("no lists today")'))
+      vendor.turn = say("Nothing to call")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Hello" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs[0].gateway.definitions).toEqual([])
+      const notice = `${file} failed: Uncaught: no lists today This session has no tools until that is fixed.`
+      const inbox = (yield* env.sessions.inbox(env.session.id)).flatMap((item) =>
+        item.type === "synthetic" ? [item.payload.text] : [],
+      )
+      expect([...texts(yield* messages(env.session.id)), ...inbox].filter((text) => text === notice)).toHaveLength(1)
     }),
   )
 
@@ -557,9 +579,13 @@ describe("subagent drivers", () => {
   const call = (
     env: Pick<Effect.Success<ReturnType<typeof setup>>, "session" | "within">,
     input: Record<string, unknown>,
-    source = { messageID: SessionMessage.ID.create(), id: Tool.CallID.make(crypto.randomUUID()) },
-    // What a restarted call reports it had attached, so it rejoins that child.
-    recovered?: { readonly sessionID: string },
+    options: {
+      readonly source?: { readonly messageID: SessionMessage.ID; readonly id: Tool.CallID }
+      // What a restarted call reports it had attached, so it rejoins that child.
+      readonly recovered?: { readonly sessionID: string }
+      // The caller's tool list, such as plan mode's; every registered tool when absent.
+      readonly paths?: ReadonlyArray<string>
+    } = {},
   ) =>
     env.within(
       Effect.gen(function* () {
@@ -574,15 +600,17 @@ describe("subagent drivers", () => {
             {
               sessionID: env.session.id,
               agent: Agent.ID.make("build"),
-              ...source,
+              ...(options.source ?? {
+                messageID: SessionMessage.ID.create(),
+                id: Tool.CallID.make(crypto.randomUUID()),
+              }),
               // The caller's catalog, as Code Mode hands it to a tool that receives tool references.
               catalog: new Map(
-                Array.from(registered.values(), (item) => [
-                  CodeModeTool.qualifiedName(item),
-                  { tool: item, lent: false },
-                ]),
+                Array.from(registered.values())
+                  .filter((item) => options.paths?.includes(CodeModeTool.qualifiedName(item)) ?? true)
+                  .map((item) => [CodeModeTool.qualifiedName(item), { tool: item, lent: false }]),
               ),
-              ...(recovered === undefined ? {} : { recovered }),
+              ...(options.recovered === undefined ? {} : { recovered: options.recovered }),
               progress: () => Effect.void,
             },
           ),
@@ -736,33 +764,97 @@ describe("subagent drivers", () => {
       }),
   )
 
-  it.live("a child's tools are exactly the tools the call passes, and a continued child keeps them", () =>
+  for (const [provider, model] of [
+    ["claude", "opus"],
+    ["codex", "gpt-5.6-sol"],
+    ["pi", "anthropic/claude-sonnet-4-6"],
+  ] as const)
+    it.live(`a ${provider} child's tools are exactly the tools the call passes, and a continued child keeps them`, () =>
+      Effect.gen(function* () {
+        const env = yield* setup(ref(provider, model))
+        yield* linear(env)
+        vendor.turn = say("Done")
+
+        // Without tools a new child has none.
+        const bare = yield* call(env, {})
+        expect(bare._tag).toBe("Success")
+        expect(vendor.runs.at(-1)?.provider).toBe(provider)
+        expect(yield* listed(env, sessionOf(bare)!)).toEqual([])
+        expect(listing()).not.toContain("tools.read")
+
+        const given = yield* call(env, { tools: refs("read", "glob", "linear") })
+        expect(given._tag).toBe("Success")
+        const sessionID = sessionOf(given)!
+        expect(yield* listed(env, sessionID)).toEqual(["glob", "linear.create", "linear.list", "read"])
+        expect(listing()).toContain("tools.read")
+        expect(listing()).toContain("tools.linear.create")
+        expect(listing()).not.toContain("tools.grep")
+        expect(listing()).not.toContain("tools.write")
+
+        expect((yield* call(env, { sessionID, message: "Continue" }))._tag).toBe("Success")
+        expect(yield* listed(env, sessionID)).toEqual(["glob", "linear.create", "linear.list", "read"])
+        expect((yield* call(env, { sessionID, message: "Continue", tools: refs("grep") }))._tag).toBe("Success")
+        expect(yield* listed(env, sessionID)).toEqual(["grep"])
+        expect(listing()).toContain("tools.grep")
+        expect(listing()).not.toContain("tools.linear")
+      }),
+    )
+
+  runnerIt.live("an ocpp child's execute catalog is exactly the tools the call passes", () =>
+    Effect.gen(function* () {
+      const env = yield* setup()
+      yield* Effect.promise(() => Bun.write(path.join(env.directory.path, "marker.txt"), "runner-marker"))
+      const result = yield* call(env, {
+        tools: refs("read"),
+        outputSchema: { type: "object", properties: { found: { type: "string" } }, required: ["found"] },
+      })
+      expect(result._tag).toBe("Success")
+      if (result._tag !== "Success") return
+      expect(JSON.stringify(result.success.output)).toContain("runner-marker")
+      expect(yield* listed(env, sessionOf(result)!)).toEqual(["read"])
+      expect(vendor.runs).toHaveLength(0)
+      // The child's model saw only the passed tool and the call's submit_result.
+      const system = JSON.stringify(runnerRequests.at(-1)?.system)
+      expect(system).toContain("tools.read")
+      expect(system).toContain("tools.submit_result")
+      expect(system).not.toContain("tools.glob")
+      expect(system).not.toContain("tools.shell")
+    }),
+  )
+
+  it.live("continuing a child drops the tools its caller no longer has, as after switching to plan mode", () =>
     Effect.gen(function* () {
       const env = yield* setup(ref("claude", "opus"))
-      yield* linear(env)
       vendor.turn = say("Done")
+      const created = yield* call(env, { tools: refs("read", "shell", "write") })
+      const sessionID = sessionOf(created)!
+      expect(yield* listed(env, sessionID)).toEqual(["read", "shell", "write"])
 
-      // Without tools a new child has none.
-      const bare = yield* call(env, {})
-      expect(bare._tag).toBe("Success")
-      expect(yield* listed(env, sessionOf(bare)!)).toBeUndefined()
-      expect(listing()).not.toContain("tools.read")
+      // Still in build, a continuation keeps the whole list and says nothing about it.
+      const kept = yield* call(env, { sessionID, message: "Continue" })
+      expect(kept._tag === "Success" ? kept.success.output : undefined).not.toHaveProperty("notice")
+      expect(yield* listed(env, sessionID)).toEqual(["read", "shell", "write"])
 
-      const given = yield* call(env, { tools: refs("read", "glob", "linear") })
-      expect(given._tag).toBe("Success")
-      const sessionID = sessionOf(given)!
-      expect(yield* listed(env, sessionID)).toEqual(["glob", "linear.create", "linear.list", "read"])
+      // In plan mode the caller has read and subagent, but no shell or write.
+      const plan = ["glob", "grep", "question", "read", "subagent", "subagent.models"]
+      const refused = yield* call(env, { tools: refs("shell") }, { paths: plan })
+      expect(refused._tag === "Failure" ? refused.failure.message : "").toContain(
+        "tools.shell is not one of your tools",
+      )
+      const continued = yield* call(env, { sessionID, message: "Now run rm -rf build" }, { paths: plan })
+      expect(continued._tag).toBe("Success")
+      if (continued._tag !== "Success") return
+      const notice =
+        "The subagent no longer has tools.shell, tools.write: you no longer have those tools, and a subagent keeps only tools its caller has."
+      expect(continued.success.output).toMatchObject({ notice })
+      expect(continued.success.content).toEqual([{ type: "text", text: expect.stringContaining(notice) }])
+      expect(yield* listed(env, sessionID)).toEqual(["read"])
       expect(listing()).toContain("tools.read")
-      expect(listing()).toContain("tools.linear.create")
-      expect(listing()).not.toContain("tools.grep")
+      expect(listing()).not.toContain("tools.shell")
       expect(listing()).not.toContain("tools.write")
-
+      // Back in build, the child does not get the tools back by being continued.
       expect((yield* call(env, { sessionID, message: "Continue" }))._tag).toBe("Success")
-      expect(yield* listed(env, sessionID)).toEqual(["glob", "linear.create", "linear.list", "read"])
-      expect((yield* call(env, { sessionID, message: "Continue", tools: refs("grep") }))._tag).toBe("Success")
-      expect(yield* listed(env, sessionID)).toEqual(["grep"])
-      expect(listing()).toContain("tools.grep")
-      expect(listing()).not.toContain("tools.linear")
+      expect(yield* listed(env, sessionID)).toEqual(["read"])
     }),
   )
 
@@ -774,6 +866,10 @@ describe("subagent drivers", () => {
         result._tag === "Failure" ? result.failure.message : "succeeded"
       expect(failure(yield* call(env, { tools: refs("linear") }))).toContain(
         "tools.linear is not one of your tools; a subagent can be given only tools you have.",
+      )
+      // A tool the Location registers but the caller's list leaves out is refused the same way.
+      expect(failure(yield* call(env, { tools: refs("read", "shell") }, { paths: ["read", "subagent"] }))).toContain(
+        "tools.shell is not one of your tools; a subagent can be given only tools you have.",
       )
       expect(failure(yield* call(env, { tools: ["read"] }))).toContain("Tools must be tool references")
       expect(yield* child(env)).toBeUndefined()
@@ -1144,12 +1240,7 @@ describe("subagent drivers", () => {
         vendor.turn = say("Done")
         const first = yield* call(env, { root: root.directory })
         const sessionID = sessionOf(first)!
-        const rejoined = yield* call(
-          env,
-          { root: root.directory },
-          { messageID: SessionMessage.ID.create(), id: Tool.CallID.make(crypto.randomUUID()) },
-          { sessionID },
-        )
+        const rejoined = yield* call(env, { root: root.directory }, { recovered: { sessionID } })
         expect(rejoined._tag).toBe("Success")
         expect(vendor.runs.at(-1)?.directory).toBe(root.directory)
         expect(vendor.runs.at(-1)?.message).toContain("The server restarted")

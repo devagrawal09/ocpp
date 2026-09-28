@@ -70,7 +70,7 @@ export const Input = Schema.Struct({
   }),
   tools: Schema.optionalKey(Schema.Array(Schema.Unknown)).annotate({
     description:
-      "Exactly the tools the child may call: your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define(...) handles. Omitted or empty, a new child has no tools (only submit_result with outputSchema); a continued child keeps the tools it had unless you pass new ones",
+      "Exactly the tools the child may call: your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define(...) handles. Omitted or empty, a new child has no tools (only submit_result with outputSchema); a continued child keeps the tools it had unless you pass new ones, less any you no longer have",
   }),
   sessionID: Schema.optionalKey(SessionSchema.ID).annotate({
     description:
@@ -99,6 +99,8 @@ export const Output = Schema.Struct({
   message: Schema.String,
   /** The submitted structured result, or null when no outputSchema was requested. */
   output: Schema.Json,
+  /** Which tools a continued child lost because its caller no longer has them. */
+  notice: Schema.optionalKey(Schema.String),
 })
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
@@ -433,10 +435,20 @@ export const Plugin = {
                     ),
                   ))
               const vendor = SessionDriver.of(selected ?? existing?.model) !== "ocpp"
-              // A continued child keeps its tool list unless the call passes a new one.
-              if (reattached === undefined && input.tools !== undefined)
+              // A new child gets exactly the tools the call passes, and none without them. A continued child keeps its
+              // list unless the call passes a new one, less every tool its caller no longer has, such as after the
+              // caller switched to plan mode, so a child never holds a tool its caller lacks.
+              const continued = existing !== undefined && input.tools === undefined
+              const lost =
+                continued && reattached === undefined
+                  ? (existing.tools ?? []).filter((path) => context.catalog?.get(path)?.lent !== false)
+                  : []
+              if (reattached === undefined && (!continued || lost.length > 0))
                 yield* runtime.session
-                  .selectTools({ sessionID: child.id, tools: given.paths })
+                  .selectTools({
+                    sessionID: child.id,
+                    tools: continued ? (existing.tools ?? []).filter((path) => !lost.includes(path)) : given.paths,
+                  })
                   .pipe(
                     Effect.mapError(
                       (error) => new ToolFailure({ message: `Failed to give the subagent its tools: ${child.id}`, error }),
@@ -650,7 +662,16 @@ export const Plugin = {
                 ).pipe(Effect.andThen(driven)),
               ).pipe(Effect.ensuring(cleanup))
               return {
-                output: { sessionID: child.id, status: "completed" as const, ...result },
+                output: {
+                  sessionID: child.id,
+                  status: "completed" as const,
+                  ...result,
+                  ...(lost.length === 0
+                    ? {}
+                    : {
+                        notice: `The subagent no longer has ${lost.map((path) => "tools." + path).join(", ")}: you no longer have ${lost.length === 1 ? "that tool" : "those tools"}, and a subagent keeps only tools its caller has.`,
+                      }),
+                },
                 structured: outputCodec !== undefined,
               }
             }).pipe(
@@ -658,7 +679,7 @@ export const Plugin = {
                 output: result.output,
                 // Only the message reaches the parent model; machine output stays in the
                 // declared output, which a Code Mode assignment retains in full.
-                content: `<subagent sessionID="${result.output.sessionID}" state="completed">\n${result.output.message}\n</subagent>`,
+                content: `<subagent sessionID="${result.output.sessionID}" state="completed">\n${result.output.message}\n</subagent>${result.output.notice === undefined ? "" : "\n" + result.output.notice}`,
                 metadata: {
                   sessionID: result.output.sessionID,
                   status: result.output.status,

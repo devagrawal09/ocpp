@@ -26,7 +26,6 @@ import { Tool } from "./tool.js"
 import { Vcs } from "./vcs.js"
 import { PluginHooks } from "./plugin/hooks.js"
 import { Generate } from "./generate.js"
-import { Permission } from "./permission.js"
 
 export interface Interface {
   readonly activate: (
@@ -202,6 +201,5 @@ export const node = makeLocationNode({
     PluginRuntime.node,
     WebSearch.node,
     Generate.node,
-    Permission.node,
   ],
 })

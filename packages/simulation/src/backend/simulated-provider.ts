@@ -558,10 +558,7 @@ const makeToolDriver = Effect.fn("SimulatedProvider.makeToolDriver")(function* (
                       for (const registration of nextRegistrations)
                         draft.add({
                           name: registration.name,
-                          options:
-                            registration.permission === undefined
-                              ? registration.options
-                              : { ...registration.options, permission: registration.permission },
+                          options: registration.options,
                           description: registration.description,
                           input: registration.inputSchema,
                           output: registration.outputSchema ?? {},

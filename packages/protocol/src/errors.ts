@@ -150,15 +150,6 @@ export class InvalidCursorError extends Schema.TaggedError<InvalidCursorError>()
   { httpApiStatus: 400 },
 ) {}
 
-export class PermissionNotFoundError extends Schema.TaggedError<PermissionNotFoundError>()(
-  "PermissionNotFoundError",
-  {
-    requestID: Schema.String,
-    message: Schema.String,
-  },
-  { httpApiStatus: 404 },
-) {}
-
 export class FormNotFoundError extends Schema.TaggedError<FormNotFoundError>()(
   "FormNotFoundError",
   {

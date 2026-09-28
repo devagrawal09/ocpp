@@ -9,7 +9,6 @@ import { EventLogger } from "@ocpp/core/event-logger"
 import { FileSystemSearch } from "@ocpp/core/filesystem/search"
 import { Credential } from "@ocpp/core/credential"
 import { Config } from "@ocpp/core/config"
-import { PermissionSaved } from "@ocpp/core/permission/saved"
 import { PtyTicket } from "@ocpp/core/pty/ticket"
 import { PersistentPty } from "@ocpp/core/persistent-pty"
 import { Project } from "@ocpp/core/project"
@@ -62,7 +61,6 @@ const applicationServiceNodes = [
   SessionTransfer.node,
   PluginRuntime.providerNode,
   SdkPlugins.node,
-  PermissionSaved.node,
   PtyTicket.node,
   PersistentPty.node,
   Credential.node,
@@ -151,7 +149,7 @@ function makeRoutes<AuthError, AuthServices>(
       const services = Layer.succeedContext(context)
       const requestServices = Layer.merge(
         Layer.succeedContext(
-          Context.pick(Database.Service, PermissionSaved.Service, Project.Service, WellKnown.Service)(context),
+          Context.pick(Database.Service, Project.Service, WellKnown.Service)(context),
         ),
         ServerInfo.layer(serviceURLs, options.app),
       )

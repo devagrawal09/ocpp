@@ -135,6 +135,7 @@ describe("Plugin", () => {
             ...runtime,
             location: {
               agent: runtime.location.agent,
+              tool: runtime.location.tool,
               mcp: {
                 list: (ref) =>
                   Effect.sync(() => {

@@ -59,14 +59,6 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
       const instructions =
         options.harness.type === "ocpp" ? await mkdtemp(path.join(tmpdir(), "ocpp-codex-")) : undefined
       owned.instructions = instructions
-      if (options.harness.type === "native")
-        // Codex exec has no approval callback: authorize the bounded workspace delegation in OC++ and
-        // keep its sandbox enabled. On-request permits configured MCP tools while unsandboxed escalation still fails.
-        await options.authorize("workspace", {
-          directory: options.directory,
-          sandbox: "workspace-write",
-          network: false,
-        })
       if (instructions !== undefined && options.harness.type === "ocpp") {
         await writeFile(path.join(instructions, "instructions.md"), options.harness.system)
         await writeFile(path.join(instructions, "catalog.json"), await catalog(options.signal))
@@ -189,7 +181,7 @@ export function configure(
     ocpp: {
       url: bridge.url,
       bearer_token_env_var: TOKEN,
-      // Codex exec cannot ask anyone, so OC++'s tools are approved here and OC++ authorizes each one itself.
+      // Codex exec cannot ask anyone, so OC++'s tools are approved here.
       default_tools_approval_mode: "approve",
     },
   }

@@ -7,7 +7,6 @@ import { Bus } from "../../bus.js"
 import { CodeModeCommand } from "../../codemode/command.js"
 import { Command } from "../../command.js"
 import { Location } from "../../location.js"
-import { Permission } from "../../permission.js"
 
 const namespace = "command"
 
@@ -20,7 +19,6 @@ export const Plugin = {
     const commands = yield* CodeModeCommand.Service
     const location = yield* Location.Service
     const locationCommands = yield* Command.Service
-    const permission = yield* Permission.Service
     // The prompt input lists commands per Location, so it refreshes on the Location's command event.
     const updated = bus
       .publish(
@@ -51,15 +49,6 @@ export const Plugin = {
           output: CodeModeCommand.Info,
           execute: (input, context) =>
             Effect.gen(function* () {
-              yield* permission.assert({
-                action: "command_define",
-                resources: [input.name],
-                save: ["*"],
-                metadata: { handler: input.handler },
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source: { type: "tool", messageID: context.messageID, id: context.id },
-              })
               // The user's commands keep their names; Session commands never shadow them.
               if ((yield* locationCommands.list()).some((command) => command.name === input.name))
                 return yield* new Tool.Error({

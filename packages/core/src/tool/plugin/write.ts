@@ -1,21 +1,16 @@
 /**
  * Model-facing file-write leaf. Relative paths resolve within the active
- * Location. Absolute paths inside that Location are accepted, while explicit
- * absolute external paths retain mutation capability through a separate
- * external_directory approval before edit approval.
+ * Location; absolute paths may name any file.
  */
 export * as WriteTool from "./write.js"
 
 import type { Context } from "@ocpp/plugin/effect/plugin"
 import { ToolFailure } from "@ocpp/ai"
 import { Effect, Schema } from "effect"
-import { Bom } from "@ocpp/util/bom"
 import { Environment } from "../../environment/index.js"
 import { FileMutation } from "../../file-mutation.js"
 import { Formatter } from "../../formatter.js"
 import { LocationMutation } from "../../location-mutation.js"
-import { Permission } from "../../permission.js"
-import { fileDiff } from "./file-diff.js"
 
 export const name = "write"
 
@@ -50,47 +45,18 @@ export const Plugin = {
     const fileMutation = yield* FileMutation.Service
     const environment = yield* Environment.Service
     const formatter = yield* Formatter.Service
-    const permission = yield* Permission.Service
 
     yield* ctx.tool
       .transform((draft) =>
         draft.add({
           name,
-          options: { permission: "edit" },
           description:
             "Writes a file to the local filesystem, overwriting if one exists.\n\nMissing parent directories are created automatically.\n\nUse this tool to create new files or overwrite existing files. For partial changes, use `tools.edit` instead.",
           input: Input,
           output: Output,
-          execute: (input, context) =>
+          execute: (input) =>
             Effect.gen(function* () {
-              const source = {
-                type: "tool" as const,
-                messageID: context.messageID,
-                id: context.id,
-              }
-              const target = yield* mutation.resolve({ path: input.path, kind: "file" })
-              const external = target.externalDirectory
-              if (external)
-                yield* permission.assert({
-                  ...LocationMutation.externalDirectoryPermission(external),
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source,
-                })
-              const current = yield* FileMutation.readText(environment.files, target.absolute).pipe(
-                Effect.catchTag("Environment.NotFound", () => Effect.undefined),
-              )
-              const next = Bom.split(input.content)
-              const preview = fileDiff(target.resource, current?.text ?? "", next.text, current ? "modified" : "added")
-              yield* permission.assert({
-                action: "edit",
-                resources: [target.resource],
-                save: ["*"],
-                metadata: { files: [preview] },
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source,
-              })
+              const target = yield* mutation.resolve({ path: input.path })
               const result = yield* fileMutation.writeTextPreservingBom({ target, content: input.content })
               const bom = (yield* FileMutation.readText(environment.files, target.absolute)).bom
               if (yield* formatter.file(target.absolute)) {

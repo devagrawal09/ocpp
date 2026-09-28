@@ -39,7 +39,6 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
     const jobs = yield* Job.Service
     const missingEvent = (name: string) =>
       new EventNotFoundError({ event: name, message: `No event is named ${name}.` })
-    // User actions from the app are not the agent's tool calls, so they skip its permission rules.
     const setEnabled = (sessionID: Session.ID, name: string, enabled: boolean) =>
       Effect.gen(function* () {
         yield* session.get(sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))

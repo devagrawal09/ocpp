@@ -151,7 +151,7 @@ const define = Effect.fnUntraced(function* (sessionID: Session.ID, location: Loc
     const agents = yield* Agent.Service
     const registry = yield* Tool.Service
     const agent = yield* agents.select()
-    const snapshot = yield* registry.snapshot(agent.info?.permissions, sessionID)
+    const snapshot = yield* registry.snapshot(undefined, sessionID)
     return yield* snapshot.execute({
       sessionID,
       agent: agent.id,

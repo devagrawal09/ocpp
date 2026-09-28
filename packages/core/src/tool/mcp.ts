@@ -7,11 +7,10 @@ import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Bus } from "../bus.js"
 
 import { Mcp } from "../mcp/index.js"
-import { Permission } from "../permission.js"
 import { Tool } from "../tool.js"
 
 /**
- * Registry namespace and permission action names for MCP tools.
+ * Registry namespace and effective names for MCP tools.
  */
 export const namespace = (server: string) => server.replace(/[^a-zA-Z0-9_-]/g, "_")
 export const name = (server: string, tool: string) => `${namespace(server)}_${tool.replace(/[^a-zA-Z0-9_-]/g, "_")}`
@@ -29,7 +28,6 @@ export const layer = Layer.effect(
     const mcp = yield* Mcp.Service
     const tools = yield* Tool.Service
     const bus = yield* Bus.Service
-    const permission = yield* Permission.Service
     const lock = Semaphore.makeUnsafe(1)
     let discovered: Mcp.Tool[] = []
 
@@ -54,19 +52,6 @@ export const layer = Layer.effect(
                 output: (tool.outputSchema ?? {}) as JsonSchema.JsonSchema,
                 execute: (input, context) =>
                   Effect.gen(function* () {
-                    yield* permission.assert({
-                      action: name(tool.server, tool.name),
-                      resources: ["*"],
-                      save: ["*"],
-                      metadata: {},
-                      sessionID: context.sessionID,
-                      agent: context.agent,
-                      source: {
-                        type: "tool",
-                        messageID: context.messageID,
-                        id: context.id,
-                      },
-                    })
                     const result = yield* mcp
                       .callTool({
                         server: tool.server,
@@ -135,5 +120,5 @@ export const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [Tool.node, Mcp.node, Bus.node, Permission.node],
+  deps: [Tool.node, Mcp.node, Bus.node],
 })

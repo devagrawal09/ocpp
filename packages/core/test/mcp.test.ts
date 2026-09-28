@@ -32,7 +32,6 @@ import { Location } from "@ocpp/core/location"
 import { Mcp } from "@ocpp/core/mcp/index"
 import { McpClient } from "@ocpp/core/mcp/client"
 import { McpStdio } from "@ocpp/core/mcp/stdio"
-import { Permission } from "@ocpp/core/permission"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { McpTool } from "@ocpp/core/tool/mcp"
@@ -59,8 +58,6 @@ import {
   waitForTool,
 } from "./lib/tool"
 
-let assertion: Deferred.Deferred<Permission.AssertInput> | undefined
-let decision: Effect.Effect<void, Permission.Error> = Effect.void
 let calls = 0
 let invocations: Array<Parameters<Mcp.Interface["callTool"]>[0]> = []
 
@@ -375,14 +372,6 @@ const mcp = Layer.mock(Mcp.Service, {
       })
     }),
 })
-const permissions = Layer.mock(Permission.Service, {
-  assert: (input) =>
-    Effect.gen(function* () {
-      if (!assertion) return yield* Effect.die("Permission test is not initialized")
-      yield* Deferred.succeed(assertion, input)
-      yield* decision
-    }),
-})
 const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
 const runtimeLayer = Layer.unwrap(
   Effect.gen(function* () {
@@ -401,6 +390,7 @@ const runtimeLayer = Layer.unwrap(
         move: () => Effect.die("Unavailable in MCP tests"),
         resume: () => Effect.die("Unavailable in MCP tests"),
         switchAgent: () => Effect.die("Unavailable in MCP tests"),
+        selectTools: () => Effect.die("Unavailable in MCP tests"),
         switchModel: () => Effect.die("Unavailable in MCP tests"),
         interrupt: () => Effect.die("Unavailable in MCP tests"),
         synthetic: () => Effect.never,
@@ -411,6 +401,7 @@ const runtimeLayer = Layer.unwrap(
       location: {
         agent: { list: () => Effect.die("Unavailable in MCP tests") },
         mcp: { list: () => Effect.die("Unavailable in MCP tests") },
+        tool: { paths: () => Effect.die("Unavailable in MCP tests") },
       },
     })
   }),
@@ -419,7 +410,6 @@ const it = testEffect(
   Layer.merge(
     AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node, Bus.node, Database.node, CodeModeStore.node]), [
       [Mcp.node, mcp],
-      [Permission.node, permissions],
       [PluginRuntime.node, runtimeLayer],
     ]),
     jobLayer,
@@ -1602,7 +1592,6 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
                   ),
               }),
             ],
-            [Permission.node, Layer.mock(Permission.Service, { assert: () => Effect.void })],
           ]),
         ),
       ),
@@ -1642,7 +1631,6 @@ testEffect(Layer.empty).effect("coalesces queued MCP tool notifications after in
               ]),
           }),
         ],
-        [Permission.node, Layer.mock(Permission.Service, { assert: () => Effect.void })],
       ]),
     ),
   )
@@ -1664,8 +1652,6 @@ it.effect("advertises MCP output schemas to Code Mode", () =>
 
 it.effect("forwards the invoking session through leaf and Code Mode MCP tools", () =>
   Effect.gen(function* () {
-    assertion = yield* Deferred.make<Permission.AssertInput>()
-    decision = Effect.void
     invocations = []
     const registry = yield* Tool.Service
     const registration = yield* McpTool.Service
@@ -1715,8 +1701,6 @@ it.effect("forwards the invoking session through leaf and Code Mode MCP tools", 
 
 it.effect("returns content-only MCP results through Code Mode", () =>
   Effect.gen(function* () {
-    assertion = yield* Deferred.make<Permission.AssertInput>()
-    decision = Effect.void
     const registry = yield* Tool.Service
     const registration = yield* McpTool.Service
     yield* registration.flush
@@ -1772,8 +1756,6 @@ it.effect("offers every MCP server's tools only through Code Mode", () =>
 // success whose text happens to describe an error.
 it.effect("fails the call when MCP reports isError", () =>
   Effect.gen(function* () {
-    assertion = yield* Deferred.make<Permission.AssertInput>()
-    decision = Effect.void
     const registry = yield* Tool.Service
     const registration = yield* McpTool.Service
     yield* registration.flush
@@ -1791,8 +1773,6 @@ it.effect("fails the call when MCP reports isError", () =>
 // Baseline (PLAN.md step 1): mixed MCP text and media content must reach the model intact.
 it.effect("preserves MCP text and media content for the model", () =>
   Effect.gen(function* () {
-    assertion = yield* Deferred.make<Permission.AssertInput>()
-    decision = Effect.void
     const registry = yield* Tool.Service
     const registration = yield* McpTool.Service
     yield* registration.flush
@@ -1808,89 +1788,5 @@ it.effect("preserves MCP text and media content for the model", () =>
       { type: "text", text: "rendered chart" },
       { type: "file", mime: "image/png" },
     ])
-  }),
-)
-
-it.effect("waits for permission before calling an MCP tool", () =>
-  Effect.gen(function* () {
-    calls = 0
-    assertion = yield* Deferred.make<Permission.AssertInput>()
-    const permission = yield* Deferred.make<void>()
-    decision = Deferred.await(permission)
-    const registry = yield* Tool.Service
-    const registration = yield* McpTool.Service
-    yield* registration.flush
-    const toolSet = yield* registry.snapshot()
-    expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.search")).toBe(true)
-
-    const sessionID = Session.ID.make("ses_mcp_permission")
-    yield* seedToolSession(sessionID, toolIdentity.messageID)
-    const started = yield* toolSet.execute({
-      sessionID,
-      ...toolIdentity,
-      call: {
-        type: "tool-call",
-        id: "call_mcp_permission",
-        name: "execute",
-        input: { code: "const permitted = tools.demo.search({})" },
-      },
-    })
-    const executionID = yield* activateCodeMode(started.output, {
-      sessionID,
-      assistantMessageID: toolIdentity.messageID,
-      id: "call_mcp_permission",
-    })
-    expect(yield* Deferred.await(assertion)).toEqual({
-      action: "demo_search",
-      resources: ["*"],
-      save: ["*"],
-      metadata: {},
-      sessionID: Session.ID.make("ses_mcp_permission"),
-      agent: toolIdentity.agent,
-      source: {
-        type: "tool",
-        messageID: toolIdentity.messageID,
-        id: "call_mcp_permission:0",
-      },
-    })
-    expect(calls).toBe(0)
-
-    yield* Deferred.succeed(permission, undefined)
-    expect(yield* waitForCodeModeExecution(executionID)).toMatchObject({ status: "completed" })
-    expect(calls).toBe(1)
-  }),
-)
-
-it.effect("does not call MCP when permission is blocked", () =>
-  Effect.gen(function* () {
-    calls = 0
-    assertion = yield* Deferred.make<Permission.AssertInput>()
-    decision = Effect.fail(new Permission.BlockedError({ rules: [], permission: "demo_search", resources: ["*"] }))
-    const registry = yield* Tool.Service
-    const registration = yield* McpTool.Service
-    yield* registration.flush
-    const toolSet = yield* registry.snapshot()
-    expect(toolSet.codeModeCatalog?.some((tool) => tool.path === "demo.search")).toBe(true)
-
-    const sessionID = Session.ID.make("ses_mcp_blocked")
-    yield* seedToolSession(sessionID, toolIdentity.messageID)
-    const execution = yield* toolSet.execute({
-      sessionID,
-      ...toolIdentity,
-      call: {
-        type: "tool-call",
-        id: "call_mcp_blocked",
-        name: "execute",
-        input: { code: "const blocked = tools.demo.search({})" },
-      },
-    })
-    expect(
-      yield* waitForCodeMode(execution.output, {
-        sessionID,
-        assistantMessageID: toolIdentity.messageID,
-        id: "call_mcp_blocked",
-      }),
-    ).toMatchObject({ status: "failed", saved: [], error: expect.stringContaining("Unable to execute demo_search") })
-    expect(calls).toBe(0)
   }),
 )

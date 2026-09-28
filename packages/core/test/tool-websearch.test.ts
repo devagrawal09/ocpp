@@ -3,7 +3,6 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { Permission } from "@ocpp/core/permission"
 import { KV } from "@ocpp/core/kv"
 import { Form } from "@ocpp/core/form"
 import { WebSearch } from "@ocpp/core/websearch"
@@ -16,7 +15,6 @@ import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Image } from "@ocpp/core/image"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
-import { permissionLayer } from "./lib/permission"
 import { execute } from "@ocpp/core/tool/runtime"
 import {
   toolIdentity,
@@ -37,7 +35,7 @@ const webSearchToolNode = makeLocationNode({
       yield* registerToolPlugin(WebSearchTool.Plugin, { websearch: webSearchHost(websearch) })
     }),
   ),
-  deps: [Tool.node, PluginHooks.node, Permission.node, WebSearch.node, Form.node],
+  deps: [Tool.node, PluginHooks.node, WebSearch.node, Form.node],
 })
 
 const sessionID = Session.ID.make("ses_websearch_test")
@@ -47,7 +45,6 @@ const providers = [
 ]
 
 class Fixture {
-  assertions: Permission.AssertInput[] = []
   events: string[] = []
   formRequests: Form.CreateInput[] = []
   formResponse: Form.TerminalState = { status: "cancelled" }
@@ -79,16 +76,6 @@ const setup = Effect.gen(function* () {
   )
   const context = yield* Layer.build(
     AppNodeBuilder.build(LayerNode.group([Tool.node, webSearchToolNode]), [
-      [
-        Permission.node,
-        permissionLayer({
-          assert: (input) =>
-            Effect.sync(() => {
-              fixture.events.push("permission")
-              fixture.assertions.push(input)
-            }),
-        }),
-      ],
       [WebSearch.node, Layer.succeed(WebSearch.Service, websearch)],
       [
         Form.node,
@@ -108,7 +95,7 @@ const setup = Effect.gen(function* () {
 })
 
 describe("WebSearchTool registration", () => {
-  it.effect("asserts permission before delegating to WebSearch", () =>
+  it.effect("delegates to WebSearch", () =>
     Effect.gen(function* () {
       const fixture = yield* setup
       const registry = fixture.registry
@@ -131,22 +118,13 @@ describe("WebSearchTool registration", () => {
         status: "completed",
         content: [{ type: "text", text: "## [Search results](https://example.com)\n\nsearch results" }],
       })
-      expect(fixture.assertions).toMatchObject([
-        {
-          sessionID,
-          action: "websearch",
-          resources: ["effect typescript"],
-          save: ["*"],
-          metadata: { query: "effect typescript" },
-        },
-      ])
       expect(fixture.websearch.queries).toEqual([
         {
           query: "effect typescript",
           providerID: WebSearch.ID.make("exa"),
         },
       ])
-      expect(fixture.events).toEqual(["permission", "query"])
+      expect(fixture.events).toEqual(["query"])
     }),
   )
 

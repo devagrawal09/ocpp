@@ -4,10 +4,8 @@ import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import type { FSUtil } from "@ocpp/util/fs-util"
 import path from "path"
 import { Context, Effect, Layer, Types } from "effect"
-import type { Agent } from "@ocpp/schema/agent"
 import { Skill } from "@ocpp/schema/skill"
 import { Bus } from "./bus.js"
-import { Permission } from "./permission.js"
 import { State } from "./state.js"
 
 export const DirectorySource = Skill.DirectorySource
@@ -30,9 +28,6 @@ export const Name = Skill.Name
 export type Name = Skill.Name
 
 export { Event } from "@ocpp/schema/skill"
-
-export const available = (skills: ReadonlyArray<Info>, agent: Agent.Info) =>
-  skills.filter((skill) => Permission.evaluate("skill", skill.id, agent.permissions).effect !== "deny")
 
 export const toModelOutput = (skill: Info, files: ReadonlyArray<string>) => {
   const directory = path.dirname(skill.location)

@@ -96,12 +96,6 @@ export function host(overrides: Overrides = {}): Plugin.Context {
       transform: () => Effect.die("unused mcp.transform"),
       reload: () => Effect.die("unused mcp.reload"),
     },
-    permission: overrides.permission ?? {
-      hook: () => Effect.die("unused permission.hook"),
-      list: () => Effect.die("unused permission.list"),
-      get: () => Effect.die("unused permission.get"),
-      reply: () => Effect.die("unused permission.reply"),
-    },
     plugin: overrides.plugin ?? {
       list: () => Effect.die("unused plugin.list"),
     },
@@ -465,7 +459,6 @@ function agentInfo(value: Agent.Info) {
       headers: { ...value.request.headers },
       body: { ...value.request.body },
     },
-    permissions: value.permissions.map((permission) => ({ ...permission })),
   }
 }
 

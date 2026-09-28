@@ -1,6 +1,5 @@
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Stream } from "effect"
-import { Agent } from "@ocpp/core/agent"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
@@ -8,7 +7,7 @@ import { AbsolutePath } from "@ocpp/core/schema"
 import { Skill } from "@ocpp/core/skill"
 import { testEffect } from "./lib/effect"
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([Skill.node, Agent.node, Bus.node])))
+const it = testEffect(AppNodeBuilder.build(LayerNode.group([Skill.node, Bus.node])))
 
 const info = (id: string, description: string) =>
   Skill.Info.make({
@@ -88,19 +87,6 @@ describe("Skill", () => {
       yield* skill.transform((draft) => draft.add(info("review", "Visible")))
       expect(yield* Deferred.await(updated).pipe(Effect.timeout("1 second"))).toEqual([info("review", "Visible")])
       yield* Fiber.interrupt(fiber)
-    }),
-  )
-
-  it.effect("filters values by agent permissions", () =>
-    Effect.gen(function* () {
-      const agents = yield* Agent.Service
-      yield* agents.transform((draft) =>
-        draft.update(Agent.ID.make("reviewer"), (agent) => {
-          agent.permissions.push({ action: "skill", resource: "deploy", effect: "deny" })
-        }),
-      )
-      const agent = yield* agents.get(Agent.ID.make("reviewer"))
-      expect(Skill.available([info("deploy", "Deploy")], agent!)).toEqual([])
     }),
   )
 })

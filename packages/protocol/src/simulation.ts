@@ -269,7 +269,6 @@ export namespace Backend {
     description: Schema.String,
     inputSchema: Schema.Record(Schema.String, Schema.Json),
     outputSchema: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)),
-    permission: Schema.optionalKey(Schema.NonEmptyString),
     options: Schema.optionalKey(
       Schema.Struct({
         namespace: Schema.optionalKey(ToolNamespace),

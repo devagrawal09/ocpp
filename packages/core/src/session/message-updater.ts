@@ -90,6 +90,7 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
           )
         }),
       "session.usage.recorded": () => Effect.void,
+      "session.tools.selected": () => Effect.void,
       "session.agent.selected": (event) =>
         Effect.gen(function* () {
           const previous = event.data.previous ?? (yield* adapter.getAgent())

@@ -9,7 +9,6 @@ import { FileMutation } from "@ocpp/core/file-mutation"
 import { Formatter } from "@ocpp/core/formatter"
 import { Location } from "@ocpp/core/location"
 import { LocationMutation } from "@ocpp/core/location-mutation"
-import { Permission } from "@ocpp/core/permission"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { Tool } from "@ocpp/core/tool"
@@ -19,62 +18,33 @@ import { location } from "./fixture/location"
 import { tmpdir, withTempDir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { testEffect } from "./lib/effect"
-import { permissionLayer } from "./lib/permission"
 import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const editToolNode = makeLocationNode({
   name: "test/edit-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(EditTool.Plugin)),
-  deps: [
-    Tool.node,
-    LocationMutation.node,
-    FileMutation.node,
-    Environment.node,
-    Formatter.node,
-    Location.node,
-    Permission.node,
-  ],
+  deps: [Tool.node, LocationMutation.node, FileMutation.node, Environment.node, Formatter.node, Location.node],
 })
 
 const sessionID = Session.ID.make("ses_edit_tool_test")
 const makeEditFixture = () => {
   const fixture: {
-    assertions: Permission.AssertInput[]
     writes: string[]
     reads: number
-    denyAction?: string
     afterRead: () => Effect.Effect<void>
     formatFile: (target: string) => Effect.Effect<boolean>
   } = {
-    assertions: [],
     writes: [],
     reads: 0,
     afterRead: () => Effect.void,
     formatFile: () => Effect.succeed(false),
   }
 
-  const permission = permissionLayer({
-    assert: (input) =>
-      Effect.sync(() => fixture.assertions.push(input)).pipe(
-        Effect.andThen(
-          input.action === fixture.denyAction
-            ? Effect.fail(
-                new Permission.BlockedError({
-                  rules: [],
-                  permission: input.action,
-                  resources: input.resources,
-                }),
-              )
-            : Effect.void,
-        ),
-      ),
-  })
-
   const formatter = Layer.mock(Formatter.Service, {
     file: (target) => fixture.formatFile(target),
   })
 
-  return Object.assign(fixture, { permission, formatter })
+  return Object.assign(fixture, { formatter })
 }
 
 const withTool = <A, E, R>(
@@ -107,7 +77,6 @@ const withTool = <A, E, R>(
         ],
         [Location.node, activeLocation],
         [Formatter.node, fixture.formatter],
-        [Permission.node, fixture.permission],
       ]),
     ),
   )
@@ -132,8 +101,8 @@ describe("EditTool", () => {
             Effect.gen(function* () {
               expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
               expect(yield* codeModeTools(registry)).toEqual(["edit"])
-              expect(yield* toolDefinitions(registry, [{ action: "edit", resource: "*", effect: "deny" }])).toEqual([])
-              expect(yield* codeModeTools(registry, [{ action: "edit", resource: "*", effect: "deny" }])).toEqual([])
+              expect(yield* toolDefinitions(registry, { paths: ["read"] })).toEqual([])
+              expect(yield* codeModeTools(registry, { paths: ["read"] })).toEqual([])
               const settled = yield* executeTool(
                 registry,
                 call({ path: "hello.txt", oldString: "before", newString: "after" }),
@@ -163,20 +132,6 @@ describe("EditTool", () => {
                 ],
               })
               expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after\nrest\n")
-              expect(edit.assertions).toMatchObject([
-                { sessionID, action: "edit", resources: ["hello.txt"], save: ["*"] },
-              ])
-              expect(edit.assertions[0]?.metadata).toMatchObject({
-                files: [
-                  {
-                    file: "hello.txt",
-                    status: "modified",
-                    additions: 1,
-                    deletions: 1,
-                    patch: expect.stringContaining("-before\n+after"),
-                  },
-                ],
-              })
               expect(edit.writes).toEqual([yield* Effect.promise(() => fs.realpath(target))])
             }),
           ),
@@ -227,7 +182,6 @@ describe("EditTool", () => {
         Effect.andThen((result) =>
           Effect.gen(function* () {
             expect(result.status).toBe("completed")
-            expect(edit.assertions.map((input) => input.action)).toEqual(["edit"])
             expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after")
           }),
         ),
@@ -235,7 +189,7 @@ describe("EditTool", () => {
     }),
   )
 
-  it.live("edits an external symlink target with only its in-location permission", () =>
+  it.live("edits an external symlink target through its in-location link", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
@@ -255,8 +209,6 @@ describe("EditTool", () => {
           Effect.andThen((result) =>
             Effect.sync(() => {
               expect(result.status).toBe("completed")
-              expect(edit.assertions.map((input) => input.action)).toEqual(["edit"])
-              expect(edit.assertions[0]?.resources).toEqual(["link.txt"])
             }),
           ),
           Effect.andThen(Effect.promise(() => fs.readFile(target, "utf8"))),
@@ -270,7 +222,7 @@ describe("EditTool", () => {
     ),
   )
 
-  it.live("approves an explicit external absolute path before edit", () =>
+  it.live("edits an explicit external absolute path", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
@@ -285,7 +237,6 @@ describe("EditTool", () => {
           Effect.andThen((result) =>
             Effect.gen(function* () {
               expect(result.status).toBe("completed")
-              expect(edit.assertions.map((input) => input.action)).toEqual(["external_directory", "edit"])
               expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after")
               expect(edit.writes).toHaveLength(1)
             }),
@@ -297,82 +248,6 @@ describe("EditTool", () => {
           Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),
         ),
     ),
-  )
-
-  it.live("does not write when external_directory or edit approval is denied", () =>
-    Effect.acquireUseRelease(
-      Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
-      ([active, outside]) =>
-        Effect.gen(function* () {
-          const external = path.join(outside.path, "denied.txt")
-          yield* Effect.promise(() => fs.writeFile(external, "before"))
-          const edit = makeEditFixture()
-          edit.denyAction = "external_directory"
-          expect(
-            yield* withTool(active.path, edit, (registry) =>
-              executeTool(registry, call({ path: external, oldString: "before", newString: "after" })),
-            ),
-          ).toEqual({
-            status: "error",
-            error: { type: "permission.rejected", message: "Permission denied: external_directory" },
-          })
-          expect(edit.assertions.map((input) => input.action)).toEqual(["external_directory"])
-          expect(edit.reads).toBe(0)
-          expect(edit.writes).toEqual([])
-
-          const deniedEdit = makeEditFixture()
-          deniedEdit.denyAction = "edit"
-          expect(
-            yield* withTool(active.path, deniedEdit, (registry) =>
-              executeTool(registry, call({ path: external, oldString: "before", newString: "after" })),
-            ),
-          ).toEqual({
-            status: "error",
-            error: { type: "permission.rejected", message: "Permission denied: edit" },
-          })
-          expect(deniedEdit.assertions.map((input) => input.action)).toEqual(["external_directory", "edit"])
-          expect(deniedEdit.reads).toBe(1)
-          expect(deniedEdit.writes).toEqual([])
-          expect(yield* Effect.promise(() => fs.readFile(external, "utf8"))).toBe("before")
-        }),
-      ([active, outside]) =>
-        Effect.promise(() =>
-          Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),
-        ),
-    ),
-  )
-
-  it.live("denied edit does not disclose whether oldString matches", () =>
-    withTempDir((tmp) => {
-      const edit = makeEditFixture()
-      edit.denyAction = "edit"
-      const target = path.join(tmp.path, "secret.txt")
-      return Effect.promise(() => fs.writeFile(target, "secret content")).pipe(
-        Effect.andThen(
-          withTool(tmp.path, edit, (registry) =>
-            Effect.gen(function* () {
-              const matching = yield* executeTool(
-                registry,
-                call({ path: "secret.txt", oldString: "secret content", newString: "replacement" }),
-              )
-              const missing = yield* executeTool(
-                registry,
-                call({ path: "secret.txt", oldString: "not present", newString: "replacement" }),
-              )
-
-              expect(matching).toEqual({
-                status: "error",
-                error: { type: "permission.rejected", message: "Permission denied: edit" },
-              })
-              expect(missing).toEqual(matching)
-              expect(edit.assertions.map((input) => input.action)).toEqual(["edit", "edit"])
-              expect(edit.reads).toBe(2)
-              expect(edit.writes).toEqual([])
-            }),
-          ),
-        ),
-      )
-    }),
   )
 
   it.live("rejects no-op, empty, missing, and ambiguous exact replacements", () =>

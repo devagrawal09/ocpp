@@ -23,7 +23,6 @@ import { ConfigInstructionPlugin } from "../config/plugin/instruction.js"
 import { ConfigLocationWatcherPlugin } from "../config/plugin/location-watcher.js"
 import { ConfigMcpPlugin } from "../config/plugin/mcp.js"
 import { ConfigProviderPlugin } from "../config/plugin/provider.js"
-import { ConfigPolicyPlugin } from "../config/plugin/policy.js"
 import { ConfigReferencePlugin } from "../config/plugin/reference.js"
 import { ConfigShellPlugin } from "../config/plugin/shell.js"
 import { ConfigSnapshotPlugin } from "../config/plugin/snapshot.js"
@@ -49,7 +48,6 @@ import { LocationMutation } from "../location-mutation.js"
 import { ModelsDev } from "../models-dev.js"
 import { Mcp } from "../mcp/index.js"
 import { Npm } from "@ocpp/util/npm"
-import { Permission } from "../permission.js"
 import { Reference } from "../reference.js"
 import { WebSearch } from "../websearch.js"
 import { Ripgrep } from "../ripgrep.js"
@@ -128,7 +126,6 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const models = yield* ModelsDev.Service
   const mcp = yield* Mcp.Service
   const npm = yield* Npm.Service
-  const permission = yield* Permission.Service
   const runtime = yield* PluginRuntime.Service
   const form = yield* Form.Service
   const read = yield* ReadToolFileSystem.Service
@@ -177,7 +174,6 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(ModelsDev.Service, models),
     Context.make(Mcp.Service, mcp),
     Context.make(Npm.Service, npm),
-    Context.make(Permission.Service, permission),
     Context.make(PluginRuntime.Service, runtime),
     Context.make(Form.Service, form),
     Context.make(ReadToolFileSystem.Service, read),
@@ -233,7 +229,6 @@ export const requirements = LayerNode.group([
   ModelsDev.node,
   Mcp.node,
   Npm.node,
-  Permission.node,
   PluginRuntime.node,
   Form.node,
   ReadToolFileSystem.node,
@@ -302,7 +297,6 @@ const post = [
   ConfigProviderPlugin.Plugin,
   ConfigWebSearchPlugin.Plugin,
   VariantPlugin.Plugin,
-  ConfigPolicyPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 
 export const list = Effect.fn("PluginInternal.list")(function* () {

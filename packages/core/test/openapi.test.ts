@@ -2,7 +2,6 @@ import path from "path"
 import { afterAll, describe, expect, setDefaultTimeout } from "bun:test"
 import { Effect, Layer, Option, Schema } from "effect"
 import { Info } from "@ocpp/schema/config"
-import { Agent } from "@ocpp/core/agent"
 import { Bus } from "@ocpp/core/bus"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Config } from "@ocpp/core/config"
@@ -15,7 +14,6 @@ import { Job } from "@ocpp/core/job"
 import { Location } from "@ocpp/core/location"
 import { OpenApi } from "@ocpp/core/openapi/index"
 import { OpenApiInstructions } from "@ocpp/core/openapi/instructions"
-import { Permission } from "@ocpp/core/permission"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
@@ -86,7 +84,6 @@ const server = Bun.serve({
 afterAll(() => server.stop(true))
 const baseURL = `http://127.0.0.1:${server.port}`
 
-const asserted: Array<Permission.AssertInput> = []
 const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
 const runtimeLayer = Layer.unwrap(
   Effect.gen(function* () {
@@ -105,6 +102,7 @@ const runtimeLayer = Layer.unwrap(
         move: () => Effect.die("Unavailable in OpenAPI tests"),
         resume: () => Effect.die("Unavailable in OpenAPI tests"),
         switchAgent: () => Effect.die("Unavailable in OpenAPI tests"),
+        selectTools: () => Effect.die("Unavailable in OpenAPI tests"),
         switchModel: () => Effect.die("Unavailable in OpenAPI tests"),
         interrupt: () => Effect.die("Unavailable in OpenAPI tests"),
         synthetic: () => Effect.never,
@@ -115,6 +113,7 @@ const runtimeLayer = Layer.unwrap(
       location: {
         agent: { list: () => Effect.die("Unavailable in OpenAPI tests") },
         mcp: { list: () => Effect.die("Unavailable in OpenAPI tests") },
+        tool: { paths: () => Effect.die("Unavailable in OpenAPI tests") },
       },
     })
   }),
@@ -162,12 +161,6 @@ const project = <A, E, R>(config: unknown, body: Effect.Effect<A, E, R>) =>
               [Credential.node, emptyCredentialNode],
               [WellKnown.node, emptyWellknownNode],
               [Watcher.node, Watcher.testLayer],
-              [
-                Permission.node,
-                Layer.mock(Permission.Service, {
-                  assert: (input) => Effect.sync(() => void asserted.push(input)),
-                }),
-              ],
               [PluginRuntime.node, runtimeLayer],
             ],
           ),
@@ -188,11 +181,6 @@ const store = (entry: Record<string, unknown> = {}) => ({
   },
 })
 
-const agent = (permissions: Permission.Ruleset = []) => {
-  const info = Agent.Info.make({ ...Agent.Info.default(Agent.ID.make("build")), permissions })
-  return { id: info.id, info }
-}
-
 describe("OpenAPI", () => {
   it.live("lists every operation of a configured document in the Code Mode catalog", () =>
     project(
@@ -209,7 +197,9 @@ describe("OpenAPI", () => {
         })
 
         const instructions = yield* OpenApiInstructions.Service
-        expect((yield* instructions.load(agent()).pipe(Effect.flatMap(readInitial))).text).toBe(
+        expect(
+          (yield* instructions.load(yield* codeModeTools(registry), undefined).pipe(Effect.flatMap(readInitial))).text,
+        ).toBe(
           [
             "<openapi_apis>",
             '  <api name="store" title="Demo Store">',
@@ -219,10 +209,14 @@ describe("OpenAPI", () => {
             "</openapi_apis>",
           ].join("\n"),
         )
-        // Denying every operation hides the API from that agent's catalog and instructions.
-        const denied = [{ action: "store_*", resource: "*", effect: "deny" as const }]
-        expect(yield* codeModeTools(registry, denied)).toEqual([])
-        expect((yield* instructions.load(agent(denied)).pipe(Effect.flatMap(readInitial))).text).toBe("")
+        // A tool list without the API hides it from that session's catalog and instructions.
+        const without = { paths: ["other"] }
+        expect(yield* codeModeTools(registry, without)).toEqual([])
+        expect(
+          (yield* instructions
+            .load(yield* codeModeTools(registry, without), without.paths)
+            .pipe(Effect.flatMap(readInitial))).text,
+        ).toBe("")
       }),
     ),
   )
@@ -233,7 +227,6 @@ describe("OpenAPI", () => {
         store(),
         Effect.gen(function* () {
           received.length = 0
-          asserted.length = 0
           const registry = yield* Tool.Service
           const snapshot = yield* registry.snapshot()
           const sessionID = Session.ID.make("ses_openapi_codemode")
@@ -273,11 +266,6 @@ describe("OpenAPI", () => {
             { method: "GET", path: "/items?limit=1", key: "secret-key", body: undefined },
             { method: "POST", path: "/items", key: "secret-key", body: { name: "lamp", stock: 3 } },
             { method: "GET", path: "/items/missing", key: "secret-key", body: undefined },
-          ])
-          expect(asserted.map((input) => input.action)).toEqual([
-            "store_listItems",
-            "store_items_create",
-            "store_getItem",
           ])
         }),
       ),
@@ -344,7 +332,7 @@ describe("OpenAPI", () => {
         expect(apis[0]?.error).toStartWith("failed to load ./missing.json: ")
         expect(apis[1]?.error).toStartWith(`failed to load ${baseURL}/absent.json: `)
         const instructions = yield* OpenApiInstructions.Service
-        expect((yield* instructions.load(agent()).pipe(Effect.flatMap(readInitial))).text).toContain(
+        expect((yield* instructions.load([], undefined).pipe(Effect.flatMap(readInitial))).text).toContain(
           '  <api name="missing">\n    This REST API is configured, but its operations are unavailable: failed to load ./missing.json: ',
         )
       }),

@@ -3,7 +3,6 @@ export * as AgentPlugin from "./agent.js"
 import { define } from "@ocpp/plugin/effect/plugin"
 import { Effect } from "effect"
 import { Agent } from "../agent.js"
-import { Permission } from "../permission.js"
 
 const PROMPT_EXPLORE = `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
 
@@ -20,7 +19,7 @@ Guidelines:
 - Adapt your search approach based on the thoroughness level specified by the caller
 - Return file paths as absolute paths in your final response
 - For clear communication, avoid using emojis
-- Do not create any files, or run bash commands that modify the user's system state in any way
+- Do not create or modify files, or change the user's system in any way, even when a tool you were given could
 
 Complete the user's search request efficiently and report your findings clearly.`
 
@@ -97,9 +96,8 @@ export const Plugin = define({
     yield* ctx.agent.transform((draft) => {
       draft.update(Agent.defaultID, (item) => {
         item.name = Agent.Name.make("Build")
-        item.description = "The default agent. Executes tools based on configured permissions."
+        item.description = "The default agent. Uses the tools its session's tool list gives it."
         item.mode = "primary"
-        item.permissions.push({ action: "question", resource: "*", effect: "allow" })
       })
 
       draft.update(Agent.ID.make("general"), (item) => {
@@ -107,38 +105,14 @@ export const Plugin = define({
         item.description =
           "General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel."
         item.mode = "subagent"
-        item.permissions.push(
-          { action: "question", resource: "*", effect: "deny" },
-          { action: "subagent", resource: "*", effect: "deny" },
-        )
       })
 
       draft.update(Agent.ID.make("explore"), (item) => {
-        const externalDirectories = item.permissions.filter(
-          (rule) => rule.action === "external_directory" && rule.effect === "allow",
-        )
         item.name = Agent.Name.make("Explore")
         item.description =
-          'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.'
+          'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions. Give it read-only tools such as [tools.read, tools.glob, tools.grep, tools.webfetch].'
         item.system = PROMPT_EXPLORE
         item.mode = "subagent"
-        item.permissions.push(
-          ...Permission.merge(
-            [
-              { action: "*", resource: "*", effect: "deny" },
-              { action: "grep", resource: "*", effect: "allow" },
-              { action: "glob", resource: "*", effect: "allow" },
-              { action: "webfetch", resource: "*", effect: "allow" },
-              { action: "websearch", resource: "*", effect: "allow" },
-              { action: "read", resource: "*", effect: "allow" },
-              { action: "read", resource: "*.env", effect: "ask" },
-              { action: "read", resource: "*.env.*", effect: "ask" },
-              { action: "read", resource: "*.env.example", effect: "allow" },
-              { action: "subagent", resource: "*", effect: "deny" },
-            ],
-            [{ action: "external_directory", resource: "*", effect: "ask" }, ...externalDirectories],
-          ),
-        )
       })
 
       draft.update(Agent.ID.make("compaction"), (item) => {
@@ -146,7 +120,6 @@ export const Plugin = define({
         item.mode = "primary"
         item.hidden = true
         item.system = PROMPT_COMPACTION
-        item.permissions.push({ action: "*", resource: "*", effect: "deny" })
       })
 
       draft.update(Agent.ID.make("title"), (item) => {
@@ -154,7 +127,6 @@ export const Plugin = define({
         item.mode = "primary"
         item.hidden = true
         item.system = PROMPT_TITLE
-        item.permissions.push({ action: "*", resource: "*", effect: "deny" })
       })
 
       draft.update(Agent.ID.make("summary"), (item) => {
@@ -162,7 +134,6 @@ export const Plugin = define({
         item.mode = "primary"
         item.hidden = true
         item.system = PROMPT_SUMMARY
-        item.permissions.push({ action: "*", resource: "*", effect: "deny" })
       })
     })
   }),

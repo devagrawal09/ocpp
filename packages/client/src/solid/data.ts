@@ -18,9 +18,6 @@ import type {
   McpServer,
   ModelInfo,
   ModelRef,
-  PermissionSavedInfo,
-  PermissionRequest,
-  PermissionReplyInput,
   Project,
   ProviderInfo,
   ReferenceInfo,
@@ -46,7 +43,6 @@ import { SessionMessage } from "@ocpp/schema/session-message"
 import {
   isFormAlreadySettledError,
   isFormNotFoundError,
-  isPermissionNotFoundError,
   type SessionPromptInput,
 } from "../promise"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -117,13 +113,11 @@ type Store = {
     // Scheduled events the agent defined for each session, with their next and latest firing.
     event: Record<string, CodeModeEventInfo[]>
     input: Record<string, string[]>
-    permission: Record<string, PermissionRequest[]>
     // Pending forms keyed by owner: a session ID or the temporary "global" elicitation sentinel.
     form: Record<string, FormWithLocation[]>
   }
   project: {
     info: Record<string, Project>
-    permission: Record<string, PermissionSavedInfo[]>
   }
   location: Record<string, LocationData>
 }
@@ -211,12 +205,10 @@ export function createData(config: CreateDataInput) {
       command: {},
       event: {},
       input: {},
-      permission: {},
       form: {},
     },
     project: {
       info: {},
-      permission: {},
     },
     location: {},
   })
@@ -250,17 +242,6 @@ export function createData(config: CreateDataInput) {
         sessionID,
         (store.session.input[sessionID] ?? []).filter((id) => id !== inboxID),
       )
-  }
-
-  function removePermission(sessionID: string, requestID: string) {
-    const requests = store.session.permission[sessionID]
-    if (!requests?.some((request) => request.id === requestID)) return
-    setStore(
-      "session",
-      "permission",
-      sessionID,
-      requests.filter((request) => request.id !== requestID),
-    )
   }
 
   function removeForm(sessionID: string, formID: string, ref?: LocationRef) {
@@ -516,7 +497,6 @@ export function createData(config: CreateDataInput) {
     sync.invalidate(`session.family:${sessionID}`)
     sync.invalidate(`session.pending:${sessionID}`)
     sync.invalidate(`session.message:${sessionID}`)
-    sync.invalidate(`session.permission:${sessionID}`)
     sync.invalidate(`session.form:${sessionID}:`)
     sync.invalidate(`session.event:${sessionID}`)
     setStore(
@@ -529,7 +509,6 @@ export function createData(config: CreateDataInput) {
         delete draft.messageLoading[sessionID]
         delete draft.pending[sessionID]
         delete draft.input[sessionID]
-        delete draft.permission[sessionID]
         delete draft.form[sessionID]
         delete draft.event[sessionID]
         for (const [rootID, family] of Object.entries(draft.family)) {
@@ -1209,16 +1188,6 @@ export function createData(config: CreateDataInput) {
         })
         if (event.data.inputID) compacting.get(event.data.sessionID)?.observed.add(event.data.inputID)
         return
-      case "permission.asked":
-        if (store.session.permission[event.data.sessionID]?.some((request) => request.id === event.data.id)) return
-        setStore("session", "permission", event.data.sessionID, [
-          ...(store.session.permission[event.data.sessionID] ?? []),
-          event.data,
-        ])
-        return
-      case "permission.replied":
-        removePermission(event.data.sessionID, event.data.requestID)
-        return
       case "form.created":
         if (event.data.form.sessionID === "global") break
         if (store.session.form[event.data.form.sessionID]?.some((form) => form.id === event.data.form.id)) return
@@ -1745,27 +1714,6 @@ export function createData(config: CreateDataInput) {
           sync.invalidate(`session.message:${sessionID}`)
         },
       },
-      permission: {
-        list(sessionID: string) {
-          return store.session.permission[sessionID]
-        },
-        sync(sessionID: string) {
-          return sync.run(`session.permission:${sessionID}`, async () => {
-            setStore("session", "permission", sessionID, await api().permission.list({ sessionID }))
-          })
-        },
-        invalidate(sessionID: string) {
-          sync.invalidate(`session.permission:${sessionID}`)
-        },
-        async reply(input: PermissionReplyInput) {
-          await api()
-            .permission.reply(input)
-            .catch((error: unknown) => {
-              if (!isPermissionNotFoundError(error)) throw error
-            })
-          removePermission(input.sessionID, input.requestID)
-        },
-      },
       form: {
         list(sessionID: string, ref?: LocationRef) {
           const forms = store.session.form[sessionID]
@@ -1825,19 +1773,6 @@ export function createData(config: CreateDataInput) {
       },
       invalidate() {
         sync.invalidate("project")
-      },
-      permission: {
-        list(projectID: string) {
-          return store.project.permission[projectID]
-        },
-        sync(projectID: string) {
-          return sync.run(`project.permission:${projectID}`, async () => {
-            setStore("project", "permission", projectID, await api().permission.saved.list({ projectID }))
-          })
-        },
-        invalidate(projectID: string) {
-          sync.invalidate(`project.permission:${projectID}`)
-        },
       },
     },
     shell: {

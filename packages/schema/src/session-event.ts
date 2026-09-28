@@ -90,6 +90,17 @@ export const ModelSelected = Event.durable({
 })
 export type ModelSelected = typeof ModelSelected.Type
 
+/** The Code Mode paths a subagent may call, as its caller passed them. */
+export const ToolsSelected = Event.durable({
+  type: "session.tools.selected",
+  ...options,
+  schema: {
+    ...Base,
+    tools: Schema.Array(Schema.String),
+  },
+})
+export type ToolsSelected = typeof ToolsSelected.Type
+
 export const Moved = Event.durable({
   type: "session.moved",
   ...options,
@@ -697,6 +708,7 @@ export const Definitions = Event.inventory(
   Created,
   AgentSelected,
   ModelSelected,
+  ToolsSelected,
   Moved,
   Renamed,
   Viewed,

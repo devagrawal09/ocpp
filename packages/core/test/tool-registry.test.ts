@@ -7,7 +7,6 @@ import { Database } from "@ocpp/core/database/database"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { CodeModeTool } from "@ocpp/core/codemode/tool"
 import { CodeModeExecutionTable } from "@ocpp/core/codemode/sql"
-import type { Permission } from "@ocpp/core/permission"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { Image } from "@ocpp/core/image"
 import { Job } from "@ocpp/core/job"
@@ -96,6 +95,7 @@ const runtimeLayer = Layer.unwrap(
         move: () => Effect.die("Unavailable in Tool registry tests"),
         resume: () => Effect.die("Unavailable in Tool registry tests"),
         switchAgent: () => Effect.die("Unavailable in Tool registry tests"),
+        selectTools: () => Effect.die("Unavailable in Tool registry tests"),
         switchModel: () => Effect.die("Unavailable in Tool registry tests"),
         interrupt: () => Effect.die("Unavailable in Tool registry tests"),
         synthetic: (input) => Effect.sync(() => void deliveries.push(input)).pipe(Effect.andThen(Effect.never)),
@@ -106,6 +106,7 @@ const runtimeLayer = Layer.unwrap(
       location: {
         agent: { list: () => Effect.die("Unavailable in Tool registry tests") },
         mcp: { list: () => Effect.die("Unavailable in Tool registry tests") },
+        tool: { paths: () => Effect.die("Unavailable in Tool registry tests") },
       },
     })
   }),
@@ -936,7 +937,7 @@ describe("Tool", () => {
     }),
   )
 
-  it.effect("offers execute exactly when the permissions leave a tool to call", () =>
+  it.effect("offers execute exactly when the tool list leaves a tool to call", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
 
@@ -946,65 +947,47 @@ describe("Tool", () => {
 
       yield* transform(service, { echo: make() })
       expect((yield* toolDefinitions(service)).map((tool) => tool.name)).toEqual(["execute"])
-      expect(yield* toolDefinitions(service, [{ action: "*", resource: "*", effect: "deny" }])).toEqual([])
-      expect(yield* toolDefinitions(service, [{ action: "echo", resource: "*", effect: "deny" }])).toEqual([])
-      expect(
-        (yield* toolDefinitions(service, [
-          { action: "*", resource: "*", effect: "deny" },
-          { action: "echo", resource: "*", effect: "allow" },
-        ])).map((tool) => tool.name),
-      ).toEqual(["execute"])
+      expect(yield* toolDefinitions(service, { paths: [] })).toEqual([])
+      expect(yield* toolDefinitions(service, { paths: ["missing"] })).toEqual([])
+      expect((yield* toolDefinitions(service, { paths: ["echo"] })).map((tool) => tool.name)).toEqual(["execute"])
+      // A list that cannot be built, such as an init.ts that fails, leaves no tools.
+      const failed = yield* service.snapshot({ error: "init.ts failed: boom" })
+      expect(failed.definitions).toEqual([])
+      expect(failed.paths).toEqual([])
+      expect(failed.notice).toBe("init.ts failed: boom This session has no tools until that is fixed.")
     }),
   )
 
-  it.effect("filters disabled tools with edit aliases and ordered wildcard precedence", () =>
+  it.effect("a tool list selects exact paths and whole namespaces", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
       yield* transform(service, { question: make(), bash: make() })
-      yield* transform(service, { edit: make(), write: make() }, { permission: "edit" })
-      const names = (permissions: Permission.Ruleset) => codeModeTools(service, permissions)
+      yield* transform(service, { create: make(), list: make() }, { namespace: "linear" })
+      const names = (paths: ReadonlyArray<string>) => codeModeTools(service, { paths })
 
-      expect(yield* names([{ action: "question", resource: "*", effect: "deny" }])).toEqual(["bash", "edit", "write"])
-      expect(
-        yield* names([
-          { action: "*", resource: "*", effect: "deny" },
-          { action: "question", resource: "private", effect: "allow" },
-        ]),
-      ).toEqual(["question"])
-      expect(
-        yield* names([
-          { action: "question", resource: "private", effect: "allow" },
-          { action: "*", resource: "*", effect: "deny" },
-        ]),
-      ).toEqual([])
-      expect(yield* names([{ action: "edit", resource: "*", effect: "deny" }])).toEqual(["bash", "question"])
+      expect(yield* codeModeTools(service)).toEqual(["bash", "linear.create", "linear.list", "question"])
+      expect(yield* names(["question"])).toEqual(["question"])
+      expect(yield* names(["linear"])).toEqual(["linear.create", "linear.list"])
+      expect(yield* names(["linear.list", "bash"])).toEqual(["bash", "linear.list"])
+      // A path selects a namespace only at a segment boundary.
+      expect(yield* names(["line", "ques"])).toEqual([])
     }),
   )
 
-  it.effect("keeps permission options isolated between registrations", () =>
-    Effect.gen(function* () {
-      const service = yield* Tool.Service
-      const shared = make()
-      yield* transform(service, { first: shared })
-      yield* transform(service, { second: shared }, { permission: "edit" })
-
-      expect(yield* codeModeTools(service, [{ action: "edit", resource: "*", effect: "deny" }])).toEqual(["first"])
-    }),
-  )
-
-  it.effect("refuses denied and unknown tool paths before an execution exists", () =>
+  it.effect("refuses tools outside the list and unknown paths before an execution exists", () =>
     Effect.gen(function* () {
       yield* seedToolSession(sessionID, identity.messageID)
       const service = yield* Tool.Service
       yield* transform(service, { echo: make(), shell: make() })
-      const snapshot = yield* service.snapshot([{ action: "shell", resource: "*", effect: "deny" }], sessionID)
+      const snapshot = yield* service.snapshot({ paths: ["echo"] }, sessionID)
       const refuse = (id: string, code: string) =>
         snapshot
           .execute({ ...call("execute", id), call: { type: "tool-call", id, name: "execute", input: { code } } })
           .pipe(Effect.flip)
 
-      const denied = yield* refuse("call-denied", 'const listing = tools.shell({ text: "ls" })')
-      expect(denied.metadata).toMatchObject({ executionStatus: "refused", kind: "ToolDenied", tools: ["shell"] })
+      const unlisted = yield* refuse("call-unlisted", 'const listing = tools.shell({ text: "ls" })')
+      expect(unlisted.metadata).toMatchObject({ executionStatus: "refused", kind: "UnknownTool", tools: ["shell"] })
+      expect(unlisted.message).toContain("Unknown tool tools.shell; it is not available to this agent.")
       const unknown = yield* refuse("call-unknown", 'const said = tools.ehco({ text: "hi" })')
       expect(unknown.metadata).toMatchObject({ executionStatus: "refused", kind: "UnknownTool", tools: ["ehco"] })
       expect(unknown.message).toContain("Did you mean tools.echo?")
@@ -1714,6 +1697,92 @@ describe("Tool", () => {
       expect(yield* store.get(executionID)).toMatchObject({ status: "indeterminate", saved: [] })
       expect(yield* store.bindings(sessionID)).toEqual({})
       expect(yield* store.reservations(sessionID)).toEqual([])
+    }),
+  )
+})
+
+describe("init.ts tool lists", () => {
+  const init = (source: string, agent = "build") => ({ init: { source, agent } })
+  const shout = [
+    "let shout = tool.define({",
+    '  name: "shout",',
+    '  description: "Echo loudly",',
+    '  inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },',
+    "  outputSchema: {},",
+    '  execute: (input) => tools.echo({ text: input.text + "!" }),',
+    "})",
+  ].join("\n")
+
+  it.effect("lists tools, whole namespaces and tool.define wrappers around tools off the list", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      yield* transform(service, { echo: make() })
+      yield* transform(service, { create: make(), list: make() }, { namespace: "linear" })
+      const selection = init(shout + "\nreturn { build: [tools.linear, shout], plan: [tools.echo] }")
+      expect(yield* codeModeTools(service, selection)).toEqual(["linear.create", "linear.list", "shout"])
+      expect(yield* codeModeTools(service, init(selection.init.source, "plan"))).toEqual(["echo"])
+
+      const snapshot = yield* service.snapshot(selection, sessionID)
+      expect(yield* run(snapshot, "call-shout", 'return tools.shout({ text: "hi" })')).toMatchObject({
+        status: "saved",
+        summary: expect.stringContaining('"hi!"'),
+      })
+      // The wrapper may call tools.echo; the agent may not.
+      const refused = yield* snapshot
+        .execute({
+          ...call("execute", "call-echo"),
+          call: {
+            type: "tool-call",
+            id: "call-echo",
+            name: "execute",
+            input: { code: 'return tools.echo({ text: "hi" })' },
+          },
+        })
+        .pipe(Effect.flip)
+      expect(refused.message).toContain("Unknown tool tools.echo; it is not available to this agent.")
+    }),
+  )
+
+  it.effect("keeps the rest of a list whose path no tool provides, and says so", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { echo: make() })
+      const snapshot = yield* service.snapshot(init("return { build: [tools.echo, tools.missing] }"))
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo"])
+      expect(snapshot.notice).toBe(
+        "init.ts lists tools.missing for the build agent, but no tool here provides it. The rest of its list applies.",
+      )
+    }),
+  )
+
+  it.effect("gives no tools, and says why, when init.ts gives no usable list", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { echo: make() })
+      const cases = [
+        ["return {", "init.ts does not compile: "],
+        ['throw new Error("broken lists")', "init.ts failed: "],
+        ["return [tools.echo]", "init.ts must return tool lists by agent"],
+        ["return { plan: [tools.echo] }", "init.ts returns no tool list for the build agent, so it has no tools."],
+        ["return { build: tools.echo }", "init.ts must return an array of tools for the build agent"],
+        ['return { build: ["echo"] }', "init.ts build[0] is neither a tool such as tools.read"],
+        [
+          'let found = tools.echo({ text: "x" })\nreturn { build: [] }',
+          "init.ts cannot call tools.echo while it builds its tool lists; call tools inside tool.define handles.",
+        ],
+        [
+          shout.replace('name: "shout"', 'name: "echo"') + "\nreturn { build: [tools.echo, shout] }",
+          "init.ts build list has two tools at tools.echo",
+        ],
+      ] as const
+      for (const [source, message] of cases) {
+        const snapshot = yield* service.snapshot(init(source))
+        expect(snapshot.definitions).toEqual([])
+        expect(snapshot.paths).toEqual([])
+        expect(snapshot.notice).toContain(message)
+        expect(snapshot.notice).toEndWith("This session has no tools until that is fixed.")
+      }
     }),
   )
 })

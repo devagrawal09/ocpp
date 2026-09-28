@@ -4,7 +4,7 @@ import { Provider } from "@ocpp/core/provider"
 import { Bus } from "@ocpp/core/bus"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Job } from "@ocpp/core/job"
-import type { Permission } from "@ocpp/core/permission"
+import type { ToolLists } from "@ocpp/core/tool/lists"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
@@ -27,17 +27,17 @@ export const toolIdentity = {
   messageID: SessionMessage.ID.make("msg_tool_test"),
 }
 
-export const toolDefinitions = (registry: Tool.Interface, permissions?: Permission.Ruleset) =>
-  registry.snapshot(permissions).pipe(Effect.map((toolSet) => toolSet.definitions))
+export const toolDefinitions = (registry: Tool.Interface, selection?: ToolLists.Selection) =>
+  registry.snapshot(selection).pipe(Effect.map((toolSet) => toolSet.definitions))
 
 /** Paths of the tools reachable from `execute`, which is the only tool the model is offered. */
-export const codeModeTools = (registry: Tool.Interface, permissions?: Permission.Ruleset) =>
-  registry.snapshot(permissions).pipe(Effect.map((toolSet) => (toolSet.codeModeCatalog ?? []).map((tool) => tool.path)))
+export const codeModeTools = (registry: Tool.Interface, selection?: ToolLists.Selection) =>
+  registry.snapshot(selection).pipe(Effect.map((toolSet) => (toolSet.codeModeCatalog ?? []).map((tool) => tool.path)))
 
 /** Registered tools keyed by effective name, such as `acme_echo` for `tools.acme.echo`. */
-export const registeredTools = (registry: Tool.Interface, permissions?: Permission.Ruleset) =>
+export const registeredTools = (registry: Tool.Interface, selection?: ToolLists.Selection) =>
   registry
-    .registrations(permissions)
+    .registrations(selection)
     .pipe(Effect.map((tools) => new Map(tools.map((tool) => [effectiveName(tool), tool]))))
 
 export function waitForTool(registry: Tool.Interface, name: string, remaining = 1000): Effect.Effect<void, Error> {

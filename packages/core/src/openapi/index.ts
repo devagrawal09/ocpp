@@ -15,7 +15,6 @@ import path from "path"
 import { Bus } from "../bus.js"
 import { Config } from "../config.js"
 import { Location } from "../location.js"
-import { Permission } from "../permission.js"
 import { Tool } from "../tool.js"
 
 /** One configured API: its operations as registrations, or why its document is unusable. */
@@ -48,7 +47,6 @@ export const layer = Layer.effect(
     const config = yield* Config.Service
     const registry = yield* Tool.Service
     const bus = yield* Bus.Service
-    const permission = yield* Permission.Service
     const http = yield* HttpClient.HttpClient
     const fs = yield* FSUtil.Service
     const global = yield* Global.Service
@@ -71,37 +69,21 @@ export const layer = Layer.effect(
 
     const operation = (api: string, segments: ReadonlyArray<string>, tool: Operation): Tool.Info => {
       const names = [api, ...segments].map(namespace)
-      const action = names.join("_")
       return {
-        name: names[names.length - 1] ?? action,
+        name: names[names.length - 1] ?? names.join("_"),
         options: { namespace: names.slice(0, -1).join(".") },
         description: tool.description,
         input: tool.input as JsonSchema.JsonSchema,
         // Responses without a declared schema still return their JSON or text body.
         output: (tool.output ?? {}) as JsonSchema.JsonSchema,
-        execute: (input, context) =>
-          permission
-            .assert({
-              action,
-              resources: ["*"],
-              save: ["*"],
-              metadata: {},
-              sessionID: context.sessionID,
-              agent: context.agent,
-              source: { type: "tool", messageID: context.messageID, id: context.id },
-            })
-            .pipe(
-              Effect.mapError((error) => new ToolFailure({ message: `Unable to execute ${action}`, error })),
-              Effect.andThen(
-                tool.execute(input).pipe(
-                  Effect.provideService(HttpClient.HttpClient, http),
-                  Effect.mapError(
-                    (error) => new ToolFailure({ message: error instanceof Error ? error.message : String(error) }),
-                  ),
-                ),
-              ),
-              Effect.map((output) => ({ output })),
+        execute: (input) =>
+          tool.execute(input).pipe(
+            Effect.provideService(HttpClient.HttpClient, http),
+            Effect.mapError(
+              (error) => new ToolFailure({ message: error instanceof Error ? error.message : String(error) }),
             ),
+            Effect.map((output) => ({ output })),
+          ),
       }
     }
 
@@ -188,7 +170,7 @@ export const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [Config.node, Tool.node, Bus.node, Permission.node, httpClient, FSUtil.node, Global.node, Location.node],
+  deps: [Config.node, Tool.node, Bus.node, httpClient, FSUtil.node, Global.node, Location.node],
 })
 
 function parse(text: string): OpenAPI.Document {

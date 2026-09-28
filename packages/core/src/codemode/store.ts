@@ -8,6 +8,7 @@ import { Database } from "../database/database.js"
 import { Job } from "../job.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
+import type { ToolLists } from "../tool/lists.js"
 import { SessionMessageTable } from "../session/sql.js"
 import { limits } from "./limits.js"
 import { CodeModeBindingTable, CodeModeExecutionTable, CodeModeJournalTable, CodeModeReservationTable } from "./sql.js"
@@ -22,6 +23,8 @@ export type Execution = {
   readonly program: CodeMode.Program
   /** Machine input exposed to the program as `input`. */
   readonly input?: CodeMode.DataValue
+  /** The tool list its catalog came from; absent for executions admitted before tool lists were stored. */
+  readonly tools?: ToolLists.Selection
   /** Completed notebook values captured when this execution was admitted. */
   readonly bindings: Readonly<Record<string, CodeMode.NotebookValue>>
 }
@@ -225,6 +228,7 @@ const layer = Layer.effect(
               ir_version: input.program.version,
               snapshot: bindings.map((binding) => binding.name),
               ...(input.input === undefined ? {} : { input: input.input }),
+              ...(input.tools === undefined ? {} : { tools: input.tools }),
             })
             return {
               ok: true as const,
@@ -572,6 +576,7 @@ const layer = Layer.effect(
                 toolCallID: row.tool_call_id,
                 program: row.program,
                 ...(row.input === null ? {} : { input: row.input }),
+                ...(row.tools === null ? {} : { tools: row.tools }),
                 bindings: Object.fromEntries(bindings.map((binding) => [binding.name, binding.value])),
               },
               journal: journal.map((entry) => ({

@@ -13,15 +13,15 @@ import { CodeModeStore } from "./codemode/store.js"
 import { CodeModeTool } from "./codemode/tool.js"
 import { Bus } from "./bus.js"
 import { Image } from "./image.js"
-import { Permission } from "./permission.js"
 import { PluginHooks } from "./plugin/hooks.js"
 import { PluginRuntime } from "./plugin/runtime.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionSchema } from "./session/schema.js"
 import { State } from "./state.js"
+import { ToolInit } from "./tool/init.js"
+import { ToolLists } from "./tool/lists.js"
 import { definition, effectiveName, execute, normalizedName, normalizeContent } from "./tool/runtime.js"
 import { ToolSessionTools } from "./tool/session-tools.js"
-import { Wildcard } from "./util/wildcard.js"
 
 export class RegistrationError extends Schema.TaggedError<RegistrationError>()("Tool.RegistrationError", {
   name: Schema.String,
@@ -47,25 +47,27 @@ export interface Interface extends State.Transformable<Draft> {
     tools: ReadonlyArray<Tool.Info>,
     options?: { readonly input?: Schema.Json },
   ) => Effect.Effect<State.Registration, RegistrationError>
+  /** The tools a selection names, with the ones lent to the Session. Without a selection, every tool. */
   readonly registrations: (
-    permissions?: Permission.Ruleset,
+    selection?: ToolLists.Selection,
     sessionID?: SessionSchema.ID,
   ) => Effect.Effect<ReadonlyArray<Tool.Info>>
   /**
-   * The tools one request may call, shaped by `tool` `catalog` hooks. `request` names the agent and model
-   * those hooks shape the catalog for; the model is absent when no model request is involved.
+   * The tools one request may call: exactly those its tool list selects, with the ones lent to the Session, shaped
+   * by `tool` `catalog` hooks. `request` names the agent and model those hooks shape the catalog for; the model is
+   * absent when no model request is involved. Without a selection, every tool.
    */
   readonly snapshot: (
-    permissions?: Permission.Ruleset,
+    selection?: ToolLists.Selection,
     sessionID?: SessionSchema.ID,
     request?: { readonly agent: Agent.ID; readonly model?: Model.Ref },
   ) => Effect.Effect<Snapshot>
   /**
-   * Resumes a Code Mode execution that was running when the host stopped, with the tools the agent
-   * that started it may use. Returns why it cannot resume safely instead of starting it.
+   * Resumes a Code Mode execution that was running when the host stopped, with the tool list it was admitted
+   * with. Returns why it cannot resume safely instead of starting it.
    */
   readonly resume: (input: {
-    readonly permissions: Permission.Ruleset
+    readonly selection: ToolLists.Selection
     readonly agent: Agent.ID
     readonly resumable: CodeModeStore.Resumable
     readonly notificationID: SessionMessage.ID
@@ -75,6 +77,10 @@ export interface Interface extends State.Transformable<Draft> {
 export interface Snapshot {
   readonly definitions: ReadonlyArray<ToolDefinition>
   readonly codeModeCatalog?: ReadonlyArray<CodeModeCatalog.Entry>
+  /** A problem with the tool list, such as an init.ts that fails, for the Session to show. */
+  readonly notice?: string
+  /** The Code Mode paths the tool list selects, each with every tool under it; absent when it selects every tool. */
+  readonly paths?: ReadonlyArray<string>
   readonly execute: (input: {
     readonly sessionID: SessionSchema.ID
     readonly agent: Agent.ID
@@ -209,30 +215,64 @@ const layer = Layer.effect(
         ),
     })
 
-    const active = (permissions?: Permission.Ruleset, sessionID?: SessionSchema.ID) => {
-      const tools = new Map<string, Tool.Info>()
-      const rules = permissions ?? []
-      for (const [name, tool] of state.get().tools) {
-        if (whollyDisabled(tool.options?.permission ?? name, rules)) continue
-        tools.set(name, tool)
-      }
-      if (sessionID === undefined) return tools
-      for (const registration of sessionTools.get(sessionID) ?? []) {
-        for (const [name, tool] of registration.tools) {
-          if (whollyDisabled(tool.options?.permission ?? name, rules)) continue
-          tools.set(name, tool)
+    // The Location's own tools a selection names, then the tools its init.ts defines and those lent to the Session,
+    // which take their names over.
+    const listed = Effect.fnUntraced(function* (
+      selection: ToolLists.Selection | undefined,
+      sessionID: SessionSchema.ID | undefined,
+      call?: ToolInit.Call,
+    ) {
+      const registry = state.get().tools
+      const evaluated = selection?.init === undefined ? undefined : yield* ToolInit.evaluate(selection.init, registry, call)
+      const error = selection?.error ?? (evaluated !== undefined && "error" in evaluated ? evaluated.error : undefined)
+      if (error !== undefined)
+        return {
+          tools: new Map<string, Tool.Info>(),
+          lent: new Set<string>(),
+          notice: `${error} This session has no tools until that is fixed.`,
+          paths: [],
         }
+      const own = evaluated !== undefined && "paths" in evaluated ? evaluated : undefined
+      const paths = own?.paths ?? selection?.paths
+      const lent = [
+        ...(own?.handles ?? []),
+        ...(sessionID === undefined ? [] : (sessionTools.get(sessionID) ?? []).flatMap((item) => [...item.tools.values()])),
+      ]
+      return {
+        tools: new Map([
+          ...Array.from(registry).filter(([, tool]) => ToolLists.includes(paths, CodeModeTool.qualifiedName(tool))),
+          ...lent.map((tool) => [effectiveName(tool), tool] as const),
+        ]),
+        lent: new Set(lent.map(effectiveName)),
+        ...(own?.notice === undefined ? {} : { notice: own.notice }),
+        ...(paths === undefined ? {} : { paths }),
       }
-      return tools
-    }
+    })
 
-    // The registered tools the same rules remove from the catalog, so Code Mode can refuse a call to
-    // one as denied instead of unknown.
-    const denied = (permissions?: Permission.Ruleset, sessionID?: SessionSchema.ID) =>
-      [
-        ...state.get().tools,
-        ...(sessionID === undefined ? [] : (sessionTools.get(sessionID) ?? []).flatMap((item) => [...item.tools])),
-      ].flatMap(([name, tool]) => (whollyDisabled(tool.options?.permission ?? name, permissions ?? []) ? [tool] : []))
+    // Each execution evaluates init.ts again, so the handles it defines run tools in that execution and close with it.
+    const handles =
+      (selection: ToolLists.Selection) =>
+      (context: Tool.Context): Effect.Effect<ReadonlyMap<string, Tool.Info>, never, Scope.Scope> =>
+        Effect.gen(function* () {
+          const catalog = new Map(
+            Array.from(state.get().tools.values(), (tool) => [CodeModeTool.qualifiedName(tool), { tool, lent: false }]),
+          )
+          const own = yield* listed(selection, undefined, (name, tool, input, index) =>
+            executeCodeModeTool(name, tool, input, {
+              ...context,
+              id: Tool.CallID.make(context.id + ":init:" + index),
+              progress: () => Effect.void,
+              ...(tool.options?.acceptsToolHandles === true ? { catalog } : {}),
+            }).pipe(
+              Effect.map((result) => {
+                if (result.output !== undefined) return result.output
+                const text = result.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+                return text === "" ? null : text
+              }),
+            ),
+          )
+          return new Map(Array.from(own.tools).filter(([name]) => own.lent.has(name)))
+        })
 
     // Plugins shape each request's Code Mode catalog: an edited description reaches the catalog and
     // tools.search, and a removed entry is neither listed nor callable.
@@ -308,43 +348,43 @@ const layer = Layer.effect(
       transform: state.transform,
       reload: state.reload,
       registerSession,
-      resume: Effect.fn("Tool.resume")((input) => {
+      resume: Effect.fn("Tool.resume")(function* (input) {
         const execution = input.resumable.execution
-        return CodeModeTool.resume(
-          active(input.permissions, execution.sessionID),
-          executeCodeModeTool,
-          codemodeServices,
-          {
-            context: {
-              sessionID: execution.sessionID,
-              agent: input.agent,
-              messageID: execution.assistantMessageID,
-              id: Tool.CallID.make(execution.toolCallID),
-              progress: () => Effect.void,
-            },
-            resumable: input.resumable,
-            notificationID: input.notificationID,
+        const own = yield* Effect.scoped(listed(input.selection, execution.sessionID))
+        return yield* CodeModeTool.resume(own.tools, executeCodeModeTool, codemodeServices, {
+          context: {
+            sessionID: execution.sessionID,
+            agent: input.agent,
+            messageID: execution.assistantMessageID,
+            id: Tool.CallID.make(execution.toolCallID),
+            progress: () => Effect.void,
           },
-        )
+          resumable: input.resumable,
+          notificationID: input.notificationID,
+          lent: own.lent,
+          ...(input.selection.init === undefined ? {} : { handles: handles(input.selection) }),
+        })
       }),
-      registrations: Effect.fn("Tool.registrations")((permissions, sessionID) =>
-        Effect.sync(() => Array.from(active(permissions, sessionID).values())),
-      ),
-      snapshot: Effect.fn("Tool.snapshot")(function* (permissions, sessionID, request) {
-        const registrations = yield* catalogued(active(permissions, sessionID), sessionID, request)
-        // `execute` is the only tool the model ever sees. Every registered tool is reachable only from
-        // code, so an agent gets `execute` exactly when its permissions leave at least one tool to call.
+      registrations: Effect.fn("Tool.registrations")(function* (selection, sessionID) {
+        return Array.from((yield* Effect.scoped(listed(selection, sessionID))).tools.values())
+      }),
+      snapshot: Effect.fn("Tool.snapshot")(function* (selection, sessionID, request) {
+        const own = yield* Effect.scoped(listed(selection, sessionID))
+        const registrations = yield* catalogued(own.tools, sessionID, request)
+        // `execute` is the only tool the model ever sees. Every tool is reachable only from code, so a
+        // Session gets `execute` exactly when its tool list holds at least one tool.
         const codemodeTool =
           registrations.size === 0
             ? undefined
-            : CodeModeTool.create(
-                registrations,
-                executeCodeModeTool,
-                codemodeServices,
-                activeInput(sessionID),
-                denied(permissions, sessionID),
-              )
+            : CodeModeTool.create(registrations, executeCodeModeTool, codemodeServices, {
+                selection: selection ?? {},
+                lent: own.lent,
+                ...(activeInput(sessionID) === undefined ? {} : { input: activeInput(sessionID) }),
+                ...(selection?.init === undefined ? {} : { handles: handles(selection) }),
+              })
         return {
+          ...(own.notice === undefined ? {} : { notice: own.notice }),
+          ...(own.paths === undefined ? {} : { paths: own.paths }),
           ...(codemodeTool === undefined ? {} : { codeModeCatalog: CodeModeTool.catalog(registrations) }),
           definitions: codemodeTool ? [definition(codemodeTool)] : [],
           execute: Effect.fnUntraced(function* (input: Parameters<Snapshot["execute"]>[0]) {
@@ -369,11 +409,6 @@ const layer = Layer.effect(
     })
   }),
 )
-
-const whollyDisabled = (action: string, rules: Permission.Ruleset) => {
-  const rule = rules.findLast((rule) => Wildcard.match(action, rule.action))
-  return rule?.resource === "*" && rule.effect === "deny"
-}
 
 const formatSchemaIssue = SchemaIssue.makeFormatterDefault()
 

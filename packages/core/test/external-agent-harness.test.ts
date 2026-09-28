@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect } from "bun:test"
 import { mkdir, realpath, symlink } from "node:fs/promises"
 import path from "node:path"
-import { ToolHandle } from "@ocpp/codemode"
+import { ToolHandle, ToolReference } from "@ocpp/codemode"
 import { LanguageModel } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols"
 import { TestLLM } from "@ocpp/ai/testing"
@@ -16,6 +16,7 @@ import { Agent } from "@ocpp/core/agent"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { Bus } from "@ocpp/core/bus"
 import { CodeModeCommand } from "@ocpp/core/codemode/command"
+import { CodeModeTool } from "@ocpp/core/codemode/tool"
 import { CodeModeEvent } from "@ocpp/core/codemode/event"
 import { CodeModeResume } from "@ocpp/core/codemode/resume"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
@@ -27,7 +28,6 @@ import { Job } from "@ocpp/core/job"
 import { Location } from "@ocpp/core/location"
 import { LocationServiceMap } from "@ocpp/core/location-services"
 import { Model } from "@ocpp/core/model"
-import { Permission } from "@ocpp/core/permission"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor-service"
 import { Project } from "@ocpp/core/project"
@@ -564,7 +564,8 @@ describe("subagent drivers", () => {
     env.within(
       Effect.gen(function* () {
         const registry = yield* Tool.Service
-        const tool = (yield* registeredTools(registry)).get(SubagentTool.name)
+        const registered = yield* registeredTools(registry)
+        const tool = registered.get(SubagentTool.name)
         if (!tool) return yield* Effect.die("subagent is not registered")
         return yield* Effect.result(
           execute(
@@ -574,6 +575,13 @@ describe("subagent drivers", () => {
               sessionID: env.session.id,
               agent: Agent.ID.make("build"),
               ...source,
+              // The caller's catalog, as Code Mode hands it to a tool that receives tool references.
+              catalog: new Map(
+                Array.from(registered.values(), (item) => [
+                  CodeModeTool.qualifiedName(item),
+                  { tool: item, lent: false },
+                ]),
+              ),
               ...(recovered === undefined ? {} : { recovered }),
               progress: () => Effect.void,
             },
@@ -605,13 +613,33 @@ describe("subagent drivers", () => {
         yield* agents.transform((draft) => draft.update(Agent.ID.make(id), edit))
       }),
     )
-  const permit = (
-    env: Effect.Success<ReturnType<typeof setup>>,
-    rules: ReadonlyArray<{ action: string; resource: string; effect: "allow" | "deny" | "ask" }>,
-  ) =>
-    configure(env, "general", (agent) => {
-      agent.permissions.push({ action: "*", resource: "*", effect: "allow" }, ...rules)
-    })
+  /** Tool references, as a program passes tools.read or the namespace tools.linear. */
+  const refs = (...paths: ReadonlyArray<string>) => paths.map((item) => new ToolReference(item.split(".")))
+  // A namespace only the caller's Location provides, as an MCP server configured there would.
+  const linear = (env: Pick<Effect.Success<ReturnType<typeof setup>>, "within">) =>
+    env.within(
+      Effect.gen(function* () {
+        const registry = yield* Tool.Service
+        yield* registry.transform((draft) => {
+          for (const name of ["create", "list"])
+            draft.add({
+              name,
+              options: { namespace: "linear" },
+              description: "Linear " + name,
+              input: Schema.Struct({}),
+              output: Schema.String,
+              execute: () => Effect.succeed({ output: name }),
+            })
+        })
+      }),
+    )
+  const listed = (env: Pick<Effect.Success<ReturnType<typeof setup>>, "sessions">, sessionID: Session.ID) =>
+    env.sessions.get(sessionID).pipe(Effect.map((session) => session.tools))
+  // The catalog the latest vendor run's OC++ system prompt lists.
+  const listing = () => {
+    const last = vendor.runs.at(-1)
+    return last?.harness.type === "ocpp" ? (last.harness.system.split("## Available tools")[1] ?? "") : ""
+  }
   const sessionOf = (result: Effect.Success<ReturnType<typeof call>>) =>
     result._tag === "Success"
       ? Schema.decodeUnknownSync(SubagentTool.Output)(result.success.output).sessionID
@@ -693,6 +721,7 @@ describe("subagent drivers", () => {
         // The call's own tools join the child's catalog; the vendor still sees only execute.
         expect(system).toContain("tools.count")
         expect(system).toContain("tools.submit_result")
+        expect(system.split("## Available tools")[1]).not.toContain("tools.read")
         expect(vendor.runs[0].gateway.definitions.map((tool) => tool.name)).toEqual(["execute"])
         const sessionID = Schema.decodeUnknownSync(SubagentTool.Output)(first.success.output).sessionID
         const vendorSessionID = vendor.runs[0].vendorSessionID
@@ -705,6 +734,78 @@ describe("subagent drivers", () => {
         expect(vendor.runs.at(-1)?.message).toContain("Continue please")
         if (continued._tag === "Success") expect(continued.success.output).toMatchObject({ message: "Continued" })
       }),
+  )
+
+  it.live("a child's tools are exactly the tools the call passes, and a continued child keeps them", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "opus"))
+      yield* linear(env)
+      vendor.turn = say("Done")
+
+      // Without tools a new child has none.
+      const bare = yield* call(env, {})
+      expect(bare._tag).toBe("Success")
+      expect(yield* listed(env, sessionOf(bare)!)).toBeUndefined()
+      expect(listing()).not.toContain("tools.read")
+
+      const given = yield* call(env, { tools: refs("read", "glob", "linear") })
+      expect(given._tag).toBe("Success")
+      const sessionID = sessionOf(given)!
+      expect(yield* listed(env, sessionID)).toEqual(["glob", "linear.create", "linear.list", "read"])
+      expect(listing()).toContain("tools.read")
+      expect(listing()).toContain("tools.linear.create")
+      expect(listing()).not.toContain("tools.grep")
+      expect(listing()).not.toContain("tools.write")
+
+      expect((yield* call(env, { sessionID, message: "Continue" }))._tag).toBe("Success")
+      expect(yield* listed(env, sessionID)).toEqual(["glob", "linear.create", "linear.list", "read"])
+      expect((yield* call(env, { sessionID, message: "Continue", tools: refs("grep") }))._tag).toBe("Success")
+      expect(yield* listed(env, sessionID)).toEqual(["grep"])
+      expect(listing()).toContain("tools.grep")
+      expect(listing()).not.toContain("tools.linear")
+    }),
+  )
+
+  it.live("a call may pass only tools it has, as references, namespaces or handles", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "opus"))
+      vendor.turn = say("Done")
+      const failure = (result: Effect.Success<ReturnType<typeof call>>) =>
+        result._tag === "Failure" ? result.failure.message : "succeeded"
+      expect(failure(yield* call(env, { tools: refs("linear") }))).toContain(
+        "tools.linear is not one of your tools; a subagent can be given only tools you have.",
+      )
+      expect(failure(yield* call(env, { tools: ["read"] }))).toContain("Tools must be tool references")
+      expect(yield* child(env)).toBeUndefined()
+      expect(vendor.runs).toHaveLength(0)
+    }),
+  )
+
+  it.live("native: execute runs over exactly the passed tools, beside the vendor's own", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "opus"))
+      yield* Effect.promise(() => Bun.write(path.join(env.directory.path, "marker.txt"), "native-marker"))
+      const outcomes: string[] = []
+      vendor.turn = async (options, message) => {
+        if (message.includes("Execution")) return
+        for (const code of [
+          'const found = tools.read({ path: "marker.txt" })',
+          'const written = tools.write({ path: "other.txt", content: "x" })',
+        ]) {
+          const result = await run(options, code)
+          outcomes.push(result._tag === "Success" ? "started" : result.failure)
+        }
+        await say("Done")(options, message)
+      }
+      const result = yield* call(env, { harness: "native", tools: refs("read") })
+      expect(result._tag).toBe("Success")
+      expect(vendor.runs[0].harness).toEqual({ type: "native" })
+      expect(vendor.runs[0].gateway.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(outcomes[0]).toBe("started")
+      expect(outcomes[1]).toContain("not available to this agent")
+      const store = yield* CodeModeStore.Service
+      expect(JSON.stringify((yield* store.bindings(sessionOf(result)!)).found)).toContain("native-marker")
+    }),
   )
 
   it.live("the native harness keeps vendor tools and adds OC++ execute and the call's tools over MCP", () =>
@@ -765,7 +866,8 @@ describe("subagent drivers", () => {
       const continued = yield* call(env, { sessionID, message: "Continue" })
       expect(continued._tag).toBe("Success")
       expect(vendor.runs.at(-1)?.harness.type).toBe("ocpp")
-      expect(vendor.runs.at(-1)?.gateway.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      // Nor does it keep the call's handle, and without tools a child has no execute either.
+      expect(vendor.runs.at(-1)?.gateway.definitions).toEqual([])
     }),
   )
   it.live("a rebuilt vendor child replays what a model saw, never private input or a Code Mode trace", () =>
@@ -854,130 +956,7 @@ describe("subagent drivers", () => {
     }),
   )
 
-  it.live("native: OC++'s own tools need no vendor permission, even for a read-only agent", () =>
-    Effect.gen(function* () {
-      const env = yield* setup()
-      const { permissionHooks } = yield* Effect.promise(() => import("../src/external-agent/claude.node"))
-      const decisions: string[] = []
-      vendor.turn = async (options) => {
-        // As Claude asks before each tool call, through the real hooks and the harness's authorization.
-        const hooks = permissionHooks(options.authorize)
-        for (const [name, input] of [
-          ["mcp__ocpp__submit_result", { message: "explored", output: { found: true } }],
-          ["Read", { file_path: "README.md" }],
-          ["Write", { file_path: "README.md" }],
-        ] as const)
-          decisions.push(
-            name +
-              ": " +
-              (await hooks.canUseTool!(name, input, { signal: options.signal, toolUseID: name, requestId: name }))
-                ?.behavior,
-          )
-        await Effect.runPromise(
-          options.gateway.invoke("submit_result", { message: "explored", output: { found: true } }),
-        )
-      }
-      const result = yield* call(env, {
-        agent: "explore",
-        driver: "claude",
-        harness: "native",
-        outputSchema: { type: "object", properties: { found: { type: "boolean" } }, required: ["found"] },
-      })
-      expect(result._tag).toBe("Success")
-      if (result._tag === "Success") expect(result.success.output).toMatchObject({ output: { found: true } })
-      expect(decisions).toEqual(["mcp__ocpp__submit_result: allow", "Read: allow", "Write: deny"])
-    }),
-  )
-
-  it.live("native: OC++ denials, outside directories and each command of a compound shell command hold", () =>
-    Effect.gen(function* () {
-      const env = yield* setup()
-      const outside = yield* tmpdirScoped()
-      yield* permit(env, [
-        { action: "edit", resource: "denied.txt", effect: "deny" },
-        { action: "external_directory", resource: outside.path + "/*", effect: "deny" },
-        { action: "shell", resource: "rm *", effect: "deny" },
-      ])
-      const decisions: Record<string, string> = {}
-      vendor.turn = async (options) => {
-        for (const [label, name, input] of [
-          ["edit allowed", "Write", { file_path: "allowed.txt" }],
-          ["edit denied", "Write", { file_path: "denied.txt" }],
-          ["outside", "Read", { file_path: outside.path + "/file" }],
-          ["shell allowed", "Bash", { command: "echo allowed" }],
-          ["compound", "Bash", { command: "echo allowed; rm forbidden" }],
-        ] as const)
-          decisions[label] = await options.authorize(name, input, options.signal).then(
-            () => "allowed",
-            () => "denied",
-          )
-        await say("Checked")(options, "")
-      }
-      for (const provider of ["claude", "pi"])
-        expect((yield* call(env, { driver: provider, harness: "native" }))._tag).toBe("Success")
-      expect(decisions).toEqual({
-        "edit allowed": "allowed",
-        "edit denied": "denied",
-        outside: "denied",
-        "shell allowed": "allowed",
-        compound: "denied",
-      })
-
-      // Codex has no per-call check, so a denial anywhere in its sandbox scope refuses the whole delegation.
-      vendor.turn = async (options) => {
-        await options.authorize(
-          "workspace",
-          { directory: options.directory, sandbox: "workspace-write" },
-          options.signal,
-        )
-      }
-      expect((yield* call(env, { driver: "codex", harness: "native" }))._tag).toBe("Failure")
-    }),
-  )
-
-  it.live("native: a permission request with no child tool part names the subagent call", () =>
-    Effect.gen(function* () {
-      const env = yield* setup()
-      yield* permit(env, [{ action: "read", resource: "*", effect: "ask" }])
-      vendor.turn = async (options) => {
-        await options.authorize("Read", { file_path: "README.md" }, options.signal)
-        await say("Read it")(options, "")
-      }
-      const bus = yield* Bus.Service
-      const asked = yield* Deferred.make<Permission.Request>()
-      const unsubscribe = yield* bus.listen((event) =>
-        event.type === Permission.Event.Asked.type
-          ? Deferred.succeed(asked, event.data as Permission.Request).pipe(Effect.asVoid)
-          : Effect.void,
-      )
-      yield* Effect.addFinalizer(() => unsubscribe)
-      const source = { messageID: SessionMessage.ID.create(), id: Tool.CallID.make("call_subagent") }
-      const running = yield* call(env, { driver: "claude", harness: "native" }, source).pipe(Effect.forkChild)
-      const request = yield* Deferred.await(asked)
-      expect(request.sessionID).toBe(env.session.id)
-      expect(request.source).toEqual({ type: "tool", ...source })
-      yield* env.within(
-        Effect.gen(function* () {
-          const permissions = yield* Permission.Service
-          yield* permissions.reply({ requestID: request.id, reply: "once" })
-        }),
-      )
-      expect((yield* Fiber.join(running))._tag).toBe("Success")
-    }),
-  )
   describe("root", () => {
-    // A caller that may place children anywhere, so each test sets only the rules it is about.
-    const reach = (
-      env: Pick<Effect.Success<ReturnType<typeof setup>>, "within">,
-      rules: ReadonlyArray<{ action: string; resource: string; effect: "allow" | "deny" | "ask" }> = [],
-    ) =>
-      configure(env, "build", (agent) => {
-        agent.permissions.push(
-          { action: "external_directory", resource: "*", effect: "allow" },
-          { action: "subagent_root", resource: "*", effect: "allow" },
-          ...rules,
-        )
-      })
     // Agent definitions in another Location, such as a root's own config.
     const configureAt = (ref: Location.Ref, id: string, edit: (agent: Types.DeepMutable<Agent.Info>) => void) =>
       Effect.gen(function* () {
@@ -999,50 +978,17 @@ describe("subagent drivers", () => {
     })
     const failure = (result: Effect.Success<ReturnType<typeof call>>) =>
       result._tag === "Failure" ? result.failure.message : "succeeded"
-    // Answers every permission request as the app does: through the Location of the Session the request names,
-    // which must hold it, as the reply route requires.
-    const answering = (decide: (request: Permission.Request) => Permission.Reply) =>
-      Effect.gen(function* () {
-        const bus = yield* Bus.Service
-        const locations = yield* LocationServiceMap.Service
-        const sessions = yield* Session.Service
-        const queue = yield* Queue.unbounded<Permission.Request>()
-        const asked: Array<Permission.Request & { readonly answerable: boolean }> = []
-        const unsubscribe = yield* bus.listen((event) =>
-          event.type === Permission.Event.Asked.type
-            ? Queue.offer(queue, event.data as Permission.Request).pipe(Effect.asVoid)
-            : Effect.void,
-        )
-        yield* Effect.addFinalizer(() => unsubscribe)
-        yield* Effect.forever(
-          Effect.gen(function* () {
-            const request = yield* Queue.take(queue)
-            const session = yield* sessions.get(request.sessionID)
-            yield* Effect.gen(function* () {
-              const permissions = yield* Permission.Service
-              const held = yield* permissions.get(request.id)
-              asked.push({ ...request, answerable: held?.sessionID === request.sessionID })
-              if (held?.sessionID === request.sessionID)
-                yield* permissions.reply({ requestID: request.id, reply: decide(request) })
-            }).pipe(Effect.provide(locations.get(session.location)))
-          }),
-        ).pipe(Effect.forkScoped)
-        return asked
-      })
-    const asks = (asked: ReadonlyArray<Permission.Request>) =>
-      asked.map((request) => [request.action, ...request.resources])
 
     it.live("a vendor child works in its root: the vendor's directory and its execute", () =>
       Effect.gen(function* () {
         const env = yield* setup()
         const root = yield* worktree
         yield* Effect.promise(() => Bun.write(path.join(env.directory.path, "marker.txt"), "parent-marker"))
-        yield* reach(env)
         vendor.turn = async (options, message) => {
           if (message.includes("Execution")) return
           await run(options, 'const found = tools.read({ path: "marker.txt" })')
         }
-        const result = yield* call(env, { driver: "claude", root: root.directory })
+        const result = yield* call(env, { driver: "claude", root: root.directory, tools: refs("read") })
         expect(result._tag).toBe("Success")
         const sessionID = sessionOf(result)!
         expect((yield* env.sessions.get(sessionID)).location.directory).toBe(AbsolutePath.make(root.directory))
@@ -1054,12 +1000,27 @@ describe("subagent drivers", () => {
       }),
     )
 
+    it.live("the tools passed to a rooted child must exist at its root by the same paths", () =>
+      Effect.gen(function* () {
+        const env = yield* setup(ref("claude", "opus"))
+        const root = yield* worktree
+        yield* linear(env)
+        vendor.turn = say("Done")
+        expect(failure(yield* call(env, { root: root.directory, tools: refs("read", "linear") }))).toContain(
+          `Subagent tools do not exist in ${root.directory}: tools.linear.create, tools.linear.list`,
+        )
+        expect(yield* child(env)).toBeUndefined()
+        const placed = yield* call(env, { root: root.directory, tools: refs("read") })
+        expect(placed._tag).toBe("Success")
+        expect(yield* listed(env, sessionOf(placed)!)).toEqual(["read"])
+      }),
+    )
+
     it.live("a root must be an existing directory, and each way it is not fails as the call's error", () =>
       Effect.gen(function* () {
         const env = yield* setup(ref("claude", "opus"))
         const root = yield* worktree
         yield* Effect.promise(() => symlink(path.join(root.outer, "loop"), path.join(root.outer, "loop")))
-        yield* reach(env)
         expect(failure(yield* call(env, { root: "worktrees/feature" }))).toContain("must be an absolute directory path")
         expect(failure(yield* call(env, { root: path.join(root.directory, "missing") }))).toContain("does not exist")
         expect(failure(yield* call(env, { root: path.join(root.directory, "marker.txt") }))).toContain(
@@ -1074,105 +1035,35 @@ describe("subagent drivers", () => {
       }),
     )
 
-    it.live("placing a child outside the caller's project asks for its boundary and for subagent_root", () =>
+    projectIt.live("a root under another repository places the child in that repository's project", () =>
       Effect.gen(function* () {
         const env = yield* setup(ref("claude", "opus"))
-        const root = yield* worktree
+        const outer = yield* tmpdirScoped()
+        const repo = path.join(outer.path, "repo")
+        const sub = path.join(repo, "sub")
+        yield* Effect.promise(() => mkdir(sub, { recursive: true }))
+        yield* Effect.promise(() => Bun.$`git init -q ${repo}`.quiet())
         vendor.turn = say("Done")
-        const asked = yield* answering(() => "once")
-        expect((yield* call(env, { root: root.directory }))._tag).toBe("Success")
-        expect(asks(asked).slice(0, 2)).toEqual([
-          ["external_directory", root.directory + "/*"],
-          ["subagent_root", root.directory],
-        ])
-        expect(asked.every((request) => request.sessionID === env.session.id && request.answerable)).toBe(true)
-
-        yield* configure(env, "build", (agent) => {
-          agent.permissions.push({ action: "subagent_root", resource: root.directory, effect: "deny" })
-        })
-        expect(failure(yield* call(env, { root: root.directory }))).toContain("Subagent root denied")
-        yield* configure(env, "build", (agent) => {
-          agent.permissions.push({ action: "external_directory", resource: root.directory + "/*", effect: "deny" })
-        })
-        expect(failure(yield* call(env, { root: root.directory }))).toContain("Subagent directory denied")
-        expect(vendor.runs).toHaveLength(1)
-      }),
-    )
-
-    it.live("a root the defaults let any tool reach still asks, because the child runs under that root's config", () =>
-      Effect.gen(function* () {
-        const env = yield* setup()
-        // The caller's project forbids shell; a child under a default-allowed root must not escape that silently.
-        for (const id of ["build", "general"])
-          yield* configure(env, id, (agent) => {
-            agent.permissions.push({ action: "shell", resource: "*", effect: "deny" })
-          })
-        const allowed = yield* env.within(
-          Effect.gen(function* () {
-            const agents = yield* Agent.Service
-            return (yield* agents.get(Agent.ID.make("build")))!.permissions.flatMap((rule) =>
-              rule.action === "external_directory" && rule.effect === "allow" && rule.resource.endsWith("/*")
-                ? [rule.resource.slice(0, -2)]
-                : [],
-            )
-          }),
+        const result = yield* call(env, { root: sub })
+        expect(result._tag).toBe("Success")
+        const locations = yield* LocationServiceMap.Service
+        const project = yield* Location.Service.pipe(
+          Effect.map((location) => location.project.directory),
+          Effect.provide(locations.get((yield* env.sessions.get(sessionOf(result)!)).location)),
         )
-        const tmp = allowed.find((directory) => directory.includes("tmp")) ?? allowed[0]
-        yield* Effect.promise(() => mkdir(tmp, { recursive: true }))
-        const asked = yield* answering(() => "reject")
-        // A declined prompt surfaces where the model's tool call is settled, as for every tool.
-        const declined = yield* Effect.exit(call(env, { root: tmp }))
-        expect(declined._tag === "Failure" && Cause.squash(declined.cause)).toBeInstanceOf(Permission.DeclinedError)
-        expect(asks(asked)).toContainEqual(["subagent_root", yield* Effect.promise(() => realpath(tmp))])
-        expect(yield* child(env)).toBeUndefined()
-
-        yield* configure(env, "build", (agent) => {
-          agent.permissions.push({ action: "subagent_root", resource: "*", effect: "deny" })
-        })
-        expect(failure(yield* call(env, { root: tmp }))).toContain("Subagent root denied")
+        expect(project).toBe(AbsolutePath.make(repo))
       }),
     )
 
-    projectIt.live(
-      "a root under another repository asks for that repository's worktree, the child's real boundary",
-      () =>
-        Effect.gen(function* () {
-          const env = yield* setup(ref("claude", "opus"))
-          const outer = yield* tmpdirScoped()
-          const repo = path.join(outer.path, "repo")
-          const sub = path.join(repo, "sub")
-          yield* Effect.promise(() => mkdir(sub, { recursive: true }))
-          yield* Effect.promise(() => Bun.$`git init -q ${repo}`.quiet())
-          vendor.turn = say("Done")
-          const asked = yield* answering(() => "once")
-          const result = yield* call(env, { root: sub })
-          expect(result._tag).toBe("Success")
-          expect(asks(asked).slice(0, 2)).toEqual([
-            ["external_directory", repo + "/*"],
-            ["subagent_root", sub],
-          ])
-          const locations = yield* LocationServiceMap.Service
-          const project = yield* Location.Service.pipe(
-            Effect.map((location) => location.project.directory),
-            Effect.provide(locations.get((yield* env.sessions.get(sessionOf(result)!)).location)),
-          )
-          expect(project).toBe(AbsolutePath.make(repo))
-        }),
-    )
-
-    projectIt.live("a root inside the caller's project places the child there without asking", () =>
+    projectIt.live("a root inside the caller's project places the child there", () =>
       Effect.gen(function* () {
         const env = yield* setup(ref("claude", "opus"))
         yield* Effect.promise(() => Bun.$`git init -q ${env.directory.path}`.quiet())
         const sub = path.join(env.directory.path, "packages", "app")
         yield* Effect.promise(() => mkdir(sub, { recursive: true }))
         vendor.turn = say("Done")
-        const asked = yield* answering(() => "reject")
         const result = yield* call(env, { root: sub })
         expect(result._tag).toBe("Success")
-        expect(asks(asked).filter(([action]) => action === "external_directory" || action === "subagent_root")).toEqual(
-          [],
-        )
         expect(vendor.runs[0].directory).toBe(sub)
       }),
     )
@@ -1183,12 +1074,6 @@ describe("subagent drivers", () => {
         const holder = yield* tmpdirScoped()
         const link = path.join(holder.path, "link")
         yield* Effect.promise(() => symlink(env.directory.path, link))
-        yield* configure(env, "build", (agent) => {
-          agent.permissions.push(
-            { action: "external_directory", resource: "*", effect: "deny" },
-            { action: "subagent_root", resource: "*", effect: "deny" },
-          )
-        })
         vendor.turn = say("Done")
         for (const root of [env.directory.path, link, env.directory.path + "/."]) {
           const result = yield* call(env, { root })
@@ -1223,7 +1108,6 @@ describe("subagent drivers", () => {
               return yield* effect
             }).pipe(Effect.provide(locations.get(session.location))),
         }
-        yield* reach(env)
         vendor.turn = say("Done")
         expect(failure(yield* call(env, { root: other.path }))).toContain("not available in a workspace")
         const own = yield* call(env, { root: directory.path })
@@ -1232,14 +1116,13 @@ describe("subagent drivers", () => {
       }),
     )
 
-    it.live("a continued child keeps its directory, is asked again, and refuses another root", () =>
+    it.live("a continued child keeps its directory and refuses another root", () =>
       Effect.gen(function* () {
         const env = yield* setup(ref("codex", "gpt-5.6-sol"))
         const root = yield* worktree
         const other = yield* tmpdirScoped()
         const link = path.join(other.path, "link")
         yield* Effect.promise(() => symlink(root.directory, link))
-        yield* reach(env)
         vendor.turn = say("Done")
         const first = yield* call(env, { root: root.directory })
         const sessionID = sessionOf(first)!
@@ -1251,26 +1134,16 @@ describe("subagent drivers", () => {
         expect((yield* call(env, { sessionID, root: link, message: "Continue" }))._tag).toBe("Success")
         expect((yield* env.sessions.get(sessionID)).location.directory).toBe(AbsolutePath.make(root.directory))
         expect(vendor.runs.map((item) => item.directory)).toEqual([root.directory, root.directory, root.directory])
-
-        yield* configure(env, "build", (agent) => {
-          agent.permissions.push({ action: "subagent_root", resource: root.directory, effect: "deny" })
-        })
-        expect(failure(yield* call(env, { sessionID, message: "Continue" }))).toContain("Subagent root denied")
-        expect(vendor.runs).toHaveLength(3)
       }),
     )
 
-    it.live("a call rejoining a rooted child after a restart asks nothing and runs it at its root", () =>
+    it.live("a call rejoining a rooted child after a restart runs it at its root", () =>
       Effect.gen(function* () {
         const env = yield* setup(ref("claude", "opus"))
         const root = yield* worktree
-        yield* reach(env)
         vendor.turn = say("Done")
         const first = yield* call(env, { root: root.directory })
         const sessionID = sessionOf(first)!
-        yield* configure(env, "build", (agent) => {
-          agent.permissions.push({ action: "subagent_root", resource: "*", effect: "deny" })
-        })
         const rejoined = yield* call(
           env,
           { root: root.directory },
@@ -1287,7 +1160,6 @@ describe("subagent drivers", () => {
       Effect.gen(function* () {
         const env = yield* setup(ref("claude", "opus"))
         const root = yield* worktree
-        yield* reach(env)
         vendor.turn = say("Done")
         yield* configureAt(at(root.directory), "rooted", (agent) => {
           agent.mode = "subagent"
@@ -1296,7 +1168,6 @@ describe("subagent drivers", () => {
         yield* configure(env, "caller-only", (agent) => {
           agent.mode = "subagent"
         })
-        const asked = yield* answering(() => "once")
         expect((yield* call(env, { agent: "rooted", root: root.directory }))._tag).toBe("Success")
         expect(vendor.runs.at(-1)).toMatchObject({
           provider: "codex",
@@ -1310,17 +1181,15 @@ describe("subagent drivers", () => {
         )
         // Refused before any child Session or prompt.
         expect((yield* child(env))?.id).toBe(before)
-        expect(asked).toHaveLength(0)
       }),
     )
 
-    it.live("what the call alone decides is refused before anything is asked", () =>
+    it.live("what the call alone decides is refused before any child exists", () =>
       Effect.gen(function* () {
         // Readiness is probed once per Location, so the vendor is missing from the start.
         vendor.ready.codex = false
         const env = yield* setup(ref("claude", "opus"))
         const root = yield* worktree
-        const asked = yield* answering(() => "once")
         expect(failure(yield* call(env, { driver: "ocpp", harness: "native", root: root.directory }))).toContain(
           'harness "native"',
         )
@@ -1328,35 +1197,7 @@ describe("subagent drivers", () => {
         expect(
           failure(yield* call(env, { driver: "claude", model: "anthropic/opus", root: root.directory })),
         ).toContain("without a provider")
-        expect(asked).toHaveLength(0)
         expect(yield* child(env)).toBeUndefined()
-      }),
-    )
-
-    it.live("a rooted native child's own requests are asked in the child, answerable where it runs", () =>
-      Effect.gen(function* () {
-        const env = yield* setup(ref("claude", "opus"))
-        const root = yield* worktree
-        yield* reach(env)
-        // The child's agent is the root's: it asks before any shell.
-        yield* configureAt(at(root.directory), "general", (agent) => {
-          agent.permissions.push({ action: "shell", resource: "*", effect: "ask" })
-        })
-        vendor.turn = async (options) => {
-          await options.authorize(
-            "workspace",
-            { directory: options.directory, sandbox: "workspace-write" },
-            options.signal,
-          )
-          await say("Done")(options, "")
-        }
-        const asked = yield* answering(() => "once")
-        const source = { messageID: SessionMessage.ID.create(), id: Tool.CallID.make("call_rooted_native") }
-        const result = yield* call(env, { driver: "codex", harness: "native", root: root.directory }, source)
-        expect(result._tag).toBe("Success")
-        const sessionID = sessionOf(result)!
-        const shell = asked.find((request) => request.action === "shell")
-        expect(shell).toMatchObject({ sessionID, answerable: true, source: { type: "tool", ...source } })
       }),
     )
 
@@ -1365,9 +1206,9 @@ describe("subagent drivers", () => {
         const env = yield* setup()
         const root = yield* worktree
         yield* Effect.promise(() => Bun.write(path.join(env.directory.path, "marker.txt"), "parent-marker"))
-        yield* reach(env)
         const result = yield* call(env, {
           root: root.directory,
+          tools: refs("read"),
           outputSchema: { type: "object", properties: { found: { type: "string" } }, required: ["found"] },
         })
         expect(result._tag).toBe("Success")
@@ -1377,27 +1218,6 @@ describe("subagent drivers", () => {
         expect(found).toContain("root-marker")
         expect(found).not.toContain("parent-marker")
         expect(vendor.runs).toHaveLength(0)
-      }),
-    )
-
-    it.live("vendor rules match the child's directory, and the model rule its vendor model", () =>
-      Effect.gen(function* () {
-        const env = yield* setup(ref("claude", "opus"))
-        const root = yield* worktree
-        vendor.turn = say("Done")
-        yield* reach(env, [
-          { action: "claude", resource: "*", effect: "deny" },
-          { action: "claude", resource: root.outer + "/worktrees/*", effect: "allow" },
-          { action: "model", resource: "claude/haiku", effect: "deny" },
-        ])
-        expect((yield* call(env, { root: root.directory }))._tag).toBe("Success")
-        expect(vendor.runs[0].directory).toBe(root.directory)
-        // Without a root the child works in the caller's directory, which no allow rule names.
-        expect(failure(yield* call(env, {}))).toContain(`Claude Code denied in ${env.directory.path}`)
-        expect(failure(yield* call(env, { root: root.directory, model: "haiku" }))).toContain(
-          "Model denied: claude/haiku",
-        )
-        expect(vendor.runs).toHaveLength(1)
       }),
     )
   })

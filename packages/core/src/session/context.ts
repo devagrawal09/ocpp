@@ -20,6 +20,7 @@ import { ReferenceInstructions } from "../reference/instructions.js"
 import { SkillInstructions } from "../skill/instructions.js"
 import { SubagentInstructions } from "../subagent/instructions.js"
 import { Tool } from "../tool.js"
+import { ToolLists } from "../tool/lists.js"
 import { AgentNotFoundError } from "./error.js"
 import { SessionHistory } from "./history.js"
 import { InstructionEntry } from "./instruction-entry.js"
@@ -98,6 +99,7 @@ const layer = Layer.effect(
     const subagentInstructions = yield* SubagentInstructions.Service
     const store = yield* SessionStore.Service
     const registry = yield* Tool.Service
+    const lists = yield* ToolLists.Service
 
     const resolveModel = (session: SessionSchema.Info) => models.resolve(session, catalog.model.available)
 
@@ -139,19 +141,22 @@ const layer = Layer.effect(
       const agent = yield* agents.select(session.agent)
       if (!agent.info) return yield* new AgentNotFoundError({ sessionID: session.id, agent: session.agent ?? agent.id })
       const model = yield* resolveModel(session).pipe(Effect.result)
+      // The catalog is exactly the Session's tool list, and guidance for tools outside it would only mislead.
+      const tools = yield* registry.snapshot(yield* lists.select(session, agent.id), session.id, {
+        agent: agent.id,
+        ...(Result.isSuccess(model) ? { model: model.success.ref } : {}),
+      })
+      yield* lists.report(session.id, tools.notice)
+      const catalog = (tools.codeModeCatalog ?? []).map((entry) => entry.path)
       const loaded = yield* Effect.all(
         {
-          tools: registry.snapshot(agent.info.permissions, session.id, {
-            agent: agent.id,
-            ...(Result.isSuccess(model) ? { model: model.success.ref } : {}),
-          }),
           builtins: builtins.load(sessionID),
           discovery: discovery.load(),
-          skills: skillInstructions.load(agent),
-          subagents: subagentInstructions.load(agent),
+          skills: skillInstructions.load(catalog),
+          subagents: subagentInstructions.load(catalog),
           references: referenceInstructions.load(),
-          mcp: mcpInstructions.load(agent),
-          openapi: openapiInstructions.load(agent),
+          mcp: mcpInstructions.load(catalog),
+          openapi: openapiInstructions.load(catalog, tools.paths),
           entries: entries.load(sessionID),
         },
         { concurrency: "unbounded" },
@@ -162,7 +167,7 @@ const layer = Layer.effect(
         model,
         instructions: Instructions.combine([
           loaded.builtins,
-          CodeModeInstructions.make(loaded.tools.codeModeCatalog),
+          CodeModeInstructions.make(tools.codeModeCatalog),
           loaded.discovery,
           loaded.skills,
           loaded.subagents,
@@ -171,7 +176,7 @@ const layer = Layer.effect(
           loaded.openapi,
           loaded.entries,
         ]),
-        tools: loaded.tools,
+        tools,
       }
     })
 
@@ -218,5 +223,6 @@ export const node = makeLocationNode({
     SkillInstructions.node,
     SubagentInstructions.node,
     Tool.node,
+    ToolLists.node,
   ],
 })

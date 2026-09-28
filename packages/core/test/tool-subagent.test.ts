@@ -17,7 +17,6 @@ import { Catalog } from "@ocpp/core/catalog"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Config } from "@ocpp/core/config"
 import { Location } from "@ocpp/core/location"
-import { LocationMutation } from "@ocpp/core/location-mutation"
 import { Model } from "@ocpp/core/model"
 import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath } from "@ocpp/core/schema"
@@ -36,7 +35,6 @@ import { SessionStore } from "@ocpp/core/session/store"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
-import { Permission } from "@ocpp/core/permission"
 import { SubagentTool } from "@ocpp/core/tool/plugin/subagent"
 import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
 import { ExternalAgentSession } from "@ocpp/core/external-agent/session"
@@ -138,8 +136,6 @@ const subagentPluginSupervisor = makeLocationNode({
     ExternalAgentDrivers.node,
     ExternalAgentSession.node,
     FSUtil.node,
-    LocationMutation.node,
-    Permission.node,
     PluginHooks.node,
     PluginRuntime.node,
     Tool.node,
@@ -228,10 +224,9 @@ const withSubagent = (location: Location.Ref) =>
     ).pipe(Effect.provide(locations.get(location)))
     yield* Agent.Service.use((agents) =>
       agents.transform((draft) => {
-        // The caller identity used by executeTool; subagent permission asserts against it.
+        // The caller identity used by executeTool.
         draft.update(toolIdentity.agent, (agent) => {
           agent.mode = "primary"
-          agent.permissions.push({ action: "*", resource: "*", effect: "allow" })
         })
         draft.update(Agent.ID.make("reviewer"), (agent) => {
           agent.mode = "subagent"
@@ -247,7 +242,7 @@ const withSubagent = (location: Location.Ref) =>
     ).pipe(Effect.provide(locations.get(location)))
   })
 
-// Beside withSubagent's agents: a described subagent, a hidden one, and one the caller's rules deny.
+// Beside withSubagent's agents: a described subagent and a hidden one.
 const withListedSubagents = (location: Location.Ref) =>
   Effect.gen(function* () {
     const locations = yield* LocationServiceMap.Service
@@ -260,17 +255,11 @@ const withListedSubagents = (location: Location.Ref) =>
           agent.mode = "subagent"
           agent.hidden = true
         })
-        draft.update(Agent.ID.make("blocked"), (agent) => {
-          agent.mode = "subagent"
-        })
-        draft.update(toolIdentity.agent, (agent) => {
-          agent.permissions.push({ action: SubagentTool.name, resource: "blocked", effect: "deny" })
-        })
       }),
     ).pipe(Effect.provide(locations.get(location)))
   })
 
-// Primary, hidden, and denied agents are left out.
+// Primary and hidden agents are left out.
 const listedSubagents = [
   "Available subagents:",
   "- fallback: This subagent should only be called when explicitly requested.",
@@ -292,9 +281,6 @@ describe("SubagentTool", () => {
           yield* withListedSubagents(parent.location)
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
-          const caller = yield* Agent.Service.use((agents) => agents.get(toolIdentity.agent)).pipe(
-            Effect.provide(locations.get(parent.location)),
-          )
           const described = [
             SubagentTool.description,
             "",
@@ -304,7 +290,7 @@ describe("SubagentTool", () => {
           const subagentEntry = (snapshot: Tool.Snapshot) =>
             snapshot.codeModeCatalog?.find((tool) => tool.path === SubagentTool.name)?.description
 
-          const snapshot = yield* registry.snapshot(caller?.permissions, parent.id, { agent: toolIdentity.agent })
+          const snapshot = yield* registry.snapshot(undefined, parent.id, { agent: toolIdentity.agent })
           expect(subagentEntry(snapshot)).toBe(described)
           // Without a caller there is nothing to filter for, so the description stays generic.
           expect(subagentEntry(yield* registry.snapshot())).toBe(SubagentTool.description)
@@ -355,7 +341,9 @@ describe("SubagentTool", () => {
           const system = modelRequests[0]?.system.map((part) => part.text).join("\n") ?? ""
           expect(system).toContain(
             [
-              "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent`. Pass `root` to run one in another existing directory, such as a separate git worktree.",
+              "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent` and the child's tools as `tools`.",
+              "An agent is a prompt and model preset; it grants no tools. The child can call exactly the tools you pass: your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles. Without `tools` it has none, only tools.submit_result when you pass an outputSchema.",
+              "Pass `root` to run one in another existing directory, such as a separate git worktree.",
               ...listedSubagents,
             ].join("\n"),
           )

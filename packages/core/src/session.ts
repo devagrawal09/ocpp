@@ -211,6 +211,11 @@ export interface Interface {
     follow?: boolean
   }) => Stream.Stream<SessionEvent.DurableEvent | EventLog.Synced, NotFoundError>
   readonly switchAgent: (input: { sessionID: SessionSchema.ID; agent: Agent.ID }) => Effect.Effect<void, NotFoundError>
+  /** Sets the Code Mode paths a subagent may call. */
+  readonly selectTools: (input: {
+    sessionID: SessionSchema.ID
+    tools: ReadonlyArray<string>
+  }) => Effect.Effect<void, NotFoundError>
   readonly switchModel: (input: { sessionID: SessionSchema.ID; model: Model.Ref }) => Effect.Effect<void, NotFoundError>
   readonly rename: (input: { sessionID: SessionSchema.ID; title: string }) => Effect.Effect<void, NotFoundError>
   readonly move: (input: {
@@ -606,6 +611,7 @@ const layer = Layer.effect(
             .pipe(Effect.ignore, Effect.forkIn(scope, { startImmediately: true }), Effect.asVoid)
       }),
       switchAgent: (input) => sessions.forSession(input.sessionID).switchAgent(input),
+      selectTools: (input) => sessions.forSession(input.sessionID).selectTools(input),
       switchModel: (input) => sessions.forSession(input.sessionID).switchModel(input),
       rename: (input) => sessions.forSession(input.sessionID).rename(input),
       move: Effect.fn("Session.move")(function* (input) {

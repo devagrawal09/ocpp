@@ -16,6 +16,7 @@ import { SessionMessage } from "../session/message.js"
 import { SessionStore } from "../session/store.js"
 import { McpTool } from "../tool/mcp.js"
 import { Tool } from "../tool.js"
+import { ToolLists } from "../tool/lists.js"
 import { CodeModeCommand } from "./command.js"
 import { CodeModeEvent } from "./event.js"
 import { CodeModeHandler } from "./handler.js"
@@ -39,6 +40,7 @@ const layer = Layer.effect(
     const mcpTools = yield* McpTool.Service
     const openapi = yield* OpenApi.Service
     const registry = yield* Tool.Service
+    const lists = yield* ToolLists.Service
     const sessions = yield* SessionStore.Service
 
     const run: Interface["run"] = Effect.fn("CodeModeInvocation.run")(function* (input) {
@@ -51,7 +53,8 @@ const layer = Layer.effect(
       // Tools from MCP servers and OpenAPI documents load in the background; a run may call them.
       yield* mcpTools.flush
       yield* openapi.flush
-      const snapshot = yield* registry.snapshot(agent.info.permissions, input.sessionID)
+      // A command or event runs with its Session's tool list for the Session's current agent.
+      const snapshot = yield* registry.snapshot(yield* lists.select(session, agent.id), input.sessionID)
       const eventID = Event.ID.create()
       const messageID = SessionMessage.ID.fromEvent(eventID)
       const code = SessionMessage.invocationCode(input.handler, input.input)
@@ -138,5 +141,6 @@ export const node = makeLocationNode({
     OpenApi.node,
     SessionStore.node,
     Tool.node,
+    ToolLists.node,
   ],
 })

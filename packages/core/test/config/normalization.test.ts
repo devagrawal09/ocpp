@@ -217,48 +217,49 @@ describe("ConfigNormalize", () => {
     ])
   })
 
-  test("preserves permission source order and appends native rules", () => {
-    expect(
-      normalized({
-        tools: { bash: true, write: false },
-        permission: { read: "allow", custom: { first: "deny", second: "ask" }, task: "allow" },
-        permissions: [{ action: "native", resource: "*", effect: "deny" }],
-      }).encoded.permissions,
-    ).toEqual([
-      { action: "shell", resource: "*", effect: "allow" },
-      { action: "edit", resource: "*", effect: "deny" },
-      { action: "read", resource: "*", effect: "allow" },
-      { action: "custom", resource: "first", effect: "deny" },
-      { action: "custom", resource: "second", effect: "ask" },
-      { action: "subagent", resource: "*", effect: "allow" },
-      { action: "native", resource: "*", effect: "deny" },
-    ])
-  })
-
-  test("redacts permission resource keys from invalid diagnostics", () => {
-    const result = normalized({
-      permission: { bash: { "curl -H Authorization:Bearer TOPSECRET *": "bogus" } },
-    })
-    expect(result.diagnostics).toEqual([
-      {
-        kind: "invalid",
-        path: ["permission", "bash", "0"],
-        message: "skipped malformed recognized value",
+  test("loads removed permission and provider settings, ignored with a diagnostic", () => {
+    const input = {
+      tools: { bash: true, write: false },
+      permission: { read: "allow", bash: { "curl -H Authorization:Bearer TOPSECRET *": "deny" } },
+      permissions: [{ action: "native", resource: "*", effect: "deny" }],
+      enabled_providers: ["anthropic"],
+      disabled_providers: ["openai"],
+      agent: { reviewer: { prompt: "Review.", permission: { edit: "deny" }, tools: { write: false } } },
+      agents: { planner: { system: "Plan.", permissions: [{ action: "edit", resource: "*", effect: "deny" }] } },
+      experimental: {
+        subagent_depth: 2,
+        portable_shell_scanner: true,
+        policies: [{ action: "provider.use", resource: "custom", effect: "allow" }],
       },
+    }
+    const result = normalized(input)
+    expect(result.encoded).not.toHaveProperty("permissions")
+    expect(result.encoded.experimental).toEqual({ subagent_depth: 2 })
+    expect(decoded(input).agents).toEqual({ reviewer: { system: "Review." }, planner: { system: "Plan." } })
+    const tools = "ignored removed permission setting; init.ts lists each agent's tools"
+    const providers = "ignored removed provider setting; every configured or logged-in provider is available"
+    expect(result.diagnostics.map((item) => [item.path.join("."), item.message])).toEqual([
+      ["permission", tools],
+      ["permissions", tools],
+      ["tools", tools],
+      ["enabled_providers", providers],
+      ["disabled_providers", providers],
+      ["agent.reviewer.permission", tools],
+      ["agent.reviewer.tools", tools],
+      ["agents.planner.permissions", tools],
+      ["experimental.policies", providers],
+      ["experimental.portable_shell_scanner", tools],
     ])
+    expect(result.diagnostics.every((item) => item.kind === "unsupported")).toBe(true)
     expect(JSON.stringify(result.diagnostics)).not.toContain("TOPSECRET")
   })
 
-  test("recovers list items for skills, plugins, instructions, and permissions", () => {
+  test("recovers list items for skills, plugins, and instructions", () => {
     const result = normalized({
       skills: { paths: ["./skills", 1], urls: [false, "https://example.com/skills"] },
       plugin: ["legacy", ["tuple", {}], [1, {}]],
       plugins: ["native", { package: "object" }, { package: 1 }],
       instructions: ["one", 2, "three"],
-      permissions: [
-        { action: "read", resource: "*", effect: "allow" },
-        { action: "read", resource: "*", effect: "invalid" },
-      ],
     })
     expect(result.encoded.skills).toEqual(["./skills", "https://example.com/skills"])
     expect(result.encoded.plugins).toEqual([
@@ -268,8 +269,7 @@ describe("ConfigNormalize", () => {
       { package: "object" },
     ])
     expect(result.encoded.instructions).toEqual(["one", "three"])
-    expect(result.encoded.permissions).toEqual([{ action: "read", resource: "*", effect: "allow" }])
-    expect(result.diagnostics.filter((item) => item.kind === "invalid")).toHaveLength(6)
+    expect(result.diagnostics.filter((item) => item.kind === "invalid")).toHaveLength(5)
   })
 
   test("omits malformed collection roots instead of synthesizing empty values", () => {
@@ -279,7 +279,6 @@ describe("ConfigNormalize", () => {
       references: false,
       agents: 1,
       plugins: {},
-      permissions: {},
       instructions: {},
     })
     expect(result.encoded).toEqual({})
@@ -288,7 +287,6 @@ describe("ConfigNormalize", () => {
       ["commands"],
       ["agents"],
       ["providers"],
-      ["permissions"],
       ["plugins"],
       ["instructions"],
     ])
@@ -397,20 +395,6 @@ describe("ConfigNormalize", () => {
     ])
   })
 
-  test("distinguishes empty, mixed, and wholly malformed enabled provider lists", () => {
-    expect(normalized({ enabled_providers: [] }).encoded.experimental).toEqual({
-      policies: [{ action: "provider.use", resource: "*", effect: "deny" }],
-    })
-    expect(normalized({ enabled_providers: [1, "anthropic", false] }).encoded.experimental).toEqual({
-      policies: [
-        { action: "provider.use", resource: "*", effect: "deny" },
-        { action: "provider.use", resource: "anthropic", effect: "allow" },
-      ],
-    })
-    expect(normalized({ enabled_providers: [1, false] }).encoded.experimental).toBeUndefined()
-    expect(normalized({ enabled_providers: "anthropic" }).encoded.experimental).toBeUndefined()
-  })
-
   test("preserves the subagent model allowlist", () => {
     expect(
       normalized({
@@ -418,29 +402,6 @@ describe("ConfigNormalize", () => {
       }).encoded.subagent,
     ).toEqual({ models: ["opencode/gpt-5.6-luna", "opencode/gpt-5.6-sol"] })
     expect(normalized({ subagent: { models: ["opencode/gpt-5.6-luna#high"] } }).encoded.subagent).toBeUndefined()
-  })
-
-  test("appends native policies after migrated provider policies", () => {
-    expect(
-      normalized({
-        enabled_providers: ["anthropic"],
-        disabled_providers: ["openai"],
-        experimental: {
-          portable_shell_scanner: true,
-          subagent_depth: 0,
-          policies: [{ action: "provider.use", resource: "custom", effect: "allow" }],
-        },
-      }).encoded.experimental,
-    ).toEqual({
-      portable_shell_scanner: true,
-      subagent_depth: 0,
-      policies: [
-        { action: "provider.use", resource: "*", effect: "deny" },
-        { action: "provider.use", resource: "anthropic", effect: "allow" },
-        { action: "provider.use", resource: "openai", effect: "deny" },
-        { action: "provider.use", resource: "custom", effect: "allow" },
-      ],
-    })
   })
 
   test("reports unsupported legacy settings without including their values", () => {

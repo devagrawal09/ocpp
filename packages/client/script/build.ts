@@ -15,8 +15,6 @@ import { Integration } from "@ocpp/schema/integration"
 import { Location } from "@ocpp/schema/location"
 import { Mcp } from "@ocpp/schema/mcp"
 import { Model } from "@ocpp/schema/model"
-import { Permission } from "@ocpp/schema/permission"
-import { PermissionSaved } from "@ocpp/schema/permission-saved"
 import { Plugin } from "@ocpp/schema/plugin"
 import { Project } from "@ocpp/schema/project"
 import { Worktree } from "@ocpp/schema/worktree"
@@ -56,8 +54,6 @@ const effectTypeReferences = [
   ...namespaceTypes("Location", "@ocpp/schema/location", Location),
   ...namespaceTypes("Mcp", "@ocpp/schema/mcp", Mcp),
   ...namespaceTypes("Model", "@ocpp/schema/model", Model),
-  ...namespaceTypes("Permission", "@ocpp/schema/permission", Permission),
-  ...namespaceTypes("PermissionSaved", "@ocpp/schema/permission-saved", PermissionSaved),
   ...namespaceTypes("Plugin", "@ocpp/schema/plugin", Plugin),
   ...namespaceTypes("Project", "@ocpp/schema/project", Project),
   ...namespaceTypes("Worktree", "@ocpp/schema/worktree", Worktree),

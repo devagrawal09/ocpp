@@ -18,38 +18,43 @@ const context = {
 }
 
 const createCodeMode = (tools: ReadonlyMap<string, Info>) =>
-  CodeModeTool.create(tools, (_, tool, input, context) => execute(tool, input, context), {
-    bus: {
-      publish: () => Effect.die("Unavailable in catalog-only tests"),
-      listen: () => Effect.die("Unavailable in catalog-only tests"),
+  CodeModeTool.create(
+    tools,
+    (_, tool, input, context) => execute(tool, input, context),
+    {
+      bus: {
+        publish: () => Effect.die("Unavailable in catalog-only tests"),
+        listen: () => Effect.die("Unavailable in catalog-only tests"),
+      },
+      jobs: {
+        startLimited: () => Effect.die("Unavailable in catalog-only tests"),
+        active: () => Effect.die("Unavailable in catalog-only tests"),
+        wait: () => Effect.die("Unavailable in catalog-only tests"),
+        background: () => Effect.die("Unavailable in catalog-only tests"),
+        cancel: () => Effect.die("Unavailable in catalog-only tests"),
+        markBackgroundTerminal: () => Effect.die("Unavailable in catalog-only tests"),
+        completeBackground: () => Effect.die("Unavailable in catalog-only tests"),
+      },
+      sessions: {
+        message: () => Effect.die("Unavailable in catalog-only tests"),
+        synthetic: () => Effect.die("Unavailable in catalog-only tests"),
+      },
+      store: {
+        admit: () => Effect.die("Unavailable in catalog-only tests"),
+        running: () => Effect.die("Unavailable in catalog-only tests"),
+        scheduleCall: () => Effect.die("Unavailable in catalog-only tests"),
+        progressCall: () => Effect.die("Unavailable in catalog-only tests"),
+        settleCall: () => Effect.die("Unavailable in catalog-only tests"),
+        commit: () => Effect.die("Unavailable in catalog-only tests"),
+        fail: () => Effect.die("Unavailable in catalog-only tests"),
+        discard: () => Effect.die("Unavailable in catalog-only tests"),
+        indeterminate: () => Effect.die("Unavailable in catalog-only tests"),
+      },
+      image: { normalize: () => Effect.die("No tool returns media in these tests") },
+      scope: Effect.runSync(Scope.make()),
     },
-    jobs: {
-      startLimited: () => Effect.die("Unavailable in catalog-only tests"),
-      active: () => Effect.die("Unavailable in catalog-only tests"),
-      wait: () => Effect.die("Unavailable in catalog-only tests"),
-      background: () => Effect.die("Unavailable in catalog-only tests"),
-      cancel: () => Effect.die("Unavailable in catalog-only tests"),
-      markBackgroundTerminal: () => Effect.die("Unavailable in catalog-only tests"),
-      completeBackground: () => Effect.die("Unavailable in catalog-only tests"),
-    },
-    sessions: {
-      message: () => Effect.die("Unavailable in catalog-only tests"),
-      synthetic: () => Effect.die("Unavailable in catalog-only tests"),
-    },
-    store: {
-      admit: () => Effect.die("Unavailable in catalog-only tests"),
-      running: () => Effect.die("Unavailable in catalog-only tests"),
-      scheduleCall: () => Effect.die("Unavailable in catalog-only tests"),
-      progressCall: () => Effect.die("Unavailable in catalog-only tests"),
-      settleCall: () => Effect.die("Unavailable in catalog-only tests"),
-      commit: () => Effect.die("Unavailable in catalog-only tests"),
-      fail: () => Effect.die("Unavailable in catalog-only tests"),
-      discard: () => Effect.die("Unavailable in catalog-only tests"),
-      indeterminate: () => Effect.die("Unavailable in catalog-only tests"),
-    },
-    image: { normalize: () => Effect.die("No tool returns media in these tests") },
-    scope: Effect.runSync(Scope.make()),
-  })
+    { selection: {}, lent: new Set() },
+  )
 
 test("execute describes invariant Code Mode behavior", () => {
   expect(createCodeMode(new Map()).description).toBe(
@@ -88,47 +93,52 @@ test("a compile failure is refused with its diagnostic kind, position, and excer
 
 test("a refused execution names the running executions instead of only the cap", async () => {
   const discarded: string[] = []
-  const codemode = CodeModeTool.create(new Map(), () => Effect.die("No tools are exposed"), {
-    bus: {
-      publish: () => Effect.succeed(undefined as never),
-      listen: () => Effect.succeed(Effect.void),
+  const codemode = CodeModeTool.create(
+    new Map(),
+    () => Effect.die("No tools are exposed"),
+    {
+      bus: {
+        publish: () => Effect.succeed(undefined as never),
+        listen: () => Effect.succeed(Effect.void),
+      },
+      jobs: {
+        // The Session already holds every slot, so admission is refused.
+        startLimited: () => Effect.succeed(undefined),
+        active: (input) =>
+          Effect.succeed(
+            ["exe_first", "exe_second"].map((id) => ({
+              id,
+              type: input.type ?? "codemode",
+              status: "running" as const,
+              started_at: 0,
+            })),
+          ),
+        wait: () => Effect.die("Unreached: the execution was refused"),
+        background: () => Effect.die("Unreached: the execution was refused"),
+        cancel: () => Effect.succeed(undefined),
+        markBackgroundTerminal: () => Effect.void,
+        completeBackground: () => Effect.void,
+      },
+      sessions: {
+        message: () => Effect.succeed(undefined),
+        synthetic: () => Effect.die("Unreached: the execution was refused"),
+      },
+      store: {
+        admit: (input) => Effect.succeed({ ok: true, execution: { ...input, bindings: {} } }),
+        running: () => Effect.void,
+        scheduleCall: () => Effect.void,
+        progressCall: () => Effect.void,
+        settleCall: () => Effect.void,
+        commit: () => Effect.die("Unreached: the execution was refused"),
+        fail: () => Effect.void,
+        discard: (id) => Effect.sync(() => void discarded.push(id)),
+        indeterminate: () => Effect.void,
+      },
+      image: { normalize: () => Effect.die("No tool returns media in these tests") },
+      scope: Effect.runSync(Scope.make()),
     },
-    jobs: {
-      // The Session already holds every slot, so admission is refused.
-      startLimited: () => Effect.succeed(undefined),
-      active: (input) =>
-        Effect.succeed(
-          ["exe_first", "exe_second"].map((id) => ({
-            id,
-            type: input.type ?? "codemode",
-            status: "running" as const,
-            started_at: 0,
-          })),
-        ),
-      wait: () => Effect.die("Unreached: the execution was refused"),
-      background: () => Effect.die("Unreached: the execution was refused"),
-      cancel: () => Effect.succeed(undefined),
-      markBackgroundTerminal: () => Effect.void,
-      completeBackground: () => Effect.void,
-    },
-    sessions: {
-      message: () => Effect.succeed(undefined),
-      synthetic: () => Effect.die("Unreached: the execution was refused"),
-    },
-    store: {
-      admit: (input) => Effect.succeed({ ok: true, execution: { ...input, bindings: {} } }),
-      running: () => Effect.void,
-      scheduleCall: () => Effect.void,
-      progressCall: () => Effect.void,
-      settleCall: () => Effect.void,
-      commit: () => Effect.die("Unreached: the execution was refused"),
-      fail: () => Effect.void,
-      discard: (id) => Effect.sync(() => void discarded.push(id)),
-      indeterminate: () => Effect.void,
-    },
-    image: { normalize: () => Effect.die("No tool returns media in these tests") },
-    scope: Effect.runSync(Scope.make()),
-  })
+    { selection: {}, lent: new Set() },
+  )
 
   const error = await Effect.runPromise(codemode.execute({ code: "return 1" }, context).pipe(Effect.flip))
   expect(error).toBeInstanceOf(Tool.Error)
@@ -150,55 +160,60 @@ test("a failed execution's completion carries a stable failure kind in its metad
   const delivered: unknown[] = []
   let finish: () => void = () => {}
   const finished = new Promise<void>((resolve) => (finish = resolve))
-  const codemode = CodeModeTool.create(new Map(), () => Effect.die("No tools are exposed"), {
-    bus: {
-      publish: () => Effect.succeed(undefined as never),
-      listen: () => Effect.succeed(Effect.void),
+  const codemode = CodeModeTool.create(
+    new Map(),
+    () => Effect.die("No tools are exposed"),
+    {
+      bus: {
+        publish: () => Effect.succeed(undefined as never),
+        listen: () => Effect.succeed(Effect.void),
+      },
+      jobs: {
+        startLimited: (input) =>
+          Effect.succeed({ id: input.id ?? "exe", type: "codemode", status: "running", started_at: 0 }),
+        active: () => Effect.succeed([]),
+        // The job settled as an error before the program ran, as a restart or cancellation would.
+        wait: () =>
+          Effect.succeed({
+            info: {
+              id: "exe",
+              type: "codemode",
+              status: "error",
+              started_at: 0,
+              notificationID,
+              error: "Execution failed",
+            },
+            timedOut: false,
+          }),
+        background: () => Effect.succeed(undefined),
+        cancel: () => Effect.succeed(undefined),
+        markBackgroundTerminal: () => Effect.void,
+        completeBackground: () => Effect.sync(finish),
+      },
+      sessions: {
+        message: () => Effect.succeed(undefined),
+        synthetic: (input) =>
+          Effect.sync(() => {
+            delivered.push(input.metadata)
+            return { id: notificationID } as never
+          }),
+      },
+      store: {
+        admit: (input) => Effect.succeed({ ok: true, execution: { ...input, bindings: {} } }),
+        running: () => Effect.void,
+        scheduleCall: () => Effect.void,
+        progressCall: () => Effect.void,
+        settleCall: () => Effect.void,
+        commit: () => Effect.die("Unreached: the job never runs the program here"),
+        fail: () => Effect.void,
+        discard: () => Effect.void,
+        indeterminate: () => Effect.void,
+      },
+      image: { normalize: () => Effect.die("No tool returns media in these tests") },
+      scope: Effect.runSync(Scope.make()),
     },
-    jobs: {
-      startLimited: (input) =>
-        Effect.succeed({ id: input.id ?? "exe", type: "codemode", status: "running", started_at: 0 }),
-      active: () => Effect.succeed([]),
-      // The job settled as an error before the program ran, as a restart or cancellation would.
-      wait: () =>
-        Effect.succeed({
-          info: {
-            id: "exe",
-            type: "codemode",
-            status: "error",
-            started_at: 0,
-            notificationID,
-            error: "Execution failed",
-          },
-          timedOut: false,
-        }),
-      background: () => Effect.succeed(undefined),
-      cancel: () => Effect.succeed(undefined),
-      markBackgroundTerminal: () => Effect.void,
-      completeBackground: () => Effect.sync(finish),
-    },
-    sessions: {
-      message: () => Effect.succeed(undefined),
-      synthetic: (input) =>
-        Effect.sync(() => {
-          delivered.push(input.metadata)
-          return { id: notificationID } as never
-        }),
-    },
-    store: {
-      admit: (input) => Effect.succeed({ ok: true, execution: { ...input, bindings: {} } }),
-      running: () => Effect.void,
-      scheduleCall: () => Effect.void,
-      progressCall: () => Effect.void,
-      settleCall: () => Effect.void,
-      commit: () => Effect.die("Unreached: the job never runs the program here"),
-      fail: () => Effect.void,
-      discard: () => Effect.void,
-      indeterminate: () => Effect.void,
-    },
-    image: { normalize: () => Effect.die("No tool returns media in these tests") },
-    scope: Effect.runSync(Scope.make()),
-  })
+    { selection: {}, lent: new Set() },
+  )
 
   await Effect.runPromise(codemode.execute({ code: "const saved = 1" }, context))
   await finished
@@ -281,48 +296,53 @@ test("a Session deleted mid-execution still finishes the background notification
   const completed: string[] = []
   let finish: () => void = () => {}
   const finished = new Promise<void>((resolve) => (finish = resolve))
-  const codemode = CodeModeTool.create(new Map(), () => Effect.die("No tools are exposed"), {
-    bus: {
-      publish: () => Effect.succeed(undefined as never),
-      listen: () => Effect.succeed(Effect.void),
+  const codemode = CodeModeTool.create(
+    new Map(),
+    () => Effect.die("No tools are exposed"),
+    {
+      bus: {
+        publish: () => Effect.succeed(undefined as never),
+        listen: () => Effect.succeed(Effect.void),
+      },
+      jobs: {
+        startLimited: (input) =>
+          Effect.succeed({ id: input.id ?? "exe", type: "codemode", status: "running", started_at: 0 }),
+        active: () => Effect.succeed([]),
+        wait: () =>
+          Effect.succeed({
+            info: { id: "exe", type: "codemode", status: "completed", started_at: 0, notificationID },
+            timedOut: false,
+          }),
+        background: () => Effect.succeed(undefined),
+        cancel: () => Effect.succeed(undefined),
+        markBackgroundTerminal: () => Effect.void,
+        completeBackground: (id) =>
+          Effect.sync(() => {
+            completed.push(id)
+            finish()
+          }),
+      },
+      sessions: {
+        message: () => Effect.succeed(undefined),
+        // The Session was deleted while the execution ran.
+        synthetic: () => Effect.fail(new NotFoundError({ sessionID: context.sessionID })),
+      },
+      store: {
+        admit: (input) => Effect.succeed({ ok: true, execution: { ...input, bindings: {} } }),
+        running: () => Effect.void,
+        scheduleCall: () => Effect.void,
+        progressCall: () => Effect.void,
+        settleCall: () => Effect.void,
+        commit: () => Effect.die("Unreached: the job never runs the program here"),
+        fail: () => Effect.void,
+        discard: () => Effect.void,
+        indeterminate: () => Effect.void,
+      },
+      image: { normalize: () => Effect.die("No tool returns media in these tests") },
+      scope: Effect.runSync(Scope.make()),
     },
-    jobs: {
-      startLimited: (input) =>
-        Effect.succeed({ id: input.id ?? "exe", type: "codemode", status: "running", started_at: 0 }),
-      active: () => Effect.succeed([]),
-      wait: () =>
-        Effect.succeed({
-          info: { id: "exe", type: "codemode", status: "completed", started_at: 0, notificationID },
-          timedOut: false,
-        }),
-      background: () => Effect.succeed(undefined),
-      cancel: () => Effect.succeed(undefined),
-      markBackgroundTerminal: () => Effect.void,
-      completeBackground: (id) =>
-        Effect.sync(() => {
-          completed.push(id)
-          finish()
-        }),
-    },
-    sessions: {
-      message: () => Effect.succeed(undefined),
-      // The Session was deleted while the execution ran.
-      synthetic: () => Effect.fail(new NotFoundError({ sessionID: context.sessionID })),
-    },
-    store: {
-      admit: (input) => Effect.succeed({ ok: true, execution: { ...input, bindings: {} } }),
-      running: () => Effect.void,
-      scheduleCall: () => Effect.void,
-      progressCall: () => Effect.void,
-      settleCall: () => Effect.void,
-      commit: () => Effect.die("Unreached: the job never runs the program here"),
-      fail: () => Effect.void,
-      discard: () => Effect.void,
-      indeterminate: () => Effect.void,
-    },
-    image: { normalize: () => Effect.die("No tool returns media in these tests") },
-    scope: Effect.runSync(Scope.make()),
-  })
+    { selection: {}, lent: new Set() },
+  )
 
   const result = await Effect.runPromise(codemode.execute({ code: "const saved = 1" }, context))
   await finished

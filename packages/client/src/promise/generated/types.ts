@@ -8,8 +8,6 @@ export type ProviderSettings = { [x: string]: any }
 
 export type AgentColor = string
 
-export type PermissionEffect = "allow" | "deny" | "ask"
-
 export type PluginSource =
   | { type: "builtin" }
   | { type: "package"; package: string }
@@ -336,10 +334,6 @@ export type FormMetadata = { [x: string]: JsonValue }
 
 export type FormValue = string | number | boolean | Array<string>
 
-export type PermissionSource = { type: "tool"; messageID: string; id: string }
-
-export type PermissionSavedInfo = { id: string; projectID: string; action: string; resource: string }
-
 export type FileSystemEntry = { path: string; type: "file" | "directory" }
 
 export type CommandInfo = { name: string; description?: string }
@@ -353,8 +347,6 @@ export type SkillInfo = {
   location: string
   content: string
 }
-
-export type PermissionReply = "once" | "always" | "reject"
 
 export type Pty = {
   id: string
@@ -460,8 +452,6 @@ export type ProviderRequest = {
   headers: { [x: string]: string }
   body: { [x: string]: any }
 }
-
-export type PermissionRule = { action: string; resource: string; effect: PermissionEffect }
 
 export type PluginInfo =
   | { id: string; source: PluginSource; status: "active" }
@@ -597,6 +587,16 @@ export type SessionModelSelected = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; model: ModelRef; previous?: ModelRef }
+}
+
+export type SessionToolsSelected = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.tools.selected"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; tools: Array<string> }
 }
 
 export type SessionMoved = {
@@ -1492,44 +1492,6 @@ export type ProjectUpdated = {
 
 export type FormAnswer = { [x: string]: FormValue }
 
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  action: string
-  resources: Array<string>
-  save?: Array<string>
-  metadata?: { [x: string]: JsonValue }
-  source?: PermissionSource
-  message?: string
-}
-
-export type PermissionAsked = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "permission.asked"
-  location?: LocationRef
-  data: {
-    id: string
-    sessionID: string
-    action: string
-    resources: Array<string>
-    save?: Array<string>
-    metadata?: { [x: string]: any }
-    source?: PermissionSource
-    message?: string
-  }
-}
-
-export type PermissionReplied = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "permission.replied"
-  location?: LocationRef
-  data: { sessionID: string; requestID: string; reply: PermissionReply }
-}
-
 export type PtyCreated = {
   id: string
   created: number
@@ -1644,7 +1606,18 @@ export type WorktreeList = Array<WorktreeDirectory>
 
 export type VcsInfo = { branch: VcsBranch }
 
-export type PermissionRuleset = Array<PermissionRule>
+export type AgentInfo = {
+  id: string
+  name: string
+  model?: ModelRef
+  request: ProviderRequest
+  system?: string
+  description?: string
+  mode: "subagent" | "primary" | "all"
+  hidden: boolean
+  color?: AgentColor
+  steps?: number
+}
 
 export type SessionInboxMove = {
   id: string
@@ -1662,6 +1635,7 @@ export type SessionInfo = {
   projectID: string
   agent?: string
   model?: ModelRef
+  tools?: Array<string>
   cost: MoneyUSD
   tokens: TokenUsageInfo
   outcome?: "succeeded" | "failed" | "interrupted"
@@ -1839,75 +1813,6 @@ export type SessionMessageToolStateError1 = {
   metadata?: { [x: string]: JsonValue }
 }
 
-export type ModelInfo = {
-  id: string
-  modelID: string
-  providerID: string
-  family?: string
-  name: string
-  compatibility?: ModelCompatibility
-  package?: string
-  settings?: { [x: string]: any }
-  headers?: { [x: string]: string }
-  body?: { [x: string]: any }
-  capabilities: ModelCapabilities
-  variants: Array<ModelVariant>
-  time: { released: number }
-  cost: Array<ModelCost>
-  status: "alpha" | "beta" | "deprecated" | "active"
-  enabled: boolean
-  limit: { context: number; input?: number; output: number }
-}
-
-export type FormField =
-  | FormStringField
-  | FormNumberField
-  | FormIntegerField
-  | FormBooleanField
-  | FormMultiselectField
-  | FormExternalField
-
-export type FormState = { status: "pending" } | { status: "answered"; answer: FormAnswer } | { status: "cancelled" }
-
-export type FormReplied = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "form.replied"
-  location?: LocationRef
-  data: { id: string; sessionID: string; answer: FormAnswer }
-}
-
-export type FormField1 =
-  | FormStringField1
-  | FormNumberField1
-  | FormIntegerField1
-  | FormBooleanField1
-  | FormMultiselectField1
-  | FormExternalField
-
-export type ReferenceInfo = {
-  name: string
-  path: string
-  description?: string
-  hidden?: boolean
-  source: ReferenceSource
-}
-
-export type AgentInfo = {
-  id: string
-  name: string
-  model?: ModelRef
-  request: ProviderRequest
-  system?: string
-  description?: string
-  mode: "subagent" | "primary" | "all"
-  hidden: boolean
-  color?: AgentColor
-  steps?: number
-  permissions: PermissionRuleset
-}
-
 export type ConfigEntry =
   | {
       type: "document"
@@ -1921,7 +1826,6 @@ export type ConfigEntry =
         share?: "manual" | "auto" | "disabled"
         enterprise?: { url?: string }
         username?: string
-        permissions?: PermissionRuleset
         agents?: {
           [x: string]: {
             model?: string | { providerID: string; model: string; variant?: string }
@@ -1933,7 +1837,6 @@ export type ConfigEntry =
             color?: string
             steps?: number
             disabled?: boolean
-            permissions?: PermissionRuleset
           }
         }
         snapshots?: boolean
@@ -2069,16 +1972,67 @@ export type ConfigEntry =
             }
           }
         }
-        experimental?: {
-          portable_shell_scanner?: boolean
-          subagent_depth?: number
-          policies?: Array<{ action: "provider.use"; resource: string; effect: "allow" | "deny" }>
-        }
+        experimental?: { subagent_depth?: number }
       }
     }
   | { type: "directory"; path: string }
   | { type: "agents"; path: string }
   | { type: "claude"; path: string }
+
+export type ModelInfo = {
+  id: string
+  modelID: string
+  providerID: string
+  family?: string
+  name: string
+  compatibility?: ModelCompatibility
+  package?: string
+  settings?: { [x: string]: any }
+  headers?: { [x: string]: string }
+  body?: { [x: string]: any }
+  capabilities: ModelCapabilities
+  variants: Array<ModelVariant>
+  time: { released: number }
+  cost: Array<ModelCost>
+  status: "alpha" | "beta" | "deprecated" | "active"
+  enabled: boolean
+  limit: { context: number; input?: number; output: number }
+}
+
+export type FormField =
+  | FormStringField
+  | FormNumberField
+  | FormIntegerField
+  | FormBooleanField
+  | FormMultiselectField
+  | FormExternalField
+
+export type FormState = { status: "pending" } | { status: "answered"; answer: FormAnswer } | { status: "cancelled" }
+
+export type FormReplied = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "form.replied"
+  location?: LocationRef
+  data: { id: string; sessionID: string; answer: FormAnswer }
+}
+
+export type FormField1 =
+  | FormStringField1
+  | FormNumberField1
+  | FormIntegerField1
+  | FormBooleanField1
+  | FormMultiselectField1
+  | FormExternalField
+
+export type ReferenceInfo = {
+  name: string
+  path: string
+  description?: string
+  hidden?: boolean
+  source: ReferenceSource
+}
 
 export type SessionsResponse = { data: Array<SessionInfo>; cursor: { previous?: string | null; next?: string | null } }
 
@@ -2297,6 +2251,7 @@ export type SessionEventDurable =
   | SessionCreated
   | SessionAgentSelected
   | SessionModelSelected
+  | SessionToolsSelected
   | SessionMoved
   | SessionRenamed
   | SessionViewed
@@ -2360,6 +2315,7 @@ export type V2Event =
   | SessionCreated
   | SessionAgentSelected
   | SessionModelSelected
+  | SessionToolsSelected
   | SessionMoved
   | SessionRenamed
   | SessionViewed
@@ -2412,8 +2368,6 @@ export type V2Event =
   | SessionMessageContentUpdated
   | FilesystemChanged
   | ReferenceUpdated
-  | PermissionAsked
-  | PermissionReplied
   | PluginAdded
   | PluginUpdated
   | ProjectUpdated
@@ -2608,14 +2562,6 @@ export type FormInvalidAnswerError = {
 }
 export const isFormInvalidAnswerError = (value: unknown): value is FormInvalidAnswerError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "FormInvalidAnswerError"
-
-export type PermissionNotFoundError = {
-  readonly _tag: "PermissionNotFoundError"
-  readonly requestID: string
-  readonly message: string
-}
-export const isPermissionNotFoundError = (value: unknown): value is PermissionNotFoundError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "PermissionNotFoundError"
 
 export type PtyNotFoundError = { readonly _tag: "PtyNotFoundError"; readonly ptyID: string; readonly message: string }
 export const isPtyNotFoundError = (value: unknown): value is PtyNotFoundError =>
@@ -2897,6 +2843,7 @@ export type SessionImportInput = {
       readonly projectID: string
       readonly agent?: string
       readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+      readonly tools?: ReadonlyArray<string>
       readonly cost: number
       readonly tokens: {
         readonly input: number
@@ -3230,6 +3177,7 @@ export type SessionImportInput = {
       readonly projectID: string
       readonly agent?: string
       readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+      readonly tools?: ReadonlyArray<string>
       readonly cost: number
       readonly tokens: {
         readonly input: number
@@ -3563,6 +3511,7 @@ export type SessionImportInput = {
       readonly projectID: string
       readonly agent?: string
       readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+      readonly tools?: ReadonlyArray<string>
       readonly cost: number
       readonly tokens: {
         readonly input: number
@@ -5838,114 +5787,6 @@ export type FormCancelInput = {
 }
 
 export type FormCancelOutput = void
-
-export type PermissionRequestListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
-}
-
-export type PermissionRequestListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<PermissionRequest>
-}
-
-export type PermissionSavedListInput = { readonly projectID?: { readonly projectID?: string | undefined }["projectID"] }
-
-export type PermissionSavedListOutput = { data: Array<PermissionSavedInfo> }["data"]
-
-export type PermissionSavedRemoveInput = { readonly id: { readonly id: string }["id"] }
-
-export type PermissionSavedRemoveOutput = void
-
-export type PermissionCreateInput = {
-  readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly id?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["id"]
-  readonly action: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["action"]
-  readonly resources: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["resources"]
-  readonly save?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["save"]
-  readonly metadata?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["metadata"]
-  readonly source?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["source"]
-  readonly agent?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["agent"]
-}
-
-export type PermissionCreateOutput = { data: { id: string; effect: PermissionEffect } }["data"]
-
-export type PermissionListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
-
-export type PermissionListOutput = { data: Array<PermissionRequest> }["data"]
-
-export type PermissionGetInput = {
-  readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
-  readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
-}
-
-export type PermissionGetOutput = { data: PermissionRequest }["data"]
-
-export type PermissionReplyInput = {
-  readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
-  readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
-  readonly reply: { readonly reply: "once" | "always" | "reject"; readonly message?: string | undefined }["reply"]
-  readonly message?: { readonly reply: "once" | "always" | "reject"; readonly message?: string | undefined }["message"]
-}
-
-export type PermissionReplyOutput = void
 
 export type FileReadInput = {
   readonly location?: {

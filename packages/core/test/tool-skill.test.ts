@@ -5,7 +5,6 @@ import { DateTime, Effect, Layer } from "effect"
 import { SessionInbox } from "@ocpp/schema/session-inbox"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { Permission } from "@ocpp/core/permission"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
@@ -17,7 +16,6 @@ import { tmpdir } from "./fixture/tmpdir"
 import { Image } from "@ocpp/core/image"
 import { it } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
-import { permissionLayer } from "./lib/permission"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
@@ -25,7 +23,7 @@ import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "
 const skillToolNode = makeLocationNode({
   name: "test/skill-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(SkillTool.Plugin)),
-  deps: [Tool.node, FSUtil.node, Skill.node, Permission.node, PluginRuntime.node],
+  deps: [Tool.node, FSUtil.node, Skill.node, PluginRuntime.node],
 })
 
 const sessionID = Session.ID.make("ses_skill_tool_test")
@@ -46,6 +44,7 @@ const runtime = Layer.mock(PluginRuntime.Service, {
     move: unavailable,
     resume: unavailable,
     switchAgent: unavailable,
+    selectTools: unavailable,
     switchModel: unavailable,
     interrupt: unavailable,
     synthetic: (input) =>
@@ -76,7 +75,7 @@ const runtime = Layer.mock(PluginRuntime.Service, {
     completeBackground: unavailable,
   },
   persistentPty: { read: unavailable },
-  location: { agent: { list: unavailable }, mcp: { list: unavailable } },
+  location: { agent: { list: unavailable }, mcp: { list: unavailable }, tool: { paths: unavailable } },
 })
 
 describe("SkillTool", () => {
@@ -103,30 +102,11 @@ describe("SkillTool", () => {
             content: "# Effect\n\nGuidance",
           }
           let current = [info]
-          const assertions: Permission.AssertInput[] = []
-          let deny = false
-          const permission = permissionLayer({
-            assert: (input) =>
-              Effect.sync(() => assertions.push(input)).pipe(
-                Effect.andThen(
-                  deny
-                    ? Effect.fail(
-                        new Permission.BlockedError({
-                          rules: [],
-                          permission: input.action,
-                          resources: input.resources,
-                        }),
-                      )
-                    : Effect.void,
-                ),
-              ),
-          })
           const skills = Layer.mock(Skill.Service, {
             get: (id) => Effect.succeed(current.find((skill) => skill.id === id)),
             list: () => Effect.succeed(current),
           })
           const skillToolLayer = AppNodeBuilder.build(LayerNode.group([Tool.node, skillToolNode]), [
-            [Permission.node, permission],
             [Skill.node, skills],
             [Image.node, imagePassthrough],
             [PluginRuntime.node, runtime],
@@ -162,7 +142,6 @@ describe("SkillTool", () => {
               },
             ])
             expect(Skill.toModelOutput(info, [reference])).toContain(`Base directory for this skill: ${directory}`)
-            expect(assertions).toMatchObject([{ sessionID, action: "skill", resources: ["effect"], save: ["effect"] }])
             expect(
               yield* executeTool(registry, {
                 sessionID,
@@ -173,19 +152,7 @@ describe("SkillTool", () => {
               status: "error",
               error: { type: "tool.execution", message: "Unable to load skill missing" },
             })
-            deny = true
-            expect(
-              yield* executeTool(registry, {
-                sessionID,
-                ...toolIdentity,
-                call: { type: "tool-call", id: "call-denied-skill", name: "skill", input: { id: "effect" } },
-              }),
-            ).toEqual({
-              status: "error",
-              error: { type: "permission.rejected", message: "Permission denied: skill" },
-            })
             expect(delivered).toHaveLength(1)
-            deny = false
             const flat = Skill.Info.make({
               id: Skill.ID.make("public"),
               name: Skill.Name.make("Public"),

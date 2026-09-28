@@ -4,6 +4,7 @@ import { Timestamps } from "../database/schema.sql.js"
 import { SessionTable } from "../session/sql.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
+import type { ToolLists } from "../tool/lists.js"
 
 /**
  * One durable notebook value. Names are immutable and never reused, so this append-only table is
@@ -68,6 +69,8 @@ export const CodeModeExecutionTable = sqliteTable(
     snapshot: text({ mode: "json" }).$type<ReadonlyArray<string>>().notNull(),
     /** Machine input the execution received, so a resumed run replays with the same `input`. */
     input: text({ mode: "json" }).$type<CodeMode.DataValue>(),
+    /** The tool list its catalog came from, so a resumed run rebuilds the same catalog. */
+    tools: text({ mode: "json" }).$type<ToolLists.Selection>(),
     saved: text({ mode: "json" }).$type<ReadonlyArray<string>>(),
     error: text(),
     /** Times this execution resumed after a restart. Bounded so a run that kills its host cannot loop. */

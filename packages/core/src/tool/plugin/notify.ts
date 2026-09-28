@@ -4,7 +4,6 @@ import type { Context } from "@ocpp/plugin/effect/plugin"
 import { Tool } from "@ocpp/schema/tool"
 import { Effect, Schema } from "effect"
 import { untrusted } from "../../codemode/untrusted.js"
-import { Permission } from "../../permission.js"
 import { PluginRuntime } from "../../plugin/runtime.js"
 
 // Notifications that wait for the model merge into one message that keeps only the latest few.
@@ -25,7 +24,6 @@ export const Plugin = {
   id: "ocpp.tool.session.notify",
   effect: Effect.fn("NotifyTool.Plugin")(function* (ctx: Context) {
     const runtime = yield* PluginRuntime.Service
-    const permission = yield* Permission.Service
 
     /** Where a notification comes from: a command or event run, or an execution the model started. */
     const origin = Effect.fnUntraced(function* (context: Tool.Context) {
@@ -61,14 +59,6 @@ export const Plugin = {
           input: Schema.Struct({ text: Schema.String.check(Schema.isNonEmpty()) }),
           execute: (input, context) =>
             Effect.gen(function* () {
-              yield* permission.assert({
-                action: "session_notify",
-                resources: ["*"],
-                save: ["*"],
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source: { type: "tool", messageID: context.messageID, id: context.id },
-              })
               const from = yield* origin(context)
               const text =
                 input.text.length > MAX_NOTICE_LENGTH

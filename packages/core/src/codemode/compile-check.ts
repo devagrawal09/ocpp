@@ -1,6 +1,13 @@
 export * as CodeModeCompileCheck from "./compile-check.js"
 
-import { excerptAt, staticToolCalls, toolExpression, type CompileError, type Program } from "@ocpp/codemode"
+import {
+  excerptAt,
+  staticToolCalls,
+  staticToolReferences,
+  toolExpression,
+  type CompileError,
+  type Program,
+} from "@ocpp/codemode"
 import { Tool } from "@ocpp/schema/tool"
 
 /**
@@ -40,20 +47,20 @@ export function compileFailure(error: CompileError, code: string) {
 }
 
 /**
- * The refusal for a program that calls tools this agent may not use at all: paths outside its
- * catalog, and paths whose tool its permission rules disable outright. Calls name their tools with
- * static paths, so this is decided before anything runs. Whether one particular call is allowed can
- * depend on its arguments, such as a shell command or a computed file path, so that stays with each
- * tool at run time.
+ * The refusal for a program that calls or passes on tools outside this agent's catalog, which is exactly its tool
+ * list. Calls and tool references name their tools with static paths, so this is decided before anything runs.
  */
-export function unavailableTools(
-  program: Program,
-  code: string,
-  catalog: { readonly available: ReadonlyArray<string>; readonly denied: ReadonlyArray<string> },
-) {
+export function unavailableTools(program: Program, code: string, catalog: ReadonlyArray<string>) {
   // tools.search is built into the runtime rather than registered by the host.
-  const available = ["search", ...catalog.available]
-  const calls = staticToolCalls(program.body).filter(
+  const available = ["search", ...catalog]
+  const used = [
+    ...staticToolCalls(program.body),
+    // A reference may name a whole namespace, which is available when this agent has a tool in it.
+    ...staticToolReferences(program.body).filter(
+      (reference) => !available.some((path) => path.startsWith(reference.path + ".")),
+    ),
+  ]
+  const calls = used.filter(
     (call, index, all) =>
       !available.includes(call.path) && all.findIndex((other) => other.path === call.path) === index,
   )
@@ -62,25 +69,12 @@ export function unavailableTools(
     calls.map((call) => {
       const location = call.node.loc && { line: call.node.loc.start.line, column: call.node.loc.start.column + 1 }
       const excerpt = location && excerptAt(code, location)
-      const base = { ...(location ? { location } : {}), ...(excerpt ? { excerpt } : {}), tool: call.path }
-      if (catalog.denied.includes(call.path))
-        return {
-          ...base,
-          kind: "ToolDenied",
-          message:
-            "Tool " +
-            toolExpression(call.path) +
-            " is denied for this agent: its permission rules deny it outright, so no call to it can succeed.",
-          suggestions: [
-            "Do not retry it. Use an allowed tool instead (tools.search({ query: " +
-              JSON.stringify(searchQuery(call.path)) +
-              " }) lists them), or ask the user to change this agent's permissions.",
-          ],
-        }
       return {
-        ...base,
+        ...(location ? { location } : {}),
+        ...(excerpt ? { excerpt } : {}),
+        tool: call.path,
         kind: "UnknownTool",
-        message: "Unknown tool " + toolExpression(call.path) + "; this agent has no tool at that path.",
+        message: "Unknown tool " + toolExpression(call.path) + "; it is not available to this agent.",
         suggestions: unknownToolSuggestions(call.path, available),
       }
     }),

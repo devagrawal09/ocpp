@@ -593,23 +593,6 @@ describe("Config", () => {
     })
   })
 
-  test("migrates v1 provider lists to policies", () => {
-    expect(
-      ConfigMigrateV1.migrate({
-        enabled_providers: ["anthropic", "openai"],
-        disabled_providers: ["openai"],
-      }).experimental?.policies,
-    ).toEqual([
-      { action: "provider.use", resource: "*", effect: "deny" },
-      { action: "provider.use", resource: "anthropic", effect: "allow" },
-      { action: "provider.use", resource: "openai", effect: "allow" },
-      { action: "provider.use", resource: "openai", effect: "deny" },
-    ])
-    expect(ConfigMigrateV1.migrate({ enabled_providers: [] }).experimental?.policies).toEqual([
-      { action: "provider.use", resource: "*", effect: "deny" },
-    ])
-  })
-
   test("migrates v1 provider setup options into AISDK settings", () => {
     const migrated = ConfigMigrateV1.migrate({
       provider: {
@@ -663,11 +646,8 @@ describe("Config", () => {
     expect(migrated.model).toEqual({ providerID: "azure", model: "deployment" })
     expect(migrated.agents?.reviewer?.model).toEqual({ providerID: "google-vertex", model: "claude-sonnet" })
     expect(migrated.commands?.review?.model).toEqual({ providerID: "azure", model: "deployment" })
-    expect(migrated.experimental?.policies).toEqual([
-      { action: "provider.use", resource: "*", effect: "deny" },
-      { action: "provider.use", resource: "google-vertex", effect: "allow" },
-      { action: "provider.use", resource: "azure", effect: "deny" },
-    ])
+    // Provider lists no longer restrict providers, so they migrate to nothing.
+    expect(migrated.experimental).toBeUndefined()
     expect(migrated.providers?.azure).toMatchObject({
       env: ["AZURE_COGNITIVE_SERVICES_API_KEY"],
       package: Provider.aisdk("@ai-sdk/azure"),
@@ -775,25 +755,6 @@ describe("Config", () => {
         subtask: true,
       },
     })
-  })
-
-  test("normalizes renamed permission actions when migrating v1 permissions", () => {
-    expect(
-      ConfigMigrateV1.migrate({
-        permission: {
-          task: "ask",
-          bash: { "git status": "allow", "*": "deny" },
-          write: "deny",
-          read: "allow",
-        },
-      }).permissions,
-    ).toEqual([
-      { action: "subagent", resource: "*", effect: "ask" },
-      { action: "shell", resource: "git status", effect: "allow" },
-      { action: "shell", resource: "*", effect: "deny" },
-      { action: "edit", resource: "*", effect: "deny" },
-      { action: "read", resource: "*", effect: "allow" },
-    ])
   })
 
   it.live("returns an empty configuration when directory files do not exist", () =>
@@ -1124,10 +1085,8 @@ describe("Config", () => {
             expect(documents[0]?.info.share).toBe("disabled")
             expect(documents[0]?.info.enterprise).toEqual({ url: "https://share.example.com" })
             expect(documents[0]?.info.username).toBe("test-user")
-            expect(documents[0]?.info.permissions).toEqual([
-              { action: "bash", resource: "*", effect: "ask" },
-              { action: "bash", resource: "git status", effect: "allow" },
-            ])
+            // Permission settings still load, ignored: tool lists replaced them.
+            expect(documents[0]?.info).not.toHaveProperty("permissions")
             const reviewer = documents[0]?.info.agents?.reviewer
             expect(reviewer?.model).toEqual(selection("openrouter/openai/gpt-5#high"))
             expect(reviewer?.request).toEqual({
@@ -1141,7 +1100,7 @@ describe("Config", () => {
             expect(reviewer?.color).toBe("#ff6b6b")
             expect(reviewer?.steps).toBe(12)
             expect(reviewer?.disabled).toBe(false)
-            expect(reviewer?.permissions).toEqual([{ action: "edit", resource: "*", effect: "deny" }])
+            expect(reviewer).not.toHaveProperty("permissions")
             expect(documents[0]?.info.snapshots).toBe(false)
             expect(documents[0]?.info.watcher).toEqual({ ignore: ["node_modules/**", "dist/**", ".git"] })
             expect(documents[0]?.info.formatter).toEqual({
@@ -1334,18 +1293,13 @@ describe("Config", () => {
             expect(documents[0]?.info.default_agent).toBe("reviewer")
             expect(documents[0]?.info.snapshots).toBe(false)
             expect(documents[0]?.info.share).toBe("auto")
-            expect(documents[0]?.info.permissions).toEqual([
-              { action: "shell", resource: "*", effect: "ask" },
-              { action: "edit", resource: "*.md", effect: "allow" },
-              { action: "edit", resource: "*", effect: "deny" },
-              { action: "question", resource: "*", effect: "deny" },
-            ])
+            expect(documents[0]?.info).not.toHaveProperty("permissions")
             expect(documents[0]?.info.agents?.reviewer).toMatchObject({
               system: "Review changes.",
               disabled: true,
               request: { body: { temperature: 0.2 } },
-              permissions: [{ action: "read", resource: "*", effect: "allow" }],
             })
+            expect(documents[0]?.info.agents?.reviewer).not.toHaveProperty("permissions")
             expect(documents[0]?.info.plugins).toEqual([
               "opencode-helicone-session",
               { package: "@my-org/audit-plugin", options: { endpoint: "https://audit.example.com" } },

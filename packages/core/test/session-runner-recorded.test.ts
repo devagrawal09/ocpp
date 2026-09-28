@@ -8,7 +8,6 @@ import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
 import { EventTable } from "@ocpp/core/event/sql"
-import { Permission } from "@ocpp/core/permission"
 import { Agent } from "@ocpp/core/agent"
 import { Config } from "@ocpp/core/config"
 import { Project } from "@ocpp/core/project"
@@ -43,7 +42,6 @@ import path from "node:path"
 import { testEffect } from "./lib/effect"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { promptLocationNode } from "./fixture/prompt-location"
-import { permissionLayer } from "./lib/permission"
 import { agentHost, catalogHost, host } from "./plugin/host"
 
 const cassetteName = "session-runner/openai-chat-streams-text"
@@ -55,7 +53,6 @@ if (process.env.RECORD === "true") {
 const cassette = HttpRecorder.layerFetch(cassetteName, { directory: cassetteDirectory })
 const executor = RequestExecutor.layer.pipe(Layer.provide(cassette))
 const client = LLMClient.layer.pipe(Layer.provide(executor))
-const permission = permissionLayer()
 const model = OpenAIChat.route
   .with({
     endpoint: { baseURL: "https://api.openai.com/v1" },
@@ -112,7 +109,6 @@ const runnerLayer = (llmClient: Layer.Layer<typeof LLMClient.Service>) =>
     [ReferenceInstructions.node, referenceInstructions],
     [McpInstructions.node, mcpInstructions],
     [Config.node, config],
-    [Permission.node, permission],
     [PluginSupervisor.node, pluginSupervisor],
   ])
 const execution = (llmClient: Layer.Layer<typeof LLMClient.Service>) =>
@@ -158,7 +154,6 @@ const testLayer = (llmClient: Layer.Layer<typeof LLMClient.Service>) =>
       [Bus.node, Bus.configured({ persist: true })],
       [LocationServiceMap.node, promptLocationNode],
       [LayerNodePlatform.llmClient, llmClient],
-      [Permission.node, permission],
       [Catalog.node, promptCatalog],
       [SessionRunnerModel.node, models],
       [InstructionBuiltIns.node, systemContext],

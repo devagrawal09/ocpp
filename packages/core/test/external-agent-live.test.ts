@@ -67,9 +67,6 @@ for (const provider of ExternalSession.Provider.literals)
           emit: async (event) => {
             events.push(event)
           },
-          authorize: async () => {
-            throw new Error("The OC++ harness has no native tools to authorize")
-          },
           next: async () => queue.shift(),
           idle: () => {},
         })

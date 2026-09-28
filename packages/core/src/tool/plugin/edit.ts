@@ -1,8 +1,6 @@
 /**
  * Model-facing exact-edit leaf. Relative paths resolve within the active
- * Location. Absolute paths inside that Location are accepted, while explicit
- * absolute external paths retain mutation capability through a separate
- * external_directory approval before edit approval.
+ * Location; absolute paths may name any file.
  */
 export * as EditTool from "./edit.js"
 
@@ -16,7 +14,6 @@ import { FileMutation } from "../../file-mutation.js"
 import { Formatter } from "../../formatter.js"
 import { Location } from "../../location.js"
 import { LocationMutation } from "../../location-mutation.js"
-import { Permission } from "../../permission.js"
 import { fileDiff } from "./file-diff.js"
 
 export const name = "edit"
@@ -114,24 +111,17 @@ export const Plugin = {
     const environment = yield* Environment.Service
     const formatter = yield* Formatter.Service
     const location = yield* Location.Service
-    const permission = yield* Permission.Service
 
     yield* ctx.tool
       .transform((draft) =>
         draft.add({
           name,
-          options: { permission: "edit" },
           description:
             "Edit the contents of a file by finding and replacing exact text. When editing text from Read output, preserve the exact indentation (tabs or spaces) and omit the line-number prefix, such as `1: `. Never include the prefix in oldString or newString. The edit fails if oldString is not found. By default, oldString must identify a UNIQUE location. Multiple matches FAIL unless replaceAll is true. Add more surrounding context to disambiguate, or set replaceAll to true to replace every occurrence. Use replaceAll when the change should apply to every occurrence, such as renaming a variable.",
           input: Input,
           output: Output,
-          execute: (input, context) => {
+          execute: (input) => {
             return Effect.gen(function* () {
-              const permissionSource = {
-                type: "tool" as const,
-                messageID: context.messageID,
-                id: context.id,
-              }
               if (input.oldString === input.newString) {
                 return yield* new ToolFailure({
                   message: "No changes to apply: oldString and newString are identical.",
@@ -143,16 +133,7 @@ export const Plugin = {
                 })
               }
 
-              const target = yield* mutation.resolve({ path: input.path, kind: "file" })
-              const external = target.externalDirectory
-              if (external) {
-                yield* permission.assert({
-                  ...LocationMutation.externalDirectoryPermission(external),
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source: permissionSource,
-                })
-              }
+              const target = yield* mutation.resolve({ path: input.path })
 
               const original = yield* FileMutation.readText(environment.files, target.absolute).pipe(
                 Effect.catchTag("Environment.NotFound", () =>
@@ -181,19 +162,6 @@ export const Plugin = {
                   (content, match) => `${content.slice(0, match.start)}${newString}${content.slice(match.end)}`,
                   source,
                 )
-              const preview =
-                replacements > 0 && (replacements === 1 || input.replaceAll === true)
-                  ? fileDiff(target.resource, source, replaced)
-                  : undefined
-              yield* permission.assert({
-                action: "edit",
-                resources: [target.resource],
-                save: ["*"],
-                metadata: preview ? { files: [preview] } : undefined,
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source: permissionSource,
-              })
               if (replacements === 0) {
                 return yield* new ToolFailure({
                   message: `Could not find oldString in ${input.path}. It must match exactly, including whitespace and indentation.`,

@@ -16,7 +16,6 @@ import { Command } from "@ocpp/core/command"
 import { Job } from "@ocpp/core/job"
 import { Location } from "@ocpp/core/location"
 import { OpenApi } from "@ocpp/core/openapi/index"
-import { Permission } from "@ocpp/core/permission"
 import { LocationServiceMap } from "@ocpp/core/location-services"
 import { Model } from "@ocpp/core/model"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
@@ -35,6 +34,7 @@ import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionStore } from "@ocpp/core/session/store"
 import { SessionTable } from "@ocpp/core/session/sql"
 import { Tool } from "@ocpp/core/tool"
+import { ToolLists } from "@ocpp/core/tool/lists"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 import { eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
@@ -107,12 +107,13 @@ const storeServer = Bun.serve({
 })
 afterAll(() => storeServer.stop(true))
 
-/** Creates a Session in a fresh directory, configured with `config` when given. */
-const configured = (config?: unknown) =>
+/** Creates a Session in a fresh directory, configured with `config` and the tool lists of `init` when given. */
+const configured = (config?: unknown, init?: string) =>
   Effect.gen(function* () {
     const directory = yield* tmpdirScoped()
     if (config !== undefined)
       yield* Effect.promise(() => Bun.write(path.join(directory.path, "ocpp.json"), JSON.stringify(config)))
+    if (init !== undefined) yield* Effect.promise(() => Bun.write(path.join(directory.path, ".ocpp", "init.ts"), init))
     const sessions = yield* Session.Service
     const session = yield* sessions.create({
       location: Location.Ref.make({ directory: AbsolutePath.make(directory.path) }),
@@ -150,8 +151,9 @@ const execute = Effect.fnUntraced(function* (context: Setup, code: string) {
     Effect.gen(function* () {
       const agents = yield* Agent.Service
       const registry = yield* Tool.Service
+      const lists = yield* ToolLists.Service
       const agent = yield* agents.select()
-      const snapshot = yield* registry.snapshot(agent.info?.permissions, sessionID)
+      const snapshot = yield* registry.snapshot(yield* lists.select(context.session, agent.id), sessionID)
       return yield* snapshot.execute({
         sessionID,
         agent: agent.id,
@@ -276,19 +278,6 @@ const fire = (context: Setup, name: string, input?: Schema.Json) =>
     )
     return fired.executionID
   })
-
-/** Adds permission rules to the default agent at the Session's Location. */
-const rules = (context: Setup, ...permissions: ReadonlyArray<Permission.Rule>) =>
-  context.within(
-    Effect.gen(function* () {
-      const agents = yield* Agent.Service
-      yield* agents.transform((draft) =>
-        draft.update(Agent.ID.make("build"), (agent) => {
-          agent.permissions.push(...permissions)
-        }),
-      )
-    }),
-  )
 
 /** Registers `tools.hold()`, which blocks until the returned gate opens. */
 const hold = (context: Setup) =>
@@ -528,25 +517,34 @@ describe("Code Mode commands", () => {
     }),
   )
 
-  it.live("applies permission rules to defining commands and events", () =>
+  it.live("runs commands and events with their Session's tool list", () =>
     Effect.gen(function* () {
-      const context = yield* setup
-      yield* rules(
-        context,
-        { action: "command_define", resource: "secret", effect: "deny" },
-        { action: "event_trigger", resource: "poll", effect: "deny" },
-      )
-      yield* execute(context, "function check(input) { return 1 }")
-      const denied = yield* execute(context, 'tools.command.define({ name: "secret", handler: "check" })')
-      expect(denied?.error).toContain("Permission denied: command_define")
+      const context = yield* configured(undefined, "return { build: [tools.command, tools.event, tools.glob] }")
+      const sessions = yield* Session.Service
       const defined = yield* execute(
         context,
-        'return tools.event.define({ name: "poll", schedule: { every: "1h" }, handler: "check" })',
+        [
+          'function look(input) { return tools.glob({ pattern: "*" }) }',
+          'tools.command.define({ name: "look", handler: "look" })',
+          'tools.event.define({ name: "poll", schedule: { every: "1h" }, handler: "look" })',
+        ].join("\n"),
       )
       expect(defined?.status).toBe("completed")
-      const triggered = yield* execute(context, 'return tools.event.trigger({ name: "poll" })')
-      expect(triggered?.error).toContain("Permission denied: event_trigger")
-      expect(yield* invocations(context.session.id)).toEqual([])
+      // The list that applies is the one when the handler runs: it now holds commands and events, not tools.glob.
+      yield* Effect.promise(() =>
+        Bun.write(
+          path.join(context.session.location.directory, ".ocpp", "init.ts"),
+          "return { build: [tools.command, tools.event] }",
+        ),
+      )
+      yield* sessions.command({ sessionID: context.session.id, command: "look", text: "" })
+      yield* settled(context.session.id, 1)
+      yield* fire(context, "poll")
+      const [command, event] = yield* settled(context.session.id, 2)
+      for (const invocation of [command, event]) {
+        expect(invocation.status).toBe("error")
+        expect(invocation.error).toContain("Unknown tool 'glob'")
+      }
     }),
   )
 
@@ -722,41 +720,6 @@ describe("Code Mode events", () => {
     }),
   )
 
-  it.live("asks before notifying when a rule says to", () =>
-    Effect.gen(function* () {
-      const context = yield* setup
-      const sessions = yield* Session.Service
-      yield* rules(context, { action: "session_notify", resource: "*", effect: "ask" })
-      yield* execute(
-        context,
-        [
-          'function alert(input) { return tools.session.notify({ text: "disk full" }) }',
-          'tools.command.define({ name: "alert", handler: "alert" })',
-        ].join("\n"),
-      )
-      yield* sessions.command({ sessionID: context.session.id, command: "alert", text: "" })
-      const request = yield* eventually(
-        context.within(
-          Effect.gen(function* () {
-            const permission = yield* Permission.Service
-            return (yield* permission.list()).find((item) => item.action === "session_notify")
-          }),
-        ),
-      )
-      expect(yield* pending(context.session.id, "notify")).toEqual([])
-      yield* context.within(
-        Effect.gen(function* () {
-          const permission = yield* Permission.Service
-          yield* permission.reply({ requestID: request.id, reply: "once" })
-        }),
-      )
-      yield* settled(context.session.id, 1)
-      expect((yield* pending(context.session.id, "notify")).map((item) => item.metadata?.notices)).toEqual([
-        ["disk full"],
-      ])
-    }),
-  )
-
   it.live("leaves one pending outcome and one notification however often an event fires", () =>
     Effect.gen(function* () {
       const context = yield* setup
@@ -817,7 +780,10 @@ describe("Code Mode events", () => {
     Effect.gen(function* () {
       const context = yield* setup
       const sessions = yield* Session.Service
-      const child = yield* sessions.create({ parentID: context.session.id })
+      const created = yield* sessions.create({ parentID: context.session.id })
+      // A subagent's tools are the ones its caller gave it.
+      yield* sessions.selectTools({ sessionID: created.id, tools: ["event"] })
+      const child = yield* sessions.get(created.id)
       const refused = yield* execute(
         { ...context, session: child },
         [

@@ -6,7 +6,6 @@ import { Effect, Schema } from "effect"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { PluginRuntime } from "../../plugin/runtime.js"
 import { Skill } from "../../skill.js"
-import { Permission } from "../../permission.js"
 
 export const name = "skill"
 
@@ -42,7 +41,6 @@ export const Plugin = {
   effect: Effect.fn("SkillTool.Plugin")(function* (ctx: Context) {
     const fs = yield* FSUtil.Service
     const skills = yield* Skill.Service
-    const permission = yield* Permission.Service
     const runtime = yield* PluginRuntime.Service
     yield* ctx.tool
       .transform((draft) =>
@@ -57,14 +55,6 @@ export const Plugin = {
               const skill = yield* skills.get(input.id)
               if (!skill) return yield* unableToLoad(input.id)
               return yield* Effect.gen(function* () {
-                yield* permission.assert({
-                  action: name,
-                  resources: [skill.id],
-                  save: [skill.id],
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source: { type: "tool", messageID: context.messageID, id: context.id },
-                })
                 const prepared = yield* Skill.prepare(fs, bounded(skill))
                 // Code Mode bounds what an execution returns, so the instructions travel as their own message, like
                 // an `@skill` mention's. It waits for the completion to wake the model rather than waking it early.

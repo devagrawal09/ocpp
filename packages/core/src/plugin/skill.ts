@@ -15,7 +15,7 @@ export const OcppContent = ocppContent
 export const ReportContent = reportContent
 
 export const OcppDescription =
-  "Use this skill for any question about OC++ itself, including how OC++ works, using or configuring it, migrating from V1 to V2, troubleshooting it, developing plugins or integrations, using the OC++ SDK, clients, server, or API, and contributing to the OC++ codebase. Also use it for OC++ agents, commands, skills, tools, permissions, MCP servers, providers, models, themes, keybinds, formatters, the CLI, and the web app."
+  "Use this skill for any question about OC++ itself, including how OC++ works, using or configuring it, migrating from V1 to V2, troubleshooting it, developing plugins or integrations, using the OC++ SDK, clients, server, or API, and contributing to the OC++ codebase. Also use it for OC++ agents, commands, skills, tools and tool lists, MCP servers, providers, models, themes, keybinds, formatters, the CLI, and the web app."
 const REPORT_DESCRIPTION =
   "Use when the user wants to report an ocpp issue or bug. Collect standard diagnostics, add user-specific reproduction context, and publish the issue with GitHub CLI."
 

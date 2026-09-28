@@ -11,9 +11,8 @@ import { RipgrepBinary } from "./ripgrep/binary.js"
 
 /**
  * Small core-owned ripgrep execution adapter. It deliberately exposes raw
- * process-oriented rows, not model text or permission behavior. Search maps
- * these rows into filesystem results; leaf tools own
- * presentation and permission prompts.
+ * process-oriented rows, not model text. Search maps these rows into
+ * filesystem results; leaf tools own presentation.
  */
 
 const ERROR_BYTES = 8 * 1024

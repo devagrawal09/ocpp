@@ -25,7 +25,6 @@ import { Bus } from "@ocpp/core/bus"
 import { Image } from "@ocpp/core/image"
 import { Event } from "@ocpp/schema/event"
 import { App } from "@ocpp/core/app"
-import { Permission } from "@ocpp/core/permission"
 import { EventTable } from "@ocpp/core/event/sql"
 import { Project } from "@ocpp/core/project"
 import { ProjectTable } from "@ocpp/core/project/sql"
@@ -84,7 +83,6 @@ import { testEffect } from "./lib/effect"
 import { promptLocationNode } from "./fixture/prompt-location"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Expected } from "./lib/session-message"
-import { permissionLayer } from "./lib/permission"
 import { registerToolPlugin } from "./lib/tool"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { agentHost, catalogHost, host } from "./plugin/host"
@@ -237,22 +235,15 @@ const makeRunnerState = () => {
 
 class RunnerState extends Context.Service<RunnerState, ReturnType<typeof makeRunnerState>>()("test/SessionRunner") {}
 
-const permissionFail = {
-  name: "permission_fail",
-  description: "Reject a permission",
+// Only build's default tool list holds it, so the catalog tells build from plan.
+const markerTool = {
+  name: "marker",
+  description: "Mark build's catalog",
   input: Schema.Struct({}),
   output: Schema.Struct({}),
-  execute: () =>
-    new ToolFailure({
-      message: "Permission denied: edit",
-      error: new Permission.BlockedError({
-        rules: [],
-        permission: "edit",
-        resources: ["src/index.ts"],
-      }),
-    }),
+  execute: () => Effect.succeed({ output: {} }),
 }
-const permission = permissionLayer()
+const skillAgent = (catalog: ReadonlyArray<string>) => Agent.ID.make(catalog.includes("marker") ? "build" : "plan")
 const transformTools = (registry: Tool.Interface, tools: Readonly<Record<string, ToolInfo>>) =>
   registry.transform((draft) => Object.entries(tools).forEach(([name, tool]) => draft.add({ ...tool, name })))
 const layer = Layer.unwrap(
@@ -276,9 +267,9 @@ const layer = Layer.unwrap(
         Effect.map(Tool.Service, (registry) =>
           Tool.Service.of({
             ...registry,
-            snapshot: (permissions, sessionID) =>
+            snapshot: (selection, sessionID) =>
               state.directTools
-                ? registry.registrations(permissions, sessionID).pipe(
+                ? registry.registrations(selection, sessionID).pipe(
                     Effect.map((registrations) => ({
                       definitions: registrations.map(definition),
                       execute: Effect.fnUntraced(function* (input: Parameters<Tool.Snapshot["execute"]>[0]) {
@@ -294,7 +285,7 @@ const layer = Layer.unwrap(
                       }),
                     })),
                   )
-                : registry.snapshot(permissions, sessionID),
+                : registry.snapshot(selection, sessionID),
           }),
         ),
       ).pipe(
@@ -395,13 +386,14 @@ const layer = Layer.unwrap(
       load: () => Effect.succeed(Instructions.empty),
     })
     const skillInstructions = Layer.mock(SkillInstructions.Service, {
-      load: (agent) =>
+      // Skill guidance follows the catalog: only build's default tool list holds the marker tool.
+      load: (catalog) =>
         Effect.succeed(
-          state.skillBaselines.has(agent.id)
+          state.skillBaselines.has(skillAgent(catalog))
             ? Instructions.make({
                 key: Instructions.Key.make("test/skill-guidance"),
                 codec: Schema.toCodecJson(Schema.String),
-                read: Effect.succeed(state.skillBaselines.get(agent.id)!),
+                read: Effect.succeed(state.skillBaselines.get(skillAgent(catalog))!),
                 render: {
                   initial: String,
                   changed: (_previous, current) => current,
@@ -455,7 +447,6 @@ const layer = Layer.unwrap(
       [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
       [SkillInstructions.node, skillInstructions],
       [ReferenceInstructions.node, referenceInstructions],
-      [Permission.node, permission],
       [Config.node, config],
       [PluginSupervisor.node, pluginSupervisor],
       [SessionModelTransport.node, modelTransport],
@@ -1354,7 +1345,6 @@ describe("SessionRunnerLLM", () => {
             list: () => Effect.succeed([ocpp]),
           }),
           AppNodeBuilder.build(FSUtil.node),
-          permissionLayer({ assert: () => Effect.void }),
         ),
       ),
     )
@@ -2014,16 +2004,17 @@ describe("SessionRunnerLLM", () => {
   scenario("updates selected-agent skill instructions after an agent switch", function* (s) {
     const agents = yield* Agent.Service
     yield* agents.transform((draft) =>
-      draft.update(Agent.ID.make("reviewer"), (agent) => {
+      draft.update(Agent.ID.make("plan"), (agent) => {
         agent.mode = "primary"
       }),
     )
+    yield* transformTools(yield* Tool.Service, { marker: markerTool })
     s.skillBaselines.set(Agent.ID.make("build"), "Build skills")
     yield* s.runPrompt("First")
-    s.skillBaselines.set(Agent.ID.make("reviewer"), "Reviewer skills")
+    s.skillBaselines.set(Agent.ID.make("plan"), "Plan skills")
     yield* s.bus.publish(SessionEvent.AgentSelected, {
       sessionID,
-      agent: Agent.ID.make("reviewer"),
+      agent: Agent.ID.make("plan"),
     })
     yield* s.runPrompt("Second")
 
@@ -2031,12 +2022,19 @@ describe("SessionRunnerLLM", () => {
       [defaultSystem, "Initial context\n\nBuild skills"],
       [defaultSystem, "Initial context\n\nBuild skills"],
     ])
-    expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Reviewer skills"))
+    expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Plan skills"))
   })
 
   scenario("keeps the sampled agent when selection changes during observation", function* (s) {
+    const agents = yield* Agent.Service
+    yield* agents.transform((draft) =>
+      draft.update(Agent.ID.make("plan"), (agent) => {
+        agent.mode = "primary"
+      }),
+    )
+    yield* transformTools(yield* Tool.Service, { marker: markerTool })
     s.skillBaselines.set(Agent.ID.make("build"), "Build skills")
-    s.skillBaselines.set(Agent.ID.make("reviewer"), "Reviewer skills")
+    s.skillBaselines.set(Agent.ID.make("plan"), "Plan skills")
     let switched = false
     s.systemLoadHook = Effect.suspend(() => {
       if (switched) return Effect.void
@@ -2044,7 +2042,7 @@ describe("SessionRunnerLLM", () => {
       return s.bus
         .publish(SessionEvent.AgentSelected, {
           sessionID,
-          agent: Agent.ID.make("reviewer"),
+          agent: Agent.ID.make("plan"),
         })
         .pipe(Effect.asVoid)
     })
@@ -4004,37 +4002,7 @@ describe("SessionRunnerLLM", () => {
     ])
   })
 
-  scenario("returns tool-wrapped policy blocks to the model and continues", function* (s) {
-    const registry = yield* Tool.Service
-    yield* transformTools(registry, {
-      blocked: {
-        name: "blocked",
-        description: "Fail because policy blocked execution",
-        input: Schema.Struct({}),
-        output: Schema.Struct({}),
-        execute: () =>
-          Effect.fail(new Permission.BlockedError({ rules: [], permission: "blocked", resources: ["*"] })).pipe(
-            Effect.mapError(() => new Tool.Error({ message: "Permission blocked" })),
-          ),
-      },
-    })
-    yield* s.admit("Call blocked")
-
-    yield* s.llm.push(TestLLM.tool("call-blocked", "blocked", {}), TestLLM.stop())
-
-    yield* s.resume
-
-    expect(s.requests).toHaveLength(2)
-    expect(yield* s.context).toMatchObject([
-      Expected.user("Call blocked"),
-      Expected.assistant({}, [
-        Expected.failedTool({ id: "call-blocked" }, { error: { message: "Permission blocked" } }),
-      ]),
-      { type: "assistant", finish: "stop" },
-    ])
-  })
-
-  scenario("interrupts runner continuation on a decline after settling an ordinary tool error", function* (s) {
+  scenario("interrupts runner continuation on a dismissal after settling an ordinary tool error", function* (s) {
     const registry = yield* Tool.Service
     yield* transformTools(registry, {
       failed: {
@@ -4046,10 +4014,10 @@ describe("SessionRunnerLLM", () => {
       },
       declined: {
         name: "declined",
-        description: "Fail because the user declined approval",
+        description: "Fail because the user dismissed a question",
         input: Schema.Struct({}),
         output: Schema.Struct({}),
-        execute: () => Effect.die(new Permission.DeclinedError()),
+        execute: () => Effect.die(new QuestionTool.CancelledError()),
       },
     })
     yield* s.admit("Call declined")
@@ -4072,70 +4040,10 @@ describe("SessionRunnerLLM", () => {
         Expected.failedTool({ id: "call-failed" }, { error: { message: "Ordinary tool failure" } }),
         Expected.failedTool(
           { id: "call-declined" },
-          { error: { type: "aborted", message: "The user declined this tool call" } },
+          { error: { type: "aborted", message: "The user dismissed this question" } },
         ),
       ]),
     ])
-  })
-
-  scenario("returns permission corrections to the model and continues", function* (s) {
-    const registry = yield* Tool.Service
-    yield* transformTools(registry, {
-      corrected: {
-        name: "corrected",
-        description: "Fail with user correction feedback",
-        input: Schema.Struct({}),
-        output: Schema.Struct({}),
-        execute: () =>
-          Effect.fail(new Permission.CorrectedError({ feedback: "Use another tool" })).pipe(
-            Effect.mapError(() => new Tool.Error({ message: "Use another tool" })),
-          ),
-      },
-    })
-    yield* s.admit("Call corrected")
-
-    yield* s.llm.push(TestLLM.tool("call-corrected", "corrected", {}), TestLLM.stop())
-
-    yield* s.resume
-
-    expect(s.requests).toHaveLength(2)
-    expect(yield* s.context).toMatchObject([
-      Expected.user("Call corrected"),
-      Expected.assistant({}, [
-        Expected.failedTool({ id: "call-corrected" }, { error: { message: "Use another tool" } }),
-      ]),
-      { type: "assistant", finish: "stop" },
-    ])
-  })
-
-  scenario("returns configured permission denials to the model and continues", function* (s) {
-    const registry = yield* Tool.Service
-    yield* transformTools(registry, { permissionfail: permissionFail })
-    yield* s.admit("Reject permission")
-    yield* s.llm.push(TestLLM.tool("call-permission", "permissionfail", {}), [
-      LLMEvent.stepStart({ index: 0 }),
-      LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
-    ])
-
-    yield* s.resume
-
-    expect(s.requests).toHaveLength(2)
-    expect(yield* s.context).toMatchObject([
-      { type: "user" },
-      Expected.assistant({}, [
-        Expected.failedTool(
-          { id: "call-permission" },
-          {
-            error: {
-              type: "permission.rejected",
-              message: "Permission denied: edit",
-            },
-          },
-        ),
-      ]),
-      { type: "assistant", finish: "stop" },
-    ])
-    expect(yield* recordedEventTypes(sessionID)).not.toContain("session.step.failed.1")
   })
 
   scenario("interrupts runner continuation when a question is cancelled", function* (s) {

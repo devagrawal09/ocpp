@@ -11,10 +11,8 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Global } from "@ocpp/util/global"
-import { Permission } from "@ocpp/core/permission"
 import { AgentPlugin } from "@ocpp/core/plugin/agent"
 import { AbsolutePath } from "@ocpp/core/schema"
-import { ConfigMigrateV1 } from "@ocpp/core/v1/config/migrate"
 import { ConfigAgentV1 } from "@ocpp/core/v1/config/agent"
 import { advance, drain } from "../lib/clock"
 import { tmpdir } from "../fixture/tmpdir"
@@ -23,13 +21,6 @@ import { agentHost, host } from "../plugin/host"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Agent.node, Bus.node, FSUtil.node, Global.node])))
 const decode = Schema.decodeUnknownSync(Info)
-const defaultPermissions = (global: Global.Interface): Permission.Ruleset => [
-  ...Agent.Info.default(Agent.ID.make("test")).permissions,
-  { action: "external_directory", resource: path.join(global.data, "shell", "*", "*"), effect: "allow" },
-  { action: "external_directory", resource: path.join(global.data, "tool-output", "*"), effect: "allow" },
-  { action: "external_directory", resource: path.join(global.tmp, "*"), effect: "allow" },
-  { action: "external_directory", resource: path.join(global.config, "*"), effect: "allow" },
-]
 
 test("rejects named agent color tokens", () => {
   expect(() => decode({ agents: { reviewer: { color: "warning" } } })).toThrow()
@@ -60,217 +51,6 @@ test("keeps schema fields and name out of legacy agent options", () => {
 })
 
 describe("ConfigAgentPlugin.Plugin", () => {
-  it.effect("matches POSIX paths against home-relative permissions", () =>
-    Effect.gen(function* () {
-      const permissions = yield* loadHomePermissions("/home/test")
-      expect(Permission.evaluate("external_directory", "/home/test/p/ocpp/src/*", permissions).effect).toBe("allow")
-      expect(Permission.evaluate("external_directory", "/home/test/cache/files/*", permissions).effect).toBe("deny")
-      expect(Permission.evaluate("external_directory", "/some/~/path", permissions).effect).toBe("deny")
-      expect(Permission.evaluate("external_directory", "$HOMELESS/private/*", permissions).effect).toBe("deny")
-      expect(permissions).toContainEqual({ action: "shell", resource: "$HOME/private/**", effect: "deny" })
-      expect(permissions).not.toContainEqual({ action: "shell", resource: "/home/test/private/**", effect: "deny" })
-      expect(Permission.evaluate("shell", "$HOME/private/key", permissions).effect).toBe("deny")
-    }),
-  )
-
-  it.effect("matches Windows paths against home-relative permissions", () =>
-    Effect.gen(function* () {
-      const permissions = yield* loadHomePermissions("C:\\Users\\test")
-      expect(permissions).toContainEqual({
-        action: "external_directory",
-        resource: "C:\\Users\\test\\p\\**",
-        effect: "allow",
-      })
-      expect(Permission.evaluate("external_directory", "C:\\Users\\test\\p\\ocpp\\src\\*", permissions).effect).toBe(
-        "allow",
-      )
-      expect(Permission.evaluate("external_directory", "C:\\Users\\test\\cache\\files\\*", permissions).effect).toBe(
-        "deny",
-      )
-    }),
-  )
-
-  it.effect("applies remote permission defaults before explicit global and build rules", () =>
-    Effect.gen(function* () {
-      const agents = yield* Agent.Service
-      const global = yield* Global.Service
-      yield* AgentPlugin.Plugin.effect(host({ agent: agentHost(agents) }))
-
-      const entries = [
-        new Document({
-          type: "document",
-          info: decode(
-            ConfigMigrateV1.migrate({
-              permission: {
-                bash: "ask",
-                edit: "ask",
-                webfetch: "ask",
-                read: {
-                  "*": "allow",
-                  "*.env": "deny",
-                  "*.env.*": "deny",
-                  "*.env.example": "allow",
-                  "*.dev.vars": "deny",
-                  "~/.local/share/ocpp/mcp-auth.json": "deny",
-                  "$HOME/.local/share/ocpp/mcp-auth.json": "deny",
-                },
-                external_directory: {
-                  "*": "ask",
-                  "~/.local/share/ocpp/*": "deny",
-                },
-              },
-            }),
-          ),
-        }),
-        new Document({
-          type: "document",
-          info: decode({
-            permissions: [{ action: "*", resource: "*", effect: "allow" }],
-            agents: {
-              build: {
-                permissions: [
-                  { action: "external_directory", resource: "*", effect: "allow" },
-                  {
-                    action: "external_directory",
-                    resource: "~/.local/share/ocpp/*",
-                    effect: "deny",
-                  },
-                  { action: "read", resource: "*.env", effect: "deny" },
-                ],
-              },
-            },
-          }),
-        }),
-      ]
-
-      yield* ConfigAgentPlugin.Plugin.effect(host({ agent: agentHost(agents) })).pipe(
-        Effect.provide(Config.testLayer(entries)),
-      )
-
-      const build = yield* agents.get(Agent.defaultID)
-      if (!build) throw new Error("expected configured build agent")
-      const ocppData = path.join(global.home, ".local", "share", "ocpp", "*")
-      const mcpAuth = path.join(global.home, ".local", "share", "ocpp", "mcp-auth.json")
-      expect(build.permissions).toEqual([
-        ...defaultPermissions(global),
-        { action: "question", resource: "*", effect: "allow" },
-        { action: "shell", resource: "*", effect: "ask" },
-        { action: "edit", resource: "*", effect: "ask" },
-        { action: "webfetch", resource: "*", effect: "ask" },
-        { action: "read", resource: "*", effect: "allow" },
-        { action: "read", resource: "*.env", effect: "deny" },
-        { action: "read", resource: "*.env.*", effect: "deny" },
-        { action: "read", resource: "*.env.example", effect: "allow" },
-        { action: "read", resource: "*.dev.vars", effect: "deny" },
-        { action: "read", resource: mcpAuth, effect: "deny" },
-        { action: "read", resource: mcpAuth, effect: "deny" },
-        { action: "external_directory", resource: "*", effect: "ask" },
-        { action: "external_directory", resource: ocppData, effect: "deny" },
-        { action: "*", resource: "*", effect: "allow" },
-        { action: "external_directory", resource: "*", effect: "allow" },
-        { action: "external_directory", resource: ocppData, effect: "deny" },
-        { action: "read", resource: "*.env", effect: "deny" },
-      ])
-      expect(Permission.evaluate("shell", "bun test", build.permissions).effect).toBe("allow")
-      expect(Permission.evaluate("edit", "src/index.ts", build.permissions).effect).toBe("allow")
-      expect(Permission.evaluate("webfetch", "https://example.com", build.permissions).effect).toBe("allow")
-      expect(Permission.evaluate("read", ".env", build.permissions).effect).toBe("deny")
-      expect(Permission.evaluate("external_directory", ocppData, build.permissions).effect).toBe("deny")
-      expect(Permission.evaluate("external_directory", "/outside/*", build.permissions).effect).toBe("allow")
-    }),
-  )
-
-  it.effect("applies all global permissions before agent-specific permissions", () =>
-    Effect.gen(function* () {
-      const agents = yield* Agent.Service
-      const global = yield* Global.Service
-      const build = Agent.ID.make("build")
-      yield* agents.transform((editor) =>
-        editor.update(build, (agent) => {
-          agent.mode = "primary"
-          agent.permissions.push({ action: "bash", resource: "*", effect: "allow" })
-        }),
-      )
-
-      const entries = [
-        new Document({
-          type: "document",
-          info: decode({
-            permissions: [{ action: "bash", resource: "*", effect: "ask" }],
-            agents: {
-              build: {
-                permissions: [{ action: "bash", resource: "git *", effect: "allow" }],
-              },
-              reviewer: {
-                model: "openrouter/openai/gpt-5",
-                description: "Review changes",
-                mode: "subagent",
-                permissions: [
-                  { action: "edit", resource: "*", effect: "deny" },
-                  { action: "read", resource: "*", effect: "deny" },
-                ],
-              },
-              removed: { description: "Removed later" },
-            },
-          }),
-        }),
-        new Document({
-          type: "document",
-          info: decode({
-            permissions: [{ action: "read", resource: "*", effect: "allow" }],
-            agents: {
-              reviewer: { model: "openrouter/openai/gpt-5#high", hidden: true },
-              removed: { disabled: true },
-              late: {
-                permissions: [{ action: "edit", resource: "*", effect: "allow" }],
-              },
-            },
-          }),
-        }),
-      ]
-
-      yield* ConfigAgentPlugin.Plugin.effect(host({ agent: agentHost(agents) })).pipe(
-        Effect.provide(Config.testLayer(entries)),
-      )
-
-      const buildAgent = yield* agents.get(build)
-      if (!buildAgent) throw new Error("expected configured build agent")
-      expect(buildAgent.permissions).toEqual([
-        ...defaultPermissions(global),
-        { action: "bash", resource: "*", effect: "allow" },
-        { action: "bash", resource: "*", effect: "ask" },
-        { action: "read", resource: "*", effect: "allow" },
-        { action: "bash", resource: "git *", effect: "allow" },
-      ])
-      expect(Permission.evaluate("bash", "git status", buildAgent.permissions).effect).toBe("allow")
-      expect(Permission.evaluate("bash", "bun test", buildAgent.permissions).effect).toBe("ask")
-
-      const reviewer = yield* agents.get(Agent.ID.make("reviewer"))
-      if (!reviewer) throw new Error("expected configured reviewer agent")
-      expect(reviewer).toMatchObject({
-        description: "Review changes",
-        mode: "subagent",
-        hidden: true,
-        model: { providerID: "openrouter", id: "openai/gpt-5", variant: "high" },
-      })
-      expect(reviewer.permissions).toEqual([
-        ...defaultPermissions(global),
-        { action: "bash", resource: "*", effect: "ask" },
-        { action: "read", resource: "*", effect: "allow" },
-        { action: "edit", resource: "*", effect: "deny" },
-        { action: "read", resource: "*", effect: "deny" },
-      ])
-      expect(Permission.evaluate("read", "README.md", reviewer.permissions).effect).toBe("deny")
-      expect((yield* agents.get(Agent.ID.make("late")))?.permissions).toEqual([
-        ...defaultPermissions(global),
-        { action: "bash", resource: "*", effect: "ask" },
-        { action: "read", resource: "*", effect: "allow" },
-        { action: "edit", resource: "*", effect: "allow" },
-      ])
-      expect(yield* agents.get(Agent.ID.make("removed"))).toBeUndefined()
-    }),
-  )
-
   it.effect("maps configured agent fields and preserves an unspecified model variant", () =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service
@@ -394,7 +174,6 @@ Use native v2 fields.`,
             await fs.writeFile(path.join(tmp.path, "modes", "plan.md"), "Make a plan.")
           })
           const agents = yield* Agent.Service
-          const global = yield* Global.Service
           const entries = [
             new Document({
               type: "document",
@@ -412,14 +191,14 @@ Use native v2 fields.`,
             system: "Review carefully.",
             description: "Markdown description",
             request: { body: { temperature: 0.5 } },
-            permissions: [...defaultPermissions(global), { action: "edit", resource: "*", effect: "deny" }],
           })
           expect(yield* agents.get(Agent.ID.make("team/helper"))).toMatchObject({ system: "Help the team." })
           expect(yield* agents.get(Agent.ID.make("native"))).toMatchObject({
             system: "Use native v2 fields.",
             request: { headers: { "x-agent": "native" }, body: { effort: "high" } },
-            permissions: [...defaultPermissions(global), { action: "edit", resource: "*", effect: "deny" }],
           })
+          // Removed permission rules still load; the agent takes its tools from its tool list instead.
+          expect(yield* agents.get(Agent.ID.make("native"))).not.toHaveProperty("permissions")
           expect(yield* agents.get(Agent.ID.make("disabled"))).toBeUndefined()
           expect(yield* agents.get(Agent.ID.make("empty"))).toBeUndefined()
           expect(yield* agents.get(Agent.ID.make("plan"))).toMatchObject({ system: "Make a plan.", mode: "primary" })
@@ -626,49 +405,4 @@ function sourceCases() {
         }),
     },
   ] as const
-}
-
-function loadHomePermissions(home: string) {
-  return Effect.gen(function* () {
-    const agents = yield* Agent.Service
-    const build = Agent.ID.make("build")
-    yield* agents.transform((editor) => editor.update(build, () => {}))
-    const entries = [
-      new Document({
-        type: "document",
-        info: decode(
-          ConfigMigrateV1.migrate({
-            permission: {
-              external_directory: {
-                "~/p/**": "allow",
-                "/some/~/path": "deny",
-                "$HOMELESS/**": "deny",
-              },
-              bash: {
-                "$HOME/private/**": "deny",
-              },
-            },
-            agent: {
-              build: {
-                permission: {
-                  external_directory: {
-                    "$HOME/cache/**": "deny",
-                  },
-                },
-              },
-            },
-          }),
-        ),
-      }),
-    ]
-
-    yield* ConfigAgentPlugin.Plugin.effect(host({ agent: agentHost(agents) })).pipe(
-      Effect.provide(Config.testLayer(entries)),
-      Effect.provideService(Global.Service, Global.Service.of({ ...Global.make(), home })),
-    )
-
-    const agent = yield* agents.get(build)
-    if (!agent) throw new Error("expected configured build agent")
-    return agent.permissions
-  })
 }

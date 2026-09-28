@@ -5,9 +5,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { Agent } from "../agent.js"
 import { ExternalAgentDrivers } from "../external-agent/drivers.js"
 import { Instructions } from "../instructions/index.js"
-import { Tool } from "../tool.js"
 import { SubagentTool } from "../tool/plugin/subagent.js"
-import { effectiveName } from "../tool/runtime.js"
 
 const Summary = Schema.Struct({
   id: Schema.String,
@@ -19,7 +17,12 @@ type Summary = typeof Summary.Type
 // it accepts are listed here.
 const render = (subagents: ReadonlyArray<Summary>) =>
   [
-    "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent`. Pass `root` to run one in another existing directory, such as a separate git worktree.",
+    "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent` and the child's tools as `tools`.",
+    "An agent is a prompt and model preset; it grants no tools. The child can call exactly the tools you pass: your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles. Without `tools` it has none, only tools.submit_result when you pass an outputSchema.",
+    ...(subagents.some((subagent) => subagent.id === "explore")
+      ? ["Typical lists: explore gets [tools.read, tools.glob, tools.grep, tools.webfetch]; general gets the tools its task needs."]
+      : []),
+    "Pass `root` to run one in another existing directory, such as a separate git worktree.",
     "Available subagents:",
     ...SubagentTool.listing(subagents),
   ].join("\n")
@@ -60,7 +63,8 @@ const renderDrivers = (drivers: ReadonlyArray<Driver>) =>
   ].join("\n")
 
 export interface Interface {
-  readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.List>
+  /** Subagent guidance for a request whose Code Mode catalog holds these paths: none without `tools.subagent`. */
+  readonly load: (catalog: ReadonlyArray<string>) => Effect.Effect<Instructions.List>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SubagentInstructions") {}
@@ -69,17 +73,12 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const agents = yield* Agent.Service
-    const tools = yield* Tool.Service
     const drivers = yield* ExternalAgentDrivers.Service
 
     return Service.of({
-      load: Effect.fn("SubagentInstructions.load")(function* (selection) {
-        const agent = selection.info
-        if (!agent) return Instructions.empty
-        const callable = (yield* tools.registrations(agent.permissions)).some(
-          (tool) => effectiveName(tool) === SubagentTool.name,
-        )
-        const subagents = callable ? SubagentTool.available(yield* agents.list(), agent.permissions) : []
+      load: Effect.fn("SubagentInstructions.load")(function* (catalog) {
+        const callable = catalog.includes(SubagentTool.name)
+        const subagents = callable ? SubagentTool.available(yield* agents.list()) : []
         const ready = callable
           ? (yield* drivers.list())
               .filter((driver) => driver.available)
@@ -118,5 +117,5 @@ const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [Agent.node, Tool.node, ExternalAgentDrivers.node],
+  deps: [Agent.node, ExternalAgentDrivers.node],
 })

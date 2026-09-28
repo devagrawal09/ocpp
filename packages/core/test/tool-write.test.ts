@@ -9,7 +9,6 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Environment } from "@ocpp/core/environment/index"
 import { Location } from "@ocpp/core/location"
 import { LocationMutation } from "@ocpp/core/location-mutation"
-import { Permission } from "@ocpp/core/permission"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { Tool } from "@ocpp/core/tool"
@@ -19,50 +18,29 @@ import { location } from "./fixture/location"
 import { tmpdir, withTempDir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { testEffect } from "./lib/effect"
-import { permissionLayer } from "./lib/permission"
 import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const writeToolNode = makeLocationNode({
   name: "test/write-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(WriteTool.Plugin)),
-  deps: [Tool.node, LocationMutation.node, FileMutation.node, Environment.node, Formatter.node, Permission.node],
+  deps: [Tool.node, LocationMutation.node, FileMutation.node, Environment.node, Formatter.node],
 })
 
 const sessionID = Session.ID.make("ses_write_tool_test")
 const makeWriteFixture = () => {
   const fixture: {
-    assertions: Permission.AssertInput[]
     writes: string[]
-    denyAction?: string
     formatFile: (target: string) => Effect.Effect<boolean>
   } = {
-    assertions: [],
     writes: [],
     formatFile: () => Effect.succeed(false),
   }
-
-  const permission = permissionLayer({
-    assert: (input) =>
-      Effect.sync(() => fixture.assertions.push(input)).pipe(
-        Effect.andThen(
-          input.action === fixture.denyAction
-            ? Effect.fail(
-                new Permission.BlockedError({
-                  rules: [],
-                  permission: input.action,
-                  resources: input.resources,
-                }),
-              )
-            : Effect.void,
-        ),
-      ),
-  })
 
   const formatter = Layer.mock(Formatter.Service, {
     file: (target) => fixture.formatFile(target),
   })
 
-  return Object.assign(fixture, { permission, formatter })
+  return Object.assign(fixture, { formatter })
 }
 
 const withTool = <A, E, R>(
@@ -89,7 +67,6 @@ const withTool = <A, E, R>(
         ],
         [Location.node, activeLocation],
         [Formatter.node, fixture.formatter],
-        [Permission.node, fixture.permission],
       ]),
     ),
   )
@@ -125,20 +102,6 @@ describe("WriteTool", () => {
           expect(yield* Effect.promise(() => fs.readFile(path.join(tmp.path, "src", "new.txt"), "utf8"))).toBe(
             "created",
           )
-          expect(fixture.assertions).toMatchObject([
-            { sessionID, action: "edit", resources: ["src/new.txt"], save: ["*"] },
-          ])
-          expect(fixture.assertions[0]?.metadata).toMatchObject({
-            files: [
-              {
-                file: "src/new.txt",
-                status: "added",
-                additions: 1,
-                deletions: 0,
-                patch: expect.stringContaining("+created"),
-              },
-            ],
-          })
           expect(fixture.writes).toEqual([
             path.join(yield* Effect.promise(() => fs.realpath(tmp.path)), "src", "new.txt"),
           ])
@@ -182,17 +145,6 @@ describe("WriteTool", () => {
             if (settled.status !== "completed") return
             expect(settled.content).toEqual([{ type: "text", text: "Wrote file successfully: existing.txt" }])
             expect(settled.output).toMatchObject({ resource: "existing.txt", existed: true })
-            expect(fixture.assertions[0]?.metadata).toMatchObject({
-              files: [
-                {
-                  file: "existing.txt",
-                  status: "modified",
-                  additions: 1,
-                  deletions: 1,
-                  patch: expect.stringMatching(/-before[\s\S]*\+after/),
-                },
-              ],
-            })
             expect(yield* Effect.promise(() => fs.readFile(path.join(tmp.path, "existing.txt"), "utf8"))).toBe("after")
             expect(fixture.writes).toHaveLength(1)
           }),
@@ -245,7 +197,6 @@ describe("WriteTool", () => {
               status: "completed",
               content: [{ type: "text", text: "Created file successfully: absolute.txt" }],
             })
-            expect(fixture.assertions.map((input) => input.action)).toEqual(["edit"])
             expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("inside")
           }),
         ),
@@ -253,7 +204,7 @@ describe("WriteTool", () => {
     }),
   )
 
-  it.live("writes an external symlink target with only its in-location permission", () =>
+  it.live("writes an external symlink target through its in-location link", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
@@ -273,8 +224,6 @@ describe("WriteTool", () => {
           Effect.andThen((result) =>
             Effect.sync(() => {
               expect(result.status).toBe("completed")
-              expect(fixture.assertions.map((input) => input.action)).toEqual(["edit"])
-              expect(fixture.assertions[0]?.resources).toEqual(["link.txt"])
             }),
           ),
           Effect.andThen(Effect.promise(() => fs.readFile(target, "utf8"))),
@@ -288,7 +237,7 @@ describe("WriteTool", () => {
     ),
   )
 
-  it.live("approves an explicit external absolute path before edit", () =>
+  it.live("writes an explicit external absolute path", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
@@ -300,14 +249,6 @@ describe("WriteTool", () => {
           Effect.andThen((settled) =>
             Effect.gen(function* () {
               const absoluteTarget = target
-              expect(fixture.assertions.map((input) => input.action)).toEqual(["external_directory", "edit"])
-              expect(fixture.assertions[0]).toMatchObject({
-                resources: [path.join(outside.path, "*").replaceAll("\\", "/")],
-              })
-              expect(fixture.assertions[1]).toMatchObject({
-                resources: [absoluteTarget.replaceAll("\\", "/")],
-                save: ["*"],
-              })
               expect(settled).toMatchObject({
                 status: "completed",
                 output: {
@@ -322,79 +263,6 @@ describe("WriteTool", () => {
           ),
         )
       },
-      ([active, outside]) =>
-        Effect.promise(() =>
-          Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),
-        ),
-    ),
-  )
-
-  it.live("saves external directory approval at the nearest project directory", () =>
-    Effect.acquireUseRelease(
-      Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
-      ([active, outside]) => {
-        const fixture = makeWriteFixture()
-        const repo = path.join(outside.path, "repo")
-        const nested = path.join(repo, "packages", "app")
-        const target = path.join(nested, "external.txt")
-        return Effect.promise(() =>
-          Promise.all([fs.mkdir(path.join(repo, ".git"), { recursive: true }), fs.mkdir(nested, { recursive: true })]),
-        ).pipe(
-          Effect.andThen(
-            withTool(active.path, fixture, (registry) =>
-              executeTool(registry, call({ path: target, content: "external" })),
-            ),
-          ),
-          Effect.andThen(
-            Effect.gen(function* () {
-              expect(fixture.assertions[0]).toMatchObject({
-                action: "external_directory",
-                resources: [path.join(nested, "*").replaceAll("\\", "/")],
-                save: [path.join(repo, "*").replaceAll("\\", "/")],
-              })
-            }),
-          ),
-        )
-      },
-      ([active, outside]) =>
-        Effect.promise(() =>
-          Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),
-        ),
-    ),
-  )
-
-  it.live("does not write when external_directory or edit approval is denied", () =>
-    Effect.acquireUseRelease(
-      Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
-      ([active, outside]) =>
-        Effect.gen(function* () {
-          const external = path.join(outside.path, "denied.txt")
-          const fixture = makeWriteFixture()
-          fixture.denyAction = "external_directory"
-          expect(
-            yield* withTool(active.path, fixture, (registry) =>
-              executeTool(registry, call({ path: external, content: "blocked" })),
-            ),
-          ).toEqual({
-            status: "error",
-            error: { type: "permission.rejected", message: "Permission denied: external_directory" },
-          })
-          expect(fixture.assertions.map((input) => input.action)).toEqual(["external_directory"])
-          expect(fixture.writes).toEqual([])
-
-          const deniedEdit = makeWriteFixture()
-          deniedEdit.denyAction = "edit"
-          expect(
-            yield* withTool(active.path, deniedEdit, (registry) =>
-              executeTool(registry, call({ path: "denied.txt", content: "blocked" })),
-            ),
-          ).toEqual({
-            status: "error",
-            error: { type: "permission.rejected", message: "Permission denied: edit" },
-          })
-          expect(deniedEdit.assertions.map((input) => input.action)).toEqual(["edit"])
-          expect(deniedEdit.writes).toEqual([])
-        }),
       ([active, outside]) =>
         Effect.promise(() =>
           Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),

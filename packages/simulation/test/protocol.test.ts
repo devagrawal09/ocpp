@@ -71,7 +71,6 @@ test("decodes the simulated tool lifecycle", () => {
       additionalProperties: false,
     },
     outputSchema: { type: "object" },
-    permission: "lookup",
   }
   expect(
     Backend.decodeRequest({

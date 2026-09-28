@@ -2,7 +2,6 @@ export * as SkillInstructions from "./instructions.js"
 
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
-import { Agent } from "../agent.js"
 import { Skill } from "../skill.js"
 import { Instructions } from "../instructions/index.js"
 
@@ -57,7 +56,8 @@ const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary
 }
 
 export interface Interface {
-  readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.List>
+  /** Skill guidance for a request whose Code Mode catalog holds these paths: none without `tools.skill`. */
+  readonly load: (catalog: ReadonlyArray<string>) => Effect.Effect<Instructions.List>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SkillInstructions") {}
@@ -68,10 +68,8 @@ const layer = Layer.effect(
     const skills = yield* Skill.Service
 
     return Service.of({
-      load: Effect.fn("SkillInstructions.load")(function* (selection) {
-        const agent = selection.info
-        if (!agent) return Instructions.empty
-        const available = Skill.available(yield* skills.list(), agent)
+      load: Effect.fn("SkillInstructions.load")(function* (catalog) {
+        const available = (catalog.includes("skill") ? yield* skills.list() : [])
           .flatMap((skill) =>
             skill.description === undefined || skill.autoinvoke === false
               ? []

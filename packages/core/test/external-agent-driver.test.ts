@@ -50,7 +50,6 @@ describe("external SDK drivers", () => {
         model: "opus",
         effort: "high",
         harness: { type: "ocpp", system: "OC++ system prompt" },
-        authorize: async () => {},
       },
       mcp,
       controller,
@@ -71,7 +70,7 @@ describe("external SDK drivers", () => {
     expect(harnessed.hooks).toBeUndefined()
     expect(harnessed.sandbox).toBeUndefined()
     const native = settings(
-      { directory: "/work", model: "opus", harness: { type: "native" }, authorize: async () => {} },
+      { directory: "/work", model: "opus", harness: { type: "native" } },
       mcp,
       controller,
       "/bin/claude",
@@ -85,8 +84,15 @@ describe("external SDK drivers", () => {
     })
     expect(native.systemPrompt).toBeUndefined()
     expect(native.tools).toBeUndefined()
-    expect(native.hooks?.PreToolUse).toHaveLength(1)
-    expect(native.canUseTool).toBeFunction()
+    // OC++ does not authorize native calls: what Claude Code would ask about runs, under its sandbox and deny rules.
+    expect(native.hooks).toBeUndefined()
+    expect(
+      await native.canUseTool!(
+        "Write",
+        { file_path: "file" },
+        { signal: controller.signal, toolUseID: "write", requestId: "request" },
+      ),
+    ).toMatchObject({ behavior: "allow", updatedInput: { file_path: "file" } })
   })
 
   test("Codex in the OC++ harness turns off native tool features and replaces its instructions", async () => {
@@ -366,7 +372,6 @@ if (process.argv[2] === "app-server") {
               message,
               harness: { type: "native" },
               gateway: ExternalAgentGateway.make([]),
-              authorize: async () => {},
               emit: stream.emit,
               linked: async (id) => {
                 calls.linked.push(id)
@@ -452,9 +457,6 @@ if (process.argv[2] === "app-server") {
         message: "Add numbers",
         harness: { type: "ocpp" as const, system: "OC++ system prompt for Codex" },
         gateway: ExternalAgentGateway.make([]),
-        authorize: async () => {
-          throw new Error("The OC++ harness has no native tools to authorize")
-        },
         emit: stream.emit,
         linked: async () => {},
         checkpointed: async (checkpoint: string) => {
@@ -624,7 +626,6 @@ if (process.argv[2] === "app-server") {
         message: "wait",
         harness: { type: "ocpp", system: "" },
         gateway,
-        authorize: async () => {},
         emit: async () => {},
         linked: async () => {},
         checkpointed: async () => {},
@@ -640,34 +641,6 @@ if (process.argv[2] === "app-server") {
     await interrupted
     expect(fiber.pollUnsafe()).toBeDefined()
   })
-})
-
-test("Claude permission hooks fail closed and recheck modified tool input", async () => {
-  const { permissionHooks } = await import("../src/external-agent/claude.node")
-  const calls: string[] = []
-  const policy = permissionHooks(async (_name, input) => {
-    calls.push(String(input.file_path))
-    if (input.file_path === "denied") throw new Error("OC++ denied")
-  })
-  const hook = policy.hooks!.PreToolUse![0].hooks[0]
-  const signal = new AbortController().signal
-  const event = {
-    hook_event_name: "PreToolUse" as const,
-    session_id: "session",
-    transcript_path: "/tmp/transcript",
-    cwd: "/tmp",
-    tool_name: "Write",
-    tool_input: { file_path: "allowed" },
-    tool_use_id: "call",
-  }
-  expect(await hook(event, "call", { signal })).toEqual({})
-  expect(
-    await policy.canUseTool!("Write", { file_path: "denied" }, { signal, toolUseID: "call", requestId: "request" }),
-  ).toMatchObject({ behavior: "deny" })
-  expect(await hook({ ...event, tool_input: { file_path: "denied" } }, "denied", { signal })).toMatchObject({
-    hookSpecificOutput: { permissionDecision: "deny" },
-  })
-  expect(calls).toEqual(["allowed", "denied", "denied"])
 })
 
 test("Codex loads exact persisted history, pages all items and does not mistake transport errors for missing sessions", async () => {
@@ -829,50 +802,6 @@ test("the MCP bridge admits only its bearer token and no browser origin", async 
     await client.close()
     await bridge.close()
   }
-})
-
-test("OC++'s own tools skip the native permission check in Claude and Pi", async () => {
-  const { permissionHooks } = await import("../src/external-agent/claude.node")
-  const { guard } = await import("../src/external-agent/pi.node")
-  const asked: string[] = []
-  const authorize = async (name: string) => {
-    asked.push(name)
-    throw new Error("OC++ denied " + name)
-  }
-  const signal = new AbortController().signal
-  const policy = permissionHooks(authorize)
-  const hook = policy.hooks!.PreToolUse![0].hooks[0]
-  const event = {
-    hook_event_name: "PreToolUse" as const,
-    session_id: "session",
-    transcript_path: "/tmp/transcript",
-    cwd: "/tmp",
-    tool_name: "mcp__ocpp__submit_result",
-    tool_input: { message: "done", output: {} },
-    tool_use_id: "submit",
-  }
-  expect(await hook(event, "submit", { signal })).toEqual({})
-  expect(
-    await policy.canUseTool!("mcp__ocpp__execute", { code: "1" }, { signal, toolUseID: "run", requestId: "r1" }),
-  ).toMatchObject({ behavior: "allow" })
-  expect(
-    await policy.canUseTool!("Write", { file_path: "file" }, { signal, toolUseID: "write", requestId: "r2" }),
-  ).toMatchObject({ behavior: "deny" })
-
-  const gateway = ExternalAgentGateway.make(
-    ["execute", "submit_result"].map((name) => ({
-      name,
-      description: name,
-      inputSchema: { type: "object" },
-      invoke: () => Effect.succeed("ok"),
-    })),
-  )
-  const check = guard({ gateway, authorize, signal })
-  await check({ toolName: "submit_result", input: {}, toolCallId: "submit" }, { cwd: "/tmp" })
-  await expect(
-    check({ toolName: "bash", input: { command: "ls" }, toolCallId: "ls" }, { cwd: "/tmp" }),
-  ).rejects.toThrow("OC++ denied bash")
-  expect(asked).toEqual(["Write", "bash"])
 })
 
 test("tests and OCPP_DISABLE_EXTERNAL_AGENTS never probe an installed vendor CLI", async () => {

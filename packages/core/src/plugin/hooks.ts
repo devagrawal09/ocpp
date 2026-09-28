@@ -5,7 +5,6 @@ import type { SessionHooks } from "@ocpp/plugin/effect/session"
 import type { ShellHooks } from "@ocpp/plugin/effect/shell"
 import type { ToolFailures, ToolHooks } from "@ocpp/plugin/effect/tool"
 import type { ModelHookOptions } from "@ocpp/plugin/effect/registration"
-import type { PermissionHooks } from "@ocpp/plugin/effect/permission"
 import { Context, Effect, Layer, Scope } from "effect"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { State } from "../state.js"
@@ -13,7 +12,6 @@ import { State } from "../state.js"
 export interface Domains {
   readonly aisdk: AISDKHooks
   readonly session: SessionHooks
-  readonly permission: PermissionHooks
   readonly shell: ShellHooks
   readonly tool: ToolHooks
 }
@@ -24,7 +22,6 @@ type NoFailures<Spec> = { readonly [Name in keyof Spec]: never }
 interface Failures extends Record<keyof Domains, unknown> {
   readonly aisdk: NoFailures<AISDKHooks>
   readonly session: NoFailures<SessionHooks>
-  readonly permission: NoFailures<PermissionHooks>
   readonly shell: NoFailures<ShellHooks>
   readonly tool: ToolFailures
 }

@@ -23,7 +23,6 @@ import { Location } from "./location.js"
 import { LocationMutation } from "./location-mutation.js"
 import { ModelResolver } from "./model-resolver.js"
 import { Mcp } from "./mcp/index.js"
-import { Permission } from "./permission.js"
 import { Plugin } from "./plugin.js"
 import { PluginHooks } from "./plugin/hooks.js"
 import { InstancePlugins } from "./plugin/instance.js"
@@ -54,6 +53,7 @@ import { McpTool } from "./tool/mcp.js"
 import { OpenApi } from "./openapi/index.js"
 import { ReadToolFileSystem } from "./tool/read-filesystem.js"
 import { Tool } from "./tool.js"
+import { ToolLists } from "./tool/lists.js"
 import { ToolOutput } from "./tool-output.js"
 import { Vcs } from "./vcs.js"
 
@@ -88,8 +88,8 @@ const nodes = [
   FileMutation.node,
   Formatter.node,
   Mcp.node,
-  Permission.node,
   Tool.node,
+  ToolLists.node,
   CodeModeInvocation.node,
   ToolOutput.node,
   Image.node,

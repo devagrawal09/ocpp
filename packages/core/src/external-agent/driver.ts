@@ -30,8 +30,8 @@ export interface History {
 
 /**
  * `ocpp`: the gateway's `execute` is the vendor's only capability, under the OC++ `system` prompt, with no vendor
- * settings, skills, or MCP servers of the user's. `native`: the vendor's own tools, prompt, and settings, with OC++
- * authorizing each native call; the gateway's tools are added over MCP.
+ * settings, skills, or MCP servers of the user's. `native`: the vendor's own tools, prompt, settings and sandbox,
+ * unrestricted by OC++; the gateway's tools are added over MCP.
  */
 export type Harness = { readonly type: "ocpp"; readonly system: string } | { readonly type: "native" }
 
@@ -46,14 +46,6 @@ export interface Options {
   readonly harness: Harness
   readonly gateway: ExternalAgentGateway.Gateway
   readonly signal: AbortSignal
-  /** Authorizes one of the vendor's native tool calls. Drivers never ask it about the gateway's own tools. */
-  readonly authorize: (
-    name: string,
-    input: Record<string, unknown>,
-    signal?: AbortSignal,
-    toolID?: string,
-    cwd?: string,
-  ) => Promise<void>
   readonly emit: (event: Event) => Promise<void>
   readonly linked: (id: string) => Promise<void>
   readonly checkpointed: (checkpoint: string) => Promise<void>

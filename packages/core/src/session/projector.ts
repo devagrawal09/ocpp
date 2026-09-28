@@ -630,6 +630,14 @@ const layer = Layer.effectDiscard(
           .pipe(Effect.orDie)
       }),
     )
+    yield* bus.project(SessionEvent.ToolsSelected, (event) =>
+      db
+        .update(SessionTable)
+        .set({ tools: event.data.tools, time_updated: event.created })
+        .where(eq(SessionTable.id, event.data.sessionID))
+        .run()
+        .pipe(Effect.orDie),
+    )
     yield* bus.project(SessionEvent.ModelSelected, (event) =>
       Effect.gen(function* () {
         yield* run(db, event)

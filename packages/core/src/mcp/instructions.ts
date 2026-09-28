@@ -2,8 +2,6 @@ export * as McpInstructions from "./instructions.js"
 
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
-import { Agent } from "../agent.js"
-import { Permission } from "../permission.js"
 import { McpTool } from "../tool/mcp.js"
 import { Mcp } from "./index.js"
 import { Instructions } from "../instructions/index.js"
@@ -51,7 +49,8 @@ const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary
 }
 
 export interface Interface {
-  readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.List>
+  /** MCP server instructions for a request whose Code Mode catalog holds these paths. */
+  readonly load: (catalog: ReadonlyArray<string>) => Effect.Effect<Instructions.List>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/McpInstructions") {}
@@ -62,9 +61,7 @@ export const layer = Layer.effect(
     const mcp = yield* Mcp.Service
 
     return Service.of({
-      load: Effect.fn("McpInstructions.load")(function* (selection) {
-        const agent = selection.info
-        if (!agent) return Instructions.empty
+      load: Effect.fn("McpInstructions.load")(function* (catalog) {
         const source = (value: ReadonlyArray<Summary> | Instructions.Removed) =>
           Instructions.make<ReadonlyArray<Summary>>({
             key: Instructions.Key.make("core/mcp-guidance"),
@@ -79,13 +76,13 @@ export const layer = Layer.effect(
         const [instructions, tools] = yield* Effect.all([mcp.instructions(), mcp.tools()], {
           concurrency: "unbounded",
         })
-        // Instructions are useful only when this agent can reach at least one server tool.
+        // Instructions are useful only when this request can reach at least one server tool.
         const visible = instructions
           .filter((item) =>
             tools.some(
               (tool) =>
                 tool.server === item.server &&
-                Permission.evaluate(McpTool.name(tool.server, tool.name), "*", agent.permissions).effect !== "deny",
+                catalog.some((path) => path.startsWith(McpTool.namespace(tool.server) + ".")),
             ),
           )
           .map((item) => ({ server: item.server, instructions: item.instructions }))

@@ -11,7 +11,6 @@ import { FileMutation } from "../../file-mutation.js"
 import { Location } from "../../location.js"
 import { LocationMutation } from "../../location-mutation.js"
 import { Patch } from "@ocpp/util/patch"
-import { Permission } from "../../permission.js"
 import DESCRIPTION from "../patch.txt"
 import { fileDiff } from "./file-diff.js"
 
@@ -71,17 +70,15 @@ export const Plugin = {
     const fileMutation = yield* FileMutation.Service
     const formatter = yield* Formatter.Service
     const location = yield* Location.Service
-    const permission = yield* Permission.Service
 
     yield* ctx.tool
       .transform((draft) =>
         draft.add({
           name,
-          options: { permission: "edit" },
           description: DESCRIPTION,
           input: Input,
           output: Output,
-          execute: (input, context) => {
+          execute: (input) => {
             const applied: Array<typeof Applied.Type> = []
             const parsed = Patch.parse(input.patchText)
             const lockTargets = Result.isSuccess(parsed)
@@ -99,11 +96,6 @@ export const Plugin = {
               })
             }
             return Effect.gen(function* () {
-              const source = {
-                type: "tool" as const,
-                messageID: context.messageID,
-                id: context.id,
-              }
               if (!input.patchText) return yield* new ToolFailure({ message: "patchText is required" })
               const hunks = yield* Effect.fromResult(parsed).pipe(
                 Effect.mapError((error) => new ToolFailure({ message: `patch verification failed: ${error.message}` })),
@@ -113,21 +105,7 @@ export const Plugin = {
               }
               const prepared: Prepared[] = []
               const updates = new Map<string, string>()
-              const resolveTarget = Effect.fnUntraced(function* (value: string) {
-                const target = yield* mutation.resolve({ path: value, kind: "file" })
-                if (!target.externalDirectory) return target
-                yield* permission.assert({
-                  ...LocationMutation.externalDirectoryPermission(target.externalDirectory),
-                  metadata: {
-                    filepath: target.absolute,
-                    parentDir: target.externalDirectory.directory,
-                  },
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source,
-                })
-                return target
-              })
+              const resolveTarget = (value: string) => mutation.resolve({ path: value })
               for (const hunk of hunks) {
                 yield* Effect.gen(function* () {
                   const target = yield* resolveTarget(hunk.path)
@@ -192,25 +170,6 @@ export const Plugin = {
                   ),
                 )
               }
-
-              const patchFiles = prepared.map((change) => patchFile(change))
-              const targets = prepared.flatMap((change) => [
-                change.target,
-                ...(change.type === "update" && change.moveTarget ? [change.moveTarget] : []),
-              ])
-              yield* permission.assert({
-                action: "edit",
-                resources: [...new Set(targets.map((target) => target.resource))],
-                save: ["*"],
-                metadata: {
-                  filepath: targets.map((target) => target.resource).join(", "),
-                  diff: patchFiles.map((file) => `${file.patch}\n`).join(""),
-                  files: patchFiles,
-                },
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source,
-              })
 
               yield* Effect.forEach(
                 prepared,

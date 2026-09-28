@@ -51,6 +51,8 @@ export const SessionTable = sqliteTable(
     revert: text({ mode: "json" }).$type<Session.Revert | RevertV1>(),
     permission: text({ mode: "json" }).$type<PermissionV1.Ruleset>(),
     agent: text(),
+    /** The Code Mode paths a subagent may call, projected from `session.tools.selected`. */
+    tools: text({ mode: "json" }).$type<ReadonlyArray<string>>(),
     model: text({ mode: "json" }).$type<{
       id: string
       providerID: string

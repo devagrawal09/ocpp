@@ -14,7 +14,6 @@ import { Image } from "@ocpp/core/image"
 import { Location } from "@ocpp/core/location"
 import { LocationMutation } from "@ocpp/core/location-mutation"
 import { Model } from "@ocpp/core/model"
-import { Permission } from "@ocpp/core/permission"
 import { Project } from "@ocpp/core/project"
 import { Provider } from "@ocpp/core/provider"
 import { ReadTool } from "@ocpp/core/tool/plugin/read"
@@ -32,7 +31,6 @@ import { Tool } from "@ocpp/core/tool"
 import { tempLocationLayer } from "./fixture/location"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { testEffect } from "./lib/effect"
-import { permissionLayer } from "./lib/permission"
 import { globalProjectNode } from "./lib/project"
 import { executeTool, registerToolPlugin } from "./lib/tool"
 
@@ -44,14 +42,12 @@ const readToolNode = makeLocationNode({
     ReadToolFileSystem.node,
     LocationMutation.node,
     Image.node,
-    Permission.node,
     SessionInstructions.node,
     FSUtil.node,
     Location.node,
   ],
 })
 
-const permission = permissionLayer({ assert: () => Effect.void })
 const config = Config.testLayer()
 const imageLayer = AppNodeBuilder.build(Image.node, [[Config.node, config]])
 
@@ -77,7 +73,6 @@ const testLayer = AppNodeBuilder.build(
     [Project.node, globalProjectNode],
     [SessionExecution.node, SessionExecution.noopLayer],
     [Location.node, tempLocationLayer],
-    [Permission.node, permission],
     [Config.node, config],
     [Image.node, imageLayer],
   ],

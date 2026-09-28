@@ -347,7 +347,7 @@ it.live("does not load a location when reading pending session requests", () =>
       config: {
         directory: config.path,
         project: false,
-        content: JSON.stringify({ permissions: [{ action: "shell", resource: "*", effect: "ask" }] }),
+        content: "{}",
       },
     })
     const created = (yield* Effect.promise(() =>
@@ -368,18 +368,16 @@ it.live("does not load a location when reading pending session requests", () =>
       )
 
     expect(yield* loaded()).toEqual([])
-    for (const resource of ["permission", "form"]) {
-      const response = yield* Effect.promise(() =>
-        handler(new Request(`http://ocpp.local/api/session/${created.data.id}/${resource}`)),
-      )
-      expect(response.status).toBe(200)
-      expect(yield* Effect.promise(() => response.json())).toEqual({ data: [] })
+    const pending = yield* Effect.promise(() =>
+      handler(new Request(`http://ocpp.local/api/session/${created.data.id}/form`)),
+    )
+    expect(pending.status).toBe(200)
+    expect(yield* Effect.promise(() => pending.json())).toEqual({ data: [] })
 
-      const missing = yield* Effect.promise(() =>
-        handler(new Request(`http://ocpp.local/api/session/ses_missing_pending/${resource}`)),
-      )
-      expect(missing.status).toBe(404)
-    }
+    const missing = yield* Effect.promise(() =>
+      handler(new Request("http://ocpp.local/api/session/ses_missing_pending/form")),
+    )
+    expect(missing.status).toBe(404)
     const global = yield* Effect.promise(() =>
       handler(
         new Request("http://ocpp.local/api/session/global/form", {
@@ -434,30 +432,6 @@ it.live("does not load a location when reading pending session requests", () =>
     )
     expect(globalForms.status).toBe(200)
     expect(yield* Effect.promise(() => globalForms.json())).toMatchObject({ data: [{ title: "Global form" }] })
-
-    // Agent permission policy is installed by plugin activation.
-    expect((yield* ready(handler)).status).toBe(200)
-    const createdPermission = yield* Effect.promise(() =>
-      handler(
-        new Request(`http://ocpp.local/api/session/${created.data.id}/permission`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id: "per_pending_read", action: "shell", resources: ["pwd"] }),
-        }),
-      ),
-    )
-    expect(createdPermission.status).toBe(200)
-    expect(yield* Effect.promise(() => createdPermission.json())).toEqual({
-      data: { id: "per_pending_read", effect: "ask" },
-    })
-
-    const permissions = yield* Effect.promise(() =>
-      handler(new Request(`http://ocpp.local/api/session/${created.data.id}/permission`)),
-    )
-    expect(permissions.status).toBe(200)
-    expect(yield* Effect.promise(() => permissions.json())).toMatchObject({
-      data: [{ id: "per_pending_read", sessionID: created.data.id, action: "shell", resources: ["pwd"] }],
-    })
     expect(yield* loaded()).toHaveLength(1)
   }),
 )

@@ -2,7 +2,6 @@ export * as Config from "./config.js"
 
 import { Schema } from "effect"
 import { ephemeral, inventory } from "./event.js"
-import { Permission } from "./permission.js"
 import { AbsolutePath, optional } from "./schema.js"
 import { ConfigAgent } from "./config/agent.js"
 import { ConfigMedia } from "./config/media.js"
@@ -55,11 +54,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   username: Schema.String.pipe(optional).annotate({
     description: "Username displayed in conversations and used for telemetry identity",
   }),
-  permissions: Permission.Ruleset.pipe(optional).annotate({
-    description: "Ordered tool permission rules applied to agent tool use",
-  }),
   agents: Schema.Record(Schema.String, ConfigAgent.Info).pipe(optional).annotate({
-    description: "Named built-in agent overrides and custom agent definitions",
+    description:
+      "Named built-in agent overrides and custom agent definitions: prompt and model presets. Tools come from init.ts",
   }),
   snapshots: Schema.Boolean.pipe(optional).annotate({
     description: "Enable snapshots used for undo and revert behavior",

@@ -22,10 +22,9 @@ import { ServerFetch } from "../src/fetch"
 
 type Services = Bus.Service | Job.Service | LocationServiceMap.Service
 
-it.live("controls a session's events from the app without the agent's permission rules", () =>
+it.live("controls a session's events from the app", () =>
   Effect.gen(function* () {
-    // The agent may not trigger this event, but the user can from the app.
-    const server = yield* serve({ permission: { event_trigger: "deny", event_enable: "deny" } })
+    const server = yield* serve()
     yield* server.run(
       [
         'function poll(input) { return "polled " + input.event }',
@@ -133,7 +132,7 @@ it.live("cancels only a running execution of the session", () =>
  * Starts a server with one Session in a fresh directory. The execution layer is the harness's handle on
  * the server's own services: it runs the model's program the way the runner does.
  */
-const serve = Effect.fnUntraced(function* (config?: unknown) {
+const serve = Effect.fnUntraced(function* () {
   const captured: { context?: Context.Context<Services> } = {}
   const execution = makeGlobalNode({
     service: SessionExecution.Service,
@@ -158,8 +157,6 @@ const serve = Effect.fnUntraced(function* (config?: unknown) {
     { overrides: [[SessionExecution.node, execution]] },
   )
   const directory = yield* tmpdirScoped()
-  if (config !== undefined)
-    yield* Effect.promise(() => Bun.write(`${directory.path}/ocpp.json`, JSON.stringify(config)))
   const create = () =>
     Effect.promise(() =>
       handler(
@@ -216,7 +213,7 @@ const run = Effect.fnUntraced(function* (sessionID: Session.ID, location: Locati
     const agents = yield* Agent.Service
     const registry = yield* Tool.Service
     const agent = yield* agents.select()
-    const snapshot = yield* registry.snapshot(agent.info?.permissions, sessionID)
+    const snapshot = yield* registry.snapshot(undefined, sessionID)
     return yield* snapshot.execute({
       sessionID,
       agent: agent.id,

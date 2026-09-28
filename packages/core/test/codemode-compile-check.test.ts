@@ -24,8 +24,8 @@ const echo = (name: string, namespace?: string): Info => ({
   ...(namespace === undefined ? {} : { options: { namespace } }),
 })
 
-/** An execute tool over `tools`, recording every execution the store admits. */
-const setup = (tools: ReadonlyArray<Info>, denied: ReadonlyArray<Info> = []) => {
+/** An execute tool whose catalog, the agent's tool list, is `tools`, recording every execution the store admits. */
+const setup = (tools: ReadonlyArray<Info>) => {
   const admitted: string[] = []
   const codemode = CodeModeTool.create(
     new Map(tools.map((tool) => [tool.name, tool])),
@@ -66,8 +66,7 @@ const setup = (tools: ReadonlyArray<Info>, denied: ReadonlyArray<Info> = []) => 
       image: { normalize: () => Effect.die("No tool returns media in these tests") },
       scope: Effect.runSync(Scope.make()),
     },
-    undefined,
-    denied,
+    { selection: {}, lent: new Set() },
   )
   return {
     admitted,
@@ -83,7 +82,7 @@ test("an unknown tool is refused with its closest catalog path before an executi
   expect(error).toBeInstanceOf(Tool.Error)
   expect(error.message).toBe(
     [
-      "Unknown tool tools.fs.raed; this agent has no tool at that path. (line 2, col 14)",
+      "Unknown tool tools.fs.raed; it is not available to this agent. (line 2, col 14)",
       "Source: const text = tools.fs.raed({ text: path })",
       "Did you mean tools.fs.read?",
       'Check its exact signature with tools.search({ query: "tools.fs.read" })',
@@ -103,23 +102,33 @@ test("an unknown tool is refused with its closest catalog path before an executi
   expect(codemode.admitted).toEqual([])
 })
 
-test("a tool the agent's permission rules deny outright is refused as denied", async () => {
-  const codemode = setup([echo("echo")], [echo("shell")])
+test("a registered tool off the agent's tool list is refused as unavailable", async () => {
+  const codemode = setup([echo("echo")])
   const error = await codemode.refuse('const listing = tools.shell({ text: "ls" })')
 
   expect(error.message).toBe(
     [
-      "Tool tools.shell is denied for this agent: its permission rules deny it outright, so no call to it can succeed. (line 1, col 17)",
+      "Unknown tool tools.shell; it is not available to this agent. (line 1, col 17)",
       'Source: const listing = tools.shell({ text: "ls" })',
-      'Do not retry it. Use an allowed tool instead (tools.search({ query: "shell" }) lists them), or ask the user to change this agent\'s permissions.',
+      'Find the right tool with tools.search({ query: "shell" }) and call the exact path it returns',
     ].join("\n"),
   )
-  expect(error.metadata).toMatchObject({ executionStatus: "refused", kind: "ToolDenied", tools: ["shell"] })
+  expect(error.metadata).toMatchObject({ executionStatus: "refused", kind: "UnknownTool", tools: ["shell"] })
   expect(codemode.admitted).toEqual([])
 })
 
+test("tool references are checked like calls, and a namespace counts when the agent has a tool in it", async () => {
+  const codemode = setup([echo("read", "fs"), echo("subagent")])
+  const admitted = await codemode.start('const done = tools.subagent({ text: tools.fs ? "a" : "b" })')
+  expect(admitted).toMatchObject({ output: { status: "running" } })
+
+  const error = await codemode.refuse("let child = [tools.fs.read, tools.shell, tools.github]")
+  expect(error.metadata).toMatchObject({ kind: "UnknownTool", tools: ["shell", "github"] })
+  expect(codemode.admitted).toHaveLength(1)
+})
+
 test("a program that calls only catalog tools and tools.search is admitted", async () => {
-  const codemode = setup([echo("echo")], [echo("shell")])
+  const codemode = setup([echo("echo")])
   const result = await codemode.start(
     ['const said = tools.echo({ text: "hi" })', 'return tools.search({ query: "echo" })'].join("\n"),
   )
@@ -142,19 +151,19 @@ test("calls are checked wherever they appear, and every unavailable path is repo
   expect(error.metadata).toMatchObject({ kind: "UnknownTool", tools: ["read", "fs", "github.issues"] })
   expect(error.message.split("\n\n")).toEqual([
     [
-      "Unknown tool tools.read; this agent has no tool at that path. (line 1, col 30)",
+      "Unknown tool tools.read; it is not available to this agent. (line 1, col 30)",
       "Source: function load(path) { return tools.read({ text: path }) }",
       "Did you mean tools.fs.read?",
       'Check its exact signature with tools.search({ query: "tools.fs.read" })',
     ].join("\n"),
     [
-      "Unknown tool tools.fs; this agent has no tool at that path. (line 2, col 49)",
+      "Unknown tool tools.fs; it is not available to this agent. (line 2, col 49)",
       "Source: let inspect = tool.define({ execute: (input) => tools.fs({ text: input }) })",
       "tools.fs is a namespace; call one of its tools: tools.fs.read",
       'Find the right tool with tools.search({ query: "fs" }) and call the exact path it returns',
     ].join("\n"),
     [
-      "Unknown tool tools.github.issues; this agent has no tool at that path. (line 3, col 26)",
+      "Unknown tool tools.github.issues; it is not available to this agent. (line 3, col 26)",
       "Source: function sync() { return tools.github.issues({}) }",
       "Did you mean tools.linear.issues?",
       'Check its exact signature with tools.search({ query: "tools.linear.issues" })',
@@ -203,7 +212,7 @@ test("a call wrapped onto its own line is refused at that line, with that line a
 
   expect(error.message).toBe(
     [
-      "Unknown tool tools.linear.create_issues; this agent has no tool at that path. (line 2, col 3)",
+      "Unknown tool tools.linear.create_issues; it is not available to this agent. (line 2, col 3)",
       "Source:   tools.linear.create_issues({",
       "Did you mean tools.linear.create_issue?",
       'Check its exact signature with tools.search({ query: "tools.linear.create_issue" })',
@@ -218,7 +227,7 @@ test("a call wrapped onto its own line is refused at that line, with that line a
 })
 
 test("statements sharing a line and type declarations above a call keep the call's own position", async () => {
-  const codemode = setup([echo("read", "fs")], [echo("shell")])
+  const codemode = setup([echo("read", "fs")])
   const shared = await codemode.refuse('let n = 0; const text = tools.fs.raed({ text: "a.ts" })')
   expect(shared.metadata).toMatchObject({
     kind: "UnknownTool",
@@ -230,7 +239,7 @@ test("statements sharing a line and type declarations above a call keep the call
     ["type Row = {", "  id: string", "}", 'const listing = tools.shell({ text: "ls" })'].join("\n"),
   )
   expect(typed.message.split("\n").slice(0, 2)).toEqual([
-    "Tool tools.shell is denied for this agent: its permission rules deny it outright, so no call to it can succeed. (line 4, col 17)",
+    "Unknown tool tools.shell; it is not available to this agent. (line 4, col 17)",
     'Source: const listing = tools.shell({ text: "ls" })',
   ])
 })

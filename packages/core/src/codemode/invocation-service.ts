@@ -18,7 +18,7 @@ export type Started = { readonly executionID: CodeModeExecution.ID; readonly mes
 export interface Interface {
   /**
    * Runs `return handler(input)` as a Code Mode execution owned by a new invocation message, with the
-   * Session agent's tools and permissions. It returns once the execution is admitted; the outcome
+   * Session's tool list for its current agent. It returns once the execution is admitted; the outcome
    * reaches the model later without waking it.
    */
   readonly run: (input: {

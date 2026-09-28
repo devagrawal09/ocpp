@@ -50,7 +50,7 @@ describe("LocationMutation", () => {
           absolute: targetPath,
           resource: "hello.txt",
         })
-        expect(target.externalDirectory).toBeUndefined()
+        expect(target.external).toBe(false)
       }).pipe(provide(directory)),
     ),
   )
@@ -69,7 +69,7 @@ describe("LocationMutation", () => {
     ),
   )
 
-  it.live("requires external-directory authorization for a relative lexical escape", () =>
+  it.live("marks a relative lexical escape as external", () =>
     withTmp((directory) =>
       Effect.gen(function* () {
         const mutation = yield* LocationMutation.Service
@@ -79,10 +79,7 @@ describe("LocationMutation", () => {
           absolute: path.join(root, "outside.txt"),
           resource: path.join(root, "outside.txt").replaceAll("\\", "/"),
         })
-        expect(target.externalDirectory).toMatchObject({
-          directory: root,
-          resource: path.join(root, "*").replaceAll("\\", "/"),
-        })
+        expect(target.external).toBe(true)
       }).pipe(provide(directory)),
     ),
   )
@@ -97,7 +94,7 @@ describe("LocationMutation", () => {
           absolute: path.join(directory, "README.md"),
           resource: "../../README.md",
         })
-        expect(target.externalDirectory).toBeUndefined()
+        expect(target.external).toBe(false)
       }).pipe(provide(path.join(directory, "packages", "ocpp"), directory)),
     ),
   )
@@ -106,7 +103,7 @@ describe("LocationMutation", () => {
     withTmp((directory) =>
       Effect.gen(function* () {
         const target = yield* (yield* LocationMutation.Service).resolve({ path: "../outside.txt" })
-        expect(target.externalDirectory).toBeDefined()
+        expect(target.external).toBe(true)
       }).pipe(provide(directory, path.parse(directory).root)),
     ),
   )
@@ -126,7 +123,7 @@ describe("LocationMutation", () => {
           absolute: path.join(directory, "escape", "new.txt"),
           resource: "escape/new.txt",
         })
-        expect(target.externalDirectory).toBeUndefined()
+        expect(target.external).toBe(false)
         yield* Effect.promise(() => fs.rm(outside, { recursive: true, force: true }))
       }).pipe(provide(directory))
     }),
@@ -150,7 +147,7 @@ describe("LocationMutation", () => {
     ),
   )
 
-  it.live("accepts an explicit absolute in-location target without external approval", () =>
+  it.live("treats an explicit absolute in-location target as internal", () =>
     withTmp((directory) =>
       Effect.gen(function* () {
         const targetPath = path.join(directory, "new.txt")
@@ -160,12 +157,12 @@ describe("LocationMutation", () => {
           absolute: targetPath,
           resource: "new.txt",
         })
-        expect(target.externalDirectory).toBeUndefined()
+        expect(target.external).toBe(false)
       }).pipe(provide(directory)),
     ),
   )
 
-  it.live("requires external-directory authorization for an explicit external absolute target", () =>
+  it.live("marks an explicit external absolute target as external", () =>
     withTmp((directory) =>
       withTmp((outside) =>
         Effect.gen(function* () {
@@ -177,10 +174,7 @@ describe("LocationMutation", () => {
             absolute: path.join(root, "new.txt"),
             resource: path.join(root, "new.txt").replaceAll("\\", "/"),
           })
-          expect(target.externalDirectory).toMatchObject({
-            directory: root,
-            resource: path.join(root, "*").replaceAll("\\", "/"),
-          })
+          expect(target.external).toBe(true)
         }).pipe(provide(directory)),
       ),
     ),
@@ -195,46 +189,14 @@ describe("LocationMutation", () => {
           const mutation = yield* LocationMutation.Service
           const target = yield* mutation.resolve({ path: targetPath })
           expect(target).toMatchObject({ absolute: targetPath })
-          expect(target.externalDirectory?.directory).toBe(outside)
-        }).pipe(provide(directory)),
-      ),
-    ),
-  )
-
-  it.live("uses an explicit file kind without treating an existing directory as the target boundary", () =>
-    withTmp((directory) =>
-      withTmp((outside) =>
-        Effect.gen(function* () {
-          const mutation = yield* LocationMutation.Service
-          const target = yield* mutation.resolve({ path: outside, kind: "file" })
-          expect(target.externalDirectory).toMatchObject({
-            directory: path.dirname(outside),
-            resource: path.join(path.dirname(outside), "*").replaceAll("\\", "/"),
-          })
-        }).pipe(provide(directory)),
-      ),
-    ),
-  )
-
-  it.live("authorizes prospective external descendants at their lexical parent", () =>
-    withTmp((directory) =>
-      withTmp((outside) =>
-        Effect.gen(function* () {
-          const targetPath = path.join(outside, "new", "nested", "file.txt")
-          const mutation = yield* LocationMutation.Service
-          const target = yield* mutation.resolve({ path: targetPath })
-          const parent = path.dirname(targetPath)
-          expect(target.externalDirectory).toMatchObject({
-            directory: parent,
-            resource: path.join(parent, "*").replaceAll("\\", "/"),
-          })
+          expect(target.external).toBe(true)
         }).pipe(provide(directory)),
       ),
     ),
   )
 
   test("ignores unknown mutation input fields", () => {
-    expect(Object.keys(LocationMutation.ResolveInput.fields)).toEqual(["path", "kind"])
+    expect(Object.keys(LocationMutation.ResolveInput.fields)).toEqual(["path"])
     expect(Schema.decodeUnknownSync(LocationMutation.ResolveInput)({ path: "README.md", reference: "docs" })).toEqual({
       path: "README.md",
     })
@@ -271,10 +233,7 @@ describe("LocationMutation", () => {
           absolute,
           resource: absolute.replaceAll("\\", "/"),
         })
-        expect(target.externalDirectory).toMatchObject({
-          directory: Global.Path.home,
-          resource: path.join(Global.Path.home, "*").replaceAll("\\", "/"),
-        })
+        expect(target.external).toBe(true)
       }).pipe(provide(directory)),
     ),
   )
@@ -287,7 +246,7 @@ describe("LocationMutation", () => {
         absolute: path.resolve(Global.Path.home, "notes.md"),
         resource: "notes.md",
       })
-      expect(target.externalDirectory).toBeUndefined()
+      expect(target.external).toBe(false)
     }).pipe(provide(Global.Path.home)),
   )
 })

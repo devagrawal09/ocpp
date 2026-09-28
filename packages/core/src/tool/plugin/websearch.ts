@@ -5,7 +5,6 @@ import { ToolFailure } from "@ocpp/ai"
 import { Effect, Schema, Semaphore } from "effect"
 import { HttpClientError } from "effect/unstable/http"
 import { Form } from "../../form.js"
-import { Permission } from "../../permission.js"
 import { WebSearch } from "../../websearch.js"
 
 export const name = "websearch"
@@ -27,7 +26,6 @@ const Output = Schema.Struct({
 export const Plugin = {
   id: "ocpp.tool.websearch",
   effect: Effect.fn("WebSearchTool.Plugin")(function* (ctx: Context) {
-    const permission = yield* Permission.Service
     const forms = yield* Form.Service
     const websearch = yield* WebSearch.Service
 
@@ -41,15 +39,6 @@ export const Plugin = {
           output: Output,
           execute: (input, context) =>
             Effect.gen(function* () {
-              yield* permission.assert({
-                action: name,
-                resources: [input.query],
-                save: ["*"],
-                metadata: input,
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source: { type: "tool", messageID: context.messageID, id: context.id },
-              })
               const search = (): Effect.Effect<Effect.Success<ReturnType<typeof ctx.websearch.query>>, unknown> =>
                 websearch.default().pipe(
                   Effect.flatMap((provider) => {

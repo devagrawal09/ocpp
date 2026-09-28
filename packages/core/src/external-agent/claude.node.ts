@@ -70,7 +70,7 @@ function message(text: string): SDKUserMessage {
 export function settings(
   options: Pick<
     ExternalAgentDriver.Options,
-    "directory" | "model" | "effort" | "vendorSessionID" | "harness" | "authorize"
+    "directory" | "model" | "effort" | "vendorSessionID" | "harness"
   >,
   mcp: McpServerConfig,
   controller: AbortController,
@@ -104,7 +104,9 @@ export function settings(
     settingSources: ["user", "project", "local"],
     permissionMode: "default",
     sandbox: { enabled: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false },
-    ...permissionHooks(options.authorize),
+    // OC++ does not authorize native calls and nobody can answer a prompt: what Claude Code would ask about runs,
+    // while the user's own deny rules and its sandbox still apply.
+    canUseTool: async (_name, input) => ({ behavior: "allow", updatedInput: input }),
   }
 }
 
@@ -234,54 +236,3 @@ export async function normalize(
   await emit({ type: "diagnostic", name: event.type + ("subtype" in event ? ":" + event.subtype : "") })
 }
 
-/** Hook failures must return a denial: vendor hook exceptions are not an authorization decision. */
-export function permissionHooks(
-  check: ExternalAgentDriver.Options["authorize"],
-): Pick<Options, "hooks" | "canUseTool"> {
-  const authorized = new Map<string, { fingerprint: string; cwd: string }>()
-  // The in-process `ocpp` server's tools are OC++'s own: execute enforces permissions inside, and tool.define handles
-  // and submit_result are capabilities the subagent call delegated.
-  const authorize: ExternalAgentDriver.Options["authorize"] = (name, ...rest) =>
-    name.startsWith("mcp__ocpp__") ? Promise.resolve() : check(name, ...rest)
-  return {
-    hooks: {
-      PreToolUse: [
-        {
-          hooks: [
-            async (event, id, hook) => {
-              if (event.hook_event_name !== "PreToolUse") return {}
-              const input = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(event.tool_input)
-              return authorize(event.tool_name, input, hook.signal, id, event.cwd).then(
-                () => {
-                  if (id !== undefined)
-                    authorized.set(id, { fingerprint: fingerprint({ name: event.tool_name, input }), cwd: event.cwd })
-                  // No permissionDecision: vendor deny/ask rules and sandbox still run.
-                  return {}
-                },
-                (error: unknown) => ({
-                  hookSpecificOutput: {
-                    hookEventName: "PreToolUse" as const,
-                    permissionDecision: "deny" as const,
-                    permissionDecisionReason: String(error),
-                  },
-                }),
-              )
-            },
-          ],
-        },
-      ],
-    },
-    canUseTool: async (name, input, request) => {
-      const previous = authorized.get(request.toolUseID)
-      authorized.delete(request.toolUseID)
-      const allowed =
-        previous?.fingerprint === fingerprint({ name, input })
-          ? Promise.resolve()
-          : authorize(name, input, request.signal, request.toolUseID, previous?.cwd)
-      return allowed.then(
-        () => ({ behavior: "allow" as const, updatedInput: input }),
-        (error: unknown) => ({ behavior: "deny" as const, message: String(error) }),
-      )
-    },
-  }
-}

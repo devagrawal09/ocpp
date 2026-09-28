@@ -6,7 +6,6 @@ import { MessageGroup } from "./groups/message.js"
 import { ModelGroup } from "./groups/model.js"
 import { ProviderGroup } from "./groups/provider.js"
 import { makeSessionGroup } from "./groups/session.js"
-import { makePermissionGroup } from "./groups/permission.js"
 import { FileSystemGroup } from "./groups/fs.js"
 import { makeFormGroup } from "./groups/form.js"
 import { CommandGroup } from "./groups/command.js"
@@ -66,13 +65,6 @@ type FormGroups<
   FormLocationService,
 > = ReturnType<typeof makeFormGroup<LocationId, LocationService, FormLocationId, FormLocationService>>
 
-type MixedMiddlewareGroups<
-  LocationId extends HttpApiMiddleware.AnyId,
-  LocationService,
-  SessionLocationId extends HttpApiMiddleware.AnyId,
-  SessionLocationService,
-> = ReturnType<typeof makePermissionGroup<LocationId, LocationService, SessionLocationId, SessionLocationService>>
-
 type ApiGroups<
   LocationId extends HttpApiMiddleware.AnyId,
   LocationService,
@@ -93,7 +85,6 @@ type ApiGroups<
   | LocationGroups<LocationId>
   | FormGroups<LocationId, LocationService, FormLocationId, FormLocationService>
   | SessionGroups<SessionLocationId, SessionLocationService>
-  | MixedMiddlewareGroups<LocationId, LocationService, SessionLocationId, SessionLocationService>
   | Event
 
 type EventGroupFor<Definitions extends ReadonlyArray<Definition>> = ReturnType<typeof makeEventGroup<Definitions>>
@@ -164,7 +155,6 @@ const makeApiFromGroup = <
     .add(CredentialGroup.middleware(locationMiddleware))
     .add(ProjectGroup.middleware(locationMiddleware))
     .add(makeFormGroup(locationMiddleware, formLocationMiddleware))
-    .add(makePermissionGroup(locationMiddleware, sessionLocationMiddleware))
     .add(FileSystemGroup.middleware(locationMiddleware))
     .add(CommandGroup.middleware(locationMiddleware))
     .add(SkillGroup.middleware(locationMiddleware))

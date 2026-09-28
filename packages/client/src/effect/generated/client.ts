@@ -179,20 +179,6 @@ import type {
   FormReplyOutput,
   FormCancelInput,
   FormCancelOutput,
-  PermissionRequestListInput,
-  PermissionRequestListOutput,
-  PermissionSavedListInput,
-  PermissionSavedListOutput,
-  PermissionSavedRemoveInput,
-  PermissionSavedRemoveOutput,
-  PermissionCreateInput,
-  PermissionCreateOutput,
-  PermissionListInput,
-  PermissionListOutput,
-  PermissionGetInput,
-  PermissionGetOutput,
-  PermissionReplyInput,
-  PermissionReplyOutput,
   FileListInput,
   FileListOutput,
   FileFindInput,
@@ -1154,76 +1140,6 @@ const adaptGroupForm = (raw: RawClient["server.form"]) => ({
   cancel: EndpointFormCancel(raw),
 })
 
-const EndpointPermissionRequestList = (raw: RawClient["server.permission"]) => (input?: PermissionRequestListInput) =>
-  preserveEffect<PermissionRequestListOutput>()(
-    raw["permission.request.list"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
-  )
-
-const EndpointPermissionSavedList = (raw: RawClient["server.permission"]) => (input?: PermissionSavedListInput) =>
-  preserveEffect<PermissionSavedListOutput>()(
-    raw["permission.saved.list"]({ query: { projectID: input?.["projectID"] } }).pipe(
-      Effect.mapError(mapClientError),
-      Effect.map((value) => value.data),
-    ),
-  )
-
-const EndpointPermissionSavedRemove = (raw: RawClient["server.permission"]) => (input: PermissionSavedRemoveInput) =>
-  preserveEffect<PermissionSavedRemoveOutput>()(
-    raw["permission.saved.remove"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError)),
-  )
-
-const EndpointPermissionCreate = (raw: RawClient["server.permission"]) => (input: PermissionCreateInput) =>
-  preserveEffect<PermissionCreateOutput>()(
-    raw["session.permission.create"]({
-      params: { sessionID: input["sessionID"] },
-      payload: {
-        id: input["id"],
-        action: input["action"],
-        resources: input["resources"],
-        save: input["save"],
-        metadata: input["metadata"],
-        source: input["source"],
-        agent: input["agent"],
-      },
-    }).pipe(
-      Effect.mapError(mapClientError),
-      Effect.map((value) => value.data),
-    ),
-  )
-
-const EndpointPermissionList = (raw: RawClient["server.permission"]) => (input: PermissionListInput) =>
-  preserveEffect<PermissionListOutput>()(
-    raw["session.permission.list"]({ params: { sessionID: input["sessionID"] } }).pipe(
-      Effect.mapError(mapClientError),
-      Effect.map((value) => value.data),
-    ),
-  )
-
-const EndpointPermissionGet = (raw: RawClient["server.permission"]) => (input: PermissionGetInput) =>
-  preserveEffect<PermissionGetOutput>()(
-    raw["session.permission.get"]({ params: { sessionID: input["sessionID"], requestID: input["requestID"] } }).pipe(
-      Effect.mapError(mapClientError),
-      Effect.map((value) => value.data),
-    ),
-  )
-
-const EndpointPermissionReply = (raw: RawClient["server.permission"]) => (input: PermissionReplyInput) =>
-  preserveEffect<PermissionReplyOutput>()(
-    raw["session.permission.reply"]({
-      params: { sessionID: input["sessionID"], requestID: input["requestID"] },
-      payload: { reply: input["reply"], message: input["message"] },
-    }).pipe(Effect.mapError(mapClientError)),
-  )
-
-const adaptGroupPermission = (raw: RawClient["server.permission"]) => ({
-  request: { list: EndpointPermissionRequestList(raw) },
-  saved: { list: EndpointPermissionSavedList(raw), remove: EndpointPermissionSavedRemove(raw) },
-  create: EndpointPermissionCreate(raw),
-  list: EndpointPermissionList(raw),
-  get: EndpointPermissionGet(raw),
-  reply: EndpointPermissionReply(raw),
-})
-
 const EndpointFileList = (raw: RawClient["server.fs"]) => (input?: FileListInput) =>
   preserveEffect<FileListOutput>()(
     raw["fs.list"]({ query: { location: input?.["location"], path: input?.["path"] } }).pipe(
@@ -1648,7 +1564,6 @@ const adaptClient = (raw: RawClient) => ({
   credential: adaptGroupCredential(raw["server.credential"]),
   project: adaptGroupProject(raw["server.project"]),
   form: adaptGroupForm(raw["server.form"]),
-  permission: adaptGroupPermission(raw["server.permission"]),
   file: adaptGroupFile(raw["server.fs"]),
   command: adaptGroupCommand(raw["server.command"]),
   skill: adaptGroupSkill(raw["server.skill"]),

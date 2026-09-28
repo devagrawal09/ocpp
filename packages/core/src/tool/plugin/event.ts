@@ -6,7 +6,6 @@ import { Tool } from "@ocpp/schema/tool"
 import { Effect, Schema } from "effect"
 import { CodeModeEvent } from "../../codemode/event.js"
 import { CodeModeInvocation } from "../../codemode/invocation-service.js"
-import { Permission } from "../../permission.js"
 
 const namespace = "event"
 
@@ -18,19 +17,6 @@ export const Plugin = {
   effect: Effect.fn("EventTool.Plugin")(function* (ctx: Context) {
     const events = yield* CodeModeEvent.Service
     const invocations = yield* CodeModeInvocation.Service
-    const permission = yield* Permission.Service
-    const allowed = (action: string, name: string, context: Tool.Context) =>
-      permission
-        .assert({
-          action,
-          resources: [name],
-          save: ["*"],
-          sessionID: context.sessionID,
-          agent: context.agent,
-          source: { type: "tool", messageID: context.messageID, id: context.id },
-        })
-        .pipe(Effect.mapError((error) => new Tool.Error({ message: error.message })))
-
     const found = (name: string) => (info: CodeModeEvent.Info | undefined) =>
       info === undefined
         ? Effect.fail(new Tool.Error({ message: `No event is named ${name}.` }))
@@ -59,8 +45,7 @@ export const Plugin = {
           }),
           output: CodeModeEvent.Info,
           execute: (input, context) =>
-            allowed("event_define", input.name, context).pipe(
-              Effect.andThen(events.define(context.sessionID, { ...input, description: input.description ?? "" })),
+            events.define(context.sessionID, { ...input, description: input.description ?? "" }).pipe(
               Effect.map((info) => ({ output: info, content: describe(info) })),
               Effect.mapError((error) => new Tool.Error({ message: error.message })),
             ),
@@ -87,10 +72,9 @@ export const Plugin = {
           input: Named,
           output: CodeModeEvent.Info,
           execute: (input, context) =>
-            allowed("event_enable", input.name, context).pipe(
-              Effect.andThen(events.setEnabled({ sessionID: context.sessionID, name: input.name }, true)),
-              Effect.flatMap(found(input.name)),
-            ),
+            events
+              .setEnabled({ sessionID: context.sessionID, name: input.name }, true)
+              .pipe(Effect.flatMap(found(input.name))),
         })
         draft.add({
           name: "disable",
@@ -128,8 +112,7 @@ export const Plugin = {
             Schema.Struct({ status: Schema.Literal("skipped") }),
           ]),
           execute: (input, context) =>
-            allowed("event_trigger", input.name, context).pipe(
-              Effect.andThen(invocations.fire({ sessionID: context.sessionID, ...input })),
+            invocations.fire({ sessionID: context.sessionID, ...input }).pipe(
               Effect.map((firing) =>
                 firing.status === "skipped"
                   ? {

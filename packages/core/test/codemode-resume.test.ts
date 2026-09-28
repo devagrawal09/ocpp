@@ -16,11 +16,9 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { Job } from "@ocpp/core/job"
 import { KV } from "@ocpp/core/kv"
 import { Location } from "@ocpp/core/location"
-import { LocationMutation } from "@ocpp/core/location-mutation"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Model } from "@ocpp/core/model"
 import { OpenApi } from "@ocpp/core/openapi/index"
-import { Permission } from "@ocpp/core/permission"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { Provider } from "@ocpp/core/provider"
@@ -110,8 +108,6 @@ const supervisor = makeLocationNode({
     ExternalAgentDrivers.node,
     ExternalAgentSession.node,
     FSUtil.node,
-    LocationMutation.node,
-    Permission.node,
     PluginRuntime.node,
     Tool.node,
   ],
@@ -192,7 +188,6 @@ const register = (location: Location.Ref, tools: ReadonlyArray<Tool.Info>) =>
       yield* agents.transform((draft) => {
         draft.update(toolIdentity.agent, (agent) => {
           agent.mode = "primary"
-          agent.permissions.push({ action: "*", resource: "*", effect: "allow" })
         })
         draft.update(Agent.ID.make("reviewer"), (agent) => {
           agent.mode = "subagent"
@@ -220,7 +215,12 @@ type Call = {
  * Leaves an execution exactly as a host that stopped mid-run leaves it: admitted, running, and with
  * the journal its calls wrote. A call without an output was still in flight.
  */
-const crashed = (location: Location.Ref, source: string, calls: ReadonlyArray<Call>) =>
+const crashed = (
+  location: Location.Ref,
+  source: string,
+  calls: ReadonlyArray<Call>,
+  tools?: CodeModeStore.Execution["tools"],
+) =>
   Effect.gen(function* () {
     const sessions = yield* Session.Service
     const store = yield* CodeModeStore.Service
@@ -232,6 +232,7 @@ const crashed = (location: Location.Ref, source: string, calls: ReadonlyArray<Ca
       assistantMessageID: toolIdentity.messageID,
       toolCallID: "call_resume",
       program: CodeMode.compile(source),
+      ...(tools === undefined ? {} : { tools }),
     })
     if (!admission.ok) return yield* Effect.die(admission.message)
     const executionID = admission.execution.id
@@ -304,6 +305,40 @@ describe("Code Mode resume", () => {
           { tool: "test.write", status: "completed", output: expect.stringContaining("w-after") },
         ])
         expect(seen[0]?.data.events.filter((event) => event.type === "tool")[2]).not.toHaveProperty("replayed")
+      }),
+    ),
+  )
+
+  it.live("resumes with the tool list it was admitted with, evaluating the same init.ts again", () =>
+    withLocation((location) =>
+      Effect.gen(function* () {
+        const ran: Array<string> = []
+        yield* register(location, testTools(ran))
+        // The execution's own init.ts, whatever the Location's is now: this Location has none.
+        const init = [
+          "let shout = tool.define({",
+          '  name: "shout",',
+          '  description: "Shout text",',
+          '  inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },',
+          "  outputSchema: {},",
+          '  execute: (input) => tools.test.write({ text: input.text + "!" }),',
+          "})",
+          "return { build: [tools.test.lookup, shout] }",
+        ].join("\n")
+        const { session, executionID } = yield* crashed(
+          location,
+          ['const found = tools.test.lookup({ query: "abc" })', 'const shouted = tools.shout({ text: "hi" })'].join(
+            "\n",
+          ),
+          [{ tool: "test.lookup", input: { query: "abc" }, output: { rows: 3 } }],
+          { init: { source: init, agent: "build" } },
+        )
+
+        expect(yield* resume(executionID)).toEqual({ resumed: true })
+        const info = yield* waitForCodeModeExecution(CodeModeExecution.ID.make(executionID))
+        expect(info.status).toBe("completed")
+        expect(ran).toEqual(["write:hi!"])
+        expect(yield* readCodeModeNotebook(session.id)).toEqual({ found: { rows: 3 }, shouted: { id: "w-hi!" } })
       }),
     ),
   )

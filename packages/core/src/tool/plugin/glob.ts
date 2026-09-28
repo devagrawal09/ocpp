@@ -10,7 +10,6 @@ import { Location } from "../../location.js"
 import { LocationMutation } from "../../location-mutation.js"
 import { Ripgrep } from "../../ripgrep.js"
 import { RelativePath } from "../../schema.js"
-import { Permission } from "../../permission.js"
 
 export const name = "glob"
 
@@ -46,7 +45,6 @@ export const Plugin = {
     const ripgrep = yield* Ripgrep.Service
     const location = yield* Location.Service
     const mutation = yield* LocationMutation.Service
-    const permission = yield* Permission.Service
 
     yield* ctx.tool
       .transform((draft) =>
@@ -56,32 +54,10 @@ export const Plugin = {
           description: 'Search file paths using a glob pattern (examples: "**/*.ts", "src/**/*.tsx").',
           input: Input,
           output: Output,
-          execute: (input, context) =>
+          execute: (input) =>
             Effect.gen(function* () {
               const searchPath = input.path === "undefined" || input.path === "null" ? undefined : input.path
-              const source = { type: "tool" as const, messageID: context.messageID, id: context.id }
-              const target = yield* mutation.resolve({ path: searchPath ?? ".", kind: "directory" })
-              const external = target.externalDirectory
-              if (external)
-                yield* permission.assert({
-                  ...LocationMutation.externalDirectoryPermission(external),
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source,
-                })
-              yield* permission.assert({
-                action: name,
-                resources: [input.pattern],
-                save: ["*"],
-                metadata: {
-                  root: searchPath ?? ".",
-                  path: searchPath,
-                  limit: input.limit,
-                },
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source,
-              })
+              const target = yield* mutation.resolve({ path: searchPath ?? "." })
               const type = yield* Environment.typeFollowing(environment.files, target.absolute).pipe(
                 Effect.catchTag("Environment.NotFound", () =>
                   Effect.fail(new ToolFailure({ message: `Search path does not exist: ${searchPath ?? "."}` })),

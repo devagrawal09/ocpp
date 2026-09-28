@@ -18,7 +18,6 @@ import { LegacyEventV1 } from "./legacy-event.js"
 import { LspEvent } from "./lsp-event.js"
 import { McpEvent } from "./mcp-event.js"
 import { ModelsDev } from "./models-dev.js"
-import { Permission } from "./permission.js"
 import { PersistentPty } from "./persistent-pty.js"
 import { Plugin } from "./plugin.js"
 import { Project } from "./project.js"
@@ -50,7 +49,6 @@ const foundationDefinitions = Event.inventory(
 const featureDefinitions = Event.inventory(
   ...FileSystem.Event.Definitions,
   ...Reference.Event.Definitions,
-  ...Permission.Event.Definitions,
   ...Plugin.Event.Definitions,
   ...Project.Event.Definitions,
   ...Worktree.Event.Definitions,

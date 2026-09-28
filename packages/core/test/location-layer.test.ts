@@ -252,7 +252,7 @@ describe("LocationServiceMap", () => {
           }).pipe(Effect.provide(context))
 
           expect(explorer).toBeDefined()
-          expect(explorer?.permissions.length).toBeGreaterThan(0)
+          expect(explorer?.mode).toBe("subagent")
         }),
       ),
     ),

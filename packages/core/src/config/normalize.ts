@@ -13,16 +13,13 @@ import { ConfigMedia } from "@ocpp/schema/config/media"
 import { ConfigMCP } from "@ocpp/schema/config/mcp"
 import { ConfigOpenAPI } from "@ocpp/schema/config/openapi"
 import { ConfigPlugin } from "@ocpp/schema/config/plugin"
-import { ConfigPolicy } from "@ocpp/schema/config/policy"
 import { ConfigProvider } from "@ocpp/schema/config/provider"
 import { ConfigReference } from "@ocpp/schema/config/reference"
 import { ConfigExperimental } from "@ocpp/schema/config/experimental"
-import { Permission } from "@ocpp/schema/permission"
 import { ConfigAgentV1 } from "../v1/config/agent.js"
 import { ConfigAttachmentV1 } from "../v1/config/attachment.js"
 import { ConfigCommandV1 } from "../v1/config/command.js"
 import { ConfigMCPV1 } from "../v1/config/mcp.js"
-import { ConfigPermissionV1 } from "../v1/config/permission.js"
 import { ConfigPluginV1 } from "../v1/config/plugin.js"
 import { ConfigProviderV1 } from "../v1/config/provider.js"
 import { ConfigMigrateV1 } from "../v1/config/migrate.js"
@@ -52,6 +49,17 @@ const unsupportedExperimental = [
   "continue_loop_on_deny",
 ] as const
 const unsupportedProvider = ["id", "whitelist", "blacklist"] as const
+// The permission system and provider policies were removed. Their settings still load, ignored with a diagnostic.
+const removedTools = "ignored removed permission setting; init.ts lists each agent's tools"
+const removedProviders = "ignored removed provider setting; every configured or logged-in provider is available"
+const removedTopLevel = [
+  ["permission", removedTools],
+  ["permissions", removedTools],
+  ["tools", removedTools],
+  ["enabled_providers", removedProviders],
+  ["disabled_providers", removedProviders],
+] as const
+const removedAgent = ["permission", "permissions", "tools"] as const
 const unsupportedModel = ["release_date", "attachment", "reasoning", "temperature", "experimental"] as const
 
 export function normalize(input: unknown): Result {
@@ -66,6 +74,7 @@ export function normalize(input: unknown): Result {
   const diagnostics: Diagnostic[] = []
   const encoded: Record<string, unknown> = {}
   unsupportedTopLevel.forEach((key) => unsupportedIfPresent(input, key, [key], diagnostics))
+  removedTopLevel.forEach(([key, message]) => removedIfPresent(input, key, [key], message, diagnostics))
 
   const legacySnapshots = own(input, "snapshot")
     ? decodeEncoded(Schema.Boolean, input.snapshot, ["snapshot"], diagnostics)
@@ -146,6 +155,7 @@ export function normalize(input: unknown): Result {
   const nativeAgents = decodeMap(input.agents, ConfigAgent.Info, ["agents"], diagnostics, decodeEncoded)
   diagnoseAgentUnsupported(input.agent, ["agent"], diagnostics)
   diagnoseAgentUnsupported(input.mode, ["mode"], diagnostics)
+  diagnoseAgentUnsupported(input.agents, ["agents"], diagnostics)
   mergeMap(
     encoded,
     "agents",
@@ -165,12 +175,6 @@ export function normalize(input: unknown): Result {
     isRecord(input.provider) || isRecord(input.providers),
     diagnostics,
   )
-
-  const toolRules = migrateTools(input.tools, diagnostics)
-  const permissionRules = migratePermissions(input.permission, diagnostics)
-  const nativePermissions = decodeList(input.permissions, Permission.Rule, ["permissions"], diagnostics, decodeEncoded)
-  const permissions = [...toolRules, ...permissionRules, ...nativePermissions]
-  if (permissions.length || Array.isArray(input.permissions)) encoded.permissions = permissions
 
   const legacyPlugins = decodeList(input.plugin, ConfigPluginV1.Spec, ["plugin"], diagnostics, decodeValue).map(
     (plugin) => (typeof plugin === "string" ? plugin : { package: plugin[0], options: plugin[1] }),
@@ -373,68 +377,26 @@ function normalizeExperimental(
   encoded: Record<string, unknown>,
   diagnostics: Diagnostic[],
 ) {
+  if (!own(input, "experimental")) return
+  if (!isRecord(input.experimental)) {
+    invalid(["experimental"], diagnostics)
+    return
+  }
+  const experimental = input.experimental
+  unsupportedExperimental.forEach((key) => unsupportedIfPresent(experimental, key, ["experimental", key], diagnostics))
+  removedIfPresent(experimental, "policies", ["experimental", "policies"], removedProviders, diagnostics)
+  removedIfPresent(experimental, "portable_shell_scanner", ["experimental", "portable_shell_scanner"], removedTools, diagnostics)
   const result: Record<string, unknown> = {}
-  const generated: unknown[] = []
-  const enabled = decodeProviderList(input, "enabled_providers", diagnostics)
-  if (enabled.present && (!enabled.nonEmpty || enabled.values.length)) {
-    generated.push({ action: "provider.use", resource: "*", effect: "deny" })
-    generated.push(
-      ...enabled.values.map((resource) => ({
-        action: "provider.use",
-        resource: ConfigMigrateV1.providerID(resource),
-        effect: "allow",
-      })),
+  if (own(experimental, "subagent_depth")) {
+    const value = decodeEncoded(
+      ConfigExperimental.Info.fields.subagent_depth,
+      experimental.subagent_depth,
+      ["experimental", "subagent_depth"],
+      diagnostics,
     )
+    if (value !== undefined) result.subagent_depth = value
   }
-  const disabled = decodeProviderList(input, "disabled_providers", diagnostics)
-  generated.push(
-    ...disabled.values.map((resource) => ({
-      action: "provider.use",
-      resource: ConfigMigrateV1.providerID(resource),
-      effect: "deny",
-    })),
-  )
-  const native: unknown[] = []
-  if (own(input, "experimental")) {
-    if (!isRecord(input.experimental)) invalid(["experimental"], diagnostics)
-    if (isRecord(input.experimental)) {
-      const experimental = input.experimental
-      unsupportedExperimental.forEach((key) =>
-        unsupportedIfPresent(experimental, key, ["experimental", key], diagnostics),
-      )
-      if (own(experimental, "portable_shell_scanner")) {
-        const value = decodeEncoded(
-          ConfigExperimental.Info.fields.portable_shell_scanner,
-          experimental.portable_shell_scanner,
-          ["experimental", "portable_shell_scanner"],
-          diagnostics,
-        )
-        if (value !== undefined) result.portable_shell_scanner = value
-      }
-      if (own(experimental, "subagent_depth")) {
-        const value = decodeEncoded(
-          ConfigExperimental.Info.fields.subagent_depth,
-          experimental.subagent_depth,
-          ["experimental", "subagent_depth"],
-          diagnostics,
-        )
-        if (value !== undefined) result.subagent_depth = value
-      }
-      native.push(
-        ...decodeList(
-          experimental.policies,
-          ConfigPolicy.Info,
-          ["experimental", "policies"],
-          diagnostics,
-          decodeEncoded,
-        ),
-      )
-    }
-  }
-  if (generated.length || native.length || (isRecord(input.experimental) && Array.isArray(input.experimental.policies)))
-    result.policies = [...generated, ...native]
-  if (Object.keys(result).length || (isRecord(input.experimental) && !Object.keys(input.experimental).length))
-    encoded.experimental = result
+  if (Object.keys(result).length || !Object.keys(experimental).length) encoded.experimental = result
 }
 
 function normalizeWatcher(input: Record<string, unknown>, encoded: Record<string, unknown>, diagnostics: Diagnostic[]) {
@@ -472,47 +434,6 @@ function normalizeLsp(input: Record<string, unknown>, encoded: Record<string, un
   }
   const entries = decodeMap(input.lsp, ConfigLSP.Entry, ["lsp"], diagnostics, decodeEncoded)
   if (isRecord(input.lsp) && (!Object.keys(input.lsp).length || Object.keys(entries).length)) encoded.lsp = entries
-}
-
-function migrateTools(value: unknown, diagnostics: Diagnostic[]) {
-  if (value === undefined) return []
-  if (!isRecord(value)) {
-    invalid(["tools"], diagnostics)
-    return []
-  }
-  return Object.entries(value).flatMap(([action, raw]) => {
-    const enabled = decodeValue(Schema.Boolean, raw, ["tools", action], diagnostics)
-    if (enabled === undefined) return []
-    return [{ action: ConfigMigrateV1.normalizeAction(action), resource: "*", effect: enabled ? "allow" : "deny" }]
-  })
-}
-
-function migratePermissions(value: unknown, diagnostics: Diagnostic[]) {
-  if (value === undefined) return []
-  if (typeof value === "string") {
-    const effect = decodeValue(ConfigPermissionV1.Action, value, ["permission"], diagnostics)
-    return effect === undefined ? [] : [{ action: "*", resource: "*", effect }]
-  }
-  if (!isRecord(value)) {
-    invalid(["permission"], diagnostics)
-    return []
-  }
-  return Object.entries(value).flatMap(([action, raw]) => {
-    if (typeof raw === "string") {
-      const effect = decodeValue(ConfigPermissionV1.Action, raw, ["permission", action], diagnostics)
-      return effect === undefined ? [] : [{ action: ConfigMigrateV1.normalizeAction(action), resource: "*", effect }]
-    }
-    if (!isRecord(raw)) {
-      invalid(["permission", action], diagnostics)
-      return []
-    }
-    return Object.entries(raw).flatMap(([resource, effect], index) => {
-      const decoded = decodeValue(ConfigPermissionV1.Action, effect, ["permission", action, String(index)], diagnostics)
-      return decoded === undefined
-        ? []
-        : [{ action: ConfigMigrateV1.normalizeAction(action), resource, effect: decoded }]
-    })
-  })
 }
 
 function migrateProviders(value: unknown, diagnostics: Diagnostic[]) {
@@ -576,6 +497,7 @@ function diagnoseAgentUnsupported(value: unknown, path: string[], diagnostics: D
   Object.entries(value).forEach(([name, agent]) => {
     if (!isRecord(agent)) return
     unsupportedIfPresent(agent, "name", [...path, name, "name"], diagnostics)
+    removedAgent.forEach((key) => removedIfPresent(agent, key, [...path, name, key], removedTools, diagnostics))
     diagnoseSelection(agent, [...path, name], diagnostics)
   })
 }
@@ -605,23 +527,6 @@ function diagnoseSelection(value: Record<string, unknown>, path: string[], diagn
       path: [...path, "variant"],
       message: "omitted unsupported legacy model variant",
     })
-}
-
-function decodeProviderList(
-  input: Record<string, unknown>,
-  key: "enabled_providers" | "disabled_providers",
-  diagnostics: Diagnostic[],
-) {
-  if (!own(input, key)) return { present: false, nonEmpty: false, values: [] as string[] }
-  if (!Array.isArray(input[key])) {
-    invalid([key], diagnostics)
-    return { present: true, nonEmpty: true, values: [] as string[] }
-  }
-  return {
-    present: true,
-    nonEmpty: input[key].length > 0,
-    values: decodeList(input[key], Schema.String, [key], diagnostics, decodeValue),
-  }
 }
 
 function decodeMap<S extends Schema.Codec<unknown, unknown, never>, A>(
@@ -765,6 +670,17 @@ function prefer(legacy: unknown, native: unknown, path: string[], diagnostics: D
 function unsupportedIfPresent(value: Record<string, unknown>, key: string, path: string[], diagnostics: Diagnostic[]) {
   if (!own(value, key)) return
   diagnostics.push({ kind: "unsupported", path, message: "omitted unsupported legacy setting" })
+}
+
+function removedIfPresent(
+  value: Record<string, unknown>,
+  key: string,
+  path: string[],
+  message: string,
+  diagnostics: Diagnostic[],
+) {
+  if (!own(value, key)) return
+  diagnostics.push({ kind: "unsupported", path, message })
 }
 
 function invalid(path: string[], diagnostics: Diagnostic[]) {

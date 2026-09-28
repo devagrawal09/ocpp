@@ -2,10 +2,8 @@ export * as OpenApiInstructions from "./instructions.js"
 
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
-import { Agent } from "../agent.js"
 import { Instructions } from "../instructions/index.js"
-import { Permission } from "../permission.js"
-import { effectiveName } from "../tool/runtime.js"
+import { ToolLists } from "../tool/lists.js"
 import { OpenApi } from "./index.js"
 
 const DESCRIPTION_LIMIT = 1_500
@@ -52,7 +50,14 @@ const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary
 }
 
 export interface Interface {
-  readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.List>
+  /**
+   * REST API guidance for a request whose Code Mode catalog holds these paths, selected by a tool list naming
+   * `paths` (every tool when absent).
+   */
+  readonly load: (
+    catalog: ReadonlyArray<string>,
+    paths: ReadonlyArray<string> | undefined,
+  ) => Effect.Effect<Instructions.List>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/OpenApiInstructions") {}
@@ -63,17 +68,15 @@ export const layer = Layer.effect(
     const openapi = yield* OpenApi.Service
 
     return Service.of({
-      load: Effect.fn("OpenApiInstructions.load")(function* (selection) {
-        const agent = selection.info
-        if (!agent) return Instructions.empty
-        const permitted = (action: string) => Permission.evaluate(action, "*", agent.permissions).effect !== "deny"
-        // An API is listed only when this agent can reach one of its operations; an unavailable one
-        // is listed unless the agent is denied the whole namespace, so the model can report why.
+      load: Effect.fn("OpenApiInstructions.load")(function* (catalog, paths) {
+        // An API is listed only when this request can reach one of its operations; an unavailable one is listed
+        // when the tool list names its namespace, so the model can report why.
         const visible = (yield* openapi.apis())
           .filter((api) =>
             api.error === undefined
-              ? api.tools.some((tool) => permitted(effectiveName(tool)))
-              : permitted(`${api.namespace}_*`),
+              ? catalog.some((path) => path.startsWith(api.namespace + "."))
+              : ToolLists.includes(paths, api.namespace + ".") ||
+                (paths ?? []).some((path) => path.startsWith(api.namespace + ".")),
           )
           .map((api) => ({
             namespace: api.namespace,

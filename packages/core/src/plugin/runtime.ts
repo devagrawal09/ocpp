@@ -25,6 +25,7 @@ export interface Interface {
     | "move"
     | "resume"
     | "switchAgent"
+    | "selectTools"
     | "switchModel"
     | "interrupt"
     | "synthetic"
@@ -55,6 +56,10 @@ export interface Interface {
       readonly list: (
         ref: Location.Ref,
       ) => Effect.Effect<{ readonly location: Location.Info; readonly data: Mcp.ServerInfo[] }, unknown>
+    }
+    readonly tool: {
+      /** The Code Mode paths of the tools registered in a Location, once its plugins, MCP servers and APIs load. */
+      readonly paths: (ref: Location.Ref) => Effect.Effect<ReadonlyArray<string>>
     }
   }
 }
@@ -92,6 +97,7 @@ export const layerWithCell = (cell: Cell) =>
         move: (input) => require(cell, (runtime) => runtime.session.move(input)),
         resume: (sessionID) => require(cell, (runtime) => runtime.session.resume(sessionID)),
         switchAgent: (input) => require(cell, (runtime) => runtime.session.switchAgent(input)),
+        selectTools: (input) => require(cell, (runtime) => runtime.session.selectTools(input)),
         switchModel: (input) => require(cell, (runtime) => runtime.session.switchModel(input)),
         interrupt: (sessionID, options) => require(cell, (runtime) => runtime.session.interrupt(sessionID, options)),
         synthetic: (input) => require(cell, (runtime) => runtime.session.synthetic(input)),
@@ -121,6 +127,9 @@ export const layerWithCell = (cell: Cell) =>
         },
         mcp: {
           list: (ref) => require(cell, (runtime) => runtime.location.mcp.list(ref)),
+        },
+        tool: {
+          paths: (ref) => require(cell, (runtime) => runtime.location.tool.paths(ref)),
         },
       },
     }),
@@ -170,6 +179,24 @@ export const providerLayerWithCell = (cell: Cell) =>
                   data: yield* mcp.servers(),
                 }
               }).pipe(Effect.provide(locations.get(ref))),
+          },
+          tool: {
+            paths: (ref) =>
+              Effect.gen(function* () {
+                // The tool registry depends on this runtime, so it loads only when a Location's tools are needed.
+                const { CodeModeTool } = yield* Effect.promise(() => import("../codemode/tool.js"))
+                const { OpenApi } = yield* Effect.promise(() => import("../openapi/index.js"))
+                const { McpTool } = yield* Effect.promise(() => import("../tool/mcp.js"))
+                const { Tool } = yield* Effect.promise(() => import("../tool.js"))
+                const plugins = yield* PluginSupervisor.Service
+                const mcp = yield* McpTool.Service
+                const openapi = yield* OpenApi.Service
+                const tools = yield* Tool.Service
+                yield* plugins.flush
+                yield* mcp.flush
+                yield* openapi.flush
+                return (yield* tools.registrations()).map(CodeModeTool.qualifiedName)
+              }).pipe(Effect.provide(locations.get(ref)), Effect.orDie),
           },
         },
       }

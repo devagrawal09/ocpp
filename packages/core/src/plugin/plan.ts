@@ -1,21 +1,18 @@
 export * as PlanPlugin from "./plan.js"
 
-import { Message, ToolFailure } from "@ocpp/ai"
+import { Message } from "@ocpp/ai"
 import { define } from "@ocpp/plugin/effect/plugin"
 import { Agent } from "@ocpp/schema/agent"
 import type { SessionEvent } from "@ocpp/schema/session-event"
-import { Global } from "@ocpp/util/global"
 import { Effect, Stream } from "effect"
-import path from "path"
-import { Permission } from "../permission.js"
 
 const plan = Agent.ID.make("plan")
 
-const enter = (directory: string) => `<system-reminder>
-You are in Plan mode. You may optionally create or update plan documents in:
-${directory}
+// The plan agent's tool list, from init.ts or the built-in default, holds what it can call; this says what it is for.
+const enterReminder = `<system-reminder>
+You are in Plan mode. Explore the codebase and plan the work, then present the plan in your reply.
 
-Do not modify any other files or ask a subagent to do so.
+Do not modify files, run commands that change anything, or ask a subagent to do so.
 
 You remain in Plan mode until the user switches agents. If the user asks you to implement changes, do not do so. Tell them they need to switch agents.
 </system-reminder>`
@@ -27,36 +24,19 @@ You are NO LONGER in Plan mode. The previous Plan restrictions no longer apply. 
 export const Plugin = define({
   id: "ocpp.plan",
   effect: Effect.fn(function* (ctx) {
-    const global = yield* Global.Service
-    const directory = path.join(global.home, ".ocpp", "plan")
-    const enterReminder = enter(directory)
     yield* ctx.agent.transform((draft) => {
       draft.update(plan, (item) => {
         item.name = Agent.Name.make("Plan")
-        item.description = "Read-only agent for exploring the codebase and planning work before implementation."
+        item.description =
+          "Agent for exploring the codebase and planning work before implementation. Its default tools read, search and ask."
         item.mode = "primary"
-        item.permissions.push({ action: "question", resource: "*", effect: "allow" })
-        item.permissions.push({ action: "edit", resource: "*", effect: "deny" })
-        item.permissions.push({ action: "edit", resource: path.join(directory, "*"), effect: "allow" })
-        item.permissions.push({ action: "external_directory", resource: path.join(directory, "*"), effect: "allow" })
       })
-    })
-
-    yield* ctx.tool.hook("execute.after", (event) => {
-      if (event.agent !== plan) return Effect.void
-      if (event.status !== "error") return Effect.void
-      if (event.tool !== "edit" && event.tool !== "write" && event.tool !== "patch") return Effect.void
-      if (!(event.error.error instanceof Permission.BlockedError)) return Effect.void
-      event.error = new ToolFailure({
-        message: `Cannot use ${event.tool} to modify files outside the Plan directory: ${directory}`,
-      })
-      return Effect.void
     })
 
     // Compaction and committed reverts can strip reminders while the session's agent stays
     // put. Reconcile per request, appending near the tail so the cached prefix stays warm.
     yield* ctx.session.hook("context", (event) => {
-      const reminder = lastReminder(event.messages, enterReminder)
+      const reminder = lastReminder(event.messages)
       const missing = event.agent === plan && reminder !== enterReminder
       const stale = event.agent !== plan && reminder === enterReminder
       const text = missing ? enterReminder : stale ? leave : undefined
@@ -79,7 +59,7 @@ export const Plugin = define({
           event.type === "session.created" || event.type === "session.agent.selected",
       ),
       Stream.runForEach((event) => {
-        const text = switchReminder(event, enterReminder)
+        const text = switchReminder(event)
         if (!text) return Effect.void
         return ctx.session
           .synthetic({
@@ -98,10 +78,7 @@ export const Plugin = define({
   }),
 })
 
-function switchReminder(
-  event: SessionEvent.Created | SessionEvent.AgentSelected,
-  enterReminder: string,
-): string | undefined {
+function switchReminder(event: SessionEvent.Created | SessionEvent.AgentSelected): string | undefined {
   if (event.type === "session.created") {
     if (event.data.agent !== plan) return undefined
     return enterReminder
@@ -112,7 +89,7 @@ function switchReminder(
   return undefined
 }
 
-function lastReminder(messages: ReadonlyArray<Message>, enterReminder: string) {
+function lastReminder(messages: ReadonlyArray<Message>) {
   return messages.reduce<string | undefined>((found, message) => {
     const part = message.role === "user" && message.content.length === 1 ? message.content[0] : undefined
     if (part?.type !== "text") return found

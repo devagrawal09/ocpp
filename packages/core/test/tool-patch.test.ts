@@ -9,7 +9,6 @@ import { Formatter } from "@ocpp/core/formatter"
 import { FileMutation } from "@ocpp/core/file-mutation"
 import { Location } from "@ocpp/core/location"
 import { LocationMutation } from "@ocpp/core/location-mutation"
-import { Permission } from "@ocpp/core/permission"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { Tool } from "@ocpp/core/tool"
@@ -24,7 +23,6 @@ import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { testEffect } from "./lib/effect"
-import { permissionLayer } from "./lib/permission"
 import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const patchToolNode = makeLocationNode({
@@ -38,7 +36,6 @@ const patchToolNode = makeLocationNode({
     Environment.node,
     Formatter.node,
     Location.node,
-    Permission.node,
   ],
 })
 
@@ -48,62 +45,25 @@ const editWriteToolNode = makeLocationNode({
   layer: Layer.effectDiscard(
     Effect.all([registerToolPlugin(EditTool.Plugin), registerToolPlugin(WriteTool.Plugin)], { discard: true }),
   ),
-  deps: [
-    Tool.node,
-    LocationMutation.node,
-    FileMutation.node,
-    Environment.node,
-    Formatter.node,
-    Location.node,
-    Permission.node,
-  ],
+  deps: [Tool.node, LocationMutation.node, FileMutation.node, Environment.node, Formatter.node, Location.node],
 })
 
 const sessionID = Session.ID.make("ses_patch_tool_test")
-const assertions: Permission.AssertInput[] = []
-let denyAction: string | undefined
 let failRemoveTarget: string | undefined
 let failRemoveErrorTarget: string | undefined
 let failWriteTarget: string | undefined
-let readsBeforeEditApproval = 0
-let editApproved = false
-let afterEditApproval = (): Effect.Effect<void> => Effect.void
+let beforeRead = (): Effect.Effect<void> => Effect.void
 let formatFile = (_target: string): Effect.Effect<boolean> => Effect.succeed(false)
-
-const permission = permissionLayer({
-  assert: (input) =>
-    Effect.sync(() => {
-      assertions.push(input)
-      if (input.action === "edit") editApproved = true
-    }).pipe(
-      Effect.andThen(input.action === "edit" ? Effect.suspend(afterEditApproval) : Effect.void),
-      Effect.andThen(
-        input.action === denyAction
-          ? Effect.fail(
-              new Permission.BlockedError({
-                rules: [],
-                permission: input.action,
-                resources: input.resources,
-              }),
-            )
-          : Effect.void,
-      ),
-    ),
-})
 
 const formatter = Layer.mock(Formatter.Service, {
   file: (target) => formatFile(target),
 })
 
 const reset = () => {
-  assertions.length = 0
-  denyAction = undefined
   failRemoveTarget = undefined
   failRemoveErrorTarget = undefined
   failWriteTarget = undefined
-  readsBeforeEditApproval = 0
-  editApproved = false
-  afterEditApproval = () => Effect.void
+  beforeRead = () => Effect.void
   formatFile = () => Effect.succeed(false)
 }
 
@@ -126,10 +86,7 @@ const withTool = <A, E, R>(
         [
           Environment.node,
           transformEnvironmentFiles((files) => ({
-            read: (target, range) =>
-              Effect.sync(() => {
-                if (!editApproved) readsBeforeEditApproval++
-              }).pipe(Effect.andThen(files.read(target, range))),
+            read: (target, range) => Effect.suspend(beforeRead).pipe(Effect.andThen(files.read(target, range))),
             remove: (target) => {
               if (failRemoveTarget && path.basename(target) === failRemoveTarget)
                 return Effect.die("forced remove failure")
@@ -146,7 +103,6 @@ const withTool = <A, E, R>(
         ],
         [Location.node, activeLocation],
         [Formatter.node, formatter],
-        [Permission.node, permission],
       ]),
     ),
   )
@@ -224,7 +180,6 @@ describe("PatchTool", () => {
                 ),
               ],
               [Formatter.node, formatter],
-              [Permission.node, permission],
             ]),
           ),
         ),
@@ -293,20 +248,6 @@ describe("PatchTool", () => {
                     },
                   ],
                 })
-                expect(assertions).toMatchObject([
-                  {
-                    sessionID,
-                    action: "edit",
-                    resources: ["nested/new.txt", "update.txt", "remove.txt"],
-                    save: ["*"],
-                    metadata: {
-                      filepath: "nested/new.txt, update.txt, remove.txt",
-                      diff: expect.stringContaining("Index:"),
-                      files: expect.any(Array),
-                    },
-                  },
-                ])
-                expect(readsBeforeEditApproval).toBe(2)
                 expect(yield* Effect.promise(() => fs.readFile(path.join(tmp.path, "nested/new.txt"), "utf8"))).toBe(
                   "created\n",
                 )
@@ -363,8 +304,9 @@ describe("PatchTool", () => {
   it.live("serializes concurrent patch transactions", () =>
     withTempTool((directory, registry) => {
       const target = path.join(directory, "concurrent.txt")
-      afterEditApproval = () =>
-        assertions.filter((input) => input.action === "edit").length === 1 ? Effect.sleep("50 millis") : Effect.void
+      // The first transaction holds its lock while it reads, so the second must wait for it.
+      const reads = { count: 0 }
+      beforeRead = () => Effect.suspend(() => (++reads.count === 1 ? Effect.sleep("50 millis") : Effect.void))
       return Effect.promise(() => fs.writeFile(target, "one\ntwo\n")).pipe(
         Effect.andThen(
           Effect.all(
@@ -566,28 +508,6 @@ describe("PatchTool", () => {
     ),
   )
 
-  it.live("includes the move destination in edit permission resources", () =>
-    withTempTool((directory, registry) =>
-      Effect.gen(function* () {
-        const source = path.join(directory, "old", "name.txt")
-        yield* Effect.promise(() => fs.mkdir(path.dirname(source), { recursive: true }))
-        yield* Effect.promise(() => fs.writeFile(source, "old content\n"))
-        yield* executeTool(
-          registry,
-          call(
-            "*** Begin Patch\n*** Update File: old/name.txt\n*** Move to: renamed/dir/name.txt\n@@\n-old content\n+new content\n*** End Patch",
-          ),
-        )
-        expect(assertions).toMatchObject([
-          {
-            action: "edit",
-            resources: ["old/name.txt", "renamed/dir/name.txt"],
-          },
-        ])
-      }),
-    ),
-  )
-
   it.live("uses Location-relative resources for move targets in a nested Location", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
@@ -613,7 +533,6 @@ describe("PatchTool", () => {
                     status: "completed",
                     output: { applied: [{ resource: "moved.txt" }] },
                   })
-                  expect(assertions).toMatchObject([{ action: "edit", resources: ["old.txt", "moved.txt"] }])
                 }),
               tmp.path,
             ),
@@ -915,7 +834,7 @@ describe("PatchTool", () => {
     ),
   )
 
-  it.live("approves an external directory before reading and requests edit permission afterward", () =>
+  it.live("patches an external absolute file", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
@@ -938,17 +857,6 @@ describe("PatchTool", () => {
                     call(`*** Begin Patch\n*** Update File: ${target}\n@@\n-before\n+after\n*** End Patch`),
                   ),
                 ).toMatchObject({ status: "completed" })
-                expect(assertions.map((input) => input.action)).toEqual(["external_directory", "edit"])
-                expect(assertions[0]).toMatchObject({
-                  resources: [path.join(directory, "*").replaceAll("\\", "/")],
-                  save: [path.join(repository, "*").replaceAll("\\", "/")],
-                  metadata: {
-                    filepath: target,
-                    parentDir: directory,
-                  },
-                })
-                expect(assertions[1]?.resources).toEqual([target.replaceAll("\\", "/")])
-                expect(readsBeforeEditApproval).toBe(1)
                 expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after\n")
               }),
             ),
@@ -959,59 +867,6 @@ describe("PatchTool", () => {
         Effect.promise(() =>
           Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),
         ),
-    ),
-  )
-
-  it.live("does not inspect an external file when external permission is denied", () =>
-    Effect.acquireUseRelease(
-      Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
-      ([active, outside]) => {
-        reset()
-        denyAction = "external_directory"
-        const target = path.join(outside.path, "external.txt")
-        return Effect.promise(() => fs.writeFile(target, "before\n")).pipe(
-          Effect.andThen(
-            withTool(
-              active.path,
-              (registry) =>
-                Effect.gen(function* () {
-                  expect(
-                    yield* executeTool(
-                      registry,
-                      call(`*** Begin Patch\n*** Update File: ${target}\n@@\n-before\n+after\n*** End Patch`),
-                    ),
-                  ).toMatchObject({ status: "error", error: { type: "permission.rejected" } })
-                  expect(assertions.map((input) => input.action)).toEqual(["external_directory"])
-                  expect(readsBeforeEditApproval).toBe(0)
-                  expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("before\n")
-                }),
-              path.parse(active.path).root,
-            ),
-          ),
-        )
-      },
-      ([active, outside]) =>
-        Effect.promise(() =>
-          Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),
-        ),
-    ),
-  )
-
-  it.live("preserves edit permission rejection", () =>
-    withTempTool((directory, registry) =>
-      Effect.gen(function* () {
-        const target = path.join(directory, "target.txt")
-        yield* Effect.promise(() => fs.writeFile(target, "before\n"))
-        denyAction = "edit"
-        expect(
-          yield* executeTool(
-            registry,
-            call("*** Begin Patch\n*** Update File: target.txt\n@@\n-before\n+after\n*** End Patch"),
-          ),
-        ).toMatchObject({ status: "error", error: { type: "permission.rejected" } })
-        expect(assertions.map((input) => input.action)).toEqual(["edit"])
-        expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("before\n")
-      }),
     ),
   )
 
@@ -1034,8 +889,6 @@ describe("PatchTool", () => {
                       call("*** Begin Patch\n*** Update File: ../sibling.txt\n@@\n-before\n+after\n*** End Patch"),
                     ),
                   ).toMatchObject({ status: "completed" })
-                  expect(assertions.map((input) => input.action)).toEqual(["edit"])
-                  expect(assertions[0]?.resources).toEqual(["../sibling.txt"])
                   expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after\n")
                 }),
               tmp.path,
@@ -1047,7 +900,7 @@ describe("PatchTool", () => {
     ),
   )
 
-  it.live("follows an internal symlink to an external file without external permission", () =>
+  it.live("follows an internal symlink to an external file", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
@@ -1066,7 +919,6 @@ describe("PatchTool", () => {
                     call("*** Begin Patch\n*** Update File: link.txt\n@@\n-before\n+after\n*** End Patch"),
                   ),
                 ).toMatchObject({ status: "completed" })
-                expect(assertions.map((input) => input.action)).toEqual(["edit"])
                 expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after\n")
               }),
             ),
@@ -1080,7 +932,7 @@ describe("PatchTool", () => {
     ),
   )
 
-  it.live("approves a relative external target before reading and requests edit permission afterward", () =>
+  it.live("patches a relative external target", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
@@ -1097,8 +949,6 @@ describe("PatchTool", () => {
                     call(`*** Begin Patch\n*** Update File: ${relative}\n@@\n-before\n+after\n*** End Patch`),
                   ),
                 ).toMatchObject({ status: "completed" })
-                expect(assertions.map((input) => input.action)).toEqual(["external_directory", "edit"])
-                expect(readsBeforeEditApproval).toBe(1)
                 expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after\n")
               }),
             ),
@@ -1112,7 +962,7 @@ describe("PatchTool", () => {
     ),
   )
 
-  it.live("uses canonical external permissions and resources for a move destination", () =>
+  it.live("uses canonical external resources for a move destination", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
@@ -1133,62 +983,8 @@ describe("PatchTool", () => {
                   status: "completed",
                   output: { applied: [{ resource: destination.replaceAll("\\", "/") }] },
                 })
-                expect(assertions).toMatchObject([
-                  {
-                    action: "external_directory",
-                    resources: [path.join(outside.path, "*").replaceAll("\\", "/")],
-                    save: [path.join(outside.path, "*").replaceAll("\\", "/")],
-                    metadata: { filepath: destination, parentDir: outside.path },
-                  },
-                  {
-                    action: "edit",
-                    resources: ["source.txt", destination.replaceAll("\\", "/")],
-                  },
-                ])
                 expect(yield* exists(source)).toBe(false)
                 expect(yield* Effect.promise(() => fs.readFile(destination, "utf8"))).toBe("after\n")
-              }),
-            ),
-          ),
-        )
-      },
-      ([active, outside]) =>
-        Effect.promise(() =>
-          Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),
-        ),
-    ),
-  )
-
-  it.live("approves each external file under the same parent", () =>
-    Effect.acquireUseRelease(
-      Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
-      ([active, outside]) => {
-        reset()
-        const first = path.join(outside.path, "first.txt")
-        const second = path.join(outside.path, "second.txt")
-        return Effect.promise(() =>
-          Promise.all([fs.writeFile(first, "before\n"), fs.writeFile(second, "before\n")]),
-        ).pipe(
-          Effect.andThen(
-            withTool(active.path, (registry) =>
-              Effect.gen(function* () {
-                expect(
-                  yield* executeTool(
-                    registry,
-                    call(
-                      `*** Begin Patch\n*** Update File: ${first}\n@@\n-before\n+after\n*** Update File: ${second}\n@@\n-before\n+after\n*** End Patch`,
-                    ),
-                  ),
-                ).toMatchObject({ status: "completed" })
-                expect(assertions.map((input) => input.action)).toEqual([
-                  "external_directory",
-                  "external_directory",
-                  "edit",
-                ])
-                expect(assertions[0]?.resources).toEqual([
-                  path.join(yield* Effect.promise(() => fs.realpath(outside.path)), "*").replaceAll("\\", "/"),
-                ])
-                expect(assertions[1]?.resources).toEqual(assertions[0]?.resources)
               }),
             ),
           ),
@@ -1249,29 +1045,6 @@ describe("PatchTool", () => {
               }),
             ),
           ),
-        )
-      },
-      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
-    ),
-  )
-
-  it.live("overwrites an add target that appears during permission approval", () =>
-    Effect.acquireUseRelease(
-      Effect.promise(() => tmpdir()),
-      (tmp) => {
-        reset()
-        const target = path.join(tmp.path, "appeared.txt")
-        afterEditApproval = () => Effect.promise(() => fs.writeFile(target, "winner\n")).pipe(Effect.orDie)
-        return withTool(tmp.path, (registry) =>
-          Effect.gen(function* () {
-            expect(
-              yield* executeTool(
-                registry,
-                call("*** Begin Patch\n*** Add File: appeared.txt\n+replacement\n*** End Patch"),
-              ),
-            ).toMatchObject({ status: "completed" })
-            expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("replacement\n")
-          }),
         )
       },
       (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),

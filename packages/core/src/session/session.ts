@@ -105,6 +105,13 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     const session = yield* get(sessionID)
     yield* bus.publish(SessionEvent.AgentSelected, { sessionID, agent: input.agent, previous: session.agent })
   })
+  const selectTools = Effect.fn("Session.selectTools")(function* (
+    sessionID: SessionSchema.ID,
+    input: { tools: ReadonlyArray<string> },
+  ) {
+    yield* get(sessionID)
+    yield* bus.publish(SessionEvent.ToolsSelected, { sessionID, tools: input.tools })
+  })
   const switchModel = Effect.fn("Session.switchModel")(function* (
     sessionID: SessionSchema.ID,
     input: { model: Model.Ref },
@@ -390,6 +397,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     view,
     rename,
     switchAgent,
+    selectTools,
     switchModel,
     inbox,
     prompt,
@@ -412,6 +420,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     const view = operations.view.bind(undefined, sessionID)
     const rename = operations.rename.bind(undefined, sessionID)
     const switchAgent = operations.switchAgent.bind(undefined, sessionID)
+    const selectTools = operations.selectTools.bind(undefined, sessionID)
     const switchModel = operations.switchModel.bind(undefined, sessionID)
     const inbox = operations.inbox.bind(undefined, sessionID)
     const prompt = operations.prompt.bind(undefined, sessionID)
@@ -437,6 +446,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       view,
       rename,
       switchAgent,
+      selectTools,
       switchModel,
       inbox,
       prompt,

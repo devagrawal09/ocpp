@@ -173,20 +173,6 @@ import type {
   FormReplyOutput,
   FormCancelInput,
   FormCancelOutput,
-  PermissionRequestListInput,
-  PermissionRequestListOutput,
-  PermissionSavedListInput,
-  PermissionSavedListOutput,
-  PermissionSavedRemoveInput,
-  PermissionSavedRemoveOutput,
-  PermissionCreateInput,
-  PermissionCreateOutput,
-  PermissionListInput,
-  PermissionListOutput,
-  PermissionGetInput,
-  PermissionGetOutput,
-  PermissionReplyInput,
-  PermissionReplyOutput,
   FileReadInput,
   FileReadOutput,
   FileListInput,
@@ -1537,101 +1523,6 @@ export function make(options: ClientOptions) {
             path: `/api/session/${encodeURIComponent(input.sessionID)}/form/${encodeURIComponent(input.formID)}/cancel`,
             successStatus: 204,
             declaredStatuses: [404, 409, 400, 401],
-            empty: true,
-          },
-          requestOptions,
-        ),
-    },
-    permission: {
-      request: {
-        list: (input?: PermissionRequestListInput, requestOptions?: RequestOptions) =>
-          request<PermissionRequestListOutput>(
-            {
-              method: "GET",
-              path: `/api/permission/request`,
-              query: { location: input?.["location"] },
-              successStatus: 200,
-              declaredStatuses: [401, 400],
-              empty: false,
-            },
-            requestOptions,
-          ),
-      },
-      saved: {
-        list: (input?: PermissionSavedListInput, requestOptions?: RequestOptions) =>
-          request<{ readonly data: PermissionSavedListOutput }>(
-            {
-              method: "GET",
-              path: `/api/permission/saved`,
-              query: { projectID: input?.["projectID"] },
-              successStatus: 200,
-              declaredStatuses: [401, 400],
-              empty: false,
-            },
-            requestOptions,
-          ).then((value) => value.data),
-        remove: (input: PermissionSavedRemoveInput, requestOptions?: RequestOptions) =>
-          request<PermissionSavedRemoveOutput>(
-            {
-              method: "DELETE",
-              path: `/api/permission/saved/${encodeURIComponent(input.id)}`,
-              successStatus: 204,
-              declaredStatuses: [401, 400],
-              empty: true,
-            },
-            requestOptions,
-          ),
-      },
-      create: (input: PermissionCreateInput, requestOptions?: RequestOptions) =>
-        request<{ readonly data: PermissionCreateOutput }>(
-          {
-            method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/permission`,
-            body: {
-              id: input["id"],
-              action: input["action"],
-              resources: input["resources"],
-              save: input["save"],
-              metadata: input["metadata"],
-              source: input["source"],
-              agent: input["agent"],
-            },
-            successStatus: 200,
-            declaredStatuses: [404, 400, 401],
-            empty: false,
-          },
-          requestOptions,
-        ).then((value) => value.data),
-      list: (input: PermissionListInput, requestOptions?: RequestOptions) =>
-        request<{ readonly data: PermissionListOutput }>(
-          {
-            method: "GET",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/permission`,
-            successStatus: 200,
-            declaredStatuses: [404, 401, 400],
-            empty: false,
-          },
-          requestOptions,
-        ).then((value) => value.data),
-      get: (input: PermissionGetInput, requestOptions?: RequestOptions) =>
-        request<{ readonly data: PermissionGetOutput }>(
-          {
-            method: "GET",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/permission/${encodeURIComponent(input.requestID)}`,
-            successStatus: 200,
-            declaredStatuses: [404, 400, 401],
-            empty: false,
-          },
-          requestOptions,
-        ).then((value) => value.data),
-      reply: (input: PermissionReplyInput, requestOptions?: RequestOptions) =>
-        request<PermissionReplyOutput>(
-          {
-            method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/permission/${encodeURIComponent(input.requestID)}/reply`,
-            body: { reply: input["reply"], message: input["message"] },
-            successStatus: 204,
-            declaredStatuses: [404, 400, 401],
             empty: true,
           },
           requestOptions,

@@ -21,6 +21,7 @@ import { CodeModeCompileCheck } from "./compile-check.js"
 import { limits } from "./limits.js"
 import { CodeModeReplay } from "./replay.js"
 import type { CodeModeStore } from "./store.js"
+import type { ToolLists } from "../tool/lists.js"
 import { neutralize, untrusted } from "./untrusted.js"
 
 type ExecuteCall = CodeModeExecution.ToolEvent
@@ -87,14 +88,26 @@ type ExecuteToolFn = (
   context: Tool.Context,
 ) => Effect.Effect<Tool.Result, Tool.Error>
 
+/** What an execution's catalog is built from, beyond its registrations. */
+type Catalog = {
+  /** Registrations that are not the Location's own tools, such as tool.define handles and init.ts wrappers. */
+  readonly lent: ReadonlySet<string>
+  /**
+   * The init.ts handles live for one execution, replacing the registrations that only describe them. Present when
+   * the tool list comes from init.ts.
+   */
+  readonly handles?: (context: Tool.Context) => Effect.Effect<ReadonlyMap<string, Tool.Info>, never, Scope.Scope>
+}
+
 export const create = (
   registrations: ReadonlyMap<string, Tool.Info>,
   executeTool: ExecuteToolFn,
   services: ExecutionServices,
-  input?: CodeMode.DataValue,
-  // Registered tools this agent's permission rules disable outright, so a call to one is refused
-  // as denied rather than unknown.
-  denied: ReadonlyArray<Tool.Info> = [],
+  options: Catalog & {
+    /** The tool list the catalog came from, stored with each execution so a resumed run rebuilds it. */
+    readonly selection: ToolLists.Selection
+    readonly input?: CodeMode.DataValue
+  },
 ) =>
   ({
     name: "execute",
@@ -112,10 +125,11 @@ export const create = (
               ? CodeModeCompileCheck.compileFailure(error, code)
               : new Tool.Error({ message: error instanceof Error ? error.message : String(error) }),
         })
-        const unavailable = CodeModeCompileCheck.unavailableTools(program, code, {
-          available: catalog(registrations).map((entry) => entry.path),
-          denied: denied.map(qualifiedName),
-        })
+        const unavailable = CodeModeCompileCheck.unavailableTools(
+          program,
+          code,
+          catalog(registrations).map((entry) => entry.path),
+        )
         if (unavailable) return yield* unavailable
         const executionID = decodeExecutionID("exe_" + ascending())
         // Admission compiles, reserves every declared name, and captures the notebook snapshot
@@ -126,7 +140,8 @@ export const create = (
           assistantMessageID: context.messageID,
           toolCallID: context.id,
           program,
-          ...(input === undefined ? {} : { input }),
+          tools: options.selection,
+          ...(options.input === undefined ? {} : { input: options.input }),
         })
         if (!admission.ok)
           return yield* new Tool.Error({
@@ -142,6 +157,7 @@ export const create = (
         return yield* Effect.gen(function* () {
           const gate = yield* Deferred.make<void>()
           const launched = yield* launch(registrations, executeTool, services, context, execution, {
+            ...options,
             gate,
             notificationID: SessionMessage.ID.create(),
           })
@@ -222,7 +238,7 @@ export const resume = (
   registrations: ReadonlyMap<string, Tool.Info>,
   executeTool: ExecuteToolFn,
   services: ExecutionServices,
-  input: {
+  input: Catalog & {
     readonly context: Tool.Context
     readonly resumable: CodeModeStore.Resumable
     readonly notificationID: SessionMessage.ID
@@ -234,6 +250,8 @@ export const resume = (
     const gate = yield* Deferred.make<void>()
     yield* Deferred.succeed(gate, undefined)
     const launched = yield* launch(registrations, executeTool, services, input.context, input.resumable.execution, {
+      lent: input.lent,
+      ...(input.handles === undefined ? {} : { handles: input.handles }),
       gate,
       notificationID: input.notificationID,
       journal: input.resumable.journal,
@@ -259,7 +277,7 @@ const launch = (
   services: ExecutionServices,
   context: Tool.Context,
   execution: CodeModeStore.Execution,
-  options: {
+  options: Catalog & {
     readonly gate: Deferred.Deferred<void>
     readonly notificationID: SessionMessage.ID
     readonly journal?: ReadonlyArray<CodeModeStore.JournalEntry>
@@ -356,8 +374,19 @@ const launch = (
       )
     const run = Effect.gen(function* () {
       yield* services.store.running(executionID)
+      const live = options.handles === undefined ? undefined : yield* options.handles(context)
+      // Catalog hooks may have edited a handle's description, which the live handle keeps.
+      const current = new Map(
+        Array.from(registrations, ([name, tool]) => {
+          const handle = live?.get(name)
+          return [name, handle === undefined ? tool : { ...handle, description: tool.description }] as const
+        }),
+      )
+      const catalog = new Map(
+        Array.from(current, ([name, tool]) => [qualifiedName(tool), { tool, lent: options.lent.has(name) }] as const),
+      )
       const exit = yield* runtime(
-        registrations,
+        current,
         (name, tool, input, index) =>
           Effect.gen(function* () {
             const decision = yield* replay.call(index)
@@ -369,6 +398,7 @@ const launch = (
               ...context,
               id: Tool.CallID.make(context.id + ":" + index),
               ...(decision.recovered === undefined ? {} : { recovered: decision.recovered }),
+              ...(tool.options?.acceptsToolHandles === true ? { catalog } : {}),
               progress: (metadata) => {
                 const shown = displayMetadata(metadata)
                 return Effect.all(
@@ -500,7 +530,7 @@ const launch = (
         return { saved: true, summary: savedSummary(executionID, settlement.saved, result, notes) }
       yield* Ref.set(failureKind, "CommitFailure")
       return { saved: false, summary: failureSummary(executionID, result, settlement.error, notes) }
-    })
+    }).pipe(Effect.scoped)
 
     const recovery = {
       kind: "codemode" as const,
@@ -603,6 +633,31 @@ export const catalog = (registrations: ReadonlyMap<string, Tool.Info>) => {
   return entries
 }
 
+/** Registered tools as the Code Mode tools a program calls by path, each run by `executeTool`. */
+export function tools(
+  registrations: ReadonlyMap<string, Tool.Info>,
+  executeTool: (name: string, tool: Tool.Info, input: unknown, index: number) => Effect.Effect<unknown, unknown>,
+) {
+  return Object.fromEntries(
+    Array.from(registrations, ([name, registration]) => {
+      const child = definition(registration)
+      return [
+        qualifiedName(registration),
+        CodeModeDefinition.make({
+          description: child.description,
+          input: child.inputSchema,
+          output: child.outputSchema ?? Schema.NullOr(Schema.String),
+          acceptsToolHandles: registration.options?.acceptsToolHandles === true,
+          execute: (input, call) =>
+            call
+              ? executeTool(name, registration, input, call.index)
+              : Effect.fail(toolError("Execute context is unavailable")),
+        }),
+      ] as const
+    }),
+  )
+}
+
 function runtime(
   registrations: ReadonlyMap<string, Tool.Info>,
   executeTool: (name: string, tool: Tool.Info, input: unknown, index: number) => Effect.Effect<unknown, unknown>,
@@ -613,23 +668,8 @@ function runtime(
     readonly impure?: (helper: CodeMode.ImpureHelper) => number
   },
 ) {
-  const tools: Record<string, CodeModeDefinition.Tool<never>> = {}
-  for (const [name, registration] of registrations) {
-    const child = definition(registration)
-    const path = qualifiedName(registration)
-    tools[path] = CodeModeDefinition.make({
-      description: child.description,
-      input: child.inputSchema,
-      output: child.outputSchema ?? Schema.NullOr(Schema.String),
-      acceptsToolHandles: registration.options?.acceptsToolHandles === true,
-      execute: (input, call) =>
-        call
-          ? executeTool(name, registration, input, call.index)
-          : Effect.fail(toolError("Execute context is unavailable")),
-    })
-  }
-  return CodeMode.make<typeof tools>({
-    tools,
+  return CodeMode.make({
+    tools: tools(registrations, executeTool),
     ...options,
     limits: {
       maxToolCalls: limits.maxToolCalls,

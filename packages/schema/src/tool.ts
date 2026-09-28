@@ -23,11 +23,16 @@ export interface Context {
    * must rejoin the work that metadata describes instead of starting it again.
    */
   readonly recovered?: Metadata
+  /**
+   * The calling execution's Code Mode catalog by path, given to a tool declared with `acceptsToolHandles`, which may
+   * receive tool references naming its entries. `lent` marks a tool that is not in the Location's registry, such as a
+   * tool.define handle, which the receiver can hand on only as that tool, not by its path.
+   */
+  readonly catalog?: ReadonlyMap<string, { readonly tool: Info; readonly lent: boolean }>
 }
 
 export interface Options {
   readonly namespace?: string
-  readonly permission?: string
   /** Allows this in-process tool boundary to receive opaque same-activation tool handles. */
   readonly acceptsToolHandles?: boolean
   readonly pinned?: boolean

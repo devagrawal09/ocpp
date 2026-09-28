@@ -8,7 +8,6 @@ import { Environment } from "../../environment/index.js"
 import { FileSystem } from "../../filesystem.js"
 import { Location } from "../../location.js"
 import { LocationMutation } from "../../location-mutation.js"
-import { Permission } from "../../permission.js"
 import { Ripgrep } from "../../ripgrep.js"
 import { RelativePath } from "../../schema.js"
 
@@ -62,7 +61,6 @@ export const Plugin = {
     const ripgrep = yield* Ripgrep.Service
     const location = yield* Location.Service
     const mutation = yield* LocationMutation.Service
-    const permission = yield* Permission.Service
 
     yield* ctx.tool
       .transform((draft) =>
@@ -73,31 +71,9 @@ export const Plugin = {
             "Search file contents using regular expressions. Use it to locate specific code, symbols, or text patterns, and narrow searches with `path` or `include`. Returns matching file paths, line numbers, and line previews.",
           input: Input,
           output: Output,
-          execute: (input, context) =>
+          execute: (input) =>
             Effect.gen(function* () {
-              const source = { type: "tool" as const, messageID: context.messageID, id: context.id }
               const target = yield* mutation.resolve({ path: input.path ?? "." })
-              if (target.externalDirectory)
-                yield* permission.assert({
-                  ...LocationMutation.externalDirectoryPermission(target.externalDirectory),
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source,
-                })
-              yield* permission.assert({
-                action: name,
-                resources: [input.pattern],
-                save: ["*"],
-                metadata: {
-                  root: ".",
-                  path: input.path,
-                  include: input.include,
-                  limit: input.limit,
-                },
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source,
-              })
               const root = target.absolute
               const type = yield* Environment.typeFollowing(environment.files, root).pipe(
                 Effect.catchTag("Environment.NotFound", () =>

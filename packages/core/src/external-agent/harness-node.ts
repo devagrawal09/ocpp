@@ -6,16 +6,11 @@ import type { Model } from "@ocpp/schema/model"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import type { SessionError } from "@ocpp/schema/session-error"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
-import { FSUtil } from "@ocpp/util/fs-util"
 import { Hash } from "@ocpp/util/hash"
 import { Cause, Deferred, Effect, Exit, FiberMap, Layer, Option, Schema } from "effect"
-import path from "path"
 import { Bus } from "../bus.js"
-import { Config } from "../config.js"
 import { Database } from "../database/database.js"
 import { Instructions } from "../instructions/index.js"
-import { LocationMutation } from "../location-mutation.js"
-import { Permission } from "../permission.js"
 import { SessionContext } from "../session/context.js"
 import { StepFailedError } from "../session/error.js"
 import { ExternalAgentHarness } from "./harness.js"
@@ -33,7 +28,6 @@ import { toSessionError } from "../session/to-session-error.js"
 import { Tool } from "../tool.js"
 import { QuestionTool } from "../tool/plugin/question.js"
 import { definition, execute } from "../tool/runtime.js"
-import { Wildcard } from "../util/wildcard.js"
 import { ExternalAgentDriver } from "./driver.js"
 import { ExternalAgentDrivers } from "./drivers.js"
 import { ExternalAgentGateway } from "./gateway.js"
@@ -49,9 +43,6 @@ const layer = Layer.effect(
     const external = yield* ExternalAgentSession.Service
     const context = yield* SessionContext.Service
     const drivers = yield* ExternalAgentDrivers.Service
-    const permission = yield* Permission.Service
-    const config = yield* Config.Service
-    const fs = yield* FSUtil.Service
     const title = yield* SessionTitle.Service
     // Title generation starts once input is visible and must not delay the vendor.
     const titles = yield* FiberMap.make<SessionSchema.ID, void, never>()
@@ -170,8 +161,8 @@ const layer = Layer.effect(
         if (Cause.hasInterruptsOnly(exit.cause)) return yield* Effect.interrupt
         const failure = Cause.squash(exit.cause)
         const error: SessionError.Error =
-          failure instanceof Permission.DeclinedError || failure instanceof QuestionTool.CancelledError
-            ? { type: "aborted", message: "The user declined this tool call" }
+          failure instanceof QuestionTool.CancelledError
+            ? { type: "aborted", message: failure.message }
             : toSessionError(failure)
         yield* stream.settle(call, {
           _tag: "Failure",
@@ -216,17 +207,6 @@ const layer = Layer.effect(
           ]
         }),
       ])
-      const caller = session.parentID === undefined ? undefined : yield* store.get(session.parentID)
-      // Requests no child tool part explains are asked of a caller that shares this Location. A child placed in
-      // another Location is asked itself: its Location holds the request, and replies are routed by Session.
-      const owner =
-        caller !== undefined &&
-        caller.location.directory === session.location.directory &&
-        caller.location.workspaceID === session.location.workspaceID
-          ? caller.id
-          : session.id
-      const authorize = native({ session, owner, provider, selection, permission, fs, config, stream, activation })
-
       const bind = Effect.fnUntraced(function* () {
         const record = yield* external.get(sessionID)
         if (record?.provider === provider && record.directory === directory) return record
@@ -290,8 +270,6 @@ const layer = Layer.effect(
           message,
           harness: harness === "ocpp" ? { type: "ocpp", system } : { type: "native" },
           gateway,
-          authorize: (name, value, signal, toolID, cwd) =>
-            Effect.runPromise(authorize(name, value, toolID, cwd), { signal }),
           emit: (event) => Effect.runPromise(stream.emit(event).pipe(Effect.asVoid)),
           linked: (id) => {
             checkpoint.vendor = id
@@ -381,129 +359,6 @@ const layer = Layer.effect(
   }),
 )
 
-/** Authorizes the vendor's own tool calls in the native harness, through OC++ permissions. */
-function native(input: {
-  readonly session: SessionSchema.Info
-  /** The Session asked when no child tool part explains a request. */
-  readonly owner: SessionSchema.ID
-  readonly provider: ExternalSession.Provider
-  readonly selection: SessionContext.Selection
-  readonly permission: Permission.Interface
-  readonly fs: FSUtil.Interface
-  readonly config: Config.Interface
-  readonly stream: ReturnType<typeof ExternalAgentStream.make>
-  readonly activation: ExternalAgentSession.Activation | undefined
-}) {
-  const directory = input.session.location.directory
-  const provider = input.provider
-  const agent = input.selection.agent.id
-  const owner = input.owner
-  return Effect.fnUntraced(function* (name: string, value: Record<string, unknown>, toolID?: string, cwd?: string) {
-    const entries = yield* input.config.entries()
-    if (provider === "codex" && name === "workspace")
-      for (const action of ["read", "edit", "shell"])
-        yield* input.permission.assert({
-          action,
-          sessionID: owner,
-          agent,
-          ...(input.activation === undefined ? {} : { source: input.activation.source }),
-          save: [],
-          resources: [
-            "*",
-            ...input.selection.agent.info.permissions
-              .filter((rule) => Wildcard.match(action, rule.action) && rule.effect !== "allow")
-              .map((rule) => rule.resource),
-          ],
-          metadata: {
-            provider,
-            directory,
-            delegation:
-              "Codex native tools require authorization for their entire sandbox scope because its execution SDK has no per-tool approval callback.",
-          },
-        })
-    // A call the child's timeline shows is asked of the child; any other is asked of the owner, naming the subagent call.
-    const part = input.stream.source(toolID)
-    const source = part ?? input.activation?.source
-    const common = {
-      sessionID: part === undefined ? owner : input.session.id,
-      agent,
-      ...(source === undefined ? {} : { source }),
-      metadata: { provider, tool: name, directory },
-      save: [],
-    }
-    const selected = action(provider, name)
-    const workingDirectory = cwd === undefined ? directory : yield* input.fs.resolve(cwd)
-    const command =
-      selected !== "shell" || typeof value.command !== "string"
-        ? undefined
-        : yield* Effect.gen(function* () {
-            const { ShellParse } = yield* Effect.promise(() => import("../shell/parse.js"))
-            return yield* ShellParse.scan(
-              value.command as string,
-              name === "powershell" ? "powershell" : "bash",
-              workingDirectory,
-              { portable: Config.latest(entries, "experimental")?.portable_shell_scanner === true },
-            )
-          })
-    const file = value.file_path ?? value.path
-    const absolute =
-      typeof file === "string"
-        ? yield* input.fs.resolve(LocationMutation.resolvePath(workingDirectory, file))
-        : undefined
-    const paths = [
-      workingDirectory,
-      ...(absolute === undefined || FSUtil.contains(directory, absolute)
-        ? []
-        : [(yield* input.fs.isDir(absolute)) ? absolute : path.dirname(absolute)]),
-      ...(command?.directories ?? []),
-    ]
-    const resolved = yield* Effect.forEach(paths, (value) =>
-      input.fs.resolve(LocationMutation.resolvePath(workingDirectory, value)),
-    )
-    const outside = resolved.filter((value) => !FSUtil.contains(directory, value))
-    if (outside.length > 0)
-      yield* input.permission.assert({
-        ...common,
-        action: "external_directory",
-        resources: outside.map((value) => path.join(value, "*").replaceAll("\\", "/")),
-      })
-    yield* input.permission.assert({
-      ...common,
-      action: selected,
-      resources: command?.commands.length
-        ? command.commands.map((item) => item.resource)
-        : [
-            absolute === undefined
-              ? resource(directory, value)
-              : (FSUtil.contains(directory, absolute)
-                  ? path.relative(directory, absolute) || "."
-                  : absolute
-                ).replaceAll("\\", "/"),
-          ],
-    })
-  })
-}
-
-function action(provider: ExternalSession.Provider, name: string) {
-  if (["Bash", "bash", "powershell", "command_execution"].includes(name)) return "shell"
-  if (["Read", "read"].includes(name)) return "read"
-  if (["Glob", "ls", "find"].includes(name)) return "glob"
-  if (["Grep", "grep"].includes(name)) return "grep"
-  if (["Edit", "Write", "NotebookEdit", "edit", "write", "file_change"].includes(name)) return "edit"
-  if (name === "WebFetch") return "webfetch"
-  if (name === "WebSearch") return "websearch"
-  if (name === "Skill") return "skill"
-  return `${provider}_${name}`
-}
-
-function resource(directory: string, value: Record<string, unknown>) {
-  const file = value.file_path ?? value.path
-  if (typeof file === "string") return LocationMutation.resolvePath(directory, file)
-  if (typeof value.command === "string") return value.command
-  if (typeof value.url === "string") return value.url
-  return directory
-}
-
 /**
  * Canonical OC++ history as the vendor reads it when a vendor session is rebuilt, and as its checkpoints hash it: what
  * the runner would show a model, reduced to text. Tool metadata never enters it: a Code Mode trace holds machine-only
@@ -584,9 +439,6 @@ export const node = makeLocationNode({
     ExternalAgentSession.node,
     SessionContext.node,
     ExternalAgentDrivers.node,
-    Permission.node,
-    Config.node,
-    FSUtil.node,
     SessionTitle.node,
   ],
 })

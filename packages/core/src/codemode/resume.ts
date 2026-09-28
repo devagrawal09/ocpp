@@ -10,6 +10,7 @@ import { SessionMessage } from "../session/message.js"
 import { SessionStore } from "../session/store.js"
 import { McpTool } from "../tool/mcp.js"
 import { Tool } from "../tool.js"
+import { ToolLists } from "../tool/lists.js"
 import { CodeModeStore } from "./store.js"
 
 /** Resumes of one execution before restart recovery stops resuming it, so a run that kills its host cannot loop. */
@@ -57,6 +58,7 @@ export const layer = Layer.effect(
           const mcp = yield* McpTool.Service
           const openapi = yield* OpenApi.Service
           const agents = yield* Agent.Service
+          const lists = yield* ToolLists.Service
           const tools = yield* Tool.Service
           // Replay needs every tool the execution could call, including plugin, MCP, and OpenAPI tools.
           yield* plugins.flush
@@ -66,7 +68,8 @@ export const layer = Layer.effect(
           const agent = yield* agents.select(started.type === "assistant" ? started.agent : session.agent)
           if (agent.info === undefined) return "Its agent " + agent.id + " no longer exists."
           return yield* tools.resume({
-            permissions: agent.info.permissions,
+            // The tool list it was admitted with, init.ts source included, rebuilds the same catalog.
+            selection: execution.tools ?? (yield* lists.select(session, agent.id)),
             agent: agent.id,
             resumable,
             notificationID: input.notificationID,

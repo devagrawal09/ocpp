@@ -26,8 +26,6 @@ import type { Integration } from "@ocpp/schema/integration"
 import type { Form } from "@ocpp/schema/form"
 import type { Mcp } from "@ocpp/schema/mcp"
 import type { Credential } from "@ocpp/schema/credential"
-import type { Permission } from "@ocpp/schema/permission"
-import type { PermissionSaved } from "@ocpp/schema/permission-saved"
 import type { FileSystem } from "@ocpp/schema/filesystem"
 import type { Command } from "@ocpp/schema/command"
 import type { OcppEvent } from "@ocpp/protocol/groups/event"
@@ -440,6 +438,15 @@ export type SessionLogOutput =
             readonly model: Model.Ref
             readonly previous?: Model.Ref | undefined
           }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.tools.selected"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: { readonly sessionID: Session.ID; readonly tools: ReadonlyArray<string> }
         }
       | {
           readonly id: Event.ID
@@ -1725,72 +1732,6 @@ export interface FormApi<E = never> {
   readonly cancel: FormCancelOperation<E>
 }
 
-export type PermissionRequestListInput = {
-  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-}
-export type PermissionRequestListOutput = {
-  readonly location: Location.Info
-  readonly data: ReadonlyArray<Permission.Request>
-}
-export type PermissionRequestListOperation<E = never> = (
-  input?: PermissionRequestListInput,
-) => Effect.Effect<PermissionRequestListOutput, E>
-
-export type PermissionSavedListInput = { readonly projectID?: Project.ID | undefined }
-export type PermissionSavedListOutput = ReadonlyArray<PermissionSaved.Info>
-export type PermissionSavedListOperation<E = never> = (
-  input?: PermissionSavedListInput,
-) => Effect.Effect<PermissionSavedListOutput, E>
-
-export type PermissionSavedRemoveInput = { readonly id: PermissionSaved.ID }
-export type PermissionSavedRemoveOutput = void
-export type PermissionSavedRemoveOperation<E = never> = (
-  input: PermissionSavedRemoveInput,
-) => Effect.Effect<PermissionSavedRemoveOutput, E>
-
-export type PermissionCreateInput = {
-  readonly sessionID: Session.ID
-  readonly id?: Permission.ID | undefined
-  readonly action: string
-  readonly resources: ReadonlyArray<string>
-  readonly save?: ReadonlyArray<string> | undefined
-  readonly metadata?: { readonly [x: string]: unknown } | undefined
-  readonly source?: Permission.Source | undefined
-  readonly agent?: Agent.ID | undefined
-}
-export type PermissionCreateOutput = { readonly id: Permission.ID; readonly effect: Permission.Effect }
-export type PermissionCreateOperation<E = never> = (
-  input: PermissionCreateInput,
-) => Effect.Effect<PermissionCreateOutput, E>
-
-export type PermissionListInput = { readonly sessionID: Session.ID }
-export type PermissionListOutput = ReadonlyArray<Permission.Request>
-export type PermissionListOperation<E = never> = (input: PermissionListInput) => Effect.Effect<PermissionListOutput, E>
-
-export type PermissionGetInput = { readonly sessionID: Session.ID; readonly requestID: Permission.ID }
-export type PermissionGetOutput = Permission.Request
-export type PermissionGetOperation<E = never> = (input: PermissionGetInput) => Effect.Effect<PermissionGetOutput, E>
-
-export type PermissionReplyInput = {
-  readonly sessionID: Session.ID
-  readonly requestID: Permission.ID
-  readonly reply: Permission.Reply
-  readonly message?: string | undefined
-}
-export type PermissionReplyOutput = void
-export type PermissionReplyOperation<E = never> = (
-  input: PermissionReplyInput,
-) => Effect.Effect<PermissionReplyOutput, E>
-
-export interface PermissionApi<E = never> {
-  readonly request: { readonly list: PermissionRequestListOperation<E> }
-  readonly saved: { readonly list: PermissionSavedListOperation<E>; readonly remove: PermissionSavedRemoveOperation<E> }
-  readonly create: PermissionCreateOperation<E>
-  readonly list: PermissionListOperation<E>
-  readonly get: PermissionGetOperation<E>
-  readonly reply: PermissionReplyOperation<E>
-}
-
 export type FileListInput = {
   readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   readonly path?: RelativePath | undefined
@@ -2328,7 +2269,6 @@ export interface AppApi<E = never> {
   readonly credential: CredentialApi<E>
   readonly project: ProjectApi<E>
   readonly form: FormApi<E>
-  readonly permission: PermissionApi<E>
   readonly file: FileApi<E>
   readonly command: CommandApi<E>
   readonly skill: SkillApi<E>

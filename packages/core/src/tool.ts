@@ -223,7 +223,8 @@ const layer = Layer.effect(
       call?: ToolInit.Call,
     ) {
       const registry = state.get().tools
-      const evaluated = selection?.init === undefined ? undefined : yield* ToolInit.evaluate(selection.init, registry, call)
+      const evaluated =
+        selection?.init === undefined ? undefined : yield* ToolInit.evaluate(selection.init, registry, call)
       const error = selection?.error ?? (evaluated !== undefined && "error" in evaluated ? evaluated.error : undefined)
       if (error !== undefined)
         return {
@@ -236,7 +237,9 @@ const layer = Layer.effect(
       const paths = own?.paths ?? selection?.paths
       const lent = [
         ...(own?.handles ?? []),
-        ...(sessionID === undefined ? [] : (sessionTools.get(sessionID) ?? []).flatMap((item) => [...item.tools.values()])),
+        ...(sessionID === undefined
+          ? []
+          : (sessionTools.get(sessionID) ?? []).flatMap((item) => [...item.tools.values()])),
       ]
       return {
         tools: new Map([

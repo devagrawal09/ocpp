@@ -1,14 +1,7 @@
 import { Cause, Duration, Effect, Scope } from "effect"
 import { compile } from "../compiler.js"
 import { decodeProgram } from "../ir.js"
-import type {
-  DataValue,
-  Diagnostic,
-  Evaluation,
-  ExecuteOptions,
-  ResolvedExecutionLimits,
-  Result,
-} from "../codemode.js"
+import type { DataValue, Diagnostic, Evaluation, ExecuteOptions, ResolvedExecutionLimits, Result } from "../codemode.js"
 import { ToolHandle } from "../tool-handle.js"
 import { copyIn, copyOut, ToolRuntime, type Services } from "../tool-runtime.js"
 import type { Tools } from "../tools.js"
@@ -178,10 +171,15 @@ export const evaluateWithLimits = <const Provided extends Record<string, unknown
     const decoded = options.program === undefined ? undefined : decodeProgram(options.program)
     if (decoded?.ok === false)
       return { ok: false, error: { kind: "ExecutionFailure", message: decoded.message }, toolCalls: [] } as const
-    const tools = ToolRuntime.make((options.tools ?? {}) as Tools<Services<Provided>>, limits.maxToolCalls, searchIndex, {
-      onToolCallStart: (call) => options.onToolCallStart?.(call) ?? Effect.void,
-      onToolCallEnd: (call) => options.onToolCallEnd?.(call) ?? Effect.void,
-    })
+    const tools = ToolRuntime.make(
+      (options.tools ?? {}) as Tools<Services<Provided>>,
+      limits.maxToolCalls,
+      searchIndex,
+      {
+        onToolCallStart: (call) => options.onToolCallStart?.(call) ?? Effect.void,
+        onToolCallEnd: (call) => options.onToolCallEnd?.(call) ?? Effect.void,
+      },
+    )
     const logs: Array<string> = []
     const handles: Array<ToolHandle> = []
     const scope = yield* Scope.fork(yield* Scope.Scope, "parallel")

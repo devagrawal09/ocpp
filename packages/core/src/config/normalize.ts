@@ -385,7 +385,13 @@ function normalizeExperimental(
   const experimental = input.experimental
   unsupportedExperimental.forEach((key) => unsupportedIfPresent(experimental, key, ["experimental", key], diagnostics))
   removedIfPresent(experimental, "policies", ["experimental", "policies"], removedProviders, diagnostics)
-  removedIfPresent(experimental, "portable_shell_scanner", ["experimental", "portable_shell_scanner"], removedTools, diagnostics)
+  removedIfPresent(
+    experimental,
+    "portable_shell_scanner",
+    ["experimental", "portable_shell_scanner"],
+    removedTools,
+    diagnostics,
+  )
   const result: Record<string, unknown> = {}
   if (own(experimental, "subagent_depth")) {
     const value = decodeEncoded(

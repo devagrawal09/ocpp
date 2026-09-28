@@ -68,10 +68,7 @@ function message(text: string): SDKUserMessage {
 
 /** Vendor options for one run. The OC++ harness keeps nothing of Claude Code but its model loop and OC++'s execute. */
 export function settings(
-  options: Pick<
-    ExternalAgentDriver.Options,
-    "directory" | "model" | "effort" | "vendorSessionID" | "harness"
-  >,
+  options: Pick<ExternalAgentDriver.Options, "directory" | "model" | "effort" | "vendorSessionID" | "harness">,
   mcp: McpServerConfig,
   controller: AbortController,
   executable?: string,
@@ -235,4 +232,3 @@ export async function normalize(
   }
   await emit({ type: "diagnostic", name: event.type + ("subtype" in event ? ":" + event.subtype : "") })
 }
-

@@ -42,7 +42,8 @@ export const validate = Effect.fn("SubagentCustomTool.validate")(function* (valu
   for (const value of values) {
     if (!isToolHandle(value))
       return yield* new Tool.Error({
-        message: "Tools must be tool references such as tools.read, namespaces such as tools.linear, or tool.define(...) handles",
+        message:
+          "Tools must be tool references such as tools.read, namespaces such as tools.linear, or tool.define(...) handles",
       })
     if (value.definition.name === "execute" || value.definition.name === "submit_result")
       return yield* new Tool.Error({ message: "Custom tool name is reserved: " + value.definition.name })

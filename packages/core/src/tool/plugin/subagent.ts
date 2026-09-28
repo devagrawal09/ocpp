@@ -451,7 +451,8 @@ export const Plugin = {
                   })
                   .pipe(
                     Effect.mapError(
-                      (error) => new ToolFailure({ message: `Failed to give the subagent its tools: ${child.id}`, error }),
+                      (error) =>
+                        new ToolFailure({ message: `Failed to give the subagent its tools: ${child.id}`, error }),
                     ),
                   )
 

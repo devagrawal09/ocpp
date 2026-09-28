@@ -20,7 +20,9 @@ const render = (subagents: ReadonlyArray<Summary>) =>
     "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent` and the child's tools as `tools`.",
     "An agent is a prompt and model preset; it grants no tools. The child can call exactly the tools you pass: your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles. Without `tools` it has none, only tools.submit_result when you pass an outputSchema.",
     ...(subagents.some((subagent) => subagent.id === "explore")
-      ? ["Typical lists: explore gets [tools.read, tools.glob, tools.grep, tools.webfetch]; general gets the tools its task needs."]
+      ? [
+          "Typical lists: explore gets [tools.read, tools.glob, tools.grep, tools.webfetch]; general gets the tools its task needs.",
+        ]
       : []),
     "Pass `root` to run one in another existing directory, such as a separate git worktree.",
     "Available subagents:",

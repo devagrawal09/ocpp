@@ -19,6 +19,7 @@ import workspaceMigration from "@ocpp/core/database/migration/20260808023530_wor
 import executionClaimsMigration from "@ocpp/core/database/migration/20260811161259_execution_claim_attempts"
 import sessionInboxMigration from "@ocpp/core/database/migration/20260812181746_session_inbox"
 import sessionViewedStateMigration from "@ocpp/core/database/migration/20260819222447_session_viewed_state"
+import toolListsMigration from "@ocpp/core/database/migration/20260928161342_tool_lists"
 import { Global } from "@ocpp/util/global"
 
 const run = <A, E>(
@@ -159,6 +160,45 @@ describe("DatabaseMigration", () => {
           idle_outcome: null,
         })
         expect(yield* db.get(sql`SELECT count(*) AS count FROM migration`)).toEqual({ count: 1 })
+      }),
+    )
+  })
+
+  test("drops saved approvals and adds tool lists to sessions and executions", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`CREATE TABLE session_v2 (id text PRIMARY KEY, title text)`)
+        yield* db.run(sql`CREATE TABLE codemode_execution (id text PRIMARY KEY)`)
+        yield* db.run(sql`
+          CREATE TABLE permission (
+            project_id text NOT NULL,
+            action text NOT NULL,
+            resource text NOT NULL,
+            time_created integer NOT NULL
+          )
+        `)
+        yield* db.run(
+          sql`CREATE UNIQUE INDEX permission_project_action_resource_idx ON permission (project_id, action, resource)`,
+        )
+        yield* db.run(sql`INSERT INTO permission VALUES ('proj_saved', 'shell', 'git status *', 1)`)
+        yield* db.run(sql`INSERT INTO session_v2 (id, title) VALUES ('ses_existing', 'Existing')`)
+        yield* db.run(sql`INSERT INTO codemode_execution (id) VALUES ('exe_existing')`)
+
+        yield* DatabaseMigration.applyOnly(db, [toolListsMigration])
+
+        expect(yield* db.all(sql`SELECT name FROM sqlite_master WHERE name LIKE 'permission%' ORDER BY name`)).toEqual(
+          [],
+        )
+        expect(yield* db.get(sql`SELECT id, title, tools FROM session_v2`)).toEqual({
+          id: "ses_existing",
+          title: "Existing",
+          tools: null,
+        })
+        expect(yield* db.get(sql`SELECT id, tools FROM codemode_execution`)).toEqual({
+          id: "exe_existing",
+          tools: null,
+        })
       }),
     )
   })

@@ -85,7 +85,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       createStore<Tab[]>([]),
     )
     const [recent, setRecent, , recentReady] = persisted(Persist.window("tabs.recent"), createStore<RecentTab>({}))
-    const [info, setInfo, , infoReady] = persisted(
+    const [info, setInfo] = persisted(
       Persist.window("tabs.info"),
       createStore<Record<string, TabInfo>>({}),
     )
@@ -493,6 +493,6 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       },
     }
 
-    return { ...actions, store, info, ready, infoReady, recentReady }
+    return { ...actions, store, info, ready }
   },
 })

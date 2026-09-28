@@ -125,16 +125,12 @@ function loadDict(locale: Locale) {
   })
 }
 
-export function loadLocaleDict(locale: Locale) {
-  return loadDict(locale).then(() => undefined)
-}
-
 function detectLocale(): Locale {
   if (typeof navigator !== "object") return "en"
   return matchLocale(navigator.languages?.length ? navigator.languages : [navigator.language])
 }
 
-export function normalizeLocale(value: string): Locale {
+function normalizeLocale(value: string): Locale {
   return LOCALES.includes(value as Locale) ? (value as Locale) : "en"
 }
 

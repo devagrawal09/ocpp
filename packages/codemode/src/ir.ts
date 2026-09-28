@@ -76,6 +76,21 @@ export const staticToolCalls = (node: AstNode): ReadonlyArray<StaticToolCall> =>
   ]
 }
 
+/**
+ * Every tool reference in a subtree that is not called, such as `tools.fs.read` or the namespace
+ * `tools.linear` passed to a tool that hands tools on. Like calls, references name static paths.
+ */
+export const staticToolReferences = (node: AstNode): ReadonlyArray<StaticToolCall> => {
+  const path = node.type === "MemberExpression" ? staticToolPath(node) : undefined
+  if (path?.length) return [{ path: path.join("."), node }]
+  return Object.entries(node).flatMap(([key, value]) =>
+    key === "loc" ||
+    (node.type === "CallExpression" && key === "callee" && isAstNode(value) && staticToolPath(value) !== undefined)
+      ? []
+      : (Array.isArray(value) ? value : [value]).filter(isAstNode).flatMap(staticToolReferences),
+  )
+}
+
 const isAstNode = (value: unknown): value is AstNode => isRecord(value) && typeof value.type === "string"
 
 const staticToolPath = (node: AstNode): ReadonlyArray<string> | undefined => {

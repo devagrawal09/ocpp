@@ -200,7 +200,13 @@ describe("compile suggestions", () => {
       'To choose between known tools, branch explicitly: mode === "read" ? tools.fs.read(input) : tools.fs.write(input).',
     ]
     expect(suggestions(`const read = tools[name]({ path: "a" })`)).toEqual(expected)
-    expect(suggestions(`const fs = tools.fs`)).toEqual(expected)
+    expect(suggestions(`let fs = tools`)).toEqual(expected)
+  })
+
+  test("a saved tool reference is rebound with let", () => {
+    expect(suggestions(`const fs = tools.fs`)).toEqual([
+      "Bind it with let so it lives for this execution only: let fs = tools.fs",
+    ])
   })
 
   test("mutation is rewritten as a copy of the value the model named", () => {

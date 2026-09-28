@@ -90,9 +90,12 @@ export const toolExpression = (path: string) =>
     .map((segment) => (identifierSegment.test(segment) ? `.${segment}` : `[${JSON.stringify(segment)}]`))
     .join("")
 
+/** A static tool path used as a value: one tool, or every tool in a namespace. */
 export class ToolReference {
   constructor(readonly path: ReadonlyArray<string>) {}
 }
+
+export const isToolReference = (value: unknown): value is ToolReference => value instanceof ToolReference
 
 const MAX_VALUE_DEPTH = 32
 
@@ -154,6 +157,13 @@ const copyBounded = (
   if (value instanceof ToolHandle) {
     if (preserveToolHandles) return value
     throw new ToolRuntimeError("InvalidDataValue", `${label} contains an opaque tool handle.`)
+  }
+  if (value instanceof ToolReference) {
+    if (preserveToolHandles && value.path.length > 0) return value
+    throw new ToolRuntimeError(
+      "InvalidDataValue",
+      `${label} contains the tool reference ${toolExpression(canonicalSegments(value.path).join("."))}, which is not data.`,
+    )
   }
 
   if (seen.has(value)) {
@@ -397,6 +407,14 @@ export const prepare = <R>(tools: Tools<R>): DiscoveryPlan => {
   }
 }
 
+const references = (value: unknown): ReadonlyArray<ReadonlyArray<string>> => {
+  if (value instanceof ToolReference) return [canonicalSegments(value.path)]
+  if (Array.isArray(value)) return value.flatMap(references)
+  if (value !== null && typeof value === "object" && !(value instanceof ToolHandle))
+    return Object.values(value).flatMap(references)
+  return []
+}
+
 const lookup = <R>(root: ToolNode<R>, segments: ReadonlyArray<string>): ToolNode<R> | undefined =>
   segments.reduce<ToolNode<R> | undefined>((node, segment) => node?.children.get(segment), root)
 
@@ -532,6 +550,14 @@ export const make = <R>(
             tool.acceptsToolHandles,
           ),
         )
+        // A reference hands on tools this catalog has, so one naming nothing here is refused before the call.
+        const unknown = externalArgs.flatMap(references).find((reference) => lookup(root, reference) === undefined)
+        if (unknown !== undefined)
+          throw new ToolRuntimeError(
+            "UnknownTool",
+            `Tool reference ${toolExpression(unknown.join("."))} names no tool in this catalog.`,
+            ["Pass only tools this program can call; tools.search lists them."],
+          )
         return yield* executeTool(name, tool, externalArgs)
       }),
   }

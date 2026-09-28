@@ -1,7 +1,7 @@
-import { Effect, Schema } from "effect"
+import { Effect, Schema, type Scope } from "effect"
 import type { Program } from "./ir.js"
 import type { NotebookValue } from "./interpreter/durable.js"
-import { executeWithLimits } from "./interpreter/execute.js"
+import { evaluateWithLimits, executeWithLimits } from "./interpreter/execute.js"
 import { type Services, type ToolDescription, ToolRuntime } from "./tool-runtime.js"
 import type { Tools } from "./tools.js"
 import type { TraceHook } from "./trace.js"
@@ -143,6 +143,19 @@ export const Result = Schema.Union([Success, Failure])
 /** Result of executing a CodeMode program. Program failures are data, not Effect failures. */
 export type Result = typeof Result.Type
 
+/**
+ * Result of evaluating a program for its returned value. The value keeps tool references and tool.define
+ * handles, which are not data, so it is only for the host that evaluated it.
+ */
+export type Evaluation =
+  | {
+      readonly ok: true
+      readonly value: unknown
+      readonly logs?: ReadonlyArray<string>
+      readonly toolCalls: ReadonlyArray<{ readonly name: string }>
+    }
+  | Failure
+
 /** Reusable confined runtime over explicit tools. */
 export type Runtime<R = never> = {
   readonly catalog: () => ReadonlyArray<ToolDescription>
@@ -174,6 +187,18 @@ export const execute = <const Provided extends Record<string, unknown>>(
 ): Effect.Effect<Result, never, Services<Provided>> => {
   const tools = (options.tools ?? {}) as Tools<Services<Provided>>
   return executeWithLimits(options, resolveExecutionLimits(options.limits), ToolRuntime.searchIndex(tools))
+}
+
+/**
+ * Evaluates one program for its returned value, keeping tool references and tool.define handles in it,
+ * for a host that reads configuration from a program. The handles stay callable until the ambient scope
+ * closes; nothing is saved.
+ */
+export const evaluate = <const Provided extends Record<string, unknown>>(
+  options: ExecuteOptions<Provided>,
+): Effect.Effect<Evaluation, never, Services<Provided> | Scope.Scope> => {
+  const tools = (options.tools ?? {}) as Tools<Services<Provided>>
+  return evaluateWithLimits(options, resolveExecutionLimits(options.limits), ToolRuntime.searchIndex(tools))
 }
 
 /** Creates an Effect-native runtime over explicit, schema-described tools. */

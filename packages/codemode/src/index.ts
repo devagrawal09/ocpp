@@ -7,9 +7,11 @@ export {
   decodeProgram,
   IR_VERSION,
   staticToolCalls,
+  staticToolReferences,
   type DecodedProgram,
   type Program,
   type StaticToolCall,
 } from "./ir.js"
 export { ToolError, toolError } from "./tool-error.js"
 export { isToolHandle, ToolHandle, type ToolHandleDefinition } from "./tool-handle.js"
+export { isToolReference, ToolReference } from "./tool-runtime.js"

@@ -373,6 +373,13 @@ function declarations(program: ProgramNode): ReadonlyArray<string> {
             "Or create the handle inside the function that passes it to a tool.",
           ],
         )
+      const reference = requireNode(init).type === "MemberExpression" ? toolPath(requireNode(init)) : undefined
+      if (reference !== undefined && reference.length > 0)
+        throw unsupported(
+          "Tool references are activation-local and cannot be saved; bind '" + id.name + "' with let.",
+          item,
+          ["Bind it with let so it lives for this execution only: let " + id.name + " = tools." + reference.join(".")],
+        )
       return durableName(id.name, id)
     })
   })
@@ -495,11 +502,17 @@ function validate(node: AstNode): void {
         Suggestions.mutatingMethod(method, callee, requireArray(node.arguments, node)),
       )
   }
+  // A static path that is not called is a tool reference: a value naming that tool, or every tool in that
+  // namespace, which a tool such as tools.subagent receives to hand those tools on.
+  if (node.type === "MemberExpression") {
+    const path = toolPath(node)
+    if (path !== undefined && path.length > 0) return
+  }
   if (node.type === "Identifier" && node.name === "Promise")
     throw unsupported(promiseUnsupported, node, promiseSuggestions)
   if (node.type === "Identifier" && node.name === "tools")
     throw unsupported(
-      "Tools must be called through a direct static path such as tools.fs.read(...).",
+      "The tools root is not a value; call a tool by its static path, such as tools.fs.read(...), or pass one as tools.fs.read.",
       node,
       Suggestions.dynamicTool,
     )

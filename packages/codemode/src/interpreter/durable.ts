@@ -1,4 +1,5 @@
 import { ToolHandle } from "../tool-handle.js"
+import { ToolReference } from "../tool-runtime.js"
 import { IR_VERSION } from "../ir.js"
 import {
   BrokenNotebookValue,
@@ -101,6 +102,10 @@ export const encodeDeclarations = (
     if (value instanceof ToolHandle)
       throw invalid(`${label} contains a live tool handle, which exists only for one execution.`, [
         "Publish the data a handle produces, or define the handle again in the execution that uses it.",
+      ])
+    if (value instanceof ToolReference)
+      throw invalid(`${label} contains a tool reference, which exists only for one execution.`, [
+        "Write the reference, such as tools.fs.read, in the execution that passes it to a tool.",
       ])
     // A capture can hold a quarantined binding without the program ever reading the name.
     if (value instanceof BrokenNotebookValue)

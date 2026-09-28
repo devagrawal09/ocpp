@@ -1,7 +1,15 @@
 import { Cause, Duration, Effect, Scope } from "effect"
 import { compile } from "../compiler.js"
 import { decodeProgram } from "../ir.js"
-import type { DataValue, Diagnostic, ExecuteOptions, ResolvedExecutionLimits, Result } from "../codemode.js"
+import type {
+  DataValue,
+  Diagnostic,
+  Evaluation,
+  ExecuteOptions,
+  ResolvedExecutionLimits,
+  Result,
+} from "../codemode.js"
+import { ToolHandle } from "../tool-handle.js"
 import { copyIn, copyOut, ToolRuntime, type Services } from "../tool-runtime.js"
 import type { Tools } from "../tools.js"
 import { defaultDurableLimits, encodeDeclarations } from "./durable.js"
@@ -154,6 +162,67 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
     )
   })
 }
+
+/**
+ * Runs a program for its returned value with tool references and tool.define handles kept, for a host
+ * that reads configuration from a program rather than data. The handles stay callable, and the work
+ * they start stays owned, until the ambient scope closes.
+ */
+export const evaluateWithLimits = <const Provided extends Record<string, unknown>>(
+  options: ExecuteOptions<Provided>,
+  limits: ResolvedExecutionLimits,
+  searchIndex: ToolRuntime.DiscoveryPlan["searchIndex"],
+): Effect.Effect<Evaluation, never, Services<Provided> | Scope.Scope> =>
+  Effect.gen(function* () {
+    const decoded = options.program === undefined ? undefined : decodeProgram(options.program)
+    if (decoded?.ok === false)
+      return { ok: false, error: { kind: "ExecutionFailure", message: decoded.message }, toolCalls: [] } as const
+    const tools = ToolRuntime.make((options.tools ?? {}) as Tools<Services<Provided>>, limits.maxToolCalls, searchIndex, {
+      onToolCallStart: (call) => options.onToolCallStart?.(call) ?? Effect.void,
+      onToolCallEnd: (call) => options.onToolCallEnd?.(call) ?? Effect.void,
+    })
+    const logs: Array<string> = []
+    const handles: Array<ToolHandle> = []
+    const scope = yield* Scope.fork(yield* Scope.Scope, "parallel")
+    yield* Effect.addFinalizer(() => Effect.sync(() => handles.forEach((handle) => handle.close())))
+    return yield* Effect.gen(function* () {
+      const parsed = decoded?.program ?? compile(options.code)
+      const executed = yield* new Interpreter<Services<Provided>>(
+        tools.execute,
+        tools.search,
+        tools.keys,
+        new PromiseRuntime<Services<Provided>>(scope),
+        logs,
+        options.onTrace,
+        parsed.source,
+        true,
+        options.bindings,
+        options.input === undefined ? undefined : copyIn(options.input, "Execution input"),
+        parsed.declarations,
+        new Map(),
+        undefined,
+        handles,
+        options.impure,
+      ).run(parsed.body, false)
+      return {
+        ok: true,
+        value: copyIn(executed.value, "Returned value", true),
+        ...(logs.length > 0 ? { logs: [...logs] } : {}),
+        toolCalls: tools.calls,
+      } as const
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.interrupt
+          : Effect.succeed({
+              ok: false,
+              error: normalizeError(Cause.squash(cause)),
+              ...(logs.length > 0 ? { logs: [...logs] } : {}),
+              toolCalls: tools.calls,
+            } as const),
+      ),
+    )
+  })
 
 // raceFirst interrupts the loser and waits for its interruption, so an expired
 // deadline still waits for tool cleanup before the result is reported.

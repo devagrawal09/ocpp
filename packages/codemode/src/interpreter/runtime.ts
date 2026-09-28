@@ -352,8 +352,10 @@ export class Interpreter<R> {
     return new Map([...this.notebookScope].map(([name, binding]) => [name, binding.value]))
   }
 
+  /** Runs a program. Its tool handles close when it settles, unless the host keeps them open for later calls. */
   run(
     program: ProgramNode,
+    closeHandles = true,
   ): Effect.Effect<{ value: unknown; declarations: ReadonlyArray<readonly [string, unknown]> }, unknown, R> {
     const self = this
     // Keep top-level declarations separate so they can shadow builtins.
@@ -388,7 +390,7 @@ export class Interpreter<R> {
       Effect.ensuring(
         Effect.sync(() => {
           self.scopes.pop()
-          for (const handle of self.handles) handle.close()
+          if (closeHandles) for (const handle of self.handles) handle.close()
         }),
       ),
     )

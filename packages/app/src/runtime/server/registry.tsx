@@ -205,19 +205,13 @@ export namespace ServerConnection {
     authToken?: boolean
   } & Base
 
+  // Regular desktop server
   export type Sidecar = {
     type: "sidecar"
     http: HttpBase
-  } & (
-    | // Regular desktop server
-    { variant: "base"; reconnect?: (signal: AbortSignal) => Promise<HttpBase> }
-    // WSL server (windows only)
-    | {
-        variant: "wsl"
-        distro: string
-      }
-  ) &
-    Base
+    variant: "base"
+    reconnect?: (signal: AbortSignal) => Promise<HttpBase>
+  } & Base
 
   // Remote server desktop can SSH into
   export type Ssh = {
@@ -236,10 +230,8 @@ export namespace ServerConnection {
     switch (conn.type) {
       case "http":
         return Key.make(conn.http.url)
-      case "sidecar": {
-        if (conn.variant === "wsl") return Key.make(`wsl:${conn.distro}`)
+      case "sidecar":
         return Key.make("sidecar")
-      }
       case "ssh":
         return Key.make(`ssh:${conn.host}`)
     }

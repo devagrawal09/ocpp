@@ -2,7 +2,6 @@ import { beforeAll, describe, expect, mock, test } from "bun:test"
 import { ServerScope } from "@/runtime/server/scope"
 import { base64Encode } from "@ocpp/util/encode"
 import { Persist } from "@/runtime/persistence/storage"
-import type { Platform } from "@/runtime/platform/platform"
 
 let getWorkspaceTerminalCacheKey: typeof import("./context").getWorkspaceTerminalCacheKey
 let clearWorkspaceTerminals: typeof import("./context").clearWorkspaceTerminals
@@ -39,25 +38,12 @@ describe("getWorkspaceTerminalCacheKey", () => {
   })
 
   test("clears the current workspace terminal store", () => {
-    const removed: { storage?: string; key: string }[] = []
-    const platform: Platform = {
-      platform: "desktop",
-      windowID: "window",
-      openExternal: () => undefined,
-      restart: async () => undefined,
-      notify: async () => undefined,
-      openDirectoryPickerDialog: async () => null,
-      storage: (storage) => ({
-        getItem: () => null,
-        setItem: () => undefined,
-        removeItem: (key) => void removed.push({ storage, key }),
-      }),
-    }
-
-    clearWorkspaceTerminals("C:/repo", platform)
-
     const target = Persist.workspace(base64Encode("C:/repo"), "terminal")
-    expect(removed).toEqual([{ storage: target.storage, key: target.key }])
+    localStorage.setItem(`${target.storage}:${target.key}`, JSON.stringify({ active: undefined, all: [] }))
+
+    clearWorkspaceTerminals("C:/repo")
+
+    expect(localStorage.getItem(`${target.storage}:${target.key}`)).toBeNull()
   })
 })
 

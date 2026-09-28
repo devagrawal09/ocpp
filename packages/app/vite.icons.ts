@@ -6,16 +6,13 @@ export function icons(channel: string): Plugin {
   const selected = channel === "beta" || channel === "prod" ? channel : "dev"
   const prefix = `icons/${selected}`
   const files = [
-    ...Object.entries({
-      "favicon.ico": "icon.ico",
-      "apple-touch-icon.png": "ios/AppIcon-60x60@3x.png",
-      "web-app-manifest-192x192.png": "android/mipmap-xxxhdpi/ic_launcher.png",
-      "web-app-manifest-512x512.png": "icon.png",
-    }).map(([name, source]) => ({
-      fileName: `${prefix}/${name}`,
-      source: readFileSync(new URL(`../desktop/icons/${selected}/${source}`, import.meta.url)),
-      type: name.endsWith(".ico") ? "image/x-icon" : "image/png",
-    })),
+    ...["favicon.ico", "apple-touch-icon.png", "web-app-manifest-192x192.png", "web-app-manifest-512x512.png"].map(
+      (name) => ({
+        fileName: `${prefix}/${name}`,
+        source: readFileSync(new URL(`./channel-icons/${selected}/${name}`, import.meta.url)),
+        type: name.endsWith(".ico") ? "image/x-icon" : "image/png",
+      }),
+    ),
     {
       fileName: "site.webmanifest",
       source: JSON.stringify({

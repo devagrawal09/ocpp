@@ -53,7 +53,7 @@ let removePersisted: RemovePersistedType
 
 beforeAll(async () => {
   mock.module("@/runtime/platform/platform", () => ({
-    usePlatform: () => ({ platform: "web" }),
+    usePlatform: () => ({}),
   }))
 
   const mod = await import("./storage")

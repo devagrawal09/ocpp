@@ -335,15 +335,6 @@ export const Terminal = (props: TerminalProps) => {
     scheduleFit()
   })
 
-  let zoom = platform.webviewZoom?.()
-  createEffect(() => {
-    const next = platform.webviewZoom?.()
-    if (next === undefined) return
-    if (next === zoom) return
-    zoom = next
-    scheduleFit()
-  })
-
   const focusTerminal = () => {
     const t = term
     if (!t) return
@@ -372,10 +363,6 @@ export const Terminal = (props: TerminalProps) => {
 
     event.preventDefault()
     event.stopImmediatePropagation()
-    if (URL.canParse(text) && new URL(text).protocol === "file:" && platform.openLocalFile) {
-      platform.openLocalFile(text)
-      return
-    }
     platform.openExternal(text)
   }
 

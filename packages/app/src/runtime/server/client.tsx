@@ -3,7 +3,6 @@ import { createClientConnection, createPtyClient, type ClientConnectionStatus } 
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { type Accessor, onCleanup } from "solid-js"
 import { createApiForServer, type ServerApi } from "@/runtime/server/api"
-import { usePlatform } from "@/runtime/platform/platform"
 import { ServerConnection } from "./registry"
 import { createRefCountMap } from "@/runtime/server/refcount"
 import { ServerScope } from "@/runtime/server/scope"
@@ -71,8 +70,7 @@ type ServerSDKBase = {
 }
 
 function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerScope): ServerSDKBase {
-  const platform = usePlatform()
-  const transport = createServerTransport({ http: server.http, fetch: platform.fetch })
+  const transport = createServerTransport({ http: server.http })
   const events = createOcppEventSource()
   const reconnect = server.type === "sidecar" && server.variant === "base" ? server.reconnect : undefined
 

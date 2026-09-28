@@ -4,7 +4,7 @@ import { encodeFilePath } from "@/workspaces/files/path"
 import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, Prompt, SkillPart } from "@/composer/state"
 import { formatCommentNote, type PromptComment } from "@/composer/comment-note"
 
-// Network fields feed both boundaries; display fields keep desktop-only rendering details in the local echo.
+// Network fields feed both boundaries; display fields keep app-only rendering details in the local echo.
 type PromptRequest = {
   text: string
   displayText: string
@@ -109,7 +109,7 @@ export function buildPromptRequest(input: BuildPromptRequestInput): PromptReques
   const images = input.images.map((attachment) => ({
     uri: attachment.dataUrl,
     mime: attachment.mime,
-    name: attachment.sourcePath ?? attachment.filename,
+    name: attachment.filename,
   }))
 
   return {

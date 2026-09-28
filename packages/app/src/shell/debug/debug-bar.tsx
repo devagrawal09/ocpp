@@ -1,10 +1,9 @@
 import { useIsRouting, useLocation } from "@solidjs/router"
-import { batch, createEffect, onCleanup, onMount, Show } from "solid-js"
+import { batch, createEffect, onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { Tooltip } from "@ocpp/ui/tooltip"
 import { useLanguage } from "@/runtime/i18n/language"
-import { usePlatform } from "@/runtime/platform/platform"
 
 type Mem = Performance & {
   memory?: {
@@ -151,7 +150,6 @@ function ToggleCell(props: {
 
 export function DebugBar(props: { inline?: boolean } = {}) {
   const language = useLanguage()
-  const platform = usePlatform()
   const location = useLocation()
   const routing = useIsRouting()
   const [state, setState] = createStore({
@@ -159,7 +157,6 @@ export function DebugBar(props: { inline?: boolean } = {}) {
     delay: undefined as number | undefined,
     fps: undefined as number | undefined,
     gap: undefined as number | undefined,
-    focus: false,
     heap: {
       limit: undefined as number | undefined,
       used: undefined as number | undefined,
@@ -186,17 +183,6 @@ export function DebugBar(props: { inline?: boolean } = {}) {
   }
   const longv = () => (state.long.count === undefined ? na() : `${time(state.long.block) ?? na()}/${state.long.count}`)
   const navv = () => (state.nav.pending ? "..." : (time(state.nav.dur) ?? na()))
-  const toggleFocus = async () => {
-    if (!platform.setForceFocus) return
-    const enabled = !state.focus
-    await platform.setForceFocus(enabled)
-    setState("focus", enabled)
-  }
-
-  onCleanup(() => {
-    if (state.focus) void platform.setForceFocus?.(false).catch(() => undefined)
-  })
-
   let prev = ""
   let start = 0
   let init = false
@@ -544,7 +530,7 @@ export function DebugBar(props: { inline?: boolean } = {}) {
           bad={bad(heap(), 0.8)}
           dim={state.heap.used === undefined}
           inline={props.inline}
-          span={platform.setForceFocus ? 2 : 3}
+          span={3}
         />
         <ToggleCell
           active={language.direction() === "rtl"}
@@ -554,16 +540,6 @@ export function DebugBar(props: { inline?: boolean } = {}) {
           value={language.t(`debugBar.direction.${language.direction()}`)}
           onClick={() => language.setDirection(language.direction() === "rtl" ? "ltr" : "rtl")}
         />
-        <Show when={platform.setForceFocus}>
-          <ToggleCell
-            active={state.focus}
-            inline={props.inline}
-            label={language.t("debugBar.focus.label")}
-            tip={language.t("debugBar.focus.tip")}
-            value={language.t(state.focus ? "debugBar.focus.on" : "debugBar.focus.off")}
-            onClick={() => void toggleFocus()}
-          />
-        </Show>
       </div>
     </aside>
   )

@@ -1,13 +1,10 @@
-import { Component, Show, createMemo, createResource } from "solid-js"
+import { Component, Show, createMemo } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
-import { Button } from "@ocpp/ui/button"
 import { Select } from "@ocpp/ui/select"
 import { Switch } from "@ocpp/ui/switch"
 import { TextInput } from "@ocpp/ui/text-input"
 import type { ReasoningMode } from "@ocpp/session-ui/timeline/projection"
 import { useLanguage } from "@/runtime/i18n/language"
-import { usePlatform } from "@/runtime/platform/platform"
-import { useUpdaterAction } from "@/shell/updates/action"
 import {
   type FollowUpBehavior,
   type TerminalPlacement,
@@ -310,25 +307,9 @@ export const SettingsGeneral: Component<{
   server?: ServerConnection.Any
 }> = (props) => {
   const language = useLanguage()
-  const platform = usePlatform()
   const settings = useSettings()
   const mobile = createMediaQuery("(max-width: 767px)")
-  const updater = useUpdaterAction()
   const shell = createShellSettingsController(() => props.server)
-  const desktop = createMemo(() => platform.platform === "desktop")
-
-  const [pinchZoom, { mutate: setPinchZoom }] = createResource(
-    () => desktop() && "getPinchZoomEnabled" in platform,
-    () => Promise.resolve(platform.getPinchZoomEnabled?.() ?? false).catch(() => false),
-    { initialValue: false },
-  )
-
-  const onPinchZoomChange = (checked: boolean) => {
-    setPinchZoom(checked)
-    const update = platform.setPinchZoomEnabled?.(checked)
-    if (!update) return
-    void update.catch(() => setPinchZoom(!checked))
-  }
 
   const GeneralSection = () => (
     <div class="settings-section">
@@ -475,55 +456,6 @@ export const SettingsGeneral: Component<{
     </div>
   )
 
-  const UpdatesSection = () => (
-    <div class="settings-section">
-      <h3 class="settings-section-title">{language.t("settings.general.section.updates")}</h3>
-
-      <SettingsList>
-        <SettingsRow
-          title={language.t("settings.general.row.releaseNotes.title")}
-          description={language.t("settings.general.row.releaseNotes.description")}
-        >
-          <div data-action="settings-release-notes">
-            <Switch
-              checked={settings.general.releaseNotes()}
-              onChange={(checked) => settings.general.setReleaseNotes(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.updates.row.check.title")}
-          description={language.t("settings.updates.row.check.description")}
-        >
-          <Button size="normal" variant="neutral" disabled={!updater.action().run} onClick={() => updater.run()}>
-            {language.t(updater.action().label)}
-          </Button>
-        </SettingsRow>
-      </SettingsList>
-    </div>
-  )
-
-  // We can probably remove this, right?
-  const DisplaySection = () => (
-    <Show when={desktop()}>
-      <div class="settings-section">
-        <h3 class="settings-section-title">{language.t("settings.general.section.display")}</h3>
-
-        <SettingsList>
-          <SettingsRow
-            title={language.t("settings.general.row.pinchZoom.title")}
-            description={language.t("settings.general.row.pinchZoom.description")}
-          >
-            <div data-action="settings-pinch-zoom">
-              <Switch checked={pinchZoom.latest} onChange={onPinchZoomChange} />
-            </div>
-          </SettingsRow>
-        </SettingsList>
-      </div>
-    </Show>
-  )
-
   return (
     <>
       <div class="settings-tab-header">
@@ -538,12 +470,6 @@ export const SettingsGeneral: Component<{
       </div>
       <div class="settings-tab-body">
         <GeneralSection />
-
-        <Show when={desktop()}>
-          <UpdatesSection />
-        </Show>
-
-        <DisplaySection />
 
         <AdvancedSection />
       </div>

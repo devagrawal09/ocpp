@@ -21,7 +21,6 @@ const storage: AsyncStorage = {
 }
 
 const platform: Platform = {
-  platform: "web",
   openExternal: () => undefined,
   restart: async () => undefined,
   notify: async () => undefined,

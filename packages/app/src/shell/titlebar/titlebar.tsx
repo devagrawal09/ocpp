@@ -8,11 +8,9 @@ import { Keybind } from "@ocpp/ui/keybind"
 import { Tooltip } from "@ocpp/ui/tooltip"
 
 import { LayoutRoute, useLayout } from "@/shell/state/layout"
-import { usePlatform } from "@/runtime/platform/platform"
 import { useCommand } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useSettings } from "@/settings/model"
-import { WindowsAppMenu } from "./windows-menu"
 import { applyPath, backPath, forwardPath } from "./history"
 import { TitlebarTabStrip } from "@/shell/titlebar/tab-strip"
 import { makeEventListener } from "@solid-primitives/event-listener"
@@ -26,24 +24,10 @@ import "./titlebar.css"
 import { newTabTooltipKeybind } from "@/shell/commands/tooltip-keybind"
 import { TitlebarRightMount } from "@/shell/titlebar/right-slot"
 
-const titlebarHeight = 36
-const windowsTitlebarHeight = 44 // Includes the content inset; matches the native Windows overlay.
-const minTitlebarZoom = 0.25
-const windowsControlsBaseWidth = 138 // 3 native Windows caption buttons at 46px each.
-const macTrafficLightsBaseWidth = 84
-
-export type TitlebarUpdate = {
-  version: string | undefined
-  installing: boolean
-  install: () => void
-}
-
 export function Titlebar(props: {
-  update?: TitlebarUpdate
   debugTools?: { visible: boolean; toggle: () => void }
   verticalTabs?: { mount?: HTMLElement }
 }) {
-  const platform = usePlatform()
   const command = useCommand()
   const language = useLanguage()
   const settings = useSettings()
@@ -51,19 +35,6 @@ export function Titlebar(props: {
   const location = useLocation()
   const mobile = createMediaQuery("(max-width: 767px)")
   const bottom = createMemo(() => mobile() && settings.general.mobileTitlebarPosition() === "bottom")
-
-  const mac = createMemo(() => platform.platform === "desktop" && platform.os === "macos")
-  const windows = createMemo(() => platform.platform === "desktop" && platform.os === "windows")
-  const linux = createMemo(() => platform.platform === "desktop" && platform.os === "linux")
-  const macTrafficLights = createMemo(() => mac() && !platform.windowFullscreen?.())
-  const zoom = () => platform.webviewZoom?.() ?? 1
-  const titlebarZoom = () => (windows() ? Math.max(zoom(), minTitlebarZoom) : zoom())
-  const minHeight = () => {
-    if (mac()) return `${titlebarHeight / zoom()}px`
-    if (windows()) return `env(titlebar-area-height, ${windowsTitlebarHeight / Math.min(titlebarZoom(), 1)}px)`
-    return undefined
-  }
-  const windowsControlsWidth = () => `${windowsControlsBaseWidth / Math.max(titlebarZoom(), 1)}px`
 
   const [history, setHistory] = createStore({
     stack: [] as string[],
@@ -82,22 +53,6 @@ export function Titlebar(props: {
       setHistory(next)
     })
   })
-
-  const updateState = createMemo<TitlebarUpdatePillState>(() => {
-    const installing = props.update?.installing ?? false
-    const version = props.update?.version
-    return {
-      visible: version !== undefined || installing,
-      installing,
-      label: language.t("titlebar.update"),
-      ariaLabel: language.t("toast.update.action.installRestart"),
-      title: version ? language.t("titlebar.updateVersion", { version }) : undefined,
-      onInstall: () => props.update?.install(),
-    }
-  })
-  const rightState = createMemo<TitlebarRightState>(() => ({
-    update: updateState(),
-  }))
 
   const back = () => {
     const next = backPath(history)
@@ -137,16 +92,6 @@ export function Titlebar(props: {
         "shrink-0 relative flex flex-row h-9 bg-v2-background-bg-deep overflow-visible": true,
         "order-last": bottom(),
       }}
-      style={{
-        "min-height": minHeight(),
-        // Keep native macOS traffic lights clear even when the desktop window is narrow.
-        "padding-left": macTrafficLights() ? `${macTrafficLightsBaseWidth / zoom()}px` : 0,
-        width: windows() ? `env(titlebar-area-width, calc(100vw - ${windowsControlsWidth()}))` : undefined,
-        "max-width": windows() ? `env(titlebar-area-width, calc(100vw - ${windowsControlsWidth()}))` : undefined,
-        // Native Windows caption controls remain on the physical right in both writing directions.
-        "margin-right": windows() ? "auto" : undefined,
-      }}
-      data-tauri-drag-region
     >
       <Switch>
         <Match when>
@@ -338,18 +283,13 @@ export function Titlebar(props: {
 
             return (
               <div
-                class="h-full flex-1 overflow-hidden flex flex-row items-center gap-1.5 px-2 md:pr-3"
+                class="h-full flex-1 overflow-hidden flex flex-row items-center gap-1.5 px-2 md:pl-4 md:pr-3"
                 classList={{
-                  "pt-2": !bottom() && !windows(),
+                  "pt-2": !bottom(),
                   "pb-2": bottom(),
-                  "md:pl-2": macTrafficLights(),
-                  "md:pl-4": !macTrafficLights(),
                 }}
               >
                 <ChannelIndicator debugTools={props.debugTools} />
-                <Show when={windows() || linux()}>
-                  <WindowsAppMenu command={command} platform={platform} />
-                </Show>
                 <Tooltip
                   placement="bottom"
                   value={
@@ -446,66 +386,15 @@ export function Titlebar(props: {
                   )}
                 </Show>
                 <div class="flex-1" />
-                <TitlebarRight state={rightState()} />
+                <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
+                  <TitlebarRightMount />
+                </div>
               </div>
             )
           }}
         </Match>
       </Switch>
     </header>
-  )
-}
-
-type TitlebarUpdatePillState = {
-  visible: boolean
-  installing: boolean
-  label: string
-  ariaLabel: string
-  title?: string
-  onInstall: () => void
-}
-
-type TitlebarRightState = {
-  update: TitlebarUpdatePillState
-}
-
-function TitlebarRight(props: { state: TitlebarRightState }) {
-  return (
-    <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
-      <Show when={props.state.update.visible}>
-        <TitlebarUpdateIconButton state={props.state.update} />
-      </Show>
-      <TitlebarRightMount />
-    </div>
-  )
-}
-
-function TitlebarUpdateIconButton(props: { state: TitlebarUpdatePillState }) {
-  return (
-    <div class="group relative mr-3 h-5 w-5 shrink-0 rounded-full bg-v2-background-bg-deep transition-[width] duration-150 ease-out hover:z-30 hover:w-[68px] focus-within:z-30 focus-within:w-[68px] motion-reduce:transition-none">
-      <button
-        type="button"
-        class="absolute right-0 top-0 z-10 flex h-5 w-5 items-center justify-end overflow-hidden rounded-full bg-v2-icon-icon-accent/20 text-v2-icon-icon-accent transition-[width,background-color] duration-150 ease-out group-hover:w-[68px] group-hover:bg-[color-mix(in_srgb,var(--v2-icon-icon-accent)_20%,var(--v2-background-bg-deep))] group-focus-within:w-[68px] group-focus-within:bg-[color-mix(in_srgb,var(--v2-icon-icon-accent)_20%,var(--v2-background-bg-deep))] focus-visible:outline-none disabled:opacity-60 motion-reduce:transition-none"
-        onClick={props.state.onInstall}
-        disabled={props.state.installing}
-        aria-busy={props.state.installing}
-        aria-label={props.state.ariaLabel}
-      >
-        <span class="shrink-0 ml-[8px] mr-px text-[11px] text-v2-text-text-accent [font-weight:530] opacity-0 translate-x-2 motion-safe:transition-all duration-150 ease-out group-hover:opacity-100 group-hover:translate-x-0 group-focus-within:opacity-100 group-focus-within:translate-x-0 motion-reduce:translate-x-0">
-          {props.state.label}
-        </span>
-        <span class="flex size-5 shrink-0 items-center justify-center">
-          <Show
-            when={!props.state.installing}
-            fallback={<span data-slot="titlebar-update-loader" aria-hidden="true" />}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path d="M7 11V3M3.5 7.63128L7 11L10.5 7.63128" stroke="currentColor" />
-            </svg>
-          </Show>
-        </span>
-      </button>
-    </div>
   )
 }
 

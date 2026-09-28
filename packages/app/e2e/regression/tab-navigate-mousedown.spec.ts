@@ -185,7 +185,7 @@ test("appearance experimental setting switches tab orientation", async ({ page }
   const settings = page.getByTestId("settings-screen")
   await expect(settings).toBeVisible()
   const version = settings.getByRole("tablist").getByText(`v${pkg.version}`, { exact: true })
-  await expect(settings.getByRole("tablist").getByText("OC++ Desktop", { exact: true })).toBeInViewport()
+  await expect(settings.getByRole("tablist").getByText("OC++", { exact: true })).toBeInViewport()
   await expect(version).toBeInViewport()
   await settings.getByRole("tab", { name: "Appearance" }).click()
   await expect(settings.getByRole("heading", { name: "Experimental" })).toBeVisible()

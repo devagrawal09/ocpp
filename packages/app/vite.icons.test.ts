@@ -69,18 +69,15 @@ async function check(channel: string, read: (path: string) => Promise<Uint8Array
   expect(html).not.toContain("%OCPP_")
 
   await Promise.all(
-    Object.entries({
-      "favicon.ico": "icon.ico",
-      "apple-touch-icon.png": "ios/AppIcon-60x60@3x.png",
-      "web-app-manifest-192x192.png": "android/mipmap-xxxhdpi/ic_launcher.png",
-      "web-app-manifest-512x512.png": "icon.png",
-    }).map(async ([name, source]) => {
-      const bytes = await read(`/icons/${channel}/${name}`)
-      expect(bytes).toEqual(await Bun.file(new URL(`../desktop/icons/${channel}/${source}`, import.meta.url)).bytes())
-      if (!name.endsWith(".png")) return
-      const size = name === "apple-touch-icon.png" ? 180 : Number(name.match(/(192|512)/)?.[0])
-      expect(new DataView(bytes.buffer, bytes.byteOffset).getUint32(16)).toBe(size)
-      expect(new DataView(bytes.buffer, bytes.byteOffset).getUint32(20)).toBe(size)
-    }),
+    ["favicon.ico", "apple-touch-icon.png", "web-app-manifest-192x192.png", "web-app-manifest-512x512.png"].map(
+      async (name) => {
+        const bytes = await read(`/icons/${channel}/${name}`)
+        expect(bytes).toEqual(await Bun.file(new URL(`./channel-icons/${channel}/${name}`, import.meta.url)).bytes())
+        if (!name.endsWith(".png")) return
+        const size = name === "apple-touch-icon.png" ? 180 : Number(name.match(/(192|512)/)?.[0])
+        expect(new DataView(bytes.buffer, bytes.byteOffset).getUint32(16)).toBe(size)
+        expect(new DataView(bytes.buffer, bytes.byteOffset).getUint32(20)).toBe(size)
+      },
+    ),
   )
 }

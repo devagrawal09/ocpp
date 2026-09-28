@@ -164,7 +164,7 @@ export const SettingsScreen: Component<{
             </div>
           </div>
           <div class="settings-nav-footer">
-            <span>{language.t("app.name.desktop")}</span>
+            <span>OC++</span>
             <span>
               <bdi dir="ltr">v{platform.version}</bdi>
             </span>

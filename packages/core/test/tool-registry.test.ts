@@ -1753,6 +1753,60 @@ describe("init.ts tool lists", () => {
       expect(snapshot.notice).toBe(
         "init.ts lists tools.missing for the build agent, but no tool here provides it. The rest of its list applies.",
       )
+      // tools.search is built into every execution, so listing it is no problem.
+      expect((yield* service.snapshot(init("return { build: [tools.echo, tools.search] }"))).notice).toBeUndefined()
+    }),
+  )
+
+  it.effect("reads top-level const as an ordinary binding, since init.ts is never saved", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { echo: make() })
+      const snapshot = yield* service.snapshot(
+        init(
+          shout.replace("let shout", "const shout") + "\nconst lists = { build: [tools.echo, shout] }\nreturn lists",
+        ),
+      )
+      expect(snapshot.notice).toBeUndefined()
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo", "shout"])
+    }),
+  )
+
+  it.effect("numbers a wrapper's calls under the call that ran it, and reads the clock only once it runs", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      yield* transform(service, {
+        whoami: {
+          name: "whoami",
+          description: "Return the call ID",
+          input: Schema.Struct({}),
+          output: Schema.String,
+          execute: (_input, context) => Effect.succeed({ output: context.id, content: context.id }),
+        },
+      })
+      const probe = [
+        "let probe = tool.define({",
+        '  name: "probe",',
+        '  description: "Call whoami twice",',
+        '  inputSchema: { type: "object" },',
+        "  outputSchema: {},",
+        "  execute: (input) => ({ ids: [tools.whoami({}), tools.whoami({})], late: time.now() > 0 }),",
+        "})",
+        "return { build: [probe] }",
+      ].join("\n")
+      const snapshot = yield* service.snapshot(init(probe), sessionID)
+      const outcome = yield* run(
+        snapshot,
+        "call-probe",
+        "const first = tools.probe({})\nconst second = tools.probe({})\nreturn [first, second]",
+      )
+      expect(outcome.status).toBe("saved")
+      const store = yield* CodeModeStore.Service
+      expect(yield* store.bindings(sessionID)).toMatchObject({
+        first: { ids: ["call-probe:0:0", "call-probe:0:1"], late: true },
+        second: { ids: ["call-probe:1:0", "call-probe:1:1"], late: true },
+      })
     }),
   )
 
@@ -1774,6 +1828,17 @@ describe("init.ts tool lists", () => {
         [
           shout.replace('name: "shout"', 'name: "echo"') + "\nreturn { build: [tools.echo, shout] }",
           "init.ts build list has two tools at tools.echo",
+        ],
+        // The lists must come out the same at every evaluation, so a resumed execution gets its own tools back.
+        [
+          "return { build: time.now() > 0 ? [tools.echo] : [] }",
+          "init.ts cannot read time.now() while it builds its tool lists",
+        ],
+        ["return { build: Math.random() < 0.5 ? [tools.echo] : [] }", "init.ts cannot read Math.random()"],
+        // A wrapper calls tools by their static paths, never through a variable holding a reference.
+        [
+          shout.replace("tools.echo({", "echo({") + "\nlet echo = tools.echo\nreturn { build: [shout] }",
+          "init.ts does not compile: 'echo' holds the tool reference tools.echo",
         ],
       ] as const
       for (const [source, message] of cases) {

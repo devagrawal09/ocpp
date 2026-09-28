@@ -18,10 +18,12 @@ import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEnvironment } from "@ocpp/core/session/environment"
 import { SessionExecution } from "@ocpp/core/session/execution"
+import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionStore } from "@ocpp/core/session/store"
 import { Tool } from "@ocpp/core/tool"
+import { ToolInit } from "@ocpp/core/tool/init"
 import { ToolLists } from "@ocpp/core/tool/lists"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
@@ -124,13 +126,13 @@ describe("ToolLists", () => {
       const selected = yield* context.within(
         ToolLists.Service.pipe(Effect.flatMap((lists) => lists.select(context.session, build))),
       )
-      expect(selected).toEqual({ init: { source: project, agent: build } })
+      const file = path.join(context.session.location.directory, ".ocpp", ToolLists.FILE)
+      expect(selected).toEqual({ init: { source: project, agent: build, file } })
       expect((yield* catalog(context, context.session, build)).paths).toEqual(["grep"])
-      // The project's init.ts has no plan list, and the global one does not fill it in.
+      // The project's init.ts has no plan list, and the global one does not fill it in. The notice names the file.
       expect(yield* catalog(context, context.session, plan)).toEqual({
         paths: [],
-        notice:
-          "init.ts returns no tool list for the plan agent, so it has no tools. This session has no tools until that is fixed.",
+        notice: `${file} returns no tool list for the plan agent, so it has no tools. This session has no tools until that is fixed.`,
       })
     }),
   )
@@ -189,5 +191,62 @@ describe("ToolLists", () => {
       yield* lists.report(context.session.id, listed.notice)
       expect(yield* shown()).toHaveLength(2)
     }),
+  )
+
+  it.live(
+    "an init.ts that never returns times out as a problem, and the Session has no tools",
+    () =>
+      Effect.gen(function* () {
+        const context = yield* setup("let n = 0\nwhile (true) { n = n + 1 }\nreturn { build: [tools.read] }")
+        const file = path.join(context.session.location.directory, ".ocpp", ToolLists.FILE)
+        const started = Date.now()
+        expect(yield* catalog(context, context.session, build)).toEqual({
+          paths: [],
+          notice: `${file} did not return its tool lists within 3 seconds; look for a loop that never ends. This session has no tools until that is fixed.`,
+        })
+        expect(Date.now() - started).toBeGreaterThanOrEqual(ToolInit.TIMEOUT_MS)
+      }),
+    15_000,
+  )
+
+  it.live("an .ocpp/init.ts created after the Location loaded applies at the next selection", () =>
+    Effect.gen(function* () {
+      const context = yield* setup()
+      const lists = yield* context.within(ToolLists.Service)
+      expect(yield* lists.select(context.session, build)).toEqual({})
+      const file = path.join(context.session.location.directory, ".ocpp", ToolLists.FILE)
+      yield* Effect.promise(() => Bun.write(file, "return { build: [tools.grep] }"))
+      expect(yield* lists.select(context.session, build)).toEqual({
+        init: { source: "return { build: [tools.grep] }", agent: build, file },
+      })
+      expect((yield* catalog(context, context.session, build)).paths).toEqual(["grep"])
+    }),
+  )
+
+  it.live(
+    "a fork keeps a stored list, so a fork of a subagent keeps its tools, and a top-level fork uses init.ts",
+    () =>
+      Effect.gen(function* () {
+        const context = yield* setup("return { build: [tools.read, tools.grep] }")
+        const { db } = yield* Database.Service
+        const bus = yield* Bus.Service
+        const fork = (sessionID: Session.ID) =>
+          Effect.gen(function* () {
+            yield* context.sessions.prompt({ sessionID, text: "Fork here", resume: false })
+            yield* SessionInbox.promote(db, bus, sessionID, "steer")
+            return yield* context.sessions.fork({ sessionID, boundary: { type: "through" } })
+          })
+
+        const child = yield* context.sessions.create({ parentID: context.session.id })
+        yield* context.sessions.selectTools({ sessionID: child.id, tools: ["glob"] })
+        const forkedChild = yield* fork(child.id)
+        expect(forkedChild.parentID).toBeUndefined()
+        expect(forkedChild.tools).toEqual(["glob"])
+        expect((yield* catalog(context, forkedChild, build)).paths).toEqual(["glob"])
+
+        const forkedTop = yield* fork(context.session.id)
+        expect(forkedTop.tools).toBeUndefined()
+        expect((yield* catalog(context, forkedTop, build)).paths).toEqual(["grep", "read"])
+      }),
   )
 })

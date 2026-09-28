@@ -313,7 +313,22 @@ describe("Code Mode resume", () => {
     withLocation((location) =>
       Effect.gen(function* () {
         const ran: Array<string> = []
-        yield* register(location, testTools(ran))
+        const called: Array<string> = []
+        yield* register(location, [
+          ...testTools(ran),
+          {
+            name: "whoami",
+            options: { namespace: "test", readOnly: true },
+            description: "Returns the call ID it ran as.",
+            input: Schema.Struct({}),
+            output: Schema.String,
+            execute: (_input: unknown, context: Tool.Context) =>
+              Effect.sync(() => {
+                called.push(context.id)
+                return { output: context.id }
+              }),
+          },
+        ])
         // The execution's own init.ts, whatever the Location's is now: this Location has none.
         const init = [
           "let shout = tool.define({",
@@ -321,7 +336,7 @@ describe("Code Mode resume", () => {
           '  description: "Shout text",',
           '  inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },',
           "  outputSchema: {},",
-          '  execute: (input) => tools.test.write({ text: input.text + "!" }),',
+          '  execute: (input) => ({ written: tools.test.write({ text: input.text + "!" }), as: tools.test.whoami({}) }),',
           "})",
           "return { build: [tools.test.lookup, shout] }",
         ].join("\n")
@@ -338,7 +353,12 @@ describe("Code Mode resume", () => {
         const info = yield* waitForCodeModeExecution(CodeModeExecution.ID.make(executionID))
         expect(info.status).toBe("completed")
         expect(ran).toEqual(["write:hi!"])
-        expect(yield* readCodeModeNotebook(session.id)).toEqual({ found: { rows: 3 }, shouted: { id: "w-hi!" } })
+        // The wrapper's calls are numbered under the execution's second call, as they were before the restart.
+        expect(called).toEqual(["call_resume:1:1"])
+        expect(yield* readCodeModeNotebook(session.id)).toEqual({
+          found: { rows: 3 },
+          shouted: { written: { id: "w-hi!" }, as: "call_resume:1:1" },
+        })
       }),
     ),
   )

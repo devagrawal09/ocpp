@@ -41,7 +41,11 @@ Type safety ends at registration. The registry validates model input and declare
 
 ## Tool lists
 
-A Session's Code Mode catalog is exactly its tool list (`tool/lists.ts`), a plain `ToolLists.Selection` of Code Mode paths, where a path selects a tool or a whole namespace. A top-level Session's list comes from `init.ts` for its agent (`tool/init.ts` evaluates it) or the built-in default; a subagent's is the paths its caller passed, projected from `session.tools.selected`. Tools lent to the Session, such as the call's `tool.define` handles and `submit_result`, join it. The compile check refuses every other path as `UnknownTool`.
+A Session's Code Mode catalog is exactly its tool list (`tool/lists.ts`), a plain `ToolLists.Selection` of Code Mode paths, where a path selects a tool or a whole namespace. A Session that stores a list, projected from `session.tools.selected`, has those paths: a subagent has the paths its caller passed (none when it passed none), and a fork copies its parent's stored list. Any other top-level Session's list comes from `init.ts` for its agent (`tool/init.ts` evaluates it) or the built-in default. Tools lent to the Session, such as the call's `tool.define` handles and `submit_result`, join it. The compile check refuses every other path as `UnknownTool`.
+
+A child never holds a tool its caller lacks: continuing a child intersects its stored list with the caller's current catalog, publishes the narrowed list, and names the dropped tools in the call's result.
+
+`init.ts` is probed at every selection, from the Location's directory up to its worktree root and then in the config directories, so a file created after startup applies at the next step. It is compiled as a program that is never saved, so top-level `const` is an ordinary binding. Its evaluation has a three-second deadline and may not call tools or read `time.now()` or `Math.random()` until its lists are built, so every evaluation of one source gives the same lists. Each problem notice names the file. The calls an `init.ts` handle makes are numbered under the call that ran the handle (`<call>:<n>`), so they read as part of that execution and number the same way when a resumed execution runs the handle again.
 
 Nothing authorizes execution: every tool on the list runs. Do not add approval prompts, allow or deny rules, or per-argument checks to the registry or to leaves. A tool the agent should not have belongs off its list, or behind a `tool.define` wrapper in `init.ts`.
 

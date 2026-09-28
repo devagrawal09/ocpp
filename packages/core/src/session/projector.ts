@@ -161,6 +161,8 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
       path: parent.path,
       title: forkTitle(parent.title ?? undefined),
       agent: parent.agent,
+      // A fork keeps its parent's stored tool list, so a fork of a subagent keeps the tools it was given.
+      tools: parent.tools,
       model: parent.model,
       metadata: parent.metadata,
       version: parent.version,

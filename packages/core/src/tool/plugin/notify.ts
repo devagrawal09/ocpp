@@ -36,10 +36,13 @@ export const Plugin = {
           display: owner.trigger.type === "command" ? "/" + owner.trigger.name : "Event " + owner.trigger.name,
           executionID: owner.executionID,
         }
-      // Code Mode numbers the calls inside an execution after the model's call that started it.
-      const call = context.id.slice(0, context.id.lastIndexOf(":"))
+      // Code Mode numbers the calls inside an execution after the model's call that started it, and the calls an
+      // init.ts wrapper makes after the call that ran the wrapper, so the model's call is a prefix of this one.
       const started =
-        owner?.type === "assistant" ? owner.content.find((item) => item.type === "tool" && item.id === call) : undefined
+        owner?.type === "assistant"
+          ? owner.content.find((item) => item.type === "tool" && context.id.startsWith(item.id + ":"))
+          : undefined
+      const call = started?.type === "tool" ? started.id : context.id.slice(0, context.id.lastIndexOf(":"))
       const metadata = started?.type === "tool" && "metadata" in started.state ? started.state.metadata : undefined
       const executionID = typeof metadata?.executionID === "string" ? metadata.executionID : undefined
       return {

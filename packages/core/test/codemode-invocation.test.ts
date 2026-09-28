@@ -1135,3 +1135,106 @@ describe("CodeModeEvent.next", () => {
     expect(CodeModeEvent.scheduleProblem({ at: "tomorrow" })).toContain("must be an ISO 8601 date")
   })
 })
+
+describe("init.ts tool lists in executions", () => {
+  // The example on the Tools docs page.
+  const safeShell = [
+    "let safeShell = tool.define({",
+    '  name: "safeShell",',
+    '  description: "Run a shell command, except git push",',
+    "  inputSchema: {",
+    '    type: "object",',
+    '    properties: { command: { type: "string" } },',
+    '    required: ["command"],',
+    "  },",
+    "  outputSchema: {},",
+    "  execute: (input) => {",
+    '    if (input.command.includes("git push")) throw new Error("git push is not allowed here")',
+    "    return tools.shell({ command: input.command })",
+    "  },",
+    "})",
+    "",
+    "return {",
+    "  build: [",
+    "    tools.read,",
+    "    tools.glob,",
+    "    tools.grep,",
+    "    tools.edit,",
+    "    tools.write,",
+    "    tools.patch,",
+    "    safeShell,",
+    "    tools.subagent,",
+    "    tools.linear,",
+    "  ],",
+    "  plan: [tools.read, tools.glob, tools.grep, tools.webfetch, tools.question],",
+    "}",
+  ].join("\n")
+
+  it.live("the docs safeShell runs commands, and its own refusal reaches the program as its message", () =>
+    Effect.gen(function* () {
+      const context = yield* configured(undefined, safeShell)
+      const ran = yield* execute(context, 'const echoed = tools.safeShell({ command: "echo wrapped" })')
+      expect(ran?.status).toBe("completed")
+      const store = yield* CodeModeStore.Service
+      expect(JSON.stringify((yield* store.bindings(context.session.id)).echoed)).toContain("wrapped")
+      const refused = yield* execute(context, 'const pushed = tools.safeShell({ command: "git push" })')
+      expect(refused?.status).toBe("error")
+      expect(refused?.error).toContain("git push is not allowed here")
+      expect(refused?.error).not.toContain("[object Object]")
+      // The wrapper stands in for tools.shell, which the agent does not have.
+      const direct = yield* execute(context, 'const direct = tools.shell({ command: "echo hi" })').pipe(Effect.flip)
+      expect(direct.message).toContain("Unknown tool tools.shell; it is not available to this agent.")
+    }),
+  )
+
+  it.live("a wrapper's calls are numbered under the call that ran it, so its notification names the execution", () =>
+    Effect.gen(function* () {
+      const context = yield* configured(
+        undefined,
+        [
+          "let ping = tool.define({",
+          '  name: "ping",',
+          '  description: "Tell the model something",',
+          '  inputSchema: { type: "object" },',
+          "  outputSchema: {},",
+          '  execute: (input) => tools.session.notify({ text: "ping from a wrapper" }),',
+          "})",
+          "return { build: [ping] }",
+        ].join("\n"),
+      )
+      const own = yield* execute(context, "const pinged = tools.ping({})")
+      expect(own?.status).toBe("completed")
+      const notice = (yield* pending(context.session.id, "notify")).find(
+        (item) => item.metadata?.executionID === own?.id,
+      )
+      expect(notice?.text).toStartWith(
+        "Notification from your own code (execution " + own?.id + "), sent by code with tools.session.notify.",
+      )
+    }),
+  )
+
+  it.live(
+    "a caller can hand on only tools on its list: refused at compile time, and at run time for a saved reference",
+    () =>
+      Effect.gen(function* () {
+        const context = yield* configured(undefined, "return { build: [tools.glob, tools.read, tools.subagent] }")
+        expect((yield* execute(context, "function reader() { return tools.read }"))?.status).toBe("completed")
+        // The Location still registers tools.read, but the list no longer holds it.
+        yield* Effect.promise(() =>
+          Bun.write(
+            path.join(context.session.location.directory, ".ocpp", "init.ts"),
+            "return { build: [tools.glob, tools.subagent] }",
+          ),
+        )
+        const pass = (tools: string) =>
+          'const given = tools.subagent({ agent: "general", description: "Read", message: "Read", tools: [' +
+          tools +
+          "] })"
+        const refused = yield* execute(context, pass("tools.read")).pipe(Effect.flip)
+        expect(refused.message).toContain("Unknown tool tools.read; it is not available to this agent.")
+        const saved = yield* execute(context, pass("reader()"))
+        expect(saved?.status).toBe("error")
+        expect(saved?.error).toContain("Tool reference tools.read names no tool in this catalog")
+      }),
+  )
+})

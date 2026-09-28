@@ -257,10 +257,10 @@ const layer = Layer.effect(
           const catalog = new Map(
             Array.from(state.get().tools.values(), (tool) => [CodeModeTool.qualifiedName(tool), { tool, lent: false }]),
           )
-          const own = yield* listed(selection, undefined, (name, tool, input, index) =>
+          const own = yield* listed(selection, undefined, (name, tool, input, id) =>
             executeCodeModeTool(name, tool, input, {
               ...context,
-              id: Tool.CallID.make(context.id + ":init:" + index),
+              id: Tool.CallID.make(id),
               progress: () => Effect.void,
               ...(tool.options?.acceptsToolHandles === true ? { catalog } : {}),
             }).pipe(

@@ -1,6 +1,6 @@
 export * as SubagentCustomTool from "./subagent-custom.js"
 
-import { isToolHandle, isToolReference, type ToolHandle } from "@ocpp/codemode"
+import { isToolHandle, isToolReference, normalizeError, type ToolHandle } from "@ocpp/codemode"
 import { Tool } from "@ocpp/schema/tool"
 import { Effect, JsonSchema, Schema, SchemaRepresentation } from "effect"
 
@@ -83,7 +83,8 @@ export function make(handles: ReadonlyArray<ToolHandle>): ReadonlyArray<Tool.Inf
         Effect.mapError(
           (error) =>
             new Tool.Error({
-              message: error instanceof globalThis.Error ? error.message : String(error),
+              // A handle fails with Code Mode values, such as an error it throws, as well as host errors.
+              message: normalizeError(error).message,
               metadata: {
                 executionKind: "custom-tool",
                 executionStatus: "error",

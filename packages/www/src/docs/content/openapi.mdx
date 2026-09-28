@@ -62,17 +62,9 @@ Tool signatures come from the document's parameter, request, and response schema
 
 OC++ skips operations it cannot call correctly, such as streaming or binary responses and unsupported parameter styles, and logs each skipped operation with its reason. If a document cannot be loaded, the agent is told that the API is unavailable and why.
 
-## Permissions
+## Tool lists
 
-Operations use the same permission rules as other tools. With no matching rule, OC++ asks before each call. Allow or deny a whole API with a wildcard on its name:
-
-```jsonc
-{
-  "permissions": [
-    { "action": "store_*", "resource": "*", "effect": "allow" },
-    { "action": "store_items_create", "resource": "*", "effect": "ask" },
-  ],
-}
-```
-
-An agent that is denied every operation of an API does not see that API in its tool catalog.
+An API's operations are tools like any other. An agent's [tool list](/tools)
+names a whole API with its namespace, such as `tools.store`, or single
+operations such as `tools.store.listItems`. An agent whose list names none of
+an API's operations does not see that API.

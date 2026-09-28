@@ -162,10 +162,8 @@ Clients can attach a reference by its root alias. The attachment provides a
 non-recursive listing of the root's immediate files and directories. Ask the
 agent to inspect a particular path when more detail is needed.
 
-References do not grant extra tool permissions. Access outside the active
-Location remains subject to the agent's normal tool rules and the
-`external_directory` permission. Editing a reference additionally requires the
-applicable edit permission.
+References grant no tools. Reading or editing a reference takes the tools on
+the agent's [tool list](/tools), as for any other path.
 
 ## Fields
 

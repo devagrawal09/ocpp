@@ -193,25 +193,15 @@ Timeouts are positive integer milliseconds. Configure defaults under `mcp.timeou
 | `catalog`   | 30 seconds | Listing tools, prompts, resources, and resource templates. |
 | `execution` | 12 hours   | Calling tools, getting prompts, and reading resources.     |
 
-## Names and permissions
+## Names and tool lists
 
 OC++ combines the server name and MCP tool name as `<server>_<tool>`. Characters other than letters, numbers, `_`, and `-` are replaced with `_`; for example, server `context 7` and tool `resolve.library/id` become `context_7_resolve_library_id`. MCP prompts become available as commands named `<server>:<prompt>` using the same normalization.
 
 Choose short server names that remain unique after normalization. In Code Mode, MCP tools are grouped under `tools.<server>` by the normalized server name.
 
-Use permission actions to hide or deny a server's tools without stopping its connection:
-
-```jsonc
-{
-  "permissions": [
-    {
-      "action": "context7_*",
-      "resource": "*",
-      "effect": "deny",
-    },
-  ],
-}
-```
+An agent's [tool list](/tools) decides which of a server's tools it has: list
+`tools.context7` for all of them, or name single tools by the paths that
+`tools.search` shows. A server stays connected whether or not a list names it.
 
 ## Session context
 

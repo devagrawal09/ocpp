@@ -1,7 +1,6 @@
 {
   "$schema": "https://ocpp.ai/config.json",
   "provider": {},
-  "permission": {},
   "references": {
     "effect": {
       "repository": "github.com/Effect-TS/effect-smol",
@@ -13,8 +12,4 @@
     },
   },
   "mcp": {},
-  "tools": {
-    "github-triage": false,
-    "github-pr-search": false,
-  },
 }

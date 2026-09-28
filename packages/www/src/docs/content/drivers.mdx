@@ -48,17 +48,17 @@ A driver runs in one of two harnesses.
 
 - **OC++ harness.** This is the default, and the only harness for a top-level
   session. The vendor keeps its model loop, but its only tool is OC++'s
-  `execute`. Code Mode, permissions, the notebook, and the timeline work as they
-  do for a provider model. The vendor's own system prompt, settings, skills, and
-  MCP servers are replaced by the OC++ prompt.
+  `execute` over the session's [tool list](/tools). Code Mode, the notebook,
+  and the timeline work as they do for a provider model. The vendor's own
+  system prompt, settings, skills, and MCP servers are replaced by the OC++
+  prompt.
 - **Native harness.** This is for subagents only, and only when a subagent call
   asks for it. The vendor keeps its own tools, prompt, and settings, and OC++
-  adds `execute`, the call's `tool.define` handles, and `submit_result` over
-  MCP. OC++ still authorizes the vendor's tool calls: Claude and Pi calls are
-  checked one at a time. Codex has no per-call check, so its whole `read`,
-  `edit`, and `shell` scope is authorized up front, and it runs in a
-  workspace-write sandbox without network access. The child's timeline shows
-  the vendor's own tool calls.
+  adds `execute` over the tools the call passes, the call's `tool.define`
+  handles, and `submit_result` over MCP. OC++ does not check the vendor's own
+  tool calls: Claude Code runs them in its sandbox under your own settings,
+  Codex runs in a workspace-write sandbox without network access, and Pi uses
+  its own settings. The child's timeline shows the vendor's own tool calls.
 
 Prompts, steers, and Code Mode completion notifications reach the vendor
 through the session inbox. Claude Code receives steers and notifications during
@@ -79,11 +79,16 @@ For Claude Code and Codex, `model` is the vendor's own model name without a
 provider, with an optional effort, for example `opus#high`. For Pi, it is Pi's
 `provider/model`. A model ID in the wrong form fails before any vendor starts.
 
+`tools` sets exactly the tools the child's `execute` can call, drawn from the
+calling session's own tools; without it the child has none. See
+[Tools](/tools#subagents).
+
 `root` runs a new subagent in another existing directory, for example a
 separate git worktree. It works with every driver, including `ocpp`. The child
 session is placed at that directory and runs under that directory's own
-configuration: its permissions, agents, models, MCP servers, plugins, and
-instructions, not the calling session's. A vendor agent works there too. The
+configuration: its agents, models, MCP servers, plugins, and instructions, not
+the calling session's. The tools the call passes must exist there by the same
+paths. A vendor agent works there too. The
 path must be absolute and must be an existing directory; another spelling of
 the calling session's own directory keeps the child there. A continued
 subagent keeps its directory, and passing a different `root` for it fails.
@@ -93,37 +98,6 @@ Every other subagent option works as usual, including `input`, `inputSchema`,
 `tool.define` handles, `outputSchema` with `submit_result`, and continuing by
 `sessionID`. A vendor subagent with no running call answers a direct prompt in
 the OC++ harness.
-
-## Permissions
-
-A subagent placed outside the calling session's directory and its project
-worktree asks for two permissions, whatever its driver:
-
-- `external_directory` on the child's boundary: the root's project worktree
-  when it contains the root, otherwise the root, as `<directory>/*`.
-- `subagent_root` on the root. No default rule allows it, because the child
-  runs under that directory's own configuration.
-
-A continued subagent is asked again each time.
-
-Starting a vendor subagent also asks for two permissions:
-
-- The vendor's action, `claude`, `codex`, or `pi`, on the directory the child
-  works in: its `root`, a continued subagent's own directory, or the calling
-  session's directory. Rules can allow or deny directory patterns, such as
-  `/work/worktrees/*`.
-- `model` on `<vendor>/<model>`, for example `claude/opus`.
-
-The `subagent.models` setting and the `subagent_model` permission apply only to
-subagents on the `ocpp` driver.
-
-Native tool calls are checked against the child's agent. A request that the
-child's timeline can explain is asked in the child session. Any other request,
-such as Codex's up-front scope, is asked in the calling session and names the
-subagent call, unless the child runs in another directory: then it is asked in
-the child session, where it is held. OC++'s own tools are not checked as vendor tools: `execute`
-checks each nested tool, and `tool.define` handles and `submit_result` were
-delegated by the call.
 
 ## What driver sessions lack
 
@@ -135,7 +109,7 @@ not apply:
 - Instruction epochs. Current instructions are rendered into each vendor run's
   system prompt instead.
 - Agent step limits, plan-mode reminders, per-step snapshots, and file diffs.
-  Plan-mode permissions still apply inside `execute`.
+  The plan agent's tool list still applies inside `execute`.
 - Plugin hooks for session context, model requests, and HTTP requests.
 - Image and PDF attachments. These are not forwarded to the vendor yet. A shell
   command you run reaches the vendor with your next prompt.

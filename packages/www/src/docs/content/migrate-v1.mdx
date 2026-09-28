@@ -89,34 +89,19 @@ Use `"manual"`, `"auto"`, or `"disabled"`. If the V1 file already uses `share`, 
 
 ### Permissions and tools
 
-V1 groups permission effects by tool. V2 uses one ordered `permissions` array, making precedence and exceptions explicit:
+V2 has no permission rules. Each agent's tools come from an explicit tool list in `init.ts`, and every tool on the list
+runs without asking. V1 `permission` and `tools` settings, at the top level or on an agent, still load but are ignored
+with a warning. To keep an agent away from a tool, leave it off that agent's list:
 
-```jsonc
-// V1
-{
-  "permission": {
-    "bash": {
-      "git push *": "ask"
-    },
-    "edit": "allow"
-  },
-  "tools": {
-    "websearch": false
-  }
-}
-
-// V2
-{
-  "permissions": [
-    { "action": "shell", "resource": "git push *", "effect": "ask" },
-    { "action": "edit", "resource": "*", "effect": "allow" },
-    { "action": "websearch", "resource": "*", "effect": "deny" }
-  ]
+```ts
+// .ocpp/init.ts
+return {
+  build: [tools.read, tools.glob, tools.grep, tools.edit, tools.write, tools.patch, tools.shell, tools.subagent],
+  plan: [tools.read, tools.glob, tools.grep, tools.webfetch, tools.question],
 }
 ```
 
-Permission actions also changed: `bash` is now `shell`, `task` is now `subagent`, and `write` and `patch` are now `edit`.
-See [Permissions](/permissions) for the ordered V2 rule format.
+See [Tools](/tools) for the default lists, `tool.define` wrappers, and subagent tools.
 
 ### Agents and modes
 
@@ -131,10 +116,7 @@ V2 config:
       "prompt": "Review for correctness and missing tests.",
       "model": "anthropic/claude-sonnet-4-5",
       "variant": "high",
-      "disable": false,
-      "permission": {
-        "edit": "deny"
-      }
+      "disable": false
     }
   }
 }
@@ -145,10 +127,7 @@ V2 config:
     "reviewer": {
       "system": "Review for correctness and missing tests.",
       "model": "anthropic/claude-sonnet-4-5#high",
-      "disabled": false,
-      "permissions": [
-        { "action": "edit", "resource": "*", "effect": "deny" }
-      ]
+      "disabled": false
     }
   }
 }
@@ -401,14 +380,9 @@ See [Models](/models) for the complete native model shape.
 Most fields that keep the same shape, including `shell`, `model`, `default_agent`, `autoupdate`, `watcher`, `formatter`,
 `lsp`, `instructions`, `enterprise`, and `tool_output`, require no migration.
 
-The V1 provider filters do not have one-to-one native V2 config fields, but their behavior remains supported:
-
-- `enabled_providers` becomes an internal deny-by-default provider policy followed by allows for the listed providers.
-- `disabled_providers` becomes internal deny policies for the listed providers.
-- `small_model` becomes the `model` selection for the built-in `title` agent. Native V2 configuration should use
-  `agents.title.model` instead.
-
-You may keep these fields in V1 syntax. OC++ normalizes them without warning.
+`small_model` has no one-to-one native V2 config field, but its behavior remains supported: it becomes the `model`
+selection for the built-in `title` agent. Native V2 configuration should use `agents.title.model` instead. You may keep it
+in V1 syntax. OC++ normalizes it without warning.
 
 ### Accepted but unsupported fields
 
@@ -423,6 +397,8 @@ they are not mistaken for active configuration:
 - An enabled-only V1 MCP entry without a `type`.
 - V1 experimental fields `batch_tool`, `openTelemetry`, `primary_tools`, and `continue_loop_on_deny`.
 - V1 provider fields `id`, `whitelist`, and `blacklist`.
+- `enabled_providers` and `disabled_providers`: every configured or logged-in provider is available.
+- `permission` and `tools`, at the top level or on an agent: use [tool lists](/tools).
 - V1 provider-model fields `release_date`, `attachment`, `reasoning`, `temperature`, `experimental`, a non-`deprecated`
   `status`, and boolean `interleaved`.
 
@@ -445,7 +421,7 @@ When converting the frontmatter to native V2 fields:
 
 - Keep the Markdown body as the agent's system instructions.
 - Rename `prompt` to `system` when it appears in JSON configuration; file bodies do not need a `system` field.
-- Rename `disable` to `disabled` and `permission` to `permissions`.
+- Rename `disable` to `disabled`, and drop `permission` and `tools`: agents take their tools from [tool lists](/tools).
 - Join `model` and `variant` as `provider/model#variant`.
 - Move `temperature`, `top_p`, and provider-specific options under `request.body`.
 
@@ -549,6 +525,6 @@ request types, and responses.
 
 ## Verify your setup
 
-Verify your model, provider credentials, agents, permissions, MCP servers, and plugins in a project before relying on the
+Verify your model, provider credentials, agents, tool lists, MCP servers, and plugins in a project before relying on the
 beta for regular work. Keep your V1 setup until you have confirmed the V2 behavior you need, and do not point V1 at
 configuration that you have converted to the native V2 shape.

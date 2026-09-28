@@ -44,7 +44,7 @@ application effects are available only when the host exposes a named tool that p
 | Admission              | Tool paths and names are checked before an execution ID exists. Unavailable tools and name conflicts refuse immediately.                  |
 | Fixed snapshots        | An execution sees exactly the completed notebook captured when it was admitted.                                                           |
 | All-or-nothing saving  | Success saves every declaration in one transaction; any failure saves none.                                                               |
-| Durable functions      | Closures are saved with their compiled body and exact captures, and re-authorize tools on call.                                           |
+| Durable functions      | Closures are saved with their compiled body and exact captures, and re-resolve tools on call.                                             |
 | Plain durable data     | `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, functions.                                             |
 | Asynchronous execution | `execute` returns an execution ID; the outcome arrives as one later notification.                                                         |
 | Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.                                               |
@@ -171,8 +171,8 @@ sequenceDiagram
 
 - Unsupported syntax produces an immediate `ParseError` or `UnsupportedSyntax` error with its
   position, the failing source line, and concrete suggestions. See [Compile-Time Checks](#compile-time-checks).
-- A tool path outside the agent's catalog produces an immediate `UnknownTool` error, and a path whose
-  tool the agent's permission rules deny outright produces `ToolDenied`.
+- A tool path outside the agent's catalog, called or passed as a reference, produces an immediate
+  `UnknownTool` error.
 - An existing binding produces an immediate `NameAlreadyDefined` error.
 - An active reservation produces an immediate `NameReserved` error that names the owning execution.
 - A refused program receives **no execution ID** and performs **no tool calls**.
@@ -237,7 +237,7 @@ A durable function keeps:
 
 - its versioned compiled body and its original source text,
 - its exact captures, frozen when the execution saves,
-- static tool paths, which are resolved and authorized again in the execution that invokes it.
+- static tool paths, which are resolved again in the execution that invokes it.
 
 A saved closure never looks up a later notebook value by name: every free identifier is either a host
 global (`tools`, `console`, `Math`, `JSON`, `time`, `url`, …) or a captured value stored with the
@@ -474,19 +474,19 @@ checks provide a second boundary for computed mutator names and evaluator refere
 
 Calls must name their tool with a static path (dynamic dispatch is rejected), so the compiler knows
 every tool a program can call. `staticToolCalls(program.body)` lists them, including calls inside
-functions and tool handles that never run. OC++ Core refuses a path that is not in the agent's
-catalog as `UnknownTool`, and a path whose tool the agent's permission rules disable outright as
-`ToolDenied`. The check reuses the rule that builds the catalog, so a tool allowed for some
-resources is not refused. Permissions that depend on arguments, such as a shell command pattern or a
-file path computed at runtime, cannot be decided statically; each tool still checks those when it is
-called. A saved notebook function keeps its own tool paths, which are authorized again when it runs.
+functions and tool handles that never run, and `staticToolReferences(program.body)` lists the paths a
+program passes as [tool references](#tool-references). OC++ Core's catalog is exactly the agent's
+tool list, and Core refuses a called or referenced path outside it as `UnknownTool` ("it is not
+available to this agent"). A namespace reference passes when the catalog holds a tool under it. A
+saved notebook function keeps its own tool paths, which are resolved again in the execution that
+invokes it.
 
 Every refusal carries `suggestions`: short, concrete rewrites that reuse the program's own names where
 they are simple. The model sees the message, its position, the failing source line, and each
 suggestion on its own line:
 
 ```text
-Unknown tool tools.fs.raed; this agent has no tool at that path. (line 2, col 14)
+Unknown tool tools.fs.raed; it is not available to this agent. (line 2, col 14)
 Source: const text = tools.fs.raed({ path })
 Did you mean tools.fs.read?
 Check its exact signature with tools.search({ query: "tools.fs.read" })
@@ -504,7 +504,7 @@ type declarations, so the compiler maps every node back through the transpiler's
 source line keeps its indentation, so the column counts from its start:
 
 ```text
-Unknown tool tools.linear.create_issues; this agent has no tool at that path. (line 2, col 3)
+Unknown tool tools.linear.create_issues; it is not available to this agent. (line 2, col 3)
 Source:   tools.linear.create_issues({
 Did you mean tools.linear.create_issue?
 Check its exact signature with tools.search({ query: "tools.linear.create_issue" })
@@ -516,6 +516,7 @@ Check its exact signature with tools.search({ query: "tools.linear.create_issue"
 | `text.split(/\s+/)`                       | `text.split(" ").filter((part) => part !== "")`                              |
 | `name.replace(/-/g, "_")`                 | `name.replaceAll("-", "_")`                                                  |
 | `const inspect = tool.define(...)`        | `let inspect = tool.define(...)`, or create the handle inside a function     |
+| `const reader = tools.fs.read`            | `let reader = tools.fs.read`                                                 |
 | `const { branch, files } = status`        | `const result = status; const branch = result.branch; ...`, or `let { ... }` |
 | `tools[name](input)`                      | `tools.search({ query })`, then a direct path or an explicit branch          |
 | `items.push(item)`, `items.sort(compare)` | `[...items, item]`, `items.toSorted(...)`                                    |
@@ -523,7 +524,6 @@ Check its exact signature with tools.search({ query: "tools.linear.create_issue"
 | `new Date()`, `new Map()`, `new Set()`    | `time.*` helpers, records, arrays                                            |
 | `new URLSearchParams(text)`               | `url.parseQuery(text)` records; `url.formatQuery([{ name, value }])`         |
 | unknown tool path                         | close catalog paths, the namespace's tools, and `tools.search({ query })`    |
-| tool denied outright                      | an allowed tool from `tools.search`, or a permission change by the user      |
 
 ## Immutability Model
 
@@ -583,10 +583,38 @@ Handle guarantees:
 - Captured bindings are snapshotted at definition time and made immutable.
 - Direct static tool calls in the execute function become enforced capabilities; calls hidden behind
   captured helpers are rejected.
-- The handle uses the outer execution's filtered catalog, authorization, counters, hooks, and
-  deadline.
+- The handle uses the outer execution's catalog, counters, hooks, and deadline.
 - Only host tools with `acceptsToolHandles: true` may receive handles.
 - Handles are opaque, are not data, cannot be saved, and become inactive when the execution settles.
+
+## Tool References
+
+A static tool path that is not called is a tool reference: one tool, such as `tools.fs.read`, or a
+whole namespace, such as `tools.linear`. References exist to hand tools to a host tool declared with
+`acceptsToolHandles`, such as `tools.subagent`, beside `tool.define` handles:
+
+```ts
+let inspect = tool.define({ ... })
+const review = tools.subagent({
+  agent: "explore",
+  description: "Review error handling",
+  message: "Find error-handling branches in src/worker.ts and explain the gaps.",
+  tools: [tools.fs.read, tools.fs.grep, tools.linear, inspect],
+})
+```
+
+- A reference must name a static path, like a call. The `tools` root and computed names are not
+  values.
+- The compile check covers references too, and the runtime refuses a reference whose path names no
+  tool in the catalog before the receiving tool runs.
+- References are opaque like handles: they are not data for other tools, cannot be saved, and are
+  refused as a top-level `const`. Bind one with `let`.
+- A receiving tool gets the reference's path and the calling execution's catalog, and decides what
+  the path means. `tools.subagent` gives the child exactly those tools.
+
+`CodeMode.evaluate` runs a program for its returned value instead of an execution: references and
+handles stay live in the value, and handles stay callable until the caller's scope closes. OC++ Core
+evaluates `init.ts` this way to build each agent's tool list.
 
 ## Subagent Data Plane
 
@@ -625,7 +653,7 @@ through the notebook without ever entering the parent's context as text.
 
 A program can hand a saved notebook function to the user as a slash command, or to the host as a
 scheduled event. Either way the function runs later as its own Code Mode execution, an
-_invocation_, with the Session agent's tools and permissions. The run shows in the Session timeline
+_invocation_, with the Session's tool list for its current agent. The run shows in the Session timeline
 but does not wake the model: its outcome waits in the Session inbox as an admit-only steer and
 reaches the model at its next step. A handler that needs the model now calls
 `tools.session.notify`.
@@ -700,10 +728,8 @@ tools.event.define({
   Notifications from one command, event, or model execution that the model has not seen yet merge
   into one message that counts them and keeps the latest five, each cut at 4000 characters.
 
-- **Permissions.** `command.define`, `event.define`, `event.enable`, `event.trigger`, and
-  `session.notify` assert the permission actions `command_define`, `event_define`, `event_enable`,
-  `event_trigger`, and `session_notify`, with the command or event name as the resource (`*` for
-  notify), so `ask` and `deny` rules apply.
+- **Tools.** A handler calls only the tools on its Session's list when it runs. A program that
+  defines commands or events needs `tools.command` or `tools.event` on its own list.
 - **Lifecycle.** Commands and events persist with the Session and keep running across restarts.
   A committed revert removes those whose handler it removed, so a later function of the same name
   never becomes their handler. A fork copies them, with events disabled so the fork does not fire
@@ -795,7 +821,7 @@ const wide = "ab".repeat(3_000_000_000) // InvalidDataValue, before the native r
 
 Admission errors are reported by the host with a stable `kind` of `NameAlreadyDefined`,
 `NameReserved`, or `NotebookLimitExceeded`, plus the names involved. The host's compile-time tool
-check reports `UnknownTool` or `ToolDenied` with the rejected paths. Compiler and runtime diagnostics
+check reports `UnknownTool` with the rejected paths. Compiler and runtime diagnostics
 include a one-based `location` in the source as written when available, and `suggestions` for
 rejected syntax. A `ParseError` also carries an `excerpt` of the failing source line so the failure
 can be understood without the whole program. OC++ Core adds the excerpt for every compile refusal.
@@ -804,12 +830,11 @@ generic failure.
 
 ## Authorization And Trust Boundaries
 
-Code Mode does not invent a second permission system. The host controls authority by exposing only
-the tools available to the current request, refusing at compile time a program that calls a tool
-outside that catalog, running normal domain authorization inside each tool,
-marking the few tools allowed to receive opaque handles, and applying the same hooks and permission
-flow used by native tool calls. Saved closures re-resolve and re-authorize their tool paths in the
-execution that invokes them, so authority is never captured.
+Code Mode has no permission system of its own. The host controls authority by exposing only the
+tools available to the current request, refusing at compile time a program that calls or references a
+tool outside that catalog, marking the few tools allowed to receive opaque handles and references,
+and applying the same hooks used by native tool calls. Saved closures re-resolve their tool paths in
+the execution that invokes them, so authority is never captured.
 
 Tool output and execution data are untrusted data, not instructions. Completion summaries frame
 previews and logs explicitly and neutralize spoofable markers and tags, and `tools.session.notify`

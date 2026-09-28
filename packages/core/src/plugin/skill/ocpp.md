@@ -88,9 +88,11 @@ then does the same for `.ocpp/ocpp.json(c)` files. This means every
 discovered `.ocpp` config overrides every discovered direct config. Global
 filesystem configuration has lower precedence than these discovered documents.
 
-Common configuration fields include `model`, `default_agent`, `permissions`,
-`agents`, `commands`, `plugins`, `providers`, `mcp`, `skills`, `instructions`,
-`references`, `formatter`, and `lsp`.
+Common configuration fields include `model`, `default_agent`, `agents`,
+`commands`, `plugins`, `providers`, `mcp`, `skills`, `instructions`,
+`references`, `formatter`, and `lsp`. Each agent's tools come from `init.ts`
+beside the configuration (`.ocpp/init.ts` or `~/.config/ocpp/init.ts`), not
+from a configuration field; read `packages/www/src/docs/content/tools.mdx`.
 
 Do not guess field names or shapes. Read
 `packages/www/src/docs/content/config.mdx` and its linked local topic guide,
@@ -160,7 +162,7 @@ in `packages/core/src/plugin.ts`.
 
 OC++ uses a client-server architecture. Interfaces such as the web app
 connect to a background OC++ service, which owns sessions, configuration,
-plugins, permissions, and tool execution.
+plugins, and tool execution.
 
 For the active service, prefer `ocpp service status`, `ocpp api`, and
 the service log over assumptions from the worktree. Inspect
@@ -238,8 +240,8 @@ problem belongs to the client, the shared server, or one project.
 - Compare with `ocpp --standalone`, which serves the web app from a private
   server, to isolate shared-service issues.
 - Inspect `~/.local/share/ocpp/log/ocpp.log`. Filter `role=cli` for
-  client startup and `role=server` for sessions, providers, plugins,
-  permissions, and tools.
+  client startup and `role=server` for sessions, providers, plugins, and
+  tools.
 - Run one reproduction with `OCPP_LOG_LEVEL=DEBUG` when normal logs are not
   sufficient.
 - Do not delete or edit the database, service registration, or service config

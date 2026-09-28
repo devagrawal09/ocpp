@@ -184,25 +184,10 @@ referenced file when the skill instructs it to do so. The supporting-file
 sample is available for directory-based `SKILL.md` skills; flat Markdown skills
 receive no neighboring file list.
 
-## Permissions
+## Tool lists
 
-Permission rules use the `skill` action and the skill ID as the resource. Rules
-are evaluated in order, with the last matching rule winning:
-
-```jsonc title="ocpp.jsonc"
-{
-  "permissions": [
-    { "action": "skill", "resource": "*", "effect": "allow" },
-    { "action": "skill", "resource": "internal-*", "effect": "deny" },
-    { "action": "skill", "resource": "experimental-*", "effect": "ask" },
-  ],
-}
-```
-
-`deny` removes matching skills from model-facing discovery and rejects skill
-tool loading. `ask` advertises the skill but requests approval when the model
-loads it. The same rules can be placed under an individual
-`agents.<id>.permissions` array.
+Skills are advertised to an agent only when its [tool list](/tools) includes
+`tools.skill`, which loads them. An agent without it sees no skills.
 
 ## Troubleshooting
 
@@ -211,6 +196,6 @@ If a skill is missing or loads the wrong content:
 1. Confirm the file is either a root-level `*.md` or a nested file named exactly `SKILL.md`.
 2. Check the path-derived ID rather than the frontmatter `name`.
 3. Add a `description` if the skill should be advertised to the model.
-4. Check `ocpp/autoinvoke` and the selected agent's `skill` permissions.
+4. Check `ocpp/autoinvoke` and that the selected agent's tool list includes `tools.skill`.
 5. Look for a later source defining the same ID.
 6. For HTTP catalogs, verify `index.json`, same-origin file paths, and a changed `version`.

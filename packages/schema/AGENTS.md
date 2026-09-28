@@ -11,8 +11,8 @@
 
 ## Current Versus V1
 
-- Current contracts are unversioned: use names like `Session`, `Permission`, `Question`, and identifiers like `Permission.Request`.
-- Legacy contracts retained for active compatibility, persistence, or migration are explicitly `V1`: use names like `SessionV1`, `PermissionV1`, and identifiers like `PermissionV1.Request`.
+- Current contracts are unversioned: use names like `Session`, `Form`, `Question`, and identifiers like `Session.Info`.
+- Legacy contracts retained for active compatibility, persistence, or migration are explicitly `V1`: use names like `SessionV1`, `PermissionV1`, and identifiers like `SessionV1.MessageID`.
 - Do not preserve `V2` as the permanent name for the replacement architecture. Remove `V2` from current namespaces, brands, and identifiers as the contracts are normalized.
 - Retained V1 contracts live under `src/v1/`. New/current code must not depend on that subtree.
 - V1 coexistence is temporary. Keep compatibility entrypoints only where migration requires them, and delete the V1 subtree when the legacy runtime is retired.

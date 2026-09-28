@@ -164,29 +164,24 @@ currently display it in conversations.
 }
 ```
 
-### Permissions
+### Tools
 
-Define ordered rules that allow, deny, or ask before an agent uses a tool on a
-matching resource.
+Each agent's tools come from `init.ts`, a Code Mode program beside your
+configuration, not from `ocpp.json`:
 
-```jsonc
-{
-  "permissions": [
-    {
-      "action": "shell",
-      "resource": "git push *",
-      "effect": "ask",
-    },
-  ],
-}
+```text
+~/.config/ocpp/init.ts
+/home/user/projects/my-app/.ocpp/init.ts
 ```
 
-See the [permissions guide](/permissions) for rule matching and available actions.
+The nearest `.ocpp/init.ts` wins over the global one, and they are not merged.
+Without one, `build` has every tool and `plan` reads, searches, and asks. See the
+[tools guide](/tools). OC++ ignores the removed `permissions` field.
 
 ### Agents
 
 Override built-in agents or define specialized agents with their own model,
-instructions, mode, and permissions.
+instructions, and mode.
 
 ```jsonc
 {
@@ -195,7 +190,6 @@ instructions, mode, and permissions.
       "description": "Review changes without editing files",
       "mode": "subagent",
       "system": "Focus on correctness, security, and missing tests.",
-      "permissions": [{ "action": "edit", "resource": "*", "effect": "deny" }],
     },
   },
 }
@@ -334,7 +328,7 @@ Code Mode tools under the API's name.
 }
 ```
 
-See the [REST APIs guide](/openapi) for base URLs, authentication, tool names, and permissions.
+See the [REST APIs guide](/openapi) for base URLs, authentication, and tool names.
 
 ### Compaction
 

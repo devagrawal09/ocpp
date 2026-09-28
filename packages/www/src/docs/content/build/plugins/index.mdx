@@ -633,16 +633,6 @@ const review = await ctx.generate.text({
 })
 ```
 
-### Permissions
-
-Inspect or resolve pending permission requests.
-
-```ts
-const pending = await ctx.permission.list({ sessionID })
-const request = await ctx.permission.get({ sessionID, requestID })
-await ctx.permission.reply({ sessionID, requestID, reply: "once" })
-```
-
 ### Sessions
 
 Create or read a session.
@@ -1187,46 +1177,6 @@ interface SessionHookContext {
     callback: (event: SessionHooks[Name]) => Promise<void> | void,
     options?: Name extends "prompt" ? never : { providerID?: string },
   ): Promise<Registration>
-}
-```
-
-### Permissions
-
-Review permission decisions after configured rules are evaluated and before an action runs or a permission prompt is
-published. Hooks run for `allow` and `ask` decisions. An explicit configured `deny` is final and does not invoke the
-hook.
-
-```ts
-await ctx.permission.hook("evaluate", async (event) => {
-  if (event.action === "read") return
-
-  const messages = await ctx.session.context({ sessionID: event.sessionID })
-  const review = await ctx.generate.text({
-    model: { providerID: "anthropic", id: "claude-sonnet-4-6" },
-    prompt: buildSafetyPrompt({ messages, action: event.action, resources: event.resources }),
-  })
-  const decision = parseDecision(review.text)
-
-  event.effect = decision.effect
-  event.message = decision.reason
-})
-```
-
-The hook may set `effect` to `allow`, `ask`, or `deny`. When set, `message` is included in an escalated permission
-request or used as the denial reason.
-
-#### Reference
-
-```ts
-interface PermissionEvaluation {
-  readonly sessionID: string
-  readonly agent?: string
-  readonly action: string
-  readonly resources: readonly string[]
-  readonly metadata?: Record<string, unknown>
-  readonly source?: { type: "tool"; messageID: string; id: string }
-  effect: "allow" | "ask" | "deny"
-  message?: string
 }
 ```
 

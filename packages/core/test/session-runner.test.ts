@@ -698,6 +698,8 @@ const messageTexts = (request: LLMRequest, role: "user" | "system") =>
   )
 const userTexts = (request: LLMRequest) => messageTexts(request, "user")
 const systemTexts = (request: LLMRequest) => messageTexts(request, "system")
+/** The rendered instruction baseline: the last system part, after the harness prompt. */
+const instructionBaseline = (request: LLMRequest) => request.system.at(-1)?.text ?? ""
 const messageRoles = (request: LLMRequest | undefined) => request?.messages.map((message) => message.role)
 
 const recordedEventTypes = (id: Session.ID) =>
@@ -2009,6 +2011,8 @@ describe("SessionRunnerLLM", () => {
       }),
     )
     yield* transformTools(yield* Tool.Service, { marker: markerTool })
+    // Skill guidance follows the Code Mode catalog, which only the real snapshot reports.
+    s.directTools = false
     s.skillBaselines.set(Agent.ID.make("build"), "Build skills")
     yield* s.runPrompt("First")
     s.skillBaselines.set(Agent.ID.make("plan"), "Plan skills")
@@ -2018,9 +2022,10 @@ describe("SessionRunnerLLM", () => {
     })
     yield* s.runPrompt("Second")
 
-    expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, "Initial context\n\nBuild skills"],
-      [defaultSystem, "Initial context\n\nBuild skills"],
+    // The instruction baseline keeps build's guidance; plan's arrives as an update.
+    expect(s.requests.map(instructionBaseline)).toEqual([
+      expect.stringMatching(/\n\nBuild skills$/),
+      expect.stringMatching(/\n\nBuild skills$/),
     ])
     expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Plan skills"))
   })
@@ -2033,6 +2038,7 @@ describe("SessionRunnerLLM", () => {
       }),
     )
     yield* transformTools(yield* Tool.Service, { marker: markerTool })
+    s.directTools = false
     s.skillBaselines.set(Agent.ID.make("build"), "Build skills")
     s.skillBaselines.set(Agent.ID.make("plan"), "Plan skills")
     let switched = false
@@ -2048,9 +2054,8 @@ describe("SessionRunnerLLM", () => {
     })
     yield* s.runPrompt("First")
 
-    expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, "Initial context\n\nBuild skills"],
-    ])
+    expect(s.requests.map(instructionBaseline)).toEqual([expect.stringMatching(/\n\nBuild skills$/)])
+    expect(JSON.stringify(s.requests[0])).not.toContain("Plan skills")
   })
 
   scenario("keeps the sampled model when selection changes during model resolution", function* (s) {

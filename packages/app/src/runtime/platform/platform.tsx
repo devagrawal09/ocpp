@@ -1,5 +1,4 @@
 import { createSimpleContext } from "@ocpp/ui/context"
-import type { AsyncStorage, SyncStorage } from "@solid-primitives/storage"
 import type { Accessor } from "solid-js"
 import type { DesktopMenuAction } from "@/shell/commands/desktop-menu"
 import { ServerConnection } from "@/runtime/server/registry"
@@ -62,9 +61,6 @@ type PlatformBase = {
   /** Open a native save file picker dialog (desktop only) */
   saveFilePickerDialog?(opts?: SaveFilePickerOptions): Promise<string | null>
 
-  /** Storage mechanism, defaults to localStorage */
-  storage?: (name?: string) => SyncStorage | AsyncStorage
-
   /** Prompt drafts, history, and their blobs. */
   draftStore?: DraftStore
 
@@ -119,12 +115,10 @@ type PlatformBase = {
 
 export type Platform = PlatformBase &
   (
-    | { platform: "web"; os?: never; windowID?: never }
+    | { platform: "web"; os?: never }
     | {
         platform: "desktop"
         os?: DesktopOS
-        /** Stable platform window identity for window-scoped persistence */
-        windowID: string
         openDirectoryPickerDialog(opts?: OpenDirectoryPickerOptions): Promise<PickerPaths>
       }
   )

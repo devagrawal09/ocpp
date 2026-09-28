@@ -18,7 +18,6 @@ type PersistTarget = {
   draft?: boolean
   sync?: boolean
   storage?: string
-  scope?: "window"
   workspaceStorageAliases?: string[]
   previousKey?: string
   key: string
@@ -26,7 +25,8 @@ type PersistTarget = {
 }
 
 const GLOBAL_STORAGE = "ocpp.global.dat"
-const WINDOW_STORAGE = "ocpp.window"
+// Keeps the name the browser build has always used so existing tab state still loads.
+const WINDOW_STORAGE = "ocpp.window.browser.dat"
 const LOCAL_PREFIX = "ocpp."
 const fallback = new Map<string, boolean>()
 
@@ -279,7 +279,7 @@ async function removeAsync(storage: AsyncStorage, key: string) {
   } catch {}
 }
 
-function toAsyncStorage(storage: SyncStorage | AsyncStorage): AsyncStorage {
+function toAsyncStorage(storage: SyncStorage): AsyncStorage {
   return {
     getItem: async (key) => storage.getItem(key),
     setItem: async (key, value) => storage.setItem(key, value),
@@ -321,11 +321,6 @@ function draftStorage(draftID: string) {
   const head = (draftID.slice(0, 12) || "draft").replace(/[^a-zA-Z0-9._-]/g, "-")
   const sum = checksum(draftID) ?? "0"
   return `ocpp.draft.${head}.${sum}.dat`
-}
-
-function windowStorage(windowID: string) {
-  const safe = (windowID || "browser").replace(/[^a-zA-Z0-9._-]/g, "-")
-  return `${WINDOW_STORAGE}.${safe}.dat`
 }
 
 function workspaceStorageAliases(dir: string) {
@@ -447,8 +442,6 @@ export const PersistTesting = {
   localStorageDirect,
   localStorageWithPrefix,
   normalize,
-  resolveTarget,
-  windowStorage,
   workspaceStorage,
 }
 
@@ -457,7 +450,7 @@ export const Persist = {
     return { storage: GLOBAL_STORAGE, key }
   },
   window(key: string): PersistTarget {
-    return { scope: "window", key }
+    return { storage: WINDOW_STORAGE, key }
   },
   draft(draftID: string, key: string): PersistTarget {
     return { storage: draftStorage(draftID), key: `draft:${key}` }
@@ -491,31 +484,12 @@ export const Persist = {
   },
 }
 
-function resolveTarget(target: PersistTarget, platform: Platform): PersistTarget {
-  if (target.scope !== "window") return target
-  const windowID = platform.platform === "desktop" ? platform.windowID : "browser"
-  if (!windowID) throw new Error("Desktop window ID is required for window-scoped storage")
-  return {
-    ...target,
-    storage: windowStorage(windowID),
-  }
-}
-
 export function removePersisted(
   target: { draft?: boolean; storage?: string; workspaceStorageAliases?: string[]; key: string },
   platform?: Platform,
 ) {
   if (target.draft && platform?.draftStore) {
     void platform.draftStore.removeItem(`${target.storage ?? "default"}:${target.key}`)
-  }
-  const isDesktop = platform?.platform === "desktop" && !!platform.storage
-
-  if (isDesktop) {
-    void platform.storage?.(target.storage)?.removeItem(target.key)
-    for (const storage of target.workspaceStorageAliases ?? []) {
-      void platform.storage?.(storage)?.removeItem(target.key)
-    }
-    return
   }
 
   if (!target.storage) {
@@ -534,32 +508,14 @@ export function persisted<T>(
   store: [Store<T>, SetStoreFunction<T>],
   platformOverride?: Platform,
 ): PersistedWithReady<T> {
-  const platform = platformOverride ?? usePlatform()
-  const config = resolveTarget(typeof target === "string" ? { key: target } : target, platform)
-
+  const config = typeof target === "string" ? { key: target } : target
   const defaults = snapshot(store[0])
-  const isDesktop = platform.platform === "desktop" && !!platform.storage
-  const draft = config.draft ? platform.draftStore : undefined
-
-  const currentStorage = (() => {
-    if (draft) {
-      const prefix = `${config.storage ?? "default"}:`
-      return {
-        getItem: (key: string) => draft.getItem(prefix + key),
-        setItem: (key: string, value: string) => draft.setItem(prefix + key, value),
-        removeItem: (key: string) => draft.removeItem(prefix + key),
-      } satisfies AsyncStorage
-    }
-    if (isDesktop) return platform.storage?.(config.storage)
-    if (!config.storage) return localStorageDirect()
-    return localStorageWithPrefix(config.storage)
-  })()
-
+  const draft = config.draft ? (platformOverride ?? usePlatform()).draftStore : undefined
+  const local = config.storage ? localStorageWithPrefix(config.storage) : localStorageDirect()
   const workspaceAliases = config.workspaceStorageAliases ?? []
 
   const storage = (() => {
-    if (!isDesktop && !draft) {
-      const current = currentStorage as SyncStorage
+    if (!draft) {
       const sources = [
         ...workspaceAliases.map((storage) => ({ storage: localStorageWithPrefix(storage) })),
         ...(config.previousKey ? [{ storage: localStorageDirect(), key: config.previousKey }] : []),
@@ -567,10 +523,10 @@ export function persisted<T>(
 
       const api: SyncStorage = {
         getItem: (key) => {
-          const value = readCurrent({ storage: current, key, defaults, migrate: config.migrate })
+          const value = readCurrent({ storage: local, key, defaults, migrate: config.migrate })
           if (value !== undefined) return value
           return relocateStoredValue({
-            current,
+            current: local,
             sources,
             key,
             defaults,
@@ -578,34 +534,28 @@ export function persisted<T>(
           })
         },
         setItem: (key, value) => {
-          current.setItem(key, value)
+          local.setItem(key, value)
         },
         removeItem: (key) => {
-          current.removeItem(key)
+          local.removeItem(key)
         },
       }
 
       return api
     }
 
-    const current = currentStorage as AsyncStorage
-    const previousDraftStorage = draft
-      ? isDesktop
-        ? platform.storage?.(config.storage)
-        : config.storage
-          ? localStorageWithPrefix(config.storage)
-          : localStorageDirect()
-      : undefined
-    const previousStorage = config.previousKey ? (isDesktop ? platform.storage?.() : localStorageDirect()) : undefined
+    const prefix = `${config.storage ?? "default"}:`
+    const current: AsyncStorage = {
+      getItem: (key) => draft.getItem(prefix + key),
+      setItem: (key, value) => draft.setItem(prefix + key, value),
+      removeItem: (key) => draft.removeItem(prefix + key),
+    }
+    // Prompt drafts used to live in localStorage; relocate them into the draft store on first read.
     const relocationSources = [
-      previousDraftStorage ? { storage: previousDraftStorage } : undefined,
-      ...workspaceAliases.map((name) => ({
-        storage: isDesktop ? platform.storage?.(name) : localStorageWithPrefix(name),
-      })),
-      previousStorage && config.previousKey ? { storage: previousStorage, key: config.previousKey } : undefined,
-    ]
-      .filter((source): source is { storage: SyncStorage | AsyncStorage; key?: string } => !!source?.storage)
-      .map((source) => ({ ...source, storage: toAsyncStorage(source.storage) }))
+      { storage: local },
+      ...workspaceAliases.map((name) => ({ storage: localStorageWithPrefix(name) })),
+      ...(config.previousKey ? [{ storage: localStorageDirect(), key: config.previousKey }] : []),
+    ].map((source) => ({ ...source, storage: toAsyncStorage(source.storage) }))
     let draftLatest: string | undefined
 
     const api: AsyncStorage = {
@@ -620,14 +570,14 @@ export function persisted<T>(
           migrate: config.migrate,
         })
         if (draftLatest === undefined) {
-          if (draft && relocated !== null) return (await current.getItem(key)) ?? relocated
+          if (relocated !== null) return (await current.getItem(key)) ?? relocated
           return relocated
         }
         await current.setItem(key, draftLatest)
         return draftLatest
       },
       setItem: async (key, value) => {
-        if (draft) draftLatest = value
+        draftLatest = value
         await current.setItem(key, value)
       },
       removeItem: async (key) => {

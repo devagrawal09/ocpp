@@ -2,7 +2,6 @@ import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "@ocpp/ui/context"
 import { batch, createEffect, createMemo, createRoot, on, onCleanup } from "solid-js"
 import { useWorkspaceLocation, type LocationContext } from "@/workspaces/location"
-import type { Platform } from "@/runtime/platform/platform"
 import { useServerSDK } from "@/runtime/server/client"
 import { base64Encode } from "@ocpp/util/encode"
 import { defaultTitle, titleNumber } from "./title"
@@ -111,7 +110,7 @@ function terminalPersistTarget(scope: ServerScope, dir: string) {
   return Persist.serverWorkspace(scope, dir, "terminal")
 }
 
-export function clearWorkspaceTerminals(dir: string, platform?: Platform, scope: ServerScope = ServerScope.local) {
+export function clearWorkspaceTerminals(dir: string, scope: ServerScope = ServerScope.local) {
   const storageDir = base64Encode(dir)
   const key = getWorkspaceTerminalCacheKey(storageDir, scope)
   for (const cache of caches) {
@@ -120,7 +119,7 @@ export function clearWorkspaceTerminals(dir: string, platform?: Platform, scope:
   }
 
   const target = terminalPersistTarget(scope, storageDir)
-  void removePersisted({ storage: target.storage, key: target.key }, platform)
+  removePersisted({ storage: target.storage, key: target.key })
 }
 
 function createWorkspaceTerminalSession(

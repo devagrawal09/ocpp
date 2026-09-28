@@ -477,9 +477,10 @@ checks provide a second boundary for computed mutator names and evaluator refere
 
 Calls must name their tool with a static path (dynamic dispatch is rejected), so the compiler knows
 every tool a program can call: the runtime runs a tool only for a call whose callee is written as a
-static path, and refuses a tool reference reached any other way. `staticToolCalls(program.body)` lists them, including calls inside
-functions and tool handles that never run, and `staticToolReferences(program.body)` lists the paths a
-program passes as [tool references](#tool-references). OC++ Core's catalog is exactly the agent's
+static path, and refuses a tool reference reached any other way. `staticToolCalls(program.body)`
+lists them, including calls inside functions and tool handles that never run, and
+`staticToolReferences(program.body)` lists the paths a program passes as
+[tool references](#tool-references). OC++ Core's catalog is exactly the agent's
 tool list, and Core refuses a called or referenced path outside it as `UnknownTool` ("it is not
 available to this agent"). A namespace reference passes when the catalog holds a tool under it. A
 saved notebook function keeps its own tool paths, which are resolved again in the execution that

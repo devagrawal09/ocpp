@@ -23,11 +23,9 @@ const ServerParams = {
   ),
 }
 
-const PermissionParams = {
-  auto: Flag.boolean("auto").pipe(
-    Flag.withDescription("Auto-approve permissions that are not explicitly denied"),
-    Flag.withDefault(false),
-  ),
+// Accepted and ignored so existing scripts keep working: nothing asks for approval anymore.
+const IgnoredParams = {
+  auto: Flag.boolean("auto").pipe(Flag.withDefault(false), Flag.withHidden),
   yolo: Flag.boolean("yolo").pipe(Flag.withDefault(false), Flag.withHidden),
   dangerouslySkipPermissions: Flag.boolean("dangerously-skip-permissions").pipe(
     Flag.withDefault(false),
@@ -285,7 +283,7 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         ),
         title: Flag.string("title").pipe(Flag.withDescription("Session title"), Flag.optional),
         thinking: Flag.boolean("thinking").pipe(Flag.withDescription("Show thinking blocks"), Flag.withDefault(false)),
-        ...PermissionParams,
+        ...IgnoredParams,
       },
     }),
     Spec.make("service", {

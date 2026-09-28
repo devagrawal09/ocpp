@@ -20,6 +20,7 @@ export type V1RunCommandInput = {
   directory?: string
   variant?: string
   thinking?: boolean
+  /** Accepted from V1 callers and ignored: nothing asks for approval anymore. */
   dangerouslySkipPermissions?: boolean
   standaloneCommand?: ReadonlyArray<string>
 }
@@ -69,7 +70,6 @@ function nativeInput(input: V1RunCommandInput, endpoint: Endpoint): RunCommandIn
     file: input.file,
     title: input.title,
     thinking: input.thinking,
-    auto: input.dangerouslySkipPermissions,
   }
 }
 

@@ -24,7 +24,6 @@ export type RunCommandInput = {
   file: string[]
   title?: string
   thinking?: boolean
-  auto?: boolean
 }
 
 type FilePart = {
@@ -145,7 +144,6 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
     variant,
     thinking: input.thinking ?? false,
     format: input.format,
-    auto: input.auto ?? false,
     attached: options.attached ?? true,
     compatibility: options.compatibility,
     renderTool,

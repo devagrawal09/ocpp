@@ -91,7 +91,6 @@ test("acp prompt resolves after ordered turn updates", async () => {
         sessionUpdate: async (update) => {
           updates.push(update)
         },
-        requestPermission: async () => ({ outcome: { outcome: "cancelled" } }),
       },
       sessionID: "ses_test",
       cwd: "/workspace",
@@ -144,7 +143,6 @@ test("acp action resolves without prompt lifecycle events", async () => {
       client: Ocpp.make({ baseUrl: server.url.toString() }),
       connection: {
         sessionUpdate: async () => {},
-        requestPermission: async () => ({ outcome: { outcome: "cancelled" } }),
       },
       sessionID: "ses_test",
       cwd: "/workspace",

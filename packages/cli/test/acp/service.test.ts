@@ -35,7 +35,6 @@ describe("acp service", () => {
         sessionUpdate: async (update) => {
           updates.push(update)
         },
-        requestPermission: async () => ({ outcome: { outcome: "cancelled" } }),
       },
     })
 
@@ -92,7 +91,6 @@ const agent = {
   request: { settings: {}, headers: {}, body: {} },
   mode: "primary" as const,
   hidden: false,
-  permissions: [],
 }
 
 const skill = {

@@ -35,7 +35,6 @@ type Input = {
   variant?: string
   thinking: boolean
   format: "default" | "json"
-  auto: boolean
   /** True when the client is attached to a shared server rather than an exclusive in-process one. */
   attached: boolean
   compatibility?: "v1"
@@ -82,7 +81,6 @@ export async function runNonInteractivePrompt(input: Input) {
   let submitted = false
   let promoted = false
   let emittedError = false
-  let permissionRejected = false
   let formCancelled = false
   let interrupted = false
   let v1InvalidOutput = false
@@ -132,27 +130,6 @@ export async function runNonInteractivePrompt(input: Input) {
     }
   }
 
-  const replyPermission = async (request: { id: string; action: string; resources: ReadonlyArray<string> }) => {
-    if (!input.auto) {
-      permissionRejected = true
-      UI.println(
-        UI.Style.TEXT_WARNING_BOLD + "!",
-        UI.Style.TEXT_NORMAL +
-          `permission requested: ${request.action} (${request.resources.join(", ")}); auto-rejecting`,
-      )
-    }
-    await input.client.permission
-      .reply({
-        sessionID: input.sessionID,
-        requestID: request.id,
-        reply: input.auto ? "once" : "reject",
-      })
-      .catch(() => {})
-    if (!input.auto) {
-      await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
-    }
-  }
-
   const cancelForm = async (request: Pick<FormRequest, "id" | "sessionID">) => {
     try {
       await input.client.form.cancel(
@@ -177,10 +154,6 @@ export async function runNonInteractivePrompt(input: Input) {
       }
       const event = next.value
 
-      if (event.type === "permission.asked" && submitted && event.data.sessionID === input.sessionID) {
-        await replyPermission(event.data)
-        continue
-      }
       if (
         event.type === "form.created" &&
         submitted &&
@@ -205,7 +178,7 @@ export async function runNonInteractivePrompt(input: Input) {
       if (
         event.type === "session.execution.interrupted" &&
         event.data.reason === "user" &&
-        (interrupted || permissionRejected || formCancelled)
+        (interrupted || formCancelled)
       ) {
         return
       }
@@ -434,7 +407,7 @@ export async function runNonInteractivePrompt(input: Input) {
         }
         tools.delete(key)
         renderedTools.add(key)
-        if (input.compatibility === "v1" && (permissionRejected || formCancelled)) continue
+        if (input.compatibility === "v1" && formCancelled) continue
         if (!emit("tool_use", time, { part })) {
           if (content && toolOutputText(content).trim())
             await input.renderTool({
@@ -473,7 +446,7 @@ export async function runNonInteractivePrompt(input: Input) {
           v1InvalidOutput = true
           continue
         }
-        if (interrupted || permissionRejected || formCancelled) continue
+        if (interrupted || formCancelled) continue
         flushStep()
         emittedError = true
         process.exitCode = 1
@@ -481,7 +454,7 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
       if (event.type === "session.execution.failed") {
-        if (input.compatibility === "v1" && (v1InvalidOutput || permissionRejected || formCancelled)) return
+        if (input.compatibility === "v1" && (v1InvalidOutput || formCancelled)) return
         flushStep()
         if (!emittedError && !formCancelled) {
           emittedError = true
@@ -491,7 +464,7 @@ export async function runNonInteractivePrompt(input: Input) {
         return
       }
       if (event.type === "session.execution.interrupted") {
-        if (input.compatibility === "v1" && (permissionRejected || formCancelled)) return
+        if (input.compatibility === "v1" && formCancelled) return
         if (event.data.reason === "user" && interrupted) process.exitCode = 130
         if (event.data.reason !== "user" && !emittedError) {
           emittedError = true
@@ -693,8 +666,7 @@ export async function runNonInteractivePrompt(input: Input) {
     if (!response) return
     if (interrupted) await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
 
-    const [permissions, forms, globals] = await Promise.all([
-      input.client.permission.list({ sessionID: input.sessionID }).catch(() => undefined),
+    const [forms, globals] = await Promise.all([
       input.client.form.list({ sessionID: input.sessionID }).catch(() => undefined),
       input.attached
         ? Promise.resolve(undefined)
@@ -705,7 +677,6 @@ export async function runNonInteractivePrompt(input: Input) {
             .catch(() => undefined),
     ])
     await Promise.all([
-      ...(permissions ?? []).map(replyPermission),
       ...(forms ?? []).map(cancelForm),
       ...(globals && sameLocation(globals.location, input.location)
         ? globals.data.filter((form) => form.sessionID === GLOBAL_FORM_SESSION_ID).map(cancelForm)
@@ -720,17 +691,10 @@ export async function runNonInteractivePrompt(input: Input) {
     await Promise.race([waiting, completed.then(() => waiting)])
     finalizing = true
     const projected = await reconcile()
-    if (
-      !projected.responded &&
-      !interrupted &&
-      !permissionRejected &&
-      !formCancelled &&
-      !emittedError &&
-      !prePromotionError
-    ) {
+    if (!projected.responded && !interrupted && !formCancelled && !emittedError && !prePromotionError) {
       await completed
     }
-    if (!projected.found && !interrupted && !permissionRejected && !formCancelled && !emittedError) {
+    if (!projected.found && !interrupted && !formCancelled && !emittedError) {
       const error = prePromotionError ?? { type: "unknown", message: "Prompt was not promoted" }
       emittedError = true
       process.exitCode = 1

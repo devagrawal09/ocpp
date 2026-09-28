@@ -239,7 +239,6 @@ async function run(input: {
     }
   })()
   spyOn(sdk.event, "subscribe").mockImplementation(() => stream)
-  spyOn(sdk.permission, "list").mockImplementation(() => ok([]) as never)
   spyOn(sdk.form, "list").mockImplementation(
     (request) => ok(input.pendingForms?.filter((item) => item.sessionID === request.sessionID) ?? []) as never,
   )
@@ -275,7 +274,6 @@ async function run(input: {
     files: [],
     thinking: false,
     format: input.format ?? "default",
-    auto: false,
     attached: input.attached ?? false,
     compatibility: input.compatibility,
     renderTool: input.renderTool ?? (() => Promise.resolve()),

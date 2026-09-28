@@ -1,6 +1,5 @@
 import { createSimpleContext } from "@ocpp/ui/context"
 import { ServerConnection } from "@/runtime/server/registry"
-import type { WslServersPlatform } from "@/servers/wsl/types"
 import type { DraftStore } from "@/runtime/persistence/drafts"
 
 type PickerPaths = string | string[] | null
@@ -69,9 +68,6 @@ type PlatformBase = {
 
   /** Set the default server URL to use on app startup (platform-specific) */
   setDefaultServer?(url: ServerConnection.Key | null): Promise<void> | void
-
-  /** Manage WSL sidecar servers (Electron on Windows only) */
-  wslServers?: WslServersPlatform
 
   /** Get whether native pinch/Ctrl-scroll zoom gestures are enabled (desktop only) */
   getPinchZoomEnabled?(): Promise<boolean> | boolean

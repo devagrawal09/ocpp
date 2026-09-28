@@ -7,4 +7,3 @@ export { type FatalRendererErrorLog, type Platform, PlatformProvider } from "./r
 export { ServerConnection, useServers } from "./runtime/server/registry"
 export { useTabs } from "./shell/tabs/tabs"
 export { createDraftStore } from "./runtime/persistence/drafts"
-export { useWslServers } from "./servers/wsl/context"

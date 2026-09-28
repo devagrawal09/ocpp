@@ -16,7 +16,6 @@ import { LanguageProvider, UiI18nBridge, type Locale } from "@/runtime/i18n/lang
 import { ServerConnection, ServersProvider } from "@/runtime/server/registry"
 import { SettingsProvider } from "@/settings/model"
 import { TabsProvider } from "@/shell/tabs/tabs"
-import { WslServersProvider } from "@/servers/wsl/context"
 import { ErrorPage } from "@/shell/errors/error"
 import { AppRoutes, File, preloadRoute } from "@/shell/routes/routes"
 
@@ -79,11 +78,9 @@ export function AppBaseProviders(
               }}
             >
               <QueryProvider>
-                <WslServersProvider>
-                  <DialogProvider>
-                    <FileComponentProvider component={File}>{props.children}</FileComponentProvider>
-                  </DialogProvider>
-                </WslServersProvider>
+                <DialogProvider>
+                  <FileComponentProvider component={File}>{props.children}</FileComponentProvider>
+                </DialogProvider>
               </QueryProvider>
             </ErrorBoundary>
           </UiI18nBridge>

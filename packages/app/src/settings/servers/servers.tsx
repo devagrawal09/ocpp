@@ -1,4 +1,5 @@
 import { Badge } from "@ocpp/ui/badge"
+import { Button } from "@ocpp/ui/button"
 import { Icon } from "@ocpp/ui/icon"
 import { IconButton } from "@ocpp/ui/icon-button"
 import { TextInput } from "@ocpp/ui/text-input"
@@ -13,7 +14,6 @@ import { ServerConnection, serverName } from "@/runtime/server/registry"
 import { useServerCollectionController } from "@/servers/registry/controller"
 import { DialogServer } from "@/servers/connect/dialog"
 import { SettingsList } from "@/settings/list"
-import { AddServerMenu, isWslServer, useFilteredWslServers, WslServerSettings } from "@/servers/wsl/settings"
 import "@/settings/settings.css"
 
 export const SettingsServers: Component = () => {
@@ -21,14 +21,11 @@ export const SettingsServers: Component = () => {
   const language = useLanguage()
   const controller = useServerCollectionController()
   const [store, setStore] = createStore({ filter: "" })
-  const wslServers = useFilteredWslServers(() => store.filter)
 
-  const showSearch = createMemo(
-    () => controller.collection.items().filter((item) => !isWslServer(item)).length + wslServers().length > 1,
-  )
+  const showSearch = createMemo(() => controller.collection.items().length > 1)
 
   const filtered = createMemo(() => {
-    const items = controller.collection.items().filter((item) => !isWslServer(item))
+    const items = controller.collection.items()
     const query = store.filter.trim()
     if (!query) return items
     return fuzzysort
@@ -57,7 +54,9 @@ export const SettingsServers: Component = () => {
             <h2 class="settings-tab-title">{language.t("status.popover.tab.servers")}</h2>
             <span class="text-11-regular text-v2-text-text-muted">{language.t("settings.servers.description")}</span>
           </div>
-          <AddServerMenu onAddServer={openAdd} />
+          <Button variant="ghost-muted" icon="plus" onClick={openAdd}>
+            {language.t("dialog.server.add.button")}
+          </Button>
         </div>
         <Show when={showSearch()}>
           <div class="settings-tab-search">
@@ -89,7 +88,7 @@ export const SettingsServers: Component = () => {
 
       <div class="settings-tab-body settings-servers">
         <Show
-          when={filtered().length > 0 || wslServers().length > 0}
+          when={filtered().length > 0}
           fallback={
             <div class="settings-servers-status">
               <span>{store.filter ? language.t("palette.empty") : language.t("dialog.server.empty")}</span>
@@ -100,7 +99,6 @@ export const SettingsServers: Component = () => {
           }
         >
           <SettingsList>
-            <WslServerSettings domain={controller} servers={wslServers} />
             <For each={filtered()}>
               {(item) => {
                 const key = ServerConnection.key(item)

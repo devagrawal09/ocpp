@@ -1,7 +1,6 @@
 import { createSimpleContext } from "@ocpp/ui/context"
 import { ServerConnection } from "@/runtime/server/registry"
 import type { WslServersPlatform } from "@/servers/wsl/types"
-import type { UpdaterPlatform } from "@/shell/updates/types"
 import type { DraftStore } from "@/runtime/persistence/drafts"
 
 type PickerPaths = string | string[] | null
@@ -61,9 +60,6 @@ type PlatformBase = {
 
   /** Prompt drafts, history, and their blobs. */
   draftStore?: DraftStore
-
-  /** Application-global desktop updater */
-  updater?: UpdaterPlatform
 
   /** Fetch override */
   fetch?: typeof fetch

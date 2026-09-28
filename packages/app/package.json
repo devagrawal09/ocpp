@@ -7,7 +7,6 @@
     ".": "./src/index.ts",
     "./desktop": "./src/desktop.ts",
     "./i18n/desktop-native": "./src/runtime/i18n/desktop-native.ts",
-    "./updater": "./src/shell/updates/types.ts",
     "./wsl/types": "./src/servers/wsl/types.ts",
     "./vite": "./vite.js",
     "./index.css": "./src/index.css"

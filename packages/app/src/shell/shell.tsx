@@ -2,8 +2,7 @@ import { lazy, Show, Suspense, type ParentProps } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { ResizeHandle } from "@ocpp/ui/resize-handle"
-import { Titlebar, type TitlebarUpdate } from "@/shell/titlebar/titlebar"
-import { usePlatform } from "@/runtime/platform/platform"
+import { Titlebar } from "@/shell/titlebar/titlebar"
 import { ToastRegion } from "@/shell/notifications/toast"
 import { TitlebarRightProvider } from "@/shell/titlebar/right-slot"
 import { useSettingsSurface } from "@/settings/surface"
@@ -13,7 +12,6 @@ const DebugBar = lazy(() => import("@/shell/debug/debug-bar").then((module) => (
 const SettingsScreen = lazy(() => import("@/settings/shell").then((module) => ({ default: module.SettingsScreen })))
 
 export default function Layout(props: ParentProps) {
-  const platform = usePlatform()
   const settings = useSettingsSurface()
   const preferences = useSettings()
   const mobile = createMediaQuery("(max-width: 767px)")
@@ -23,18 +21,6 @@ export default function Layout(props: ParentProps) {
     tabsMount: undefined as HTMLElement | undefined,
   })
   const verticalTabs = () => preferences.appearance.tabLayout() === "vertical" && !mobile()
-
-  const update: TitlebarUpdate = {
-    get version() {
-      const state = platform.updater?.state()
-      if (state?.status !== "ready") return undefined
-      return state.version
-    },
-    get installing() {
-      return platform.updater?.state().status === "installing"
-    },
-    install: () => void platform.updater?.install(),
-  }
 
   return (
     <TitlebarRightProvider>
@@ -46,7 +32,6 @@ export default function Layout(props: ParentProps) {
         }}
       >
         <Titlebar
-          update={update}
           verticalTabs={verticalTabs() ? { mount: state.tabsMount } : undefined}
           debugTools={
             import.meta.env.DEV

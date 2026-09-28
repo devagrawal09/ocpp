@@ -456,6 +456,24 @@ describeNative("LocationWatcher", () => {
     ),
   )
 
+  it.live("publishes .git/HEAD events when switching to a new branch", () =>
+    withTmp(
+      (directory) =>
+        Effect.gen(function* () {
+          const head = path.join(directory, ".git", "HEAD")
+          const branch = `watch-${Math.random().toString(36).slice(2)}`
+          yield* ready(head)
+          expect(
+            yield* nextUpdate(
+              (event) => event.file === head,
+              Effect.promise(() => $`git switch -c ${branch}`.cwd(directory).quiet()),
+            ),
+          ).toMatchObject({ file: head })
+        }),
+      { vcs: "git" },
+    ),
+  )
+
   const describeSymlink = process.platform !== "win32" ? describe : describe.skip
   describeSymlink("symlinked .git", () => {
     it.live("publishes .git/HEAD events through a symlinked .git directory", () =>

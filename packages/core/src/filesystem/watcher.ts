@@ -7,7 +7,7 @@ import { FileSystem } from "@ocpp/schema/filesystem"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Cause, Context, Effect, Layer, PubSub, RcMap, Schema, Stream } from "effect"
 import { lazy } from "../util/lazy.js"
-import { watch } from "node:fs"
+import { statSync, watch } from "node:fs"
 import path from "path"
 import loadBinding from "./watcher-binding.js"
 
@@ -192,16 +192,36 @@ export const nativeLayer = Layer.succeed(
       if (input.type === "file") {
         return Effect.sync(() => {
           const directory = path.dirname(input.target)
-          const subscription = watch(directory, { recursive: false }, (_event, file) => {
-            if (file && path.resolve(directory, file.toString()) !== input.target) return
+          let seen = version(input.target)
+          let recheck: ReturnType<typeof setTimeout> | undefined
+          const update = () => {
+            seen = version(input.target)
             input.publish({ path: input.target, type: "update" } satisfies Update)
+          }
+          const subscription = watch(directory, { recursive: false }, (_event, file) => {
+            // Bun drops a directory event that follows the previous one within a millisecond
+            // unless both its file name and event type differ, so a save through a temporary
+            // file (`HEAD.lock` renamed onto `HEAD`) or a second quick write loses the target's
+            // event. Once the directory settles, compare the target against what was reported.
+            clearTimeout(recheck)
+            recheck = setTimeout(() => {
+              if (version(input.target) !== seen) update()
+            }, 10)
+            if (file && path.resolve(directory, file.toString()) !== input.target) return
+            update()
           })
           if ("on" in subscription && typeof subscription.on === "function") {
             subscription.on("error", (error: unknown) =>
               Effect.runFork(Effect.logError("watcher callback failed", { path: input.target, error })),
             )
           }
-          return { unsubscribe: () => Promise.resolve(subscription.close()), backend: "node" }
+          return {
+            unsubscribe: () => {
+              clearTimeout(recheck)
+              return Promise.resolve(subscription.close())
+            },
+            backend: "node",
+          }
         })
       }
       return subscribeDirectory(watcher(), getBackend(), input.target, input.ignore, input.publish)
@@ -216,6 +236,17 @@ export function configured(options?: Options) {
 }
 
 export const node = configured()
+
+function version(file: string) {
+  // Runs in a timer callback, where a throw would crash the process; Bun's
+  // `throwIfNoEntry: false` still throws ENOTDIR and ELOOP.
+  try {
+    const stat = statSync(file)
+    return `${stat.ino}:${stat.size}:${stat.mtimeMs}`
+  } catch {
+    return ""
+  }
+}
 
 function subscribeDirectory(
   native: typeof ParcelWatcher | undefined,

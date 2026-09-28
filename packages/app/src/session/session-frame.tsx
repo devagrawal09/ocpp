@@ -2,10 +2,7 @@ import type { ParentProps } from "solid-js"
 
 export function SessionRouteFrame(props: ParentProps<{ padded?: boolean }>) {
   return (
-    <div
-      class="relative flex size-full flex-col overflow-hidden"
-      classList={{ "p-2": props.padded }}
-    >
+    <div class="relative flex size-full flex-col overflow-hidden" classList={{ "p-2": props.padded }}>
       {props.children}
     </div>
   )

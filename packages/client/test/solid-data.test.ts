@@ -349,6 +349,55 @@ test("refreshes global credential events across every loaded location and worksp
   }
 })
 
+test("reloads a location's config when it changes", async () => {
+  const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
+  const models = ["demo", "claude"]
+  const api = Ocpp.make({
+    baseUrl: "http://ocpp.local",
+    fetch: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      const url = new URL(request.url)
+      if (url.pathname !== "/api/config") return Response.json({ location: { directory: "/project" }, data: [] })
+      expect(url.searchParams.get("location[directory]")).toBe("/project")
+      return Response.json([
+        { type: "document", path: "/project/ocpp.json", info: { model: { providerID: models[0], model: "m" } } },
+      ])
+    },
+  })
+  const setup = createRoot((dispose) => ({
+    data: createData({
+      api: () => api,
+      directory: "/project",
+      event: {
+        on: () => () => {},
+        listen(handler) {
+          listeners.add(handler)
+          return () => listeners.delete(handler)
+        },
+      },
+      connection: { status: () => "connected" },
+    }),
+    dispose,
+  }))
+  const location = { directory: "/project" }
+  const configured = () => {
+    const entry = setup.data.location.config.list(location)?.[0]
+    return entry?.type === "document" && typeof entry.info.model === "object" ? entry.info.model.providerID : undefined
+  }
+
+  try {
+    await setup.data.location.config.sync(location)
+    expect(configured()).toBe("demo")
+
+    models.shift()
+    const updated: OcppEvent = { id: "evt_config.updated", created: 1, type: "config.updated", location, data: {} }
+    listeners.forEach((listener) => listener({ name: updated.type, details: updated }))
+    await wait(() => configured() === "claude")
+  } finally {
+    setup.dispose()
+  }
+})
+
 test("reports optimistic sessions as creating until the request settles", async () => {
   const release = Promise.withResolvers<void>()
   const api = Ocpp.make({

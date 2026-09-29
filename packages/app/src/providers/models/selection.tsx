@@ -225,6 +225,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const item = firstModel(
         () => scope()?.model,
         () => agent.current()?.model,
+        providers.configured,
         fallback,
       )
       if (!item) return
@@ -385,7 +386,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           setStore("promoting", next)
           setStore("draft", undefined)
         },
-        restore(msg: { sessionID: string; agent: string; model: ModelKey }) {
+        restore(msg: { sessionID: string; agent?: string; model: ModelKey }) {
           const session = id()
           if (!session) return
           if (msg.sessionID !== session) return

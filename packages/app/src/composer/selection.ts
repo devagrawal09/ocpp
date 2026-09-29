@@ -62,7 +62,7 @@ export function createComposerModelSelection(input: {
       return modelID ? [{ providerID: provider.id, modelID }] : []
     })[0]
   const current = () => {
-    const key = [prompt.model.current(), input.agent()?.model, recent(), fallback()].find(
+    const key = [prompt.model.current(), input.agent()?.model, providers.configured(), recent(), fallback()].find(
       (item): item is ModelKey => !!item && valid(item),
     )
     return key ? models.find(key) : undefined

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { AgentListOutput, ModelListOutput, ProviderListOutput } from "@ocpp/client/promise"
-import { directoryKey, normalizeAgentList, normalizeProviderList, withDrivers } from "./utils"
+import { configuredModel, directoryKey, normalizeAgentList, normalizeProviderList, withDrivers } from "./utils"
 
 describe("normalizeAgentList", () => {
   test("adapts current agents to the app agent shape", () => {
@@ -81,6 +81,29 @@ describe("normalizeProviderList", () => {
       variants: { high: {} },
     })
   })
+
+  test("leaves a config-defined model undated so the picker shows it", () => {
+    const result = normalizeProviderList(
+      [{ id: "demo", name: "Demo", package: "aisdk:@ai-sdk/openai-compatible" }] as ProviderListOutput["data"],
+      [
+        {
+          id: "scripted",
+          modelID: "scripted",
+          providerID: "demo",
+          name: "Scripted model",
+          capabilities: { tools: true, input: ["text"], output: ["text"] },
+          variants: [],
+          time: { released: 0 },
+          cost: [],
+          status: "active",
+          enabled: true,
+          limit: { context: 200_000, output: 8_000 },
+        },
+      ] as ModelListOutput["data"],
+    )
+
+    expect(result.all.get("demo")?.models.scripted?.release_date).toBe("")
+  })
 })
 
 describe("directoryKey", () => {
@@ -123,5 +146,27 @@ describe("withDrivers", () => {
       variants: { low: {}, high: {} },
     })
     expect(withDrivers(catalog, [])).toBe(catalog)
+  })
+})
+
+describe("configuredModel", () => {
+  test("reads the model from the highest-priority document that sets one", () => {
+    expect(
+      configuredModel([
+        { type: "document", path: "/global/ocpp.json", info: { model: { providerID: "openai", model: "gpt-5" } } },
+        { type: "document", path: "/project/ocpp.json", info: { model: { providerID: "demo", model: "scripted" } } },
+        { type: "document", path: "/project/.ocpp/ocpp.json", info: { username: "dev" } },
+        { type: "directory", path: "/project/.ocpp" },
+      ]),
+    ).toEqual({ providerID: "demo", modelID: "scripted" })
+  })
+
+  test("finds no model when no document sets one", () => {
+    expect(
+      configuredModel([
+        { type: "document", info: {} },
+        { type: "claude", path: "/home/.claude" },
+      ]),
+    ).toBeUndefined()
   })
 })

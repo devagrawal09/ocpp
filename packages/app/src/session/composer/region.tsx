@@ -28,7 +28,6 @@ import { createSessionComposerRegionController } from "./session-composer-region
 import { createActiveComposerAdapter } from "./adapter"
 import { createSessionQueue } from "./queue"
 import { SessionQueuePanel } from "./queue-panel"
-import { resolveSessionComposerSelection } from "./selection"
 import { createSessionRequestModel } from "../requests/model"
 import { useSettings } from "@/settings/model"
 
@@ -53,14 +52,7 @@ export function createActiveSessionRegion(input: {
   createEffect(
     on(
       () => [input.timeline.lastUserMessage(), input.session.data.info()] as const,
-      () => {
-        const message = input.timeline.lastUserMessage()
-        const info = input.session.data.info()
-        const selection = resolveSessionComposerSelection(info, message?.metadata)
-        if (info && selection.agent && selection.model) {
-          syncSessionModel(local, { sessionID: info.id, agent: selection.agent, model: selection.model })
-        }
-      },
+      () => syncSessionModel(local, input.session.data.info(), input.timeline.lastUserMessage()?.metadata),
     ),
   )
   let restoredModelSession: string | undefined

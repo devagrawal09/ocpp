@@ -1,6 +1,6 @@
 import { useData } from "@/runtime/server/current"
 import { useServerSDK } from "@/runtime/server/client"
-import { normalizeProviderList, withDrivers } from "@/runtime/server/global-sync/utils"
+import { configuredModel, normalizeProviderList, withDrivers } from "@/runtime/server/global-sync/utils"
 import { Iterable, pipe } from "effect"
 import { createEffect, createMemo, type Accessor } from "solid-js"
 import type { ProviderListResponse } from "@/runtime/server/types"
@@ -29,6 +29,7 @@ export function useProviders(directory: Accessor<string | undefined>) {
         data.location.provider.sync(resolved),
         data.location.model.sync(resolved),
         data.location.driver.sync(resolved),
+        data.location.config.sync(resolved),
       ])
     })().catch(() => undefined)
   })
@@ -49,6 +50,8 @@ export function useProviders(directory: Accessor<string | undefined>) {
     },
     all: () => providers().all,
     default: () => providers().default,
+    // A new session starts on the config `model` unless its agent names one.
+    configured: () => configuredModel(data.location.config.list(location()) ?? []),
     // V2 servers list only available providers, so the connectable catalog
     // comes from the integration list, with the provider catalog as fallback.
     popular: () => {

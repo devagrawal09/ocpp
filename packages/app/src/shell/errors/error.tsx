@@ -239,7 +239,7 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
   return (
     <div class="relative flex-1 h-full w-full min-h-0 min-w-0 overflow-y-auto flex flex-col items-center justify-start sm:justify-center p-4 sm:p-8 font-sans">
       <div class="w-full max-w-3xl flex flex-col items-center justify-center gap-6 sm:gap-8 my-auto">
-        <Logo class="w-48 sm:w-58.5 opacity-12 shrink-0" />
+        <Logo class="w-28 sm:w-34.5 opacity-12 shrink-0" />
         <div class="flex flex-col items-center gap-2 text-center">
           <h1 class="text-lg font-medium text-text-strong">
             {language.t(status() ? "error.page.title.status" : "error.page.title")}

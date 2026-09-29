@@ -219,7 +219,7 @@ export default function () {
                             <SessionTimeline document={document()} class="min-w-0 w-full" />
                           </div>
                           <div class="px-4 flex items-center justify-center pt-20 pb-8 shrink-0">
-                            <Logo class="w-58.5 opacity-12" />
+                            <Logo class="w-34.5 opacity-12" />
                           </div>
                         </div>
                       )
@@ -285,7 +285,7 @@ export default function () {
                                   <div class="flex min-w-0 grow flex-col justify-between">
                                     <SessionTimeline document={activeDocument()} class="w-full px-6 pb-20" />
                                     <div classList={{ "w-full flex items-center justify-center pb-8 shrink-0": true }}>
-                                      <Logo class="w-58.5 opacity-12" />
+                                      <Logo class="w-34.5 opacity-12" />
                                     </div>
                                   </div>
                                 </div>

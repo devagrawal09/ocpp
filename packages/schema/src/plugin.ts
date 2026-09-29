@@ -20,14 +20,12 @@ export const Info = Schema.Union([
     id: ID,
     source: Source,
     status: Schema.Literal("active"),
-    tui: Schema.Boolean,
   }),
   Schema.Struct({
     id: ID.pipe(optional),
     source: Source,
     status: Schema.Literal("failed"),
     error: Schema.String,
-    tui: Schema.Boolean,
   }),
 ]).annotate({ identifier: "Plugin.Info" })
 export type Info = typeof Info.Type

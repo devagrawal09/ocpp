@@ -4,7 +4,6 @@ import { Schema } from "effect"
 import { ephemeral, inventory } from "./event.js"
 import { optional } from "./schema.js"
 import { Model } from "./model.js"
-import { Permission } from "./permission.js"
 import { Provider } from "./provider.js"
 import { PositiveInt, statics } from "./schema.js"
 
@@ -19,6 +18,7 @@ export type Name = typeof Name.Type
 export const Color = Schema.String.annotate({ identifier: "Agent.Color" })
 export type Color = typeof Color.Type
 
+/** A prompt and model preset. An agent grants no tools: a Session's tool list decides what it can call. */
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -31,7 +31,6 @@ export const Info = Schema.Struct({
   hidden: Schema.Boolean,
   color: Color.pipe(optional),
   steps: PositiveInt.pipe(optional),
-  permissions: Permission.Ruleset,
 })
   .annotate({ identifier: "Agent.Info" })
   .pipe(
@@ -43,13 +42,6 @@ export const Info = Schema.Struct({
           request: { settings: {}, headers: {}, body: {} },
           mode: "primary",
           hidden: false,
-          permissions: [
-            { action: "*", resource: "*", effect: "allow" },
-            { action: "external_directory", resource: "*", effect: "ask" },
-            { action: "read", resource: "*.env", effect: "ask" },
-            { action: "read", resource: "*.env.*", effect: "ask" },
-            { action: "read", resource: "*.env.example", effect: "allow" },
-          ],
         }) satisfies Info,
     })),
   )

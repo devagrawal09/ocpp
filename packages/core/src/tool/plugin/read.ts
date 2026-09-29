@@ -7,7 +7,6 @@ import { Effect, Schema } from "effect"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Location } from "../../location.js"
 import { LocationMutation } from "../../location-mutation.js"
-import { Permission } from "../../permission.js"
 import { SessionInstructions } from "../../session/instructions.js"
 import { AbsolutePath } from "../../schema.js"
 import { ReadToolFileSystem } from "../read-filesystem.js"
@@ -32,7 +31,6 @@ export const Plugin = {
   effect: Effect.fn("ReadTool.Plugin")(function* (ctx: Context) {
     const reader = yield* ReadToolFileSystem.Service
     const mutation = yield* LocationMutation.Service
-    const permission = yield* Permission.Service
     const sessionInstructions = yield* SessionInstructions.Service
     const fs = yield* FSUtil.Service
     const location = yield* Location.Service
@@ -41,36 +39,13 @@ export const Plugin = {
       .transform((draft) =>
         draft.add({
           name,
-          options: { codemode: false },
+          options: { readOnly: true },
           description:
-            "Read the contents of a file or directory. Supports text files, images, and PDFs. Images and PDFs are presented directly to the model. Each text line is prefixed by its 1-based line number as <line>: <content>. The prefix is for reference and is not part of the file content. Directory entries are returned one per line. Use offset and limit to read large files or directories in sections. Prefer one larger read over many small slices, and use grep to find specific content in large files.",
+            "Read the contents of a file or directory. Supports text files, images, and PDFs. Images and PDFs are attached to the execution's completion notification, so you see them when it arrives. Each text line is prefixed by its 1-based line number as <line>: <content>. The prefix is for reference and is not part of the file content. Directory entries are returned one per line. Use offset and limit to read large files or directories in sections. Prefer one larger read over many small slices, and use `tools.grep` to find specific content in large files.",
           input: Input,
           output: Output,
           execute: (input, context) => {
             return Effect.gen(function* () {
-              const source = {
-                type: "tool" as const,
-                messageID: context.messageID,
-                id: context.id,
-              }
-              const authorize = (target: LocationMutation.Target, authorizeExternal = true) =>
-                Effect.gen(function* () {
-                  if (target.externalDirectory && authorizeExternal)
-                    yield* permission.assert({
-                      ...LocationMutation.externalDirectoryPermission(target.externalDirectory),
-                      sessionID: context.sessionID,
-                      agent: context.agent,
-                      source,
-                    })
-                  yield* permission.assert({
-                    action: name,
-                    resources: [target.resource],
-                    save: ["*"],
-                    sessionID: context.sessionID,
-                    agent: context.agent,
-                    source,
-                  })
-                })
               const read = (target: LocationMutation.Target) =>
                 reader.read(AbsolutePath.make(target.absolute), target.resource, {
                   offset: input.offset,
@@ -78,7 +53,6 @@ export const Plugin = {
                 })
 
               const requested = yield* mutation.resolve({ path: input.path })
-              yield* authorize(requested)
               const result = yield* read(requested).pipe(
                 Effect.map((content) => ({ content, target: requested, path: input.path })),
                 Effect.catchIf(
@@ -89,9 +63,7 @@ export const Plugin = {
                         Effect.orElseSucceed(() => undefined),
                       )
                       if (!alternate) return yield* missing(input.path, requested.absolute)
-                      const target = yield* mutation.resolve({ path: alternate, kind: "file" })
-                      // The candidate is a sibling under the external directory already approved above.
-                      yield* authorize(target, false)
+                      const target = yield* mutation.resolve({ path: alternate })
                       const content = yield* read(target).pipe(
                         Effect.catchIf(
                           (error) => error instanceof Environment.NotFound,
@@ -113,7 +85,7 @@ export const Plugin = {
               // is discovered); for a file it starts at the file's dirname. External reads are
               // skipped, and discovery failures never fail the read.
               yield* Effect.gen(function* () {
-                if (result.target.externalDirectory !== undefined) return
+                if (result.target.external) return
                 const resolved = yield* fs.resolve(result.target.absolute)
                 const root = yield* fs.resolve(location.directory)
                 // up() searches its stop directory, so the Location-root AGENTS.md (already

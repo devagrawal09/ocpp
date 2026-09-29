@@ -1,17 +1,50 @@
 export * as SubagentCustomTool from "./subagent-custom.js"
 
-import { isToolHandle, type ToolHandle } from "@ocpp/codemode"
+import { isToolHandle, isToolReference, normalizeError, type ToolHandle } from "@ocpp/codemode"
 import { Tool } from "@ocpp/schema/tool"
 import { Effect, JsonSchema, Schema, SchemaRepresentation } from "effect"
 
 export const JSONSchema = Schema.Record(Schema.String, Schema.Json)
+
+/**
+ * The tools a subagent call hands its child. A tool reference expands through the caller's catalog: the Location's
+ * own tools become paths the child keeps, and tools the caller only borrows, such as its tool.define handles and
+ * init.ts wrappers, are lent to the child for this call, like the call's own handles.
+ */
+export const select = Effect.fn("SubagentCustomTool.select")(function* (
+  values: ReadonlyArray<unknown>,
+  catalog: NonNullable<Tool.Context["catalog"]>,
+) {
+  const handles = yield* validate(values.filter((value) => !isToolReference(value)))
+  const matched = values.filter(isToolReference).map((reference) => {
+    const path = reference.path.join(".")
+    return {
+      path,
+      entries: Array.from(catalog).filter(([candidate]) => candidate === path || candidate.startsWith(path + ".")),
+    }
+  })
+  // tools.search is built into every execution, so passing it hands on nothing.
+  const unknown = matched.find((item) => item.entries.length === 0 && item.path !== "search")
+  if (unknown !== undefined)
+    return yield* new Tool.Error({
+      message: `tools.${unknown.path} is not one of your tools; a subagent can be given only tools you have.`,
+    })
+  const entries = Array.from(new Map(matched.flatMap((item) => item.entries)))
+  return {
+    paths: entries.flatMap(([path, entry]) => (entry.lent ? [] : [path])).toSorted(),
+    lent: [...entries.flatMap(([, entry]) => (entry.lent ? [entry.tool] : [])), ...make(handles)],
+  }
+})
 
 export const validate = Effect.fn("SubagentCustomTool.validate")(function* (values: ReadonlyArray<unknown>) {
   const names = new Set<string>()
   const handles: Array<ToolHandle> = []
   for (const value of values) {
     if (!isToolHandle(value))
-      return yield* new Tool.Error({ message: "Subagent tools must be tool.define(...) handles" })
+      return yield* new Tool.Error({
+        message:
+          "Tools must be tool references such as tools.read, namespaces such as tools.linear, or tool.define(...) handles",
+      })
     if (value.definition.name === "execute" || value.definition.name === "submit_result")
       return yield* new Tool.Error({ message: "Custom tool name is reserved: " + value.definition.name })
     if (names.has(value.definition.name))
@@ -51,7 +84,8 @@ export function make(handles: ReadonlyArray<ToolHandle>): ReadonlyArray<Tool.Inf
         Effect.mapError(
           (error) =>
             new Tool.Error({
-              message: error instanceof globalThis.Error ? error.message : String(error),
+              // A handle fails with Code Mode values, such as an error it throws, as well as host errors.
+              message: normalizeError(error).message,
               metadata: {
                 executionKind: "custom-tool",
                 executionStatus: "error",

@@ -7,12 +7,39 @@ Tool call failure summary styled like a tool trigger.
 ### API
 - Required: \`tool\` (tool id, e.g. patch, shell)
 - Required: \`error\` (error string)
+- Optional: \`suggestions\` (concrete fixes listed under the error, such as compiler suggestions)
 
 ### Behavior
 - Collapsible; click header to expand/collapse.
 `
 
-const samples: { tool: string; error: string; subtitle?: string; defaultOpen?: boolean }[] = [
+const refusal = {
+  error: [
+    "Unknown tool tools.fs.raed; this agent has no tool at that path. (line 2, col 14)",
+    "Source: const text = tools.fs.raed({ path })",
+    "Did you mean tools.fs.read?",
+    'Check its exact signature with tools.search({ query: "tools.fs.read" })',
+  ].join("\n"),
+  suggestions: [
+    "Did you mean tools.fs.read?",
+    'Check its exact signature with tools.search({ query: "tools.fs.read" })',
+  ],
+}
+
+const samples: {
+  tool: string
+  error: string
+  subtitle?: string
+  defaultOpen?: boolean
+  suggestions?: ReadonlyArray<string>
+}[] = [
+  {
+    tool: "execute",
+    subtitle: 'const path = "a.ts"',
+    error: refusal.error,
+    suggestions: refusal.suggestions,
+    defaultOpen: true,
+  },
   {
     tool: "shell",
     subtitle: "sleep 30",
@@ -104,6 +131,7 @@ export const All = {
               error={item.error}
               subtitle={item.subtitle}
               defaultOpen={item.defaultOpen}
+              suggestions={item.suggestions}
             />
           )}
         </For>

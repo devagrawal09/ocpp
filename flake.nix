@@ -38,12 +38,9 @@
               inherit rev;
             };
           in
-          rec {
+          {
             ocpp = final.callPackage ./nix/ocpp.nix {
               inherit node_modules;
-            };
-            ocpp-desktop = final.callPackage ./nix/desktop.nix {
-              inherit ocpp;
             };
           };
       };
@@ -59,9 +56,6 @@
           default = ocpp;
           ocpp = pkgs.callPackage ./nix/ocpp.nix {
             inherit node_modules;
-          };
-          ocpp-desktop = pkgs.callPackage ./nix/desktop.nix {
-            inherit ocpp;
           };
           # Updater derivation with fakeHash - build fails and reveals correct hash
           node_modules_updater = node_modules.override {

@@ -168,6 +168,22 @@ export function renderInitial(value: List, values: Readonly<Record<string, Schem
   )
 }
 
+/** Renders every currently available source with no stored baseline, for harnesses that keep no instruction epochs. */
+export function renderCurrent(value: List) {
+  return read(value).pipe(
+    Effect.map((observed) =>
+      renderInitial(
+        value,
+        Object.fromEntries(
+          observed.flatMap((entry) =>
+            isUnavailable(entry.value) || isRemoved(entry.value) ? [] : [[entry.key, entry.value]],
+          ),
+        ),
+      ),
+    ),
+  )
+}
+
 export function renderUpdate(
   value: List,
   previous: Readonly<Record<string, Schema.Json>>,

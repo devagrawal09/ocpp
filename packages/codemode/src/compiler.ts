@@ -1,7 +1,17 @@
 import { parse } from "acorn"
 import { transpile } from "#transpile"
 import { reservedNames } from "./globals.js"
-import { IR_VERSION, isPromiseAllCall, isRecord, type AstNode, type Program, type ProgramNode } from "./ir.js"
+import {
+  IR_VERSION,
+  isPromiseAllCall,
+  isRecord,
+  type AstNode,
+  type Program,
+  type ProgramNode,
+  type SourcePosition,
+} from "./ir.js"
+import { SourceMap } from "./source-map.js"
+import { Suggestions } from "./suggestions.js"
 
 /**
  * A compile-time diagnostic. Compilation is source in, versioned IR out or this error, so the
@@ -15,7 +25,7 @@ export class CompileError extends Error {
     readonly suggestions?: ReadonlyArray<string>,
     /** One-based source position for diagnostics that have no AST node, such as parse failures. */
     readonly location?: { readonly line: number; readonly column: number },
-    /** The trimmed source line at `location`, so a host can show what failed without the program. */
+    /** The source line at `location`, so a host can show what failed without the program. */
     readonly excerpt?: string,
   ) {
     super(message)
@@ -25,20 +35,28 @@ export class CompileError extends Error {
 
 const MAX_EXCERPT_LENGTH = 200
 
-/** The trimmed source line at a one-based position, bounded so a diagnostic stays small. */
+/**
+ * The source line at a one-based position, bounded so a diagnostic stays small. Its indentation is
+ * kept so the reported column still counts from the start of the excerpt.
+ */
 export function excerptAt(source: string, location: { readonly line: number }): string | undefined {
-  const line = source.split("\n")[location.line - 1]?.trim()
-  if (line === undefined || line === "") return undefined
+  const line = source.split("\n")[location.line - 1]?.trimEnd()
+  if (line === undefined || line.trim() === "") return undefined
   return line.length > MAX_EXCERPT_LENGTH ? line.slice(0, MAX_EXCERPT_LENGTH) + "..." : line
 }
 
-// acorn reports positions as a one-based line with a zero-based column and appends "(line:column)"
-// to its message. The location is kept separately, so the suffix is dropped from the message.
-function parseError(source: string, error: unknown): CompileError {
-  const position =
+/** Maps a position in the transpiled output to the source as written, if the source produced it. */
+type Original = (position: SourcePosition) => SourcePosition | undefined
+
+// acorn reports positions in the transpiled output as a one-based line with a zero-based column and
+// appends "(line:column)" to its message. The location is kept separately, in the source as written,
+// so the suffix is dropped from the message.
+function parseError(source: string, error: unknown, original: Original): CompileError {
+  const found =
     error instanceof SyntaxError && isRecord(error) && isRecord(error.loc)
-      ? { line: Number(error.loc.line), column: Number(error.loc.column) + 1 }
+      ? original({ line: Number(error.loc.line), column: Number(error.loc.column) })
       : undefined
+  const position = found && { line: found.line, column: found.column + 1 }
   const message = error instanceof Error ? error.message.replace(/ \(\d+:\d+\)$/, "") : String(error)
   return new CompileError(
     "Failed to parse: " + message,
@@ -50,39 +68,110 @@ function parseError(source: string, error: unknown): CompileError {
   )
 }
 
+const noModules =
+  'Remove it: there are no modules. Host capabilities are tools; find them with tools.search({ query: "what you need" }).'
+const autoPublish =
+  "Remove export: export const total = 1 becomes const total = 1, which is saved to the notebook automatically."
+const records = "Use a function that returns a plain record: function counter(start) { return { value: start } }"
+
 const forbidden = new Map([
-  ["YieldExpression", "generators are not supported"],
-  ["ImportDeclaration", "imports are not supported"],
-  ["ImportExpression", "dynamic imports are not supported"],
+  [
+    "YieldExpression",
+    {
+      message: "generators are not supported",
+      suggestions: ["Return an array instead of yielding: function pages(ids) { return ids.map((id) => load(id)) }"],
+    },
+  ],
+  ["ImportDeclaration", { message: "imports are not supported", suggestions: [noModules] }],
+  ["ImportExpression", { message: "dynamic imports are not supported", suggestions: [noModules] }],
   [
     "ExportNamedDeclaration",
-    "export is not supported; direct top-level const and function declarations are published automatically",
+    {
+      message: "export is not supported; direct top-level const and function declarations are published automatically",
+      suggestions: [autoPublish],
+    },
   ],
   [
     "ExportDefaultDeclaration",
-    "export is not supported; direct top-level const and function declarations are published automatically",
+    {
+      message: "export is not supported; direct top-level const and function declarations are published automatically",
+      suggestions: [autoPublish],
+    },
   ],
-  ["ExportAllDeclaration", "re-exports are not supported"],
+  ["ExportAllDeclaration", { message: "re-exports are not supported", suggestions: [noModules] }],
+  ["ClassDeclaration", { message: "classes are not supported", suggestions: [records] }],
+  ["ClassExpression", { message: "classes are not supported", suggestions: [records] }],
+  [
+    "ThisExpression",
+    {
+      message: "this is not supported",
+      suggestions: ["Pass the value as a parameter: function area(shape) { return shape.width * shape.height }"],
+    },
+  ],
 ])
+
+const regexUnavailable =
+  "Regular expressions are not available; match text with string methods such as includes, startsWith, indexOf, slice, and split"
 
 // Removed language values whose helper replacements return plain durable data.
 const removedGlobals = new Map([
-  ["Date", "Date is not a value; use time.now(), time.parse(text), time.add(...), and time.format(...)"],
-  ["Map", "Map is not a value; use immutable records and arrays"],
-  ["Set", "Set is not a value; use immutable arrays"],
-  ["URL", "URL is not a value; use url.parse(text) and url.format(record)"],
-  ["URLSearchParams", "URLSearchParams is not a value; use url.parse(text).query and url.formatQuery(record)"],
+  [
+    "Date",
+    {
+      message: "Date is not a value; use time.now(), time.parse(text), time.add(...), and time.format(...)",
+      suggestions: [
+        'Use epoch milliseconds with the time helpers: time.now(), time.parse("2024-05-01T00:00:00Z"), time.add(at, { days: 1 }), time.format(at), time.parts(at).',
+      ],
+    },
+  ],
+  [
+    "Map",
+    {
+      message: "Map is not a value; use immutable records and arrays",
+      suggestions: [
+        "Use a record: let counts = {}; counts = { ...counts, [key]: (counts[key] ?? 0) + 1 }; list it with Object.entries(counts).",
+      ],
+    },
+  ],
+  [
+    "Set",
+    {
+      message: "Set is not a value; use immutable arrays",
+      suggestions: [
+        "Use an array: items.includes(item) tests membership, and items.filter((item, index) => items.indexOf(item) === index) removes duplicates.",
+      ],
+    },
+  ],
+  [
+    "URL",
+    {
+      message: "URL is not a value; use url.parse(text) and url.format(record)",
+      suggestions: [
+        "url.parse(text) returns a record with scheme, host, path, query, and hash; url.format(record) builds the text.",
+      ],
+    },
+  ],
+  [
+    "URLSearchParams",
+    {
+      message: "URLSearchParams is not a value; use url.parseQuery(text) and url.formatQuery(entries)",
+      suggestions: [
+        "Read the parameters as [{ name, value }] records: url.parse(text).query for a URL, url.parseQuery(text) for a bare query string",
+        'Build a query string from those records: url.formatQuery([{ name: "q", value: "term" }])',
+      ],
+    },
+  ],
   // Pattern matching is unavailable until the runtime has an engine whose cost is bounded by input
   // length. A backtracking matcher blocks the host, so no partial pattern support is offered.
-  [
-    "RegExp",
-    "Regular expressions are not available; match text with string methods such as includes, startsWith, indexOf, slice, and split",
-  ],
-  [
-    "regex",
-    "Regular expressions are not available; match text with string methods such as includes, startsWith, indexOf, slice, and split",
-  ],
+  ["RegExp", { message: regexUnavailable, suggestions: Suggestions.regex() }],
+  ["regex", { message: regexUnavailable, suggestions: Suggestions.regex() }],
 ])
+
+const promiseUnsupported = "Promise is not supported; tool calls block and return their result directly."
+const promiseSuggestions = [
+  "Call the tool and use its value directly: const file = tools.fs.read({ path })",
+  "Run independent work concurrently as separate execute calls instead.",
+]
 
 const mutatingMethods = new Set([
   "assign",
@@ -97,7 +186,16 @@ const mutatingMethods = new Set([
   "unshift",
 ])
 
-export function compile(code: string): Program {
+export type CompileOptions = {
+  /**
+   * False compiles a program that is no notebook cell, such as a configuration file a host evaluates for its
+   * value: its top-level declarations are ordinary bindings, never saved, so the notebook's durable-name rules
+   * do not apply to them. Defaults to true.
+   */
+  readonly notebook?: boolean
+}
+
+export function compile(code: string, options?: CompileOptions): Program {
   if (code.trim().length === 0) throw new CompileError("Code cannot be empty.", "ParseError")
   const transpiled = transpile(code)
   if (transpiled.error !== undefined)
@@ -110,16 +208,21 @@ export function compile(code: string): Program {
       transpiled.location && excerptAt(code, transpiled.location),
     )
 
-  const parsed = parseSource(transpiled.outputText, code)
+  const original: Original =
+    transpiled.mappings === undefined ? (position) => position : SourceMap.originalPosition(transpiled.mappings)
+  const parsed = parseSource(transpiled.outputText, code, original)
   if (!isRecord(parsed) || parsed.type !== "Program" || !Array.isArray(parsed.body))
     throw new CompileError("Failed to compile script as a Program.", "ParseError")
 
   const program = parsed as ProgramNode
+  if (transpiled.mappings !== undefined) restorePositions(program, original)
   // Declared names come first so a bad notebook name reports its own diagnostic instead of the
   // generic one `validate` produces for the same identifier elsewhere in a program.
-  const names = declarations(program)
+  const notebook = options?.notebook !== false
+  const names = notebook ? declarations(program) : []
   validate(program)
-  rejectEarlyReturns(program)
+  rejectReferenceDispatch(program)
+  if (notebook) rejectEarlyReturns(program)
   const warnings = [
     ...(containsNode(program, (node) => node.type === "AwaitExpression")
       ? [
@@ -150,9 +253,8 @@ export function compile(code: string): Program {
 }
 
 // acorn throws a bare SyntaxError, which is the only reason the compiler catches anything: the
-// failure is re-thrown as a positioned ParseError so hosts never see an unstructured throw. The
-// excerpt comes from the original source because transpilation preserves lines but not their text.
-function parseSource(transpiled: string, source: string): unknown {
+// failure is re-thrown as a positioned ParseError so hosts never see an unstructured throw.
+function parseSource(transpiled: string, source: string, original: Original): unknown {
   try {
     return parse(transpiled, {
       ecmaVersion: "latest",
@@ -161,7 +263,24 @@ function parseSource(transpiled: string, source: string): unknown {
       locations: true,
     })
   } catch (error) {
-    throw parseError(source, error)
+    throw parseError(source, error, original)
+  }
+}
+
+/**
+ * The transpiler re-prints the program: it splits statements onto their own lines, joins wrapped
+ * expressions, and drops type declarations. Each node's line and column are mapped back to the source
+ * as written, so every diagnostic, compile time or run time, points at the author's own line. Node
+ * offsets still index the transpiled `source`, which is the text the runtime slices.
+ */
+function restorePositions(node: AstNode, original: Original): void {
+  const start = node.loc && original(node.loc.start)
+  // Output that no source produced, such as the `export {}` left by an elided import, has no position.
+  if (node.loc) node.loc = start && { start, end: original(node.loc.end) ?? start }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "loc") continue
+    for (const item of Array.isArray(value) ? value : [value])
+      if (isRecord(item) && typeof item.type === "string") restorePositions(item as AstNode, original)
   }
 }
 
@@ -197,6 +316,9 @@ function rejectEarlyReturns(program: ProgramNode): void {
       throw unsupported(
         "This return would skip a durable declaration that follows it, leaving its notebook name reserved but never saved. Move the return after every top-level const and function declaration.",
         found,
+        [
+          "Keep one preview return at the end, and compute conditional values instead of exiting early: const later = done ? null : compute(first).",
+        ],
       )
   }
 }
@@ -241,10 +363,13 @@ function declarations(program: ProgramNode): ReadonlyArray<string> {
         throw unsupported(
           "Top-level const declarations save one durable name each; destructure inside a block or function instead.",
           id,
+          Suggestions.destructuring(id, item.init),
         )
       const init = item.init
       if (init === undefined || init === null)
-        throw unsupported("Top-level const '" + id.name + "' requires an initializer.", item)
+        throw unsupported("Top-level const '" + id.name + "' requires an initializer.", item, [
+          "Give it a value, const " + id.name + " = ..., or use let " + id.name + " for working state.",
+        ])
       // Handles exist only for one execution, so catch the natural const form before anything runs.
       if (requireNode(init).type === "CallExpression" && isToolDefine(requireNode(requireNode(init).callee)))
         throw unsupported(
@@ -252,10 +377,161 @@ function declarations(program: ProgramNode): ReadonlyArray<string> {
             id.name +
             "' with let, or create the handle inside a function.",
           item,
+          [
+            "Bind it with let so it lives for this execution only: let " +
+              id.name +
+              " = tool.define({ name, description, inputSchema, outputSchema, execute })",
+            "Or create the handle inside the function that passes it to a tool.",
+          ],
+        )
+      const reference = requireNode(init).type === "MemberExpression" ? toolPath(requireNode(init)) : undefined
+      if (reference !== undefined && reference.length > 0)
+        throw unsupported(
+          "Tool references are activation-local and cannot be saved; bind '" + id.name + "' with let.",
+          item,
+          ["Bind it with let so it lives for this execution only: let " + id.name + " = tools." + reference.join(".")],
+        )
+      // A reference or handle inside the value, such as { read: tools.fs.read }, fails the same way, so it is
+      // refused here before the program's earlier statements can run.
+      const held = heldValues(requireNode(init)).find(
+        (value) =>
+          (value.type === "CallExpression" && isToolDefine(requireNode(value.callee))) ||
+          (value.type === "MemberExpression" && (toolPath(value)?.length ?? 0) > 0),
+      )
+      if (held !== undefined)
+        throw unsupported(
+          "'" +
+            id.name +
+            "' would hold a " +
+            (held.type === "CallExpression" ? "tool handle" : "tool reference") +
+            ", which exists only for one execution and cannot be saved; bind '" +
+            id.name +
+            "' with let.",
+          held,
+          ["Bind it with let so it lives for this execution only: let " + id.name + " = ..."],
         )
       return durableName(id.name, id)
     })
   })
+}
+
+// The expressions whose values become part of a declaration's value: array elements, record values, and the
+// branches of conditional and logical expressions. What a call returns is not visible here.
+function heldValues(node: AstNode): ReadonlyArray<AstNode> {
+  if (node.type === "ArrayExpression")
+    return requireArray(node.elements, node).flatMap((value) => (value === null ? [] : heldValues(requireNode(value))))
+  if (node.type === "ObjectExpression")
+    return requireArray(node.properties, node).flatMap((value) => {
+      const property = requireNode(value)
+      return heldValues(requireNode(property.type === "Property" ? property.value : property.argument))
+    })
+  if (node.type === "SpreadElement") return heldValues(requireNode(node.argument))
+  if (node.type === "ConditionalExpression")
+    return [...heldValues(requireNode(node.consequent)), ...heldValues(requireNode(node.alternate))]
+  if (node.type === "LogicalExpression")
+    return [...heldValues(requireNode(node.left)), ...heldValues(requireNode(node.right))]
+  if (node.type === "SequenceExpression") return heldValues(requireNode(requireArray(node.expressions, node).at(-1)))
+  return [node]
+}
+
+/**
+ * A tool reference held in a variable is a value to hand on, never a tool to call or a namespace to extend: a
+ * call names its tool by a static path, so the compiler sees every tool a program can call. The runtime refuses
+ * both forms wherever they appear; this refuses the ones visible here, a call or member of a name that only a
+ * declaration of a static tool path binds.
+ */
+function rejectReferenceDispatch(program: ProgramNode): void {
+  const nodes = descendants(program)
+  const bound = nodes.flatMap(bindingNames)
+  const references = new Map(
+    nodes.flatMap((node) => {
+      const id = node.type === "VariableDeclarator" ? requireNode(node.id) : undefined
+      const init = node.type === "VariableDeclarator" && isRecord(node.init) ? requireNode(node.init) : undefined
+      const path = init?.type === "MemberExpression" ? toolPath(init) : undefined
+      return id?.type === "Identifier" && typeof id.name === "string" && path !== undefined && path.length > 0
+        ? [[id.name, path.join(".")] as const]
+        : []
+    }),
+  )
+  const aliased = (value: unknown) => {
+    const name = identifierName(value)
+    return name !== undefined && references.has(name) && bound.filter((item) => item === name).length === 1
+      ? name
+      : undefined
+  }
+  for (const node of nodes) {
+    const called = node.type === "CallExpression" ? aliased(node.callee) : undefined
+    if (called !== undefined) {
+      const tool = "tools." + references.get(called)
+      throw unsupported(
+        "'" +
+          called +
+          "' holds the tool reference " +
+          tool +
+          ", which can only be passed to a tool that hands tools on, such as tools.subagent. Call the tool by its static path instead.",
+        requireNode(node.callee),
+        ["Call it directly: " + tool + "(input)"],
+      )
+    }
+    const extended = node.type === "MemberExpression" ? aliased(node.object) : undefined
+    if (extended !== undefined) {
+      const tool = "tools." + references.get(extended)
+      throw unsupported(
+        "'" +
+          extended +
+          "' holds the tool reference " +
+          tool +
+          ", which cannot be extended with a member; name the tool by its full static path.",
+        node,
+        ["Write the path out in full, such as " + tool + ".name(input)"],
+      )
+    }
+  }
+}
+
+// Every name a declaration, function, parameter or catch clause binds, once per binding.
+function bindingNames(node: AstNode): ReadonlyArray<string> {
+  if (node.type === "VariableDeclarator") return patternNames(requireNode(node.id))
+  if (node.type === "CatchClause") return isRecord(node.param) ? patternNames(requireNode(node.param)) : []
+  if (
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "ArrowFunctionExpression"
+  )
+    return [
+      ...(isRecord(node.id) ? patternNames(requireNode(node.id)) : []),
+      ...requireArray(node.params, node).flatMap((value) => patternNames(requireNode(value))),
+    ]
+  return []
+}
+
+function patternNames(node: AstNode): ReadonlyArray<string> {
+  if (node.type === "Identifier") return typeof node.name === "string" ? [node.name] : []
+  if (node.type === "AssignmentPattern") return patternNames(requireNode(node.left))
+  if (node.type === "RestElement") return patternNames(requireNode(node.argument))
+  if (node.type === "ArrayPattern")
+    return requireArray(node.elements, node).flatMap((value) =>
+      value === null ? [] : patternNames(requireNode(value)),
+    )
+  if (node.type === "ObjectPattern")
+    return requireArray(node.properties, node).flatMap((value) => {
+      const property = requireNode(value)
+      return patternNames(requireNode(property.type === "RestElement" ? property.argument : property.value))
+    })
+  return []
+}
+
+function descendants(node: AstNode): ReadonlyArray<AstNode> {
+  return [
+    node,
+    ...Object.entries(node).flatMap(([key, value]) =>
+      key === "loc"
+        ? []
+        : (Array.isArray(value) ? value : [value]).flatMap((item) =>
+            isRecord(item) && typeof item.type === "string" ? descendants(item as AstNode) : [],
+          ),
+    ),
+  ]
 }
 
 // A notebook name is permanent, so shadowing a builtin at the top level would hide it from every
@@ -267,51 +543,84 @@ function durableName(name: string, node: AstNode): string {
         name +
         "' is a runtime global and cannot become a permanent notebook name; it would hide the builtin from every later execution. Choose a different name, or declare it inside a block or function.",
       node,
+      ["Rename it, e.g. const " + name + "Result = ..."],
     )
   return name
 }
 
 function validate(node: AstNode): void {
-  const message = forbidden.get(node.type)
-  if (message) throw unsupported(message, node)
+  // TypeScript drops unused and type-only imports and leaves a bare `export {}` in their place.
+  if (
+    node.type === "ExportNamedDeclaration" &&
+    node.declaration == null &&
+    node.source == null &&
+    requireArray(node.specifiers, node).length === 0
+  )
+    throw unsupported("imports and exports are not supported", node, [noModules])
+  const rejected = forbidden.get(node.type)
+  if (rejected) throw unsupported(rejected.message, node, rejected.suggestions)
   if (
     (node.type === "FunctionDeclaration" ||
       node.type === "FunctionExpression" ||
       node.type === "ArrowFunctionExpression") &&
     (node.async === true || node.generator === true)
   )
-    throw unsupported("Async functions and generators are not supported.", node)
-  if (node.type === "ForOfStatement" && node.await === true) throw unsupported("for await...of is not supported.", node)
+    throw unsupported("Async functions and generators are not supported.", node, [
+      node.async === true
+        ? "Remove async and await: tool calls block and return their value, e.g. function load(path) { return tools.fs.read({ path }) }"
+        : "Return an array instead of yielding: function pages(ids) { return ids.map((id) => load(id)) }",
+    ])
+  if (node.type === "ForOfStatement" && node.await === true)
+    throw unsupported("for await...of is not supported.", node, [
+      "Use for...of: tool calls inside the loop already block and return their value.",
+    ])
   if (node.type === "VariableDeclaration" && node.kind === "var")
-    throw unsupported("var is not supported; use activation-local let or immutable const.", node)
+    throw unsupported("var is not supported; use activation-local let or immutable const.", node, [
+      "Use let for working state or const to save a notebook value: let " +
+        (identifierName(requireNode(requireArray(node.declarations, node)[0]).id) ?? "total") +
+        " = ...",
+    ])
   if (node.type === "Literal" && isRecord(node.regex))
-    throw unsupported(
-      "Regular expressions are not available; match text with string methods such as includes, startsWith, indexOf, slice, and split.",
-      node,
-    )
+    throw unsupported(regexUnavailable + ".", node, Suggestions.regex())
   if (node.type === "AssignmentExpression") {
     const left = requireNode(node.left)
-    if (hasMemberTarget(left)) throw unsupported("Arrays and objects are immutable; assign a new value instead.", left)
+    if (hasMemberTarget(left))
+      throw unsupported(
+        "Arrays and objects are immutable; assign a new value instead.",
+        left,
+        Suggestions.memberAssignment(left, Suggestions.assignedValue(node)),
+      )
   }
   if (
     (node.type === "ForOfStatement" || node.type === "ForInStatement") &&
     requireNode(node.left).type !== "VariableDeclaration" &&
     hasMemberTarget(requireNode(node.left))
   )
-    throw unsupported("Arrays and objects are immutable; assign a new value instead.", requireNode(node.left))
+    throw unsupported("Arrays and objects are immutable; assign a new value instead.", requireNode(node.left), [
+      "Loop with a fresh binding, e.g. for (const item of items) { ... }, and build a new value from it.",
+    ])
   if (node.type === "UpdateExpression" && requireNode(node.argument).type === "MemberExpression")
-    throw unsupported("Arrays and objects are immutable; assign a new value instead.", node)
+    throw unsupported(
+      "Arrays and objects are immutable; assign a new value instead.",
+      node,
+      Suggestions.memberAssignment(requireNode(node.argument), Suggestions.assignedValue(node)),
+    )
   if (node.type === "UnaryExpression" && node.operator === "delete")
-    throw unsupported("Arrays and objects are immutable; delete is not supported.", node)
+    throw unsupported(
+      "Arrays and objects are immutable; delete is not supported.",
+      node,
+      Suggestions.deletion(node.argument),
+    )
   if (node.type === "NewExpression") {
     const name = identifierName(node.callee)
-    if (name === "Promise")
-      throw unsupported("Promise is not supported; tool calls block and return their result directly.", node)
+    if (name === "Promise") throw unsupported(promiseUnsupported, node, promiseSuggestions)
     const removed = name === undefined ? undefined : removedGlobals.get(name)
-    if (removed) throw unsupported(removed + ".", node)
+    if (removed) throw unsupported(removed.message + ".", node, removed.suggestions)
   }
   if (node.type === "CallExpression") {
     const callee = requireNode(node.callee)
+    const regex = Suggestions.regexCall(node)
+    if (regex) throw unsupported(regexUnavailable + ".", regex.node, regex.suggestions)
     if (isPromiseAllCall(node)) {
       const args = requireArray(node.arguments, node)
       if (args.length !== 1) throw unsupported("Promise.all compatibility expects exactly one array argument.", node)
@@ -323,7 +632,10 @@ function validate(node: AstNode): void {
     }
     const path = toolPath(callee)
     if (path !== undefined) {
-      if (path.length === 0) throw unsupported("The tools root is not callable.", callee)
+      if (path.length === 0)
+        throw unsupported("The tools root is not callable.", callee, [
+          'Call a tool by its full path; tools.search({ query: "what you need" }) lists them.',
+        ])
       for (const value of requireArray(node.arguments, node)) validate(requireNode(value))
       return
     }
@@ -333,17 +645,39 @@ function validate(node: AstNode): void {
     }
     const method = memberName(callee)
     if (method && mutatingMethods.has(method))
-      throw unsupported("Mutating method '" + method + "' is not supported; arrays and objects are immutable.", callee)
+      throw unsupported(
+        "Mutating method '" + method + "' is not supported; arrays and objects are immutable.",
+        callee,
+        Suggestions.mutatingMethod(method, callee, requireArray(node.arguments, node)),
+      )
+  }
+  if (node.type === "MemberExpression" && node.optional === true && toolPath(requireNode(node.object)) !== undefined)
+    throw unsupported(
+      "Tool paths cannot use optional chaining; name the tool by its full static path, such as tools.fs.read(...).",
+      node,
+      Suggestions.dynamicTool,
+    )
+  // A static path that is not called is a tool reference: a value naming that tool, or every tool in that
+  // namespace, which a tool such as tools.subagent receives to hand those tools on.
+  if (node.type === "MemberExpression") {
+    const path = toolPath(node)
+    if (path !== undefined && path.length > 0) return
   }
   if (node.type === "Identifier" && node.name === "Promise")
-    throw unsupported("Promise is not supported; tool calls block and return their result directly.", node)
+    throw unsupported(promiseUnsupported, node, promiseSuggestions)
   if (node.type === "Identifier" && node.name === "tools")
-    throw unsupported("Tools must be called through a direct static path such as tools.fs.read(...).", node)
+    throw unsupported(
+      "The tools root is not a value; call a tool by its static path, such as tools.fs.read(...), or pass one as tools.fs.read.",
+      node,
+      Suggestions.dynamicTool,
+    )
   if (node.type === "Identifier" && node.name === "tool")
-    throw unsupported("The tool namespace only supports direct tool.define(...) calls.", node)
+    throw unsupported("The tool namespace only supports direct tool.define(...) calls.", node, [
+      "Call it directly: let inspect = tool.define({ name, description, inputSchema, outputSchema, execute })",
+    ])
   if (node.type === "Identifier" && typeof node.name === "string") {
     const removed = removedGlobals.get(node.name)
-    if (removed) throw unsupported(removed + ".", node)
+    if (removed) throw unsupported(removed.message + ".", node, removed.suggestions)
   }
 
   for (const [key, value] of Object.entries(node)) {
@@ -380,7 +714,7 @@ function toolPath(value: AstNode): ReadonlyArray<string> | undefined {
     return [...parent, property.name]
   if (value.computed === true && property.type === "Literal" && typeof property.value === "string")
     return [...parent, property.value]
-  throw unsupported("Tool paths must use literal property names.", property)
+  throw unsupported("Tool paths must use literal property names.", property, Suggestions.dynamicTool)
 }
 
 function memberName(value: AstNode): string | undefined {
@@ -421,8 +755,10 @@ function requireArray(value: unknown, node: AstNode): Array<unknown> {
   return value
 }
 
-function unsupported(message: string, node: AstNode): CompileError {
-  return new CompileError(message, "UnsupportedSyntax", node, [
-    "Use synchronous functions, direct blocking tool calls, and immutable data. Direct top-level const and function declarations publish durable notebook names automatically.",
-  ])
+function unsupported(
+  message: string,
+  node: AstNode,
+  suggestions: ReadonlyArray<string> = [Suggestions.general],
+): CompileError {
+  return new CompileError(message, "UnsupportedSyntax", node, suggestions)
 }

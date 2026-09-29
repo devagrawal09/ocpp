@@ -187,6 +187,8 @@ const source = {
   "ui.codemode.steps.other": "{{count}} steps",
   "ui.codemode.source": "Source",
   "ui.codemode.executionTrace": "Execution trace",
+  "ui.codemode.resumed": "Resumed after restart",
+  "ui.codemode.replayed": "Replayed from the journal after a restart; the tool did not run again",
   "ui.customTool.steps.one": "Custom tool: {{count}} step",
   "ui.customTool.steps.other": "Custom tool: {{count}} steps",
   "ui.codemode.trace.assignment": "Assigned",
@@ -223,6 +225,7 @@ const source = {
   "ui.basicTool.called": "Called `{{tool}}`",
   "ui.toolErrorCard.failed": "Failed",
   "ui.toolErrorCard.copyError": "Copy error",
+  "ui.toolErrorCard.suggestions": "Suggestions",
 
   "ui.common.file.one": "file",
   "ui.common.file.other": "files",
@@ -242,10 +245,6 @@ const source = {
   "ui.common.showMore": "Show more",
   "ui.common.moreCount.one": "+{{count}} more",
   "ui.common.moreCount.other": "+{{count}} more",
-
-  "ui.permission.deny": "Deny",
-  "ui.permission.allowAlways": "Allow always",
-  "ui.permission.allowOnce": "Allow once",
 
   "ui.message.expand": "Expand message",
   "ui.message.collapse": "Collapse message",
@@ -267,6 +266,7 @@ const source = {
   "ui.sessionTimeline.notice.cancelled": "{{actor}} cancelled",
   "ui.sessionTimeline.notice.finished": "{{actor}} finished",
   "ui.sessionTimeline.notice.instructionsUpdated": "Instructions updated",
+  "ui.sessionTimeline.invocation.event": "Event {{name}}",
   "ui.message.queued": "Queued",
   "ui.message.attachment.alt": "attachment",
 

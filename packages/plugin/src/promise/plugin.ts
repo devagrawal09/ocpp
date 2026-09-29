@@ -11,7 +11,6 @@ import type { CommandDomain } from "./command.js"
 import type { EventDomain } from "./event.js"
 import type { IntegrationDomain } from "./integration.js"
 import type { MCPDomain } from "./mcp.js"
-import type { PermissionDomain } from "./permission.js"
 import type { ReferenceDomain } from "./reference.js"
 import type { SessionDomain } from "./session.js"
 import type { ShellDomain } from "./shell.js"
@@ -36,7 +35,6 @@ export interface Context {
   readonly integration: IntegrationDomain
   readonly mcp: MCPDomain
   readonly generate: GenerateApi
-  readonly permission: PermissionDomain
   readonly plugin: PluginApi
   readonly reference: ReferenceDomain
   readonly session: SessionDomain
@@ -52,7 +50,6 @@ export type Cleanup = () => Promise<void> | void
 
 export interface Plugin {
   readonly id: string
-  readonly tui?: boolean
   readonly vcs?: VcsDiscovery
   readonly setup: (context: Context) => Promise<Cleanup | void> | Cleanup | void
 }

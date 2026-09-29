@@ -3,13 +3,19 @@ title: Web
 description: Using OC++ in your browser.
 ---
 
-OC++ can run as a web application in your browser, providing the same powerful AI coding experience without needing a terminal.
+The OC++ web app is the main way to use OC++ interactively. It runs in your browser and connects to a local OC++ server.
 
 ![OC++ Web - New Session](../../assets/web/web-homepage-new-session.png)
 
 ## Getting Started
 
-Start the web interface by running:
+Running `ocpp` without a command starts the OC++ server if needed and opens the web app in your default browser.
+
+```bash
+ocpp
+```
+
+To start a web server with custom options, run:
 
 ```bash
 ocpp web
@@ -105,22 +111,6 @@ View and manage your sessions from the homepage. You can see active sessions and
 Click "See Servers" to view connected servers and their status.
 
 ![OC++ Web - See Servers](../../assets/web/web-homepage-see-servers.png)
-
----
-
-## Attaching a Terminal
-
-You can attach a terminal TUI to a running web server:
-
-```bash
-# Start the web server
-ocpp web --port 4096
-
-# In another terminal, attach the TUI
-ocpp attach http://localhost:4096
-```
-
-This allows you to use both the web interface and terminal simultaneously, sharing the same sessions and state.
 
 ---
 

@@ -45,7 +45,7 @@ function providerIconsPlugin() {
 }
 
 async function fetchProviderIcons() {
-  const url = process.env.OCPP_MODELS_URL || "https://models.ocpp.ai"
+  const url = process.env.OCPP_MODELS_URL || "https://models.opencode.ai"
   const providers = await fetch(`${url}/api.json`)
     .then((res) => res.json())
     .then((json) => Object.keys(json))

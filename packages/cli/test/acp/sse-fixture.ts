@@ -21,13 +21,6 @@ type FixtureOptions = {
     readonly sessionID: string
     readonly send: (event: unknown) => void
   }) => boolean | Promise<boolean>
-  readonly onPermissionReply?: (input: {
-    readonly sessionID: string
-    readonly requestID: string
-    readonly reply: string
-    readonly body: unknown
-    readonly send: (event: unknown) => void
-  }) => void | Promise<void>
   readonly onFormCancel?: (input: {
     readonly sessionID: string
     readonly formID: string
@@ -124,20 +117,6 @@ export function createSseFixture(options: FixtureOptions = {}) {
         return Response.json({
           data: messages.get(`${sessionID}/${messageID}`) ?? messages.get(messageID) ?? assistantMessage(messageID),
         })
-      }
-
-      const permission = /^\/api\/session\/([^/]+)\/permission\/([^/]+)\/reply$/.exec(url.pathname)
-      if (permission?.[1] && permission[2]) {
-        const reply = stringField(body, "reply")
-        if (!reply) return new Response(null, { status: 400 })
-        await options.onPermissionReply?.({
-          sessionID: decodeURIComponent(permission[1]),
-          requestID: decodeURIComponent(permission[2]),
-          reply,
-          body,
-          send,
-        })
-        return new Response(null, { status: 204 })
       }
 
       const form = /^\/api\/session\/([^/]+)\/form\/([^/]+)\/cancel$/.exec(url.pathname)

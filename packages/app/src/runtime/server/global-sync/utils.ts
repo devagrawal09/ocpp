@@ -1,4 +1,4 @@
-import type { AgentListOutput, ModelListOutput, ProviderListOutput } from "@ocpp/client/promise"
+import type { AgentListOutput, ModelListOutput, ProviderListOutput, SessionDriverInfo } from "@ocpp/client/promise"
 import type { Agent, Project, Provider, ProviderListResponse } from "@/runtime/server/types"
 import type { Project as CurrentProject } from "@ocpp/client/promise"
 import { unwrap } from "solid-js/store"
@@ -22,11 +22,6 @@ export function normalizeAgentList(input: AgentListOutput["data"] | Agent[]): Ag
       typeof agent.request.settings.temperature === "number" ? agent.request.settings.temperature : undefined,
     topP: typeof agent.request.settings.topP === "number" ? agent.request.settings.topP : undefined,
     color: agent.color,
-    permission: agent.permissions.map((rule) => ({
-      permission: rule.action,
-      pattern: rule.resource,
-      action: rule.effect,
-    })),
     model: agent.model && { providerID: agent.model.providerID, modelID: agent.model.id },
     variant: agent.model?.variant,
     prompt: agent.system,
@@ -127,6 +122,60 @@ export function normalizeProviderList(
     providerCatalogs.set(providers, cache)
   }
   return result
+}
+
+/**
+ * Adds vendor drivers (Claude Code, Codex, Pi) to the picker as providers whose models select that driver: a
+ * session whose model is claude/opus is driven by Claude Code. Only ready drivers count as connected.
+ */
+export function withDrivers(catalog: ProviderListResponse, drivers: ReadonlyArray<SessionDriverInfo>) {
+  if (drivers.length === 0) return catalog
+  return {
+    all: new Map([
+      ...catalog.all,
+      ...drivers.map((driver): [string, Provider] => [
+        driver.id,
+        {
+          id: driver.id,
+          name: driver.name,
+          source: "custom",
+          env: [],
+          options: {},
+          models: Object.fromEntries(
+            driver.models.map((id) => [
+              id,
+              {
+                id,
+                providerID: driver.id,
+                api: { id, url: "", npm: driver.id },
+                name: id,
+                capabilities: {
+                  temperature: false,
+                  reasoning: true,
+                  attachment: false,
+                  toolcall: true,
+                  input: { text: true, audio: false, image: false, video: false, pdf: false },
+                  output: { text: true, audio: false, image: false, video: false, pdf: false },
+                  interleaved: false,
+                },
+                // The vendor bills through the user's own subscription or key.
+                cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+                limit: { context: 200_000, output: 32_000 },
+                status: "active",
+                options: {},
+                headers: {},
+                // No release date keeps every driver model visible in the picker.
+                release_date: "",
+                variants: Object.fromEntries(driver.variants.map((variant) => [variant, {}])),
+              },
+            ]),
+          ),
+        },
+      ]),
+    ]),
+    connected: [...catalog.connected, ...drivers.filter((driver) => driver.available).map((driver) => driver.id)],
+    default: { ...catalog.default, ...Object.fromEntries(drivers.map((driver) => [driver.id, driver.model])) },
+  } satisfies ProviderListResponse
 }
 
 export function normalizeProjectInfo(project: Project | CurrentProject): Project {

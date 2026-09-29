@@ -5,6 +5,8 @@
 
 import type {
   AgentInfo,
+  CodeModeCommandInfo,
+  CodeModeEventInfo,
   CommandInfo,
   FormCancelInput,
   FormInfo,
@@ -16,9 +18,6 @@ import type {
   McpServer,
   ModelInfo,
   ModelRef,
-  PermissionSavedInfo,
-  PermissionRequest,
-  PermissionReplyInput,
   Project,
   ProviderInfo,
   ReferenceInfo,
@@ -30,6 +29,7 @@ import type {
   SessionInfo,
   SessionInboxInfo,
   SessionInboxCompaction,
+  SessionDriverInfo,
   ShellInfo,
   SkillInfo,
   VcsInfo,
@@ -40,12 +40,7 @@ import type {
 import { Worktree } from "@ocpp/schema/worktree"
 import { SessionID } from "@ocpp/schema/session-id"
 import { SessionMessage } from "@ocpp/schema/session-message"
-import {
-  isFormAlreadySettledError,
-  isFormNotFoundError,
-  isPermissionNotFoundError,
-  type SessionPromptInput,
-} from "../promise"
+import { isFormAlreadySettledError, isFormNotFoundError, type SessionPromptInput } from "../promise"
 import { createStore, produce, reconcile } from "solid-js/store"
 import type { SessionInbox } from "@ocpp/schema/session-inbox"
 import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
@@ -81,6 +76,7 @@ type LocationData = {
   vcs?: VcsInfo
   agent?: AgentInfo[]
   command?: CommandInfo[]
+  driver?: SessionDriverInfo[]
   integration?: IntegrationInfo[]
   mcp?: {
     server?: McpServer[]
@@ -108,14 +104,16 @@ type Store = {
     messageCursor: Record<string, string | undefined>
     messageLoading: Record<string, boolean>
     pending: Record<string, SessionInboxInfo[]>
+    // Slash commands the agent defined for each session, beside the Location's commands.
+    command: Record<string, CodeModeCommandInfo[]>
+    // Scheduled events the agent defined for each session, with their next and latest firing.
+    event: Record<string, CodeModeEventInfo[]>
     input: Record<string, string[]>
-    permission: Record<string, PermissionRequest[]>
     // Pending forms keyed by owner: a session ID or the temporary "global" elicitation sentinel.
     form: Record<string, FormWithLocation[]>
   }
   project: {
     info: Record<string, Project>
-    permission: Record<string, PermissionSavedInfo[]>
   }
   location: Record<string, LocationData>
 }
@@ -200,13 +198,13 @@ export function createData(config: CreateDataInput) {
       messageCursor: {},
       messageLoading: {},
       pending: {},
+      command: {},
+      event: {},
       input: {},
-      permission: {},
       form: {},
     },
     project: {
       info: {},
-      permission: {},
     },
     location: {},
   })
@@ -240,17 +238,6 @@ export function createData(config: CreateDataInput) {
         sessionID,
         (store.session.input[sessionID] ?? []).filter((id) => id !== inboxID),
       )
-  }
-
-  function removePermission(sessionID: string, requestID: string) {
-    const requests = store.session.permission[sessionID]
-    if (!requests?.some((request) => request.id === requestID)) return
-    setStore(
-      "session",
-      "permission",
-      sessionID,
-      requests.filter((request) => request.id !== requestID),
-    )
   }
 
   function removeForm(sessionID: string, formID: string, ref?: LocationRef) {
@@ -412,6 +399,11 @@ export function createData(config: CreateDataInput) {
       const item = position === undefined ? undefined : messages[position]
       return item?.type === "assistant" ? item : undefined
     },
+    invocation(messages: SessionMessageInfo[], index: Map<string, number>, messageID: string) {
+      const position = index.get(messageID)
+      const item = position === undefined ? undefined : messages[position]
+      return item?.type === "invocation" ? item : undefined
+    },
     shell(messages: SessionMessageInfo[], shellID: string) {
       const item = messages.findLast((item) => item.type === "shell" && item.shellID === shellID)
       return item?.type === "shell" ? item : undefined
@@ -501,8 +493,8 @@ export function createData(config: CreateDataInput) {
     sync.invalidate(`session.family:${sessionID}`)
     sync.invalidate(`session.pending:${sessionID}`)
     sync.invalidate(`session.message:${sessionID}`)
-    sync.invalidate(`session.permission:${sessionID}`)
     sync.invalidate(`session.form:${sessionID}:`)
+    sync.invalidate(`session.event:${sessionID}`)
     setStore(
       "session",
       produce((draft) => {
@@ -513,8 +505,8 @@ export function createData(config: CreateDataInput) {
         delete draft.messageLoading[sessionID]
         delete draft.pending[sessionID]
         delete draft.input[sessionID]
-        delete draft.permission[sessionID]
         delete draft.form[sessionID]
+        delete draft.event[sessionID]
         for (const [rootID, family] of Object.entries(draft.family)) {
           const next = family.filter((id) => id !== sessionID)
           if (next.length === 0) delete draft.family[rootID]
@@ -929,10 +921,33 @@ export function createData(config: CreateDataInput) {
         return
       case "session.codemode.started":
         return
+      case "session.invocation.started":
+        message.update(event.data.sessionID, (draft, index) => {
+          message.append(draft, index, {
+            id: messageIDFromEvent(event.id),
+            type: "invocation",
+            trigger: event.data.trigger,
+            code: SessionMessage.invocationCode(event.data.handler, event.data.input),
+            executionID: event.data.executionID,
+            status: "running",
+            metadata: event.metadata,
+            time: { created: event.created },
+          })
+        })
+        return
       case "session.codemode.progress":
       case "session.codemode.completed":
       case "session.codemode.failed":
         message.update(event.data.sessionID, (draft, index) => {
+          const invocation = message.invocation(draft, index, event.data.assistantMessageID)
+          if (invocation?.executionID === event.data.executionID) {
+            if (event.data.events.length > 0) invocation.events = [...event.data.events]
+            if (event.type === "session.codemode.progress") return
+            invocation.status = event.type === "session.codemode.completed" ? "completed" : event.data.status
+            if (event.type === "session.codemode.failed") invocation.error = event.data.error
+            invocation.time.completed = event.created
+            return
+          }
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
             event.data.id,
@@ -949,8 +964,22 @@ export function createData(config: CreateDataInput) {
                   : event.data.status,
             events: [...event.data.events],
             ...(event.type === "session.codemode.failed" ? { error: event.data.error } : {}),
+            ...(event.data.resumed === true ? { resumed: true } : {}),
           }
         })
+        if (event.type === "session.codemode.progress" || !store.session.event[event.data.sessionID]) return
+        // An event's latest outcome is read from the invocation of its latest firing, which just settled. A
+        // quick firing can settle before the list names it, so an event's invocation settling counts too.
+        const settled = result.session.message.get(event.data.sessionID, event.data.assistantMessageID)
+        if (
+          (settled?.type === "invocation" && settled.trigger.type === "event") ||
+          store.session.event[event.data.sessionID]?.some(
+            (item) => item.lastMessageID === event.data.assistantMessageID,
+          )
+        ) {
+          result.session.event.invalidate(event.data.sessionID)
+          void result.session.event.sync(event.data.sessionID)
+        }
         return
       case "session.tool.success":
         message.update(event.data.sessionID, (draft, index) => {
@@ -1090,6 +1119,15 @@ export function createData(config: CreateDataInput) {
           if (position === -1) return
           for (const item of draft.splice(position)) index.delete(item.id)
         })
+        // A revert removes the session commands and events whose notebook function it removed.
+        if (store.session.command[event.data.sessionID]) {
+          result.session.command.invalidate(event.data.sessionID)
+          void result.session.command.sync(event.data.sessionID)
+        }
+        if (store.session.event[event.data.sessionID]) {
+          result.session.event.invalidate(event.data.sessionID)
+          void result.session.event.sync(event.data.sessionID)
+        }
         return
       case "session.compaction.delta":
         message.update(event.data.sessionID, (draft) => {
@@ -1146,16 +1184,6 @@ export function createData(config: CreateDataInput) {
         })
         if (event.data.inputID) compacting.get(event.data.sessionID)?.observed.add(event.data.inputID)
         return
-      case "permission.asked":
-        if (store.session.permission[event.data.sessionID]?.some((request) => request.id === event.data.id)) return
-        setStore("session", "permission", event.data.sessionID, [
-          ...(store.session.permission[event.data.sessionID] ?? []),
-          event.data,
-        ])
-        return
-      case "permission.replied":
-        removePermission(event.data.sessionID, event.data.requestID)
-        return
       case "form.created":
         if (event.data.form.sessionID === "global") break
         if (store.session.form[event.data.form.sessionID]?.some((form) => form.id === event.data.form.id)) return
@@ -1167,6 +1195,11 @@ export function createData(config: CreateDataInput) {
       case "form.replied":
       case "form.cancelled":
         removeForm(event.data.sessionID, event.data.id, event.location)
+        return
+      case "codemode.event.updated":
+        if (!store.session.event[event.data.sessionID]) return
+        result.session.event.invalidate(event.data.sessionID)
+        void result.session.event.sync(event.data.sessionID)
         return
     }
 
@@ -1215,6 +1248,11 @@ export function createData(config: CreateDataInput) {
       case "command.updated":
         result.location.command.invalidate(location)
         void result.location.command.sync(location)
+        // Session commands change through the same event, published at the Session's Location.
+        Object.keys(store.session.command).forEach((sessionID) => {
+          result.session.command.invalidate(sessionID)
+          void result.session.command.sync(sessionID)
+        })
         break
       case "skill.updated":
         result.location.skill.invalidate(location)
@@ -1365,6 +1403,34 @@ export function createData(config: CreateDataInput) {
         },
         invalidate(sessionID: string) {
           sync.invalidate(`session.pending:${sessionID}`)
+        },
+      },
+      command: {
+        list(sessionID: string): CodeModeCommandInfo[] | undefined {
+          return store.session.command[sessionID]
+        },
+        sync(sessionID: string) {
+          return sync.run(`session.command:${sessionID}`, async () => {
+            const commands = await api().session.commands({ sessionID })
+            setStore("session", "command", sessionID, reconcile(commands))
+          })
+        },
+        invalidate(sessionID: string) {
+          sync.invalidate(`session.command:${sessionID}`)
+        },
+      },
+      event: {
+        list(sessionID: string): CodeModeEventInfo[] | undefined {
+          return store.session.event[sessionID]
+        },
+        sync(sessionID: string) {
+          return sync.run(`session.event:${sessionID}`, async () => {
+            const events = await api().session.events({ sessionID })
+            setStore("session", "event", sessionID, reconcile(events))
+          })
+        },
+        invalidate(sessionID: string) {
+          sync.invalidate(`session.event:${sessionID}`)
         },
       },
       // Optimistic session creation: admit a local record under a
@@ -1644,27 +1710,6 @@ export function createData(config: CreateDataInput) {
           sync.invalidate(`session.message:${sessionID}`)
         },
       },
-      permission: {
-        list(sessionID: string) {
-          return store.session.permission[sessionID]
-        },
-        sync(sessionID: string) {
-          return sync.run(`session.permission:${sessionID}`, async () => {
-            setStore("session", "permission", sessionID, await api().permission.list({ sessionID }))
-          })
-        },
-        invalidate(sessionID: string) {
-          sync.invalidate(`session.permission:${sessionID}`)
-        },
-        async reply(input: PermissionReplyInput) {
-          await api()
-            .permission.reply(input)
-            .catch((error: unknown) => {
-              if (!isPermissionNotFoundError(error)) throw error
-            })
-          removePermission(input.sessionID, input.requestID)
-        },
-      },
       form: {
         list(sessionID: string, ref?: LocationRef) {
           const forms = store.session.form[sessionID]
@@ -1724,19 +1769,6 @@ export function createData(config: CreateDataInput) {
       },
       invalidate() {
         sync.invalidate("project")
-      },
-      permission: {
-        list(projectID: string) {
-          return store.project.permission[projectID]
-        },
-        sync(projectID: string) {
-          return sync.run(`project.permission:${projectID}`, async () => {
-            setStore("project", "permission", projectID, await api().permission.saved.list({ projectID }))
-          })
-        },
-        invalidate(projectID: string) {
-          sync.invalidate(`project.permission:${projectID}`)
-        },
       },
     },
     shell: {
@@ -1822,6 +1854,7 @@ export function createData(config: CreateDataInput) {
         result.location.vcs.invalidate(location)
         result.location.agent.invalidate(location)
         result.location.command.invalidate(location)
+        result.location.driver.invalidate(location)
         result.location.integration.invalidate(location)
         result.location.mcp.server.invalidate(location)
         result.location.mcp.resource.invalidate(location)
@@ -1878,6 +1911,24 @@ export function createData(config: CreateDataInput) {
         },
         invalidate(ref?: LocationRef) {
           sync.invalidate(`location.command:${locationKey(ref ?? defaultLocation())}`)
+        },
+      },
+      // Vendor agents that can drive a session, selected through a model whose provider is the driver ID.
+      driver: {
+        list(location?: LocationRef) {
+          return store.location[locationKey(location ?? defaultLocation())]?.driver
+        },
+        sync(ref?: LocationRef) {
+          const id = locationKey(ref ?? defaultLocation())
+          return sync.run(`location.driver:${id}`, async () => {
+            const response = await api().model.drivers({ location: locationQuery(ref ?? defaultLocation()) })
+            const key = locationKey(response.location)
+            setStore("location", key, { ...store.location[key], driver: response.data })
+            if (key !== id) setStore("location", id, { ...store.location[id], driver: response.data })
+          })
+        },
+        invalidate(ref?: LocationRef) {
+          sync.invalidate(`location.driver:${locationKey(ref ?? defaultLocation())}`)
         },
       },
       integration: {

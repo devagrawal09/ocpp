@@ -2,12 +2,15 @@ import { Effect, Layer } from "effect"
 import { Agent } from "./agent.js"
 import { AISDK } from "./aisdk.js"
 import { Catalog } from "./catalog.js"
+import { CodeModeInvocation } from "./codemode/invocation.js"
 import { Command } from "./command.js"
 import { Config } from "./config.js"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Node } from "@ocpp/util/effect/app-node"
 import { FileMutation } from "./file-mutation.js"
 import { Environment } from "./environment/index.js"
+import { ExternalAgentDrivers } from "./external-agent/drivers.js"
+import { ExternalAgentHarnessNode } from "./external-agent/harness-node.js"
 import { Formatter } from "./formatter.js"
 import { FileSystem } from "./filesystem.js"
 import { FileSystemSearch } from "./filesystem/search.js"
@@ -20,7 +23,6 @@ import { Location } from "./location.js"
 import { LocationMutation } from "./location-mutation.js"
 import { ModelResolver } from "./model-resolver.js"
 import { Mcp } from "./mcp/index.js"
-import { Permission } from "./permission.js"
 import { Plugin } from "./plugin.js"
 import { PluginHooks } from "./plugin/hooks.js"
 import { InstancePlugins } from "./plugin/instance.js"
@@ -48,8 +50,10 @@ import { SessionGenerateNode } from "./session/generate-node.js"
 import { SessionPromptNode } from "./session/prompt-node.js"
 import { SessionRevertNode } from "./session/revert-node.js"
 import { McpTool } from "./tool/mcp.js"
+import { OpenApi } from "./openapi/index.js"
 import { ReadToolFileSystem } from "./tool/read-filesystem.js"
 import { Tool } from "./tool.js"
+import { ToolLists } from "./tool/lists.js"
 import { ToolOutput } from "./tool-output.js"
 import { Vcs } from "./vcs.js"
 
@@ -84,8 +88,9 @@ const nodes = [
   FileMutation.node,
   Formatter.node,
   Mcp.node,
-  Permission.node,
   Tool.node,
+  ToolLists.node,
+  CodeModeInvocation.node,
   ToolOutput.node,
   Image.node,
   SkillInstructions.node,
@@ -98,6 +103,7 @@ const nodes = [
   SessionRevertNode.node,
   ReadToolFileSystem.node,
   McpTool.node,
+  OpenApi.node,
   SessionInstructions.node,
   SessionRunnerModel.node,
   SessionModelTransport.node,
@@ -105,6 +111,8 @@ const nodes = [
   SessionTitle.node,
   Snapshot.node,
   SessionRunnerLLM.node,
+  ExternalAgentDrivers.node,
+  ExternalAgentHarnessNode.node,
   Vcs.node,
   // Start repository watches only after boot-critical filesystem and Git work.
   LocationWatcher.node,

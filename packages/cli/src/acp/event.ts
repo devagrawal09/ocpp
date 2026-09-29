@@ -7,7 +7,7 @@ import type {
 } from "@ocpp/client/promise"
 import { partsToContentChunks, type ReplayPart } from "./content"
 import { ACPError } from "./error"
-import { replyPermission, syncEditedFiles } from "./permission"
+import { syncEditedFiles } from "./edit"
 import {
   completedToolUpdate,
   errorToolUpdate,
@@ -17,8 +17,7 @@ import {
   type ToolInput,
 } from "./tool"
 
-type Connection = Pick<AgentSideConnection, "sessionUpdate" | "requestPermission"> &
-  Partial<Pick<AgentSideConnection, "writeTextFile">>
+type Connection = Pick<AgentSideConnection, "sessionUpdate"> & Partial<Pick<AgentSideConnection, "writeTextFile">>
 
 export type TurnControl = {
   cancelled: boolean
@@ -150,20 +149,6 @@ export async function streamTurn(input: {
       const send = (update: SessionUpdate) => updateSession(update, child, mode)
       if (mode === "background" && !child) continue
 
-      if (event.type === "permission.asked" && (event.data.sessionID === input.sessionID || child)) {
-        const tool = event.data.source?.id ? tools.get(toolKey(event.data.sessionID, event.data.source.id)) : undefined
-        await replyPermission({
-          client: input.client,
-          connection: input.connection,
-          event,
-          sessionID: event.data.sessionID,
-          clientSessionID: input.sessionID,
-          cwd: input.cwd,
-          tool,
-          ...(child ? { toolCallPrefix: child.id, titlePrefix: child.title } : {}),
-        })
-        continue
-      }
       if (event.type === "form.created" && (event.data.form.sessionID === input.sessionID || child)) {
         await input.client.form
           .cancel({ sessionID: event.data.form.sessionID, formID: event.data.form.id })

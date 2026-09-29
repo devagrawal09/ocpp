@@ -1,109 +1,46 @@
-import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { Global } from "@ocpp/util/global"
-import { run } from "@ocpp/tui"
+import type { Endpoint } from "@ocpp/client/effect/service"
+import { Effect, Fiber, Option } from "effect"
 import { Commands } from "../commands"
 import { Runtime } from "../../framework/runtime"
-import { Config } from "../../config"
-import { Context, Effect, FileSystem, Option, Queue } from "effect"
 import { ServerConnection } from "../../services/server-connection"
 import { Updater } from "../../services/updater"
-import { UpdatePreflight } from "../../services/update-preflight"
-import { Npm } from "@ocpp/util/npm"
-import { OCPP_CHANNEL, OCPP_VERSION } from "../../version"
-import { Env } from "../../env"
 
 export default Runtime.handler(Commands, (input) =>
   Effect.gen(function* () {
-    const requestedDirectory = Option.getOrUndefined(input.directory)
-    const requestedServer = Option.getOrUndefined(input.server)
-    if (requestedDirectory !== undefined) process.chdir(requestedDirectory)
-    const preflight = UpdatePreflight.make()
-    yield* Effect.addFinalizer(() => Effect.promise(() => preflight.close()))
-    const serviceStarts = yield* Queue.unbounded<{
-      readonly reason: "missing" | "version-mismatch"
-      readonly previousVersion?: string
-    }>()
-    yield* Queue.take(serviceStarts).pipe(
-      Effect.flatMap((event) => Effect.logInfo("background service starting", event)),
-      Effect.forever,
-      Effect.forkScoped,
-    )
     const server = yield* ServerConnection.resolve({
-      server: requestedServer,
+      server: Option.getOrUndefined(input.server),
       standalone: input.standalone,
       mismatch: "replace",
-      onStart: (reason, previousVersion) => {
-        Queue.offerUnsafe(serviceStarts, { reason, previousVersion })
-        if (reason === "version-mismatch" && preflight.begin(previousVersion)) return
+      onStart: (reason) =>
         process.stderr.write(
           reason === "version-mismatch"
             ? "Restarting background server (version mismatch)...\n"
             : "Starting background server...\n",
-        )
-      },
-    }).pipe(
-      Effect.tapError(() =>
-        Effect.promise(() => preflight.fail("OC++ update could not start the new background service")),
-      ),
-    )
+        ),
+    })
     const updater = yield* Updater.Service
-    yield* updater.check().pipe(Effect.forkScoped)
-    preflight.loading()
-    const config = yield* Config.Service
-    const npm = yield* Npm.Service
-    const fileSystem = yield* FileSystem.FileSystem
-    const runServicePromise = Effect.runPromiseWith(Context.make(FileSystem.FileSystem, fileSystem))
-    const context = yield* Effect.context<FileSystem.FileSystem>()
-    const runFork = Effect.runForkWith(context)
-    const runPromise = Effect.runPromiseWith(context)
-    const service = server.service
-    yield* run({
-      app: {
-        name: process.env.OCPP_CLIENT ?? "cli",
-        version: OCPP_VERSION,
-        channel: process.env.OCPP_TUI_CHANNEL ?? OCPP_CHANNEL,
-      },
-      server: {
-        endpoint: server.endpoint,
-        service: service
-          ? {
-              reconnect: (signal) => runServicePromise(service.reconnect(), { signal }),
-              restart: () => runServicePromise(service.restart()),
-            }
-          : undefined,
-      },
-      args: {
-        continue: input.continue,
-        sessionID: Option.getOrUndefined(input.session),
-        prompt: Option.getOrUndefined(input.prompt),
-        auto: input.auto || input.yolo || input.dangerouslySkipPermissions,
-      },
-      config: {
-        path: config.path,
-        get: () => runPromise(config.get()),
-        update: (update) => runPromise(config.update(update)),
-      },
-      packages: {
-        resolve: (spec, install = true) =>
-          runPromise(
-            (install ? npm.add(spec, { subpaths: ["tui"] }) : npm.resolve(spec, { subpaths: ["tui"] })).pipe(
-              Effect.map((result) => result.entrypoint),
-            ),
-          ),
-      },
-      environment: requestedServer === undefined ? Env.session() : undefined,
-      terminalHandoff: () => preflight.finish(),
-      log: (level, message, tags) => {
-        const effect =
-          level === "debug"
-            ? Effect.logDebug(message, tags)
-            : level === "warn"
-              ? Effect.logWarning(message, tags)
-              : level === "error"
-                ? Effect.logError(message, tags)
-                : Effect.logInfo(message, tags)
-        runFork(effect)
-      },
-    }).pipe(Effect.provide(LayerNode.compile(Global.node)))
+    const update = yield* updater.check().pipe(Effect.forkScoped)
+    process.stdout.write(`OC++ is running at ${server.endpoint.url}\n`)
+    const { default: open } = yield* Effect.promise(() => import("open"))
+    // `open` resolves once the launcher spawns, so it can't report whether a browser appeared.
+    yield* Effect.promise(() => open(webAppURL(server.endpoint))).pipe(Effect.catchCause(() => Effect.void))
+    if (server.endpoint.auth)
+      process.stdout.write(
+        `If your browser didn't open, go to that URL and sign in as ${server.endpoint.auth.username}` +
+          (server.service ? "; `ocpp service get password` prints the password.\n" : ".\n"),
+      )
+    // A standalone server lives in this process, so keep it running until the user stops it.
+    if (input.standalone) {
+      process.stdout.write("Press Ctrl+C to stop the server.\n")
+      return yield* Effect.never
+    }
+    yield* Fiber.join(update)
   }),
 )
+
+/** The web app signs in with credentials passed once as `auth_token`, then removes them from its URL. */
+function webAppURL(endpoint: Endpoint) {
+  const url = new URL(endpoint.url)
+  if (endpoint.auth) url.searchParams.set("auth_token", btoa(endpoint.auth.username + ":" + endpoint.auth.password))
+  return url.toString()
+}

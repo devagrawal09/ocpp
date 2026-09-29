@@ -39,6 +39,11 @@ export const Info = Schema.Struct({
   projectID: Project.ID,
   agent: Agent.ID.pipe(optional),
   model: Model.Ref.pipe(optional),
+  /**
+   * The Code Mode paths the Session may call: a subagent's as its caller passed them, and a fork's as its parent
+   * stored them. Absent for any other top-level Session, whose tools come from init.ts for its agent.
+   */
+  tools: Schema.Array(Schema.String).pipe(optional),
   cost: Money.USD,
   tokens: TokenUsage.Info,
   /** Outcome of the last completed execution, recorded at `time.idle`. Absent until a run reaches a terminal transition. */

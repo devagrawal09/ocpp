@@ -5,7 +5,6 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstab
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { LayerNodePlatform } from "@ocpp/util/effect/app-node-platform"
-import { Permission } from "@ocpp/core/permission"
 import { Session } from "@ocpp/core/session"
 import { Tool } from "@ocpp/core/tool"
 import { WebFetchTool } from "@ocpp/core/tool/plugin/webfetch"
@@ -13,20 +12,18 @@ import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Image } from "@ocpp/core/image"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
-import { permissionLayer } from "./lib/permission"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const webFetchToolNode = makeLocationNode({
   name: "test/webfetch-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(WebFetchTool.Plugin)),
-  deps: [Tool.node, Permission.node, LayerNodePlatform.httpClient],
+  deps: [Tool.node, LayerNodePlatform.httpClient],
 })
 
 const sessionID = Session.ID.make("ses_webfetch_test")
 const webFetchUserAgent =
   "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; OC++-User/1.0; +https://ocpp.ai"
 const requests: Array<{ readonly url: string; readonly headers: Record<string, string> }> = []
-const assertions: Permission.AssertInput[] = []
 let respond = (_request: HttpClientRequest.HttpClientRequest) =>
   Effect.succeed(new Response("hello", { headers: { "content-type": "text/plain" } }))
 
@@ -39,10 +36,8 @@ const http = Layer.succeed(
     ),
   ),
 )
-const permission = permissionLayer({ assert: (input) => Effect.sync(() => assertions.push(input)) })
 const toolLayer = (replacements: LayerNode.Replacements = []) =>
   AppNodeBuilder.build(LayerNode.group([Tool.node, webFetchToolNode]), [
-    [Permission.node, permission],
     [Image.node, imagePassthrough],
     ...replacements,
   ])
@@ -51,7 +46,6 @@ const live = testEffect(toolLayer())
 
 const reset = () => {
   requests.length = 0
-  assertions.length = 0
   respond = () => Effect.succeed(new Response("hello", { headers: { "content-type": "text/plain" } }))
 }
 
@@ -359,16 +353,14 @@ describe("WebFetchTool registration", () => {
       const registry = yield* Tool.Service
       const url = "http://example.com/public"
 
-      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["webfetch", "execute"])
+      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(registry)).toEqual(["webfetch"])
       expect(yield* executeTool(registry, call({ url, format: "text", timeout: 4 }))).toEqual({
         status: "completed",
         output: { url, contentType: "text/plain", format: "text", output: "hello" },
         content: [{ type: "text", text: "hello" }],
         metadata: { contentType: "text/plain" },
       })
-      expect(assertions).toMatchObject([
-        { sessionID, action: "webfetch", resources: [url], save: ["*"], metadata: { url, format: "text", timeout: 4 } },
-      ])
       expect(requests).toMatchObject([
         {
           url,
@@ -383,7 +375,7 @@ describe("WebFetchTool registration", () => {
     }),
   )
 
-  it.effect("accepts localhost URLs with the same requested-URL permission check", () =>
+  it.effect("accepts localhost URLs", () =>
     Effect.gen(function* () {
       reset()
       const registry = yield* Tool.Service
@@ -393,14 +385,11 @@ describe("WebFetchTool registration", () => {
         status: "completed",
         content: [{ type: "text", text: "hello" }],
       })
-      expect(assertions).toMatchObject([
-        { sessionID, action: "webfetch", resources: [url], save: ["*"], metadata: { url, format: "text" } },
-      ])
       expect(requests.map((request) => request.url)).toEqual([url])
     }),
   )
 
-  live.effect("follows redirects while approving only the requested URL", () => {
+  live.effect("follows redirects", () => {
     const received: Array<Record<string, string | null>> = []
     return Effect.acquireUseRelease(
       Effect.sync(() =>
@@ -429,9 +418,6 @@ describe("WebFetchTool registration", () => {
             status: "completed",
             content: [{ type: "text", text: "redirected" }],
           })
-          expect(assertions).toMatchObject([
-            { sessionID, action: "webfetch", resources: [url], save: ["*"], metadata: { url, format: "text" } },
-          ])
           expect(received).toEqual(
             Array.from({ length: 2 }, () => ({
               accept: "text/plain;q=1.0, text/markdown;q=0.9, text/html;q=0.8, */*;q=0.1",
@@ -445,7 +431,7 @@ describe("WebFetchTool registration", () => {
     )
   })
 
-  it.effect("rejects non-HTTP schemes before permission or transport", () =>
+  it.effect("rejects non-HTTP schemes before transport", () =>
     Effect.gen(function* () {
       reset()
       const registry = yield* Tool.Service
@@ -455,7 +441,6 @@ describe("WebFetchTool registration", () => {
         status: "error",
         error: { type: "unknown", message: "URL must use http:// or https://" },
       })
-      expect(assertions).toEqual([])
       expect(requests).toEqual([])
     }),
   )

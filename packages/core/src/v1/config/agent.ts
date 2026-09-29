@@ -18,9 +18,8 @@ const AgentSchema = Schema.StructWithRest(
     temperature: Schema.optional(Schema.Finite),
     top_p: Schema.optional(Schema.Finite),
     prompt: Schema.optional(Schema.String),
-    tools: Schema.optional(Schema.Record(Schema.String, Schema.Boolean)).annotate({
-      description: "@deprecated Use 'permission' field instead",
-    }),
+    // V1 tool and permission settings still decode so old configs load; OC++ ignores both.
+    tools: Schema.optional(Schema.Record(Schema.String, Schema.Boolean)),
     disable: Schema.optional(Schema.Boolean),
     description: Schema.optional(Schema.String).annotate({ description: "Description of when to use the agent" }),
     mode: Schema.optional(Schema.Literals(["subagent", "primary", "all"])),
@@ -48,19 +47,8 @@ const normalize = (agent: Schema.Schema.Type<typeof AgentSchema>): Schema.Schema
     if (!KNOWN_KEYS.has(key)) options[key] = value
   }
 
-  const permission: ConfigPermissionV1.Info = {}
-  for (const [tool, enabled] of Object.entries(agent.tools ?? {})) {
-    const action = enabled ? "allow" : "deny"
-    if (tool === "write" || tool === "edit" || tool === "patch") {
-      permission.edit = action
-      continue
-    }
-    permission[tool] = action
-  }
-  globalThis.Object.assign(permission, agent.permission)
-
   const steps = agent.steps ?? agent.maxSteps
-  return { ...agent, options, permission, ...(steps !== undefined ? { steps } : {}) }
+  return { ...agent, options, ...(steps !== undefined ? { steps } : {}) }
 }
 
 export const Info = AgentSchema.pipe(

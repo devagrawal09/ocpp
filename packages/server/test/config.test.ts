@@ -46,10 +46,8 @@ it.live("returns ordered config entries for the requested directory", () =>
     const document = entries.find(
       (entry): entry is Config.Document => entry.type === "document" && entry.path === config,
     )
-    expect(document?.info.permissions).toEqual([
-      { action: "shell", resource: "*", effect: "ask" },
-      { action: "shell", resource: "git status", effect: "allow" },
-    ])
+    // Removed permission settings still load, ignored.
+    expect(document?.info).not.toHaveProperty("permissions")
     expect(document?.info.external_agents).toMatchObject({
       claude: { enabled: false, model: "sonnet", effort: "high" },
       codex: { enabled: false, model: "gpt-5.4" },

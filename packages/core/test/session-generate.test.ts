@@ -36,6 +36,7 @@ import {
 } from "@ocpp/core/session/sql"
 import { SessionStore } from "@ocpp/core/session/store"
 import { SkillInstructions } from "@ocpp/core/skill/instructions"
+import { SubagentInstructions } from "@ocpp/core/subagent/instructions"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { Tool } from "@ocpp/core/tool"
@@ -101,6 +102,7 @@ const discovery = Layer.mock(InstructionDiscovery.Service, {
   load: () => Effect.succeed(Instructions.empty),
 })
 const skills = Layer.mock(SkillInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
+const subagents = Layer.mock(SubagentInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
 const references = Layer.mock(ReferenceInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
 const mcp = Layer.mock(McpInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
 const plugins = Layer.mock(PluginSupervisor.Service, { flush: Effect.void })
@@ -140,6 +142,7 @@ const it = testEffect(
       [InstructionBuiltIns.node, builtins],
       [InstructionDiscovery.node, discovery],
       [SkillInstructions.node, skills],
+      [SubagentInstructions.node, subagents],
       [ReferenceInstructions.node, references],
       [McpInstructions.node, mcp],
       [PluginSupervisor.node, plugins],

@@ -33,7 +33,7 @@ const layer = Layer.effect(
                   `  Workspace root folder: ${location.project.directory}`,
                   `  Is directory a git repo: ${location.vcs?.type === "git" ? "yes" : "no"}`,
                   `  Platform: ${process.platform}`,
-                  `  Prefer ${global.tmp} over generic system temporary directories such as /tmp; it is pre-created and approved for external access.`,
+                  `  Prefer ${global.tmp} over generic system temporary directories such as /tmp; it is pre-created for scratch files.`,
                   "</env>",
                 ].join("\n"),
               ),

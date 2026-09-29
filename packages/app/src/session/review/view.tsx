@@ -58,7 +58,11 @@ export function SessionMobileReview(props: { review: SessionReviewModel }) {
   )
 }
 
-export function SessionDesktopReview(props: { review: SessionReviewModel; present?: boolean }) {
+export function SessionDesktopReview(props: {
+  review: SessionReviewModel
+  present?: boolean
+  reveal: (target: { messageID: string; partID?: string }) => void
+}) {
   return (
     <Suspense>
       <SessionSidePanel
@@ -82,6 +86,7 @@ export function SessionDesktopReview(props: { review: SessionReviewModel; presen
         reviewPresent={props.present}
         size={props.review.screen.size}
         stacked={props.review.screen.side.layout().stacked}
+        reveal={props.reveal}
       />
     </Suspense>
   )

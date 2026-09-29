@@ -46,7 +46,7 @@ OCPP_SERVER_PASSWORD=your-password ocpp serve
 
 ### How it works
 
-When you run `ocpp` it starts a TUI and a server. Where the TUI is the
+When you run `ocpp` it starts a server and opens the web app, which is the
 client that talks to the server. The server exposes an OpenAPI 3.1 spec
 endpoint. This endpoint is also used to generate an [SDK](/docs/sdk).
 
@@ -56,16 +56,13 @@ Use the ocpp server to interact with ocpp programmatically.
 
 This architecture lets ocpp support multiple clients and allows you to interact with ocpp programmatically.
 
-You can run `ocpp serve` to start a standalone server. If you have the
-ocpp TUI running, `ocpp serve` will start a new server.
+You can run `ocpp serve` to start a standalone server.
 
 ---
 
 #### Connect to an existing server
 
-When you start the TUI it randomly assigns a port and hostname. You can instead pass in the `--hostname` and `--port` [flags](/docs/cli). Then use this to connect to its server.
-
-The [`/tui`](#tui) endpoint can be used to drive the TUI through the server. For example, you can prefill or run a prompt. This setup is used by the OC++ [IDE](/docs/ide) plugins.
+When you start a server it randomly assigns a port and hostname. You can instead pass in the `--hostname` and `--port` [flags](/docs/cli). Then use this to connect to its server.
 
 ---
 
@@ -242,24 +239,6 @@ The ocpp server exposes the following APIs.
 | Method | Path   | Description                                                  | Response  |
 | ------ | ------ | ------------------------------------------------------------ | --------- |
 | `POST` | `/log` | Write log entry. Body: `{ service, level, message, extra? }` | `boolean` |
-
----
-
-### TUI
-
-| Method | Path                    | Description                                 | Response               |
-| ------ | ----------------------- | ------------------------------------------- | ---------------------- |
-| `POST` | `/tui/append-prompt`    | Append text to the prompt                   | `boolean`              |
-| `POST` | `/tui/open-help`        | Open the help dialog                        | `boolean`              |
-| `POST` | `/tui/open-sessions`    | Open the session selector                   | `boolean`              |
-| `POST` | `/tui/open-themes`      | Open the theme selector                     | `boolean`              |
-| `POST` | `/tui/open-models`      | Open the model selector                     | `boolean`              |
-| `POST` | `/tui/submit-prompt`    | Submit the current prompt                   | `boolean`              |
-| `POST` | `/tui/clear-prompt`     | Clear the prompt                            | `boolean`              |
-| `POST` | `/tui/execute-command`  | Execute a command (`{ command }`)           | `boolean`              |
-| `POST` | `/tui/show-toast`       | Show toast (`{ title?, message, variant }`) | `boolean`              |
-| `GET`  | `/tui/control/next`     | Wait for the next control request           | Control request object |
-| `POST` | `/tui/control/response` | Respond to a control request (`{ body }`)   | `boolean`              |
 
 ---
 

@@ -8,7 +8,6 @@ import { createServerSdkContext } from "./client"
 import { createServerSyncContext } from "./sync"
 import { createData } from "@ocpp/client/solid"
 import type { ServerScope } from "@/runtime/server/scope"
-import { createPermissionAutoApprover } from "@/session/requests/auto-approve"
 import { createServerNotificationState } from "@/shell/notifications/notification"
 import { Persist, persisted } from "@/runtime/persistence/storage"
 import { createDesktopData } from "./data"
@@ -149,7 +148,6 @@ function createServerController(
     remove: (sessionID) => sdk.api.session.remove({ sessionID }),
   })
   const sync = createServerSyncContext(sdk, data)
-  createPermissionAutoApprover({ sdk, data })
   const notification = createServerNotificationState({ sdk, data, key: connKey })
 
   function enrich(project: { worktree: string; expanded: boolean }) {

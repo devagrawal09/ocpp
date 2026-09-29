@@ -2,7 +2,6 @@ export * as SkillInstructions from "./instructions.js"
 
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
-import { Agent } from "../agent.js"
 import { Skill } from "../skill.js"
 import { Instructions } from "../instructions/index.js"
 
@@ -25,7 +24,7 @@ const entries = (skills: ReadonlyArray<Summary>) =>
 const render = (skills: ReadonlyArray<Summary>) =>
   [
     "Skills provide specialized instructions and workflows for specific tasks.",
-    "Use the skill tool to load a skill when a task matches its description.",
+    "Call `tools.skill({ id })` to load a skill when a task matches its description. Its full instructions arrive as a separate message, no later than that execution's completion notification.",
     ...(skills.length === 0
       ? ["No skills are currently available."]
       : ["<available_skills>", ...entries(skills), "</available_skills>"]),
@@ -57,7 +56,8 @@ const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary
 }
 
 export interface Interface {
-  readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.List>
+  /** Skill guidance for a request whose Code Mode catalog holds these paths: none without `tools.skill`. */
+  readonly load: (catalog: ReadonlyArray<string>) => Effect.Effect<Instructions.List>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SkillInstructions") {}
@@ -68,10 +68,8 @@ const layer = Layer.effect(
     const skills = yield* Skill.Service
 
     return Service.of({
-      load: Effect.fn("SkillInstructions.load")(function* (selection) {
-        const agent = selection.info
-        if (!agent) return Instructions.empty
-        const available = Skill.available(yield* skills.list(), agent)
+      load: Effect.fn("SkillInstructions.load")(function* (catalog) {
+        const available = (catalog.includes("skill") ? yield* skills.list() : [])
           .flatMap((skill) =>
             skill.description === undefined || skill.autoinvoke === false
               ? []

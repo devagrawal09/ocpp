@@ -16,7 +16,6 @@ export function HomeProjects(props: { projects: HomeProjectsController; scroll: 
       collapsed={props.projects.server.collapsed}
       canDefaultServer={props.projects.server.canDefault()}
       defaultServerKey={props.projects.server.defaultKey()}
-      canRevealProject={props.projects.project.canReveal}
       unseenCount={props.projects.project.unseenCount}
       onWheel={props.scroll.viewport.containWheel}
       onChooseProject={props.projects.project.choose}
@@ -33,7 +32,6 @@ export function HomeProjects(props: { projects: HomeProjectsController; scroll: 
       onAddProjects={props.projects.project.add}
       onOpenProjectNewSession={props.projects.project.openNewSession}
       onEditProject={props.projects.project.edit}
-      onRevealProject={props.projects.project.reveal}
       onClearNotifications={props.projects.project.clearNotifications}
       onCloseProject={props.projects.project.close}
       onOpenSettings={props.projects.utility.settings}

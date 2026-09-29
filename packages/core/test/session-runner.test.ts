@@ -22,9 +22,9 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
+import { Image } from "@ocpp/core/image"
 import { Event } from "@ocpp/schema/event"
 import { App } from "@ocpp/core/app"
-import { Permission } from "@ocpp/core/permission"
 import { EventTable } from "@ocpp/core/event/sql"
 import { Project } from "@ocpp/core/project"
 import { ProjectTable } from "@ocpp/core/project/sql"
@@ -51,10 +51,14 @@ import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { SystemPromptPlugin } from "@ocpp/core/plugin/system-prompt"
 import { QuestionTool } from "@ocpp/core/tool/plugin/question"
+import { SkillTool } from "@ocpp/core/tool/plugin/skill"
+import { Skill } from "@ocpp/core/skill"
+import { SkillPlugin } from "@ocpp/core/plugin/skill"
 import { Agent } from "@ocpp/core/agent"
 import { Config } from "@ocpp/core/config"
 import { Document, Info } from "@ocpp/schema/config"
 import { ConfigCompaction } from "@ocpp/schema/config/compaction"
+import { ToolSessionTools } from "@ocpp/core/tool/session-tools"
 import { Tool } from "@ocpp/core/tool"
 import type { Info as ToolInfo } from "@ocpp/schema/tool"
 import { InstructionStateTable, SessionInboxTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
@@ -79,11 +83,13 @@ import { testEffect } from "./lib/effect"
 import { promptLocationNode } from "./fixture/prompt-location"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Expected } from "./lib/session-message"
-import { permissionLayer } from "./lib/permission"
+import { registerToolPlugin } from "./lib/tool"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { agentHost, catalogHost, host } from "./plugin/host"
-import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
+import { CodeModeStore } from "@ocpp/core/codemode/store"
+import { PluginRuntime } from "@ocpp/core/plugin/runtime"
+import { definition, effectiveName, execute } from "@ocpp/core/tool/runtime"
 
-const emptyCodeMode = `\n\n${CodeModeInstructions.render({ total: 0, shown: 0, namespaces: [] })}`
 type ToolBarrier = {
   readonly count: number
   readonly started: Deferred.Deferred<void>
@@ -91,17 +97,7 @@ type ToolBarrier = {
   active: number
   maxActive: number
 }
-const testLLM = TestLLM.layer({
-  fallback: [],
-  transformRequest: (request) =>
-    LLMRequest.update(request, {
-      system: request.system.map((part) => ({
-        ...part,
-        text: part.text.replace(emptyCodeMode, ""),
-      })),
-      tools: request.tools.filter((tool) => tool.name !== "execute"),
-    }),
-})
+const testLLM = TestLLM.layer({ fallback: [] })
 type ModelLimit = { readonly context: number; readonly input?: number; readonly output: number }
 const defaultModelLimit = { context: 200_000, output: 32_000 }
 const modelLimits = new Map<string, ModelLimit>()
@@ -202,6 +198,8 @@ const makeRunnerState = () => {
     systemLoadHook: Effect.void,
     skillBaselines: new Map<Agent.ID, string>(),
     pluginFlushHook: Effect.void,
+    // Scenarios about registry and Code Mode integration clear this to use the real snapshot.
+    directTools: true,
     authorizations: new Array<Tool.Context>(),
     executions: new Array<string>(),
     closedTransports: new Array<Session.ID>(),
@@ -237,26 +235,17 @@ const makeRunnerState = () => {
 
 class RunnerState extends Context.Service<RunnerState, ReturnType<typeof makeRunnerState>>()("test/SessionRunner") {}
 
-const permissionFail = {
-  name: "permission_fail",
-  description: "Reject a permission",
+// Only build's default tool list holds it, so the catalog tells build from plan.
+const markerTool = {
+  name: "marker",
+  description: "Mark build's catalog",
   input: Schema.Struct({}),
   output: Schema.Struct({}),
-  execute: () =>
-    new ToolFailure({
-      message: "Permission denied: edit",
-      error: new Permission.BlockedError({
-        rules: [],
-        permission: "edit",
-        resources: ["src/index.ts"],
-      }),
-    }),
+  execute: () => Effect.succeed({ output: {} }),
 }
-const permission = permissionLayer()
-const transformTools = (registry: Tool.Interface, tools: Readonly<Record<string, ToolInfo>>, options?: Tool.Options) =>
-  registry.transform((draft) =>
-    Object.entries(tools).forEach(([name, tool]) => draft.add({ ...tool, name, options: options ?? tool.options })),
-  )
+const skillAgent = (catalog: ReadonlyArray<string>) => Agent.ID.make(catalog.includes("marker") ? "build" : "plan")
+const transformTools = (registry: Tool.Interface, tools: Readonly<Record<string, ToolInfo>>) =>
+  registry.transform((draft) => Object.entries(tools).forEach(([name, tool]) => draft.add({ ...tool, name })))
 const layer = Layer.unwrap(
   Effect.map(RunnerState, (state) => {
     const modelTransport = Layer.succeed(
@@ -267,41 +256,87 @@ const layer = Layer.unwrap(
         closeAll: Effect.void,
       }),
     )
+    // The model is only ever offered `execute`, but most scenarios exercise the runner's generic handling
+    // of a synchronous tool call. The runner executes whatever definitions a snapshot advertises, so while
+    // `directTools` is set this snapshot advertises every registered tool directly and dispatches calls to
+    // it by name. Everything else is the real registry.
+    const tools = makeLocationNode({
+      service: Tool.Service,
+      layer: Layer.effect(
+        Tool.Service,
+        Effect.map(Tool.Service, (registry) =>
+          Tool.Service.of({
+            ...registry,
+            snapshot: (selection, sessionID) =>
+              state.directTools
+                ? registry.registrations(selection, sessionID).pipe(
+                    Effect.map((registrations) => ({
+                      definitions: registrations.map(definition),
+                      execute: Effect.fnUntraced(function* (input: Parameters<Tool.Snapshot["execute"]>[0]) {
+                        const tool = registrations.find((tool) => effectiveName(tool) === input.call.name)
+                        if (!tool) return yield* new Tool.Error({ message: `Unknown tool: ${input.call.name}` })
+                        return yield* execute(tool, input.call.input, {
+                          sessionID: input.sessionID,
+                          agent: input.agent,
+                          messageID: input.messageID,
+                          id: Tool.CallID.make(input.call.id),
+                          progress: input.progress ?? (() => Effect.void),
+                        })
+                      }),
+                    })),
+                  )
+                : registry.snapshot(selection, sessionID),
+          }),
+        ),
+      ).pipe(
+        Layer.provide(
+          Tool.node.implementation as Layer.Layer<
+            Tool.Service,
+            never,
+            | PluginHooks.Service
+            | PluginRuntime.Service
+            | Bus.Service
+            | Image.Service
+            | CodeModeStore.Service
+            | ToolSessionTools.Service
+          >,
+        ),
+      ),
+      deps: [PluginHooks.node, PluginRuntime.node, Bus.node, Image.node, CodeModeStore.node, ToolSessionTools.node],
+    })
+    // Code Mode runs programs as Jobs and delivers their completions through the Session service.
+    const runtime = PluginRuntime.makeCell()
     const echo = Layer.effectDiscard(
       Tool.Service.use((registry) =>
-        transformTools(
-          registry,
-          {
-            echo: {
-              name: "echo",
-              description: "Echo text",
-              input: Schema.Struct({ text: Schema.String }),
-              output: Schema.Struct({ text: Schema.String }),
-              execute: ({ text }, context) =>
-                Effect.gen(function* () {
-                  state.authorizations.push(context)
-                  state.executions.push(text)
-                  yield* state.awaitToolBarrier
-                  return { output: { text }, content: text }
-                }),
-            },
-            defect: {
-              name: "defect",
-              description: "Fail unexpectedly",
-              input: Schema.Struct({}),
-              output: Schema.Struct({}),
-              execute: () => state.awaitToolBarrier.pipe(Effect.andThen(Effect.die("unexpected tool defect"))),
-            },
-            storefail: {
-              name: "storefail",
-              description: "Produce output that cannot be persisted",
-              input: Schema.Struct({}),
-              output: Schema.Struct({}),
-              execute: () => Effect.succeed({ output: {} }),
-            },
+        transformTools(registry, {
+          echo: {
+            name: "echo",
+            description: "Echo text",
+            input: Schema.Struct({ text: Schema.String }),
+            output: Schema.Struct({ text: Schema.String }),
+            execute: ({ text }, context) =>
+              Effect.gen(function* () {
+                state.authorizations.push(context)
+                state.executions.push(text)
+                yield* state.awaitToolBarrier
+                return { output: { text }, content: text }
+              }),
           },
-          { codemode: false },
-        ),
+          defect: {
+            name: "defect",
+            description: "Fail unexpectedly",
+            input: Schema.Struct({}),
+            output: Schema.Struct({}),
+            execute: () => state.awaitToolBarrier.pipe(Effect.andThen(Effect.die("unexpected tool defect"))),
+          },
+          storefail: {
+            name: "storefail",
+            description: "Produce output that cannot be persisted",
+            input: Schema.Struct({}),
+            output: Schema.Struct({}),
+            execute: () => Effect.succeed({ output: {} }),
+          },
+        }),
       ),
     )
     const echoNode = makeLocationNode({ name: "test/session-runner-tools", layer: echo, deps: [Tool.node] })
@@ -351,13 +386,14 @@ const layer = Layer.unwrap(
       load: () => Effect.succeed(Instructions.empty),
     })
     const skillInstructions = Layer.mock(SkillInstructions.Service, {
-      load: (agent) =>
+      // Skill guidance follows the catalog: only build's default tool list holds the marker tool.
+      load: (catalog) =>
         Effect.succeed(
-          state.skillBaselines.has(agent.id)
+          state.skillBaselines.has(skillAgent(catalog))
             ? Instructions.make({
                 key: Instructions.Key.make("test/skill-guidance"),
                 codec: Schema.toCodecJson(Schema.String),
-                read: Effect.succeed(state.skillBaselines.get(agent.id)!),
+                read: Effect.succeed(state.skillBaselines.get(skillAgent(catalog))!),
                 render: {
                   initial: String,
                   changed: (_previous, current) => current,
@@ -411,10 +447,11 @@ const layer = Layer.unwrap(
       [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
       [SkillInstructions.node, skillInstructions],
       [ReferenceInstructions.node, referenceInstructions],
-      [Permission.node, permission],
       [Config.node, config],
       [PluginSupervisor.node, pluginSupervisor],
       [SessionModelTransport.node, modelTransport],
+      [Tool.node, tools],
+      [PluginRuntime.node, PluginRuntime.layerWithCell(runtime)],
     ]
     const runnerLayer = AppNodeBuilder.build(SessionRunnerLLM.node, [
       ...replacements,
@@ -477,6 +514,8 @@ const layer = Layer.unwrap(
         SessionRunnerLLM.node,
         SessionExecution.node,
         Session.node,
+        PluginRuntime.node,
+        PluginRuntime.providerNodeWithCell(runtime),
       ]),
       [
         ...replacements,
@@ -659,6 +698,8 @@ const messageTexts = (request: LLMRequest, role: "user" | "system") =>
   )
 const userTexts = (request: LLMRequest) => messageTexts(request, "user")
 const systemTexts = (request: LLMRequest) => messageTexts(request, "system")
+/** The rendered instruction baseline: the last system part, after the harness prompt. */
+const instructionBaseline = (request: LLMRequest) => request.system.at(-1)?.text ?? ""
 const messageRoles = (request: LLMRequest | undefined) => request?.messages.map((message) => message.role)
 
 const recordedEventTypes = (id: Session.ID) =>
@@ -1026,12 +1067,13 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("applies session context hooks without exposing unavailable tools", function* (s) {
+    s.directTools = false
     const hooks = yield* PluginHooks.Service
     yield* hooks.register("session", "context", (event) =>
       Effect.sync(() => {
         event.system = [SystemPart.make("Hooked system")]
         event.messages = [Message.user("Hooked message")]
-        delete event.tools.echo
+        delete event.tools.execute
         event.tools.unregistered = { description: "Unavailable", input: { type: "object" } }
         event.generation.temperature = 0.2
         event.generation.topP = 0.9
@@ -1041,7 +1083,7 @@ describe("SessionRunnerLLM", () => {
       }),
     )
     yield* s.admit("Original message")
-    yield* s.llm.push(TestLLM.tool("call-removed", "echo", { text: "blocked" }))
+    yield* s.llm.push(TestLLM.tool("call-removed", "execute", { code: 'return tools.echo({ text: "blocked" })' }))
 
     yield* s.resume
 
@@ -1049,14 +1091,18 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(2)
     expect(s.requests[0]?.system.map((part) => part.text)).toEqual(["Hooked system"])
     expect(s.requests[0]?.messages).toEqual([Message.user("Hooked message")])
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).not.toContain("echo")
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).not.toContain("unregistered")
+    expect(s.requests[0]?.tools).toEqual([])
     expect(s.requests[0]?.generation).toMatchObject({ temperature: 0.2, topP: 0.9, topK: 40, maxTokens: 2048 })
     expect(s.requests[0]?.providerOptions).toEqual({ reasoningEffort: "high" })
     expect(s.executions).toEqual([])
     expect(yield* s.context).toMatchObject([
       Expected.user("Original message"),
-      Expected.assistant({}, [Expected.failedTool({ id: "call-removed" }, { error: { type: "tool.execution" } })]),
+      Expected.assistant({}, [
+        Expected.failedTool(
+          { id: "call-removed" },
+          { error: { type: "tool.execution", message: "Tool is not available for this request: execute" } },
+        ),
+      ]),
     ])
   })
 
@@ -1139,121 +1185,243 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("executes a tool renamed by a session context hook", function* (s) {
+    s.directTools = false
     const hooks = yield* PluginHooks.Service
     yield* hooks.register("session", "context", (event) =>
       Effect.sync(() => {
-        event.tools.renamed_echo = event.tools.echo!
-        delete event.tools.echo
+        event.tools.renamed_execute = event.tools.execute!
+        delete event.tools.execute
       }),
     )
     yield* s.admit("Use the renamed tool")
-    yield* s.llm.push(TestLLM.tool("call-renamed", "renamed_echo", { text: "renamed" }), [])
+    yield* s.llm.push(
+      TestLLM.tool("call-renamed", "renamed_execute", { code: 'return tools.echo({ text: "renamed" })' }),
+      [],
+    )
+    // Code Mode runs the program after the call settles and delivers its outcome as a later synthetic
+    // message. Holding the program until the admitting turn ends makes the completion wake its own turn.
+    const tools = yield* s.blockTools()
 
     yield* s.resume
+    yield* tools.release
+    yield* s.llm.wait(3)
+    yield* s.session.wait(sessionID)
 
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).toContain("renamed_echo")
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).not.toContain("echo")
+    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["renamed_execute"])
     expect(s.executions).toEqual(["renamed"])
+    expect(userTexts(s.requests[2]).at(-1)).toContain('{"text":"renamed"}')
   })
 
   scenario("advertises and executes a location registered tool", function* (s) {
+    s.directTools = false
     const registry = yield* Tool.Service
     const contexts: Tool.Context[] = []
-    yield* transformTools(
-      registry,
-      {
-        location_context: {
-          name: "location_context",
-          description: "Read application context",
-          input: Schema.Struct({ query: Schema.String }),
-          output: Schema.Struct({ answer: Schema.String }),
-          execute: ({ query }, context) =>
-            Effect.gen(function* () {
-              contexts.push(context)
-              yield* context.progress({ phase: "reading" })
-              return { output: { answer: query.toUpperCase() } }
-            }),
-        },
+    yield* transformTools(registry, {
+      location_context: {
+        name: "location_context",
+        description: "Read application context",
+        input: Schema.Struct({ query: Schema.String }),
+        output: Schema.Struct({ answer: Schema.String }),
+        execute: ({ query }, context) =>
+          Effect.gen(function* () {
+            contexts.push(context)
+            yield* context.progress({ phase: "reading" })
+            yield* s.awaitToolBarrier
+            return { output: { answer: query.toUpperCase() } }
+          }),
       },
-      { codemode: false },
-    )
+    })
     yield* s.admit("Use application context")
-    yield* s.llm.push(TestLLM.tool("call-location", "location_context", { query: "hello" }), [])
+    yield* s.llm.push(
+      TestLLM.tool("call-location", "execute", { code: 'return tools.location_context({ query: "hello" })' }),
+      [],
+    )
 
-    const progressFiber = yield* s.bus.subscribe(SessionEvent.Tool.Progress).pipe(
-      Stream.filter((event) => event.data.sessionID === sessionID && event.data.id === "call-location"),
+    const progressFiber = yield* s.bus.subscribe(SessionEvent.CodeMode.Progress).pipe(
+      Stream.filter(
+        (event) =>
+          event.data.sessionID === sessionID &&
+          event.data.id === "call-location" &&
+          event.data.events.some((entry) => entry.type === "tool" && entry.metadata !== undefined),
+      ),
       Stream.take(1),
       Stream.runCollect,
       Effect.forkScoped({ startImmediately: true }),
     )
+    const tools = yield* s.blockTools()
 
     yield* s.resume
+    yield* tools.started
 
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).toContain("location_context")
+    // The admitting turn ends with the execution still running.
+    expect(s.requests).toHaveLength(2)
+    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["execute"])
+    expect(s.requests[0]?.system.at(-1)?.text).toContain("tools.location_context(")
+    expect(yield* s.context).toMatchObject([
+      Expected.user("Use application context"),
+      Expected.assistant({}, [
+        Expected.completedTool({ id: "call-location" }, { metadata: { executionStatus: "running" } }),
+      ]),
+    ])
+
+    yield* tools.release
+    yield* s.llm.wait(3)
+    yield* s.session.wait(sessionID)
+
     expect(contexts).toEqual([
       {
         sessionID,
         agent: Agent.ID.make("build"),
         messageID: expect.stringMatching(/^msg_/),
-        id: Tool.CallID.make("call-location"),
+        id: Tool.CallID.make("call-location:0"),
         progress: expect.any(Function),
       },
     ])
-    expect(Array.from(yield* Fiber.join(progressFiber))[0]?.data.metadata).toEqual({ phase: "reading" })
-    expect(yield* s.context).toMatchObject([
-      Expected.user("Use application context"),
-      Expected.assistant({}, [
-        Expected.completedTool({ id: "call-location" }, { content: [Expected.text('{"answer":"HELLO"}')] }),
-      ]),
-    ])
+    expect(Array.from(yield* Fiber.join(progressFiber))[0]?.data.events).toContainEqual(
+      expect.objectContaining({ type: "tool", tool: "location_context", metadata: { phase: "reading" } }),
+    )
+    expect(userTexts(s.requests[2]).at(-1)).toContain('{"answer":"HELLO"}')
+  })
+
+  scenario("resizes an oversized tool image with the real resizer before the model receives it", function* (s) {
+    s.directTools = false
+    const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
+    // Wider than the 2000 pixel prompt attachment limit.
+    const source = new photon.PhotonImage(new Uint8Array(2_400 * 4 * 4).fill(255), 2_400, 4)
+    const screenshot = Buffer.from(source.get_bytes()).toString("base64")
+    source.free()
+    const registry = yield* Tool.Service
+    yield* transformTools(registry, {
+      screenshot: {
+        name: "screenshot",
+        description: "Capture the screen",
+        input: Schema.Struct({}),
+        output: Schema.Null,
+        execute: () =>
+          s.awaitToolBarrier.pipe(
+            Effect.as({
+              output: null,
+              content: [
+                { type: "file", uri: `data:image/png;base64,${screenshot}`, mime: "image/png", name: "screen.png" },
+              ],
+            }),
+          ),
+      },
+    })
+    yield* s.admit("Take a screenshot")
+    yield* s.llm.push(TestLLM.tool("call-screenshot", "execute", { code: "return tools.screenshot({})" }), [])
+    const tools = yield* s.blockTools()
+
+    yield* s.resume
+    yield* tools.release
+    yield* s.llm.wait(3)
+    yield* s.session.wait(sessionID)
+
+    const media = s.requests[2]?.messages
+      .flatMap((message) => (message.role === "user" ? message.content : []))
+      .filter((part) => part.type === "media")
+    expect(media).toMatchObject([{ type: "media", mediaType: "image/png", filename: "screen.png" }])
+    const resized = photon.PhotonImage.new_from_byteslice(Buffer.from(String(media?.[0]?.data), "base64"))
+    expect(resized.get_width()).toBe(2_000)
+    expect(resized.get_height()).toBeLessThanOrEqual(4)
+    resized.free()
+    expect(userTexts(s.requests[2]).at(-1)).toContain("Attached 1 file returned by tool calls: screen.png.")
+  })
+
+  scenario("delivers a skill loaded from Code Mode to the model's next request in full", function* (s) {
+    s.directTools = false
+    const ocpp = Skill.Info.make({
+      id: Skill.ID.make("ocpp"),
+      name: Skill.Name.make("OC++"),
+      description: SkillPlugin.OcppDescription,
+      location: AbsolutePath.make("/builtin/ocpp.md"),
+      content: SkillPlugin.OcppContent,
+    })
+    // Larger than the 4 KiB preview and 8 KiB summary that bound what an execution returns to the model.
+    expect(new TextEncoder().encode(ocpp.content).length).toBeGreaterThan(10_000)
+    yield* registerToolPlugin(SkillTool.Plugin).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.mock(Skill.Service, {
+            get: (id) => Effect.succeed(id === ocpp.id ? ocpp : undefined),
+            list: () => Effect.succeed([ocpp]),
+          }),
+          AppNodeBuilder.build(FSUtil.node),
+        ),
+      ),
+    )
+    yield* s.admit("How do I configure OC++?")
+    // The program waits on echo first, so the skill loads after the admitting turn has ended.
+    yield* s.llm.push(
+      TestLLM.tool("call-skill", "execute", {
+        code: 'const ready = tools.echo({ text: "ready" })\nreturn tools.skill({ id: "ocpp" })',
+      }),
+      [],
+    )
+    const tools = yield* s.blockTools()
+
+    yield* s.resume
+    yield* tools.release
+    yield* s.llm.wait(3)
+    yield* s.session.wait(sessionID)
+
+    const texts = userTexts(s.requests[2])
+    const instructions = Skill.toModelOutput(ocpp, [])
+    expect(texts).toContain(instructions)
+    // The completion notification follows the skill and carries only the small confirmation.
+    expect(texts.indexOf(instructions)).toBe(texts.length - 2)
+    expect(texts.at(-1)).toContain('"name":"OC++"')
+    expect(texts.at(-1)).not.toContain(ocpp.content.slice(0, 100))
+    expect(yield* s.messages).toContainEqual(
+      expect.objectContaining({
+        type: "synthetic",
+        description: "Loaded skill OC++",
+        metadata: { source: "skill", skill: "ocpp" },
+      }),
+    )
   })
 
   scenario("executes the tool advertised before a registry reload", function* (s) {
+    s.directTools = false
     const registry = yield* Tool.Service
     const scope = yield* Scope.make()
     const executions: string[] = []
-    yield* transformTools(
-      registry,
-      {
-        reloaded: {
-          name: "reloaded",
-          description: "Record the advertised tool",
-          input: Schema.Struct({}),
-          output: Schema.Struct({ value: Schema.String }),
-          execute: () =>
-            Effect.sync(() => executions.push("advertised")).pipe(Effect.as({ output: { value: "advertised" } })),
-        },
+    yield* transformTools(registry, {
+      reloaded: {
+        name: "reloaded",
+        description: "Record the advertised tool",
+        input: Schema.Struct({}),
+        output: Schema.Struct({ value: Schema.String }),
+        execute: () =>
+          Effect.sync(() => executions.push("advertised")).pipe(
+            Effect.andThen(s.awaitToolBarrier),
+            Effect.as({ output: { value: "advertised" } }),
+          ),
       },
-      { codemode: false },
-    ).pipe(Scope.provide(scope))
+    }).pipe(Scope.provide(scope))
     yield* s.admit("Use the reloaded tool")
-    yield* s.llm.push(TestLLM.tool("call-reloaded", "reloaded", {}), [])
+    yield* s.llm.push(TestLLM.tool("call-reloaded", "execute", { code: "return tools.reloaded({})" }), [])
+    const tools = yield* s.blockTools()
 
     const run = yield* s.resumePaused
     yield* Scope.close(scope, Exit.void)
-    yield* transformTools(
-      registry,
-      {
-        reloaded: {
-          name: "reloaded",
-          description: "Record the replacement tool",
-          input: Schema.Struct({}),
-          output: Schema.Struct({ value: Schema.String }),
-          execute: () =>
-            Effect.sync(() => executions.push("replacement")).pipe(Effect.as({ output: { value: "replacement" } })),
-        },
+    yield* transformTools(registry, {
+      reloaded: {
+        name: "reloaded",
+        description: "Record the replacement tool",
+        input: Schema.Struct({}),
+        output: Schema.Struct({ value: Schema.String }),
+        execute: () =>
+          Effect.sync(() => executions.push("replacement")).pipe(Effect.as({ output: { value: "replacement" } })),
       },
-      { codemode: false },
-    )
+    })
     yield* run.finish
+    yield* tools.release
+    yield* s.llm.wait(3)
+    yield* s.session.wait(sessionID)
 
     expect(executions).toEqual(["advertised"])
-    expect(yield* s.context).toMatchObject([
-      Expected.user("Use the reloaded tool"),
-      Expected.assistant({}, [
-        Expected.completedTool({ id: "call-reloaded" }, { content: [Expected.text('{"value":"advertised"}')] }),
-      ]),
-    ])
+    expect(userTexts(s.requests[2]).at(-1)).toContain('{"value":"advertised"}')
   })
 
   scenario("starts a real runner step after default prompt recording", function* (s) {
@@ -1293,12 +1461,13 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("streams one request with registry definitions from chronological user history", function* (s) {
+    s.directTools = false
     yield* s.admit("First")
     yield* s.runPrompt("Second")
 
     expect(s.requests).toHaveLength(1)
     expect(s.requests[0]?.model).toBe(model)
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "storefail"])
+    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["execute"])
     expect(s.requests[0]?.messages.map((message) => ({ role: message.role, content: message.content }))).toEqual([
       { role: "user", content: [{ type: "text", text: "First" }] },
       { role: "user", content: [{ type: "text", text: "Second" }] },
@@ -1837,29 +2006,41 @@ describe("SessionRunnerLLM", () => {
   scenario("updates selected-agent skill instructions after an agent switch", function* (s) {
     const agents = yield* Agent.Service
     yield* agents.transform((draft) =>
-      draft.update(Agent.ID.make("reviewer"), (agent) => {
+      draft.update(Agent.ID.make("plan"), (agent) => {
         agent.mode = "primary"
       }),
     )
+    yield* transformTools(yield* Tool.Service, { marker: markerTool })
+    // Skill guidance follows the Code Mode catalog, which only the real snapshot reports.
+    s.directTools = false
     s.skillBaselines.set(Agent.ID.make("build"), "Build skills")
     yield* s.runPrompt("First")
-    s.skillBaselines.set(Agent.ID.make("reviewer"), "Reviewer skills")
+    s.skillBaselines.set(Agent.ID.make("plan"), "Plan skills")
     yield* s.bus.publish(SessionEvent.AgentSelected, {
       sessionID,
-      agent: Agent.ID.make("reviewer"),
+      agent: Agent.ID.make("plan"),
     })
     yield* s.runPrompt("Second")
 
-    expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, "Initial context\n\nBuild skills"],
-      [defaultSystem, "Initial context\n\nBuild skills"],
+    // The instruction baseline keeps build's guidance; plan's arrives as an update.
+    expect(s.requests.map(instructionBaseline)).toEqual([
+      expect.stringMatching(/\n\nBuild skills$/),
+      expect.stringMatching(/\n\nBuild skills$/),
     ])
-    expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Reviewer skills"))
+    expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Plan skills"))
   })
 
   scenario("keeps the sampled agent when selection changes during observation", function* (s) {
+    const agents = yield* Agent.Service
+    yield* agents.transform((draft) =>
+      draft.update(Agent.ID.make("plan"), (agent) => {
+        agent.mode = "primary"
+      }),
+    )
+    yield* transformTools(yield* Tool.Service, { marker: markerTool })
+    s.directTools = false
     s.skillBaselines.set(Agent.ID.make("build"), "Build skills")
-    s.skillBaselines.set(Agent.ID.make("reviewer"), "Reviewer skills")
+    s.skillBaselines.set(Agent.ID.make("plan"), "Plan skills")
     let switched = false
     s.systemLoadHook = Effect.suspend(() => {
       if (switched) return Effect.void
@@ -1867,15 +2048,14 @@ describe("SessionRunnerLLM", () => {
       return s.bus
         .publish(SessionEvent.AgentSelected, {
           sessionID,
-          agent: Agent.ID.make("reviewer"),
+          agent: Agent.ID.make("plan"),
         })
         .pipe(Effect.asVoid)
     })
     yield* s.runPrompt("First")
 
-    expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, "Initial context\n\nBuild skills"],
-    ])
+    expect(s.requests.map(instructionBaseline)).toEqual([expect.stringMatching(/\n\nBuild skills$/)])
+    expect(JSON.stringify(s.requests[0])).not.toContain("Plan skills")
   })
 
   scenario("keeps the sampled model when selection changes during model resolution", function* (s) {
@@ -2655,6 +2835,7 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("projects reasoning and tool events without executing or continuing tools", function* (s) {
+    s.directTools = false
     yield* s.admit("Use tools")
 
     yield* s.llm.push(
@@ -2704,7 +2885,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests).toHaveLength(1)
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "storefail"])
+    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["execute"])
     expect(yield* s.context).toMatchObject([
       Expected.user("Use tools"),
       {
@@ -3781,6 +3962,7 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("durably settles local tool failures before continuing", function* (s) {
+    s.directTools = false
     yield* s.admit("Call missing")
 
     yield* s.llm.push(TestLLM.tool("call-missing", "missing", {}), TestLLM.text("Recovered", "text-after-error"))
@@ -3825,62 +4007,24 @@ describe("SessionRunnerLLM", () => {
     ])
   })
 
-  scenario("returns tool-wrapped policy blocks to the model and continues", function* (s) {
+  scenario("interrupts runner continuation on a dismissal after settling an ordinary tool error", function* (s) {
     const registry = yield* Tool.Service
-    yield* transformTools(
-      registry,
-      {
-        blocked: {
-          name: "blocked",
-          description: "Fail because policy blocked execution",
-          input: Schema.Struct({}),
-          output: Schema.Struct({}),
-          execute: () =>
-            Effect.fail(new Permission.BlockedError({ rules: [], permission: "blocked", resources: ["*"] })).pipe(
-              Effect.mapError(() => new Tool.Error({ message: "Permission blocked" })),
-            ),
-        },
+    yield* transformTools(registry, {
+      failed: {
+        name: "failed",
+        description: "Fail normally before the declined call",
+        input: Schema.Struct({}),
+        output: Schema.Struct({}),
+        execute: () => Effect.fail(new Tool.Error({ message: "Ordinary tool failure" })),
       },
-      { codemode: false },
-    )
-    yield* s.admit("Call blocked")
-
-    yield* s.llm.push(TestLLM.tool("call-blocked", "blocked", {}), TestLLM.stop())
-
-    yield* s.resume
-
-    expect(s.requests).toHaveLength(2)
-    expect(yield* s.context).toMatchObject([
-      Expected.user("Call blocked"),
-      Expected.assistant({}, [
-        Expected.failedTool({ id: "call-blocked" }, { error: { message: "Permission blocked" } }),
-      ]),
-      { type: "assistant", finish: "stop" },
-    ])
-  })
-
-  scenario("interrupts runner continuation on a decline after settling an ordinary tool error", function* (s) {
-    const registry = yield* Tool.Service
-    yield* transformTools(
-      registry,
-      {
-        failed: {
-          name: "failed",
-          description: "Fail normally before the declined call",
-          input: Schema.Struct({}),
-          output: Schema.Struct({}),
-          execute: () => Effect.fail(new Tool.Error({ message: "Ordinary tool failure" })),
-        },
-        declined: {
-          name: "declined",
-          description: "Fail because the user declined approval",
-          input: Schema.Struct({}),
-          output: Schema.Struct({}),
-          execute: () => Effect.die(new Permission.DeclinedError()),
-        },
+      declined: {
+        name: "declined",
+        description: "Fail because the user dismissed a question",
+        input: Schema.Struct({}),
+        output: Schema.Struct({}),
+        execute: () => Effect.die(new QuestionTool.CancelledError()),
       },
-      { codemode: false },
-    )
+    })
     yield* s.admit("Call declined")
 
     yield* s.llm.push(
@@ -3901,91 +4045,23 @@ describe("SessionRunnerLLM", () => {
         Expected.failedTool({ id: "call-failed" }, { error: { message: "Ordinary tool failure" } }),
         Expected.failedTool(
           { id: "call-declined" },
-          { error: { type: "aborted", message: "The user declined this tool call" } },
+          { error: { type: "aborted", message: "The user dismissed this question" } },
         ),
       ]),
     ])
-  })
-
-  scenario("returns permission corrections to the model and continues", function* (s) {
-    const registry = yield* Tool.Service
-    yield* transformTools(
-      registry,
-      {
-        corrected: {
-          name: "corrected",
-          description: "Fail with user correction feedback",
-          input: Schema.Struct({}),
-          output: Schema.Struct({}),
-          execute: () =>
-            Effect.fail(new Permission.CorrectedError({ feedback: "Use another tool" })).pipe(
-              Effect.mapError(() => new Tool.Error({ message: "Use another tool" })),
-            ),
-        },
-      },
-      { codemode: false },
-    )
-    yield* s.admit("Call corrected")
-
-    yield* s.llm.push(TestLLM.tool("call-corrected", "corrected", {}), TestLLM.stop())
-
-    yield* s.resume
-
-    expect(s.requests).toHaveLength(2)
-    expect(yield* s.context).toMatchObject([
-      Expected.user("Call corrected"),
-      Expected.assistant({}, [
-        Expected.failedTool({ id: "call-corrected" }, { error: { message: "Use another tool" } }),
-      ]),
-      { type: "assistant", finish: "stop" },
-    ])
-  })
-
-  scenario("returns configured permission denials to the model and continues", function* (s) {
-    const registry = yield* Tool.Service
-    yield* transformTools(registry, { permissionfail: permissionFail }, { codemode: false })
-    yield* s.admit("Reject permission")
-    yield* s.llm.push(TestLLM.tool("call-permission", "permissionfail", {}), [
-      LLMEvent.stepStart({ index: 0 }),
-      LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
-    ])
-
-    yield* s.resume
-
-    expect(s.requests).toHaveLength(2)
-    expect(yield* s.context).toMatchObject([
-      { type: "user" },
-      Expected.assistant({}, [
-        Expected.failedTool(
-          { id: "call-permission" },
-          {
-            error: {
-              type: "permission.rejected",
-              message: "Permission denied: edit",
-            },
-          },
-        ),
-      ]),
-      { type: "assistant", finish: "stop" },
-    ])
-    expect(yield* recordedEventTypes(sessionID)).not.toContain("session.step.failed.1")
   })
 
   scenario("interrupts runner continuation when a question is cancelled", function* (s) {
     const registry = yield* Tool.Service
-    yield* transformTools(
-      registry,
-      {
-        question: {
-          name: "question",
-          description: "Ask the user",
-          input: Schema.Struct({}),
-          output: Schema.Struct({}),
-          execute: () => Effect.die(new QuestionTool.CancelledError()),
-        },
+    yield* transformTools(registry, {
+      question: {
+        name: "question",
+        description: "Ask the user",
+        input: Schema.Struct({}),
+        output: Schema.Struct({}),
+        execute: () => Effect.die(new QuestionTool.CancelledError()),
       },
-      { codemode: false },
-    )
+    })
     yield* s.admit("Ask then stop")
 
     yield* s.llm.push(TestLLM.tool("call-question", "question", {}), [])

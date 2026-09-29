@@ -5,7 +5,7 @@ description: OC++ CLI options and commands.
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-The OC++ CLI by default starts the [TUI](/docs/tui) when run without any arguments.
+Running the OC++ CLI without a command starts the OC++ server if needed and opens the [web app](/docs/web) in your browser.
 
 ```bash
 ocpp
@@ -16,33 +16,6 @@ But it also accepts commands as documented on this page. This allows you to inte
 ```bash
 ocpp run "Explain how closures work in JavaScript"
 ```
-
----
-
-### tui
-
-Start the OC++ terminal user interface.
-
-```bash
-ocpp [project]
-```
-
-#### Flags
-
-| Flag                                        | Short | Description                                                             |
-| ------------------------------------------- | ----- | ----------------------------------------------------------------------- |
-| <nobr><code>{"--continue"}</code></nobr>    | `-c`  | Continue the last session                                               |
-| <nobr><code>{"--session"}</code></nobr>     | `-s`  | Session ID to continue                                                  |
-| <nobr><code>{"--fork"}</code></nobr>        |       | Fork the session when continuing (use with `--continue` or `--session`) |
-| <nobr><code>{"--prompt"}</code></nobr>      |       | Prompt to use                                                           |
-| <nobr><code>{"--model"}</code></nobr>       | `-m`  | Model to use in the form of provider/model                              |
-| <nobr><code>{"--agent"}</code></nobr>       |       | Agent to use                                                            |
-| <nobr><code>{"--auto"}</code></nobr>        |       | Auto-approve permissions that are not explicitly denied                 |
-| <nobr><code>{"--port"}</code></nobr>        |       | Port to listen on                                                       |
-| <nobr><code>{"--hostname"}</code></nobr>    |       | Hostname to listen on                                                   |
-| <nobr><code>{"--mdns"}</code></nobr>        |       | Enable mDNS discovery                                                   |
-| <nobr><code>{"--mdns-domain"}</code></nobr> |       | Custom mDNS domain name                                                 |
-| <nobr><code>{"--cors"}</code></nobr>        |       | Additional browser origin(s) to allow CORS                              |
 
 ---
 
@@ -93,37 +66,6 @@ List all available agents.
 ```bash
 ocpp agent list
 ```
-
----
-
-### attach
-
-Attach a terminal to an already running OC++ backend server started via `serve` or `web` commands.
-
-```bash
-ocpp attach [url]
-```
-
-This allows using the TUI with a remote OC++ backend. For example:
-
-```bash
-# Start the backend server for web/mobile access
-ocpp web --port 4096 --hostname 0.0.0.0
-
-# In another terminal, attach the TUI to the running backend
-ocpp attach http://10.20.30.40:4096
-```
-
-#### Flags
-
-| Flag                                     | Short | Description                                                             |
-| ---------------------------------------- | ----- | ----------------------------------------------------------------------- |
-| <nobr><code>{"--dir"}</code></nobr>      |       | Working directory to start TUI in                                       |
-| <nobr><code>{"--continue"}</code></nobr> | `-c`  | Continue the last session                                               |
-| <nobr><code>{"--session"}</code></nobr>  | `-s`  | Session ID to continue                                                  |
-| <nobr><code>{"--fork"}</code></nobr>     |       | Fork the session when continuing (use with `--continue` or `--session`) |
-| <nobr><code>{"--password"}</code></nobr> | `-p`  | Basic auth password (defaults to `OCPP_SERVER_PASSWORD`)                |
-| <nobr><code>{"--username"}</code></nobr> | `-u`  | Basic auth username (defaults to `OCPP_SERVER_USERNAME` or `ocpp`)      |
 
 ---
 
@@ -344,7 +286,7 @@ Run ocpp in non-interactive mode by passing a prompt directly.
 ocpp run [message..]
 ```
 
-This is useful for scripting, automation, or when you want a quick answer without launching the full TUI. For example.
+This is useful for scripting, automation, or when you want a quick answer without opening the web app. For example.
 
 ```bash "ocpp run"
 ocpp run Explain the use of context in Go
@@ -393,7 +335,7 @@ Start a headless OC++ server for API access. Check out the [server docs](/docs/s
 ocpp serve
 ```
 
-This starts an HTTP server that provides API access to ocpp functionality without the TUI interface. Set `OCPP_SERVER_PASSWORD` to enable HTTP basic auth (username defaults to `ocpp`).
+This starts an HTTP server that provides API access to ocpp functionality without opening the web app. Set `OCPP_SERVER_PASSWORD` to enable HTTP basic auth (username defaults to `ocpp`).
 
 #### Flags
 
@@ -682,12 +624,10 @@ OC++ can be configured using environment variables.
 | `OCPP_AUTO_SHARE`                 | boolean | Automatically share sessions                     |
 | `OCPP_GIT_BASH_PATH`              | string  | Path to Git Bash executable on Windows           |
 | `OCPP_CONFIG`                     | string  | Path to config file                              |
-| `OCPP_TUI_CONFIG`                 | string  | Path to TUI config file                          |
 | `OCPP_CONFIG_DIR`                 | string  | Path to config directory                         |
 | `OCPP_CONFIG_CONTENT`             | string  | Inline json config content                       |
 | `OCPP_DISABLE_AUTOUPDATE`         | boolean | Disable automatic update checks                  |
 | `OCPP_DISABLE_PRUNE`              | boolean | Disable pruning of old data                      |
-| `OCPP_DISABLE_TERMINAL_TITLE`     | boolean | Disable automatic terminal title updates         |
 | `OCPP_PERMISSION`                 | string  | Inlined json permissions config                  |
 | `OCPP_DISABLE_DEFAULT_PLUGINS`    | boolean | Disable default plugins                          |
 | `OCPP_DISABLE_LSP_DOWNLOAD`       | boolean | Disable automatic LSP server downloads           |
@@ -697,7 +637,6 @@ OC++ can be configured using environment variables.
 | `OCPP_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Disable reading `~/.claude/CLAUDE.md`            |
 | `OCPP_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Disable loading `.claude/skills`                 |
 | `OCPP_DISABLE_MODELS_FETCH`       | boolean | Disable fetching models from remote sources      |
-| `OCPP_DISABLE_MOUSE`              | boolean | Disable mouse capture in the TUI                 |
 | `OCPP_FAKE_VCS`                   | string  | Fake VCS provider for testing purposes           |
 | `OCPP_CLIENT`                     | string  | Client identifier (defaults to `cli`)            |
 | `OCPP_ENABLE_EXA`                 | boolean | Enable Exa web search tools                      |
@@ -715,7 +654,6 @@ These environment variables enable experimental features that may change or be r
 | ------------------------------------------- | ------- | --------------------------------------- |
 | `OCPP_EXPERIMENTAL`                         | boolean | Enable the experimental umbrella flag   |
 | `OCPP_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Enable icon discovery                   |
-| `OCPP_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Disable copy on select in TUI           |
 | `OCPP_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | number  | Default timeout for bash commands in ms |
 | `OCPP_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | number  | Max output tokens for LLM responses     |
 | `OCPP_EXPERIMENTAL_FILEWATCHER`             | boolean | Enable file watcher for entire dir      |

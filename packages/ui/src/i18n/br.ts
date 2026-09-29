@@ -177,10 +177,6 @@ export const dict = {
   "ui.common.submit": "Enviar",
   "ui.common.showMore": "Mostrar mais",
 
-  "ui.permission.deny": "Negar",
-  "ui.permission.allowAlways": "Permitir sempre",
-  "ui.permission.allowOnce": "Permitir uma vez",
-
   "ui.message.expand": "Expandir mensagem",
   "ui.message.collapse": "Recolher mensagem",
   "ui.message.copy": "Copiar",

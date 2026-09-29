@@ -70,7 +70,7 @@ use `.*` to match an ID prefix. A later ID re-enables a plugin.
 }
 ```
 
-Install, inspect, list, or remove global package plugins with the CLI.
+Install, list, or remove package plugins in the global server config with the CLI.
 
 ```sh
 ocpp plugin add ocpp-acme-plugin@1.2.0
@@ -101,14 +101,6 @@ restarting OC++.
 ```sh
 touch .ocpp/plugins/concise.ts
 ocpp service restart
-```
-
-CLI-only plugins are configured separately and remain active when connected to a remote server.
-
-```json title="cli.json"
-{
-  "plugins": ["ocpp-acme-cli"]
-}
 ```
 
 <Card title="Build a plugin" href="/build/plugins">

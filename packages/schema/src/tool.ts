@@ -17,26 +17,36 @@ export interface Context {
   readonly messageID: SessionMessage.ID
   readonly id: CallID
   readonly progress: (update: Metadata) => Effect.Effect<void>
+  /**
+   * The progress metadata this call reported before the host restarted. It is present only when a
+   * resumed Code Mode execution re-invokes an in-flight call of a tool declared with `reattach`, which
+   * must rejoin the work that metadata describes instead of starting it again.
+   */
+  readonly recovered?: Metadata
+  /**
+   * The calling execution's Code Mode catalog by path, given to a tool declared with `acceptsToolHandles`, which may
+   * receive tool references naming its entries. `lent` marks a tool that is not in the Location's registry, such as a
+   * tool.define handle, which the receiver can hand on only as that tool, not by its path.
+   */
+  readonly catalog?: ReadonlyMap<string, { readonly tool: Info; readonly lent: boolean }>
 }
 
-interface BaseOptions {
+export interface Options {
   readonly namespace?: string
-  readonly permission?: string
   /** Allows this in-process tool boundary to receive opaque same-activation tool handles. */
   readonly acceptsToolHandles?: boolean
+  readonly pinned?: boolean
+  /**
+   * The tool only reads, so a call interrupted by a restart may safely run again. Tools without it
+   * are treated as side-effecting and are never re-run automatically.
+   */
+  readonly readOnly?: boolean
+  /**
+   * A call interrupted by a restart can rejoin the work it started from the progress metadata it
+   * reported, which it receives as `Context.recovered`.
+   */
+  readonly reattach?: boolean
 }
-
-export type Options = BaseOptions &
-  (
-    | {
-        readonly codemode?: true | "both"
-        readonly pinned?: boolean
-      }
-    | {
-        readonly codemode: boolean
-        readonly pinned?: never
-      }
-  )
 
 export type ValueSchema<A = unknown> = Schema.Codec<A, any> | StandardSchemaV1<any, A> | JsonSchema.JsonSchema
 

@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect"
-import { LanguageModel } from "@ocpp/ai"
+import { LanguageModel, type LLMRequest } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols"
 import { TestLLM } from "@ocpp/ai/testing"
 import path from "path"
@@ -8,6 +8,7 @@ import { Money } from "@ocpp/schema/money"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { FSUtil } from "@ocpp/util/fs-util"
 import { Global } from "@ocpp/util/global"
 import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Database } from "@ocpp/core/database/database"
@@ -31,11 +32,15 @@ import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { SessionStore } from "@ocpp/core/session/store"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
-import { Permission } from "@ocpp/core/permission"
 import { SubagentTool } from "@ocpp/core/tool/plugin/subagent"
+import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
+import { ExternalAgentSession } from "@ocpp/core/external-agent/session"
+import { noVendorDrivers } from "./lib/drivers"
 import { Tool } from "@ocpp/core/tool"
+import { execute } from "@ocpp/core/tool/runtime"
 import { tmpdir } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
@@ -43,6 +48,7 @@ import {
   executeTool,
   readCodeModeNotebook,
   registerToolPlugin,
+  registeredTools,
   seedToolSession,
   toolIdentity,
   waitForCodeMode,
@@ -122,7 +128,18 @@ const subagentPluginSupervisor = makeLocationNode({
     PluginSupervisor.Service,
     registerToolPlugin(SubagentTool.Plugin).pipe(Effect.as(PluginSupervisor.Service.of({ flush: Effect.void }))),
   ),
-  deps: [Agent.node, Bus.node, Catalog.node, Config.node, Permission.node, PluginRuntime.node, Tool.node],
+  deps: [
+    Agent.node,
+    Bus.node,
+    Catalog.node,
+    Config.node,
+    ExternalAgentDrivers.node,
+    ExternalAgentSession.node,
+    FSUtil.node,
+    PluginHooks.node,
+    PluginRuntime.node,
+    Tool.node,
+  ],
 })
 
 const nodes = LayerNode.group([
@@ -138,13 +155,25 @@ const nodes = LayerNode.group([
 const replacements = [
   [SessionExecution.node, executionNode],
   [Global.node, tempGlobalLayer],
+  [ExternalAgentDrivers.node, noVendorDrivers],
 ] satisfies LayerNode.Replacements
 const productionIt = testEffect(AppNodeBuilder.build(nodes, replacements))
 const it = testEffect(AppNodeBuilder.build(nodes, [...replacements, [PluginSupervisor.node, subagentPluginSupervisor]]))
+const resolvedChildModel = Layer.succeed(SessionRunnerModel.Service, {
+  resolve: () =>
+    Effect.succeed(
+      SessionRunnerModel.resolved(LanguageModel.make({ id: "child", provider: "test", route: OpenAIChat.route }), {
+        capabilities: { tools: true, input: ["text"], output: ["text"] },
+        cost: [],
+        limit: { context: 200_000, output: 32_000 },
+      }),
+    ),
+})
 const completionIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([nodes, SessionRestart.node, KV.node]), [
     [Global.node, tempGlobalLayer],
     [PluginSupervisor.node, subagentPluginSupervisor],
+    [ExternalAgentDrivers.node, noVendorDrivers],
     [
       LayerNodePlatform.llmClient,
       TestLLM.testLayer({
@@ -156,22 +185,27 @@ const completionIt = testEffect(
         }),
       }),
     ],
+    [SessionRunnerModel.node, resolvedChildModel],
+  ]),
+)
+// Model requests the real runner sends, so a test can read exactly what the model is shown.
+const modelRequests: LLMRequest[] = []
+const requestIt = testEffect(
+  AppNodeBuilder.build(LayerNode.group([nodes, SessionRestart.node, KV.node]), [
+    [Global.node, tempGlobalLayer],
+    [PluginSupervisor.node, subagentPluginSupervisor],
+    [ExternalAgentDrivers.node, noVendorDrivers],
     [
-      SessionRunnerModel.node,
-      Layer.succeed(SessionRunnerModel.Service, {
-        resolve: () =>
-          Effect.succeed(
-            SessionRunnerModel.resolved(
-              LanguageModel.make({ id: "child", provider: "test", route: OpenAIChat.route }),
-              {
-                capabilities: { tools: true, input: ["text"], output: ["text"] },
-                cost: [],
-                limit: { context: 200_000, output: 32_000 },
-              },
-            ),
-          ),
+      LayerNodePlatform.llmClient,
+      TestLLM.testLayer({
+        fallback: TestLLM.text("Done.", "text-done"),
+        transformRequest: (request) => {
+          modelRequests.push(request)
+          return request
+        },
       }),
     ],
+    [SessionRunnerModel.node, resolvedChildModel],
   ]),
 )
 
@@ -190,10 +224,9 @@ const withSubagent = (location: Location.Ref) =>
     ).pipe(Effect.provide(locations.get(location)))
     yield* Agent.Service.use((agents) =>
       agents.transform((draft) => {
-        // The caller identity used by executeTool; subagent permission asserts against it.
+        // The caller identity used by executeTool.
         draft.update(toolIdentity.agent, (agent) => {
           agent.mode = "primary"
-          agent.permissions.push({ action: "*", resource: "*", effect: "allow" })
         })
         draft.update(Agent.ID.make("reviewer"), (agent) => {
           agent.mode = "subagent"
@@ -209,7 +242,117 @@ const withSubagent = (location: Location.Ref) =>
     ).pipe(Effect.provide(locations.get(location)))
   })
 
+// Beside withSubagent's agents: a described subagent and a hidden one.
+const withListedSubagents = (location: Location.Ref) =>
+  Effect.gen(function* () {
+    const locations = yield* LocationServiceMap.Service
+    yield* Agent.Service.use((agents) =>
+      agents.transform((draft) => {
+        draft.update(Agent.ID.make("reviewer"), (agent) => {
+          agent.description = "Reviews changes for correctness."
+        })
+        draft.update(Agent.ID.make("hidden"), (agent) => {
+          agent.mode = "subagent"
+          agent.hidden = true
+        })
+      }),
+    ).pipe(Effect.provide(locations.get(location)))
+  })
+
+// Primary and hidden agents are left out.
+const listedSubagents = [
+  "Available subagents:",
+  "- fallback: This subagent should only be called when explicitly requested.",
+  "- reviewer: Reviews changes for correctness.",
+]
+
 describe("SubagentTool", () => {
+  it.live("appends the subagents the caller may start to the description tools.search returns", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location })
+          yield* withSubagent(parent.location)
+          yield* withListedSubagents(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const described = [
+            SubagentTool.description,
+            "",
+            // No vendor driver is ready here, so none is offered.
+            ...listedSubagents,
+          ].join("\n")
+          const subagentEntry = (snapshot: Tool.Snapshot) =>
+            snapshot.codeModeCatalog?.find((tool) => tool.path === SubagentTool.name)?.description
+
+          const snapshot = yield* registry.snapshot(undefined, parent.id, { agent: toolIdentity.agent })
+          expect(subagentEntry(snapshot)).toBe(described)
+          // Without a caller there is nothing to filter for, so the description stays generic.
+          expect(subagentEntry(yield* registry.snapshot())).toBe(SubagentTool.description)
+
+          yield* seedToolSession(parent.id, toolIdentity.messageID)
+          const started = yield* snapshot.execute({
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-search-subagent",
+              name: "execute",
+              input: { code: 'const subagentSearch = tools.search({ query: "tools.subagent" })' },
+            },
+          })
+          expect(
+            yield* waitForCodeMode(started.output, {
+              sessionID: parent.id,
+              assistantMessageID: toolIdentity.messageID,
+              id: "call-search-subagent",
+            }),
+          ).toMatchObject({ status: "saved", saved: ["subagentSearch"] })
+          expect((yield* readCodeModeNotebook(parent.id)).subagentSearch).toMatchObject({
+            items: [{ path: "tools.subagent", description: described }],
+          })
+        }),
+      ),
+    ),
+  )
+
+  requestIt.live("shows the model the subagents it may start before it searches", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          yield* withListedSubagents(parent.location)
+          modelRequests.length = 0
+
+          yield* sessions.prompt({ sessionID: parent.id, text: "Who can review this change?", resume: false })
+          yield* sessions.resume(parent.id)
+
+          const system = modelRequests[0]?.system.map((part) => part.text).join("\n") ?? ""
+          expect(system).toContain(
+            [
+              "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent` and the child's tools as `tools`.",
+              "An agent is a prompt and model preset; it grants no tools. The child can call exactly the tools you pass: your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles. Without `tools` it has none, only tools.submit_result when you pass an outputSchema.",
+              "Pass `root` to run one in another existing directory, such as a separate git worktree.",
+              ...listedSubagents,
+            ].join("\n"),
+          )
+          expect(system).toContain("  - tools.subagent(input: {")
+        }),
+      ),
+    ),
+  )
+
   productionIt.live("registers globally while resolving agents from the caller location", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
@@ -225,7 +368,7 @@ describe("SubagentTool", () => {
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
           const snapshot = yield* registry.snapshot()
-          expect(snapshot.definitions.map((tool) => tool.name)).toContain(SubagentTool.name)
+          expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
           expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toContain(SubagentTool.name)
           expect(
             yield* executeTool(registry, {
@@ -365,11 +508,16 @@ describe("SubagentTool", () => {
               id: "call-subagent-models",
             }),
           ).toMatchObject({ status: "saved", saved: ["availableModels"] })
-          expect((yield* readCodeModeNotebook(parent.id)).availableModels).toEqual({
+          expect((yield* readCodeModeNotebook(parent.id)).availableModels).toMatchObject({
             models: [
               { id: "test/child", variants: [] },
               { id: "test/parent", variants: [] },
               { id: "test/override", variants: ["high"] },
+            ],
+            drivers: [
+              { id: "claude", name: "Claude Code", available: false, model: "sonnet" },
+              { id: "codex", name: "Codex", available: false, model: "gpt-5.6-sol" },
+              { id: "pi", name: "Pi", available: false },
             ],
           })
 
@@ -913,17 +1061,15 @@ describe("SubagentTool", () => {
           yield* withSubagent(parent.location)
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const subagent = (yield* registeredTools(registry)).get(SubagentTool.name)
+          if (!subagent) return yield* Effect.die("subagent is not registered")
           const fail = (id: string, input: Record<string, unknown>) =>
-            registry.snapshot().pipe(
-              Effect.flatMap((tools) =>
-                tools.execute({
-                  sessionID: parent.id,
-                  ...toolIdentity,
-                  call: { type: "tool-call", id, name: SubagentTool.name, input },
-                }),
-              ),
-              Effect.flip,
-            )
+            execute(subagent, input, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              id: Tool.CallID.make(id),
+              progress: () => Effect.void,
+            }).pipe(Effect.flip)
 
           // The child's own run fails: the runner error stays the message, the reason is data.
           const crashed = yield* fail("call-reason-child-failed", {

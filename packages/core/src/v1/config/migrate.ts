@@ -7,7 +7,6 @@ import { ConfigV1 } from "./config.js"
 import { ConfigAgentV1 } from "./agent.js"
 import { ConfigCommandV1 } from "./command.js"
 import { ConfigMCPV1 } from "./mcp.js"
-import { ConfigPermissionV1 } from "./permission.js"
 import { ConfigProviderV1 } from "./provider.js"
 import { ConfigProviderOptionsV1 } from "./provider-options.js"
 import { Provider } from "../../provider.js"
@@ -30,7 +29,6 @@ export function migrate(info: typeof ConfigV1.Info.Type) {
         share: info.share ?? (info.autoshare ? "auto" : undefined),
         enterprise: info.enterprise,
         username: info.username,
-        permissions: permissions(info.permission, info.tools),
         agents: agents(info),
         snapshots: info.snapshot,
         watcher: info.watcher,
@@ -51,7 +49,10 @@ export function migrate(info: typeof ConfigV1.Info.Type) {
         commands: commands(info.command),
         instructions: info.instructions,
         references: info.references ?? info.reference,
-        experimental: experimental(info),
+        experimental:
+          info.experimental?.subagent_depth === undefined
+            ? undefined
+            : { subagent_depth: info.experimental.subagent_depth },
         plugins: info.plugin?.map((plugin) =>
           typeof plugin === "string" ? plugin : { package: plugin[0], options: plugin[1] },
         ),
@@ -59,59 +60,6 @@ export function migrate(info: typeof ConfigV1.Info.Type) {
       }),
     ),
   )
-}
-
-function experimental(info: typeof ConfigV1.Info.Type) {
-  const policies = [
-    ...(info.enabled_providers === undefined
-      ? []
-      : [
-          { action: "provider.use" as const, resource: "*", effect: "deny" as const },
-          ...info.enabled_providers.map((resource) => ({
-            action: "provider.use" as const,
-            resource: providerID(resource),
-            effect: "allow" as const,
-          })),
-        ]),
-    ...(info.disabled_providers ?? []).map((resource) => ({
-      action: "provider.use" as const,
-      resource: providerID(resource),
-      effect: "deny" as const,
-    })),
-  ]
-  if (info.experimental?.subagent_depth === undefined && !policies.length) return
-  return {
-    subagent_depth: info.experimental?.subagent_depth,
-    policies: policies.length ? policies : undefined,
-  }
-}
-
-function permissions(info?: ConfigPermissionV1.Info, tools?: Readonly<Record<string, boolean>>) {
-  const rules: Array<{ action: string; resource: string; effect: ConfigPermissionV1.Action }> = Object.entries(
-    tools ?? {},
-  ).map(([action, enabled]) => ({
-    action: normalizeAction(action),
-    resource: "*",
-    effect: enabled ? ("allow" as const) : ("deny" as const),
-  }))
-  for (const [key, rule] of Object.entries(info ?? {})) {
-    if (!rule) continue
-    const action = normalizeAction(key)
-    if (typeof rule === "string") {
-      rules.push({ action, resource: "*", effect: rule })
-      continue
-    }
-    rules.push(...Object.entries(rule).map(([resource, effect]) => ({ action, resource, effect })))
-  }
-  return rules.length ? rules : undefined
-}
-
-// Map v1 permission/tool keys onto their renamed v2 tool actions so migrated rules keep matching.
-export function normalizeAction(action: string) {
-  if (action === "write" || action === "patch") return "edit"
-  if (action === "task") return "subagent"
-  if (action === "bash") return "shell"
-  return action
 }
 
 function agents(info: typeof ConfigV1.Info.Type) {
@@ -149,7 +97,6 @@ export function migrateAgent(info: ConfigAgentV1.Info) {
         color: info.color === undefined ? undefined : info.color.startsWith("#") ? info.color : "#aaaaaa",
         steps: info.steps,
         disabled: info.disable,
-        permissions: permissions(info.permission),
       }),
     ),
   )

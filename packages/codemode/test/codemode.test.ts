@@ -219,6 +219,63 @@ describe("CodeMode callback tracing", () => {
   })
 })
 
+describe("CodeMode impure helpers", () => {
+  const program = `
+    const started = time.now()
+    const rolls = [1, 2].map(() => Math.random())
+    const picked = [0].map(Math.random)
+    return { started, rolls, picked, later: time.now() - started }
+  `
+
+  test("reads every impure value from the host hook in program order", async () => {
+    const reads: Array<CodeMode.ImpureHelper> = []
+    const values = [1_700_000_000_000, 0.25, 0.5, 0.75, 1_700_000_000_042]
+    const result = await Effect.runPromise(
+      CodeMode.execute({
+        code: program,
+        impure: (helper) => {
+          reads.push(helper)
+          return values[reads.length - 1]
+        },
+      }),
+    )
+
+    expect(reads).toEqual(["time.now", "Math.random", "Math.random", "Math.random", "time.now"])
+    expect(result).toMatchObject({
+      ok: true,
+      value: { started: 1_700_000_000_000, rolls: [0.25, 0.5], picked: [0.75], later: 42 },
+    })
+  })
+
+  test("replaying recorded values reproduces the same result", async () => {
+    const recorded: Array<number> = []
+    const first = await Effect.runPromise(
+      CodeMode.execute({
+        code: program,
+        impure: (helper) => {
+          const value = helper === "time.now" ? Date.now() : Math.random()
+          recorded.push(value)
+          return value
+        },
+      }),
+    )
+    const replayed = [...recorded]
+    const second = await Effect.runPromise(CodeMode.execute({ code: program, impure: () => replayed.shift() ?? 0 }))
+
+    expect(replayed).toEqual([])
+    expect(second).toEqual(first)
+  })
+
+  test("defaults to the host clock and random source", async () => {
+    const before = Date.now()
+    const result = await Effect.runPromise(CodeMode.execute({ code: "return [time.now(), Math.random()]" }))
+    if (!result.ok || !Array.isArray(result.value)) throw new Error("Expected an array result")
+    expect(result.value[0]).toBeGreaterThanOrEqual(before)
+    expect(result.value[1]).toBeGreaterThanOrEqual(0)
+    expect(result.value[1]).toBeLessThan(1)
+  })
+})
+
 describe("CodeMode tool-call observation", () => {
   test("reports the tools actually invoked with decoded input", async () => {
     const calls: Array<unknown> = []

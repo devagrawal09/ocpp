@@ -2,32 +2,10 @@
 
 The app's high-volume performance diagnostics live under `packages/app/e2e/performance` and are excluded from normal local and CI Playwright discovery. The benchmark config builds the app and serves the production bundle before running scenarios serially.
 
-The `devex` category is the explicit exception to the production-build rule. It measures development commands from submission through a user-visible ready state and has its own Playwright configuration.
-
 Run the suite explicitly from `packages/app`:
 
 ```sh
 bun run test:bench
-```
-
-Run the desktop development startup benchmark from the repository root:
-
-```sh
-bun run bench:devex
-```
-
-It runs five serial samples of the exact `bun dev:desktop` command. Each sample uses a fresh desktop profile, database, service configuration, service registration, and service process; the desktop selects an isolated ephemeral loopback endpoint. It removes desktop build output and the desktop Vite cache before every run; dependencies, Bun's package cache, and Electron remain installed. The harness stops only that sample's service; it does not stop or change the elected global OC++ service. The measured endpoint is a visible Home page whose empty-state controls pass Playwright actionability checks. The command's Electron installation check remains inside the measured interval.
-
-Set `DESKTOP_STARTUP_RUNS` only for focused diagnostics:
-
-```sh
-DESKTOP_STARTUP_RUNS=1 bun run bench:devex
-```
-
-Set `OCPP_PERFORMANCE_TRACE_DIR` to capture the renderer's CDP trace from attachment through actionable Home:
-
-```sh
-DESKTOP_STARTUP_RUNS=1 OCPP_PERFORMANCE_TRACE_DIR=/tmp/ocpp-desktop-traces bun run bench:devex
 ```
 
 PowerShell:
@@ -67,9 +45,9 @@ BENCHMARK {"name":"...","context":{"project":"chromium","platform":"darwin"},"me
 
 Every observed page also emits `BENCHMARK_PAGE` with the same run ID, navigation history, optional trace path, and trace scope before the final status-bearing `BENCHMARK` record. Chrome traces are browser-wide; the default window is page lifetime. Tab-switch traces begin after scenario setup and include explicit interaction markers. Scenario metrics use their own narrower observation windows.
 
-This follows the stack's own guidance: [Electron recommends repeated Chrome DevTools and Chrome Tracing measurement](https://www.electronjs.org/docs/latest/tutorial/performance), [Chrome DevTools recommends Performance recordings for runtime work](https://developer.chrome.com/docs/devtools/performance), and [Playwright uses traces for test debugging rather than renderer profiling](https://playwright.dev/docs/trace-viewer).
+This follows the stack's own guidance: [Chrome DevTools recommends Performance recordings for runtime work](https://developer.chrome.com/docs/devtools/performance) and [Playwright uses traces for test debugging rather than renderer profiling](https://playwright.dev/docs/trace-viewer).
 
-These Playwright benchmarks profile the shared app renderer in Chromium. A future packaged Electron benchmark that needs main-process and multi-process attribution should use Electron's official [`contentTracing`](https://www.electronjs.org/docs/latest/api/content-tracing/) API rather than extending this renderer harness with bespoke process instrumentation.
+These Playwright benchmarks profile the app renderer in Chromium.
 
 CPU and high-volume visual profiling are disabled by default. Set `TIMELINE_CPU_PROFILE=1` to enable both, or additionally set `TIMELINE_VISUAL_PROFILE=0` for CPU-only profiling.
 
@@ -114,7 +92,7 @@ Complete original `BENCHMARK` JSON records, including samples, context, and fail
 bun run bench:tabs --repeat-each=3 --output=e2e/test-results/tabs-smoke
 ```
 
-Set `OCPP_PERFORMANCE_MEMORY=1` for an opt-in renderer-main-isolate heap and DOM sample after mounted content is ready and an explicit GC completes. Probe DOM references are released before collection. This is not total desktop memory; do not mix these diagnostic runs with unprofiled latency samples. Set `OCPP_PERFORMANCE_TRACE_DIR` for a separate Chrome trace of each tab interaction, starting after preparation, with `session-switch:start`, `session-switch:ready`, and `session-switch:stable` markers.
+Set `OCPP_PERFORMANCE_MEMORY=1` for an opt-in renderer-main-isolate heap and DOM sample after mounted content is ready and an explicit GC completes. Probe DOM references are released before collection. This is not total browser memory; do not mix these diagnostic runs with unprofiled latency samples. Set `OCPP_PERFORMANCE_TRACE_DIR` for a separate Chrome trace of each tab interaction, starting after preparation, with `session-switch:start`, `session-switch:ready`, and `session-switch:stable` markers.
 
 ### Cache-Enabled HTTP Fixture
 
@@ -144,7 +122,7 @@ bunx playwright test --config e2e/performance/playwright.config.ts \
   timeline/provider-memory-benchmark.spec.ts --repeat-each=3
 ```
 
-`PROVIDER_MEMORY_MODELS` defaults to 1,200 and `PROVIDER_MEMORY_SWITCHES` defaults to 10. Each sample records Chromium's `Runtime.getHeapUsage` and `Memory.getDOMCounters` after an explicit garbage collection. This measures retained state, not allocation peaks or normal GC timing. It does not include worker heaps, the Electron main/GPU processes, or the OC++ server, and must not be reported as total desktop RAM. Use identical model counts and navigation sequences for before/after comparisons.
+`PROVIDER_MEMORY_MODELS` defaults to 1,200 and `PROVIDER_MEMORY_SWITCHES` defaults to 10. Each sample records Chromium's `Runtime.getHeapUsage` and `Memory.getDOMCounters` after an explicit garbage collection. This measures retained state, not allocation peaks or normal GC timing. It does not include worker heaps, other browser processes, or the OC++ server, and must not be reported as total browser RAM. Use identical model counts and navigation sequences for before/after comparisons.
 
 ## Chrome traces
 

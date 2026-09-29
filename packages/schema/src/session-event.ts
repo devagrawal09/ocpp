@@ -90,6 +90,20 @@ export const ModelSelected = Event.durable({
 })
 export type ModelSelected = typeof ModelSelected.Type
 
+/**
+ * The Code Mode paths a subagent may call: those its caller passed, or what remains of them when a continuing caller
+ * no longer has some.
+ */
+export const ToolsSelected = Event.durable({
+  type: "session.tools.selected",
+  ...options,
+  schema: {
+    ...Base,
+    tools: Schema.Array(Schema.String),
+  },
+})
+export type ToolsSelected = typeof ToolsSelected.Type
+
 export const Moved = Event.durable({
   type: "session.moved",
   ...options,
@@ -560,11 +574,15 @@ export namespace CodeMode {
   })
   export type Started = typeof Started.Type
 
+  /** Marks an execution that resumed after a restart by replaying its tool-call journal. */
+  const Resumed = { resumed: Schema.Boolean.pipe(optional) }
+
   export const Progress = Event.ephemeral({
     type: "session.codemode.progress",
     schema: {
       ...CodeModeBase,
       events: CodeModeExecution.Entries,
+      ...Resumed,
     },
   })
   export type Progress = typeof Progress.Type
@@ -575,6 +593,7 @@ export namespace CodeMode {
     schema: {
       ...CodeModeBase,
       events: CodeModeExecution.Entries,
+      ...Resumed,
     },
   })
   export type Completed = typeof Completed.Type
@@ -587,9 +606,31 @@ export namespace CodeMode {
       events: CodeModeExecution.Entries,
       status: Schema.Literals(["error", "cancelled"]),
       error: Schema.String,
+      ...Resumed,
     },
   })
   export type Failed = typeof Failed.Type
+}
+
+export namespace Invocation {
+  /**
+   * A command or an event started a Code Mode execution outside the model. The message ID derives from
+   * this event ID, and the program it ran derives from the handler and input (`SessionMessage.invocationCode`).
+   */
+  export const Started = Event.durable({
+    type: "session.invocation.started",
+    ...options,
+    schema: {
+      ...Base,
+      executionID: CodeModeExecution.ID,
+      trigger: SessionMessage.InvocationTrigger,
+      /** Name of the notebook function the execution called. */
+      handler: Schema.String,
+      /** The value the handler received. */
+      input: Schema.Json,
+    },
+  })
+  export type Started = typeof Started.Type
 }
 
 export const RetryScheduled = Event.durable({
@@ -670,6 +711,7 @@ export const Definitions = Event.inventory(
   Created,
   AgentSelected,
   ModelSelected,
+  ToolsSelected,
   Moved,
   Renamed,
   Viewed,
@@ -710,6 +752,7 @@ export const Definitions = Event.inventory(
   CodeMode.Progress,
   CodeMode.Completed,
   CodeMode.Failed,
+  Invocation.Started,
   RetryScheduled,
   Compaction.Started,
   Compaction.Delta,

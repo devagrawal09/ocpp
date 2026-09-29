@@ -58,7 +58,6 @@ export interface ImageAttachmentPart {
   type: "image"
   id: string
   filename: string
-  sourcePath?: string
   mime: string
   blob: BlobReference
 }
@@ -241,7 +240,6 @@ function parsePart(value: unknown): ContentPart[] {
         filename: value.filename,
         mime: value.mime,
         blob: { id: blobID, url: blobURL },
-        ...(typeof value.sourcePath === "string" ? { sourcePath: value.sourcePath } : {}),
       },
     ]
   }

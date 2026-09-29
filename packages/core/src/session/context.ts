@@ -1,7 +1,7 @@
 export * as SessionContext from "./context.js"
 
 import { Model } from "@ocpp/schema/model"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Result } from "effect"
 import { Agent } from "../agent.js"
 import { Catalog } from "../catalog.js"
 import { CodeModeInstructions } from "../codemode/instructions.js"
@@ -13,10 +13,14 @@ import { InstructionBuiltIns } from "../instructions/builtins.js"
 import { Location } from "../location.js"
 import { McpInstructions } from "../mcp/instructions.js"
 import { McpTool } from "../tool/mcp.js"
+import { OpenApi } from "../openapi/index.js"
+import { OpenApiInstructions } from "../openapi/instructions.js"
 import { PluginSupervisor } from "../plugin/supervisor.js"
 import { ReferenceInstructions } from "../reference/instructions.js"
 import { SkillInstructions } from "../skill/instructions.js"
+import { SubagentInstructions } from "../subagent/instructions.js"
 import { Tool } from "../tool.js"
+import { ToolLists } from "../tool/lists.js"
 import { AgentNotFoundError } from "./error.js"
 import { SessionHistory } from "./history.js"
 import { InstructionEntry } from "./instruction-entry.js"
@@ -29,6 +33,8 @@ import { SessionStore } from "./store.js"
 export interface Selection {
   readonly session: SessionSchema.Info
   readonly agent: Agent.Selection & { readonly info: Agent.Info }
+  /** Resolved while selecting because tool catalog hooks depend on it; `load` reports a failure. */
+  readonly model: Result.Result<SessionRunnerModel.Resolved, SessionRunnerModel.Error>
   readonly instructions: Instructions.List
   readonly tools: Tool.Snapshot
 }
@@ -84,12 +90,16 @@ const layer = Layer.effect(
     const mcpInstructions = yield* McpInstructions.Service
     const mcpTools = yield* McpTool.Service
     const models = yield* SessionRunnerModel.Service
+    const openapi = yield* OpenApi.Service
+    const openapiInstructions = yield* OpenApiInstructions.Service
     const modelRequests = yield* SessionModelRequest.Service
     const plugins = yield* PluginSupervisor.Service
     const referenceInstructions = yield* ReferenceInstructions.Service
     const skillInstructions = yield* SkillInstructions.Service
+    const subagentInstructions = yield* SubagentInstructions.Service
     const store = yield* SessionStore.Service
     const registry = yield* Tool.Service
+    const lists = yield* ToolLists.Service
 
     const resolveModel = (session: SessionSchema.Info) => models.resolve(session, catalog.model.available)
 
@@ -127,16 +137,26 @@ const layer = Layer.effect(
 
       yield* plugins.flush
       yield* mcpTools.flush
+      yield* openapi.flush
       const agent = yield* agents.select(session.agent)
       if (!agent.info) return yield* new AgentNotFoundError({ sessionID: session.id, agent: session.agent ?? agent.id })
+      const model = yield* resolveModel(session).pipe(Effect.result)
+      // The catalog is exactly the Session's tool list, and guidance for tools outside it would only mislead.
+      const tools = yield* registry.snapshot(yield* lists.select(session, agent.id), session.id, {
+        agent: agent.id,
+        ...(Result.isSuccess(model) ? { model: model.success.ref } : {}),
+      })
+      yield* lists.report(session.id, tools.notice)
+      const catalog = (tools.codeModeCatalog ?? []).map((entry) => entry.path)
       const loaded = yield* Effect.all(
         {
-          tools: registry.snapshot(agent.info.permissions, session.id),
           builtins: builtins.load(sessionID),
           discovery: discovery.load(),
-          skills: skillInstructions.load(agent),
+          skills: skillInstructions.load(catalog),
+          subagents: subagentInstructions.load(catalog),
           references: referenceInstructions.load(),
-          mcp: mcpInstructions.load(agent),
+          mcp: mcpInstructions.load(catalog),
+          openapi: openapiInstructions.load(catalog, tools.paths),
           entries: entries.load(sessionID),
         },
         { concurrency: "unbounded" },
@@ -144,21 +164,24 @@ const layer = Layer.effect(
       return {
         session,
         agent: { ...agent, info: agent.info },
+        model,
         instructions: Instructions.combine([
           loaded.builtins,
-          CodeModeInstructions.make(loaded.tools.codeModeCatalog),
+          CodeModeInstructions.make(tools.codeModeCatalog),
           loaded.discovery,
           loaded.skills,
+          loaded.subagents,
           loaded.references,
           loaded.mcp,
+          loaded.openapi,
           loaded.entries,
         ]),
-        tools: loaded.tools,
+        tools,
       }
     })
 
     const load = Effect.fn("SessionContext.load")(function* (selection: Selection) {
-      const model = yield* resolveModel(selection.session)
+      const model = yield* Effect.fromResult(selection.model)
       const history = yield* SessionHistory.entriesForRunner(db, selection.session.id, selection.instructions)
       return {
         session: selection.session,
@@ -190,12 +213,16 @@ export const node = makeLocationNode({
     Location.node,
     McpInstructions.node,
     McpTool.node,
+    OpenApi.node,
+    OpenApiInstructions.node,
     PluginSupervisor.node,
     ReferenceInstructions.node,
     SessionRunnerModel.node,
     SessionModelRequest.node,
     SessionStore.node,
     SkillInstructions.node,
+    SubagentInstructions.node,
     Tool.node,
+    ToolLists.node,
   ],
 })

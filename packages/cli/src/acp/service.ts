@@ -56,7 +56,7 @@ import { ACPError } from "./error"
 
 export const AuthMethodID = "ocpp-login"
 
-type Connection = Pick<AgentSideConnection, "sessionUpdate" | "requestPermission"> &
+type Connection = Pick<AgentSideConnection, "sessionUpdate"> &
   Partial<Pick<AgentSideConnection, "writeTextFile" | "extNotification" | "signal">>
 
 type Catalog = {

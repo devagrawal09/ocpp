@@ -126,6 +126,15 @@ export class CommandNotFoundError extends Schema.TaggedError<CommandNotFoundErro
   { httpApiStatus: 404 },
 ) {}
 
+export class EventNotFoundError extends Schema.TaggedError<EventNotFoundError>()(
+  "EventNotFoundError",
+  {
+    event: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
 export class CommandExecutionError extends Schema.TaggedError<CommandExecutionError>()(
   "CommandExecutionError",
   {
@@ -139,15 +148,6 @@ export class InvalidCursorError extends Schema.TaggedError<InvalidCursorError>()
   "InvalidCursorError",
   { message: Schema.String },
   { httpApiStatus: 400 },
-) {}
-
-export class PermissionNotFoundError extends Schema.TaggedError<PermissionNotFoundError>()(
-  "PermissionNotFoundError",
-  {
-    requestID: Schema.String,
-    message: Schema.String,
-  },
-  { httpApiStatus: 404 },
 ) {}
 
 export class FormNotFoundError extends Schema.TaggedError<FormNotFoundError>()(

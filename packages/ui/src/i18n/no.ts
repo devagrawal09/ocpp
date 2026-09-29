@@ -152,10 +152,6 @@ export const dict: Record<Keys, string> = {
   "ui.common.clear": "Tøm",
   "ui.common.file": "Fil",
 
-  "ui.permission.deny": "Avslå",
-  "ui.permission.allowAlways": "Tillat alltid",
-  "ui.permission.allowOnce": "Tillat én gang",
-
   "ui.message.expand": "Utvid melding",
   "ui.message.collapse": "Skjul melding",
   "ui.message.copy": "Kopier",

@@ -82,8 +82,14 @@ describe("Config", () => {
         const global = path.join(tmp.path, "global")
         const home = path.join(global, "home")
         const project = path.join(home, "project")
-        const ambient = (entries: readonly { type: string }[]) =>
-          entries.filter((entry) => entry.type === "claude" || entry.type === "agents")
+        // Other suites can leave ecosystem directories in the shared test home above the fixture.
+        const ambient = (entries: readonly { type: string; path?: string }[]) =>
+          entries.filter(
+            (entry) =>
+              (entry.type === "claude" || entry.type === "agents") &&
+              entry.path !== undefined &&
+              inFixture(tmp.path, entry.path),
+          )
         return Effect.promise(() =>
           Promise.all([
             fs.mkdir(project, { recursive: true }),
@@ -587,23 +593,6 @@ describe("Config", () => {
     })
   })
 
-  test("migrates v1 provider lists to policies", () => {
-    expect(
-      ConfigMigrateV1.migrate({
-        enabled_providers: ["anthropic", "openai"],
-        disabled_providers: ["openai"],
-      }).experimental?.policies,
-    ).toEqual([
-      { action: "provider.use", resource: "*", effect: "deny" },
-      { action: "provider.use", resource: "anthropic", effect: "allow" },
-      { action: "provider.use", resource: "openai", effect: "allow" },
-      { action: "provider.use", resource: "openai", effect: "deny" },
-    ])
-    expect(ConfigMigrateV1.migrate({ enabled_providers: [] }).experimental?.policies).toEqual([
-      { action: "provider.use", resource: "*", effect: "deny" },
-    ])
-  })
-
   test("migrates v1 provider setup options into AISDK settings", () => {
     const migrated = ConfigMigrateV1.migrate({
       provider: {
@@ -657,11 +646,8 @@ describe("Config", () => {
     expect(migrated.model).toEqual({ providerID: "azure", model: "deployment" })
     expect(migrated.agents?.reviewer?.model).toEqual({ providerID: "google-vertex", model: "claude-sonnet" })
     expect(migrated.commands?.review?.model).toEqual({ providerID: "azure", model: "deployment" })
-    expect(migrated.experimental?.policies).toEqual([
-      { action: "provider.use", resource: "*", effect: "deny" },
-      { action: "provider.use", resource: "google-vertex", effect: "allow" },
-      { action: "provider.use", resource: "azure", effect: "deny" },
-    ])
+    // Provider lists no longer restrict providers, so they migrate to nothing.
+    expect(migrated.experimental).toBeUndefined()
     expect(migrated.providers?.azure).toMatchObject({
       env: ["AZURE_COGNITIVE_SERVICES_API_KEY"],
       package: Provider.aisdk("@ai-sdk/azure"),
@@ -771,25 +757,6 @@ describe("Config", () => {
     })
   })
 
-  test("normalizes renamed permission actions when migrating v1 permissions", () => {
-    expect(
-      ConfigMigrateV1.migrate({
-        permission: {
-          task: "ask",
-          bash: { "git status": "allow", "*": "deny" },
-          write: "deny",
-          read: "allow",
-        },
-      }).permissions,
-    ).toEqual([
-      { action: "subagent", resource: "*", effect: "ask" },
-      { action: "shell", resource: "git status", effect: "allow" },
-      { action: "shell", resource: "*", effect: "deny" },
-      { action: "edit", resource: "*", effect: "deny" },
-      { action: "read", resource: "*", effect: "allow" },
-    ])
-  })
-
   it.live("returns an empty configuration when directory files do not exist", () =>
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
       Effect.flatMap((tmp) =>
@@ -819,9 +786,9 @@ describe("Config", () => {
               fs.mkdir(project, { recursive: true }),
             ]),
           )
-          const entries = yield* Config.Service.use((config) => config.entries()).pipe(
+          const entries = (yield* Config.Service.use((config) => config.entries()).pipe(
             Effect.provide(testLayer(project, global)),
-          )
+          )).filter((entry) => !entry.path || inFixture(tmp.path, entry.path))
 
           expect(entries.filter((entry) => entry.type === "claude").map((entry) => entry.path)).toEqual([
             AbsolutePath.make(path.join(home, ".claude")),
@@ -1118,10 +1085,8 @@ describe("Config", () => {
             expect(documents[0]?.info.share).toBe("disabled")
             expect(documents[0]?.info.enterprise).toEqual({ url: "https://share.example.com" })
             expect(documents[0]?.info.username).toBe("test-user")
-            expect(documents[0]?.info.permissions).toEqual([
-              { action: "bash", resource: "*", effect: "ask" },
-              { action: "bash", resource: "git status", effect: "allow" },
-            ])
+            // Permission settings still load, ignored: tool lists replaced them.
+            expect(documents[0]?.info).not.toHaveProperty("permissions")
             const reviewer = documents[0]?.info.agents?.reviewer
             expect(reviewer?.model).toEqual(selection("openrouter/openai/gpt-5#high"))
             expect(reviewer?.request).toEqual({
@@ -1135,7 +1100,7 @@ describe("Config", () => {
             expect(reviewer?.color).toBe("#ff6b6b")
             expect(reviewer?.steps).toBe(12)
             expect(reviewer?.disabled).toBe(false)
-            expect(reviewer?.permissions).toEqual([{ action: "edit", resource: "*", effect: "deny" }])
+            expect(reviewer).not.toHaveProperty("permissions")
             expect(documents[0]?.info.snapshots).toBe(false)
             expect(documents[0]?.info.watcher).toEqual({ ignore: ["node_modules/**", "dist/**", ".git"] })
             expect(documents[0]?.info.formatter).toEqual({
@@ -1158,7 +1123,6 @@ describe("Config", () => {
                   command: ["node", "./mcp/server.js"],
                   environment: { API_KEY: "secret" },
                   disabled: false,
-                  codemode: false,
                   timeout: { catalog: 10000 },
                 },
                 remote: {
@@ -1167,11 +1131,13 @@ describe("Config", () => {
                   headers: { Authorization: "Bearer token" },
                   oauth: { client_id: "client", scope: "read write", callback_port: 19876 },
                   disabled: true,
-                  codemode: false,
                   timeout: { startup: 15000 },
                 },
               },
             })
+            // Configs written while MCP servers accepted `codemode` still load, without carrying it.
+            expect(documents[0]?.info.mcp?.servers?.local).not.toHaveProperty("codemode")
+            expect(documents[0]?.info.mcp?.servers?.remote).not.toHaveProperty("codemode")
             expect(documents[0]?.info.compaction).toEqual({
               auto: true,
               keep: { tokens: 2000 },
@@ -1327,18 +1293,13 @@ describe("Config", () => {
             expect(documents[0]?.info.default_agent).toBe("reviewer")
             expect(documents[0]?.info.snapshots).toBe(false)
             expect(documents[0]?.info.share).toBe("auto")
-            expect(documents[0]?.info.permissions).toEqual([
-              { action: "shell", resource: "*", effect: "ask" },
-              { action: "edit", resource: "*.md", effect: "allow" },
-              { action: "edit", resource: "*", effect: "deny" },
-              { action: "question", resource: "*", effect: "deny" },
-            ])
+            expect(documents[0]?.info).not.toHaveProperty("permissions")
             expect(documents[0]?.info.agents?.reviewer).toMatchObject({
               system: "Review changes.",
               disabled: true,
               request: { body: { temperature: 0.2 } },
-              permissions: [{ action: "read", resource: "*", effect: "allow" }],
             })
+            expect(documents[0]?.info.agents?.reviewer).not.toHaveProperty("permissions")
             expect(documents[0]?.info.plugins).toEqual([
               "opencode-helicone-session",
               { package: "@my-org/audit-plugin", options: { endpoint: "https://audit.example.com" } },

@@ -1,8 +1,7 @@
 import { createMemo, type Accessor } from "solid-js"
 import { useGlobal, useServerCtx } from "@/runtime/server/runtime"
-import { sessionPermissionRequest, sessionQuestionForm } from "@/session/requests/session-request-tree"
+import { sessionQuestionForm } from "@/session/requests/session-request-tree"
 import { ServerConnection } from "@/runtime/server/registry"
-import { useSettings } from "@/settings/model"
 
 export function useSessionTabAvatarState(
   server: Accessor<ServerConnection.Key>,
@@ -10,7 +9,6 @@ export function useSessionTabAvatarState(
   root?: Accessor<boolean>,
 ) {
   const global = useGlobal()
-  const settings = useSettings()
   const connection = createMemo(() => global.servers.list().find((item) => ServerConnection.key(item) === server()))
   const serverCtx = useServerCtx(connection)
   const sessions = createMemo(() => {
@@ -23,18 +21,11 @@ export function useSessionTabAvatarState(
       return info ? [info] : []
     })
   })
-  const hasPermissions = createMemo(() => {
-    if (settings.permissions.autoApprove()) return false
-    const ctx = serverCtx()
-    if (!ctx) return false
-    return !!sessionPermissionRequest(sessions(), ctx.data.session.permission.list, sessionId())
-  })
-  const hasQuestions = createMemo(() => {
+  const needsAttention = createMemo(() => {
     const data = serverCtx()?.data
     if (!data) return false
     return !!sessionQuestionForm(sessions(), data.session.form.list, sessionId())
   })
-  const needsAttention = createMemo(() => hasPermissions() || hasQuestions())
   const unread = createMemo(
     () => needsAttention() || (serverCtx()?.notification.session.unseenCount(sessionId()) ?? 0) > 0,
   )

@@ -1,6 +1,6 @@
 import { useData } from "@/runtime/server/current"
 import { useServerSDK } from "@/runtime/server/client"
-import { normalizeProviderList } from "@/runtime/server/global-sync/utils"
+import { normalizeProviderList, withDrivers } from "@/runtime/server/global-sync/utils"
 import { Iterable, pipe } from "effect"
 import { createEffect, createMemo, type Accessor } from "solid-js"
 import type { ProviderListResponse } from "@/runtime/server/types"
@@ -25,7 +25,11 @@ export function useProviders(directory: Accessor<string | undefined>) {
     void (async () => {
       if (!ref) await data.location.syncInfo()
       const resolved = ref ?? data.location.default()
-      await Promise.all([data.location.provider.sync(resolved), data.location.model.sync(resolved)])
+      await Promise.all([
+        data.location.provider.sync(resolved),
+        data.location.model.sync(resolved),
+        data.location.driver.sync(resolved),
+      ])
     })().catch(() => undefined)
   })
   const integrations = useIntegrations(directory)
@@ -35,7 +39,7 @@ export function useProviders(directory: Accessor<string | undefined>) {
     const provider = data.location.provider.list(ref)
     const model = data.location.model.list(ref)
     if (!provider || !model) return emptyProviderCatalog
-    return normalizeProviderList(provider, model)
+    return withDrivers(normalizeProviderList(provider, model), data.location.driver.list(ref) ?? [])
   })
 
   return {

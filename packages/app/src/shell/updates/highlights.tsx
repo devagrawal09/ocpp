@@ -170,14 +170,13 @@ export const { use: useHighlights, provider: HighlightsProvider } = createSimple
         return
       }
 
-      const fetcher = platform.fetch ?? fetch
       const controller = new AbortController()
       onCleanup(() => {
         controller.abort()
         clearTimer()
       })
 
-      fetcher(CHANGELOG_URL, {
+      fetch(CHANGELOG_URL, {
         signal: controller.signal,
         headers: { Accept: "application/json" },
       })

@@ -5,15 +5,12 @@ import type { Context } from "@ocpp/plugin/effect/plugin"
 import type { ShellCreateBefore } from "@ocpp/plugin/effect/shell"
 import type { Tool } from "@ocpp/schema/tool"
 import { Deferred, Effect, Schema, Scope } from "effect"
-import { Config } from "../../config.js"
 import { Environment } from "../../environment/index.js"
 import { LocationMutation } from "../../location-mutation.js"
-import { Permission } from "../../permission.js"
 import { PluginRuntime } from "../../plugin/runtime.js"
 import { NonNegativeInt } from "../../schema.js"
 import { SessionSchema } from "../../session/schema.js"
 import { Shell } from "../../shell.js"
-import { ShellParse } from "../../shell/parse.js"
 import { ShellSelect } from "../../shell/select.js"
 import { ShellResult } from "../../shell/result.js"
 
@@ -106,49 +103,12 @@ export const Plugin = {
     const shell = yield* Shell.Service
     const shellSelect = yield* ShellSelect.Service
     const compatibleShell = shellSelect.resolve({ priority: "compat" })
-    const permission = yield* Permission.Service
-    const config = yield* Config.Service
 
-    const prepare = Effect.fn("ShellTool.prepare")(function* (invocation: ShellCreateBefore, context: Tool.Context) {
-      const source = {
-        type: "tool" as const,
-        messageID: context.messageID,
-        id: context.id,
-      }
-      const target = yield* mutation.resolve({ path: invocation.cwd, kind: "directory" })
+    const prepare = Effect.fn("ShellTool.prepare")(function* (invocation: ShellCreateBefore) {
+      const target = yield* mutation.resolve({ path: invocation.cwd })
       invocation.cwd = target.absolute
       const timeout = invocation.timeout
-      const portable = Config.latest(yield* config.entries(), "experimental")?.portable_shell_scanner === true
-      const parsed = yield* ShellParse.scan(invocation.command, invocation.shell, target.absolute, { portable })
-      const directories = yield* Effect.forEach(parsed.directories, (directory) =>
-        mutation.resolve({
-          path: LocationMutation.resolvePath(target.absolute, directory),
-          kind: "directory",
-        }),
-      )
-      const external = [target, ...directories]
-        .map((item) => item.externalDirectory)
-        .filter((item) => item !== undefined)
-        .filter((item, index, items) => items.findIndex((other) => other.resource === item.resource) === index)
-      if (external.length > 0)
-        yield* permission.assert({
-          action: "external_directory",
-          resources: external.map((item) => item.resource),
-          save: external.map((item) => item.save),
-          sessionID: context.sessionID,
-          agent: context.agent,
-          source,
-        })
-      if (parsed.commands.length > 0)
-        yield* permission.assert({
-          action: name,
-          resources: parsed.commands.map((command) => command.resource),
-          save: parsed.commands.map((command) => command.save),
-          sessionID: context.sessionID,
-          agent: context.agent,
-          source,
-        })
-      // Approval can outlive the directory, so validate immediately before spawning.
+      // Validate immediately before spawning.
       const workdir = yield* Environment.typeFollowing(environment.files, target.absolute).pipe(
         Effect.catchTag("Environment.NotFound", () =>
           Effect.fail(new Error(`Working directory does not exist: ${target.absolute}`)),
@@ -197,7 +157,6 @@ export const Plugin = {
       .transform((draft) =>
         draft.add({
           name,
-          options: { codemode: false },
           description: description(),
           input: Input,
           output: Output,
@@ -215,7 +174,7 @@ export const Plugin = {
                 },
                 (invocation) =>
                   Effect.gen(function* () {
-                    finalTimeout = yield* prepare(invocation, context)
+                    finalTimeout = yield* prepare(invocation)
                   }),
               )
               yield* context.progress({ shellID: info.id })
@@ -268,7 +227,7 @@ export const Plugin = {
       )
       .pipe(Effect.orDie)
 
-    yield* ctx.session.hook("context", (event) =>
+    yield* ctx.tool.hook("catalog", (event) =>
       Effect.gen(function* () {
         const tool = event.tools[name]
         if (!tool) return

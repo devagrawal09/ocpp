@@ -6,7 +6,7 @@ import { replayMessages, streamTurn, type ChildSessionUpdate, type TurnControl }
 import { createSseFixture, durableEvent, ephemeralEvent, withTimeout } from "./sse-fixture"
 
 type SessionUpdateParams = Parameters<AgentSideConnection["sessionUpdate"]>[0]
-type Connection = Pick<AgentSideConnection, "sessionUpdate" | "requestPermission">
+type Connection = Pick<AgentSideConnection, "sessionUpdate">
 type Fixture = ReturnType<typeof createSseFixture>
 
 describe("acp event behavior", () => {
@@ -146,7 +146,6 @@ describe("acp event behavior", () => {
         }
         if (updates.length === 3) allUpdates.resolve()
       },
-      requestPermission: async () => ({ outcome: { outcome: "cancelled" } }),
     } satisfies Connection
     const result = turn({ fixture, connection, sessionID: "ses_order", inboxID: "input_order" })
 
@@ -723,7 +722,6 @@ function recordingConnection(updates: SessionUpdateParams[]) {
     sessionUpdate: async (update) => {
       updates.push(update)
     },
-    requestPermission: async () => ({ outcome: { outcome: "cancelled" } }),
   } satisfies Connection
 }
 

@@ -1,4 +1,5 @@
 import { Catalog } from "@ocpp/core/catalog"
+import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
 import { ServiceUnavailableError } from "@ocpp/protocol/errors"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
@@ -31,6 +32,13 @@ export const ModelHandler = HttpApiBuilder.group(Api, "server.model", (handlers)
           yield* flushPlugins
           const catalog = yield* Catalog.Service
           return yield* response(catalog.model.default())
+        }),
+      )
+      .handle(
+        "model.drivers",
+        Effect.fn(function* () {
+          const drivers = yield* ExternalAgentDrivers.Service
+          return yield* response(drivers.list())
         }),
       )
   }),

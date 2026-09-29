@@ -66,7 +66,6 @@ test("project Extensions stays inside settings while plugins load", async ({ pag
             id,
             source: { type: "package", package: id },
             status: "active",
-            tui: false,
           })),
         },
       })

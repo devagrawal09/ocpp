@@ -6,7 +6,7 @@ import path from "node:path"
 import { readStdin } from "../util/io"
 import { ServerConnection } from "../services/server-connection"
 import { parseSessionTargetModel, resolveSessionTarget } from "../session-target"
-import { toolInlineInfo } from "@ocpp/tui/mini/tool"
+import { toolDisplay } from "./tool-display"
 import { runNonInteractivePrompt } from "./noninteractive"
 import { UI } from "./ui"
 import { Env } from "../env"
@@ -24,7 +24,6 @@ export type RunCommandInput = {
   file: string[]
   title?: string
   thinking?: boolean
-  auto?: boolean
 }
 
 type FilePart = {
@@ -145,11 +144,10 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
     variant,
     thinking: input.thinking ?? false,
     format: input.format,
-    auto: input.auto ?? false,
     attached: options.attached ?? true,
     compatibility: options.compatibility,
-    renderTool: (part) => renderTool(part, target.location.directory),
-    renderToolError: (part) => renderToolError(part, target.location.directory),
+    renderTool,
+    renderToolError,
   }).catch((error) => reportRunError(input, errorMessage(error), target.session.id))
 }
 
@@ -223,25 +221,20 @@ function isBinaryContent(bytes: Uint8Array) {
   return bytes.reduce((count, byte) => count + Number(byte < 9 || (byte > 13 && byte < 32)), 0) / bytes.length > 0.3
 }
 
-async function renderTool(part: SessionMessageAssistantTool, directory: string) {
-  const info = toolInlineInfo(part, directory)
-  if (info.mode === "block") {
-    UI.empty()
-    UI.println(UI.Style.TEXT_NORMAL + info.icon, UI.Style.TEXT_NORMAL + info.title)
-    if (info.body?.trim()) UI.println(info.body)
-    UI.empty()
+async function renderTool(part: SessionMessageAssistantTool) {
+  const info = toolDisplay(part)
+  if (info.body === undefined) {
+    UI.println(UI.Style.TEXT_NORMAL + "⚙", UI.Style.TEXT_NORMAL + info.title)
     return
   }
-  UI.println(
-    UI.Style.TEXT_NORMAL + info.icon,
-    UI.Style.TEXT_NORMAL + info.title,
-    info.description ? UI.Style.TEXT_DIM + info.description + UI.Style.TEXT_NORMAL : "",
-  )
+  UI.empty()
+  UI.println(UI.Style.TEXT_NORMAL + "⚙", UI.Style.TEXT_NORMAL + info.title)
+  if (info.body.trim()) UI.println(UI.Style.TEXT_DIM + info.body + UI.Style.TEXT_NORMAL)
+  UI.empty()
 }
 
-async function renderToolError(part: SessionMessageAssistantTool, directory: string) {
-  const info = toolInlineInfo(part, directory)
-  UI.println(UI.Style.TEXT_NORMAL + "✗", UI.Style.TEXT_NORMAL + `${info.title} failed`)
+async function renderToolError(part: SessionMessageAssistantTool) {
+  UI.println(UI.Style.TEXT_NORMAL + "✗", UI.Style.TEXT_NORMAL + `${toolDisplay(part).title} failed`)
 }
 
 /** @internal Used by the V1 command boundary before a Session exists. */

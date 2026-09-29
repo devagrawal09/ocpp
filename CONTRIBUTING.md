@@ -26,23 +26,22 @@ OC++ requires Bun 1.3 or newer. From the repository root:
 
 ```bash
 bun install
-bun dev [directory]
+bun run --cwd packages/app build
+bun dev
 ```
 
-`bun dev` runs the V2 CLI and TUI. Pass a directory to open another project, or `.` to open this repository.
+`bun dev` runs the V2 CLI from source. Without a command, it starts the background server if needed and opens the web app in your browser. In development the server serves the web app from `packages/app/dist`, so build it first. Pass a command to run anything else, for example `bun dev run "summarize this repository"` or `bun dev service status`.
 
-To test a development TUI against your installed OC++ V2 background service and live sessions:
-
-```bash
-bun run dev:live [directory]
-```
-
-For web development, run the backend and app in separate terminals. Other interfaces have root scripts:
+For web development with hot reload, run the backend and the app dev server in separate terminals:
 
 ```bash
 bun dev serve --port 4096
 bun run dev:web
-bun run dev:desktop
+```
+
+The documentation site has its own root script:
+
+```bash
 bun run dev:www
 ```
 
@@ -54,9 +53,7 @@ bun run dev:www
 - `packages/server`: HTTP server and runtime composition
 - `packages/client`: generated TypeScript clients
 - `packages/cli`: command-line entrypoint and service lifecycle
-- `packages/tui`: terminal interface
-- `packages/app`: shared web interface
-- `packages/desktop`: Electron desktop application
+- `packages/app`: web app, served by the OC++ server
 - `packages/plugin`: plugin API
 
 ### Verification
@@ -102,7 +99,7 @@ Use `type(scope): summary`. Supported types are `feat`, `fix`, `docs`, `chore`, 
 Examples:
 
 - `docs: update contributing guide`
-- `fix(tui): restore scroll position`
+- `fix(cli): restore run output formatting`
 - `feat(app): add workspace search`
 
 ## Issues

@@ -52,7 +52,7 @@ Inbox commands own identity and type checks and return typed `SessionInbox.Lifec
 
 ## Execution Is Process-Local
 
-`SessionExecution` is process-global and keyed only by Session ID. At drain start it loads the Session, enters its Location through `LocationServiceMap`, and invokes the Location-scoped runner. The runner, model resolution, tools, permissions, plugins, and filesystem remain Location-scoped.
+`SessionExecution` is process-global and keyed only by Session ID. At drain start it loads the Session, enters its Location through `LocationServiceMap`, and invokes the Location-scoped runner. The runner, model resolution, tools and tool lists, plugins, and filesystem remain Location-scoped.
 
 `SessionRunCoordinator` provides the local ownership rules:
 

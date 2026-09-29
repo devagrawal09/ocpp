@@ -9,7 +9,6 @@ import { Environment } from "@ocpp/core/environment/index"
 import { FileSystem } from "@ocpp/core/filesystem"
 import { Location } from "@ocpp/core/location"
 import { LocationMutation } from "@ocpp/core/location-mutation"
-import { Permission } from "@ocpp/core/permission"
 import { Ripgrep } from "@ocpp/core/ripgrep"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
@@ -19,26 +18,21 @@ import { Tool } from "@ocpp/core/tool"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { it } from "./lib/effect"
-import { permissionLayer } from "./lib/permission"
 import { executeTool, registerToolPlugin, toolIdentity } from "./lib/tool"
 
 const globToolNode = makeLocationNode({
   name: "test/glob-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(GlobTool.Plugin)),
-  deps: [Tool.node, Environment.node, Ripgrep.node, Location.node, LocationMutation.node, Permission.node],
+  deps: [Tool.node, Environment.node, Ripgrep.node, Location.node, LocationMutation.node],
 })
 const grepToolNode = makeLocationNode({
   name: "test/grep-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(GrepTool.Plugin)),
-  deps: [Tool.node, Environment.node, Ripgrep.node, Location.node, LocationMutation.node, Permission.node],
+  deps: [Tool.node, Environment.node, Ripgrep.node, Location.node, LocationMutation.node],
 })
 const sessionID = Session.ID.make("ses_search_tool_test")
 
-const withTools = <A, E, R>(
-  directory: string,
-  body: (registry: Tool.Interface) => Effect.Effect<A, E, R>,
-  assertions?: Permission.AssertInput[],
-) =>
+const withTools = <A, E, R>(directory: string, body: (registry: Tool.Interface) => Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const registry = yield* Tool.Service
     return yield* body(registry)
@@ -48,15 +42,6 @@ const withTools = <A, E, R>(
         [
           Location.node,
           Layer.succeed(Location.Service, Location.Service.of(location({ directory: AbsolutePath.make(directory) }))),
-        ],
-        [
-          Permission.node,
-          permissionLayer({
-            assert: (input) =>
-              Effect.sync(() => {
-                assertions?.push(input)
-              }),
-          }),
         ],
       ]),
     ),
@@ -207,42 +192,23 @@ describe("search tools", () => {
     ),
   )
 
-  it.live("requires external_directory approval for external grep files and directories", () =>
+  it.live("greps external files and directories", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
-        const assertions: Permission.AssertInput[] = []
         return Effect.promise(() => fs.writeFile(path.join(outside.path, "outside.txt"), "needle\n")).pipe(
           Effect.andThen(
-            withTools(
-              active.path,
-              (registry) =>
-                Effect.gen(function* () {
-                  const directory = yield* executeTool(
-                    registry,
-                    call("grep", { path: outside.path, pattern: "needle" }),
-                  )
-                  const file = yield* executeTool(
-                    registry,
-                    call("grep", { path: path.join(outside.path, "outside.txt"), pattern: "needle" }),
-                  )
-                  expect(directory.status).toBe("completed")
-                  expect(file.status).toBe("completed")
-                }),
-              assertions,
+            withTools(active.path, (registry) =>
+              Effect.gen(function* () {
+                const directory = yield* executeTool(registry, call("grep", { path: outside.path, pattern: "needle" }))
+                const file = yield* executeTool(
+                  registry,
+                  call("grep", { path: path.join(outside.path, "outside.txt"), pattern: "needle" }),
+                )
+                expect(directory.status).toBe("completed")
+                expect(file.status).toBe("completed")
+              }),
             ),
-          ),
-          Effect.tap(() =>
-            Effect.sync(() => {
-              expect(assertions.map((input) => input.action)).toEqual([
-                "external_directory",
-                "grep",
-                "external_directory",
-                "grep",
-              ])
-              expect(assertions[0]?.resources).toEqual([path.join(outside.path, "*").replaceAll("\\", "/")])
-              expect(assertions[2]?.resources).toEqual([path.join(outside.path, "*").replaceAll("\\", "/")])
-            }),
           ),
         )
       },
@@ -296,24 +262,19 @@ describe("search tools", () => {
     ),
   )
 
-  it.live("requires external_directory approval for an explicit external glob path", () =>
+  it.live("globs an explicit external path", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
-        const assertions: Permission.AssertInput[] = []
         return Effect.promise(() => fs.writeFile(path.join(outside.path, "outside.txt"), "outside\n")).pipe(
           Effect.andThen(
-            withTools(
-              active.path,
-              (registry) => executeTool(registry, call("glob", { path: outside.path, pattern: "*.txt" })),
-              assertions,
+            withTools(active.path, (registry) =>
+              executeTool(registry, call("glob", { path: outside.path, pattern: "*.txt" })),
             ),
           ),
           Effect.tap((result) =>
             Effect.sync(() => {
               expect(result.status).toBe("completed")
-              expect(assertions.map((input) => input.action)).toEqual(["external_directory", "glob"])
-              expect(assertions[0]?.resources).toEqual([path.join(outside.path, "*").replaceAll("\\", "/")])
             }),
           ),
         )
@@ -325,27 +286,23 @@ describe("search tools", () => {
     ),
   )
 
-  it.live("globs through an in-location external symlink without external approval", () =>
+  it.live("globs through an in-location external symlink", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
         if (process.platform === "win32") return Effect.void
-        const assertions: Permission.AssertInput[] = []
         return Effect.promise(async () => {
           await fs.writeFile(path.join(outside.path, "outside.txt"), "outside\n")
           await fs.symlink(outside.path, path.join(active.path, "linked"))
         }).pipe(
           Effect.andThen(
-            withTools(
-              active.path,
-              (registry) => executeTool(registry, call("glob", { path: "linked", pattern: "*.txt" })),
-              assertions,
+            withTools(active.path, (registry) =>
+              executeTool(registry, call("glob", { path: "linked", pattern: "*.txt" })),
             ),
           ),
           Effect.tap((result) =>
             Effect.sync(() => {
               expect(result.status).toBe("completed")
-              expect(assertions.map((input) => input.action)).toEqual(["glob"])
               expect(result).toMatchObject({
                 output: [{ path: path.join("linked", "outside.txt"), type: "file" }],
                 content: [{ type: "text", text: path.join(active.path, "linked", "outside.txt") }],

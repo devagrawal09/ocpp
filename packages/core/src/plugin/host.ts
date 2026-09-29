@@ -11,6 +11,7 @@ import { AISDK } from "../aisdk.js"
 import { Catalog } from "../catalog.js"
 import { Command } from "../command.js"
 import { Credential } from "../credential.js"
+import { ExternalAgentDrivers } from "../external-agent/drivers.js"
 import { Bus } from "../bus.js"
 import { Integration } from "../integration.js"
 import { KV } from "../kv.js"
@@ -27,7 +28,6 @@ import { Workspace } from "../workspace.js"
 import { Vcs } from "../vcs.js"
 import { WebSearch } from "../websearch.js"
 import { Generate } from "../generate.js"
-import { Permission } from "../permission.js"
 import { PluginHooks } from "./hooks.js"
 import type { Interface } from "../plugin.js"
 
@@ -37,6 +37,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
   const agents = yield* Agent.Service
   const aisdk = yield* AISDK.Service
   const catalog = yield* Catalog.Service
+  const drivers = yield* ExternalAgentDrivers.Service
   const commands = yield* Command.Service
   const bus = yield* Bus.Service
   const integration = yield* Integration.Service
@@ -49,7 +50,6 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
   const vcs = yield* Vcs.Service
   const websearch = yield* WebSearch.Service
   const generate = yield* Generate.Service
-  const permission = yield* Permission.Service
   const hooks = yield* PluginHooks.Service
   const runtime = yield* PluginRuntime.Service
   const locationInfo = () =>
@@ -159,6 +159,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
       model: {
         list: () => response(catalog.model.available()),
         default: () => response(catalog.model.default()),
+        drivers: () => response(drivers.list()),
       },
       reload: catalog.reload,
       transform: (callback) =>
@@ -305,30 +306,6 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
             remove: draft.remove,
           })
         }),
-    },
-    permission: {
-      hook: (name, callback) => hooks.register("permission", name, callback),
-      list: (input) => permission.forSession(input.sessionID),
-      get: (input) =>
-        permission
-          .get(input.requestID)
-          .pipe(
-            Effect.flatMap((request) =>
-              request?.sessionID === input.sessionID
-                ? Effect.succeed(request)
-                : Effect.fail(new Error(`Permission request not found: ${input.requestID}`)),
-            ),
-          ),
-      reply: (input) =>
-        permission
-          .get(input.requestID)
-          .pipe(
-            Effect.flatMap((request) =>
-              request?.sessionID === input.sessionID
-                ? permission.reply({ requestID: input.requestID, reply: input.reply, message: input.message })
-                : Effect.fail(new Error(`Permission request not found: ${input.requestID}`)),
-            ),
-          ),
     },
     plugin: {
       list: () => response(plugin.list()),

@@ -1,7 +1,6 @@
 export * as ConfigAgent from "./agent.js"
 
 import { Schema } from "effect"
-import { Permission } from "../permission.js"
 import { optional, PositiveInt } from "../schema.js"
 import { ConfigModel } from "./model.js"
 import { ConfigProvider } from "./provider.js"
@@ -18,5 +17,4 @@ export class Info extends Schema.Class<Info>("Config.Agent")({
   color: Color.pipe(optional),
   steps: PositiveInt.pipe(optional),
   disabled: Schema.Boolean.pipe(optional),
-  permissions: Permission.Ruleset.pipe(optional),
 }) {}

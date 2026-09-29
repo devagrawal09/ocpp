@@ -29,8 +29,10 @@ export type ProgramNode = AstNode & {
 export type Program = {
   readonly version: typeof IR_VERSION
   /**
-   * Canonical source of the compiled program. Node positions refer to it, and it is retained beside
-   * the IR so a later compiler can recompile a persisted program instead of rejecting it.
+   * Canonical source of the compiled program: the transpiled JavaScript. Node offsets (`start` and
+   * `end`) index it, while each node's `loc` gives the line and column in the code as submitted, so
+   * diagnostics point at the author's own lines. It is retained beside the IR so a later compiler can
+   * recompile a persisted program instead of rejecting it.
    */
   readonly source: string
   readonly body: ProgramNode
@@ -54,6 +56,53 @@ export const isPromiseAllCall = (node: AstNode): boolean => {
     node.callee.property.type === "Identifier" &&
     node.callee.property.name === "all"
   )
+}
+
+/** A direct tool call and the canonical dotted path it names. */
+export type StaticToolCall = { readonly path: string; readonly node: AstNode }
+
+/**
+ * Every direct tool call in a subtree, in source order. Programs must name their tools with static
+ * paths, so this is exactly the set of tools the code itself can call. A saved notebook function it
+ * invokes carries its own paths, which are resolved and authorized again when it runs.
+ */
+export const staticToolCalls = (node: AstNode): ReadonlyArray<StaticToolCall> => {
+  const path = node.type === "CallExpression" && isAstNode(node.callee) ? staticToolPath(node.callee) : undefined
+  return [
+    ...(path?.length ? [{ path: path.join("."), node }] : []),
+    ...Object.entries(node).flatMap(([key, value]) =>
+      key === "loc" ? [] : (Array.isArray(value) ? value : [value]).filter(isAstNode).flatMap(staticToolCalls),
+    ),
+  ]
+}
+
+/**
+ * Every tool reference in a subtree that is not called, such as `tools.fs.read` or the namespace
+ * `tools.linear` passed to a tool that hands tools on. Like calls, references name static paths.
+ */
+export const staticToolReferences = (node: AstNode): ReadonlyArray<StaticToolCall> => {
+  const path = node.type === "MemberExpression" ? staticToolPath(node) : undefined
+  if (path?.length) return [{ path: path.join("."), node }]
+  return Object.entries(node).flatMap(([key, value]) =>
+    key === "loc" ||
+    (node.type === "CallExpression" && key === "callee" && isAstNode(value) && staticToolPath(value) !== undefined)
+      ? []
+      : (Array.isArray(value) ? value : [value]).filter(isAstNode).flatMap(staticToolReferences),
+  )
+}
+
+const isAstNode = (value: unknown): value is AstNode => isRecord(value) && typeof value.type === "string"
+
+/** The path a static tool expression such as `tools.fs.read` names, `[]` for the `tools` root, else undefined. */
+export const staticToolPath = (node: AstNode): ReadonlyArray<string> | undefined => {
+  if (node.type === "Identifier") return node.name === "tools" ? [] : undefined
+  if (node.type !== "MemberExpression" || node.optional === true || !isAstNode(node.object)) return
+  const parent = staticToolPath(node.object)
+  if (parent === undefined || !isRecord(node.property)) return
+  if (node.computed !== true && node.property.type === "Identifier" && typeof node.property.name === "string")
+    return [...parent, node.property.name]
+  if (node.computed === true && node.property.type === "Literal" && typeof node.property.value === "string")
+    return [...parent, node.property.value]
 }
 
 export type DecodedProgram =

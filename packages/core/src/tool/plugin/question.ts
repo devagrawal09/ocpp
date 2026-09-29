@@ -1,10 +1,8 @@
 export * as QuestionTool from "./question.js"
 
 import type { Context } from "@ocpp/plugin/effect/plugin"
-import { ToolFailure } from "@ocpp/ai"
 import { Effect, Schema } from "effect"
 import { Form } from "../../form.js"
-import { Permission } from "../../permission.js"
 import { Question } from "@ocpp/schema/question"
 
 export const name = "question"
@@ -49,47 +47,34 @@ export const Plugin = {
   id: "ocpp.tool.question",
   effect: Effect.fn("QuestionTool.Plugin")(function* (ctx: Context) {
     const forms = yield* Form.Service
-    const permission = yield* Permission.Service
 
     yield* ctx.tool
       .transform((draft) =>
         draft.add({
           name,
-          options: { codemode: false },
           description,
           input: Input,
           output: Output,
           execute: (input, context) =>
-            permission
-              .assert({
-                action: "question",
-                resources: ["*"],
+            forms
+              .ask({
                 sessionID: context.sessionID,
-                agent: context.agent,
-                source: { type: "tool", messageID: context.messageID, id: context.id },
+                title: "Questions",
+                metadata: {
+                  kind: "question",
+                  tool: { messageID: context.messageID, id: context.id },
+                },
+                fields: [
+                  toField(input.questions[0], 0),
+                  ...input.questions.slice(1).map((question, index) => toField(question, index + 1)),
+                ],
               })
               .pipe(
-                Effect.mapError((error) => new ToolFailure({ message: "Permission denied: question", error })),
-                Effect.andThen(
-                  forms
-                    .ask({
-                      sessionID: context.sessionID,
-                      title: "Questions",
-                      metadata: {
-                        kind: "question",
-                        tool: { messageID: context.messageID, id: context.id },
-                      },
-                      fields: [
-                        toField(input.questions[0], 0),
-                        ...input.questions.slice(1).map((question, index) => toField(question, index + 1)),
-                      ],
-                    })
-                    .pipe(Effect.orDie),
-                ),
+                Effect.orDie,
                 Effect.flatMap((state) => {
-                  // Deliberate defect tunnel (see Permission.assert): a dismissal must dodge
-                  // leaf `mapError` blankets so it never becomes model-facing tool output; it
-                  // resurfaces as a typed failure at SessionModelRequest.executeTool.
+                  // Deliberate defect tunnel: a dismissal must dodge leaf `mapError` blankets so it
+                  // never becomes model-facing tool output; it resurfaces as a typed failure at
+                  // SessionModelRequest.executeTool.
                   if (state.status === "cancelled") return Effect.die(new CancelledError())
                   const output = {
                     answers: input.questions.map((_, index): Question.Answer => {

@@ -10,6 +10,7 @@ import { Agent } from "./agent.js"
 import { AISDK } from "./aisdk.js"
 import { Catalog } from "./catalog.js"
 import { Command } from "./command.js"
+import { ExternalAgentDrivers } from "./external-agent/drivers.js"
 import { Bus } from "./bus.js"
 import { Integration } from "./integration.js"
 import { KV } from "./kv.js"
@@ -25,7 +26,6 @@ import { Tool } from "./tool.js"
 import { Vcs } from "./vcs.js"
 import { PluginHooks } from "./plugin/hooks.js"
 import { Generate } from "./generate.js"
-import { Permission } from "./permission.js"
 
 export interface Interface {
   readonly activate: (
@@ -124,7 +124,6 @@ const layer = Layer.effect(
                   source: definition.source ?? { type: "builtin" },
                   status: "failed",
                   error: loaded.error,
-                  tui: definition.tui ?? false,
                 })
 
                 if (!previous) continue
@@ -176,7 +175,6 @@ function activeInfo(plugin: Versioned): Plugin.Info {
     id: Plugin.ID.make(plugin.id),
     source: plugin.source ?? { type: "builtin" },
     status: "active",
-    tui: plugin.tui ?? false,
   }
 }
 
@@ -190,6 +188,7 @@ export const node = makeLocationNode({
     AISDK.node,
     Catalog.node,
     Command.node,
+    ExternalAgentDrivers.node,
     Integration.node,
     KV.node,
     Mcp.node,
@@ -202,6 +201,5 @@ export const node = makeLocationNode({
     PluginRuntime.node,
     WebSearch.node,
     Generate.node,
-    Permission.node,
   ],
 })

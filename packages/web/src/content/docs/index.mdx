@@ -12,9 +12,9 @@ OC++ 1 installs and runs as `ocpp`. OC++ 2 installs separately as `ocpp`, so you
 installed and run them side by side. See the [OC++ 2 docs](https://ocpp.ai/v2/docs/) to install V2.
 :::
 
-[**OC++**](/) is an open source AI coding agent. It's available as a terminal-based interface, desktop app, or IDE extension.
+[**OC++**](/) is an open source AI coding agent. Running `ocpp` opens the OC++ web app in your browser, and the [CLI](/docs/cli) lets you use it from scripts and automation.
 
-![OC++ TUI with the ocpp theme](../../assets/lander/screenshot.png)
+![OC++ web app](../../assets/web/web-homepage-new-session.png)
 
 Let's get started.
 
@@ -22,15 +22,7 @@ Let's get started.
 
 #### Prerequisites
 
-To use OC++ in your terminal, you'll need:
-
-1. A modern terminal emulator like:
-   - [WezTerm](https://wezterm.org), cross-platform
-   - [Alacritty](https://alacritty.org), cross-platform
-   - [Ghostty](https://ghostty.org), Linux and macOS
-   - [Kitty](https://sw.kovidgoyal.net/kitty/), Linux and macOS
-
-2. API keys for the LLM providers you want to use.
+To use OC++, you'll need API keys for the LLM providers you want to use.
 
 ---
 
@@ -144,22 +136,11 @@ If you are new to using LLM providers, we recommend using [OpenCode Zen](/docs/z
 It's a curated list of models that have been tested and verified by the OC++
 team.
 
-1. Run the `/connect` command in the TUI, select ocpp, and head to [opencode.ai/auth](https://opencode.ai/auth).
-
-   ```txt
-   /connect
-   ```
+1. In the web app, open the command palette with **Cmd+K** (**Ctrl+K** on Windows and Linux), run **Connect provider**, select ocpp, and head to [opencode.ai/auth](https://opencode.ai/auth).
 
 2. Sign in, add your billing details, and copy your API key.
 
 3. Paste your API key.
-
-   ```txt
-   ┌ API key
-   │
-   │
-   └ enter
-   ```
 
 Alternatively, you can select one of the other providers. [Learn more](/docs/providers#directory).
 
@@ -167,18 +148,14 @@ Alternatively, you can select one of the other providers. [Learn more](/docs/pro
 
 ## Initialize
 
-Now that you've configured a provider, you can navigate to a project that
-you want to work on.
-
-```bash
-cd /path/to/project
-```
-
-And run OC++.
+Now that you've configured a provider, run OC++. It starts the OC++ server if
+it isn't already running and opens the web app in your browser.
 
 ```bash
 ocpp
 ```
+
+From the home page, open the project that you want to work on.
 
 Next, initialize OC++ for the project by running the following command.
 
@@ -233,10 +210,10 @@ You can ask OC++ to add new features to your project. Though we first recommend 
    OC++ has a _Plan mode_ that disables its ability to make changes and
    instead suggest _how_ it'll implement the feature.
 
-   Switch to it using the **Tab** key. You'll see an indicator for this in the lower right corner.
+   Switch to it with the agent picker in the prompt, or run the `/agent` command.
 
    ```bash frame="none" title="Switch to Plan mode"
-   <TAB>
+   /agent
    ```
 
    Now let's describe what we want it to do.
@@ -265,22 +242,16 @@ You can ask OC++ to add new features to your project. Though we first recommend 
    ```
 
    :::tip
-   Drag and drop images into the terminal to add them to the prompt.
+   Drag and drop images into the prompt to add them.
    :::
 
    OC++ can scan any images you give it and add them to the prompt. You can
-   do this by dragging and dropping an image into the terminal.
+   do this by dragging and dropping an image into the prompt.
 
 3. **Build the feature**
 
-   Once you feel comfortable with the plan, switch back to _Build mode_ by
-   hitting the **Tab** key again.
-
-   ```bash frame="none"
-   <TAB>
-   ```
-
-   And asking it to make the changes.
+   Once you feel comfortable with the plan, switch back to _Build mode_ the
+   same way, and ask it to make the changes.
 
    ```bash frame="none"
    Sounds good! Go ahead and make the changes.
@@ -363,4 +334,4 @@ Here's an [example conversation](https://ocpp.ai/s/4XP1fce5) with OC++.
 
 And that's it! You are now a pro at using OC++.
 
-To make it your own, we recommend [picking a theme](/docs/themes), [customizing the keybinds](/docs/keybinds), [configuring code formatters](/docs/formatters), [creating custom commands](/docs/commands), or playing around with the [OC++ config](/docs/config).
+To make it your own, we recommend [configuring code formatters](/docs/formatters), [creating custom commands](/docs/commands), or playing around with the [OC++ config](/docs/config).

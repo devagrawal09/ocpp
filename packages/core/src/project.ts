@@ -47,7 +47,7 @@ export interface Resolved {
   readonly vcsBackend?: string
 }
 
-// Keep this filesystem-only; permission checks use it and should not execute VCS commands.
+// Keep this filesystem-only; path resolution uses it and should not execute VCS commands.
 export const root = Effect.fn("Project.root")(function* (
   fs: FSUtil.Interface,
   input: AbsolutePath,

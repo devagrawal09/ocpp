@@ -71,7 +71,6 @@ export const buildAgent = {
   request: { settings: {}, headers: {}, body: {} },
   mode: "primary",
   hidden: false,
-  permissions: [],
 } satisfies AgentInfo
 
 export const planAgent = {
@@ -81,7 +80,6 @@ export const planAgent = {
   request: { settings: {}, headers: {}, body: {} },
   mode: "primary",
   hidden: false,
-  permissions: [],
 } satisfies AgentInfo
 
 export const reviewCommand = {
@@ -190,7 +188,6 @@ export function makeACPFixture(options: FixtureOptions = {}) {
       sessionUpdate: async (update) => {
         updates.push(update)
       },
-      requestPermission: async () => ({ outcome: { outcome: "cancelled" } }),
     },
   })
 

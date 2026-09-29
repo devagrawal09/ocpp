@@ -1,0 +1,166 @@
+---
+title: "Tools"
+---
+
+Every session works with an explicit tool list: exactly the tools its programs
+can call through `execute`. Nothing asks for approval. Every tool on the list
+runs, and a program that calls a tool off the list is refused before it starts:
+
+```text
+Unknown tool tools.shell; it is not available to this agent.
+```
+
+A session with an empty list has no `execute` at all.
+
+<Callout type="warning">
+  Tool lists choose what an agent can call. They are not a sandbox: a tool on the list runs with the host user's
+  filesystem, process, and network authority.
+</Callout>
+
+## `init.ts`
+
+A top-level session takes its tools from `init.ts`, a Code Mode program that
+returns one tool list per primary agent. OC++ looks for it in two places:
+
+- `.ocpp/init.ts` in the project: the nearest one from the session's directory
+  up to the repository root
+- `~/.config/ocpp/init.ts` for every project
+
+The project's file wins. The two are not merged, so a project `init.ts` must
+list everything its agents need. OC++ looks for the file at every request, so
+a new or edited `init.ts` applies from the next request without a restart.
+
+```ts
+let safeShell = tool.define({
+  name: "safeShell",
+  description: "Run a shell command, except git push",
+  inputSchema: {
+    type: "object",
+    properties: { command: { type: "string" } },
+    required: ["command"],
+  },
+  outputSchema: {},
+  execute: (input) => {
+    if (input.command.includes("git push")) throw new Error("git push is not allowed here")
+    return tools.shell({ command: input.command })
+  },
+})
+
+return {
+  build: [
+    tools.read,
+    tools.glob,
+    tools.grep,
+    tools.edit,
+    tools.write,
+    tools.patch,
+    safeShell,
+    tools.subagent,
+    tools.linear,
+  ],
+  plan: [tools.read, tools.glob, tools.grep, tools.webfetch, tools.question],
+}
+```
+
+`init.ts` is written in the same language `execute` runs. Each list holds:
+
+- **Tools**, such as `tools.read`.
+- **Namespaces**, such as `tools.linear`: every tool under that path, for
+  example every tool of an MCP server.
+- **`tool.define` handles**, which wrap tools with your own logic. A handle may
+  call any registered tool, including tools that are not on the list, so
+  `safeShell` above gives the agent a restricted shell without `tools.shell`
+  itself. When a handle throws, the call fails with its message, such as
+  `git push is not allowed here`.
+
+A list is the agent's whole catalog. `tools.search` is always available and
+needs no entry.
+
+### How it runs
+
+`init.ts` is evaluated again for every execution, so each execution gets its own
+live handles, which close when it ends. While it builds its lists it may not
+call tools, read `time.now()`, or read `Math.random()`; handles may, when they
+run. The lists therefore come out the same every time. Each execution records
+the `init.ts` it started with: after a restart, a resumed execution evaluates
+that same program and gets the same tools, even if the file changed in the
+meantime.
+
+`init.ts` is never saved, so a top-level `const` is an ordinary binding there,
+unlike in `execute`. A tool reference such as `tools.shell` is a value to put
+in a list or hand on; a handle calls a tool by its full path, as
+`tools.shell(...)`, never through a variable that holds the reference.
+
+### Problems
+
+If `init.ts` does not compile, throws, returns something other than
+`{ agent: [tools] }`, has no list for the session's agent, or does not return
+within three seconds, that session gets **no tools** until the file is fixed.
+The reason, with the path of the file, appears in the session's timeline and in
+the web app, once per problem.
+
+A listed path that no tool provides, such as a disconnected MCP server's
+namespace, is reported the same way, but the rest of the list still applies.
+
+## The default
+
+Without an `init.ts`:
+
+- `build`, and every agent other than `plan`, has every registered tool.
+- `plan` reads, searches, and asks: `read`, `glob`, `grep`, `webfetch`,
+  `websearch`, `skill`, `question`, and `subagent`. It cannot edit files or
+  run shell commands.
+
+Plan mode is the `plan` agent. Switch to another agent to leave it; the new
+agent's tool list applies from the next request.
+
+## Subagents
+
+A subagent gets exactly the tools its caller passes in `tools`:
+
+```ts
+const found = tools.subagent({
+  agent: "explore",
+  description: "Find the retry logic",
+  message: "Find where provider requests are retried and summarize the policy.",
+  tools: [tools.read, tools.glob, tools.grep, tools.webfetch],
+})
+```
+
+- Entries are the same as in `init.ts`: tools, namespaces, and `tool.define`
+  handles.
+- A caller can pass only tools it has. Its handles may call only its own tools.
+- Without `tools`, or with an empty list, the child has no tools. With an
+  `outputSchema` it still gets `tools.submit_result`.
+- The agent is a prompt and model preset. It grants no tools.
+- A continued child (`sessionID`) keeps its tools unless the call passes new
+  ones, less any tool the caller no longer has, such as after switching to
+  plan mode. The call's result names the dropped tools in `notice`.
+- A child placed with `root` resolves the same paths in that directory. The
+  call fails if a passed tool does not exist there.
+
+On a [session driver](/drivers), the OC++ harness gives the vendor `execute`
+over exactly these tools. The native harness keeps the vendor's own tools and
+adds `execute` over these tools, the handles, and `tools.submit_result`.
+
+## Commands and events
+
+Commands and events that a program defines with `tools.command.define` and
+`tools.event.define` run with their session's tool list for its current agent:
+the list the model has when it runs the same program.
+
+## Removed settings
+
+Tool lists replace the permission system and provider policies:
+
+- `permissions`, `agents.<id>.permissions`, and the V1 `permission` and `tools`
+  settings
+- approval prompts and saved "Allow always" approvals
+- the plugin `permission` hook
+- `experimental.policies`, `enabled_providers`, and `disabled_providers`: every
+  configured or logged-in provider is available
+- `experimental.portable_shell_scanner`
+
+These settings still load. OC++ ignores them and logs a configuration
+diagnostic. On the native harness, OC++ no longer checks the vendor's own tool
+calls; the vendor's sandbox and settings apply.

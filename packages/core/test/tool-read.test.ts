@@ -8,7 +8,6 @@ import { FileSystem } from "@ocpp/core/filesystem"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Location } from "@ocpp/core/location"
 import { Image } from "@ocpp/core/image"
-import { Permission } from "@ocpp/core/permission"
 import { Session } from "@ocpp/core/session"
 import { AbsolutePath, RelativePath } from "@ocpp/core/schema"
 import { Global } from "@ocpp/util/global"
@@ -21,8 +20,7 @@ import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { SessionInstructions } from "@ocpp/core/session/instructions"
 import { Environment } from "@ocpp/core/environment/index"
 import { testEffect } from "./lib/effect"
-import { permissionLayer } from "./lib/permission"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { toolIdentity, codeModeTools, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
 const readToolNode = makeLocationNode({
   name: "test/read-tool-plugin",
@@ -32,14 +30,12 @@ const readToolNode = makeLocationNode({
     ReadToolFileSystem.node,
     LocationMutation.node,
     Image.node,
-    Permission.node,
     SessionInstructions.node,
     FSUtil.node,
     Location.node,
   ],
 })
 
-const assertions: Permission.AssertInput[] = []
 const missingPath = "__missing_read_target__.txt"
 const missingAbsolutePath = path.join(process.cwd(), missingPath)
 const readCalls: {
@@ -76,25 +72,6 @@ const reader = Layer.succeed(
     },
   }),
 )
-let allow = true
-const permission = permissionLayer({
-  assert: (input) =>
-    Effect.sync(() => {
-      assertions.push(input)
-    }).pipe(
-      Effect.andThen(
-        allow
-          ? Effect.void
-          : Effect.fail(
-              new Permission.BlockedError({
-                rules: [],
-                permission: input.action,
-                resources: input.resources,
-              }),
-            ),
-      ),
-    ),
-})
 const config = Config.testLayer()
 const imageLayer = AppNodeBuilder.build(Image.node)
 const testFileSystem = Layer.effect(
@@ -119,20 +96,7 @@ const mutation = Layer.succeed(
       const absolute = path.resolve(process.cwd(), input.path)
       const external = path.isAbsolute(input.path) && !FSUtil.contains(process.cwd(), absolute)
       const resource = external ? absolute.replaceAll("\\", "/") : path.relative(process.cwd(), absolute) || "."
-      const directory = path.dirname(absolute)
-      const externalResource = path.join(directory, "*").replaceAll("\\", "/")
-      return Effect.succeed({
-        absolute,
-        resource,
-        externalDirectory: external
-          ? {
-              action: "external_directory" as const,
-              directory,
-              resource: externalResource,
-              save: externalResource,
-            }
-          : undefined,
-      })
+      return Effect.succeed({ absolute, resource, external })
     },
   }),
 )
@@ -143,7 +107,6 @@ const readLayer = (imageLayer: Layer.Layer<Image.Service>) =>
   Layer.mergeAll(
     AppNodeBuilder.build(LayerNode.group([Tool.node, readToolNode]), [
       [ReadToolFileSystem.node, reader],
-      [Permission.node, permission],
       [Config.node, config],
       [Image.node, imageLayer],
       [LocationMutation.node, mutation],
@@ -161,10 +124,8 @@ const sessionID = Session.ID.make("ses_read_tool_test")
 
 describe("ReadTool", () => {
   beforeEach(() => {
-    assertions.length = 0
     readCalls.length = 0
     listCalls.length = 0
-    allow = true
     resolveFailure = undefined
     directoryEntries = []
     directoryEntryDetails = []
@@ -180,16 +141,14 @@ describe("ReadTool", () => {
     readOverride = undefined
   })
 
-  it.effect("registers, authorizes, and reads through the location filesystem", () =>
+  it.effect("registers and reads through the location filesystem", () =>
     Effect.gen(function* () {
       const registry = yield* Tool.Service
 
-      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["read", "execute"])
-      expect(
-        (yield* toolDefinitions(registry, [{ action: "read", resource: "*", effect: "deny" }])).map(
-          (tool) => tool.name,
-        ),
-      ).toEqual(["execute"])
+      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(registry)).toEqual(["read"])
+      expect(yield* toolDefinitions(registry, { paths: ["glob"] })).toEqual([])
+      expect(yield* codeModeTools(registry, { paths: ["glob"] })).toEqual([])
       const execution = yield* executeTool(registry, {
         sessionID,
         ...toolIdentity,
@@ -206,7 +165,6 @@ describe("ReadTool", () => {
         mime: "text/plain",
       })
       expect(execution.content).toEqual([{ type: "text", text: "Read file README.md, lines 1-1\n1: hello" }])
-      expect(assertions).toMatchObject([{ sessionID, action: "read", resources: ["README.md"], save: ["*"] }])
       expect(readCalls).toEqual([
         {
           input: AbsolutePath.make(path.join(process.cwd(), "README.md")),
@@ -217,7 +175,7 @@ describe("ReadTool", () => {
     }),
   )
 
-  it.effect("asks for external_directory approval before reading an external absolute path", () =>
+  it.effect("reads an external absolute path", () =>
     Effect.gen(function* () {
       const registry = yield* Tool.Service
       const external = path.join(path.parse(process.cwd()).root, "external-read", "notes.txt")
@@ -229,14 +187,6 @@ describe("ReadTool", () => {
           call: { type: "tool-call", id: "call-external-read", name: "read", input: { path: external } },
         }),
       ).toMatchObject({ status: "completed" })
-      expect(assertions).toMatchObject([
-        {
-          sessionID,
-          action: "external_directory",
-          resources: [path.join(path.dirname(external), "*").replaceAll("\\", "/")],
-        },
-        { sessionID, action: "read", resources: [external.replaceAll("\\", "/")], save: ["*"] },
-      ])
       expect(readCalls).toEqual([{ input: AbsolutePath.make(external), page: { offset: undefined, limit: undefined } }])
     }),
   )
@@ -348,134 +298,6 @@ describe("ReadTool", () => {
       ).toMatchObject({
         status: "completed",
         content: [{ type: "text" }, { type: "file", uri: `data:image/png;base64,${png}`, mime: "image/png" }],
-      })
-    }),
-  )
-
-  it.effect("drops undecodable image data from the outcome", () =>
-    Effect.gen(function* () {
-      readResult = {
-        type: "file",
-        uri: "file:///truncated.png",
-        name: "truncated.png",
-        content: "iVBORw0KGgo=",
-        encoding: "base64",
-        mime: "image/png",
-      }
-      const registry = yield* Tool.Service
-
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-truncated-image", name: "read", input: { path: "truncated.png" } },
-        }),
-      ).toMatchObject({
-        status: "completed",
-        content: [
-          { type: "text", text: "Image read successfully" },
-          { type: "text", text: "[1 image omitted: could not be decoded.]" },
-        ],
-      })
-    }),
-  )
-
-  it.effect("drops oversized images from the outcome when resizing is disabled", () =>
-    Effect.gen(function* () {
-      const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
-      const source = new photon.PhotonImage(new Uint8Array(Array.from({ length: 16 * 4 }, () => 255)), 16, 1)
-      const base64 = Buffer.from(source.get_bytes()).toString("base64")
-      source.free()
-      readResult = {
-        type: "file",
-        uri: "file:///wide.png",
-        name: "wide.png",
-        content: base64,
-        encoding: "base64",
-        mime: "image/png",
-      }
-      const image = yield* Image.Service
-      yield* image.transform((draft) => draft.configure({ autoResize: false, maxWidth: 4 }))
-      const registry = yield* Tool.Service
-
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-wide-image", name: "read", input: { path: "wide.png" } },
-        }),
-      ).toMatchObject({
-        status: "completed",
-        content: [
-          { type: "text", text: "Image read successfully" },
-          { type: "text", text: "[1 image omitted: could not be resized below the image size limit.]" },
-        ],
-      })
-    }),
-  )
-
-  it.effect("resizes images to configured dimensions before returning media", () =>
-    Effect.gen(function* () {
-      const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
-      const source = new photon.PhotonImage(new Uint8Array(Array.from({ length: 16 * 4 }, () => 255)), 16, 1)
-      const base64 = Buffer.from(source.get_bytes()).toString("base64")
-      source.free()
-      readResult = {
-        type: "file",
-        uri: "file:///wide.png",
-        name: "wide.png",
-        content: base64,
-        encoding: "base64",
-        mime: "image/png",
-      }
-      const image = yield* Image.Service
-      yield* image.transform((draft) => draft.configure({ maxWidth: 4 }))
-      const registry = yield* Tool.Service
-      const result = yield* executeTool(registry, {
-        sessionID,
-        ...toolIdentity,
-        call: { type: "tool-call", id: "call-resize-image", name: "read", input: { path: "wide.png" } },
-      })
-
-      expect(result.status).toBe("completed")
-      if (result.status !== "completed") return
-      const media = result.content?.[1]
-      expect(media?.type).toBe("file")
-      if (media?.type !== "file") return
-      const resized = photon.PhotonImage.new_from_byteslice(Buffer.from(media.uri.split(",")[1] ?? "", "base64"))
-      expect(resized.get_width()).toBeLessThanOrEqual(4)
-      expect(resized.get_height()).toBeLessThanOrEqual(2_000)
-      resized.free()
-    }),
-  )
-
-  it.effect("drops images that cannot fit max base64 bytes after resize attempts", () =>
-    Effect.gen(function* () {
-      const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-      readResult = {
-        type: "file",
-        uri: "file:///pixel.png",
-        name: "pixel.png",
-        content: png,
-        encoding: "base64",
-        mime: "image/png",
-      }
-      const image = yield* Image.Service
-      yield* image.transform((draft) => draft.configure({ maxBase64Bytes: 1 }))
-      const registry = yield* Tool.Service
-
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-max-bytes", name: "read", input: { path: "pixel.png" } },
-        }),
-      ).toMatchObject({
-        status: "completed",
-        content: [
-          { type: "text", text: "Image read successfully" },
-          { type: "text", text: "[1 image omitted: could not be resized below the image size limit.]" },
-        ],
       })
     }),
   )
@@ -597,22 +419,6 @@ describe("ReadTool", () => {
     }),
   )
 
-  it.effect("does not read when permission is denied", () =>
-    Effect.gen(function* () {
-      allow = false
-      const registry = yield* Tool.Service
-
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-read", name: "read", input: { path: "README.md" } },
-        }),
-      ).toEqual({ status: "error", error: { type: "permission.rejected", message: "Permission denied: read" } })
-      expect(readCalls).toEqual([])
-    }),
-  )
-
   it.effect("returns missing paths as model-visible tool failures", () =>
     Effect.gen(function* () {
       readFailure = new Environment.NotFound({ path: missingAbsolutePath })
@@ -638,7 +444,6 @@ describe("ReadTool", () => {
           message: `File not found: ${missingPath}\n\nDid you mean one of these?\n__missing_read_target__.txt.bak\ncopy___missing_read_target__.txt\nold___missing_read_target__.txt`,
         },
       })
-      expect(assertions).toMatchObject([{ sessionID, action: "read", resources: [missingPath], save: ["*"] }])
       expect(readCalls).toEqual([
         {
           input: AbsolutePath.make(missingAbsolutePath),
@@ -671,10 +476,6 @@ describe("ReadTool", () => {
         status: "completed",
         content: [{ type: "text", text: `Read file ${recovered}, lines 1-1\n1: hello` }],
       })
-      expect(assertions).toMatchObject([
-        { action: "read", resources: [requested] },
-        { action: "read", resources: [recovered] },
-      ])
       expect(readCalls.map((call) => call.input)).toEqual([
         AbsolutePath.make(requestedAbsolute),
         AbsolutePath.make(recoveredAbsolute),
@@ -701,7 +502,6 @@ describe("ReadTool", () => {
           call: { type: "tool-call", id: "call-ambiguous-path", name: "read", input: { path: requested } },
         }),
       ).toMatchObject({ status: "error", error: { message: `File not found: ${requested}` } })
-      expect(assertions).toHaveLength(1)
       expect(readCalls).toHaveLength(1)
     }),
   )
@@ -725,7 +525,6 @@ describe("ReadTool", () => {
           call: { type: "tool-call", id: "call-directory-recovery", name: "read", input: { path: requested } },
         }),
       ).toMatchObject({ status: "error", error: { message: `File not found: ${requested}` } })
-      expect(assertions).toHaveLength(1)
       expect(readCalls).toHaveLength(1)
     }),
   )
@@ -765,7 +564,6 @@ describe("ReadTool", () => {
           text: "Read directory src, entries 2-3\ncomponents/\nindex.ts\n[Output truncated. Continue reading with offset: 4]",
         },
       ])
-      expect(assertions).toMatchObject([{ sessionID, action: "read", resources: ["src"], save: ["*"] }])
       expect(readCalls).toEqual([
         { input: AbsolutePath.make(path.join(process.cwd(), "src")), page: { offset: 2, limit: 10 } },
       ])
@@ -803,22 +601,6 @@ describe("ReadTool", () => {
       expect(readCalls).toEqual([
         { input: AbsolutePath.make(path.join(process.cwd(), "src")), page: { offset: 0, limit: 1 } },
       ])
-    }),
-  )
-
-  it.effect("does not list a directory when permission is denied", () =>
-    Effect.gen(function* () {
-      allow = false
-      const registry = yield* Tool.Service
-
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-read-directory-denied", name: "read", input: { path: "src" } },
-        }),
-      ).toEqual({ status: "error", error: { type: "permission.rejected", message: "Permission denied: read" } })
-      expect(readCalls).toEqual([])
     }),
   )
 

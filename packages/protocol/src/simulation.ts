@@ -194,200 +194,6 @@ export namespace Handshake {
   }
 }
 
-export namespace Frontend {
-  export const Capabilities = [
-    "ui.type",
-    "ui.press",
-    "ui.enter",
-    "ui.arrow",
-    "ui.focus",
-    "ui.click",
-    "ui.click.semantic",
-    "ui.resize",
-    "ui.matches",
-    "ui.state",
-    "ui.snapshot",
-    "ui.capture",
-    "ui.recording.finish",
-  ] as const satisfies ReadonlyArray<Handshake.Capability>
-  export type Capability = (typeof Capabilities)[number]
-
-  export const KeyModifiers = Schema.Struct({
-    ctrl: Schema.optional(Schema.Boolean),
-    shift: Schema.optional(Schema.Boolean),
-    meta: Schema.optional(Schema.Boolean),
-    super: Schema.optional(Schema.Boolean),
-    hyper: Schema.optional(Schema.Boolean),
-  })
-  export interface KeyModifiers extends Schema.Schema.Type<typeof KeyModifiers> {}
-
-  export const SemanticClickTarget = Schema.Struct({
-    id: Schema.NonEmptyString,
-    instance: Schema.optionalKey(Schema.NonEmptyString),
-    element: Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0)),
-  })
-  export interface SemanticClickTarget extends Schema.Schema.Type<typeof SemanticClickTarget> {}
-
-  export const Action = Schema.Union([
-    Schema.Struct({ type: Schema.Literal("ui.type"), text: Schema.String }),
-    Schema.Struct({ type: Schema.Literal("ui.press"), key: Schema.String, modifiers: Schema.optional(KeyModifiers) }),
-    Schema.Struct({ type: Schema.Literal("ui.enter") }),
-    Schema.Struct({ type: Schema.Literal("ui.arrow"), direction: Schema.Literals(["up", "down", "left", "right"]) }),
-    Schema.Struct({ type: Schema.Literal("ui.focus"), target: Schema.Number }),
-    Schema.Struct({
-      type: Schema.Literal("ui.click"),
-      target: Schema.Number,
-      x: Schema.Number,
-      y: Schema.Number,
-      semantic: Schema.optionalKey(SemanticClickTarget),
-    }),
-    Schema.Struct({ type: Schema.Literal("ui.resize"), cols: Schema.Number, rows: Schema.Number }),
-  ])
-  export type Action = Schema.Schema.Type<typeof Action>
-
-  export const Element = Schema.Struct({
-    id: Schema.String,
-    num: Schema.Number,
-    x: Schema.Number,
-    y: Schema.Number,
-    width: Schema.Number,
-    height: Schema.Number,
-    focusable: Schema.Boolean,
-    focused: Schema.Boolean,
-    clickable: Schema.Boolean,
-    editor: Schema.Boolean,
-  })
-  export interface Element extends Schema.Schema.Type<typeof Element> {}
-
-  export const State = Schema.Struct({
-    focused: Schema.Struct({
-      renderable: Schema.optional(Schema.Number),
-      editor: Schema.Boolean,
-    }),
-    elements: Schema.Array(Element),
-  })
-  export interface State extends Schema.Schema.Type<typeof State> {}
-
-  export const SemanticNode = Schema.Struct({
-    id: Schema.NonEmptyString,
-    instance: Schema.optionalKey(Schema.NonEmptyString),
-    parent: Schema.optionalKey(Schema.NonEmptyString),
-    role: Schema.NonEmptyString,
-    label: Schema.optionalKey(Schema.NonEmptyString),
-    element: Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0)),
-    focused: Schema.optionalKey(Schema.Boolean),
-    selected: Schema.optionalKey(Schema.Boolean),
-    expanded: Schema.optionalKey(Schema.Boolean),
-    disabled: Schema.optionalKey(Schema.Boolean),
-  })
-  export interface SemanticNode extends Schema.Schema.Type<typeof SemanticNode> {}
-
-  export const SemanticSnapshot = Schema.Struct({
-    format: Schema.Literal("ocpp-ui-snapshot-v1"),
-    nodes: Schema.Array(SemanticNode).check(
-      Schema.makeFilter((nodes) => {
-        const ids = new Set(nodes.map((node) => node.id))
-        if (ids.size !== nodes.length) return "semantic node ids must be unique"
-        if (new Set(nodes.map((node) => node.element)).size !== nodes.length)
-          return "semantic node elements must be unique"
-        if (nodes.some((node) => node.parent !== undefined && !ids.has(node.parent)))
-          return "semantic node parents must reference another node"
-        const parents = new Map(nodes.map((node) => [node.id, node.parent]))
-        for (const node of nodes) {
-          const visited = new Set<string>()
-          let current: string | undefined = node.id
-          while (current !== undefined) {
-            if (visited.has(current)) return "semantic node hierarchy must be acyclic"
-            visited.add(current)
-            current = parents.get(current)
-          }
-        }
-        return undefined
-      }),
-    ),
-  })
-  export interface SemanticSnapshot extends Schema.Schema.Type<typeof SemanticSnapshot> {}
-
-  export const Color = Schema.Tuple([Schema.Number, Schema.Number, Schema.Number, Schema.Number])
-  export type Color = Schema.Schema.Type<typeof Color>
-
-  export const CapturedFrame = Schema.Struct({
-    cols: Schema.Number,
-    rows: Schema.Number,
-    cursor: Schema.Tuple([Schema.Number, Schema.Number]),
-    lines: Schema.Array(
-      Schema.Struct({
-        spans: Schema.Array(
-          Schema.Struct({
-            text: Schema.String,
-            fg: Color,
-            bg: Color,
-            attributes: Schema.Number,
-            width: Schema.Number,
-          }),
-        ),
-      }),
-    ),
-  })
-  export interface CapturedFrame extends Schema.Schema.Type<typeof CapturedFrame> {}
-
-  export const RecordingFinish = Schema.String
-  export type RecordingFinish = Schema.Schema.Type<typeof RecordingFinish>
-
-  export const Matches = Schema.Boolean
-  export type Matches = Schema.Schema.Type<typeof Matches>
-
-  export const TypeParams = Schema.Struct({ text: Schema.String })
-  export interface TypeParams extends Schema.Schema.Type<typeof TypeParams> {}
-
-  export const MatchesParams = Schema.Struct({ text: Schema.String })
-  export interface MatchesParams extends Schema.Schema.Type<typeof MatchesParams> {}
-
-  export const PressParams = Schema.Struct({ key: Schema.String, modifiers: Schema.optional(KeyModifiers) })
-  export interface PressParams extends Schema.Schema.Type<typeof PressParams> {}
-
-  export const pressParams = (key: string, modifiers?: KeyModifiers): PressParams => ({
-    key,
-    ...(modifiers === undefined ? {} : { modifiers }),
-  })
-
-  export const ArrowParams = Schema.Struct({ direction: Schema.Literals(["up", "down", "left", "right"]) })
-  export interface ArrowParams extends Schema.Schema.Type<typeof ArrowParams> {}
-
-  export const FocusParams = Schema.Struct({ target: Schema.Number })
-  export interface FocusParams extends Schema.Schema.Type<typeof FocusParams> {}
-
-  export const ClickParams = Schema.Struct({
-    target: Schema.Number,
-    x: Schema.Number,
-    y: Schema.Number,
-    semantic: Schema.optionalKey(SemanticClickTarget),
-  })
-  export interface ClickParams extends Schema.Schema.Type<typeof ClickParams> {}
-
-  export const ResizeParams = Schema.Struct({ cols: Schema.Number, rows: Schema.Number })
-  export interface ResizeParams extends Schema.Schema.Type<typeof ResizeParams> {}
-
-  export const Request = Schema.Union([
-    Handshake.Request,
-    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.type"), params: TypeParams }),
-    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.press"), params: PressParams }),
-    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.arrow"), params: ArrowParams }),
-    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.focus"), params: FocusParams }),
-    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.click"), params: ClickParams }),
-    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.resize"), params: ResizeParams }),
-    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.matches"), params: MatchesParams }),
-    Schema.Struct({
-      ...JsonRpc.RequestFields,
-      method: Schema.Literals(["ui.enter", "ui.state", "ui.snapshot", "ui.recording.finish"]),
-    }),
-    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.capture") }),
-  ])
-  export type Request = Schema.Schema.Type<typeof Request>
-  export const decodeRequest = Schema.decodeUnknownSync(Request)
-  export const decodeRequestEffect = Schema.decodeUnknownEffect(Schema.fromJsonString(Request))
-}
-
 export namespace Backend {
   export const Capabilities = [
     "llm.attach",
@@ -463,11 +269,9 @@ export namespace Backend {
     description: Schema.String,
     inputSchema: Schema.Record(Schema.String, Schema.Json),
     outputSchema: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)),
-    permission: Schema.optionalKey(Schema.NonEmptyString),
     options: Schema.optionalKey(
       Schema.Struct({
         namespace: Schema.optionalKey(ToolNamespace),
-        codemode: Schema.optionalKey(Schema.Boolean),
       }),
     ),
   })
@@ -480,13 +284,8 @@ export namespace Backend {
         if (names.some((name) => !ProviderSafeName.test(name)))
           return "simulated tool names including namespaces must be provider-safe"
         if (new Set(names).size !== names.length) return "simulated tool registrations must have unique exposed names"
-        if (
-          tools.some(
-            (tool) =>
-              tool.name === "execute" && tool.options?.namespace === undefined && tool.options?.codemode === false,
-          )
-        )
-          return 'direct simulated tool name "execute" is reserved'
+        if (tools.some((tool) => tool.name === "search" && tool.options?.namespace === undefined))
+          return 'simulated tool name "search" is reserved for tool search'
         return undefined
       }),
     ),
@@ -617,22 +416,6 @@ export namespace Backend {
   export const decodeNotification = Schema.decodeUnknownSync(Notification)
   export const decodeNotificationEffect = Schema.decodeUnknownEffect(Schema.fromJsonString(Notification))
 }
-
-export const UiRpcs = RpcGroup.make(
-  request("simulation.handshake", { payload: Handshake.Params, success: Handshake.Response }),
-  request("ui.state", { success: Frontend.State }),
-  request("ui.snapshot", { success: Frontend.SemanticSnapshot }),
-  request("ui.capture", { success: Frontend.CapturedFrame }),
-  request("ui.matches", { payload: Frontend.MatchesParams, success: Frontend.Matches }),
-  request("ui.recording.finish", { success: Frontend.RecordingFinish }),
-  request("ui.type", { payload: Frontend.TypeParams, success: Frontend.State }),
-  request("ui.press", { payload: Frontend.PressParams, success: Frontend.State }),
-  request("ui.enter", { success: Frontend.State }),
-  request("ui.arrow", { payload: Frontend.ArrowParams, success: Frontend.State }),
-  request("ui.focus", { payload: Frontend.FocusParams, success: Frontend.State }),
-  request("ui.click", { payload: Frontend.ClickParams, success: Frontend.State }),
-  request("ui.resize", { payload: Frontend.ResizeParams, success: Frontend.State }),
-)
 
 export const BackendRpcs = RpcGroup.make(
   request("simulation.handshake", { payload: Handshake.Params, success: Handshake.Response }),

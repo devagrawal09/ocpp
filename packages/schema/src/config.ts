@@ -2,7 +2,6 @@ export * as Config from "./config.js"
 
 import { Schema } from "effect"
 import { ephemeral, inventory } from "./event.js"
-import { Permission } from "./permission.js"
 import { AbsolutePath, optional } from "./schema.js"
 import { ConfigAgent } from "./config/agent.js"
 import { ConfigMedia } from "./config/media.js"
@@ -12,6 +11,7 @@ import { ConfigExperimental } from "./config/experimental.js"
 import { ConfigFormatter } from "./config/formatter.js"
 import { ConfigLSP } from "./config/lsp.js"
 import { ConfigMCP } from "./config/mcp.js"
+import { ConfigOpenAPI } from "./config/openapi.js"
 import { ConfigModel } from "./config/model.js"
 import { ConfigPlugin } from "./config/plugin.js"
 import { ConfigProvider } from "./config/provider.js"
@@ -21,7 +21,6 @@ import { ConfigToolOutput } from "./config/tool-output.js"
 import { ConfigWatcher } from "./config/watcher.js"
 import { ConfigWarming } from "./config/warming.js"
 import { ConfigExternalAgent } from "./config/external-agent.js"
-import { ConfigSubagent } from "./config/subagent.js"
 
 export class Info extends Schema.Class<Info>("Config.Info")({
   $schema: optional(Schema.String).annotate({
@@ -54,11 +53,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   username: Schema.String.pipe(optional).annotate({
     description: "Username displayed in conversations and used for telemetry identity",
   }),
-  permissions: Permission.Ruleset.pipe(optional).annotate({
-    description: "Ordered tool permission rules applied to agent tool use",
-  }),
   agents: Schema.Record(Schema.String, ConfigAgent.Info).pipe(optional).annotate({
-    description: "Named built-in agent overrides and custom agent definitions",
+    description:
+      "Named built-in agent overrides and custom agent definitions: prompt and model presets. Tools come from init.ts",
   }),
   snapshots: Schema.Boolean.pipe(optional).annotate({
     description: "Enable snapshots used for undo and revert behavior",
@@ -80,6 +77,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   }),
   mcp: ConfigMCP.Info.pipe(optional).annotate({
     description: "MCP server configuration",
+  }),
+  openapi: ConfigOpenAPI.Info.pipe(optional).annotate({
+    description: "REST APIs described by OpenAPI documents, keyed by the tool namespace their operations use",
   }),
   compaction: ConfigCompaction.Info.pipe(optional).annotate({
     description: "Conversation compaction behavior",
@@ -106,9 +106,6 @@ export class Info extends Schema.Class<Info>("Config.Info")({
     description: "Keep recently active sessions warm with transient model requests (default: false)",
   }),
   external_agents: ConfigExternalAgent.Info.pipe(optional),
-  subagent: ConfigSubagent.Info.pipe(optional).annotate({
-    description: "Control model selection for delegated subagents",
-  }),
   providers: Schema.Record(Schema.String, ConfigProvider.Info).pipe(optional),
   experimental: ConfigExperimental.Info.pipe(optional),
 }) {}

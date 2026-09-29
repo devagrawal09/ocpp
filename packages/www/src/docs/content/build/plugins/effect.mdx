@@ -131,7 +131,6 @@ interface Context {
 
 interface Plugin<R = Scope.Scope> {
   readonly id: string
-  readonly tui?: boolean
   readonly effect: (context: Context) => Effect.Effect<void, never, R>
 }
 ```
@@ -843,7 +842,7 @@ effect: (ctx) =>
         description: "Create a greeting",
         input: Schema.Struct({ name: Schema.String }),
         output: Schema.Struct({ greeting: Schema.String }),
-        options: { namespace: "acme", codemode: true },
+        options: { namespace: "acme" },
         execute: ({ name }, context) =>
           Effect.gen(function* () {
             yield* context.progress({ status: "greeting" })
@@ -1079,7 +1078,8 @@ effect: (ctx) =>
 
 ### Sessions
 
-Modify assembled system instructions, messages, or tools immediately before model dispatch.
+Modify assembled system instructions or messages immediately before model dispatch. The only tool the model is offered
+is `execute`; shape the tools reachable from its code with the tool `catalog` hook instead.
 
 ```ts
 effect: (ctx) =>
@@ -1088,7 +1088,6 @@ effect: (ctx) =>
     yield* session.hook("context", (event) =>
       Effect.sync(() => {
         event.system.push({ text: "Keep the review focused on correctness." })
-        delete event.tools.write
       }),
     )
   }),
@@ -1254,17 +1253,41 @@ effect: (ctx) =>
   }),
 ```
 
+Catalog hooks shape the Code Mode catalog for each request, keyed by tool path. An edited description reaches the catalog
+and `tools.search`; a deleted entry is neither listed nor callable. `model` is absent for command and event handler runs.
+
+```ts
+effect: (ctx) =>
+  Effect.gen(function* () {
+    const tool = ctx.tool
+    yield* tool.hook("catalog", (event) =>
+      Effect.sync(() => {
+        if (event.agent === "reviewer") delete event.tools.write
+      }),
+    )
+  }),
+```
+
 #### Reference
 
 ```ts
 interface ToolHooks {
   readonly "execute.before": ToolExecuteBefore
   readonly "execute.after": ToolExecuteAfter
+  readonly catalog: ToolCatalog
+}
+
+interface ToolCatalog {
+  readonly sessionID?: Session.ID
+  readonly agent?: Agent.ID
+  readonly model?: Model.Ref
+  tools: Record<string, { description: string }>
 }
 
 interface ToolFailures extends Record<keyof ToolHooks, unknown> {
   readonly "execute.before": Tool.Error
   readonly "execute.after": never
+  readonly catalog: never
 }
 
 interface ToolHookDomain {

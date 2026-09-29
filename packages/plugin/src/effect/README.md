@@ -94,8 +94,8 @@ Session context is mutable immediately before provider dispatch:
 yield *
   ctx.session.hook("context", (event) =>
     Effect.sync(() => {
-      event.tools.read.description = "Read a file using narrow line ranges."
-      delete event.tools.write
+      // `execute` is the only tool the model sees; removing it leaves the request without tools.
+      if (event.agent === "reviewer") delete event.tools.execute
     }),
   )
 
@@ -103,6 +103,19 @@ yield *
   ctx.session.hook("retry", (event) =>
     Effect.sync(() => {
       if (event.attempt >= 3) event.decision = { retry: false }
+    }),
+  )
+```
+
+Registered tools are reachable only from Code Mode, so shape them per request through the Code Mode catalog, keyed by path. An edited description reaches the catalog and `tools.search`; a deleted entry is neither listed nor callable:
+
+```ts
+yield *
+  ctx.tool.hook("catalog", (event) =>
+    Effect.sync(() => {
+      if (event.agent === "reviewer") delete event.tools["acme.deploy"]
+      const echo = event.tools.echo
+      if (echo) echo.description += "\nEcho preserves whitespace."
     }),
   )
 ```

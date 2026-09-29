@@ -12,6 +12,7 @@ import { SessionStore } from "../store.js"
 import { ShellResult } from "../../shell/result.js"
 import { SubagentCompletion } from "../subagent-completion.js"
 import { CodeModeCompletion } from "../codemode-completion.js"
+import { CodeModeResume } from "../../codemode/resume.js"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 
 const CONTINUE_AFTER_SERVER_RESTART =
@@ -73,6 +74,7 @@ export const layer = (options?: Options) =>
       const bus = yield* Bus.Service
       const jobs = yield* Job.Service
       const sessions = yield* Session.Service
+      const codemode = yield* CodeModeResume.Service
       const scope = yield* Effect.scope
       const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS
 
@@ -147,12 +149,19 @@ export const layer = (options?: Options) =>
         const restarted =
           background.status === "running" ||
           (background.status === "error" && background.error === INTERRUPTED_WITHOUT_ERROR)
+        // A run the server stopped resumes by replaying its journal, and its own job then reports the
+        // outcome through this same notification.
+        const resumed = restarted
+          ? yield* codemode.resume({ executionID: background.id, notificationID: background.notificationID })
+          : undefined
+        if (resumed?.resumed === true) return
         const status = restarted ? "error" : background.status
-        const error = restarted
-          ? "Execution failed because the server restarted."
-          : background.status === "cancelled"
-            ? (background.error ?? "Execution cancelled")
-            : (background.error ?? "Execution failed")
+        const error =
+          resumed?.resumed === false
+            ? resumed.reason
+            : background.status === "cancelled"
+              ? (background.error ?? "Execution cancelled")
+              : (background.error ?? "Execution failed")
         const terminal = background.terminal === true
         if (!terminal && status === "completed") {
           yield* bus.publish(
@@ -311,5 +320,5 @@ export const layer = (options?: Options) =>
 export const node = makeGlobalNode({
   service: Service,
   layer: layer(),
-  deps: [SessionStore.node, SessionExecution.node, Bus.node, Job.node, Session.node],
+  deps: [SessionStore.node, SessionExecution.node, Bus.node, Job.node, Session.node, CodeModeResume.node],
 })

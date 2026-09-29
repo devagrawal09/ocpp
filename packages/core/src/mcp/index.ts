@@ -41,7 +41,6 @@ export class ServerInstructions extends Schema.Class<ServerInstructions>("MCP.Se
 export class Tool extends Schema.Class<Tool>("MCP.Tool")({
   server: ServerName,
   name: Schema.String,
-  codemode: Schema.Boolean.pipe(Schema.optional),
   description: Schema.String.pipe(Schema.optional),
   inputSchema: Schema.Unknown.pipe(Schema.optional),
   outputSchema: Schema.Unknown.pipe(Schema.optional),
@@ -397,11 +396,10 @@ export const layer = (options?: Options) =>
           }),
       } satisfies McpClient.ElicitationHandler
 
-      const toTool = (server: ServerName, entry: ServerEntry, def: McpClient.ToolDefinition) =>
+      const toTool = (server: ServerName, def: McpClient.ToolDefinition) =>
         new Tool({
           server,
           name: def.name,
-          codemode: entry.config.codemode,
           description: def.description,
           inputSchema: def.inputSchema,
           outputSchema: def.outputSchema,
@@ -443,7 +441,7 @@ export const layer = (options?: Options) =>
       const refreshTools = (name: ServerName, entry: ServerEntry, connection: McpClient.Connection) =>
         connection.tools().pipe(
           Effect.map((defs) => {
-            entry.tools = defs.map((def) => toTool(name, entry, def))
+            entry.tools = defs.map((def) => toTool(name, def))
           }),
         )
 
@@ -537,7 +535,7 @@ export const layer = (options?: Options) =>
           )
           if (Exit.isSuccess(result)) {
             entry.client = result.value.connection
-            entry.tools = result.value.tools.map((def) => toTool(name, entry, def))
+            entry.tools = result.value.tools.map((def) => toTool(name, def))
             entry.prompts = []
             entry.status = { status: "connected" }
             watch(name, entry, result.value.connection)

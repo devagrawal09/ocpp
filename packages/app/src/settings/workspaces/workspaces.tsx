@@ -21,7 +21,6 @@ import { pathKey } from "@/workspaces/path-key"
 import { SettingsList } from "@/settings/list"
 import { InlineServerSelect } from "@/settings/server-select"
 import { useTabs } from "@/shell/tabs/tabs"
-import { usePlatform } from "@/runtime/platform/platform"
 import { clearWorkspaceTerminals } from "@/session/terminal/context"
 import { ServerConnection } from "@/runtime/server/registry"
 import type { Project } from "@/runtime/server/types"
@@ -52,7 +51,6 @@ export const SettingsWorkspaces: Component<{ activeDirectory?: string }> = (prop
   const serverSDK = useServerSDK()
   const data = useData()
   const tabs = useTabs()
-  const platform = usePlatform()
   const [store, setStore] = createStore({
     project: "all",
     transaction: undefined as "confirm" | "running" | undefined,
@@ -204,7 +202,7 @@ export const SettingsWorkspaces: Component<{ activeDirectory?: string }> = (prop
         worktree: undefined,
       })
     })
-    clearWorkspaceTerminals(workspace.directory, platform, context.sdk.scope)
+    clearWorkspaceTerminals(workspace.directory, context.sdk.scope)
     await projectQuery.refetch()
   }
 

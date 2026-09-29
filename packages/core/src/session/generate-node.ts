@@ -20,7 +20,7 @@ export const layer = Layer.effect(
     return SessionGenerate.Service.of({
       generate: Effect.fn("SessionGenerate.generate")(function* (input) {
         const selection = yield* context.select(input.sessionID)
-        const model = yield* context.resolveModel(selection.session)
+        const model = yield* Effect.fromResult(selection.model)
         const history = yield* SessionHistory.preview(database.db, selection.session.id, selection.instructions)
         const transcript = SessionModelRequest.baseTranscript({
           agent: selection.agent.info,

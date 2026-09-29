@@ -97,6 +97,7 @@ function session(input: {
       location: { command: { list: () => [] } },
       session: {
         setStatus: (_sessionID, status) => input.statuses?.push(status),
+        command: { list: () => undefined },
         prompt: async (value) => {
           input.calls.push("prompt")
           await input.prompt(value)

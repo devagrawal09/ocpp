@@ -26,8 +26,6 @@ import type { Integration } from "@ocpp/schema/integration"
 import type { Form } from "@ocpp/schema/form"
 import type { Mcp } from "@ocpp/schema/mcp"
 import type { Credential } from "@ocpp/schema/credential"
-import type { Permission } from "@ocpp/schema/permission"
-import type { PermissionSaved } from "@ocpp/schema/permission-saved"
 import type { FileSystem } from "@ocpp/schema/filesystem"
 import type { Command } from "@ocpp/schema/command"
 import type { OcppEvent } from "@ocpp/protocol/groups/event"
@@ -440,6 +438,15 @@ export type SessionLogOutput =
             readonly model: Model.Ref
             readonly previous?: Model.Ref | undefined
           }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.tools.selected"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: { readonly sessionID: Session.ID; readonly tools: ReadonlyArray<string> }
         }
       | {
           readonly id: Event.ID
@@ -936,6 +943,7 @@ export type SessionLogOutput =
                   readonly output?: string | undefined
                   readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
                   readonly error?: string | undefined
+                  readonly replayed?: boolean | undefined
                 }
               | (
                   | {
@@ -961,6 +969,7 @@ export type SessionLogOutput =
                   | { readonly type: "trace"; readonly kind: "return"; readonly value: string }
                 )
             >
+            readonly resumed?: boolean | undefined
           }
         }
       | {
@@ -984,6 +993,7 @@ export type SessionLogOutput =
                   readonly output?: string | undefined
                   readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
                   readonly error?: string | undefined
+                  readonly replayed?: boolean | undefined
                 }
               | (
                   | {
@@ -1011,6 +1021,22 @@ export type SessionLogOutput =
             >
             readonly status: "error" | "cancelled"
             readonly error: string
+            readonly resumed?: boolean | undefined
+          }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.invocation.started"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: {
+            readonly sessionID: Session.ID
+            readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+            readonly trigger: SessionMessage.InvocationTrigger
+            readonly handler: string
+            readonly input: Schema.Json
           }
         }
       | {
@@ -1174,6 +1200,108 @@ export type SessionViewInput = { readonly sessionID: Session.ID; readonly idle: 
 export type SessionViewOutput = void
 export type SessionViewOperation<E = never> = (input: SessionViewInput) => Effect.Effect<SessionViewOutput, E>
 
+export type SessionCommandsInput = { readonly sessionID: Session.ID }
+export type SessionCommandsOutput = ReadonlyArray<{
+  readonly name: string
+  readonly description: string
+  readonly handler: string
+}>
+export type SessionCommandsOperation<E = never> = (
+  input: SessionCommandsInput,
+) => Effect.Effect<SessionCommandsOutput, E>
+
+export type SessionEventsInput = { readonly sessionID: Session.ID }
+export type SessionEventsOutput = ReadonlyArray<{
+  readonly name: string
+  readonly description: string
+  readonly schedule: { readonly every: string } | { readonly cron: string } | { readonly at: string }
+  readonly handler: string
+  readonly input?: Schema.Json | undefined
+  readonly enabled: boolean
+  readonly nextFireAt?: string | undefined
+  readonly lastFiredAt?: string | undefined
+  readonly lastStatus?: ("running" | "completed" | "error" | "cancelled") | undefined
+  readonly lastMessageID?: SessionMessage.ID | undefined
+  readonly lastSummary?: string | undefined
+  readonly runCount: number
+  readonly skipCount: number
+  readonly lastSkippedAt?: string | undefined
+}>
+export type SessionEventsOperation<E = never> = (input: SessionEventsInput) => Effect.Effect<SessionEventsOutput, E>
+
+export type SessionEventEnableInput = { readonly sessionID: Session.ID; readonly name: string }
+export type SessionEventEnableOutput = {
+  readonly name: string
+  readonly description: string
+  readonly schedule: { readonly every: string } | { readonly cron: string } | { readonly at: string }
+  readonly handler: string
+  readonly input?: Schema.Json | undefined
+  readonly enabled: boolean
+  readonly nextFireAt?: string | undefined
+  readonly lastFiredAt?: string | undefined
+  readonly lastStatus?: ("running" | "completed" | "error" | "cancelled") | undefined
+  readonly lastMessageID?: SessionMessage.ID | undefined
+  readonly lastSummary?: string | undefined
+  readonly runCount: number
+  readonly skipCount: number
+  readonly lastSkippedAt?: string | undefined
+}
+export type SessionEventEnableOperation<E = never> = (
+  input: SessionEventEnableInput,
+) => Effect.Effect<SessionEventEnableOutput, E>
+
+export type SessionEventDisableInput = { readonly sessionID: Session.ID; readonly name: string }
+export type SessionEventDisableOutput = {
+  readonly name: string
+  readonly description: string
+  readonly schedule: { readonly every: string } | { readonly cron: string } | { readonly at: string }
+  readonly handler: string
+  readonly input?: Schema.Json | undefined
+  readonly enabled: boolean
+  readonly nextFireAt?: string | undefined
+  readonly lastFiredAt?: string | undefined
+  readonly lastStatus?: ("running" | "completed" | "error" | "cancelled") | undefined
+  readonly lastMessageID?: SessionMessage.ID | undefined
+  readonly lastSummary?: string | undefined
+  readonly runCount: number
+  readonly skipCount: number
+  readonly lastSkippedAt?: string | undefined
+}
+export type SessionEventDisableOperation<E = never> = (
+  input: SessionEventDisableInput,
+) => Effect.Effect<SessionEventDisableOutput, E>
+
+export type SessionEventTriggerInput = {
+  readonly sessionID: Session.ID
+  readonly name: string
+  readonly input?: Schema.Json | undefined
+}
+export type SessionEventTriggerOutput =
+  | {
+      readonly status: "started"
+      readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+      readonly messageID: SessionMessage.ID
+    }
+  | { readonly status: "skipped" }
+export type SessionEventTriggerOperation<E = never> = (
+  input: SessionEventTriggerInput,
+) => Effect.Effect<SessionEventTriggerOutput, E>
+
+export type SessionEventRemoveInput = { readonly sessionID: Session.ID; readonly name: string }
+export type SessionEventRemoveOutput = void
+export type SessionEventRemoveOperation<E = never> = (
+  input: SessionEventRemoveInput,
+) => Effect.Effect<SessionEventRemoveOutput, E>
+
+export type SessionExecutionCancelInput = {
+  readonly sessionID: Session.ID
+  readonly executionID: string & Brand.Brand<"CodeModeExecution.ID">
+}
+export type SessionExecutionCancelOutput = { readonly cancelled: boolean }
+export type SessionExecutionCancelOperation<E = never> = (
+  input: SessionExecutionCancelInput,
+) => Effect.Effect<SessionExecutionCancelOutput, E>
+
 export interface SessionApi<E = never> {
   readonly list: SessionListOperation<E>
   readonly stats: SessionStatsOperation<E>
@@ -1222,6 +1350,15 @@ export interface SessionApi<E = never> {
   readonly messageUpdate: SessionMessageUpdateOperation<E>
   readonly environment: SessionEnvironmentOperation<E>
   readonly view: SessionViewOperation<E>
+  readonly commands: SessionCommandsOperation<E>
+  readonly events: SessionEventsOperation<E>
+  readonly event: {
+    readonly enable: SessionEventEnableOperation<E>
+    readonly disable: SessionEventDisableOperation<E>
+    readonly trigger: SessionEventTriggerOperation<E>
+    readonly remove: SessionEventRemoveOperation<E>
+  }
+  readonly execution: { readonly cancel: SessionExecutionCancelOperation<E> }
 }
 
 export type MessageListInput = {
@@ -1252,9 +1389,26 @@ export type ModelDefaultInput = {
 export type ModelDefaultOutput = { readonly location: Location.Info; readonly data: Model.Info | undefined }
 export type ModelDefaultOperation<E = never> = (input?: ModelDefaultInput) => Effect.Effect<ModelDefaultOutput, E>
 
+export type ModelDriversInput = {
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+}
+export type ModelDriversOutput = {
+  readonly location: Location.Info
+  readonly data: ReadonlyArray<{
+    readonly id: "claude" | "codex" | "pi"
+    readonly name: string
+    readonly available: boolean
+    readonly model: string
+    readonly models: ReadonlyArray<string>
+    readonly variants: ReadonlyArray<string>
+  }>
+}
+export type ModelDriversOperation<E = never> = (input?: ModelDriversInput) => Effect.Effect<ModelDriversOutput, E>
+
 export interface ModelApi<E = never> {
   readonly list: ModelListOperation<E>
   readonly default: ModelDefaultOperation<E>
+  readonly drivers: ModelDriversOperation<E>
 }
 
 export type GenerateTextInput = { readonly prompt: string; readonly model?: Model.Ref | undefined }
@@ -1576,72 +1730,6 @@ export interface FormApi<E = never> {
   readonly state: FormStateOperation<E>
   readonly reply: FormReplyOperation<E>
   readonly cancel: FormCancelOperation<E>
-}
-
-export type PermissionRequestListInput = {
-  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-}
-export type PermissionRequestListOutput = {
-  readonly location: Location.Info
-  readonly data: ReadonlyArray<Permission.Request>
-}
-export type PermissionRequestListOperation<E = never> = (
-  input?: PermissionRequestListInput,
-) => Effect.Effect<PermissionRequestListOutput, E>
-
-export type PermissionSavedListInput = { readonly projectID?: Project.ID | undefined }
-export type PermissionSavedListOutput = ReadonlyArray<PermissionSaved.Info>
-export type PermissionSavedListOperation<E = never> = (
-  input?: PermissionSavedListInput,
-) => Effect.Effect<PermissionSavedListOutput, E>
-
-export type PermissionSavedRemoveInput = { readonly id: PermissionSaved.ID }
-export type PermissionSavedRemoveOutput = void
-export type PermissionSavedRemoveOperation<E = never> = (
-  input: PermissionSavedRemoveInput,
-) => Effect.Effect<PermissionSavedRemoveOutput, E>
-
-export type PermissionCreateInput = {
-  readonly sessionID: Session.ID
-  readonly id?: Permission.ID | undefined
-  readonly action: string
-  readonly resources: ReadonlyArray<string>
-  readonly save?: ReadonlyArray<string> | undefined
-  readonly metadata?: { readonly [x: string]: unknown } | undefined
-  readonly source?: Permission.Source | undefined
-  readonly agent?: Agent.ID | undefined
-}
-export type PermissionCreateOutput = { readonly id: Permission.ID; readonly effect: Permission.Effect }
-export type PermissionCreateOperation<E = never> = (
-  input: PermissionCreateInput,
-) => Effect.Effect<PermissionCreateOutput, E>
-
-export type PermissionListInput = { readonly sessionID: Session.ID }
-export type PermissionListOutput = ReadonlyArray<Permission.Request>
-export type PermissionListOperation<E = never> = (input: PermissionListInput) => Effect.Effect<PermissionListOutput, E>
-
-export type PermissionGetInput = { readonly sessionID: Session.ID; readonly requestID: Permission.ID }
-export type PermissionGetOutput = Permission.Request
-export type PermissionGetOperation<E = never> = (input: PermissionGetInput) => Effect.Effect<PermissionGetOutput, E>
-
-export type PermissionReplyInput = {
-  readonly sessionID: Session.ID
-  readonly requestID: Permission.ID
-  readonly reply: Permission.Reply
-  readonly message?: string | undefined
-}
-export type PermissionReplyOutput = void
-export type PermissionReplyOperation<E = never> = (
-  input: PermissionReplyInput,
-) => Effect.Effect<PermissionReplyOutput, E>
-
-export interface PermissionApi<E = never> {
-  readonly request: { readonly list: PermissionRequestListOperation<E> }
-  readonly saved: { readonly list: PermissionSavedListOperation<E>; readonly remove: PermissionSavedRemoveOperation<E> }
-  readonly create: PermissionCreateOperation<E>
-  readonly list: PermissionListOperation<E>
-  readonly get: PermissionGetOperation<E>
-  readonly reply: PermissionReplyOperation<E>
 }
 
 export type FileListInput = {
@@ -2181,7 +2269,6 @@ export interface AppApi<E = never> {
   readonly credential: CredentialApi<E>
   readonly project: ProjectApi<E>
   readonly form: FormApi<E>
-  readonly permission: PermissionApi<E>
   readonly file: FileApi<E>
   readonly command: CommandApi<E>
   readonly skill: SkillApi<E>

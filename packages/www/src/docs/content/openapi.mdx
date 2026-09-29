@@ -1,0 +1,70 @@
+---
+title: "REST APIs"
+---
+
+OC++ can turn any REST API described by an [OpenAPI](https://www.openapis.org/) 3.x document into Code Mode tools. The agent calls each operation from code as `tools.<name>.<operationId>(input)`, the same way it calls MCP tools, and composes the results however it needs.
+
+## Configure an API
+
+Define each API by name under `openapi` in your [OC++ configuration](/config). The name becomes the tool namespace.
+
+```jsonc title="ocpp.jsonc"
+{
+  "$schema": "https://ocpp.ai/config.json",
+  "openapi": {
+    "store": {
+      "spec": "./openapi/store.json",
+      "base_url": "https://api.example.com/v1",
+      "headers": {
+        "Authorization": "Bearer {env:STORE_API_TOKEN}",
+      },
+    },
+  },
+}
+```
+
+| Field      | Required | Description                                                                                                         |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `spec`     | Yes      | HTTP(S) URL or file path of the OpenAPI 3.x document, in JSON or YAML. Relative paths resolve from the config file. |
+| `base_url` | No       | Absolute base URL for every operation. Required when the document declares no absolute server URL.                  |
+| `headers`  | No       | HTTP headers sent with every request. The model never sees them.                                                    |
+| `disabled` | No       | Set to `true` to stop exposing the API. Defaults to `false`.                                                        |
+
+Use `{env:NAME}` or `{file:path}` to keep secrets out of the configuration file; they are substituted while the configuration loads. The document is loaded when OC++ starts and again whenever the configuration changes. An API in a higher-precedence configuration replaces one with the same name.
+
+## Authentication
+
+Headers apply to every request, and they also satisfy the security schemes the document declares:
+
+- An `http` (bearer or basic), `oauth2`, or `openIdConnect` scheme uses your `Authorization` header.
+- An `apiKey` scheme sent in a header uses the header with the scheme's name, such as `X-Api-Key`.
+
+Query-parameter and cookie API keys are not supported. An operation whose security requirement no configured header satisfies fails with an error that names the missing scheme.
+
+## Tools
+
+Each operation becomes one tool. Its path comes from the `operationId`, with dots creating nested namespaces; an operation without an `operationId` gets a name derived from its method and path.
+
+| Operation                                  | Code Mode path             |
+| ------------------------------------------ | -------------------------- |
+| `GET /items`, `operationId: listItems`     | `tools.store.listItems`    |
+| `POST /items`, `operationId: items.create` | `tools.store.items.create` |
+| `GET /items/{id}`, no `operationId`        | `tools.store.getItemsById` |
+
+Path, query, and header parameters are top-level input fields, and a JSON request body is the `body` field:
+
+```js
+const lowStock = tools.store.listItems({ limit: 50 }).filter((item) => item.stock < 5)
+const created = tools.store.items.create({ body: { name: "lamp", stock: 3 } })
+```
+
+Tool signatures come from the document's parameter, request, and response schemas. A JSON response returns the parsed value and other text responses return a string. A non-2xx response throws an error that includes the HTTP status and response body, so code can catch it.
+
+OC++ skips operations it cannot call correctly, such as streaming or binary responses and unsupported parameter styles, and logs each skipped operation with its reason. If a document cannot be loaded, the agent is told that the API is unavailable and why.
+
+## Tool lists
+
+An API's operations are tools like any other. An agent's [tool list](/tools)
+names a whole API with its namespace, such as `tools.store`, or single
+operations such as `tools.store.listItems`. An agent whose list names none of
+an API's operations does not see that API.

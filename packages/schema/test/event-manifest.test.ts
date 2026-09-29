@@ -6,7 +6,6 @@ import {
   FileSystem,
   Form,
   Integration,
-  Permission,
   PersistentPty,
   Project,
   Reference,
@@ -66,7 +65,6 @@ describe("public event manifest", () => {
     expect(FileSystem.Event.Definitions).toEqual([FileSystem.Event.Changed])
     expect(FileSystemV1.Event.Definitions).toEqual([FileSystemV1.Event.Edited])
     expect(Integration.Event.Definitions).toEqual([Integration.Event.Updated])
-    expect(Permission.Event.Definitions).toEqual([Permission.Event.Asked, Permission.Event.Replied])
     expect(PersistentPty.Event.Definitions).toEqual([PersistentPty.Event.Added, PersistentPty.Event.Removed])
     expect(Form.Event.Definitions).toEqual([Form.Event.Created, Form.Event.Replied, Form.Event.Cancelled])
     expect(Reference.Event.Definitions).toEqual([Reference.Event.Updated])
@@ -118,6 +116,7 @@ describe("public event manifest", () => {
         "session.deleted.2",
         "session.agent.selected.1",
         "session.model.selected.1",
+        "session.tools.selected.1",
         "session.moved.1",
         "session.renamed.1",
         "session.viewed.1",
@@ -133,6 +132,7 @@ describe("public event manifest", () => {
         "session.execution.failed.1",
         "session.execution.interrupted.1",
         "session.instructions.updated.2",
+        "session.invocation.started.1",
         "session.synthetic.1",
         "session.skill.activated.1",
         "session.shell.started.1",

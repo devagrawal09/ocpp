@@ -59,35 +59,9 @@ must still use V2 unless the user specifically requests a V1 result.
 
 ## CLI
 
-For questions about the terminal interface, command-line invocation, `run`,
-`mini`, terminal providers, or other CLI behavior, read
-`packages/www/src/docs/content/cli/index.mdx` and the relevant local page.
-Confirm behavior in `packages/cli/src/` or `packages/tui/src/` when exact current
-behavior matters.
-
-CLI and TUI preferences are separate from OC++'s server and project
-configuration. They live in the global `~/.config/ocpp/cli.json`, or
-`$XDG_CONFIG_HOME/ocpp/cli.json` when `XDG_CONFIG_HOME` is set. There is no
-project-local CLI configuration. Most preferences can also be changed from the
-TUI by pressing `Ctrl+P` and selecting **Open settings**.
-
-Read `packages/www/src/docs/content/cli/config.mdx` before editing `cli.json`. It
-covers terminal-only settings such as themes, keybindings, terminal plugins,
-scrolling, attention alerts, diff presentation, and terminal integration.
-Confirm accepted fields in `packages/cli/src/config/`. Do not put these settings
-in `ocpp.json(c)`.
-
-### Keybinds
-
-Configure keybindings under `keybinds` in `cli.json`. The leader key is the
-`keybinds.leader` entry; leader timing is configured separately under
-`leader.timeout`. Bindings can use a string, an array of strings, or an object
-when event behavior such as `preventDefault` is required. Disable a binding
-with `"none"` or `false`.
-
-Never guess a command ID, default binding, or accepted key syntax. Read
-`packages/www/src/docs/content/cli/keybinds.mdx`, then confirm current IDs and
-defaults in the CLI and TUI source before answering or editing a binding.
+For questions about command-line invocation, `run`, or other CLI behavior,
+read `packages/www/src/docs/content/cli/index.mdx` and the relevant local page.
+Confirm behavior in `packages/cli/src/` when exact current behavior matters.
 
 ## OC++ configuration
 
@@ -114,13 +88,11 @@ then does the same for `.ocpp/ocpp.json(c)` files. This means every
 discovered `.ocpp` config overrides every discovered direct config. Global
 filesystem configuration has lower precedence than these discovered documents.
 
-Common configuration fields include `model`, `default_agent`, `permissions`,
-`agents`, `commands`, `plugins`, `providers`, `mcp`, `skills`, `instructions`,
-`references`, `formatter`, and `lsp`.
-
-This configuration is distinct from `cli.json`. Use the
-local `packages/www/src/docs/content/cli/config.mdx` guide for terminal
-preferences, especially themes and keybindings.
+Common configuration fields include `model`, `default_agent`, `agents`,
+`commands`, `plugins`, `providers`, `mcp`, `skills`, `instructions`,
+`references`, `formatter`, and `lsp`. Each agent's tools come from `init.ts`
+beside the configuration (`.ocpp/init.ts` or `~/.config/ocpp/init.ts`), not
+from a configuration field; read `packages/www/src/docs/content/tools.mdx`.
 
 Do not guess field names or shapes. Read
 `packages/www/src/docs/content/config.mdx` and its linked local topic guide,
@@ -184,15 +156,13 @@ using the `report` skill to file it as a compatibility bug.
 For questions about creating, configuring, loading, publishing, or migrating
 plugins, read `packages/www/src/docs/content/build/plugins/index.mdx` before
 answering. Confirm current APIs in `packages/plugin/src/` and loading behavior
-in `packages/core/src/plugin.ts`. Plugins can also extend the TUI; for those,
-read `packages/www/src/docs/content/build/plugins/cli.mdx` and inspect
-`packages/plugin/src/tui/`.
+in `packages/core/src/plugin.ts`.
 
 ## Service
 
-OC++ uses a client-server architecture. Interfaces such as the TUI connect
-to a background OC++ service, which owns sessions, configuration, plugins,
-permissions, and tool execution.
+OC++ uses a client-server architecture. Interfaces such as the web app
+connect to a background OC++ service, which owns sessions, configuration,
+plugins, and tool execution.
 
 For the active service, prefer `ocpp service status`, `ocpp api`, and
 the service log over assumptions from the worktree. Inspect
@@ -218,9 +188,9 @@ OC++ exposes an HTTP API from its server. The API is described by an
 OpenAPI document available from the running server at `/openapi.json`.
 
 Use OC++'s built-in `api` command for local requests. It uses the same
-discovery and authentication flow as the TUI and may start the background
-service when no compatible healthy service is available. It accepts either an
-HTTP method and path or an OpenAPI operation ID.
+discovery and authentication flow as the other `ocpp` commands and may start
+the background service when no compatible healthy service is available. It
+accepts either an HTTP method and path or an OpenAPI operation ID.
 
 Call an endpoint with an HTTP method and path:
 
@@ -267,11 +237,11 @@ problem belongs to the client, the shared server, or one project.
 
 - Check the service with `ocpp service status` and verify the API with
   `ocpp api get /api/health`.
-- Compare with `ocpp --standalone`, which runs the TUI with a private
+- Compare with `ocpp --standalone`, which serves the web app from a private
   server, to isolate shared-service issues.
 - Inspect `~/.local/share/ocpp/log/ocpp.log`. Filter `role=cli` for
-  client startup and `role=server` for sessions, providers, plugins,
-  permissions, and tools.
+  client startup and `role=server` for sessions, providers, plugins, and
+  tools.
 - Run one reproduction with `OCPP_LOG_LEVEL=DEBUG` when normal logs are not
   sufficient.
 - Do not delete or edit the database, service registration, or service config

@@ -1,4 +1,9 @@
 import { Session } from "@ocpp/core/session"
+import { CodeModeCommand } from "@ocpp/core/codemode/command"
+import { CodeModeEvent } from "@ocpp/core/codemode/event"
+import { CodeModeInvocation } from "@ocpp/core/codemode/invocation-service"
+import { Job } from "@ocpp/core/job"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor-service"
 import { SessionStats } from "@ocpp/core/session/stats"
 import { SessionTitle } from "@ocpp/core/session/title"
 import { SessionTransfer } from "@ocpp/core/session/transfer"
@@ -11,6 +16,7 @@ import {
   ConflictError,
   CommandExecutionError,
   CommandNotFoundError,
+  EventNotFoundError,
   InvalidRequestError,
   InvalidCursorError,
   MessageNotFoundError,
@@ -28,6 +34,18 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
   Effect.gen(function* () {
     const session = yield* Session.Service
     const transfer = yield* SessionTransfer.Service
+    const commands = yield* CodeModeCommand.Service
+    const events = yield* CodeModeEvent.Service
+    const jobs = yield* Job.Service
+    const missingEvent = (name: string) =>
+      new EventNotFoundError({ event: name, message: `No event is named ${name}.` })
+    const setEnabled = (sessionID: Session.ID, name: string, enabled: boolean) =>
+      Effect.gen(function* () {
+        yield* session.get(sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+        const info = yield* events.setEnabled({ sessionID, name }, enabled)
+        if (!info) return yield* missingEvent(name)
+        return { data: info }
+      })
     const busySession = (error: Session.BusyError) =>
       new SessionBusyError({
         sessionID: error.sessionID,
@@ -353,6 +371,9 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                   }),
                 ),
               ),
+              Effect.catchTag("Session.CommandInputError", (error) =>
+                Effect.fail(new InvalidRequestError({ message: error.message, field: error.field })),
+              ),
             )
           return HttpApiSchema.NoContent.make()
         }),
@@ -666,6 +687,56 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
             ),
           )
           return { data: message }
+        }),
+      )
+      .handle(
+        "session.commands",
+        Effect.fn(function* (ctx) {
+          yield* session.get(ctx.params.sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          return { data: yield* commands.list(ctx.params.sessionID) }
+        }),
+      )
+      .handle(
+        "session.events",
+        Effect.fn(function* (ctx) {
+          yield* session.get(ctx.params.sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          return { data: yield* events.list(ctx.params.sessionID) }
+        }),
+      )
+      .handle("session.event.enable", (ctx) => setEnabled(ctx.params.sessionID, ctx.params.name, true))
+      .handle("session.event.disable", (ctx) => setEnabled(ctx.params.sessionID, ctx.params.name, false))
+      .handle(
+        "session.event.trigger",
+        Effect.fn(function* (ctx) {
+          const key = { sessionID: ctx.params.sessionID, name: ctx.params.name }
+          if (!(yield* events.get(key))) return yield* missingEvent(key.name)
+          // Tools from plugins load in the background, and a firing may call them, as scheduled firings do.
+          const plugins = yield* PluginSupervisor.Service
+          yield* plugins.flush
+          const invocations = yield* CodeModeInvocation.Service
+          const firing = yield* invocations
+            .fire({ ...key, ...(ctx.payload.input === undefined ? {} : { input: ctx.payload.input }) })
+            .pipe(Effect.mapError((error) => new ConflictError({ resource: key.name, message: error.message })))
+          return { data: firing }
+        }),
+      )
+      .handle(
+        "session.event.remove",
+        Effect.fn(function* (ctx) {
+          yield* session.get(ctx.params.sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          if (!(yield* events.remove({ sessionID: ctx.params.sessionID, name: ctx.params.name })))
+            return yield* missingEvent(ctx.params.name)
+          return HttpApiSchema.NoContent.make()
+        }),
+      )
+      .handle(
+        "session.execution.cancel",
+        Effect.fn(function* (ctx) {
+          yield* session.get(ctx.params.sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          // Only this session's own running executions, the ones a user interrupt would cancel.
+          const running = yield* jobs.active({ ownerSessionID: ctx.params.sessionID, type: "codemode" })
+          if (!running.some((job) => job.id === ctx.params.executionID)) return { cancelled: false }
+          return { cancelled: (yield* jobs.cancel(ctx.params.executionID))?.status === "cancelled" }
         }),
       )
   }),

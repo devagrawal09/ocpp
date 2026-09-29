@@ -3,6 +3,7 @@ export * as EventManifest from "./event-manifest.js"
 import { Schema } from "effect"
 import { Agent } from "./agent.js"
 import { Catalog } from "./catalog.js"
+import { CodeModeEvent } from "./codemode-event.js"
 import { Command } from "./command.js"
 import { Config } from "./config.js"
 import { Credential } from "./credential.js"
@@ -17,7 +18,6 @@ import { LegacyEventV1 } from "./legacy-event.js"
 import { LspEvent } from "./lsp-event.js"
 import { McpEvent } from "./mcp-event.js"
 import { ModelsDev } from "./models-dev.js"
-import { Permission } from "./permission.js"
 import { PersistentPty } from "./persistent-pty.js"
 import { Plugin } from "./plugin.js"
 import { Project } from "./project.js"
@@ -30,7 +30,6 @@ import { Skill } from "./skill.js"
 import { SessionCompactionEvent } from "./session-compaction-event.js"
 import { SessionEvent } from "./session-event.js"
 import { SessionStatusEvent } from "./session-status-event.js"
-import { TuiEvent } from "./tui-event.js"
 import { VcsEvent } from "./vcs-event.js"
 import { WorkspaceEvent } from "./workspace-event.js"
 import { WorktreeEvent } from "./worktree-event.js"
@@ -50,11 +49,11 @@ const foundationDefinitions = Event.inventory(
 const featureDefinitions = Event.inventory(
   ...FileSystem.Event.Definitions,
   ...Reference.Event.Definitions,
-  ...Permission.Event.Definitions,
   ...Plugin.Event.Definitions,
   ...Project.Event.Definitions,
   ...Worktree.Event.Definitions,
   ...Command.Event.Definitions,
+  ...CodeModeEvent.Event.Definitions,
   ...Config.Event.Definitions,
   ...Skill.Event.Definitions,
   ...Pty.Event.Definitions,
@@ -67,9 +66,7 @@ const featureDefinitions = Event.inventory(
 export const ServerDefinitions = Event.inventory(
   ...foundationDefinitions,
   ...featureDefinitions,
-  // Current events the TUI consumes from the public stream.
   ...SessionStatusEvent.Definitions,
-  ...TuiEvent.Definitions,
   ...InstallationEvent.Definitions,
   ...VcsEvent.Definitions,
   McpEvent.StatusChanged,
@@ -84,7 +81,6 @@ export const Definitions = Event.inventory(
   ...InstallationEvent.Definitions,
   ...featureDefinitions,
   ...LspEvent.Definitions,
-  ...TuiEvent.Definitions,
   ...McpEvent.Definitions,
   ...LegacyEventV1.Definitions,
   ...FileSystemV1.Event.Definitions,

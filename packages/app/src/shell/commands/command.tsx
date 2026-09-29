@@ -1,3 +1,4 @@
+import { Command } from "@ocpp/schema/command"
 import { createSimpleContext } from "@ocpp/ui/context"
 import { useDialog } from "@ocpp/ui/context/dialog"
 import { type Accessor, createEffect, createMemo, onCleanup, onMount } from "solid-js"
@@ -78,7 +79,8 @@ export interface CommandOption {
   description?: string
   category?: string
   keybind?: KeybindConfig
-  slash?: string
+  /** Built-in slash names are shared with the server, which keeps agent-defined commands off them. */
+  slash?: Command.Builtin
   suggested?: boolean
   disabled?: boolean
   hidden?: boolean

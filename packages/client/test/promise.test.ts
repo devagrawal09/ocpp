@@ -20,7 +20,6 @@ test("exposes every standard HTTP API group", () => {
     "credential",
     "project",
     "form",
-    "permission",
     "file",
     "command",
     "skill",
@@ -63,12 +62,7 @@ test("config.get returns ordered config entries for a location", async () => {
     {
       type: "document" as const,
       path: "/tmp/project/ocpp.json",
-      info: {
-        permissions: [
-          { action: "shell", resource: "*", effect: "ask" as const },
-          { action: "shell", resource: "git status", effect: "allow" as const },
-        ],
-      },
+      info: { default_agent: "plan" },
     },
   ]
   const client = Ocpp.make({

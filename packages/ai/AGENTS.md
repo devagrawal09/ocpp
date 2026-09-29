@@ -33,7 +33,7 @@ This package is an Effect Schema-first LLM core. The Schema classes in `src/sche
 
 Session integration lives in `packages/core/src/session`: `runner/llm.ts` owns orchestration, `model-request.ts` lowers Session state into `LLMRequest`, and `model-transport.ts` selects transport behavior.
 
-Keep this package independent of Session concerns. Session auth, permissions, plugins, telemetry headers, and runtime selection belong in Core.
+Keep this package independent of Session concerns. Session auth, tool lists, plugins, telemetry headers, and runtime selection belong in Core.
 
 ### Request Flow
 
@@ -213,7 +213,7 @@ The dispatcher:
 - Does not stream providers, construct Session events, schedule fibers, append history, count steps, or continue model rounds.
 - Leaves persistence and continuation to the enclosing product flow.
 
-Handler dependencies (services, permissions, plugin hooks, abort handling) are closed over by the consumer at tool-construction time. Build the tools record inside an `Effect.gen` once and reuse it across many dispatches.
+Handler dependencies (services, plugin hooks, abort handling) are closed over by the consumer at tool-construction time. Build the tools record inside an `Effect.gen` once and reuse it across many dispatches.
 
 Errors must be expressed as `ToolFailure`. The runtime catches it and emits a `tool-error` event, then a `tool-result` of `type: "error"`, so the model can self-correct on the next step. Anything that is not a `ToolFailure` is treated as a defect and fails the stream. Three recoverable error paths produce `tool-error` events:
 

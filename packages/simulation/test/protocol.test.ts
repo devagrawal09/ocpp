@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Schema } from "effect"
-import { Backend, Frontend, Handshake, JsonRpc } from "../src/protocol"
+import { Backend, Handshake, JsonRpc } from "../src/protocol"
 
 const successResponse: Schema.Schema.Type<typeof JsonRpc.Response> = { jsonrpc: "2.0", id: 1, result: null }
 // @ts-expect-error responses require one outcome
@@ -60,101 +60,6 @@ test("requires exactly one JSON-RPC response outcome", () => {
   ).toThrow()
 })
 
-test("decodes ui.matches text params", () => {
-  expect(
-    Frontend.decodeRequest({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "ui.matches",
-      params: { text: "OC++ [ready].*" },
-    }),
-  ).toMatchObject({ method: "ui.matches", params: { text: "OC++ [ready].*" } })
-  expect(() =>
-    Frontend.decodeRequest({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "ui.matches",
-      params: { pattern: "OC++.*" },
-    }),
-  ).toThrow()
-})
-
-test("decodes semantic click identity", () => {
-  expect(
-    Frontend.decodeRequest({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "ui.click",
-      params: {
-        target: 12,
-        x: 4,
-        y: 0,
-        semantic: {
-          id: "session.permission.action.once",
-          instance: "permission-1",
-          element: 12,
-        },
-      },
-    }),
-  ).toMatchObject({
-    method: "ui.click",
-    params: {
-      semantic: {
-        id: "session.permission.action.once",
-        instance: "permission-1",
-        element: 12,
-      },
-    },
-  })
-})
-
-test("decodes semantic UI snapshots", () => {
-  expect(
-    Frontend.decodeRequest({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "ui.snapshot",
-    }),
-  ).toMatchObject({ method: "ui.snapshot" })
-  const decode = Schema.decodeUnknownSync(Frontend.SemanticSnapshot)
-  expect(
-    decode({
-      format: "ocpp-ui-snapshot-v1",
-      nodes: [
-        {
-          id: "session.permission",
-          role: "dialog",
-          label: "Permission required",
-          element: 1,
-          expanded: false,
-        },
-      ],
-    }),
-  ).toMatchObject({ nodes: [{ role: "dialog", expanded: false }] })
-  expect(() =>
-    decode({
-      format: "ocpp-ui-snapshot-v1",
-      nodes: [{ id: "", role: "dialog", element: 0 }],
-    }),
-  ).toThrow()
-  for (const nodes of [
-    [
-      { id: "duplicate", role: "dialog", element: 1 },
-      { id: "duplicate", role: "option", element: 2 },
-    ],
-    [
-      { id: "first", role: "dialog", element: 1 },
-      { id: "second", role: "option", element: 1 },
-    ],
-    [{ id: "orphan", parent: "missing", role: "option", element: 1 }],
-    [
-      { id: "first", parent: "second", role: "dialog", element: 1 },
-      { id: "second", parent: "first", role: "option", element: 2 },
-    ],
-  ])
-    expect(() => decode({ format: "ocpp-ui-snapshot-v1", nodes })).toThrow()
-})
-
 test("decodes the simulated tool lifecycle", () => {
   const registration = {
     name: "lookup",
@@ -166,8 +71,6 @@ test("decodes the simulated tool lifecycle", () => {
       additionalProperties: false,
     },
     outputSchema: { type: "object" },
-    permission: "lookup",
-    options: { codemode: false },
   }
   expect(
     Backend.decodeRequest({
@@ -218,9 +121,9 @@ test("decodes the simulated tool lifecycle", () => {
   ).toThrow()
   for (const invalid of [
     { ...registration, name: "1lookup" },
-    { ...registration, options: { namespace: "bad group", codemode: false } },
-    { ...registration, name: "execute", options: { codemode: false } },
-    { ...registration, options: { namespace: "a".repeat(64), codemode: false } },
+    { ...registration, options: { namespace: "bad group" } },
+    { ...registration, name: "search" },
+    { ...registration, options: { namespace: "a".repeat(64) } },
   ])
     expect(() =>
       Backend.decodeRequest({
@@ -237,8 +140,8 @@ test("decodes the simulated tool lifecycle", () => {
       method: "tool.attach",
       params: {
         tools: [
-          { ...registration, name: "b_c", options: { namespace: "a", codemode: false } },
-          { ...registration, name: "c", options: { namespace: "a.b", codemode: false } },
+          { ...registration, name: "b_c", options: { namespace: "a" } },
+          { ...registration, name: "c", options: { namespace: "a.b" } },
         ],
       },
     }),
@@ -247,28 +150,27 @@ test("decodes the simulated tool lifecycle", () => {
 
 const params: Handshake.Params = {
   client: { name: "ocpp-drive", version: "test" },
-  expectedRole: "ui",
+  expectedRole: "backend",
   offeredVersions: [1],
-  requiredCapabilities: ["ui.state"],
-  optionalCapabilities: ["ui.capture", "future.capability"],
+  requiredCapabilities: ["llm.attach"],
+  optionalCapabilities: ["llm.pending", "future.capability"],
 }
 
-const ui: Handshake.DispatchAction = {
-  role: "ui",
+const backend: Handshake.DispatchAction = {
+  role: "backend",
   server: { name: "ocpp", version: "test" },
-  capabilities: Frontend.Capabilities,
+  capabilities: Backend.Capabilities,
 }
 
 describe("simulation.handshake", () => {
-  test("decodes through both endpoint request protocols", () => {
+  test("decodes through the backend request protocol", () => {
     const request = {
       jsonrpc: "2.0" as const,
       id: 1,
       method: "simulation.handshake" as const,
       params,
     }
-    expect(Frontend.decodeRequest(request)).toEqual(request)
-    expect(Backend.decodeRequest({ ...request, params: { ...params, expectedRole: "backend" } })).toMatchObject({
+    expect(Backend.decodeRequest(request)).toMatchObject({
       method: "simulation.handshake",
       params: { expectedRole: "backend" },
     })
@@ -282,19 +184,19 @@ describe("simulation.handshake", () => {
       params,
     }
     expect(() =>
-      Frontend.decodeRequest({
+      Backend.decodeRequest({
         ...request,
         params: { ...params, offeredVersions: [] },
       }),
     ).toThrow()
     expect(() =>
-      Frontend.decodeRequest({
+      Backend.decodeRequest({
         ...request,
-        params: { ...params, requiredCapabilities: ["ui.state", "ui.state"] },
+        params: { ...params, requiredCapabilities: ["llm.attach", "llm.attach"] },
       }),
     ).toThrow()
     expect(() =>
-      Frontend.decodeRequest({
+      Backend.decodeRequest({
         ...request,
         params: { ...params, optionalCapabilities: [""] },
       }),
@@ -302,22 +204,24 @@ describe("simulation.handshake", () => {
   })
 
   test("selects the protocol and advertises only installed capabilities", async () => {
-    await expect(Effect.runPromise(Handshake.dispatch(ui, params))).resolves.toEqual({
+    await expect(Effect.runPromise(Handshake.dispatch(backend, params))).resolves.toEqual({
       protocolVersion: 1,
-      role: "ui",
+      role: "backend",
       server: { name: "ocpp", version: "test" },
-      capabilities: [...Frontend.Capabilities],
+      capabilities: [...Backend.Capabilities],
     })
   })
 
   test("rejects a role mismatch", async () => {
     await expect(
-      Effect.runPromise(Handshake.dispatch(ui, { ...params, expectedRole: "backend" })),
-    ).rejects.toMatchObject({ _tag: "SimulationHandshake.RoleMismatchError", expected: "backend", actual: "ui" })
+      Effect.runPromise(Handshake.dispatch(backend, { ...params, expectedRole: "ui" })),
+    ).rejects.toMatchObject({ _tag: "SimulationHandshake.RoleMismatchError", expected: "ui", actual: "backend" })
   })
 
   test("rejects unsupported protocol versions", async () => {
-    await expect(Effect.runPromise(Handshake.dispatch(ui, { ...params, offeredVersions: [2] }))).rejects.toMatchObject({
+    await expect(
+      Effect.runPromise(Handshake.dispatch(backend, { ...params, offeredVersions: [2] })),
+    ).rejects.toMatchObject({
       _tag: "SimulationHandshake.UnsupportedProtocolError",
       offered: [2],
       supported: [1],
@@ -327,21 +231,21 @@ describe("simulation.handshake", () => {
   test("rejects a missing required capability but ignores missing optional capabilities", async () => {
     await expect(
       Effect.runPromise(
-        Handshake.dispatch(ui, {
+        Handshake.dispatch(backend, {
           ...params,
-          requiredCapabilities: ["ui.state", "ui.future"],
+          requiredCapabilities: ["llm.attach", "llm.future"],
         }),
       ),
-    ).rejects.toMatchObject({ _tag: "SimulationHandshake.MissingCapabilityError", missing: ["ui.future"] })
+    ).rejects.toMatchObject({ _tag: "SimulationHandshake.MissingCapabilityError", missing: ["llm.future"] })
 
     await expect(
       Effect.runPromise(
-        Handshake.dispatch(ui, {
+        Handshake.dispatch(backend, {
           ...params,
           requiredCapabilities: [],
-          optionalCapabilities: ["ui.future"],
+          optionalCapabilities: ["llm.future"],
         }),
       ),
-    ).resolves.toMatchObject({ capabilities: Frontend.Capabilities })
+    ).resolves.toMatchObject({ capabilities: Backend.Capabilities })
   })
 })

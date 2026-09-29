@@ -5,7 +5,6 @@ import { ToolFailure } from "@ocpp/ai"
 import { Duration, Effect, Schema } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { Parser } from "htmlparser2"
-import { Permission } from "../../permission.js"
 import { convertHTMLToMarkdown, MAX_MARKDOWN_BYTES } from "../html-markdown.js"
 import { collectBoundedResponseBody } from "../http-body.js"
 
@@ -103,13 +102,12 @@ export const Plugin = {
   id: "ocpp.tool.webfetch",
   effect: Effect.fn("WebFetchTool.Plugin")(function* (ctx: Context) {
     const http = yield* HttpClient.HttpClient
-    const permission = yield* Permission.Service
 
     yield* ctx.tool
       .transform((draft) =>
         draft.add({
           name,
-          options: { codemode: false },
+          options: { readOnly: true },
           description,
           input: Input,
           output: Output,
@@ -118,16 +116,6 @@ export const Plugin = {
               yield* Effect.try({
                 try: () => assertHttpUrl(new URL(input.url)),
                 catch: (error) => error,
-              })
-
-              yield* permission.assert({
-                action: name,
-                resources: [input.url],
-                save: ["*"],
-                metadata: input,
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source: { type: "tool", messageID: context.messageID, id: context.id },
               })
 
               const { body, contentType } = yield* Effect.gen(function* () {

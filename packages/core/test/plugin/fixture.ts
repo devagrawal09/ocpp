@@ -23,7 +23,6 @@ import { Npm } from "@ocpp/util/npm"
 import { Plugin } from "@ocpp/core/plugin"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
-import { Permission } from "@ocpp/core/permission"
 import { Reference } from "@ocpp/core/reference"
 import { Skill } from "@ocpp/core/skill"
 import { SkillDiscovery } from "@ocpp/core/skill/discovery"
@@ -34,29 +33,18 @@ import { WebSearch } from "@ocpp/core/websearch"
 import { Effect, Layer } from "effect"
 import { tempLocationLayer } from "../fixture/location"
 import { emptyMcpLayer } from "../fixture/mcp"
+import { noVendorDrivers } from "../lib/drivers"
+import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
 
 const npmLayer = Layer.succeed(
   Npm.Service,
   Npm.Service.of({
     add: () => Effect.succeed({ directory: "", entrypoint: undefined }),
-    resolve: () => Effect.succeed({ directory: "", entrypoint: undefined }),
     which: () => Effect.undefined,
   }),
 )
 
 const generateLayer = Layer.succeed(Generate.Service, Generate.Service.of({ text: () => Effect.succeed("") }))
-
-const permissionLayer = Layer.succeed(
-  Permission.Service,
-  Permission.Service.of({
-    ask: (input) => Effect.succeed({ id: input.id ?? Permission.ID.create(), effect: "ask" }),
-    assert: () => Effect.void,
-    reply: () => Effect.void,
-    get: () => Effect.succeed(undefined),
-    forSession: () => Effect.succeed([]),
-    list: () => Effect.succeed([]),
-  }),
-)
 
 const jobLayer = LayerNode.compile(LayerNode.group([Job.node]))
 const runtimeLayer = Layer.unwrap(
@@ -76,6 +64,7 @@ const runtimeLayer = Layer.unwrap(
         move: () => Effect.die("Unavailable in Plugin tests"),
         resume: () => Effect.die("Unavailable in Plugin tests"),
         switchAgent: () => Effect.die("Unavailable in Plugin tests"),
+        selectTools: () => Effect.die("Unavailable in Plugin tests"),
         switchModel: () => Effect.die("Unavailable in Plugin tests"),
         interrupt: () => Effect.die("Unavailable in Plugin tests"),
         synthetic: () => Effect.never,
@@ -86,6 +75,7 @@ const runtimeLayer = Layer.unwrap(
       location: {
         agent: { list: () => Effect.die("Unavailable in Plugin tests") },
         mcp: { list: () => Effect.die("Unavailable in Plugin tests") },
+        tool: { paths: () => Effect.die("Unavailable in Plugin tests") },
       },
     })
   }),
@@ -111,11 +101,11 @@ export const PluginTestLayer = Layer.merge(
       AISDK.node,
       Catalog.node,
       Command.node,
+      ExternalAgentDrivers.node,
       Integration.node,
       KV.node,
       Mcp.node,
       PluginRuntime.node,
-      Permission.node,
       PluginHooks.node,
       Reference.node,
       Skill.node,
@@ -131,8 +121,8 @@ export const PluginTestLayer = Layer.merge(
       [Config.node, Config.testLayer()],
       [Mcp.node, emptyMcpLayer],
       [Generate.node, generateLayer],
-      [Permission.node, permissionLayer],
       [PluginRuntime.node, runtimeLayer],
+      [ExternalAgentDrivers.node, noVendorDrivers],
     ],
   ),
   jobLayer,

@@ -157,7 +157,7 @@ export function SessionScreen(props: { session: SessionModel }) {
   return (
     <>
       <SessionHeader />
-      <div class="flex-1 min-h-0 flex flex-col gap-2 px-2 pb-2 pt-[var(--shell-top-inset,8px)]">
+      <div class="flex-1 min-h-0 flex flex-col gap-2 p-2">
         <div ref={screen.panel.ref} class="relative flex-1 min-h-0 flex flex-col md:flex-row gap-2">
           <div
             classList={{
@@ -237,7 +237,11 @@ export function SessionScreen(props: { session: SessionModel }) {
                         setStore("sideReviewPresent", false)
                       }}
                     >
-                      <SessionDesktopReview review={review} present={store.sideReviewPresent} />
+                      <SessionDesktopReview
+                        review={review}
+                        present={store.sideReviewPresent}
+                        reveal={(target) => void timeline.actions.reveal(target)}
+                      />
                     </div>
                   </Show>
                 </div>

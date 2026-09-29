@@ -9,7 +9,6 @@ import { Cause, Config, Context, Effect, Layer, Result, Stream } from "effect"
 import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { App } from "../app.js"
-import { Permission } from "../permission.js"
 import { PluginHooks } from "../plugin/hooks.js"
 import { QuestionTool } from "../tool/plugin/question.js"
 import { Tool } from "../tool.js"
@@ -28,19 +27,16 @@ const IMAGE_REMOVED =
 const responsesWebSocketFlag = (providerID: string) =>
   `OCPP_EXPERIMENTAL_${providerID.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_RESPONSES_WEBSOCKET`
 
-/** Failures a prepared execution can surface: infrastructure errors plus user declines resurfaced from the defect tunnel. */
-export type ExecuteError = Tool.Error | Permission.DeclinedError | QuestionTool.CancelledError
+/** Failures a prepared execution can surface: infrastructure errors plus question dismissals resurfaced from the defect tunnel. */
+export type ExecuteError = Tool.Error | QuestionTool.CancelledError
 
-// User declines dive under the leaves' blanket `mapError` as defects (the deliberate
-// tunnel entered in Permission.assert and the question tool), so a user's "no" can
-// never become model-facing tool output. They resurface as typed failures exactly once,
-// here at the seam the runner executes through.
+// A dismissed question dives under the leaves' blanket `mapError` as a defect (the deliberate
+// tunnel entered in the question tool), so a user's "no" can never become model-facing tool
+// output. It resurfaces as a typed failure exactly once, here at the seam the runner executes
+// through.
 const declineDefect = (cause: Cause.Cause<Tool.Error>) => {
   const decline = cause.reasons.flatMap((reason) =>
-    Cause.isDieReason(reason) &&
-    (reason.defect instanceof Permission.DeclinedError || reason.defect instanceof QuestionTool.CancelledError)
-      ? [reason.defect]
-      : [],
+    Cause.isDieReason(reason) && reason.defect instanceof QuestionTool.CancelledError ? [reason.defect] : [],
   )[0]
   return decline ? Result.succeed(decline) : Result.fail(cause)
 }
@@ -79,6 +75,19 @@ interface PrepareInput {
   readonly webSocket?: "session"
 }
 
+/** The agent's system prompt, or OC++'s for its Code Mode catalog, followed by the rendered instructions. */
+export const systemPrompt = (input: {
+  readonly agent: Agent.Info
+  readonly tools: Tool.Snapshot
+  readonly initial: string
+}) =>
+  [
+    input.agent.system
+      ? input.agent.system
+      : SessionSystemPrompt.make((input.tools.codeModeCatalog ?? []).map((entry) => entry.path)),
+    input.initial,
+  ].filter((part) => part.length > 0)
+
 export const baseTranscript = (input: {
   readonly agent: Agent.Info
   readonly model: SessionRunnerModel.Resolved
@@ -89,14 +98,7 @@ export const baseTranscript = (input: {
   const providerMetadataKey = input.model.model.route.providerMetadataKey ?? input.model.model.provider
   return {
     providerMetadataKey,
-    system: [
-      input.agent.system
-        ? input.agent.system
-        : SessionSystemPrompt.make(input.tools.definitions.map((tool) => tool.name)),
-      input.initial,
-    ]
-      .filter((part) => part.length > 0)
-      .map(SystemPart.make),
+    system: systemPrompt(input).map(SystemPart.make),
     messages: toLLMMessages(input.messages, input.model.ref, providerMetadataKey),
   }
 }

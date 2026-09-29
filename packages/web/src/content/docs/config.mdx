@@ -55,7 +55,7 @@ Config sources are loaded in this order (later sources override earlier ones):
 This means project configs can override global defaults, and global configs can override remote organizational defaults. Managed settings override everything.
 
 :::note
-The `.ocpp` and `~/.config/ocpp` directories use **plural names** for subdirectories: `agents/`, `commands/`, `modes/`, `plugins/`, `skills/`, `tools/`, and `themes/`. Singular names (e.g., `agent/`) are also supported for backwards compatibility.
+The `.ocpp` and `~/.config/ocpp` directories use **plural names** for subdirectories: `agents/`, `commands/`, `modes/`, `plugins/`, `skills/`, and `tools/`. Singular names (e.g., `agent/`) are also supported for backwards compatibility.
 :::
 
 ---
@@ -100,8 +100,6 @@ You can enable specific servers in your local config:
 
 Place your global OC++ config in `~/.config/ocpp/ocpp.json`. Use global config for user-wide server/runtime preferences like providers, models, and permissions.
 
-For TUI-specific settings, use `~/.config/ocpp/tui.json`.
-
 Global config overrides remote organizational defaults.
 
 ---
@@ -109,8 +107,6 @@ Global config overrides remote organizational defaults.
 ### Per project
 
 Add `ocpp.json` in your project root. Project config has the highest precedence among standard config files - it overrides both global and remote configs.
-
-For project-specific TUI settings, add `tui.json` alongside it.
 
 :::tip
 Place project specific config in the root of your project.
@@ -255,45 +251,7 @@ All managed preference keys appear in the resolved config and cannot be overridd
 
 The server/runtime config schema is defined in [**`ocpp.ai/config.json`**](https://ocpp.ai/config.json).
 
-TUI config uses [**`ocpp.ai/tui.json`**](https://ocpp.ai/tui.json).
-
 Your editor should be able to validate and autocomplete based on the schema.
-
----
-
-### TUI
-
-Use a dedicated `tui.json` (or `tui.jsonc`) file for TUI-specific settings.
-
-```json title="tui.json"
-{
-  "$schema": "https://ocpp.ai/tui.json",
-  "scroll_speed": 3,
-  "scroll_acceleration": {
-    "enabled": true
-  },
-  "diff_style": "auto",
-  "cursor": {
-    "style": "block",
-    "blinking": true
-  },
-  "mouse": true,
-  "attention": {
-    "enabled": true,
-    "notifications": true,
-    "sound": true,
-    "volume": 0.4
-  }
-}
-```
-
-Use `OCPP_TUI_CONFIG` to point to a custom TUI config file.
-
-When `cursor.style` is `"default"`, the terminal default cursor is restored, so `cursor.blinking` has no effect.
-
-Set `attention.enabled` to turn on TUI desktop notifications and sounds. See [TUI attention](/docs/tui#attention).
-
-Legacy `theme`, `keybinds`, and `tui` keys in `ocpp.json` are deprecated and automatically migrated when possible.
 
 ---
 
@@ -486,21 +444,6 @@ Bearer tokens (`AWS_BEARER_TOKEN_BEDROCK` or `/connect`) take precedence over pr
 
 ---
 
-### Themes
-
-Set your UI theme in `tui.json`.
-
-```json title="tui.json"
-{
-  "$schema": "https://ocpp.ai/tui.json",
-  "theme": "tokyonight"
-}
-```
-
-[Learn more here](/docs/themes).
-
----
-
 ### Agents
 
 You can configure specialized agents for specific tasks through the `agent` option.
@@ -540,7 +483,7 @@ You can set the default agent using the `default_agent` option. This determines 
 
 The default agent must be a primary agent (not a subagent). This can be a built-in agent like `"build"` or `"plan"`, or a [custom agent](/docs/agents) you've defined. If the specified agent doesn't exist or is a subagent, OC++ will fall back to `"build"` with a warning.
 
-This setting applies across all interfaces: TUI, CLI (`ocpp run`), desktop app, and GitHub Action.
+This setting applies across all interfaces: the web app, CLI (`ocpp run`), and GitHub Action.
 
 ---
 
@@ -603,25 +546,6 @@ You can configure custom commands for repetitive tasks through the `command` opt
 ```
 
 You can also define commands using markdown files in `~/.config/ocpp/commands/` or `.ocpp/commands/`. [Learn more here](/docs/commands).
-
----
-
-### Keybinds
-
-Customize TUI keyboard shortcuts in `tui.json` with `keybinds`.
-
-```json title="tui.json"
-{
-  "$schema": "https://ocpp.ai/tui.json",
-  "keybinds": {
-    "command_list": "ctrl+p"
-  }
-}
-```
-
-`keybinds` is merged with built-in defaults, so you only need to configure the shortcuts you want to change.
-
-[Learn more here](/docs/keybinds).
 
 ---
 

@@ -23,11 +23,9 @@ const ServerParams = {
   ),
 }
 
-const PermissionParams = {
-  auto: Flag.boolean("auto").pipe(
-    Flag.withDescription("Auto-approve permissions that are not explicitly denied"),
-    Flag.withDefault(false),
-  ),
+// Accepted and ignored so existing scripts keep working: nothing asks for approval anymore.
+const IgnoredParams = {
+  auto: Flag.boolean("auto").pipe(Flag.withDefault(false), Flag.withHidden),
   yolo: Flag.boolean("yolo").pipe(Flag.withDefault(false), Flag.withHidden),
   dangerouslySkipPermissions: Flag.boolean("dangerously-skip-permissions").pipe(
     Flag.withDefault(false),
@@ -36,26 +34,8 @@ const PermissionParams = {
 }
 
 const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp", {
-  description: "OC++ 2.0 preview command line interface",
-  params: {
-    ...ServerParams,
-    ...PermissionParams,
-    directory: Argument.string("directory").pipe(
-      Argument.withDescription("Directory to start OC++ in"),
-      Argument.optional,
-    ),
-    continue: Flag.boolean("continue").pipe(
-      Flag.withAlias("c"),
-      Flag.withDescription("Continue the last session"),
-      Flag.withDefault(false),
-    ),
-    session: Flag.string("session").pipe(
-      Flag.withAlias("s"),
-      Flag.withDescription("Session ID to continue"),
-      Flag.optional,
-    ),
-    prompt: Flag.string("prompt").pipe(Flag.withDescription("Prompt to use"), Flag.optional),
-  },
+  description: "OC++ 2.0 preview command line interface. Run without a command to open the web app.",
+  params: ServerParams,
   commands: [
     Spec.make("upgrade", {
       description: "Upgrade OC++ to the latest or a specific version",
@@ -264,42 +244,6 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         ),
       },
     }),
-    Spec.make("mini", {
-      description: "Start the minimal interactive interface",
-      params: {
-        ...ServerParams,
-        continue: Flag.boolean("continue").pipe(
-          Flag.withAlias("c"),
-          Flag.withDescription("Continue the last session"),
-          Flag.withDefault(false),
-        ),
-        session: Flag.string("session").pipe(
-          Flag.withAlias("s"),
-          Flag.withDescription("Session ID to continue"),
-          Flag.optional,
-        ),
-        fork: Flag.boolean("fork").pipe(
-          Flag.withDescription("Fork the session when continuing"),
-          Flag.withDefault(false),
-        ),
-        replay: Flag.boolean("replay").pipe(
-          Flag.withDescription("Restore session history on resume and resize (disable with --no-replay)"),
-          Flag.optional,
-        ),
-        replayLimit: Flag.integer("replay-limit").pipe(
-          Flag.withDescription("Limit replay to the newest N messages (default: 200)"),
-          Flag.optional,
-        ),
-        model: Flag.string("model").pipe(
-          Flag.withAlias("m"),
-          Flag.withDescription("Model to use in the format provider/model"),
-          Flag.optional,
-        ),
-        agent: Flag.string("agent").pipe(Flag.withDescription("Agent to use"), Flag.optional),
-        prompt: Flag.string("prompt").pipe(Flag.withDescription("Prompt to use"), Flag.optional),
-        demo: Flag.boolean("demo").pipe(Flag.withDefault(false), Flag.withHidden),
-      },
-    }),
     Spec.make("run", {
       description: "Run OC++ with a message",
       params: {
@@ -339,7 +283,7 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         ),
         title: Flag.string("title").pipe(Flag.withDescription("Session title"), Flag.optional),
         thinking: Flag.boolean("thinking").pipe(Flag.withDescription("Show thinking blocks"), Flag.withDefault(false)),
-        ...PermissionParams,
+        ...IgnoredParams,
       },
     }),
     Spec.make("service", {

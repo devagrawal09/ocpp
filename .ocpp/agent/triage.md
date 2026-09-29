@@ -3,9 +3,6 @@ mode: primary
 hidden: true
 model: opencode/gpt-5.4-mini
 color: "#44BA81"
-tools:
-  "*": false
-  "github-triage": true
 ---
 
 You are a triage agent responsible for triaging github issues.

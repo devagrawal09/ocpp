@@ -6,7 +6,6 @@ import { applyEdits, modify, parse, type ParseError } from "jsonc-parser"
 import { Global } from "@ocpp/util/global"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
-import { Config } from "../../../config"
 import { resolveConfigPath } from "../mcp/add"
 
 export default Runtime.handler(
@@ -14,21 +13,10 @@ export default Runtime.handler(
   Effect.fn("cli.plugin.remove")(function* (input) {
     const global = yield* Global.Service
     const configPath = yield* Effect.promise(() => resolveConfigPath(global.config))
-    const server = yield* Effect.promise(() => removePluginConfig(configPath, input.package))
-    const config = yield* Config.Service
-    const info = yield* config.get()
-    const tui = configured(info.plugins, input.package)
-    if (tui)
-      yield* config.update((draft) => {
-        draft.plugins = draft.plugins?.filter((entry) => !matches(entry, input.package))
-      })
-
-    const removed = [server ? configPath : undefined, tui ? config.path : undefined].filter(
-      (file) => file !== undefined,
-    )
+    const removed = yield* Effect.promise(() => removePluginConfig(configPath, input.package))
     process.stdout.write(
-      removed.length
-        ? `Plugin "${input.package}" removed from ${removed.join(", ")}${EOL}`
+      removed
+        ? `Plugin "${input.package}" removed from ${configPath}${EOL}`
         : `Plugin "${input.package}" is not configured${EOL}`,
     )
   }),

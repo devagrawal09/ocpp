@@ -8,8 +8,6 @@ export type ProviderSettings = { [x: string]: any }
 
 export type AgentColor = string
 
-export type PermissionEffect = "allow" | "deny" | "ask"
-
 export type PluginSource =
   | { type: "builtin" }
   | { type: "package"; package: string }
@@ -67,15 +65,6 @@ export type PromptFileSource = { type: "inline" } | { type: "uri"; uri: string }
 
 export type PromptMention = { start: number; end: number; text: string }
 
-export type SessionMessageSynthetic = {
-  id: string
-  metadata?: { [x: string]: JsonValue }
-  time: { created: number }
-  text: string
-  description?: string
-  type: "synthetic"
-}
-
 export type SessionMessageSystem = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -106,6 +95,28 @@ export type SessionMessageShell = {
   exit?: number | "Infinity" | "-Infinity" | "NaN"
   output?: { output: string; cursor: number; size: number; truncated: boolean }
 }
+
+export type SessionMessageInvocationTrigger =
+  | { type: "command"; name: string; text: string }
+  | { type: "event"; name: string }
+
+export type CodeModeExecutionToolEvent = {
+  type: "tool"
+  tool: string
+  status: "running" | "completed" | "error"
+  input?: { [x: string]: JsonValue }
+  output?: string
+  metadata?: { [x: string]: JsonValue }
+  error?: string
+  replayed?: boolean
+}
+
+export type CodeModeExecutionTraceEvent =
+  | { type: "trace"; kind: "assignment"; target: string; value: string }
+  | { type: "trace"; kind: "branch"; expression: string; result: boolean }
+  | { type: "trace"; kind: "operation"; operation: string; input: string; output: string }
+  | { type: "trace"; kind: "log"; method: string; message: string }
+  | { type: "trace"; kind: "return"; value: string }
 
 export type SessionMessageProviderState = { [x: string]: JsonValue }
 
@@ -149,15 +160,11 @@ export type SessionActive = { type: "running" }
 
 export type SessionInboxDelivery = "steer" | "queue"
 
-export type SessionInboxSyntheticPayload = { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
-
 export type SessionInboxCompactionPayload = {}
 
 export type InstructionEntryKey = string
 
 export type SessionGenerateResponse = { data: { text: string } }
-
-export type SessionInboxSyntheticPayload1 = { text: string; description?: string; metadata?: { [x: string]: any } }
 
 export type ShellInfo = {
   id: string
@@ -176,23 +183,6 @@ export type SessionMessageProviderState1 = { [x: string]: any }
 
 export type ToolFileContent1 = { type: "file"; uri: string; mime: string; name?: string | undefined }
 
-export type CodeModeExecutionToolEvent = {
-  type: "tool"
-  tool: string
-  status: "running" | "completed" | "error"
-  input?: { [x: string]: JsonValue }
-  output?: string
-  metadata?: { [x: string]: JsonValue }
-  error?: string
-}
-
-export type CodeModeExecutionTraceEvent =
-  | { type: "trace"; kind: "assignment"; target: string; value: string }
-  | { type: "trace"; kind: "branch"; expression: string; result: boolean }
-  | { type: "trace"; kind: "operation"; operation: string; input: string; output: string }
-  | { type: "trace"; kind: "log"; method: string; message: string }
-  | { type: "trace"; kind: "return"; value: string }
-
 export type SessionMessageToolStateRunning1 = {
   status: "running"
   input: { [x: string]: any }
@@ -202,6 +192,16 @@ export type SessionMessageToolStateRunning1 = {
 export type EventLogSynced = { type: "log.synced"; aggregateID: string; seq?: number }
 
 export type SessionInterruptResponse = { interrupted: boolean }
+
+export type CodeModeCommandInfo = { name: string; description: string; handler: string }
+
+export type CodeModeEventSchedule = { every: string } | { cron: string } | { at: string }
+
+export type CodeModeEventStatus = "running" | "completed" | "error" | "cancelled"
+
+export type SessionEventFiring = { status: "started"; executionID: string; messageID: string } | { status: "skipped" }
+
+export type SessionExecutionCancelResponse = { cancelled: boolean }
 
 export type ModelReasoningField = "reasoning" | "reasoning_content" | "reasoning_text" | (string & {})
 
@@ -222,6 +222,8 @@ export type ModelVariant = {
 }
 
 export type MoneyUSDPerMillionTokens = number
+
+export type ExternalSessionProvider = "claude" | "codex" | "pi"
 
 export type GenerateTextResponse = { data: { text: string } }
 
@@ -332,10 +334,6 @@ export type FormMetadata = { [x: string]: JsonValue }
 
 export type FormValue = string | number | boolean | Array<string>
 
-export type PermissionSource = { type: "tool"; messageID: string; id: string }
-
-export type PermissionSavedInfo = { id: string; projectID: string; action: string; resource: string }
-
 export type FileSystemEntry = { path: string; type: "file" | "directory" }
 
 export type CommandInfo = { name: string; description?: string }
@@ -349,8 +347,6 @@ export type SkillInfo = {
   location: string
   content: string
 }
-
-export type PermissionReply = "once" | "always" | "reject"
 
 export type Pty = {
   id: string
@@ -457,11 +453,9 @@ export type ProviderRequest = {
   body: { [x: string]: any }
 }
 
-export type PermissionRule = { action: string; resource: string; effect: PermissionEffect }
-
 export type PluginInfo =
-  | { id: string; source: PluginSource; status: "active"; tui: boolean }
-  | { id?: string; source: PluginSource; status: "failed"; error: string; tui: boolean }
+  | { id: string; source: PluginSource; status: "active" }
+  | { id?: string; source: PluginSource; status: "failed"; error: string }
 
 export type SessionMessageLocationSwitched = {
   id: string
@@ -515,6 +509,8 @@ export type PromptAgentAttachment = { name: string; mention?: PromptMention }
 
 export type PromptSkillAttachment = { id: string; name: string; text?: string; mention?: PromptMention }
 
+export type CodeModeExecutionEntry = CodeModeExecutionToolEvent | CodeModeExecutionTraceEvent
+
 export type SessionMessageAssistantText = { type: "text"; text: string; state?: SessionMessageProviderState }
 
 export type SessionMessageAssistantReasoning = {
@@ -536,15 +532,6 @@ export type SessionMessageCompactionFailed = {
   status: "failed"
   reason: "auto" | "manual"
   error: SessionStructuredError
-}
-
-export type SessionInboxSynthetic = {
-  id: string
-  sessionID: string
-  timeCreated: number
-  type: "synthetic"
-  payload: SessionInboxSyntheticPayload
-  delivery: SessionInboxDelivery
 }
 
 export type SessionInboxCompaction = {
@@ -600,6 +587,16 @@ export type SessionModelSelected = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; model: ModelRef; previous?: ModelRef }
+}
+
+export type SessionToolsSelected = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.tools.selected"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; tools: Array<string> }
 }
 
 export type SessionMoved = {
@@ -800,6 +797,22 @@ export type SessionCodemodeStarted = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; assistantMessageID: string; id: string; executionID: string }
+}
+
+export type SessionInvocationStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.invocation.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    executionID: string
+    trigger: SessionMessageInvocationTrigger
+    handler: string
+    input: JsonValue
+  }
 }
 
 export type SessionRetryScheduled = {
@@ -1044,6 +1057,15 @@ export type CommandUpdated = {
   data: {}
 }
 
+export type CodeModeEventUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "codemode.event.updated"
+  location?: LocationRef
+  data: { sessionID: string; name: string }
+}
+
 export type ConfigUpdated = {
   id: string
   created: number
@@ -1130,67 +1152,6 @@ export type SessionIdle = {
   created: number
   metadata?: { [x: string]: any }
   type: "session.idle"
-  location?: LocationRef
-  data: { sessionID: string }
-}
-
-export type TuiPromptAppend = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "tui.prompt.append"
-  location?: LocationRef
-  data: { text: string }
-}
-
-export type TuiCommandExecute = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "tui.command.execute"
-  location?: LocationRef
-  data: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.share"
-      | "session.interrupt"
-      | "session.background"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | (string & {})
-  }
-}
-
-export type TuiToastShow = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "tui.toast.show"
-  location?: LocationRef
-  data: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    duration?: number | undefined
-  }
-}
-
-export type TuiSessionSelect = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "tui.session.select"
   location?: LocationRef
   data: { sessionID: string }
 }
@@ -1384,7 +1345,22 @@ export type SessionMessageAssistantReasoning1 = {
 
 export type ToolContent1 = ToolTextContent | ToolFileContent1
 
-export type CodeModeExecutionEntry = CodeModeExecutionToolEvent | CodeModeExecutionTraceEvent
+export type CodeModeEventInfo = {
+  name: string
+  description: string
+  schedule: CodeModeEventSchedule
+  handler: string
+  input?: JsonValue
+  enabled: boolean
+  nextFireAt?: string
+  lastFiredAt?: string
+  lastStatus?: CodeModeEventStatus
+  lastMessageID?: string
+  lastSummary?: string
+  runCount: number | "Infinity" | "-Infinity" | "NaN"
+  skipCount: number | "Infinity" | "-Infinity" | "NaN"
+  lastSkippedAt?: string
+}
 
 export type ModelCompatibility = {
   reasoningField?: ModelReasoningField
@@ -1399,6 +1375,15 @@ export type ModelCost = {
   input: MoneyUSDPerMillionTokens
   output: MoneyUSDPerMillionTokens
   cache: { read: MoneyUSDPerMillionTokens; write: MoneyUSDPerMillionTokens }
+}
+
+export type SessionDriverInfo = {
+  id: ExternalSessionProvider
+  name: string
+  available: boolean
+  model: string
+  models: Array<string>
+  variants: Array<string>
 }
 
 export type FormNumberField = {
@@ -1506,44 +1491,6 @@ export type ProjectUpdated = {
 }
 
 export type FormAnswer = { [x: string]: FormValue }
-
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  action: string
-  resources: Array<string>
-  save?: Array<string>
-  metadata?: { [x: string]: JsonValue }
-  source?: PermissionSource
-  message?: string
-}
-
-export type PermissionAsked = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "permission.asked"
-  location?: LocationRef
-  data: {
-    id: string
-    sessionID: string
-    action: string
-    resources: Array<string>
-    save?: Array<string>
-    metadata?: { [x: string]: any }
-    source?: PermissionSource
-    message?: string
-  }
-}
-
-export type PermissionReplied = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "permission.replied"
-  location?: LocationRef
-  data: { sessionID: string; requestID: string; reply: PermissionReply }
-}
 
 export type PtyCreated = {
   id: string
@@ -1659,7 +1606,18 @@ export type WorktreeList = Array<WorktreeDirectory>
 
 export type VcsInfo = { branch: VcsBranch }
 
-export type PermissionRuleset = Array<PermissionRule>
+export type AgentInfo = {
+  id: string
+  name: string
+  model?: ModelRef
+  request: ProviderRequest
+  system?: string
+  description?: string
+  mode: "subagent" | "primary" | "all"
+  hidden: boolean
+  color?: AgentColor
+  steps?: number
+}
 
 export type SessionInboxMove = {
   id: string
@@ -1677,6 +1635,7 @@ export type SessionInfo = {
   projectID: string
   agent?: string
   model?: ModelRef
+  tools?: Array<string>
   cost: MoneyUSD
   tokens: TokenUsageInfo
   outcome?: "succeeded" | "failed" | "interrupted"
@@ -1713,6 +1672,30 @@ export type SessionStatsInfo = {
   models: Array<SessionStatsModelUsage>
 }
 
+export type SessionMessageSynthetic = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  text: string
+  description?: string
+  files?: Array<PromptFileAttachment>
+  type: "synthetic"
+}
+
+export type SessionInboxSyntheticPayload = {
+  text: string
+  description?: string
+  files?: Array<PromptFileAttachment>
+  metadata?: { [x: string]: JsonValue }
+}
+
+export type SessionInboxSyntheticPayload1 = {
+  text: string
+  description?: string
+  files?: Array<PromptFileAttachment>
+  metadata?: { [x: string]: any }
+}
+
 export type SessionMessageUser = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -1739,6 +1722,8 @@ export type SessionInboxUserPayload1 = {
   skills?: Array<PromptSkillAttachment>
   metadata?: { [x: string]: any }
 }
+
+export type CodeModeExecutionEntries = Array<CodeModeExecutionEntry>
 
 export type SessionMessageToolStateCompleted = {
   status: "completed"
@@ -1828,7 +1813,170 @@ export type SessionMessageToolStateError1 = {
   metadata?: { [x: string]: JsonValue }
 }
 
-export type CodeModeExecutionEntries = Array<CodeModeExecutionEntry>
+export type ConfigEntry =
+  | {
+      type: "document"
+      path?: string
+      info: {
+        $schema?: string
+        shell?: string
+        model?: string | { providerID: string; model: string; variant?: string }
+        default_agent?: string
+        autoupdate?: boolean | "notify"
+        share?: "manual" | "auto" | "disabled"
+        enterprise?: { url?: string }
+        username?: string
+        agents?: {
+          [x: string]: {
+            model?: string | { providerID: string; model: string; variant?: string }
+            request?: { headers?: { [x: string]: string }; body?: { [x: string]: JsonValue } }
+            system?: string
+            description?: string
+            mode?: "subagent" | "primary" | "all"
+            hidden?: boolean
+            color?: string
+            steps?: number
+            disabled?: boolean
+          }
+        }
+        snapshots?: boolean
+        watcher?: { ignore?: Array<string> }
+        formatter?:
+          | boolean
+          | {
+              [x: string]: {
+                disabled?: boolean
+                command?: Array<string>
+                environment?: { [x: string]: string }
+                extensions?: Array<string>
+              }
+            }
+        lsp?:
+          | boolean
+          | {
+              [x: string]:
+                | { disabled: true }
+                | {
+                    command: Array<string>
+                    extensions?: Array<string>
+                    disabled?: boolean
+                    env?: { [x: string]: string }
+                    initialization?: { [x: string]: JsonValue }
+                  }
+            }
+        media?: {
+          image?: { auto_resize?: boolean; max_width?: number; max_height?: number; max_base64_bytes?: number }
+        }
+        tool_output?: { max_lines?: number; max_bytes?: number }
+        mcp?: {
+          timeout?: { startup?: number; catalog?: number; execution?: number }
+          servers?: {
+            [x: string]:
+              | {
+                  type: "local"
+                  command: Array<string>
+                  cwd?: string
+                  environment?: { [x: string]: string }
+                  disabled?: boolean
+                  timeout?: { startup?: number; catalog?: number; execution?: number }
+                }
+              | {
+                  type: "remote"
+                  url: string
+                  headers?: { [x: string]: string }
+                  oauth?:
+                    | {
+                        client_id?: string
+                        client_secret?: string
+                        scope?: string
+                        callback_port?: number
+                        redirect_uri?: string
+                      }
+                    | false
+                  disabled?: boolean
+                  timeout?: { startup?: number; catalog?: number; execution?: number }
+                }
+          }
+        }
+        openapi?: {
+          [x: string]: { spec: string; base_url?: string; headers?: { [x: string]: string }; disabled?: boolean }
+        }
+        compaction?: { auto?: boolean; keep?: { tokens?: number }; buffer?: number }
+        skills?: Array<string>
+        commands?: {
+          [x: string]: {
+            template: string
+            description?: string
+            agent?: string
+            model?: string | { providerID: string; model: string; variant?: string }
+            subtask?: boolean
+          }
+        }
+        instructions?: Array<string>
+        references?: {
+          [x: string]:
+            | string
+            | { repository: string; branch?: string; description?: string; hidden?: boolean }
+            | { path: string; description?: string; hidden?: boolean }
+        }
+        websearch?: false | { provider: "random" | (string & {}) }
+        plugins?: Array<string | { package: string; options?: { [x: string]: JsonValue } }>
+        warming?: boolean | { prompt?: string; interval?: string; duration?: string }
+        external_agents?: {
+          claude?: { enabled?: boolean; model?: string; effort?: string }
+          codex?: { enabled?: boolean; model?: string; effort?: string }
+          pi?: { enabled?: boolean; model?: string; effort?: string }
+        }
+        providers?: {
+          [x: string]: {
+            name?: string
+            env?: Array<string>
+            package?: string
+            settings?: { [x: string]: JsonValue }
+            headers?: { [x: string]: string }
+            body?: { [x: string]: JsonValue }
+            models?: {
+              [x: string]: {
+                modelID?: string
+                family?: string
+                name?: string
+                compatibility?: ModelCompatibility
+                package?: string
+                settings?: { [x: string]: JsonValue }
+                headers?: { [x: string]: string }
+                body?: { [x: string]: JsonValue }
+                capabilities?: ModelCapabilities
+                variants?: Array<{
+                  id: string
+                  settings?: { [x: string]: JsonValue }
+                  headers?: { [x: string]: string }
+                  body?: { [x: string]: JsonValue }
+                }>
+                cost?:
+                  | {
+                      tier?: { type: "context"; size: number }
+                      input: MoneyUSDPerMillionTokens
+                      output: MoneyUSDPerMillionTokens
+                      cache?: { read?: MoneyUSDPerMillionTokens; write?: MoneyUSDPerMillionTokens }
+                    }
+                  | Array<{
+                      tier?: { type: "context"; size: number }
+                      input: MoneyUSDPerMillionTokens
+                      output: MoneyUSDPerMillionTokens
+                      cache?: { read?: MoneyUSDPerMillionTokens; write?: MoneyUSDPerMillionTokens }
+                    }>
+                disabled?: boolean
+                limit?: { context?: number; input?: number; output?: number }
+              }
+            }
+          }
+        }
+        experimental?: { subagent_depth?: number }
+      }
+    }
+  | { type: "directory"; path: string }
+  | { type: "agents"; path: string }
+  | { type: "claude"; path: string }
 
 export type ModelInfo = {
   id: string
@@ -1885,192 +2033,16 @@ export type ReferenceInfo = {
   source: ReferenceSource
 }
 
-export type AgentInfo = {
-  id: string
-  name: string
-  model?: ModelRef
-  request: ProviderRequest
-  system?: string
-  description?: string
-  mode: "subagent" | "primary" | "all"
-  hidden: boolean
-  color?: AgentColor
-  steps?: number
-  permissions: PermissionRuleset
-}
-
-export type ConfigEntry =
-  | {
-      type: "document"
-      path?: string
-      info: {
-        $schema?: string
-        shell?: string
-        model?: string | { providerID: string; model: string; variant?: string }
-        default_agent?: string
-        autoupdate?: boolean | "notify"
-        share?: "manual" | "auto" | "disabled"
-        enterprise?: { url?: string }
-        username?: string
-        permissions?: PermissionRuleset
-        agents?: {
-          [x: string]: {
-            model?: string | { providerID: string; model: string; variant?: string }
-            request?: { headers?: { [x: string]: string }; body?: { [x: string]: JsonValue } }
-            system?: string
-            description?: string
-            mode?: "subagent" | "primary" | "all"
-            hidden?: boolean
-            color?: string
-            steps?: number
-            disabled?: boolean
-            permissions?: PermissionRuleset
-          }
-        }
-        snapshots?: boolean
-        watcher?: { ignore?: Array<string> }
-        formatter?:
-          | boolean
-          | {
-              [x: string]: {
-                disabled?: boolean
-                command?: Array<string>
-                environment?: { [x: string]: string }
-                extensions?: Array<string>
-              }
-            }
-        lsp?:
-          | boolean
-          | {
-              [x: string]:
-                | { disabled: true }
-                | {
-                    command: Array<string>
-                    extensions?: Array<string>
-                    disabled?: boolean
-                    env?: { [x: string]: string }
-                    initialization?: { [x: string]: JsonValue }
-                  }
-            }
-        media?: {
-          image?: { auto_resize?: boolean; max_width?: number; max_height?: number; max_base64_bytes?: number }
-        }
-        tool_output?: { max_lines?: number; max_bytes?: number }
-        mcp?: {
-          timeout?: { startup?: number; catalog?: number; execution?: number }
-          servers?: {
-            [x: string]:
-              | {
-                  type: "local"
-                  command: Array<string>
-                  cwd?: string
-                  environment?: { [x: string]: string }
-                  disabled?: boolean
-                  codemode?: boolean
-                  timeout?: { startup?: number; catalog?: number; execution?: number }
-                }
-              | {
-                  type: "remote"
-                  url: string
-                  headers?: { [x: string]: string }
-                  oauth?:
-                    | {
-                        client_id?: string
-                        client_secret?: string
-                        scope?: string
-                        callback_port?: number
-                        redirect_uri?: string
-                      }
-                    | false
-                  disabled?: boolean
-                  codemode?: boolean
-                  timeout?: { startup?: number; catalog?: number; execution?: number }
-                }
-          }
-        }
-        compaction?: { auto?: boolean; keep?: { tokens?: number }; buffer?: number }
-        skills?: Array<string>
-        commands?: {
-          [x: string]: {
-            template: string
-            description?: string
-            agent?: string
-            model?: string | { providerID: string; model: string; variant?: string }
-            subtask?: boolean
-          }
-        }
-        instructions?: Array<string>
-        references?: {
-          [x: string]:
-            | string
-            | { repository: string; branch?: string; description?: string; hidden?: boolean }
-            | { path: string; description?: string; hidden?: boolean }
-        }
-        websearch?: false | { provider: "random" | (string & {}) }
-        plugins?: Array<string | { package: string; options?: { [x: string]: JsonValue } }>
-        warming?: boolean | { prompt?: string; interval?: string; duration?: string }
-        external_agents?: {
-          claude?: { enabled?: boolean; model?: string; effort?: string }
-          codex?: { enabled?: boolean; model?: string; effort?: string }
-          pi?: { enabled?: boolean; model?: string; effort?: string }
-        }
-        subagent?: { models?: Array<string> }
-        providers?: {
-          [x: string]: {
-            name?: string
-            env?: Array<string>
-            package?: string
-            settings?: { [x: string]: JsonValue }
-            headers?: { [x: string]: string }
-            body?: { [x: string]: JsonValue }
-            models?: {
-              [x: string]: {
-                modelID?: string
-                family?: string
-                name?: string
-                compatibility?: ModelCompatibility
-                package?: string
-                settings?: { [x: string]: JsonValue }
-                headers?: { [x: string]: string }
-                body?: { [x: string]: JsonValue }
-                capabilities?: ModelCapabilities
-                variants?: Array<{
-                  id: string
-                  settings?: { [x: string]: JsonValue }
-                  headers?: { [x: string]: string }
-                  body?: { [x: string]: JsonValue }
-                }>
-                cost?:
-                  | {
-                      tier?: { type: "context"; size: number }
-                      input: MoneyUSDPerMillionTokens
-                      output: MoneyUSDPerMillionTokens
-                      cache?: { read?: MoneyUSDPerMillionTokens; write?: MoneyUSDPerMillionTokens }
-                    }
-                  | Array<{
-                      tier?: { type: "context"; size: number }
-                      input: MoneyUSDPerMillionTokens
-                      output: MoneyUSDPerMillionTokens
-                      cache?: { read?: MoneyUSDPerMillionTokens; write?: MoneyUSDPerMillionTokens }
-                    }>
-                disabled?: boolean
-                limit?: { context?: number; input?: number; output?: number }
-              }
-            }
-          }
-        }
-        experimental?: {
-          portable_shell_scanner?: boolean
-          subagent_depth?: number
-          policies?: Array<{ action: "provider.use"; resource: string; effect: "allow" | "deny" }>
-        }
-      }
-    }
-  | { type: "directory"; path: string }
-  | { type: "agents"; path: string }
-  | { type: "claude"; path: string }
-
 export type SessionsResponse = { data: Array<SessionInfo>; cursor: { previous?: string | null; next?: string | null } }
+
+export type SessionInboxSynthetic = {
+  id: string
+  sessionID: string
+  timeCreated: number
+  type: "synthetic"
+  payload: SessionInboxSyntheticPayload
+  delivery: SessionInboxDelivery
+}
 
 export type SessionInboxUser = {
   id: string
@@ -2086,6 +2058,71 @@ export type SessionInboxItem =
   | { type: "synthetic"; payload: SessionInboxSyntheticPayload1; delivery: SessionInboxDelivery }
   | { type: "compaction"; payload: SessionInboxCompactionPayload; delivery: SessionInboxDelivery }
   | { type: "move"; payload: SessionInboxMovePayload; delivery: SessionInboxDelivery }
+
+export type SessionMessageInvocation = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number; completed?: number }
+  type: "invocation"
+  trigger: SessionMessageInvocationTrigger
+  code: string
+  executionID: string
+  status: "running" | "completed" | "error" | "cancelled"
+  events?: CodeModeExecutionEntries
+  error?: string
+}
+
+export type SessionCodemodeCompleted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.codemode.completed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    id: string
+    executionID: string
+    events: CodeModeExecutionEntries
+    resumed?: boolean
+  }
+}
+
+export type SessionCodemodeFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.codemode.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    id: string
+    executionID: string
+    events: CodeModeExecutionEntries
+    status: "error" | "cancelled"
+    error: string
+    resumed?: boolean
+  }
+}
+
+export type SessionCodemodeProgress = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.codemode.progress"
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    id: string
+    executionID: string
+    events: CodeModeExecutionEntries
+    resumed?: boolean
+  }
+}
 
 export type SessionMessageAssistantTool = {
   type: "tool"
@@ -2115,55 +2152,6 @@ export type SessionMessageAssistantTool1 = {
     | SessionMessageToolStateCompleted1
     | SessionMessageToolStateError1
   time: { created: number; ran?: number; completed?: number }
-}
-
-export type SessionCodemodeCompleted = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.codemode.completed"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: {
-    sessionID: string
-    assistantMessageID: string
-    id: string
-    executionID: string
-    events: CodeModeExecutionEntries
-  }
-}
-
-export type SessionCodemodeFailed = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.codemode.failed"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: {
-    sessionID: string
-    assistantMessageID: string
-    id: string
-    executionID: string
-    events: CodeModeExecutionEntries
-    status: "error" | "cancelled"
-    error: string
-  }
-}
-
-export type SessionCodemodeProgress = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.codemode.progress"
-  location?: LocationRef
-  data: {
-    sessionID: string
-    assistantMessageID: string
-    id: string
-    executionID: string
-    events: CodeModeExecutionEntries
-  }
 }
 
 export type FormFields = [FormField, ...Array<FormField>]
@@ -2222,6 +2210,7 @@ export type SessionMessageInfo =
   | SessionMessageSystem
   | SessionMessageSkill
   | SessionMessageShell
+  | SessionMessageInvocation
   | SessionMessageAssistant
   | SessionMessageCompaction
 
@@ -2261,6 +2250,7 @@ export type SessionEventDurable =
   | SessionCreated
   | SessionAgentSelected
   | SessionModelSelected
+  | SessionToolsSelected
   | SessionMoved
   | SessionRenamed
   | SessionViewed
@@ -2295,6 +2285,7 @@ export type SessionEventDurable =
   | SessionCodemodeStarted
   | SessionCodemodeCompleted
   | SessionCodemodeFailed
+  | SessionInvocationStarted
   | SessionRetryScheduled
   | SessionCompactionStarted
   | SessionCompactionEnded
@@ -2323,6 +2314,7 @@ export type V2Event =
   | SessionCreated
   | SessionAgentSelected
   | SessionModelSelected
+  | SessionToolsSelected
   | SessionMoved
   | SessionRenamed
   | SessionViewed
@@ -2363,6 +2355,7 @@ export type V2Event =
   | SessionCodemodeProgress
   | SessionCodemodeCompleted
   | SessionCodemodeFailed
+  | SessionInvocationStarted
   | SessionRetryScheduled
   | SessionCompactionStarted
   | SessionCompactionDelta
@@ -2374,14 +2367,13 @@ export type V2Event =
   | SessionMessageContentUpdated
   | FilesystemChanged
   | ReferenceUpdated
-  | PermissionAsked
-  | PermissionReplied
   | PluginAdded
   | PluginUpdated
   | ProjectUpdated
   | WorktreeUpdated
   | WorktreeResolved
   | CommandUpdated
+  | CodeModeEventUpdated
   | ConfigUpdated
   | SkillUpdated
   | PtyCreated
@@ -2399,10 +2391,6 @@ export type V2Event =
   | WebsearchUpdated
   | SessionStatusUpdated
   | SessionIdle
-  | TuiPromptAppend
-  | TuiCommandExecute
-  | TuiToastShow
-  | TuiSessionSelect
   | InstallationUpdated
   | InstallationUpdateAvailable
   | VcsBranchUpdated
@@ -2522,6 +2510,14 @@ export const isInstructionEntryValueTooLargeError = (value: unknown): value is I
   "_tag" in value &&
   value["_tag"] === "InstructionEntryValueTooLargeError"
 
+export type EventNotFoundError = {
+  readonly _tag: "EventNotFoundError"
+  readonly event: string
+  readonly message: string
+}
+export const isEventNotFoundError = (value: unknown): value is EventNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "EventNotFoundError"
+
 export type ProviderNotFoundError = {
   readonly _tag: "ProviderNotFoundError"
   readonly providerID: string
@@ -2565,14 +2561,6 @@ export type FormInvalidAnswerError = {
 }
 export const isFormInvalidAnswerError = (value: unknown): value is FormInvalidAnswerError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "FormInvalidAnswerError"
-
-export type PermissionNotFoundError = {
-  readonly _tag: "PermissionNotFoundError"
-  readonly requestID: string
-  readonly message: string
-}
-export const isPermissionNotFoundError = (value: unknown): value is PermissionNotFoundError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "PermissionNotFoundError"
 
 export type PtyNotFoundError = { readonly _tag: "PtyNotFoundError"; readonly ptyID: string; readonly message: string }
 export const isPtyNotFoundError = (value: unknown): value is PtyNotFoundError =>
@@ -2854,6 +2842,7 @@ export type SessionImportInput = {
       readonly projectID: string
       readonly agent?: string
       readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+      readonly tools?: ReadonlyArray<string>
       readonly cost: number
       readonly tokens: {
         readonly input: number
@@ -2948,6 +2937,14 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly text: string
           readonly description?: string
+          readonly files?: ReadonlyArray<{
+            readonly data: string
+            readonly mime: string
+            readonly source: { readonly type: "inline" } | { readonly type: "uri"; readonly uri: string }
+            readonly name?: string
+            readonly description?: string
+            readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
           readonly type: "synthetic"
         }
       | {
@@ -2982,6 +2979,54 @@ export type SessionImportInput = {
             readonly size: number
             readonly truncated: boolean
           }
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number; readonly completed?: number }
+          readonly type: "invocation"
+          readonly trigger:
+            | { readonly type: "command"; readonly name: string; readonly text: string }
+            | { readonly type: "event"; readonly name: string }
+          readonly code: string
+          readonly executionID: string
+          readonly status: "running" | "completed" | "error" | "cancelled"
+          readonly events?: ReadonlyArray<
+            | {
+                readonly type: "tool"
+                readonly tool: string
+                readonly status: "running" | "completed" | "error"
+                readonly input?: { readonly [x: string]: JsonValue }
+                readonly output?: string
+                readonly metadata?: { readonly [x: string]: JsonValue }
+                readonly error?: string
+                readonly replayed?: boolean
+              }
+            | (
+                | {
+                    readonly type: "trace"
+                    readonly kind: "assignment"
+                    readonly target: string
+                    readonly value: string
+                  }
+                | {
+                    readonly type: "trace"
+                    readonly kind: "branch"
+                    readonly expression: string
+                    readonly result: boolean
+                  }
+                | {
+                    readonly type: "trace"
+                    readonly kind: "operation"
+                    readonly operation: string
+                    readonly input: string
+                    readonly output: string
+                  }
+                | { readonly type: "trace"; readonly kind: "log"; readonly method: string; readonly message: string }
+                | { readonly type: "trace"; readonly kind: "return"; readonly value: string }
+              )
+          >
+          readonly error?: string
         }
       | {
           readonly id: string
@@ -3131,6 +3176,7 @@ export type SessionImportInput = {
       readonly projectID: string
       readonly agent?: string
       readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+      readonly tools?: ReadonlyArray<string>
       readonly cost: number
       readonly tokens: {
         readonly input: number
@@ -3225,6 +3271,14 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly text: string
           readonly description?: string
+          readonly files?: ReadonlyArray<{
+            readonly data: string
+            readonly mime: string
+            readonly source: { readonly type: "inline" } | { readonly type: "uri"; readonly uri: string }
+            readonly name?: string
+            readonly description?: string
+            readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
           readonly type: "synthetic"
         }
       | {
@@ -3259,6 +3313,54 @@ export type SessionImportInput = {
             readonly size: number
             readonly truncated: boolean
           }
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number; readonly completed?: number }
+          readonly type: "invocation"
+          readonly trigger:
+            | { readonly type: "command"; readonly name: string; readonly text: string }
+            | { readonly type: "event"; readonly name: string }
+          readonly code: string
+          readonly executionID: string
+          readonly status: "running" | "completed" | "error" | "cancelled"
+          readonly events?: ReadonlyArray<
+            | {
+                readonly type: "tool"
+                readonly tool: string
+                readonly status: "running" | "completed" | "error"
+                readonly input?: { readonly [x: string]: JsonValue }
+                readonly output?: string
+                readonly metadata?: { readonly [x: string]: JsonValue }
+                readonly error?: string
+                readonly replayed?: boolean
+              }
+            | (
+                | {
+                    readonly type: "trace"
+                    readonly kind: "assignment"
+                    readonly target: string
+                    readonly value: string
+                  }
+                | {
+                    readonly type: "trace"
+                    readonly kind: "branch"
+                    readonly expression: string
+                    readonly result: boolean
+                  }
+                | {
+                    readonly type: "trace"
+                    readonly kind: "operation"
+                    readonly operation: string
+                    readonly input: string
+                    readonly output: string
+                  }
+                | { readonly type: "trace"; readonly kind: "log"; readonly method: string; readonly message: string }
+                | { readonly type: "trace"; readonly kind: "return"; readonly value: string }
+              )
+          >
+          readonly error?: string
         }
       | {
           readonly id: string
@@ -3408,6 +3510,7 @@ export type SessionImportInput = {
       readonly projectID: string
       readonly agent?: string
       readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+      readonly tools?: ReadonlyArray<string>
       readonly cost: number
       readonly tokens: {
         readonly input: number
@@ -3502,6 +3605,14 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly text: string
           readonly description?: string
+          readonly files?: ReadonlyArray<{
+            readonly data: string
+            readonly mime: string
+            readonly source: { readonly type: "inline" } | { readonly type: "uri"; readonly uri: string }
+            readonly name?: string
+            readonly description?: string
+            readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
           readonly type: "synthetic"
         }
       | {
@@ -3536,6 +3647,54 @@ export type SessionImportInput = {
             readonly size: number
             readonly truncated: boolean
           }
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number; readonly completed?: number }
+          readonly type: "invocation"
+          readonly trigger:
+            | { readonly type: "command"; readonly name: string; readonly text: string }
+            | { readonly type: "event"; readonly name: string }
+          readonly code: string
+          readonly executionID: string
+          readonly status: "running" | "completed" | "error" | "cancelled"
+          readonly events?: ReadonlyArray<
+            | {
+                readonly type: "tool"
+                readonly tool: string
+                readonly status: "running" | "completed" | "error"
+                readonly input?: { readonly [x: string]: JsonValue }
+                readonly output?: string
+                readonly metadata?: { readonly [x: string]: JsonValue }
+                readonly error?: string
+                readonly replayed?: boolean
+              }
+            | (
+                | {
+                    readonly type: "trace"
+                    readonly kind: "assignment"
+                    readonly target: string
+                    readonly value: string
+                  }
+                | {
+                    readonly type: "trace"
+                    readonly kind: "branch"
+                    readonly expression: string
+                    readonly result: boolean
+                  }
+                | {
+                    readonly type: "trace"
+                    readonly kind: "operation"
+                    readonly operation: string
+                    readonly input: string
+                    readonly output: string
+                  }
+                | { readonly type: "trace"; readonly kind: "log"; readonly method: string; readonly message: string }
+                | { readonly type: "trace"; readonly kind: "return"; readonly value: string }
+              )
+          >
+          readonly error?: string
         }
       | {
           readonly id: string
@@ -4334,6 +4493,50 @@ export type SessionViewInput = {
 
 export type SessionViewOutput = void
 
+export type SessionCommandsInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SessionCommandsOutput = { data: Array<CodeModeCommandInfo> }["data"]
+
+export type SessionEventsInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SessionEventsOutput = { data: Array<CodeModeEventInfo> }["data"]
+
+export type SessionEventEnableInput = {
+  readonly sessionID: { readonly sessionID: string; readonly name: string }["sessionID"]
+  readonly name: { readonly sessionID: string; readonly name: string }["name"]
+}
+
+export type SessionEventEnableOutput = { data: CodeModeEventInfo }["data"]
+
+export type SessionEventDisableInput = {
+  readonly sessionID: { readonly sessionID: string; readonly name: string }["sessionID"]
+  readonly name: { readonly sessionID: string; readonly name: string }["name"]
+}
+
+export type SessionEventDisableOutput = { data: CodeModeEventInfo }["data"]
+
+export type SessionEventTriggerInput = {
+  readonly sessionID: { readonly sessionID: string; readonly name: string }["sessionID"]
+  readonly name: { readonly sessionID: string; readonly name: string }["name"]
+  readonly input?: { readonly input?: JsonValue | undefined }["input"]
+}
+
+export type SessionEventTriggerOutput = { data: SessionEventFiring }["data"]
+
+export type SessionEventRemoveInput = {
+  readonly sessionID: { readonly sessionID: string; readonly name: string }["sessionID"]
+  readonly name: { readonly sessionID: string; readonly name: string }["name"]
+}
+
+export type SessionEventRemoveOutput = void
+
+export type SessionExecutionCancelInput = {
+  readonly sessionID: { readonly sessionID: string; readonly executionID: string }["sessionID"]
+  readonly executionID: { readonly sessionID: string; readonly executionID: string }["executionID"]
+}
+
+export type SessionExecutionCancelOutput = SessionExecutionCancelResponse
+
 export type MessageListInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly limit?: {
@@ -4375,6 +4578,17 @@ export type ModelDefaultInput = {
 export type ModelDefaultOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: ModelInfo | null
+}
+
+export type ModelDriversInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ModelDriversOutput = {
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
+  data: Array<SessionDriverInfo>
 }
 
 export type GenerateTextInput = {
@@ -4597,7 +4811,6 @@ export type McpAddInput = {
           readonly cwd?: string
           readonly environment?: { readonly [x: string]: string }
           readonly disabled?: boolean
-          readonly codemode?: boolean
           readonly timeout?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         }
       | {
@@ -4614,7 +4827,6 @@ export type McpAddInput = {
               }
             | false
           readonly disabled?: boolean
-          readonly codemode?: boolean
           readonly timeout?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         }
   }["config"]
@@ -5574,114 +5786,6 @@ export type FormCancelInput = {
 }
 
 export type FormCancelOutput = void
-
-export type PermissionRequestListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
-}
-
-export type PermissionRequestListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<PermissionRequest>
-}
-
-export type PermissionSavedListInput = { readonly projectID?: { readonly projectID?: string | undefined }["projectID"] }
-
-export type PermissionSavedListOutput = { data: Array<PermissionSavedInfo> }["data"]
-
-export type PermissionSavedRemoveInput = { readonly id: { readonly id: string }["id"] }
-
-export type PermissionSavedRemoveOutput = void
-
-export type PermissionCreateInput = {
-  readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly id?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["id"]
-  readonly action: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["action"]
-  readonly resources: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["resources"]
-  readonly save?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["save"]
-  readonly metadata?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["metadata"]
-  readonly source?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["source"]
-  readonly agent?: {
-    readonly id?: string | null
-    readonly action: string
-    readonly resources: ReadonlyArray<string>
-    readonly save?: ReadonlyArray<string>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly source?: { readonly type: "tool"; readonly messageID: string; readonly id: string }
-    readonly agent?: string | null
-  }["agent"]
-}
-
-export type PermissionCreateOutput = { data: { id: string; effect: PermissionEffect } }["data"]
-
-export type PermissionListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
-
-export type PermissionListOutput = { data: Array<PermissionRequest> }["data"]
-
-export type PermissionGetInput = {
-  readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
-  readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
-}
-
-export type PermissionGetOutput = { data: PermissionRequest }["data"]
-
-export type PermissionReplyInput = {
-  readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
-  readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
-  readonly reply: { readonly reply: "once" | "always" | "reject"; readonly message?: string | undefined }["reply"]
-  readonly message?: { readonly reply: "once" | "always" | "reject"; readonly message?: string | undefined }["message"]
-}
-
-export type PermissionReplyOutput = void
 
 export type FileReadInput = {
   readonly location?: {

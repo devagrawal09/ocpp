@@ -2,8 +2,7 @@
 title: "Overview"
 ---
 
-Plugins can modify OC++'s behavior and add new features. To change the terminal UI, build a [CLI
-plugin](/build/plugins/cli).
+Plugins can modify OC++'s behavior and add new features.
 
 ```ts title=".ocpp/plugins/example.ts"
 import { Plugin } from "@ocpp/plugin"
@@ -634,16 +633,6 @@ const review = await ctx.generate.text({
 })
 ```
 
-### Permissions
-
-Inspect or resolve pending permission requests.
-
-```ts
-const pending = await ctx.permission.list({ sessionID })
-const request = await ctx.permission.get({ sessionID, requestID })
-await ctx.permission.reply({ sessionID, requestID, reply: "once" })
-```
-
 ### Sessions
 
 Create or read a session.
@@ -808,7 +797,7 @@ const registration = await ctx.tool.transform((draft) => {
       required: ["name"],
       additionalProperties: false,
     },
-    options: { namespace: "acme", codemode: true },
+    options: { namespace: "acme" },
     execute: async (input, tool) => {
       await tool.progress({ status: "greeting" })
       return { content: `Hello ${(input as { name: string }).name}!` }
@@ -1047,13 +1036,13 @@ retried payload. Concurrent submissions can run hooks more than once before eith
 successful admission wins. Keep hooks retry-safe; they are not an exactly-once side-effect boundary. A failed or interrupted
 preparation admits no prompt. This hook transforms input and does not expose a typed rejection API.
 
-Modify assembled system instructions, messages, tools, generation settings, or provider options immediately before model
-dispatch.
+Modify assembled system instructions, messages, generation settings, or provider options immediately before model
+dispatch. The only tool the model is offered is `execute`; shape the tools reachable from its code with the tool
+`catalog` hook instead.
 
 ```ts
 await ctx.session.hook("context", (event) => {
   event.system.push({ text: "Keep the review focused on correctness." })
-  delete event.tools.write
   event.generation.temperature = 0.2
   event.generation.maxTokens = 8_000
 })
@@ -1191,46 +1180,6 @@ interface SessionHookContext {
 }
 ```
 
-### Permissions
-
-Review permission decisions after configured rules are evaluated and before an action runs or a permission prompt is
-published. Hooks run for `allow` and `ask` decisions. An explicit configured `deny` is final and does not invoke the
-hook.
-
-```ts
-await ctx.permission.hook("evaluate", async (event) => {
-  if (event.action === "read") return
-
-  const messages = await ctx.session.context({ sessionID: event.sessionID })
-  const review = await ctx.generate.text({
-    model: { providerID: "anthropic", id: "claude-sonnet-4-6" },
-    prompt: buildSafetyPrompt({ messages, action: event.action, resources: event.resources }),
-  })
-  const decision = parseDecision(review.text)
-
-  event.effect = decision.effect
-  event.message = decision.reason
-})
-```
-
-The hook may set `effect` to `allow`, `ask`, or `deny`. When set, `message` is included in an escalated permission
-request or used as the denial reason.
-
-#### Reference
-
-```ts
-interface PermissionEvaluation {
-  readonly sessionID: string
-  readonly agent?: string
-  readonly action: string
-  readonly resources: readonly string[]
-  readonly metadata?: Record<string, unknown>
-  readonly source?: { type: "tool"; messageID: string; id: string }
-  effect: "allow" | "ask" | "deny"
-  message?: string
-}
-```
-
 ### Shell
 
 Modify shell commands, working directories, timeouts, executables, or environment variables before execution.
@@ -1277,12 +1226,27 @@ await ctx.tool.hook("execute.after", (event) => {
 })
 ```
 
+Shape the Code Mode catalog for each request, keyed by tool path. An edited description reaches the catalog and
+`tools.search`; a deleted entry is neither listed nor callable. `model` is absent for command and event handler runs.
+
+```ts
+await ctx.tool.hook("catalog", (event) => {
+  if (event.agent === "reviewer") delete event.tools.write
+})
+```
+
 #### Reference
 
 ```ts
 interface ToolHooks {
   "execute.before": ToolExecuteBefore
   "execute.after": ToolExecuteCompleted | ToolExecuteFailed
+  catalog: {
+    sessionID?: string
+    agent?: string
+    model?: { providerID: string; id: string; variant?: string }
+    tools: Record<string, { description: string }>
+  }
 }
 
 interface ToolHookContext {

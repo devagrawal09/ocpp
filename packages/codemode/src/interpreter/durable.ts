@@ -1,4 +1,5 @@
 import { ToolHandle } from "../tool-handle.js"
+import { ToolReference } from "../tool-runtime.js"
 import { IR_VERSION } from "../ir.js"
 import {
   BrokenNotebookValue,
@@ -68,6 +69,9 @@ const storedKind = (value: unknown): "function" | "reference" | undefined => {
   return marker === "function" || marker === "reference" ? marker : undefined
 }
 
+/** Whether a saved notebook value is a durable function, including a reference to another saved function. */
+export const isFunctionValue = (value: NotebookValue) => storedKind(value) !== undefined
+
 /**
  * Encodes the values a successful program declares at the top level. A function already bound to a
  * notebook name is stored as a reference to that immutable name, so recursive and mutually recursive
@@ -98,6 +102,10 @@ export const encodeDeclarations = (
     if (value instanceof ToolHandle)
       throw invalid(`${label} contains a live tool handle, which exists only for one execution.`, [
         "Publish the data a handle produces, or define the handle again in the execution that uses it.",
+      ])
+    if (value instanceof ToolReference)
+      throw invalid(`${label} contains a tool reference, which exists only for one execution.`, [
+        "Write the reference, such as tools.fs.read, in the execution that passes it to a tool.",
       ])
     // A capture can hold a quarantined binding without the program ever reading the name.
     if (value instanceof BrokenNotebookValue)

@@ -5,6 +5,41 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
   up(tx) {
     return Effect.gen(function* () {
       yield* tx.run(`
+        CREATE TABLE \`codemode_command\` (
+          \`session_id\` text NOT NULL,
+          \`name\` text NOT NULL,
+          \`description\` text NOT NULL,
+          \`handler\` text NOT NULL,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          CONSTRAINT \`codemode_command_pk\` PRIMARY KEY(\`session_id\`, \`name\`),
+          CONSTRAINT \`fk_codemode_command_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`codemode_event\` (
+          \`session_id\` text NOT NULL,
+          \`name\` text NOT NULL,
+          \`description\` text NOT NULL,
+          \`schedule\` text NOT NULL,
+          \`handler\` text NOT NULL,
+          \`input\` text,
+          \`enabled\` integer NOT NULL,
+          \`time_next\` integer,
+          \`time_fired\` integer,
+          \`execution_id\` text,
+          \`message_id\` text,
+          \`error\` text,
+          \`run_count\` integer DEFAULT 0 NOT NULL,
+          \`skip_count\` integer DEFAULT 0 NOT NULL,
+          \`time_skipped\` integer,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          CONSTRAINT \`codemode_event_pk\` PRIMARY KEY(\`session_id\`, \`name\`),
+          CONSTRAINT \`fk_codemode_event_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`account_state\` (
           \`id\` integer PRIMARY KEY,
           \`active_account_id\` text,
@@ -58,8 +93,11 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`program\` text NOT NULL,
           \`ir_version\` integer NOT NULL,
           \`snapshot\` text NOT NULL,
+          \`input\` text,
+          \`tools\` text,
           \`saved\` text,
           \`error\` text,
+          \`resumes\` integer DEFAULT 0 NOT NULL,
           \`time_created\` integer NOT NULL,
           \`time_updated\` integer NOT NULL,
           \`time_completed\` integer,
@@ -75,6 +113,9 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`status\` text NOT NULL,
           \`output\` text,
           \`error\` text,
+          \`omitted\` integer DEFAULT false NOT NULL,
+          \`impure\` text,
+          \`progress\` text,
           \`time_created\` integer NOT NULL,
           \`time_updated\` integer NOT NULL,
           \`time_completed\` integer,
@@ -141,17 +182,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`value\` text NOT NULL,
           \`time_created\` integer NOT NULL,
           \`time_updated\` integer NOT NULL
-        );
-      `)
-      yield* tx.run(`
-        CREATE TABLE \`permission\` (
-          \`id\` text PRIMARY KEY,
-          \`project_id\` text NOT NULL,
-          \`action\` text NOT NULL,
-          \`resource\` text NOT NULL,
-          \`time_created\` integer NOT NULL,
-          \`time_updated\` integer NOT NULL,
-          CONSTRAINT \`fk_permission_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
         );
       `)
       yield* tx.run(`
@@ -273,6 +303,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`revert\` text,
           \`permission\` text,
           \`agent\` text,
+          \`tools\` text,
           \`model\` text,
           \`time_created\` integer NOT NULL,
           \`time_updated\` integer NOT NULL,
@@ -318,9 +349,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
       )
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)
       yield* tx.run(`CREATE INDEX \`event_aggregate_type_seq_idx\` ON \`event\` (\`aggregate_id\`,\`type\`,\`seq\`);`)
-      yield* tx.run(
-        `CREATE UNIQUE INDEX \`permission_project_action_resource_idx\` ON \`permission\` (\`project_id\`,\`action\`,\`resource\`);`,
-      )
       yield* tx.run(
         `CREATE INDEX \`session_inbox_session_delivery_seq_idx\` ON \`session_inbox\` (\`session_id\`,\`delivery\`,\`enqueued_seq\`);`,
       )

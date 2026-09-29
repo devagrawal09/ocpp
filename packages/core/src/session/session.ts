@@ -3,6 +3,7 @@ export * as Session from "./session.js"
 import { DateTime, Effect, Fiber, Layer, Schema, Scope } from "effect"
 import type { Agent } from "@ocpp/schema/agent"
 import type { Model } from "@ocpp/schema/model"
+import type { FileAttachment } from "@ocpp/schema/prompt"
 import { Event } from "@ocpp/schema/event"
 import { Bus } from "../bus.js"
 import { Location } from "../location.js"
@@ -103,6 +104,13 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
   ) {
     const session = yield* get(sessionID)
     yield* bus.publish(SessionEvent.AgentSelected, { sessionID, agent: input.agent, previous: session.agent })
+  })
+  const selectTools = Effect.fn("Session.selectTools")(function* (
+    sessionID: SessionSchema.ID,
+    input: { tools: ReadonlyArray<string> },
+  ) {
+    yield* get(sessionID)
+    yield* bus.publish(SessionEvent.ToolsSelected, { sessionID, tools: input.tools })
   })
   const switchModel = Effect.fn("Session.switchModel")(function* (
     sessionID: SessionSchema.ID,
@@ -282,36 +290,73 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
         id?: SessionMessage.ID
         text: string
         description?: string
+        files?: ReadonlyArray<FileAttachment>
         metadata?: Record<string, unknown>
         delivery?: SessionInbox.Delivery
         resume?: boolean
+        /**
+         * Replaces the undelivered synthetic inputs admitted under the same key instead of queueing
+         * beside them, so repeated notices from one source reach the model once. When it replaces any,
+         * `merge` receives their payloads, oldest first, and returns what this input says instead.
+         */
+        coalesce?: {
+          readonly key: string
+          readonly merge: (
+            replaced: ReadonlyArray<SessionInbox.SyntheticPayload>,
+          ) => Pick<SessionInbox.SyntheticPayload, "text" | "description" | "metadata">
+        }
       },
     ) =>
       Effect.uninterruptible(
         Effect.gen(function* () {
           yield* get(sessionID)
           const inputID = input.id ?? SessionMessage.ID.create()
-          const admittedInput = {
-            type: "synthetic",
-            payload: SessionInbox.SyntheticPayload.make({
-              text: input.text,
-              description: input.description,
-              metadata: input.metadata,
-            }),
-            delivery: SessionInbox.Delivery.make(input.delivery ?? "steer"),
-          } satisfies SessionInbox.Item
-          const admitted = yield* admission
-            .admit({
+          const admit = (payload: Pick<SessionInbox.SyntheticPayload, "text" | "description" | "metadata">) =>
+            admission.admit({
               id: inputID,
               sessionID,
-              item: admittedInput,
+              item: {
+                type: "synthetic",
+                payload: SessionInbox.SyntheticPayload.make({
+                  text: payload.text,
+                  description: payload.description,
+                  files: input.files,
+                  metadata: payload.metadata,
+                }),
+                delivery: SessionInbox.Delivery.make(input.delivery ?? "steer"),
+              },
             })
-            .pipe(
-              Effect.catchTag(
-                "SessionInbox.LifecycleConflict",
-                () => new SyntheticConflictError({ sessionID, inputID }),
-              ),
-            )
+          const coalesce = input.coalesce
+          const admitted = yield* (
+            coalesce === undefined
+              ? admit(input)
+              : // Serialized with delivery, so an item is either replaced here or delivered, never both.
+                SessionInbox.serialized(
+                  sessionID,
+                  Effect.gen(function* () {
+                    const existing = yield* admission.reconcile({
+                      id: inputID,
+                      sessionID,
+                      type: "synthetic",
+                      delivery: input.delivery ?? "steer",
+                    })
+                    if (existing) return existing
+                    const replaced = (yield* admission.list(sessionID)).filter(
+                      (item): item is SessionInbox.Synthetic =>
+                        item.type === "synthetic" && item.payload.metadata?.coalesce === coalesce.key,
+                    )
+                    yield* Effect.forEach(
+                      replaced,
+                      (item) => bus.publish(SessionEvent.InboxCancelled, { sessionID, inboxID: item.id }),
+                      { discard: true },
+                    )
+                    const merged = replaced.length === 0 ? input : coalesce.merge(replaced.map((item) => item.payload))
+                    return yield* admit({ ...merged, metadata: { ...merged.metadata, coalesce: coalesce.key } })
+                  }),
+                )
+          ).pipe(
+            Effect.catchTag("SessionInbox.LifecycleConflict", () => new SyntheticConflictError({ sessionID, inputID })),
+          )
           if (input.resume !== false && !(yield* get(sessionID)).revert) yield* execution.wake(sessionID)
           return admitted
         }),
@@ -352,6 +397,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     view,
     rename,
     switchAgent,
+    selectTools,
     switchModel,
     inbox,
     prompt,
@@ -374,6 +420,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     const view = operations.view.bind(undefined, sessionID)
     const rename = operations.rename.bind(undefined, sessionID)
     const switchAgent = operations.switchAgent.bind(undefined, sessionID)
+    const selectTools = operations.selectTools.bind(undefined, sessionID)
     const switchModel = operations.switchModel.bind(undefined, sessionID)
     const inbox = operations.inbox.bind(undefined, sessionID)
     const prompt = operations.prompt.bind(undefined, sessionID)
@@ -399,6 +446,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       view,
       rename,
       switchAgent,
+      selectTools,
       switchModel,
       inbox,
       prompt,

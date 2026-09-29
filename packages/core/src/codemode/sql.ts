@@ -4,6 +4,7 @@ import { Timestamps } from "../database/schema.sql.js"
 import { SessionTable } from "../session/sql.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
+import type { ToolLists } from "../tool/lists.js"
 
 /**
  * One durable notebook value. Names are immutable and never reused, so this append-only table is
@@ -66,8 +67,14 @@ export const CodeModeExecutionTable = sqliteTable(
      * add names.
      */
     snapshot: text({ mode: "json" }).$type<ReadonlyArray<string>>().notNull(),
+    /** Machine input the execution received, so a resumed run replays with the same `input`. */
+    input: text({ mode: "json" }).$type<CodeMode.DataValue>(),
+    /** The tool list its catalog came from, so a resumed run rebuilds the same catalog. */
+    tools: text({ mode: "json" }).$type<ToolLists.Selection>(),
     saved: text({ mode: "json" }).$type<ReadonlyArray<string>>(),
     error: text(),
+    /** Times this execution resumed after a restart. Bounded so a run that kills its host cannot loop. */
+    resumes: integer().notNull().default(0),
     ...Timestamps,
     time_completed: integer(),
   },
@@ -86,6 +93,15 @@ export const CodeModeJournalTable = sqliteTable(
     status: text().$type<"scheduled" | "completed" | "failed" | "indeterminate">().notNull(),
     output: text({ mode: "json" }).$type<unknown>(),
     error: text(),
+    /**
+     * True when the input, output, or error exceeded the capture limit and was stored as a
+     * placeholder. Such a call cannot be replayed from the journal after a restart.
+     */
+    omitted: integer({ mode: "boolean" }).notNull().default(false),
+    /** Values of `time.now()` and `Math.random()` the program read after the previous call and before this one. */
+    impure: text({ mode: "json" }).$type<ReadonlyArray<number>>(),
+    /** Latest progress metadata of a call that can rejoin its work after a restart, such as a subagent's session. */
+    progress: text({ mode: "json" }).$type<Readonly<Record<string, unknown>>>(),
     ...Timestamps,
     time_completed: integer(),
   },

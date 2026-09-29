@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { defineConfig, type Plugin, type UserConfig } from "vite"
 import solid from "vite-plugin-solid"
-import { nodeExecArgv, nodeTarget, type NodeTarget, photonWasmAsset, shellParserWasmAssets } from "./src/node/target"
+import { nodeExecArgv, nodeTarget, type NodeTarget, photonWasmAsset } from "./src/node/target"
 import { verifySimulationGraph } from "./script/verify-artifact"
 
 const dir = import.meta.dirname
@@ -225,9 +225,6 @@ process.env.OTUI_ASSET_ROOT = __ocppAssetRoot
 process.env.OCPP_NODE_PTY_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(input.target.nodePtyEntryAsset)})
 process.env.OCPP_PARCEL_WATCHER_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(input.target.parcelWatcherAsset)})
 process.env.OCPP_PHOTON_WASM_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(photonWasmAsset)})
-process.env.OCPP_TREE_SITTER_WASM_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(shellParserWasmAssets.runtime)})
-process.env.OCPP_TREE_SITTER_BASH_WASM_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(shellParserWasmAssets.bash)})
-process.env.OCPP_TREE_SITTER_POWERSHELL_WASM_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(shellParserWasmAssets.powershell)})
 process.env.FFF_BINARY_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(input.target.fffAsset)})
 process.env.OCPP_FFF_FFI_PATH = __ocppPath.join(__ocppAssetRoot, ${JSON.stringify(input.target.fffFfiAsset)})
 if (__ocppPersistentPty && !process.env.OCPP_PTY_BIN) process.env.OCPP_PTY_BIN = __ocppPath.join(__ocppAssetRoot, __ocppPersistentPty)

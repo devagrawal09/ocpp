@@ -17,7 +17,6 @@ test("loads cached plugin packages without requesting a refresh", async () => {
             calls.push(options)
             return { directory: path.dirname(entrypoint), entrypoint: pathToFileURL(entrypoint).href }
           }),
-        resolve: () => Effect.die(new Error("Unexpected resolve")),
         which: () => Effect.die(new Error("Unexpected which")),
       }),
     ),

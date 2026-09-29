@@ -55,7 +55,6 @@ const refreshNpm = makeGlobalNode({
                 return installed
               })
             : Effect.succeed(installed),
-        resolve: () => Effect.succeed(installed),
         which: () => Effect.succeed(undefined),
       })
     }),
@@ -124,7 +123,6 @@ describe("PluginSupervisor config", () => {
             path: path.join(import.meta.dir, "../plugin/fixtures/config-promise-plugin.ts"),
           },
           status: "active",
-          tui: true,
         })
       }),
     ),

@@ -3,19 +3,15 @@ import type { OcppEvent } from "@ocpp/client/promise"
 import { createRoot } from "solid-js"
 import { createOcppEventSource, createServerTransport } from "./client"
 
-const permission = {
-  id: "evt_permission",
+const form = {
+  id: "evt_form",
   created: 1,
-  type: "permission.asked",
+  type: "form.created",
   location: { directory: "/repo", workspaceID: "workspace_1" },
   data: {
-    id: "perm_1",
-    sessionID: "ses_1",
-    action: "read",
-    resources: ["src/**"],
-    source: { type: "tool", messageID: "msg_1", id: "call_1" },
+    form: { id: "form_1", sessionID: "ses_1", title: "Questions", fields: [{ key: "q0", type: "string" }] },
   },
-} satisfies Extract<OcppEvent, { type: "permission.asked" }>
+} satisfies Extract<OcppEvent, { type: "form.created" }>
 
 function setup() {
   return createRoot((dispose) => ({ ...createOcppEventSource(), dispose }))
@@ -27,15 +23,15 @@ describe("server event stream", () => {
     const received: OcppEvent[] = []
     let requestID: string | undefined
 
-    server.event.on("permission.asked", (event) => {
-      requestID = event.data.id
+    server.event.on("form.created", (event) => {
+      requestID = event.data.form.id
     })
     server.event.listen((event) => received.push(event))
-    server.publish(permission)
+    server.publish(form)
 
-    expect(requestID).toBe("perm_1")
-    expect(received).toEqual([permission])
-    expect(received[0]).toBe(permission)
+    expect(requestID).toBe("form_1")
+    expect(received).toEqual([form])
+    expect(received[0]).toBe(form)
     server.dispose()
   })
 
@@ -52,19 +48,19 @@ describe("server event stream", () => {
     } satisfies Extract<OcppEvent, { type: "server.connected" }>
 
     const repoEvents = server.event.location("/repo")
-    repoEvents.on("permission.asked", (event) => {
+    repoEvents.on("form.created", (event) => {
       workspaceID = event.location?.workspaceID
     })
     repoEvents.listen((event) => repo.push(event))
     server.event.location("/other").listen((event) => other.push(event))
     server.event.listen((event) => all.push(event))
-    server.publish(permission)
+    server.publish(form)
     server.publish(global)
 
-    expect(repo).toEqual([permission])
+    expect(repo).toEqual([form])
     expect(workspaceID).toBe("workspace_1")
     expect(other).toEqual([])
-    expect(all).toEqual([permission, global])
+    expect(all).toEqual([form, global])
     server.dispose()
   })
 
@@ -75,10 +71,10 @@ describe("server event stream", () => {
 
     first.event.listen(() => received.first++)
     second.event.listen(() => received.second++)
-    first.publish(permission)
+    first.publish(form)
     first.dispose()
-    first.publish(permission)
-    second.publish(permission)
+    first.publish(form)
+    second.publish(form)
 
     expect(received).toEqual({ first: 1, second: 1 })
     second.dispose()

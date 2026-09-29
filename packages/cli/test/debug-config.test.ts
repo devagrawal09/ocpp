@@ -16,7 +16,7 @@ describe("debug config command", () => {
     expect(config.stdout).toContain("List configuration sources")
   })
 
-  test("prints config entries from the invoking directory without reordering permissions", async () => {
+  test("prints config entries from the invoking directory without reordering them", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-debug-config-"))
     const project = path.join(import.meta.dir, "..")
     const registration = path.join(root, "state", "ocpp", "service-local.json")
@@ -24,12 +24,7 @@ describe("debug config command", () => {
       {
         type: "document",
         path: path.join(project, "ocpp.json"),
-        info: {
-          permissions: [
-            { action: "shell", resource: "*", effect: "ask" },
-            { action: "shell", resource: "git status", effect: "allow" },
-          ],
-        },
+        info: { instructions: ["second.md", "first.md"] },
       },
     ]
     let requested: URL | undefined

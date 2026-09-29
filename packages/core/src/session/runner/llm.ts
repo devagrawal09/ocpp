@@ -1,4 +1,3 @@
-import { Delegation } from "@ocpp/schema/delegation"
 export * as SessionRunnerLLM from "./llm.js"
 
 import { Message } from "@ocpp/ai"
@@ -26,6 +25,7 @@ import { SessionStep } from "./step.js"
 import { ToolOutput } from "../../tool-output.js"
 import { PluginSupervisor } from "../../plugin/supervisor.js"
 import { MAX_STEPS_PROMPT } from "./max-steps.js"
+import { settleStaleToolCalls } from "./stale.js"
 
 const CONTINUE_AFTER_INCOMPLETE_STREAM =
   "The previous response was interrupted. Continue from where you left off without repeating completed content."
@@ -59,7 +59,7 @@ const layer = Layer.effect(
         if (promotable === "steer" && pending.delivery === "queue" && !control) return DrainResult.Complete()
       }
       yield* plugins.flush
-      yield* settleStaleToolCalls(sessionID)
+      yield* settleStaleToolCalls(store, bus, sessionID)
 
       const advanceToStep = Effect.fn("SessionRunner.advanceToStep")(() =>
         Effect.uninterruptibleMask((restore) =>
@@ -260,31 +260,6 @@ const layer = Layer.effect(
           }),
         })
         if (completed !== undefined) return completed
-      }
-    })
-
-    const settleStaleToolCalls = Effect.fn("SessionRunner.settleStaleToolCalls")(function* (
-      sessionID: SessionSchema.ID,
-    ) {
-      for (const message of yield* store.context(sessionID)) {
-        if (message.type !== "assistant") continue
-        for (const tool of message.content) {
-          if (tool.type !== "tool" || (tool.state.status !== "streaming" && tool.state.status !== "running")) continue
-          const metadata = tool.state.status === "running" ? tool.state.metadata : undefined
-          const childID =
-            Delegation.isTool(tool.name) && typeof metadata?.sessionID === "string" ? metadata.sessionID : undefined
-          yield* bus.publish(SessionEvent.Tool.Failed, {
-            sessionID,
-            assistantMessageID: message.id,
-            id: tool.id,
-            error: {
-              type: "aborted",
-              message: `Tool execution interrupted: ${tool.name}${childID ? ` (sessionID: ${childID})` : ""}`,
-            },
-            ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
-            executed: tool.executed === true,
-          })
-        }
       }
     })
 

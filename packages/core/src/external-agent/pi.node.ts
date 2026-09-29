@@ -1,9 +1,10 @@
-import type { AgentSessionEvent, ToolDefinition } from "@earendil-works/pi-coding-agent"
+import type { AgentSessionEvent, PromptOptions, ToolDefinition } from "@earendil-works/pi-coding-agent"
 import { createHash } from "node:crypto"
 import { Effect, Schema } from "effect"
 import { ExternalAgentDriver } from "./driver.js"
+import { ExternalAgentEffort } from "./effort.js"
+import { imageMimes } from "../session/runner/to-llm-message.js"
 
-const Effort = Schema.Literals(["off", "minimal", "low", "medium", "high", "xhigh", "max"])
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
 
 export const PiDriver: ExternalAgentDriver.Driver = {
@@ -29,24 +30,21 @@ export const PiDriver: ExternalAgentDriver.Driver = {
         : (await SessionManager.list(options.directory)).find((item) => item.id === options.vendorSessionID)
     const manager =
       previous === undefined ? SessionManager.create(options.directory) : SessionManager.open(previous.path)
-    if (previous === undefined && options.history.length > 0)
-      manager.appendMessage({
-        role: "user",
-        content: "Restored canonical OC++ history:\n" + ExternalAgentDriver.replay(options.history),
-        timestamp: Date.now(),
-      })
-    const loader = new DefaultResourceLoader({
-      cwd: options.directory,
-      agentDir: getAgentDir(),
-      extensionFactories: [
-        (api) => {
-          // Keep Pi's discovered extensions and their policies. This additional guard cannot turn a vendor denial into an allow.
-          api.on("tool_call", async (event, context) => {
-            await options.authorize(event.toolName, event.input, options.signal, event.toolCallId, context.cwd)
-          })
-        },
-      ],
-    })
+    const loader = new DefaultResourceLoader(
+      options.harness.type === "ocpp"
+        ? {
+            cwd: options.directory,
+            agentDir: getAgentDir(),
+            noExtensions: true,
+            noSkills: true,
+            noPromptTemplates: true,
+            noThemes: true,
+            noContextFiles: true,
+            systemPrompt: options.harness.system,
+          }
+        : // The native harness keeps Pi's own tools, extensions and settings; OC++ does not authorize its calls.
+          { cwd: options.directory, agentDir: getAgentDir() },
+    )
     await loader.reload()
     const tools: ToolDefinition[] = options.gateway.definitions.map((tool) => ({
       name: tool.name,
@@ -54,31 +52,27 @@ export const PiDriver: ExternalAgentDriver.Driver = {
       description: tool.description,
       parameters: tool.inputSchema as ToolDefinition["parameters"],
       executionMode: "sequential",
-      async execute(_id, input, signal) {
-        const value = await Effect.runPromise(options.gateway.invoke(tool.name, input), {
+      async execute(id, input, signal) {
+        const result = await Effect.runPromise(Effect.result(options.gateway.invoke(tool.name, input, id)), {
           signal: signal ?? options.signal,
         })
-        return {
-          content: [
-            { type: "text", text: typeof value === "string" ? value : (JSON.stringify(value) ?? "Completed.") },
-          ],
-          details: {},
-        }
+        if (result._tag === "Failure") throw new Error(result.failure)
+        return { content: [{ type: "text", text: result.success }], details: {} }
       },
     }))
     const result = await createAgentSession({
       cwd: options.directory,
       modelRuntime: runtime,
       model,
-      thinkingLevel: options.effort === undefined ? undefined : Schema.decodeUnknownSync(Effort)(options.effort),
+      thinkingLevel:
+        options.effort === undefined ? undefined : Schema.decodeUnknownSync(ExternalAgentEffort.pi)(options.effort),
       sessionManager: manager,
       resourceLoader: loader,
       customTools: tools,
+      // The OC++ harness keeps Pi's model loop and OC++'s execute, never Pi's read, bash, edit or write.
+      ...(options.harness.type === "ocpp" ? { noTools: "builtin" as const } : {}),
     })
     await result.session.bindExtensions({})
-    const stop = result.session.agent.shouldStopAfterTurn
-    result.session.agent.shouldStopAfterTurn = async (context, signal) =>
-      options.gateway.result() !== undefined || (await stop?.(context, signal)) === true
     const queue = { pending: Promise.resolve() }
     const unsubscribe = result.session.subscribe((event) => {
       queue.pending = queue.pending.then(() => normalize(event, options.emit))
@@ -92,9 +86,16 @@ export const PiDriver: ExternalAgentDriver.Driver = {
     try {
       options.signal.throwIfAborted()
       await options.linked(manager.getSessionId())
-      await result.session.prompt(options.message)
-      await queue.pending
-      options.signal.throwIfAborted()
+      const turn = { message: ExternalAgentDriver.first(options) as ExternalAgentDriver.Input | undefined }
+      // Input waits for the end of each prompt, like Codex.
+      while (turn.message !== undefined) {
+        const input = prompt(turn.message)
+        await result.session.prompt(input.text, { images: input.images })
+        await queue.pending
+        options.signal.throwIfAborted()
+        options.idle()
+        turn.message = await options.next(options.signal)
+      }
     } finally {
       options.signal.removeEventListener("abort", abort)
       unsubscribe()
@@ -102,6 +103,22 @@ export const PiDriver: ExternalAgentDriver.Driver = {
       await options.checkpointed(fingerprint(manager.buildSessionContext().messages))
     }
   },
+}
+
+/** Input as Pi's prompt takes it: the text, then each image. Pi has no PDF input. */
+export function prompt(input: ExternalAgentDriver.Input): { text: string; images: PromptOptions["images"] } {
+  const parts = input.map((part) =>
+    part.type === "media" && !imageMimes.has(part.mime)
+      ? ExternalAgentDriver.omitted(part, "Pi takes only images")
+      : part,
+  )
+  return {
+    text: parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n"),
+    images: parts.flatMap(
+      (part): NonNullable<PromptOptions["images"]> =>
+        part.type === "media" ? [{ type: "image", data: part.data, mimeType: part.mime }] : [],
+    ),
+  }
 }
 
 export async function normalize(event: AgentSessionEvent, emit: ExternalAgentDriver.Options["emit"]) {

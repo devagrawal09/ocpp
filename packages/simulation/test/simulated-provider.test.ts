@@ -17,6 +17,7 @@ import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { Tool } from "@ocpp/core/tool"
+import { effectiveName, execute } from "@ocpp/core/tool/runtime"
 import { Plugin } from "@ocpp/plugin/effect"
 import { Deferred, Effect, Fiber, Layer, Queue, Stream } from "effect"
 import type { Scope } from "effect/Scope"
@@ -241,8 +242,6 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
             additionalProperties: false,
           },
           outputSchema: { type: "object" },
-          permission: "simulate_lookup",
-          options: { codemode: false },
         }
         const locations = yield* LocationServiceMap.Service
         const [primary, secondary] = yield* Effect.all([
@@ -266,21 +265,23 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           expect(yield* Queue.take(messages)).toMatchObject({ id: 1, result: { attached: true } })
           const registry = yield* Tool.Service
           const toolSet = yield* registry.snapshot()
-          expect(toolSet.definitions).toContainEqual(
-            expect.objectContaining({ name: "lookup", description: "Look up a value" }),
+          expect(toolSet.definitions.map((definition) => definition.name)).toEqual(["execute"])
+          expect(toolSet.codeModeCatalog).toContainEqual(
+            expect.objectContaining({ path: "lookup", description: "Look up a value" }),
           )
-          expect(
-            (yield* registry.snapshot([{ action: "simulate_lookup", resource: "*", effect: "deny" }])).definitions,
-          ).not.toContainEqual(expect.objectContaining({ name: "lookup" }))
+          expect((yield* registry.snapshot({ paths: ["read"] })).codeModeCatalog).not.toContainEqual(
+            expect.objectContaining({ path: "lookup" }),
+          )
           const secondaryToolSet = yield* Tool.Service.use((secondaryRegistry) => secondaryRegistry.snapshot()).pipe(
             Effect.provide(secondary),
           )
-          expect(secondaryToolSet.definitions).toContainEqual(
-            expect.objectContaining({ name: "lookup", description: "Look up a value" }),
+          expect(secondaryToolSet.codeModeCatalog).toContainEqual(
+            expect.objectContaining({ path: "lookup", description: "Look up a value" }),
           )
+          const lookup = yield* registeredTool(registry, "lookup")
           const progress: Tool.Metadata[] = []
           const executeCall = (id: string, query: string) =>
-            toolSet.execute({
+            callTool(lookup, {
               sessionID: Session.ID.make("ses_simulated_tools"),
               agent: Agent.ID.make("build"),
               messageID: SessionMessage.ID.make("msg_simulated_tools"),
@@ -502,7 +503,7 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           })
           yield* closeSocket(socket)
           const disconnected = yield* registry.snapshot()
-          expect(disconnected.definitions).toContainEqual(expect.objectContaining({ name: "lookup" }))
+          expect(disconnected.codeModeCatalog).toContainEqual(expect.objectContaining({ path: "lookup" }))
           replacement.send(
             JSON.stringify({
               jsonrpc: "2.0",
@@ -585,8 +586,8 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           })
 
           const namespaced = [
-            { ...registration, name: "search", options: { namespace: "github", codemode: false } },
-            { ...registration, name: "search", options: { namespace: "web", codemode: false } },
+            { ...registration, name: "search", options: { namespace: "github" } },
+            { ...registration, name: "search", options: { namespace: "web" } },
           ]
           replacement.send(
             JSON.stringify({
@@ -598,28 +599,26 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           )
           expect(yield* Queue.take(replacementMessages)).toMatchObject({ id: 11, result: { attached: true } })
           const replaced = yield* registry.snapshot()
-          const replacedNames = replaced.definitions.map((definition) => definition.name)
-          expect(replacedNames).toEqual(expect.arrayContaining(["github_search", "web_search"]))
+          const replacedNames = (replaced.codeModeCatalog ?? []).map((tool) => tool.path)
+          expect(replacedNames).toEqual(expect.arrayContaining(["github.search", "web.search"]))
           expect(replacedNames).not.toContain("lookup")
           const secondaryReplaced = yield* Tool.Service.use((secondaryRegistry) => secondaryRegistry.snapshot()).pipe(
             Effect.provide(secondary),
           )
-          const secondaryNames = secondaryReplaced.definitions.map((definition) => definition.name)
-          expect(secondaryNames).toEqual(expect.arrayContaining(["github_search", "web_search"]))
+          const secondaryNames = (secondaryReplaced.codeModeCatalog ?? []).map((tool) => tool.path)
+          expect(secondaryNames).toEqual(expect.arrayContaining(["github.search", "web.search"]))
           expect(secondaryNames).not.toContain("lookup")
-          const routed = yield* replaced
-            .execute({
-              sessionID: Session.ID.make("ses_simulated_tools"),
-              agent: Agent.ID.make("build"),
-              messageID: SessionMessage.ID.make("msg_simulated_tools"),
-              call: {
-                type: "tool-call",
-                id: "call_namespaced",
-                name: "github_search",
-                input: { query: "routing" },
-              },
-            })
-            .pipe(Effect.forkScoped)
+          const routed = yield* callTool(yield* registeredTool(registry, "github_search"), {
+            sessionID: Session.ID.make("ses_simulated_tools"),
+            agent: Agent.ID.make("build"),
+            messageID: SessionMessage.ID.make("msg_simulated_tools"),
+            call: {
+              type: "tool-call",
+              id: "call_namespaced",
+              name: "github_search",
+              input: { query: "routing" },
+            },
+          }).pipe(Effect.forkScoped)
           const routedInvocation = yield* takeToolInvocation(replacementMessages)
           expect(routedInvocation.params).toMatchObject({ name: "github_search" })
           const routedID = requireString(requireRecord(routedInvocation.params).id)
@@ -639,19 +638,17 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
             output: "routed",
             content: [{ type: "text", text: "routed" }],
           })
-          const stale = yield* toolSet
-            .execute({
-              sessionID: Session.ID.make("ses_simulated_tools"),
-              agent: Agent.ID.make("build"),
-              messageID: SessionMessage.ID.make("msg_simulated_tools"),
-              call: {
-                type: "tool-call",
-                id: "call_stale",
-                name: "lookup",
-                input: { query: "stale" },
-              },
-            })
-            .pipe(Effect.exit)
+          const stale = yield* callTool(lookup, {
+            sessionID: Session.ID.make("ses_simulated_tools"),
+            agent: Agent.ID.make("build"),
+            messageID: SessionMessage.ID.make("msg_simulated_tools"),
+            call: {
+              type: "tool-call",
+              id: "call_stale",
+              name: "lookup",
+              input: { query: "stale" },
+            },
+          }).pipe(Effect.exit)
           expect(stale).toMatchObject({ _tag: "Failure" })
           expect(stale.toString()).toContain("no longer active")
           expect(activations).toBe(2)
@@ -768,3 +765,21 @@ function requireRecord(value: unknown): Record<string, unknown> {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
 }
+
+// The model only ever calls `execute`, so these tests run attached tools through the leaf runtime Code
+// Mode calls, capturing a registration the way a snapshot captures its executors.
+const registeredTool = (registry: Tool.Interface, name: string) =>
+  Effect.gen(function* () {
+    const tool = (yield* registry.registrations()).find((tool) => effectiveName(tool) === name)
+    if (!tool) return yield* Effect.die(`Tool is not registered: ${name}`)
+    return tool
+  })
+
+const callTool = (tool: Tool.Info, input: Parameters<Tool.Snapshot["execute"]>[0]) =>
+  execute(tool, input.call.input, {
+    sessionID: input.sessionID,
+    agent: input.agent,
+    messageID: input.messageID,
+    id: Tool.CallID.make(input.call.id),
+    progress: input.progress ?? (() => Effect.void),
+  })

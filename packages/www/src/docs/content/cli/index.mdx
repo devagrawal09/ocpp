@@ -2,51 +2,30 @@
 title: "Intro"
 ---
 
-Run the CLI in a project to open the full-screen terminal interface:
+Run the CLI to open OC++ in your browser:
 
 ```bash
 ocpp
 ```
 
-Pass a directory to work in a different project:
-
-```bash
-ocpp ~/code/my-project
-```
-
-Suggested terminals:
-
-- [Ghostty](https://ghostty.org)
-- [WezTerm](https://wezterm.org)
-- [Alacritty](https://alacritty.org)
-- [Kitty](https://sw.kovidgoyal.net/kitty/)
-
-Truecolor support gives themes their most accurate colors; terminals without it use an approximation of the available
-palette.
+It starts the background server if it isn't already running, prints the server URL, and opens the web app. Open or add
+projects from the web app's home page.
 
 ## Automation
 
-Use `ocpp run` to submit a prompt without opening the interactive interface. It is designed for scripts, CI jobs, and
-other workflows that need model output directly in the terminal.
+Use `ocpp run` to submit a prompt without opening the web app. It is designed for scripts, CI jobs, and other workflows
+that need model output directly in the terminal.
 
 ```bash
 ocpp run "Explain this repository"
 ```
 
-## Mini
-
-Use `ocpp mini` to start OC++'s minimal interactive interface instead of the full-screen TUI.
-
-```bash
-ocpp mini
-```
-
-Run `ocpp mini --help` to see its session, model, agent, prompt, and replay options.
+Run `ocpp --help` to see every command, including `serve`, `acp`, `auth`, `mcp`, `plugin`, and `service`.
 
 ## Background service
 
-By default, OC++ discovers or starts one shared background server for your user account. Every local OC++ client
-connects to that server, which owns sessions, configuration, integrations, permissions, and tool execution.
+By default, OC++ discovers or starts one shared background server for your user account. The web app and every local
+OC++ command connect to that server, which owns sessions, configuration, integrations, and tool execution.
 
 Use `--standalone` to run with a private server, or `--server` to connect to a specific server URL:
 
@@ -54,5 +33,7 @@ Use `--standalone` to run with a private server, or `--server` to connect to a s
 ocpp --standalone
 ocpp --server http://localhost:4096
 ```
+
+With `--standalone`, the private server runs inside the `ocpp` process, so keep it running while you use the web app.
 
 See [Troubleshooting](/troubleshooting) for shared service diagnostics and the [API reference](/api) for server endpoints.

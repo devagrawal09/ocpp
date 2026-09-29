@@ -21,6 +21,7 @@ export interface SyntheticPayload extends Schema.Schema.Type<typeof SyntheticPay
 export const SyntheticPayload = Schema.Struct({
   text: Schema.String,
   description: Schema.String.pipe(optional),
+  files: Prompt.fields.files,
   metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(optional),
 }).annotate({ identifier: "Session.Inbox.SyntheticPayload" })
 

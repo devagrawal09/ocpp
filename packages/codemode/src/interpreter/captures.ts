@@ -39,9 +39,9 @@ export const freeIdentifiers = (fn: AstNode): ReadonlyArray<string> => {
   const free = new Set<string>()
   const scopes: Array<Set<string>> = []
 
-  const declare = (name: string) => scopes[scopes.length - 1]?.add(name)
+  const bindName = (name: string) => scopes[scopes.length - 1]?.add(name)
   const declarePattern = (pattern: AstNode) => {
-    for (const name of collectPatternNames(pattern)) declare(name)
+    for (const name of collectPatternNames(pattern)) bindName(name)
   }
   const bound = (name: string) => scopes.some((scope) => scope.has(name))
 
@@ -51,7 +51,7 @@ export const freeIdentifiers = (fn: AstNode): ReadonlyArray<string> => {
       const statement = value as AstNode
       if (statement.type === "FunctionDeclaration" || statement.type === "ClassDeclaration") {
         const id = statement.id
-        if (isRecord(id) && typeof id.name === "string") declare(id.name)
+        if (isRecord(id) && typeof id.name === "string") bindName(id.name)
         continue
       }
       if (statement.type !== "VariableDeclaration") continue
@@ -71,7 +71,7 @@ export const freeIdentifiers = (fn: AstNode): ReadonlyArray<string> => {
     scoped(
       () => {
         const id = node.id
-        if (node.type === "FunctionExpression" && isRecord(id) && typeof id.name === "string") declare(id.name)
+        if (node.type === "FunctionExpression" && isRecord(id) && typeof id.name === "string") bindName(id.name)
         for (const parameter of getArray(node, "params")) declarePattern(asNode(parameter, "params"))
       },
       () => {

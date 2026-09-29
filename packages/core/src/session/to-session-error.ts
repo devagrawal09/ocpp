@@ -1,7 +1,6 @@
 import { AIError, ToolFailure } from "@ocpp/ai"
 import { Tool } from "@ocpp/schema/tool"
 import { SessionError } from "@ocpp/schema/session-error"
-import { Permission } from "../permission.js"
 import { Integration } from "../integration.js"
 import { AgentNotFoundError, StepFailedError, UserInterruptedError } from "./error.js"
 import { SessionRunnerModel } from "./runner/model.js"
@@ -35,7 +34,6 @@ export function toSessionError(cause: unknown): SessionError.Error {
       }
     }
   }
-  if (cause instanceof Permission.BlockedError) return { type: "permission.rejected", message: cause.message }
   if (cause instanceof ToolFailure || cause instanceof Tool.Error) {
     if (cause.error === undefined) return { type: "tool.execution", message: cause.message }
     // The canonical error is the sole model-visible representation, so a cause

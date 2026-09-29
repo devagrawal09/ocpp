@@ -92,7 +92,7 @@ benchmark("measures retained renderer memory with a large model catalog", async 
   await expect(page.locator('[data-action="composer-model"]')).toContainText(selected.name)
   report(
     { samples },
-    { models: count, switches, gc: "explicit", scope: "renderer main isolate; not total desktop RAM" },
+    { models: count, switches, gc: "explicit", scope: "renderer main isolate; not total browser RAM" },
   )
   await cdp.detach()
 })

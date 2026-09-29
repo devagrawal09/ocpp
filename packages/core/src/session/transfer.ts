@@ -162,7 +162,8 @@ export const node = makeGlobalNode({
 
 function isSettled(message: SessionMessage.Info) {
   if (message.type === "assistant") return message.time.completed !== undefined
-  if (message.type === "shell" || message.type === "compaction") return message.status !== "running"
+  if (message.type === "shell" || message.type === "compaction" || message.type === "invocation")
+    return message.status !== "running"
   return true
 }
 
@@ -210,17 +211,7 @@ function sanitizeMessage(message: SessionMessage.Info): SessionMessage.Info {
       ...message,
       metadata: meta,
       text: redact("text", message.id, message.text),
-      files: message.files?.map((file, index) => ({
-        ...file,
-        data: "",
-        source: { type: "inline" },
-        name: file.name === undefined ? undefined : redact("file-name", String(index), file.name),
-        description:
-          file.description === undefined ? undefined : redact("file-description", String(index), file.description),
-        mention: file.mention
-          ? { ...file.mention, text: redact("file-mention", String(index), file.mention.text) }
-          : undefined,
-      })),
+      files: sanitizeFiles(message.files),
       agents: message.agents?.map((agent, index) => ({
         ...agent,
         name: redact("agent-name", String(index), agent.name),
@@ -246,6 +237,8 @@ function sanitizeMessage(message: SessionMessage.Info): SessionMessage.Info {
         message.description === undefined
           ? undefined
           : redact("synthetic-description", message.id, message.description),
+      // Code Mode completions attach the images and PDFs that tool calls returned.
+      files: sanitizeFiles(message.files),
     }
   if (message.type === "system") return { ...message, metadata: meta, text: redact("system", message.id, message.text) }
   if (message.type === "skill") return { ...message, metadata: meta, text: redact("skill", message.id, message.text) }
@@ -285,6 +278,18 @@ function sanitizeMessage(message: SessionMessage.Info): SessionMessage.Info {
         }
       }),
     }
+  if (message.type === "invocation")
+    return {
+      ...message,
+      metadata: meta,
+      trigger:
+        message.trigger.type === "command"
+          ? { ...message.trigger, text: redact("invocation-text", message.id, message.trigger.text) }
+          : message.trigger,
+      code: redact("invocation-code", message.id, message.code),
+      events: undefined,
+      error: message.error === undefined ? undefined : redact("invocation-error", message.id, message.error),
+    }
   if (message.type === "compaction") {
     if (message.status === "failed")
       return {
@@ -299,6 +304,20 @@ function sanitizeMessage(message: SessionMessage.Info): SessionMessage.Info {
     }
   }
   return { ...message, metadata: meta }
+}
+
+function sanitizeFiles(files: SessionMessage.User["files"]) {
+  return files?.map((file, index) => ({
+    ...file,
+    data: "",
+    source: { type: "inline" as const },
+    name: file.name === undefined ? undefined : redact("file-name", String(index), file.name),
+    description:
+      file.description === undefined ? undefined : redact("file-description", String(index), file.description),
+    mention: file.mention
+      ? { ...file.mention, text: redact("file-mention", String(index), file.mention.text) }
+      : undefined,
+  }))
 }
 
 function sanitizeToolState(id: string, state: SessionMessage.ToolState): SessionMessage.ToolState {

@@ -7,7 +7,6 @@ import { Model } from "@ocpp/schema/model"
 import { Provider } from "@ocpp/schema/provider"
 import { Project } from "@ocpp/schema/project"
 import { Worktree } from "@ocpp/schema/worktree"
-import { PermissionV1 } from "@ocpp/schema/permission-v1"
 import { Prompt } from "@ocpp/schema/prompt"
 import { SessionInbox } from "@ocpp/schema/session-inbox"
 import { SessionMessage } from "@ocpp/schema/session-message"
@@ -18,7 +17,6 @@ import { Credential } from "@ocpp/schema/credential"
 import { FileSystem } from "@ocpp/schema/filesystem"
 import { Integration } from "@ocpp/schema/integration"
 import { LLM } from "@ocpp/schema/llm"
-import { Permission } from "@ocpp/schema/permission"
 import { Pty } from "@ocpp/schema/pty"
 import { Reference } from "@ocpp/schema/reference"
 import { Skill } from "@ocpp/schema/skill"
@@ -36,8 +34,6 @@ test("Core reuses the canonical shared schemas", async () => {
     coreLocation,
     coreAI,
     coreModel,
-    corePermission,
-    corePermissionV1,
     coreWorktree,
     corePty,
     coreProject,
@@ -57,8 +53,6 @@ test("Core reuses the canonical shared schemas", async () => {
     import("@ocpp/core/location"),
     import("@ocpp/ai"),
     import("@ocpp/core/model"),
-    import("@ocpp/core/permission"),
-    import("@ocpp/core/v1/permission"),
     import("@ocpp/core/worktree"),
     import("@ocpp/core/pty"),
     import("@ocpp/core/project/schema"),
@@ -106,10 +100,6 @@ test("Core reuses the canonical shared schemas", async () => {
     [coreProvider.ID, Provider.ID],
     [coreProvider.Request, Provider.Request],
     [coreProvider.Info, Provider.Info],
-    [corePermission.Effect, Permission.Effect],
-    [corePermission.Rule, Permission.Rule],
-    [corePermission.Ruleset, Permission.Ruleset],
-    [corePermissionV1.Event, PermissionV1.Event],
     [coreWorktree.CreateInput, Worktree.CreateInput],
     [coreWorktree.RemoveInput, Worktree.RemoveInput],
     [coreWorktree.Info, Worktree.Info],

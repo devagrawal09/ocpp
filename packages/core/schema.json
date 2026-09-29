@@ -1,9 +1,17 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "bca615cf-0e17-4f00-bddb-feb72a5b7bcb",
-  "prevIds": ["81c089f3-43e4-414b-bc9b-0c0e4454e001"],
+  "id": "740b833f-1408-45c0-98df-41c9d24af227",
+  "prevIds": ["e870180b-6970-4e2c-a7e5-35696bedecf5"],
   "ddl": [
+    {
+      "name": "codemode_command",
+      "entityType": "tables"
+    },
+    {
+      "name": "codemode_event",
+      "entityType": "tables"
+    },
     {
       "name": "account_state",
       "entityType": "tables"
@@ -53,10 +61,6 @@
       "entityType": "tables"
     },
     {
-      "name": "permission",
-      "entityType": "tables"
-    },
-    {
       "name": "project_directory",
       "entityType": "tables"
     },
@@ -99,6 +103,236 @@
     {
       "name": "worktree",
       "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "codemode_command"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "codemode_command"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "description",
+      "entityType": "columns",
+      "table": "codemode_command"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "handler",
+      "entityType": "columns",
+      "table": "codemode_command"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "codemode_command"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "codemode_command"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "description",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "schedule",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "handler",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "enabled",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_next",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_fired",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "execution_id",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "error",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "run_count",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "skip_count",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_skipped",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "codemode_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "codemode_event"
     },
     {
       "type": "integer",
@@ -426,6 +660,26 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "input",
+      "entityType": "columns",
+      "table": "codemode_execution"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tools",
+      "entityType": "columns",
+      "table": "codemode_execution"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "saved",
       "entityType": "columns",
       "table": "codemode_execution"
@@ -437,6 +691,16 @@
       "default": null,
       "generated": null,
       "name": "error",
+      "entityType": "columns",
+      "table": "codemode_execution"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "resumes",
       "entityType": "columns",
       "table": "codemode_execution"
     },
@@ -537,6 +801,36 @@
       "default": null,
       "generated": null,
       "name": "error",
+      "entityType": "columns",
+      "table": "codemode_journal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "omitted",
+      "entityType": "columns",
+      "table": "codemode_journal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "impure",
+      "entityType": "columns",
+      "table": "codemode_journal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "progress",
       "entityType": "columns",
       "table": "codemode_journal"
     },
@@ -899,66 +1193,6 @@
       "name": "time_updated",
       "entityType": "columns",
       "table": "kv"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "permission"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "project_id",
-      "entityType": "columns",
-      "table": "permission"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "action",
-      "entityType": "columns",
-      "table": "permission"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "resource",
-      "entityType": "columns",
-      "table": "permission"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_created",
-      "entityType": "columns",
-      "table": "permission"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_updated",
-      "entityType": "columns",
-      "table": "permission"
     },
     {
       "type": "text",
@@ -1736,6 +1970,16 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "tools",
+      "entityType": "columns",
+      "table": "session_v2"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "model",
       "entityType": "columns",
       "table": "session_v2"
@@ -1941,6 +2185,28 @@
       "table": "worktree"
     },
     {
+      "columns": ["session_id"],
+      "tableTo": "session_v2",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_codemode_command_session_id_session_v2_id_fk",
+      "entityType": "fks",
+      "table": "codemode_command"
+    },
+    {
+      "columns": ["session_id"],
+      "tableTo": "session_v2",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_codemode_event_session_id_session_v2_id_fk",
+      "entityType": "fks",
+      "table": "codemode_event"
+    },
+    {
       "columns": ["active_account_id"],
       "tableTo": "account",
       "columnsTo": ["id"],
@@ -2016,17 +2282,6 @@
       "name": "fk_session_external_session_id_session_v2_id_fk",
       "entityType": "fks",
       "table": "session_external"
-    },
-    {
-      "columns": ["project_id"],
-      "tableTo": "project",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "name": "fk_permission_project_id_project_id_fk",
-      "entityType": "fks",
-      "table": "permission"
     },
     {
       "columns": ["project_id"],
@@ -2115,6 +2370,20 @@
       "name": "fk_worktree_project_id_project_id_fk",
       "entityType": "fks",
       "table": "worktree"
+    },
+    {
+      "columns": ["session_id", "name"],
+      "nameExplicit": false,
+      "name": "codemode_command_pk",
+      "entityType": "pks",
+      "table": "codemode_command"
+    },
+    {
+      "columns": ["session_id", "name"],
+      "nameExplicit": false,
+      "name": "codemode_event_pk",
+      "entityType": "pks",
+      "table": "codemode_event"
     },
     {
       "columns": ["email", "url"],
@@ -2219,13 +2488,6 @@
       "nameExplicit": false,
       "name": "kv_pk",
       "table": "kv",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "permission_pk",
-      "table": "permission",
       "entityType": "pks"
     },
     {
@@ -2373,28 +2635,6 @@
       "name": "event_aggregate_type_seq_idx",
       "entityType": "indexes",
       "table": "event"
-    },
-    {
-      "columns": [
-        {
-          "value": "project_id",
-          "isExpression": false
-        },
-        {
-          "value": "action",
-          "isExpression": false
-        },
-        {
-          "value": "resource",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "origin": "manual",
-      "name": "permission_project_action_resource_idx",
-      "entityType": "indexes",
-      "table": "permission"
     },
     {
       "columns": [

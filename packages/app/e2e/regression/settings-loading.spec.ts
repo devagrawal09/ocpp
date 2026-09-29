@@ -82,9 +82,7 @@ test("extensions opens without waiting for MCPs or plugins", async ({ page }) =>
     await route.fulfill({
       json: {
         location: { directory },
-        data: [
-          { id: "demo-plugin", source: { type: "package", package: "demo-plugin" }, status: "active", tui: false },
-        ],
+        data: [{ id: "demo-plugin", source: { type: "package", package: "demo-plugin" }, status: "active" }],
       },
     })
   })

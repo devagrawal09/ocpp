@@ -13,10 +13,8 @@ import {
   RateLimitError,
   TransportError,
   UnknownProviderError,
-  ToolFailure,
   HttpContext,
 } from "@ocpp/ai"
-import { Permission } from "@ocpp/core/permission"
 import { ID } from "@ocpp/core/model"
 import { ModelResolver } from "@ocpp/core/model-resolver"
 import { Provider } from "@ocpp/core/provider"
@@ -58,16 +56,7 @@ describe("toSessionError", () => {
     expect(toSessionError(llm(new UnknownProviderError({ message: "unknown" }))).type).toBe("provider.unknown")
   })
 
-  test("preserves the permission rejection type without exposing internal fields", () => {
-    const blocked = new Permission.BlockedError({ rules: [], permission: "external_directory", resources: [] })
-    expect(toSessionError(blocked)).toEqual({
-      type: "permission.rejected",
-      message: "Permission denied: external_directory",
-    })
-    expect(toSessionError(new ToolFailure({ message: blocked.message, error: blocked }))).toEqual({
-      type: "permission.rejected",
-      message: "Permission denied: external_directory",
-    })
+  test("maps tool failures to tool execution errors", () => {
     expect(toSessionError(new Tool.Error({ message: "failed" }))).toEqual({
       type: "tool.execution",
       message: "failed",

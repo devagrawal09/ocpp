@@ -53,7 +53,6 @@ export const mathMethods = new Set([
 
 export const invokeMathMethod = (name: string, args: Array<unknown>, node: AstNode): number => {
   if (!mathMethods.has(name)) throw new InterpreterRuntimeError(`Math.${name} is not available.`, node)
-  if (name === "random") return Math.random()
   // Validate only the arguments the method consumes; like JS, extras are ignored
   // (so built-ins work as callbacks receiving (element, index, array)).
   const num = (index: number): number => {

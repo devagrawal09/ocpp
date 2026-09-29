@@ -10,7 +10,7 @@ import type {
 import { SessionMessage } from "@ocpp/schema/session-message"
 import { EOL } from "node:os"
 import { readFile } from "node:fs/promises"
-import { nonEmptyToolContent, toolOutputText, type MiniToolPart } from "@ocpp/tui/mini/tool"
+import { nonEmptyToolContent, toolOutputText, type ToolPart } from "./tool-display"
 import { UI } from "./ui"
 
 type Model = {
@@ -35,7 +35,6 @@ type Input = {
   variant?: string
   thinking: boolean
   format: "default" | "json"
-  auto: boolean
   /** True when the client is attached to a shared server rather than an exclusive in-process one. */
   attached: boolean
   compatibility?: "v1"
@@ -82,7 +81,6 @@ export async function runNonInteractivePrompt(input: Input) {
   let submitted = false
   let promoted = false
   let emittedError = false
-  let permissionRejected = false
   let formCancelled = false
   let interrupted = false
   let v1InvalidOutput = false
@@ -132,27 +130,6 @@ export async function runNonInteractivePrompt(input: Input) {
     }
   }
 
-  const replyPermission = async (request: { id: string; action: string; resources: ReadonlyArray<string> }) => {
-    if (!input.auto) {
-      permissionRejected = true
-      UI.println(
-        UI.Style.TEXT_WARNING_BOLD + "!",
-        UI.Style.TEXT_NORMAL +
-          `permission requested: ${request.action} (${request.resources.join(", ")}); auto-rejecting`,
-      )
-    }
-    await input.client.permission
-      .reply({
-        sessionID: input.sessionID,
-        requestID: request.id,
-        reply: input.auto ? "once" : "reject",
-      })
-      .catch(() => {})
-    if (!input.auto) {
-      await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
-    }
-  }
-
   const cancelForm = async (request: Pick<FormRequest, "id" | "sessionID">) => {
     try {
       await input.client.form.cancel(
@@ -177,10 +154,6 @@ export async function runNonInteractivePrompt(input: Input) {
       }
       const event = next.value
 
-      if (event.type === "permission.asked" && submitted && event.data.sessionID === input.sessionID) {
-        await replyPermission(event.data)
-        continue
-      }
       if (
         event.type === "form.created" &&
         submitted &&
@@ -205,7 +178,7 @@ export async function runNonInteractivePrompt(input: Input) {
       if (
         event.type === "session.execution.interrupted" &&
         event.data.reason === "user" &&
-        (interrupted || permissionRejected || formCancelled)
+        (interrupted || formCancelled)
       ) {
         return
       }
@@ -364,7 +337,7 @@ export async function runNonInteractivePrompt(input: Input) {
           },
           time: { created: current.timestamp, ran: current.timestamp, completed: time },
         }
-        const part: MiniToolPart = {
+        const part: ToolPart = {
           partID: current.id,
           sessionID: input.sessionID,
           messageID: event.data.assistantMessageID,
@@ -374,7 +347,7 @@ export async function runNonInteractivePrompt(input: Input) {
           state: {
             status: "completed",
             input: current.input,
-            output: toolOutputText(current.tool, event.data.content),
+            output: toolOutputText(event.data.content),
             title: current.tool,
             metadata: {
               metadata: event.data.metadata,
@@ -413,7 +386,7 @@ export async function runNonInteractivePrompt(input: Input) {
           },
           time: { created: current.timestamp, ran: current.timestamp, completed: time },
         }
-        const part: MiniToolPart = {
+        const part: ToolPart = {
           partID: current.id,
           sessionID: input.sessionID,
           messageID: event.data.assistantMessageID,
@@ -434,9 +407,9 @@ export async function runNonInteractivePrompt(input: Input) {
         }
         tools.delete(key)
         renderedTools.add(key)
-        if (input.compatibility === "v1" && (permissionRejected || formCancelled)) continue
+        if (input.compatibility === "v1" && formCancelled) continue
         if (!emit("tool_use", time, { part })) {
-          if (content && toolOutputText(current.tool, content).trim())
+          if (content && toolOutputText(content).trim())
             await input.renderTool({
               ...tool,
               state: {
@@ -473,7 +446,7 @@ export async function runNonInteractivePrompt(input: Input) {
           v1InvalidOutput = true
           continue
         }
-        if (interrupted || permissionRejected || formCancelled) continue
+        if (interrupted || formCancelled) continue
         flushStep()
         emittedError = true
         process.exitCode = 1
@@ -481,7 +454,7 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
       if (event.type === "session.execution.failed") {
-        if (input.compatibility === "v1" && (v1InvalidOutput || permissionRejected || formCancelled)) return
+        if (input.compatibility === "v1" && (v1InvalidOutput || formCancelled)) return
         flushStep()
         if (!emittedError && !formCancelled) {
           emittedError = true
@@ -491,7 +464,7 @@ export async function runNonInteractivePrompt(input: Input) {
         return
       }
       if (event.type === "session.execution.interrupted") {
-        if (input.compatibility === "v1" && (permissionRejected || formCancelled)) return
+        if (input.compatibility === "v1" && formCancelled) return
         if (event.data.reason === "user" && interrupted) process.exitCode = 130
         if (event.data.reason !== "user" && !emittedError) {
           emittedError = true
@@ -574,7 +547,7 @@ export async function runNonInteractivePrompt(input: Input) {
 
         const key = toolKey(message.id, item.id)
         if (renderedTools.has(key) || item.state.status === "streaming" || item.state.status === "running") continue
-        const part: MiniToolPart = {
+        const part: ToolPart = {
           partID: projectedPartID(message.id, `tool-${item.id}`),
           sessionID: input.sessionID,
           messageID: message.id,
@@ -586,7 +559,7 @@ export async function runNonInteractivePrompt(input: Input) {
               ? {
                   status: "completed",
                   input: item.state.input,
-                  output: toolOutputText(item.name, item.state.content),
+                  output: toolOutputText(item.state.content),
                   title: item.name,
                   metadata: { metadata: item.state.metadata, content: item.state.content },
                   time: { start: item.time.ran ?? item.time.created, end: item.time.completed ?? timestamp },
@@ -605,7 +578,7 @@ export async function runNonInteractivePrompt(input: Input) {
           await input.renderTool(item)
           continue
         }
-        if (item.state.content && toolOutputText(item.name, item.state.content).trim()) {
+        if (item.state.content && toolOutputText(item.state.content).trim()) {
           await input.renderTool({
             ...item,
             state: {
@@ -693,8 +666,7 @@ export async function runNonInteractivePrompt(input: Input) {
     if (!response) return
     if (interrupted) await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
 
-    const [permissions, forms, globals] = await Promise.all([
-      input.client.permission.list({ sessionID: input.sessionID }).catch(() => undefined),
+    const [forms, globals] = await Promise.all([
       input.client.form.list({ sessionID: input.sessionID }).catch(() => undefined),
       input.attached
         ? Promise.resolve(undefined)
@@ -705,7 +677,6 @@ export async function runNonInteractivePrompt(input: Input) {
             .catch(() => undefined),
     ])
     await Promise.all([
-      ...(permissions ?? []).map(replyPermission),
       ...(forms ?? []).map(cancelForm),
       ...(globals && sameLocation(globals.location, input.location)
         ? globals.data.filter((form) => form.sessionID === GLOBAL_FORM_SESSION_ID).map(cancelForm)
@@ -720,17 +691,10 @@ export async function runNonInteractivePrompt(input: Input) {
     await Promise.race([waiting, completed.then(() => waiting)])
     finalizing = true
     const projected = await reconcile()
-    if (
-      !projected.responded &&
-      !interrupted &&
-      !permissionRejected &&
-      !formCancelled &&
-      !emittedError &&
-      !prePromotionError
-    ) {
+    if (!projected.responded && !interrupted && !formCancelled && !emittedError && !prePromotionError) {
       await completed
     }
-    if (!projected.found && !interrupted && !permissionRejected && !formCancelled && !emittedError) {
+    if (!projected.found && !interrupted && !formCancelled && !emittedError) {
       const error = prePromotionError ?? { type: "unknown", message: "Prompt was not promoted" }
       emittedError = true
       process.exitCode = 1

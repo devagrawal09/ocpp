@@ -18,6 +18,7 @@ import { Skill as SkillSchema } from "./skill.js"
 import { Money } from "./money.js"
 import { Snapshot } from "./snapshot.js"
 import { TokenUsage } from "./token-usage.js"
+import { CodeModeExecution } from "./codemode-execution.js"
 
 export const ID = Schema.String.check(Schema.isStartsWith("msg_")).pipe(
   Schema.brand("Session.Message.ID"),
@@ -84,6 +85,7 @@ export const Synthetic = Schema.Struct({
   ...Base,
   text: Schema.String,
   description: Schema.String.pipe(optional),
+  files: Prompt.fields.files,
   type: Schema.tag("synthetic"),
 }).annotate({ identifier: "Session.Message.Synthetic" })
 
@@ -120,6 +122,38 @@ export const Shell = Schema.Struct({
     completed: DateTimeUtcFromMillis.pipe(optional),
   }),
 }).annotate({ identifier: "Session.Message.Shell" })
+
+export const InvocationTrigger = Schema.Union([
+  Schema.Struct({ type: Schema.tag("command"), name: Schema.String, text: Schema.String }),
+  Schema.Struct({ type: Schema.tag("event"), name: Schema.String }),
+])
+  .pipe(Schema.toTaggedUnion("type"))
+  .annotate({ identifier: "Session.Message.InvocationTrigger" })
+export type InvocationTrigger = typeof InvocationTrigger.Type
+
+/** The program an invocation runs. Its input is written into it, so the stored plan alone reproduces the run. */
+export const invocationCode = (handler: string, input: Schema.Json) =>
+  "return " + handler + "(" + JSON.stringify(input) + ")"
+
+/**
+ * A Code Mode execution that a command or an event started outside the model. It is display
+ * history: its outcome reaches the model through the execution's later completion notification.
+ */
+export interface Invocation extends Schema.Schema.Type<typeof Invocation> {}
+export const Invocation = Schema.Struct({
+  ...Base,
+  type: Schema.tag("invocation"),
+  trigger: InvocationTrigger,
+  code: Schema.String,
+  executionID: CodeModeExecution.ID,
+  status: Schema.Literals(["running", "completed", "error", "cancelled"]),
+  events: CodeModeExecution.Entries.pipe(optional),
+  error: Schema.String.pipe(optional),
+  time: Schema.Struct({
+    created: DateTimeUtcFromMillis,
+    completed: DateTimeUtcFromMillis.pipe(optional),
+  }),
+}).annotate({ identifier: "Session.Message.Invocation" })
 
 export interface ToolStateStreaming extends Schema.Schema.Type<typeof ToolStateStreaming> {}
 export const ToolStateStreaming = Schema.Struct({
@@ -277,6 +311,7 @@ export const Info = Schema.Union([
   System,
   Skill,
   Shell,
+  Invocation,
   Assistant,
   Compaction,
 ]).annotate({ identifier: "Session.Message.Info" })
@@ -289,6 +324,7 @@ export type Info =
   | System
   | Skill
   | Shell
+  | Invocation
   | Assistant
   | Compaction
 export type Type = Info["type"]

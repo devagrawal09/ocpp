@@ -13,15 +13,12 @@ export type TabLayout = "horizontal" | "vertical"
 
 export interface NotificationSettings {
   agent: boolean
-  permissions: boolean
   errors: boolean
 }
 
 export interface SoundSettings {
   agentEnabled: boolean
   agent: string
-  permissionsEnabled: boolean
-  permissions: string
   errorsEnabled: boolean
   errors: string
 }
@@ -52,9 +49,6 @@ export interface Settings {
     tabLayout: TabLayout
   }
   keybinds: Record<string, string>
-  permissions: {
-    autoApprove: boolean
-  }
   workspaces: {
     defaultDestination: WorkspaceDefaultDestination
     lastUsed: Record<string, WorkspaceLastUsed>
@@ -141,23 +135,17 @@ const defaultSettings: Settings = {
     tabLayout: "horizontal",
   },
   keybinds: {},
-  permissions: {
-    autoApprove: false,
-  },
   workspaces: {
     defaultDestination: "last-used",
     lastUsed: {},
   },
   notifications: {
     agent: true,
-    permissions: true,
     errors: false,
   },
   sounds: {
     agentEnabled: true,
     agent: "staplebops-01",
-    permissionsEnabled: true,
-    permissions: "staplebops-02",
     errorsEnabled: true,
     errors: "nope-03",
   },
@@ -325,12 +313,6 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
           setStore("keybinds", reconcile({}))
         },
       },
-      permissions: {
-        autoApprove: withFallback(() => store.permissions?.autoApprove, defaultSettings.permissions.autoApprove),
-        setAutoApprove(value: boolean) {
-          setStore("permissions", "autoApprove", value)
-        },
-      },
       workspaces: {
         defaultDestination: withFallback(
           () => store.workspaces?.defaultDestination,
@@ -359,10 +341,6 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setAgent(value: boolean) {
           setStore("notifications", "agent", value)
         },
-        permissions: withFallback(() => store.notifications?.permissions, defaultSettings.notifications.permissions),
-        setPermissions(value: boolean) {
-          setStore("notifications", "permissions", value)
-        },
         errors: withFallback(() => store.notifications?.errors, defaultSettings.notifications.errors),
         setErrors(value: boolean) {
           setStore("notifications", "errors", value)
@@ -376,17 +354,6 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         agent: withFallback(() => store.sounds?.agent, defaultSettings.sounds.agent),
         setAgent(value: string) {
           setStore("sounds", "agent", value)
-        },
-        permissionsEnabled: withFallback(
-          () => store.sounds?.permissionsEnabled,
-          defaultSettings.sounds.permissionsEnabled,
-        ),
-        setPermissionsEnabled(value: boolean) {
-          setStore("sounds", "permissionsEnabled", value)
-        },
-        permissions: withFallback(() => store.sounds?.permissions, defaultSettings.sounds.permissions),
-        setPermissions(value: string) {
-          setStore("sounds", "permissions", value)
         },
         errorsEnabled: withFallback(() => store.sounds?.errorsEnabled, defaultSettings.sounds.errorsEnabled),
         setErrorsEnabled(value: boolean) {

@@ -174,10 +174,7 @@ function cacheThemeVariants(theme: DesktopTheme, themeId: string) {
 
 export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   name: "Theme",
-  init: (props: {
-    defaultTheme?: string
-    onThemeApplied?: (theme: DesktopTheme, mode: "light" | "dark", scheme: ColorScheme) => void
-  }) => {
+  init: (props: { defaultTheme?: string }) => {
     const rawTheme = read(STORAGE_KEYS.THEME_ID) ?? props.defaultTheme
     const themeId = resolveStoredTheme(rawTheme)
     if (rawTheme && rawTheme !== themeId) {
@@ -219,11 +216,6 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         })
       loads.set(next, task)
       return task
-    }
-
-    const applyTheme = (theme: DesktopTheme, themeId: string, mode: "light" | "dark", scheme: ColorScheme) => {
-      applyThemeCss(theme, themeId, mode)
-      props.onThemeApplied?.(theme, mode, scheme)
     }
 
     const ids = () => {
@@ -289,7 +281,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     createEffect(() => {
       const theme = store.themes[store.themeId]
       if (!theme) return
-      applyTheme(theme, store.themeId, store.mode, store.colorScheme)
+      applyThemeCss(theme, store.themeId, store.mode)
     })
 
     const setTheme = (id: string) => {
@@ -344,7 +336,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
               ? getSystemMode()
               : store.previewScheme
             : store.mode
-          applyTheme(theme, next, mode, store.previewScheme ?? store.colorScheme)
+          applyThemeCss(theme, next, mode)
         })
       },
       previewColorScheme: (scheme: ColorScheme) => {
@@ -355,7 +347,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           if (!theme) return
           if ((store.previewThemeId ?? store.themeId) !== id) return
           if (store.previewScheme !== scheme) return
-          applyTheme(theme, id, mode, scheme)
+          applyThemeCss(theme, id, mode)
         })
       },
       commitPreview: () => {
@@ -373,7 +365,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         setStore("previewScheme", null)
         void load(store.themeId).then((theme) => {
           if (!theme) return
-          applyTheme(theme, store.themeId, store.mode, store.colorScheme)
+          applyThemeCss(theme, store.themeId, store.mode)
         })
       },
     }

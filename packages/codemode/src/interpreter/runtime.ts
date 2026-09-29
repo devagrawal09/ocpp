@@ -1,8 +1,9 @@
 import { Cause, Deferred, Effect, Exit } from "effect"
 import { coercionFunctions, errorConstructorNames, globalNamespaces, uriFunctions } from "../globals.js"
+import type { ImpureHelper } from "../codemode.js"
 import { ToolHandle } from "../tool-handle.js"
-import { isPromiseAllCall } from "../ir.js"
-import { isBlockedMember, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
+import { isPromiseAllCall, staticToolCalls, staticToolPath } from "../ir.js"
+import { isBlockedMember, toolExpression, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
 import {
   type AstNode,
   AsyncIteratorSymbol,
@@ -265,6 +266,7 @@ export class Interpreter<R> {
   private readonly bindingOverrides: ReadonlyMap<Binding, Binding>
   private readonly allowedTools: ReadonlySet<string> | undefined
   private readonly handles: Array<ToolHandle>
+  private readonly impure: (helper: ImpureHelper) => number
   private generatorState?: GeneratorState
   private generatorAsync = false
   private readonly runner: CallbackRunner<R> & SyncIteratorRunner<R> = {
@@ -289,6 +291,7 @@ export class Interpreter<R> {
     bindingOverrides: ReadonlyMap<Binding, Binding> = new Map(),
     allowedTools?: ReadonlySet<string>,
     handles: Array<ToolHandle> = [],
+    impure: (helper: ImpureHelper) => number = (helper) => (helper === "time.now" ? Date.now() : Math.random()),
   ) {
     const globalScope = new Map<string, Binding>()
     this.scopes = new ScopeStack([globalScope])
@@ -305,6 +308,7 @@ export class Interpreter<R> {
     this.bindingOverrides = bindingOverrides
     this.allowedTools = allowedTools
     this.handles = handles
+    this.impure = impure
     // Built from the shared name lists so the compiler's reserved durable names cannot drift away
     // from what an activation actually binds.
     for (const name of globalNamespaces) globalScope.set(name, { mutable: false, value: new GlobalNamespace(name) })
@@ -348,8 +352,10 @@ export class Interpreter<R> {
     return new Map([...this.notebookScope].map(([name, binding]) => [name, binding.value]))
   }
 
+  /** Runs a program. Its tool handles close when it settles, unless the host keeps them open for later calls. */
   run(
     program: ProgramNode,
+    closeHandles = true,
   ): Effect.Effect<{ value: unknown; declarations: ReadonlyArray<readonly [string, unknown]> }, unknown, R> {
     const self = this
     // Keep top-level declarations separate so they can shadow builtins.
@@ -384,7 +390,7 @@ export class Interpreter<R> {
       Effect.ensuring(
         Effect.sync(() => {
           self.scopes.pop()
-          for (const handle of self.handles) handle.close()
+          if (closeHandles) for (const handle of self.handles) handle.close()
         }),
       ),
     )
@@ -1766,6 +1772,12 @@ export class Interpreter<R> {
       if ((callable === null || callable === undefined) && node.optional === true) return OptionalShortCircuit
 
       const args = yield* self.evaluateCallArguments(argNodes)
+      // Only a call that names its tool by a static path runs it, so the compile check has seen every tool a
+      // program calls. A reference reached any other way is a value to pass on, which invokeCallable refuses.
+      if (callable instanceof ToolReference && staticToolPath(callee) !== undefined) {
+        if (callable.path.length === 0) throw new InterpreterRuntimeError("The tools root is not callable.", callee)
+        return yield* self.executeToolCall(callable.path, args)
+      }
       return yield* self.invokeCallable(callable, args, node, callee)
     })
   }
@@ -1781,8 +1793,15 @@ export class Interpreter<R> {
     const self = this
     return Effect.gen(function* () {
       if (callable instanceof ToolReference) {
-        if (callable.path.length === 0) throw new InterpreterRuntimeError("The tools root is not callable.", callee)
-        return yield* self.executeToolCall(callable.path, args)
+        const tool = toolExpression(callable.path.join("."))
+        throw new InterpreterRuntimeError(
+          `${tool} is a tool reference here, which can only be passed to a tool that hands tools on, such as tools.subagent. Call the tool by its static path instead: ${tool}(...).`,
+          callee,
+          "UnsupportedSyntax",
+          [
+            `Write the call as ${tool}(input), naming the tool directly rather than through a variable, parameter or callback.`,
+          ],
+        )
       }
       if (callable instanceof PromiseMethodReference) {
         return yield* invokePromiseMethod(self.runner, self.promises, callable, args, node)
@@ -1813,6 +1832,8 @@ export class Interpreter<R> {
       }
       if (callable instanceof GlobalMethodReference) {
         if (callable.namespace === "console") return yield* self.invokeConsole(callable.name, args, node)
+        if (callable.namespace === "time" && callable.name === "now") return self.impure("time.now")
+        if (callable.namespace === "Math" && callable.name === "random") return self.impure("Math.random")
         if (callable.namespace === "Object" && args[0] instanceof ToolReference) {
           return self.invokeObjectMethodOnTools(callable.name, args[0], node)
         }
@@ -1912,7 +1933,7 @@ export class Interpreter<R> {
         throw new InterpreterRuntimeError("Tool handles require a synchronous execute function.", node).as("TypeError")
       }
       const execute = definition.execute
-      const capabilities = collectToolCapabilities(execute.body)
+      const capabilities = [...new Set(staticToolCalls(execute.body).map((call) => call.path))].sort()
       const bindings = snapshotBindings(execute)
       const context = yield* Effect.context<R>()
       const handle = new ToolHandle(
@@ -1993,6 +2014,7 @@ export class Interpreter<R> {
       bindingOverrides,
       allowedTools,
       this.handles,
+      this.impure,
     )
     invocation.scopes = new ScopeStack([...fn.capturedScopes, new Map()], bindingOverrides)
     const run = Effect.gen(function* () {
@@ -2456,6 +2478,16 @@ export class Interpreter<R> {
         if (typeof key !== "string") {
           throw new InterpreterRuntimeError("Tool paths must use string property names.", propertyNode)
         }
+        // A tool path is written out in full, so a reference held in a variable cannot reach further tools.
+        if (staticToolPath(node) === undefined) {
+          const tool = toolExpression([...objectValue.path, key].join("."))
+          throw new InterpreterRuntimeError(
+            `A tool reference cannot be extended with a member; name the tool by its full static path, such as ${tool}.`,
+            propertyNode,
+            "UnsupportedSyntax",
+            [`Write the path out in full, as in ${tool}(input), rather than reading it from a variable.`],
+          )
+        }
         return new ToolReference([...objectValue.path, key])
       }
 
@@ -2689,29 +2721,6 @@ function isJsonSchema(value: unknown): value is ToolHandle["definition"]["inputS
   return isRecord(value)
 }
 
-function collectToolCapabilities(node: AstNode) {
-  const capabilities = new Set<string>()
-  const visit = (current: AstNode): void => {
-    if (current.type === "CallExpression") {
-      const callee = current.callee
-      if (isRecord(callee) && typeof callee.type === "string") {
-        const path = staticToolPath(callee as AstNode)
-        if (path?.length) capabilities.add(path.join("."))
-      }
-    }
-    for (const [key, value] of Object.entries(current)) {
-      if (key === "loc") continue
-      if (Array.isArray(value)) {
-        for (const item of value) if (isRecord(item) && typeof item.type === "string") visit(item as AstNode)
-        continue
-      }
-      if (isRecord(value) && typeof value.type === "string") visit(value as AstNode)
-    }
-  }
-  visit(node)
-  return [...capabilities].sort()
-}
-
 function snapshotBindings(fn: CodeModeFunction) {
   const overrides = new Map<Binding, Binding>()
   const visited = new Set<object>()
@@ -2744,15 +2753,4 @@ function immutableMethod(name: string, node?: AstNode) {
     node,
     "UnsupportedSyntax",
   )
-}
-
-function staticToolPath(node: AstNode): ReadonlyArray<string> | undefined {
-  if (node.type === "Identifier") return node.name === "tools" ? [] : undefined
-  if (node.type !== "MemberExpression" || node.optional === true || !isRecord(node.object)) return
-  const parent = staticToolPath(node.object as AstNode)
-  if (parent === undefined || !isRecord(node.property)) return
-  if (node.computed !== true && node.property.type === "Identifier" && typeof node.property.name === "string")
-    return [...parent, node.property.name]
-  if (node.computed === true && node.property.type === "Literal" && typeof node.property.value === "string")
-    return [...parent, node.property.value]
 }

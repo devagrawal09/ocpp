@@ -1,4 +1,5 @@
-# CLI and TUI development guide
+# CLI development guide
 
-- Use `@ocpp/client` and the location-scoped data in `packages/tui/src/context/data.tsx` instead of adding dependencies on legacy sync state.
-- Preserve established TUI behavior unless the task intentionally changes it.
+- Bare `ocpp` starts or reuses the background server and opens the web app (`packages/app`) in the browser. Other commands, such as `run`, `serve`, and `acp`, are the terminal-facing entrypoints.
+- Talk to the server through `@ocpp/client` instead of adding dependencies on legacy sync state.
+- Preserve established command behavior and output unless the task intentionally changes it.

@@ -1,15 +1,8 @@
 import { expect, test } from "bun:test"
 import path from "node:path"
 import { parse } from "jsonc-parser"
-import { configurationTarget, writePluginConfig } from "../src/commands/handlers/plugin/add"
+import { writePluginConfig } from "../src/commands/handlers/plugin/add"
 import { tmpdir } from "./fixture/tmpdir"
-
-test("routes packages according to their exported runtimes", () => {
-  expect(configurationTarget("server.js", "tui.js")).toBe("server")
-  expect(configurationTarget("server.js", undefined)).toBe("server")
-  expect(configurationTarget(undefined, "tui.js")).toBe("tui")
-  expect(configurationTarget(undefined, undefined)).toBeUndefined()
-})
 
 test("adds a package to global plugin config without replacing unrelated settings", async () => {
   await using directory = await tmpdir()

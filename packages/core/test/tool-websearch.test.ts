@@ -1,9 +1,8 @@
 import { describe, expect } from "bun:test"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { Permission } from "@ocpp/core/permission"
 import { KV } from "@ocpp/core/kv"
 import { Form } from "@ocpp/core/form"
 import { WebSearch } from "@ocpp/core/websearch"
@@ -11,12 +10,20 @@ import { Session } from "@ocpp/core/session"
 import { toSessionError } from "@ocpp/core/session/to-session-error"
 import { Tool } from "@ocpp/core/tool"
 import { WebSearchTool } from "@ocpp/core/tool/plugin/websearch"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Image } from "@ocpp/core/image"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
-import { permissionLayer } from "./lib/permission"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { execute } from "@ocpp/core/tool/runtime"
+import {
+  toolIdentity,
+  codeModeTools,
+  executeTool,
+  registerToolPlugin,
+  registeredTools,
+  toolDefinitions,
+} from "./lib/tool"
 import { webSearchHost } from "./plugin/host"
 import { TestWebSearch } from "./lib/websearch"
 
@@ -28,7 +35,7 @@ const webSearchToolNode = makeLocationNode({
       yield* registerToolPlugin(WebSearchTool.Plugin, { websearch: webSearchHost(websearch) })
     }),
   ),
-  deps: [Tool.node, Permission.node, WebSearch.node, Form.node],
+  deps: [Tool.node, PluginHooks.node, WebSearch.node, Form.node],
 })
 
 const sessionID = Session.ID.make("ses_websearch_test")
@@ -38,7 +45,6 @@ const providers = [
 ]
 
 class Fixture {
-  assertions: Permission.AssertInput[] = []
   events: string[] = []
   formRequests: Form.CreateInput[] = []
   formResponse: Form.TerminalState = { status: "cancelled" }
@@ -70,16 +76,6 @@ const setup = Effect.gen(function* () {
   )
   const context = yield* Layer.build(
     AppNodeBuilder.build(LayerNode.group([Tool.node, webSearchToolNode]), [
-      [
-        Permission.node,
-        permissionLayer({
-          assert: (input) =>
-            Effect.sync(() => {
-              fixture.events.push("permission")
-              fixture.assertions.push(input)
-            }),
-        }),
-      ],
       [WebSearch.node, Layer.succeed(WebSearch.Service, websearch)],
       [
         Form.node,
@@ -99,13 +95,14 @@ const setup = Effect.gen(function* () {
 })
 
 describe("WebSearchTool registration", () => {
-  it.effect("asserts permission before delegating to WebSearch", () =>
+  it.effect("delegates to WebSearch", () =>
     Effect.gen(function* () {
       const fixture = yield* setup
       const registry = fixture.registry
       yield* fixture.websearch.select(WebSearch.ID.make("exa"))
 
-      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["websearch", "execute"])
+      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(registry)).toEqual(["websearch"])
       expect(
         yield* executeTool(registry, {
           sessionID,
@@ -121,22 +118,50 @@ describe("WebSearchTool registration", () => {
         status: "completed",
         content: [{ type: "text", text: "## [Search results](https://example.com)\n\nsearch results" }],
       })
-      expect(fixture.assertions).toMatchObject([
-        {
-          sessionID,
-          action: "websearch",
-          resources: ["effect typescript"],
-          save: ["*"],
-          metadata: { query: "effect typescript" },
-        },
-      ])
       expect(fixture.websearch.queries).toEqual([
         {
           query: "effect typescript",
           providerID: WebSearch.ID.make("exa"),
         },
       ])
-      expect(fixture.events).toEqual(["permission", "query"])
+      expect(fixture.events).toEqual(["query"])
+    }),
+  )
+
+  it.effect("leaves websearch out of the catalog and refuses calls to it while web search is disabled", () =>
+    Effect.gen(function* () {
+      const fixture = yield* setup
+      const registry = fixture.registry
+      // Another tool keeps execute on offer while websearch is hidden.
+      yield* registry.transform((draft) =>
+        draft.add({
+          name: "echo",
+          description: "Echo text",
+          input: Schema.Struct({ text: Schema.String }),
+          execute: ({ text }) => Effect.succeed({ content: text }),
+        }),
+      )
+      yield* fixture.websearch.select(false)
+
+      const snapshot = yield* registry.snapshot()
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo"])
+      const refused = yield* snapshot
+        .execute({
+          sessionID,
+          ...toolIdentity,
+          call: {
+            type: "tool-call",
+            id: "call-disabled-search",
+            name: "execute",
+            input: { code: 'const found = tools.websearch({ query: "effect typescript" })' },
+          },
+        })
+        .pipe(Effect.flip)
+      expect(refused.metadata).toMatchObject({ executionStatus: "refused", kind: "UnknownTool", tools: ["websearch"] })
+      expect(fixture.events).toEqual([])
+
+      yield* fixture.websearch.select(WebSearch.ID.make("exa"))
+      expect(yield* codeModeTools(registry)).toEqual(["echo", "websearch"])
     }),
   )
 
@@ -353,7 +378,8 @@ describe("WebSearchTool registration", () => {
     Effect.gen(function* () {
       const fixture = yield* setup
       const registry = fixture.registry
-      const tools = yield* registry.snapshot()
+      const websearch = (yield* registeredTools(registry)).get("websearch")
+      if (!websearch) return yield* Effect.die("websearch is not registered")
       yield* fixture.websearch.select(WebSearch.ID.make("exa"))
 
       yield* Effect.forEach(
@@ -373,19 +399,16 @@ describe("WebSearchTool registration", () => {
               }),
             })
             const progress: Tool.Metadata[] = []
-            const error = yield* tools
-              .execute({
+            const error = yield* execute(
+              websearch,
+              { query: "effect" },
+              {
                 sessionID,
                 ...toolIdentity,
-                call: {
-                  type: "tool-call",
-                  id: `call-http-${index}`,
-                  name: "websearch",
-                  input: { query: "effect" },
-                },
+                id: Tool.CallID.make(`call-http-${index}`),
                 progress: (metadata) => Effect.sync(() => progress.push(metadata)),
-              })
-              .pipe(Effect.flip)
+              },
+            ).pipe(Effect.flip)
 
             const sessionError = toSessionError(error)
             expect(sessionError).toEqual({ type: "tool.execution", message })

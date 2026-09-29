@@ -10,7 +10,6 @@ import { useSettings } from "@/settings/model"
 import { useTerminal } from "@/session/terminal/context"
 import { showToast } from "@/shell/notifications/toast"
 import { downloadSessionExport, fetchSessionExport, sessionExportFilename } from "@/session/commands/export"
-import { usePlatform } from "@/runtime/platform/platform"
 import type { SessionModel } from "@/session/model"
 import type { SessionRevert } from "@/session/revert"
 
@@ -50,7 +49,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const serverSDK = useServerSDK()
   const settings = useSettings()
   const terminal = useTerminal()
-  const platform = usePlatform()
   const layout = useLayout()
   const openDialog = async <T,>(load: () => Promise<T>, show: (value: T) => void) => {
     const owner = actions.session.ownership.capture()
@@ -93,7 +91,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const viewCommand = withCategory(language.t("command.category.view"))
   const terminalCommand = withCategory(language.t("command.category.terminal"))
   const mcpCommand = withCategory(language.t("command.category.mcp"))
-  const permissionsCommand = withCategory(language.t("command.category.permissions"))
 
   const exportSession = async () => {
     const sessionID = actions.session.identity.params.id
@@ -124,7 +121,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     const sessionID = actions.session.identity.params.id
     if (!sessionID) return
     try {
-      await (platform.writeClipboardText?.(sessionID) ?? navigator.clipboard.writeText(sessionID))
+      await navigator.clipboard.writeText(sessionID)
       showToast({
         variant: "success",
         icon: "circle-check",
@@ -144,7 +141,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     const projectID = actions.session.data.info()?.projectID
     if (!projectID) return
     try {
-      await (platform.writeClipboardText?.(projectID) ?? navigator.clipboard.writeText(projectID))
+      await navigator.clipboard.writeText(projectID)
       showToast({
         variant: "success",
         icon: "circle-check",
@@ -211,19 +208,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       () => import("@/providers/connect/mcp-dialog"),
       (x) => dialog.show(() => <x.DialogSelectMcp />),
     )
-  }
-
-  const toggleAutoAccept = () => {
-    const active = !settings.permissions.autoApprove()
-    settings.permissions.setAutoApprove(active)
-    showToast({
-      title: active
-        ? language.t("toast.permissions.autoaccept.on.title")
-        : language.t("toast.permissions.autoaccept.off.title"),
-      description: active
-        ? language.t("toast.permissions.autoaccept.on.description")
-        : language.t("toast.permissions.autoaccept.off.description"),
-    })
   }
 
   const undo = actions.revert.undo
@@ -437,18 +421,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     }),
   ]
 
-  const permissionsCmds = () => [
-    permissionsCommand({
-      id: "permissions.autoaccept",
-      title: settings.permissions.autoApprove()
-        ? language.t("command.permissions.autoaccept.disable")
-        : language.t("command.permissions.autoaccept.enable"),
-      keybind: "mod+shift+a",
-      disabled: false,
-      onSelect: toggleAutoAccept,
-    }),
-  ]
-
   command.register("session", () => [
     ...sessionCmds(),
     ...projectCmds(),
@@ -458,6 +430,5 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     ...terminalCmds(),
     ...messageCmds(),
     ...mcpCmds(),
-    ...permissionsCmds(),
   ])
 }

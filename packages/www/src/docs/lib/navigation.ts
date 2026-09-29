@@ -33,8 +33,8 @@ export const docsSections: DocsSection[] = [
           { title: "LSP", slug: "lsp" },
           { title: "Agents", slug: "agents" },
           { title: "Models", slug: "models" },
+          { title: "Session drivers", slug: "drivers" },
           { title: "Skills", slug: "skills" },
-          { title: "Themes", slug: "themes" },
           { title: "Commands", slug: "commands" },
           { title: "Plugins", slug: "plugins" },
           { title: "Providers", slug: "providers" },
@@ -44,7 +44,8 @@ export const docsSections: DocsSection[] = [
           { title: "References", slug: "references" },
           { title: "Attachments", slug: "attachments" },
           { title: "MCP servers", slug: "mcp-servers" },
-          { title: "Permissions", slug: "permissions" },
+          { title: "REST APIs", slug: "openapi" },
+          { title: "Tools", slug: "tools" },
           { title: "Instructions", slug: "instructions" },
           { title: "Session sharing", slug: "sharing" },
           { title: "Session warming", slug: "warming" },
@@ -64,21 +65,7 @@ export const docsSections: DocsSection[] = [
     landingSlug: "cli",
     groups: [
       {
-        items: [
-          { title: "Intro", slug: "cli" },
-          { title: "Config", slug: "cli/config" },
-        ],
-      },
-      {
-        title: "Configure",
-        items: [
-          { title: "Theme", slug: "cli/theme" },
-          { title: "Plugins", slug: "cli/plugins" },
-          { title: "Keybinds", slug: "cli/keybinds" },
-        ],
-      },
-      {
-        items: [{ title: "Providers", slug: "cli/providers" }],
+        items: [{ title: "Intro", slug: "cli" }],
       },
     ],
   },
@@ -95,7 +82,6 @@ export const docsSections: DocsSection[] = [
         items: [
           { title: "Overview", slug: "build/plugins" },
           { title: "Effect", slug: "build/plugins/effect" },
-          { title: "CLI", slug: "build/plugins/cli" },
         ],
       },
       {

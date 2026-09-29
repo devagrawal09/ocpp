@@ -8,7 +8,6 @@ export function createWebPlatform(version: string) {
   const currentServerUrl = getCurrentServerUrl()
   const storedServerUrl = readDefaultServerUrl()
   const platform: Platform = {
-    platform: "web",
     draftStore: createBrowserDraftStore(),
     version,
     openExternal(value) {
@@ -30,7 +29,7 @@ export function createWebPlatform(version: string) {
 
       const notification = new Notification(title, {
         body: description ?? "",
-        icon: "https://ocpp.ai/favicon-96x96-v3.png",
+        icon: "/favicon-96x96-v3.png",
       })
       notification.onclick = () => {
         window.focus()

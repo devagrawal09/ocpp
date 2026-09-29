@@ -26,7 +26,14 @@ import { PersistentPty } from "@ocpp/schema/persistent-pty"
 import { Pty } from "@ocpp/schema/pty"
 import type { SessionHooks } from "@ocpp/plugin/effect/session"
 import { testEffect } from "../lib/effect"
-import { readCodeModeNotebook, seedToolSession, waitForCodeMode } from "../lib/tool"
+import {
+  codeModeTools,
+  executeTool,
+  readCodeModeNotebook,
+  registeredTools,
+  seedToolSession,
+  waitForCodeMode,
+} from "../lib/tool"
 import { PluginTestLayer } from "./fixture"
 import { host } from "./host"
 
@@ -689,13 +696,13 @@ describe("fromPromise", () => {
       const registry = yield* Tool.Service
       const host = yield* PluginHost.make(plugins)
       const progress: Tool.Metadata[] = []
+      const seen: string[] = []
       const promisePlugin = define({
         id: "promise-tool",
         setup: async (ctx) => {
           await ctx.tool.transform((tools) => {
             tools.add({
               name: "hello",
-              options: { codemode: false },
               description: "Hello",
               input: Schema.Struct({ name: Schema.String }),
               output: Schema.String,
@@ -706,30 +713,54 @@ describe("fromPromise", () => {
             })
           })
           await ctx.tool.hook("execute.before", (event) => {
-            expect(event.tool).toBe("helllo")
             expect(event).not.toHaveProperty("inputSchema")
-            event.tool = "hello"
+            seen.push(event.tool)
+            if (event.tool === "helllo") event.tool = "execute"
           })
         },
       })
 
       yield* PluginPromise.fromPromise(promisePlugin).effect(host)
 
+      const sessionID = Session.ID.make("ses_promise_tool")
+      const messageID = SessionMessage.ID.make("msg_promise_tool")
       const toolSet = yield* registry.snapshot()
-      expect(toolSet.definitions).toContainEqual(expect.objectContaining({ name: "hello", description: "Hello" }))
+      expect(toolSet.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(toolSet.codeModeCatalog).toContainEqual(expect.objectContaining({ path: "hello", description: "Hello" }))
       expect(
-        yield* toolSet.execute({
-          sessionID: Session.ID.make("ses_promise_tool"),
+        yield* executeTool(registry, {
+          sessionID,
           agent: Agent.ID.make("build"),
-          messageID: SessionMessage.ID.make("msg_promise_tool"),
+          messageID,
           progress: (update) => Effect.sync(() => progress.push(update)),
-          call: { type: "tool-call", id: "call_promise_tool", name: "helllo", input: { name: "world" } },
+          call: { type: "tool-call", id: "call_promise_tool", name: "hello", input: { name: "world" } },
         }),
       ).toMatchObject({
         output: "Hello, world!",
         content: [{ type: "text", text: "Hello, world!" }],
       })
       expect(progress).toEqual([{ phase: "greeting" }])
+
+      yield* seedToolSession(sessionID, messageID)
+      const repaired = yield* toolSet.execute({
+        sessionID,
+        agent: Agent.ID.make("build"),
+        messageID,
+        call: {
+          type: "tool-call",
+          id: "call_promise_tool_repaired",
+          name: "helllo",
+          input: { code: 'return tools.hello({ name: "world" })' },
+        },
+      })
+      expect(
+        yield* waitForCodeMode(repaired.output, {
+          sessionID,
+          assistantMessageID: messageID,
+          id: "call_promise_tool_repaired",
+        }),
+      ).toMatchObject({ status: "saved", summary: expect.stringContaining('"Hello, world!"') })
+      expect(seen).toEqual(["helllo", "hello"])
     }),
   )
 
@@ -743,7 +774,7 @@ describe("fromPromise", () => {
         draft.add({
           name: "hello",
           description: "Hello",
-          options: { namespace: "acme", codemode: false },
+          options: { namespace: "acme" },
           input: Schema.Struct({ name: Schema.String }),
           output: Schema.String,
           execute: ({ name }, context) => {
@@ -823,7 +854,6 @@ describe("fromPromise", () => {
                 description,
                 input: Schema.Struct({}),
                 output: Schema.String,
-                options: { codemode: false },
                 execute: async () => ({ output: description }),
               })
               expect(draft.list().map((tool) => tool.id)).toEqual(["reloadable"])
@@ -838,32 +868,42 @@ describe("fromPromise", () => {
       const registration = registrations[0]
       if (!registration) return yield* Effect.die("Promise tool registration was not captured")
       const original = yield* registry.snapshot()
-      const execute = (snapshot: Tool.Snapshot) =>
-        snapshot.execute({
-          sessionID: Session.ID.make("ses_promise_tool_reload"),
-          agent: Agent.ID.make("build"),
-          messageID: SessionMessage.ID.make("msg_promise_tool_reload"),
-          call: { type: "tool-call", id: "call_promise_tool_reload", name: "reloadable", input: {} },
-        })
+      const sessionID = Session.ID.make("ses_promise_tool_reload")
+      const messageID = SessionMessage.ID.make("msg_promise_tool_reload")
+      yield* seedToolSession(sessionID, messageID)
+      const execute = (snapshot: Tool.Snapshot, id: string) =>
+        snapshot
+          .execute({
+            sessionID,
+            agent: Agent.ID.make("build"),
+            messageID,
+            call: { type: "tool-call", id, name: "execute", input: { code: "return tools.reloadable({})" } },
+          })
+          .pipe(
+            Effect.flatMap((result) =>
+              waitForCodeMode(result.output, { sessionID, assistantMessageID: messageID, id }),
+            ),
+            Effect.map((outcome) => outcome.summary),
+          )
 
       source.description = "Reloaded"
       yield* Effect.promise(() => registration.reload())
       const reloaded = yield* registry.snapshot()
       expect(source.replays).toBe(2)
-      expect(reloaded.definitions).toContainEqual(
-        expect.objectContaining({ name: "reloadable", description: "Reloaded" }),
+      expect(reloaded.codeModeCatalog).toContainEqual(
+        expect.objectContaining({ path: "reloadable", description: "Reloaded" }),
       )
-      expect(yield* execute(reloaded)).toMatchObject({ output: "Reloaded" })
-      expect(yield* execute(original)).toMatchObject({ output: "Original" })
+      expect(yield* execute(reloaded, "call_reloaded")).toContain('"Reloaded"')
+      expect(yield* execute(original, "call_original")).toContain('"Original"')
 
       yield* Effect.promise(() => registration.dispose())
       yield* Effect.promise(() => registration.dispose())
-      expect((yield* registry.snapshot()).definitions.some((tool) => tool.name === "reloadable")).toBe(false)
-      expect(yield* execute(original)).toMatchObject({ output: "Original" })
-      expect(yield* execute(reloaded)).toMatchObject({ output: "Reloaded" })
+      expect(yield* codeModeTools(registry)).not.toContain("reloadable")
+      expect(yield* execute(original, "call_original_disposed")).toContain('"Original"')
+      expect(yield* execute(reloaded, "call_reloaded_disposed")).toContain('"Reloaded"')
       yield* Effect.promise(() => registration.reload())
       expect(source.replays).toBe(2)
-      expect((yield* registry.snapshot()).definitions.some((tool) => tool.name === "reloadable")).toBe(false)
+      expect(yield* codeModeTools(registry)).not.toContain("reloadable")
     }),
   )
 
@@ -880,7 +920,7 @@ describe("fromPromise", () => {
         draft.add({
           name: "hello",
           description: "Hello",
-          options: { namespace: "acme", codemode: false },
+          options: { namespace: "acme" },
           input: Schema.Struct({ name: Schema.String }),
           output: Schema.String,
           execute: ({ name }, context) =>
@@ -890,7 +930,6 @@ describe("fromPromise", () => {
           name: "temporary",
           description: "Temporary",
           input: Schema.Struct({}),
-          options: { codemode: false },
           execute: () => Effect.succeed({ content: "temporary" }),
         })
       })
@@ -921,11 +960,13 @@ describe("fromPromise", () => {
         }),
       ).effect(host)
       const snapshot = yield* registry.snapshot()
-      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
-      expect(snapshot.definitions[0]?.description).toBe("Wrapped")
-      expect(snapshot.definitions[0]?.outputSchema).toBeUndefined()
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(snapshot.codeModeCatalog).toEqual([
+        expect.objectContaining({ path: "acme.hello", description: "Wrapped" }),
+      ])
+      expect((yield* registeredTools(registry)).get("acme_hello")?.output).toBeUndefined()
       expect(
-        yield* snapshot.execute({
+        yield* executeTool(registry, {
           sessionID: Session.ID.make("ses_promise_tool_update"),
           agent: Agent.ID.make("build"),
           messageID: SessionMessage.ID.make("msg_promise_tool_update"),
@@ -942,8 +983,8 @@ describe("fromPromise", () => {
       yield* Effect.promise(() => registration.dispose())
       yield* Effect.promise(() => registration.dispose())
       const restored = yield* registry.snapshot()
-      expect(restored.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "temporary", "execute"])
-      expect(restored.definitions[0]?.description).toBe("Hello")
+      expect(restored.codeModeCatalog?.map((tool) => tool.path)).toEqual(["acme.hello", "temporary"])
+      expect(restored.codeModeCatalog?.[0]?.description).toBe("Hello")
     }),
   )
 
@@ -956,15 +997,16 @@ describe("fromPromise", () => {
         draft.add({
           name: "hello",
           description: "Hello",
-          options: { namespace: "acme", codemode: false },
+          options: { namespace: "acme", pinned: true },
           input: Schema.Struct({}),
           output: Schema.String,
           execute: () => Effect.succeed({ output: "Hello" }),
         })
       })
+      const pins = (snapshot: Tool.Snapshot) =>
+        snapshot.codeModeCatalog?.map((tool) => ({ path: tool.path, pinned: tool.pinned }))
       const original = yield* registry.snapshot()
-      expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
-      expect(original.codeModeCatalog).toEqual([])
+      expect(pins(original)).toEqual([{ path: "acme.hello", pinned: true }])
 
       yield* PluginPromise.fromPromise(
         define({
@@ -982,8 +1024,8 @@ describe("fromPromise", () => {
 
       const snapshot = yield* registry.snapshot()
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
-      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["acme.hello"])
-      expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
+      expect(pins(snapshot)).toEqual([{ path: "acme.hello", pinned: false }])
+      expect(pins(original)).toEqual([{ path: "acme.hello", pinned: true }])
       const sessionID = Session.ID.make("ses_promise_tool_options")
       const messageID = SessionMessage.ID.make("msg_promise_tool_options")
       yield* seedToolSession(sessionID, messageID)
@@ -1026,7 +1068,6 @@ describe("fromPromise", () => {
                 if (fail) await ctx.session.create({ agent: undefined })
                 return { content: [{ type: "text", text: "hello" }] }
               },
-              options: { codemode: true },
             })
           })
         },

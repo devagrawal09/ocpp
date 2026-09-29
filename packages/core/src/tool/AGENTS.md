@@ -16,21 +16,15 @@ Do not add a second executable entry type, registry-owned executor, authorizatio
 
 Tool schemas use `input` and `output` terminology. Each tool carries its name, options, schemas, and executable behavior in one object.
 
-Location-scoped built-in layers acquire `Permission.Service` and every other required Location service while the layer is constructed. The executor captures those services. Permission sources are always constructed from the canonical invocation context:
+Location-scoped built-in layers acquire every required Location service while the layer is constructed. The executor captures those services.
 
-```ts
-const source = {
-  type: "tool" as const,
-  messageID: context.messageID,
-  id: context.id,
-}
-```
-
-Leaves own resolution, permission, and side-effect ordering. Translate only expected typed errors into `ToolFailure`; do not use `catchCause`, because interruption and defects must survive. User declines from `Permission.assert` and question dismissals travel as defects beneath leaf `mapError` blankets and resurface as typed failures at `SessionModelRequest.executeTool`; leaves must never catch or convert them. A decline with feedback (`Permission.CorrectedError`) stays typed so the leaf converts it into `ToolFailure` and the model continues.
+Leaves own resolution and side-effect ordering. Translate only expected typed errors into `ToolFailure`; do not use `catchCause`, because interruption and defects must survive. Question dismissals travel as defects beneath leaf `mapError` blankets and resurface as typed failures at `SessionModelRequest.executeTool`; leaves must never catch or convert them.
 
 ## Registration
 
-Built-ins, plugins, and MCP install tools through `Tool.Service.transform`, adding complete tool objects to the draft. A tool may provide a namespace, which flattens direct model names to `<namespace>_<tool>`, and defaults into CodeMode (`codemode` defaults true; `codemode: false` keeps the tool on the provider's native tool list).
+Built-ins, plugins, and MCP install tools through `Tool.Service.transform`, adding complete tool objects to the draft. A tool may provide a namespace, which places it at `tools.<namespace>.<tool>` in Code Mode. The model is only ever offered one tool, `execute`: every registered tool is reachable only from code, and an agent receives `execute` exactly when its tool list holds at least one tool. Do not add a way to put a registered tool on the provider's tool list.
+
+Session `context` hooks see only `execute`, so per-request tool customization belongs in the `tool` `catalog` hook. `Tool.snapshot` runs it with the Session, agent, and model (the model is absent for command and event handler runs), keyed by Code Mode path: an edited description reaches the catalog and `tools.search`, and a removed entry is neither listed nor callable. The catalog instructions show only each description's first line, so information the model needs up front, such as the subagent list, also needs an instruction source.
 
 The service uses shared `State` to replay synchronous transforms in registration order against a fresh draft. `Tool.Service.reload()` rebuilds from captured source data without changing registration precedence. Registrations are scoped and return a real, idempotent `dispose` Effect:
 
@@ -45,11 +39,19 @@ Type safety ends at registration. The registry validates model input and declare
 
 `Tool.Service` is Location-scoped. Do not make the registry process-global or construct a separate application-tool service for each Location.
 
-## Permissions
+## Tool lists
 
-The registry has no `Permission.Service` dependency and performs no execution authorization. Registration options may attach a permission action solely to preserve whole-tool definition filtering. Most registrations default to their effective name; `edit`, `write`, and `patch` use the shared `edit` action.
+A Session's Code Mode catalog is exactly its tool list (`tool/lists.ts`), a plain `ToolLists.Selection` of Code Mode paths, where a path selects a tool or a whole namespace. A Session that stores a list, projected from `session.tools.selected`, has those paths: a subagent has the paths its caller passed (none when it passed none), and a fork copies its parent's stored list. Any other top-level Session's list comes from `init.ts` for its agent (`tool/init.ts` evaluates it) or the built-in default. Tools lent to the Session, such as the call's `tool.define` handles and `submit_result`, join it. The compile check refuses every other path as `UnknownTool`.
 
-Tool filtering is catalog visibility, not execution authorization. A call still executes the captured tool's leaf policy if it reaches execution.
+A child never holds a tool its caller lacks: continuing a child intersects its stored list with the caller's current catalog, publishes the narrowed list, and names the dropped tools in the call's result.
+
+`init.ts` is probed at every selection, from the Location's directory up to its worktree root and then in the config directories, so a file created after startup applies at the next step. It is compiled as a program that is never saved, so top-level `const` is an ordinary binding. Its evaluation has a three-second deadline and may not call tools or read `time.now()` or `Math.random()` until its lists are built, so every evaluation of one source gives the same lists. Each problem notice names the file. The calls an `init.ts` handle makes are numbered under the call that ran the handle (`<call>:<n>`), so they read as part of that execution and number the same way when a resumed execution runs the handle again.
+
+Nothing authorizes execution: every tool on the list runs. Do not add approval prompts, allow or deny rules, or per-argument checks to the registry or to leaves. A tool the agent should not have belongs off its list, or behind a `tool.define` wrapper in `init.ts`.
+
+`init.ts` handles live for one execution, so each execution evaluates `init.ts` again in its own scope, and the execution row stores the selection it was admitted with so a resumed run rebuilds the same catalog. Lists are applied before the `tool` `catalog` hook, which sees and shapes only listed tools.
+
+A tool declared with `acceptsToolHandles` receives the calling execution's catalog in `Tool.Context.catalog`, so it can resolve tool references it is passed. `lent` marks entries that are not in the Location's registry; they can be handed on only as those tools, not by their paths.
 
 ## Output
 

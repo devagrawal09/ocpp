@@ -14,12 +14,10 @@ import { Tooltip } from "@ocpp/ui/tooltip"
 import { getProjectAvatarVariant, type HomeProjectSelection, type LocalProject } from "@/shell/state/layout"
 import { ServerConnection } from "@/runtime/server/registry"
 import { useLanguage } from "@/runtime/i18n/language"
-import { usePlatform } from "@/runtime/platform/platform"
 import { displayName, getProjectAvatarSource } from "@/shell/layout/helpers"
 import { ServerRowMenuView, serverMenuLabels } from "@/servers/registry/row-menu"
 import { ServerHealthIndicator } from "@/servers/registry/row"
 import { type ServerHealth } from "@/runtime/server/health"
-import { fileManagerApp } from "@/home/projects/file-manager"
 
 const HOME_PROJECT_NAV_LABEL = "min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
 
@@ -39,7 +37,6 @@ export type HomeProjectsViewProps = {
   collapsed: (server: ServerConnection.Any) => boolean
   canDefaultServer: boolean
   defaultServerKey: ServerConnection.Key | null | undefined
-  canRevealProject: (server: ServerConnection.Any) => boolean
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
   onWheel: (event: WheelEvent) => void
   onChooseProject: (server: ServerConnection.Any) => void
@@ -56,7 +53,6 @@ export type HomeProjectsViewProps = {
   onAddProjects: (server: ServerConnection.Any, directories: string[]) => void
   onOpenProjectNewSession: (server: ServerConnection.Any, directory: string) => void
   onEditProject: (server: ServerConnection.Any, project: LocalProject) => void
-  onRevealProject: (server: ServerConnection.Any, project: LocalProject) => void
   onClearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   onCloseProject: (server: ServerConnection.Any, directory: string) => void
   onOpenSettings: () => void
@@ -467,7 +463,6 @@ function HomeProjectRow(
       unseen: number
     },
 ) {
-  const platform = usePlatform()
   const serverUnreachable = () => props.serverHealth(props.server)?.healthy === false
   const sortable = useSortable({
     get id() {
@@ -564,14 +559,6 @@ function HomeProjectRow(
               <Menu.Item onSelect={() => props.onEditProject(props.server, props.project)}>
                 {props.language.t("dialog.project.edit.title")}
               </Menu.Item>
-              <Show when={props.canRevealProject(props.server)}>
-                <Menu.Item onSelect={() => props.onRevealProject(props.server, props.project)}>
-                  {props.language.t(
-                    fileManagerApp(platform.platform === "desktop" ? (platform.os ?? "unknown") : "unknown")
-                      .actionLabel,
-                  )}
-                </Menu.Item>
-              </Show>
               <Menu.Item
                 disabled={props.unseen === 0}
                 onSelect={() => props.onClearNotifications(props.server, props.project)}

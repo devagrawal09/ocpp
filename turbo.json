@@ -1,12 +1,6 @@
 {
   "$schema": "https://v2-8-13.turborepo.dev/schema.json",
-  "globalDependencies": [
-    "patches/**",
-    "bunfig.toml",
-    ".npmrc",
-    ".github/actions/setup-bun/**",
-    ".github/workflows/test.yml"
-  ],
+  "globalDependencies": ["patches/**", "bunfig.toml", ".npmrc"],
   "globalEnv": ["CI", "OCPP_DISABLE_SHARE"],
   "globalPassThroughEnv": ["CI", "OCPP_DISABLE_SHARE"],
   "tasks": {
@@ -25,9 +19,6 @@
       "dependsOn": ["@ocpp/core#typecheck"]
     },
     "@ocpp/simulation#typecheck": {
-      "dependsOn": ["@ocpp/core#typecheck"]
-    },
-    "@ocpp/tui#typecheck": {
       "dependsOn": ["@ocpp/core#typecheck"]
     },
     "build": {
@@ -57,14 +48,6 @@
       "outputs": []
     },
     "@ocpp/cli#test": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "@ocpp/tui#test": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "@ocpp/latex#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },

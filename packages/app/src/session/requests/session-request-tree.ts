@@ -1,4 +1,4 @@
-import type { FormInfo, PermissionRequest, SessionInfo } from "@ocpp/client/promise"
+import type { FormInfo, SessionInfo } from "@ocpp/client/promise"
 
 function sessionTreeRequest<T>(
   session: SessionInfo[],
@@ -32,15 +32,6 @@ function sessionTreeRequest<T>(
   const id = ids.find((id) => list(id)?.some(include))
   if (!id) return
   return list(id)?.find(include)
-}
-
-export function sessionPermissionRequest(
-  session: SessionInfo[],
-  request: Record<string, PermissionRequest[] | undefined> | ((sessionID: string) => PermissionRequest[] | undefined),
-  sessionID?: string,
-  include?: (item: PermissionRequest) => boolean,
-) {
-  return sessionTreeRequest(session, request, sessionID, include)
 }
 
 export function sessionQuestionForm(

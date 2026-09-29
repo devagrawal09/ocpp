@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { chmod } from "node:fs/promises"
+import { chmod, mkdir, readdir } from "node:fs/promises"
 import path from "node:path"
-import { Effect, Fiber } from "effect"
+import { Deferred, Effect, Fiber } from "effect"
+import { TestClock } from "effect/testing"
 import { ExternalAgentDriver } from "../src/external-agent/driver"
 import { ExternalAgentGateway } from "../src/external-agent/gateway"
 import { ClaudeDriver, normalize } from "../src/external-agent/claude.node"
@@ -10,6 +11,10 @@ import { PiDriver } from "../src/external-agent/pi.node"
 import { ExternalAgentBridge } from "../src/external-agent/bridge.node"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { ExternalSession } from "@ocpp/schema/external-session"
+import { ExternalAgentDrivers } from "../src/external-agent/drivers"
+import { it } from "./lib/effect"
 import { tmpdir } from "./fixture/tmpdir"
 
 function collector() {
@@ -23,11 +28,113 @@ function collector() {
 }
 
 describe("external SDK drivers", () => {
-  test("exports separate lazy drivers and rejects an unknown or divergent checkpoint", () => {
+  test("exports separate lazy drivers and replays canonical history only into a new vendor session", () => {
     expect([ClaudeDriver.provider, CodexDriver.provider, PiDriver.provider]).toEqual(["claude", "codex", "pi"])
-    expect(() => ExternalAgentDriver.check(undefined, "a")).toThrow("diverged")
-    expect(() => ExternalAgentDriver.check("a", "b")).toThrow("diverged")
-    expect(() => ExternalAgentDriver.check("a", "a")).not.toThrow()
+    const history = [
+      { role: "user" as const, text: "One" },
+      { role: "assistant" as const, text: "Two" },
+    ]
+    const message = [{ type: "text" as const, text: "Three" }]
+    expect(ExternalAgentDriver.first({ history, message })).toEqual([
+      { type: "text", text: "Restored canonical OC++ history:\nuser:\nOne\n\nassistant:\nTwo\n\nThree" },
+    ])
+    expect(ExternalAgentDriver.first({ history, message, vendorSessionID: "vendor" })).toEqual(message)
+  })
+
+  test("Claude in the OC++ harness keeps only its model loop, OC++'s prompt and OC++'s execute", async () => {
+    const { settings } = await import("../src/external-agent/claude.node")
+    const mcp = { type: "sdk" as const, name: "ocpp", instance: undefined as never }
+    const controller = new AbortController()
+    const harnessed = settings(
+      {
+        directory: "/work",
+        model: "opus",
+        effort: "high",
+        harness: { type: "ocpp", system: "OC++ system prompt" },
+      },
+      mcp,
+      controller,
+    )
+    expect(harnessed).toMatchObject({
+      cwd: "/work",
+      model: "opus",
+      effort: "high",
+      systemPrompt: "OC++ system prompt",
+      tools: [],
+      settingSources: [],
+      strictMcpConfig: true,
+      skills: [],
+      allowedTools: ["mcp__ocpp__execute"],
+      permissionMode: "dontAsk",
+      mcpServers: { ocpp: mcp },
+    })
+    expect(harnessed.hooks).toBeUndefined()
+    expect(harnessed.sandbox).toBeUndefined()
+    const native = settings(
+      { directory: "/work", model: "opus", harness: { type: "native" } },
+      mcp,
+      controller,
+      "/bin/claude",
+    )
+    expect(native).toMatchObject({
+      pathToClaudeCodeExecutable: "/bin/claude",
+      settingSources: ["user", "project", "local"],
+      permissionMode: "default",
+      sandbox: { enabled: true, allowUnsandboxedCommands: false },
+      mcpServers: { ocpp: mcp },
+    })
+    expect(native.systemPrompt).toBeUndefined()
+    expect(native.tools).toBeUndefined()
+    // OC++ does not authorize native calls: what Claude Code would ask about runs, under its sandbox and deny rules.
+    expect(native.hooks).toBeUndefined()
+    expect(
+      await native.canUseTool!(
+        "Write",
+        { file_path: "file" },
+        { signal: controller.signal, toolUseID: "write", requestId: "request" },
+      ),
+    ).toMatchObject({ behavior: "allow", updatedInput: { file_path: "file" } })
+  })
+
+  test("Codex in the OC++ harness turns off native tool features and replaces its instructions", async () => {
+    const { configure, NATIVE_FEATURES } = await import("../src/external-agent/codex.node")
+    const bridge = { url: "http://127.0.0.1:1/mcp" }
+    const harnessed = configure(
+      { directory: "/work", model: "gpt-5.6-sol", effort: "high", harness: { type: "ocpp", system: "OC++" } },
+      bridge,
+      "/tmp/ocpp-codex",
+    )
+    expect(NATIVE_FEATURES).toEqual(expect.arrayContaining(["shell_tool", "unified_exec", "multi_agent", "apps"]))
+    expect(harnessed.config).toMatchObject({
+      model_instructions_file: "/tmp/ocpp-codex/instructions.md",
+      model_catalog_json: "/tmp/ocpp-codex/catalog.json",
+      include_permissions_instructions: false,
+      include_environment_context: false,
+      // No project AGENTS.md reaches the model.
+      project_doc_max_bytes: 0,
+      skills: { include_instructions: false, bundled: { enabled: false } },
+      mcp_servers: {
+        ocpp: {
+          url: bridge.url,
+          // The credential travels in Codex's environment, never in its arguments.
+          bearer_token_env_var: "OCPP_MCP_BEARER_TOKEN",
+          default_tools_approval_mode: "approve",
+        },
+      },
+    })
+    expect(Object.values(harnessed.config.features as Record<string, boolean>).every((value) => value === false)).toBe(
+      true,
+    )
+    expect(harnessed.thread).toMatchObject({
+      sandboxMode: "read-only",
+      webSearchMode: "disabled",
+      approvalPolicy: "on-request",
+      networkAccessEnabled: false,
+      modelReasoningEffort: "high",
+    })
+    const native = configure({ directory: "/work", model: "gpt-5.6-sol", harness: { type: "native" } }, bridge)
+    expect(native.config).toEqual({ features: { multi_agent: true }, mcp_servers: harnessed.config.mcp_servers })
+    expect(native.thread).toMatchObject({ sandboxMode: "workspace-write", webSearchMode: "live" })
   })
 
   test("Claude maps partial text, thinking, progress, vendor denials and diagnostics", async () => {
@@ -87,11 +194,23 @@ describe("external SDK drivers", () => {
     ])
   })
 
-  test("Claude's installed in-process MCP server uses the same schema-enforcing gateway", async () => {
+  test("Claude's in-process MCP server offers the gateway and names the tool_use each call answers", async () => {
     const { createSdkMcpServer } = await import("@anthropic-ai/claude-agent-sdk")
-    const gateway = await Effect.runPromise(
-      ExternalAgentGateway.make({ input: { token: "private" }, outputSchema: { type: "string" } }),
-    )
+    const calls: Array<{ input: Record<string, unknown>; id?: string }> = []
+    const gateway = ExternalAgentGateway.make([
+      {
+        name: "execute",
+        description: "Run code",
+        inputSchema: { type: "object", properties: { code: { type: "string" } }, required: ["code"] },
+        invoke: (input, id) =>
+          input.code === "fail"
+            ? Effect.fail("CompileError: bad program")
+            : Effect.sync(() => {
+                calls.push({ input, id })
+                return "Execution exe_1 started."
+              }),
+      },
+    ])
     const mcp = createSdkMcpServer({ name: "ocpp", tools: [] })
     ExternalAgentBridge.handlers(mcp.instance.server, gateway, new AbortController().signal)
     const pair = InMemoryTransport.createLinkedPair()
@@ -99,22 +218,23 @@ describe("external SDK drivers", () => {
     await mcp.instance.server.connect(pair[0])
     await client.connect(pair[1])
     try {
-      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(["submit_result", "execute"])
+      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(["execute"])
       expect(
         await client.callTool({
           name: "execute",
-          arguments: { code: 'const submitted = tools.submit_result({message: "done", output: input.token})' },
+          arguments: { code: "const a = 1" },
+          _meta: { "claudecode/toolUseId": "toolu_1" },
         }),
-      ).not.toHaveProperty("isError", true)
-      expect(gateway.result()).toEqual({ message: "done", output: "private" })
-      expect(await client.callTool({ name: "submit_result", arguments: { message: "bad", output: 3 } })).toHaveProperty(
-        "isError",
-        true,
-      )
+      ).toEqual({ content: [{ type: "text", text: "Execution exe_1 started." }] })
+      expect(calls).toEqual([{ input: { code: "const a = 1" }, id: "toolu_1" }])
+      expect(await client.callTool({ name: "execute", arguments: { code: "fail" } })).toEqual({
+        isError: true,
+        content: [{ type: "text", text: "CompileError: bad program" }],
+      })
+      expect(await client.callTool({ name: "shell", arguments: {} })).toHaveProperty("isError", true)
     } finally {
       await client.close()
       await mcp.instance.close()
-      gateway.close()
     }
   })
 
@@ -238,7 +358,6 @@ if (process.argv[2] === "app-server") {
 `,
     )
     await chmod(path.join(dir.path, "codex"), 0o755)
-    const gateway = await Effect.runPromise(ExternalAgentGateway.make({}))
     const previous = process.env.PATH
     process.env.PATH = dir.path + path.delimiter + previous
     try {
@@ -251,9 +370,9 @@ if (process.argv[2] === "app-server") {
               directory: dir.path,
               model: "fixture",
               history: [],
-              message,
-              gateway,
-              authorize: async () => {},
+              message: [{ type: "text", text: message }],
+              harness: { type: "native" },
+              gateway: ExternalAgentGateway.make([]),
               emit: stream.emit,
               linked: async (id) => {
                 calls.linked.push(id)
@@ -261,6 +380,8 @@ if (process.argv[2] === "app-server") {
               checkpointed: async (checkpoint) => {
                 calls.checkpointed.push(checkpoint)
               },
+              next: async () => undefined,
+              idle: () => {},
             }),
           ),
         )
@@ -271,13 +392,166 @@ if (process.argv[2] === "app-server") {
       expect(crashed.error).not.toContain("is empty")
       expect(crashed.calls).toEqual({ linked: ["fake-thread"], checkpointed: [] })
       const completed = await run("finish")
-      expect(completed.events).toContainEqual({ type: "text", id: "a", delta: "done" })
+      expect(completed.events).toContainEqual({ type: "text", id: "1:a", delta: "done" })
       expect(completed.events.filter((event) => event.type === "diagnostic")).toHaveLength(2)
       expect(completed.error).toContain("is empty")
       expect(completed.calls.checkpointed).toEqual([])
     } finally {
       process.env.PATH = previous
-      gateway.close()
+    }
+  })
+
+  test("Codex runs the OC++ harness turn by turn through exec and exec resume", async () => {
+    await using dir = await tmpdir()
+    const record = path.join(dir.path, "invocations.jsonl")
+    // Records each exec invocation with the instructions file it was given, then answers one turn.
+    await Bun.write(
+      path.join(dir.path, "codex"),
+      `#!${process.execPath}
+const fs = require("node:fs")
+const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n")
+if (process.argv[2] === "app-server") {
+  for await (const line of console) {
+    const message = JSON.parse(line)
+    if (message.id === undefined) continue
+    if (message.method === "initialize") write({ id: message.id, result: {} })
+    else if (message.method === "thread/resume")
+      write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [] } } })
+    else write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [{ id: "t" }] } } })
+  }
+} else if (process.argv[2] === "debug") {
+  if (process.env.FAKE_CODEX_CATALOG_FAILS) process.exit(3)
+  write({ models: [{ slug: "gpt-5.6-sol", tool_mode: "code_mode_only", multi_agent_version: "v2", supports_search_tool: true }] })
+} else if (process.argv[2] === "mcp") {
+  write([{ name: "personal", enabled: true }, { name: "ocpp", enabled: true }])
+} else {
+  const args = process.argv.slice(2)
+  const read = (key) => {
+    const file = args.map((arg) => new RegExp("^" + key + '="(.*)"$').exec(arg)?.[1]).find(Boolean)
+    return file && fs.readFileSync(file, "utf8")
+  }
+  const prompt = await Bun.stdin.text()
+  const images = args.flatMap((arg, index) => (args[index - 1] === "--image" ? [fs.readFileSync(arg).toString("base64")] : []))
+  fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify({ args, prompt, images, token: process.env.OCPP_MCP_BEARER_TOKEN, instructions: read("model_instructions_file"), catalog: read("model_catalog_json") }) + "\\n")
+  write({ type: "thread.started", thread_id: "fake-thread" })
+  write({ type: "turn.started" })
+  write({ type: "item.completed", item: { id: "a" + args.length, type: "agent_message", text: "answered " + prompt } })
+  write({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1, reasoning_output_tokens: 0 } })
+}
+`,
+    )
+    await chmod(path.join(dir.path, "codex"), 0o755)
+    // The run's instructions directory is created under TMPDIR, which must be empty again after every run.
+    const temporary = path.join(dir.path, "tmp")
+    await mkdir(temporary)
+    const previous = { path: process.env.PATH, tmpdir: process.env.TMPDIR }
+    process.env.PATH = dir.path + path.delimiter + previous.path
+    process.env.TMPDIR = temporary
+    try {
+      const stream = collector()
+      const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+      const queue: ExternalAgentDriver.Input[] = [
+        [{ type: "text", text: "Execution exe_1 saved notebook values: total." }],
+        // A user's image on its own, and a PDF, which Codex cannot take.
+        [
+          { type: "media", mime: "image/png", data: png, name: "shot.png" },
+          { type: "media", mime: "application/pdf", data: "JVBERi0=", name: "report.pdf" },
+        ],
+        [{ type: "media", mime: "image/png", data: png, name: "shot.png" }],
+      ]
+      const idles: number[] = []
+      const checkpoints: string[] = []
+      const options = {
+        directory: dir.path,
+        model: "gpt-5.6-sol",
+        history: [],
+        message: [{ type: "text" as const, text: "Add numbers" }],
+        harness: { type: "ocpp" as const, system: "OC++ system prompt for Codex" },
+        gateway: ExternalAgentGateway.make([]),
+        emit: stream.emit,
+        linked: async () => {},
+        checkpointed: async (checkpoint: string) => {
+          checkpoints.push(checkpoint)
+        },
+        next: async () => queue.shift(),
+        idle: () => {
+          idles.push(Date.now())
+        },
+      }
+      await Effect.runPromise(ExternalAgentDriver.execute(CodexDriver, options))
+      expect(await readdir(temporary)).toEqual([])
+      const invocations = (await Bun.file(record).text())
+        .trim()
+        .split("\n")
+        .map(
+          (line) =>
+            JSON.parse(line) as {
+              args: string[]
+              prompt: string
+              images: string[]
+              token?: string
+              instructions?: string
+              catalog?: string
+            },
+        )
+      expect(invocations).toHaveLength(4)
+      expect(invocations.map((item) => item.prompt)).toEqual([
+        "Add numbers",
+        "Execution exe_1 saved notebook values: total.",
+        "[Attached file report.pdf (application/pdf) was not forwarded: Codex takes only images]",
+        // Codex exec refuses a turn without text.
+        "[Attached shot.png]",
+      ])
+      // Each image is a file Codex reads when its turn starts; the run's directory is gone afterwards.
+      expect(invocations.map((item) => item.images)).toEqual([[], [], [png], [png]])
+      expect(invocations[1].args.slice(-2)).toEqual(["resume", "fake-thread"])
+      expect(invocations[3].args).toEqual(expect.arrayContaining(["resume", "fake-thread", "--image"]))
+      for (const invocation of invocations) {
+        expect(invocation.instructions).toBe("OC++ system prompt for Codex")
+        // The catalog stops Codex from wrapping tools in its own code mode, sub-agents and deferred search.
+        expect(JSON.parse(invocation.catalog!)).toEqual({
+          models: [{ slug: "gpt-5.6-sol", supports_search_tool: false }],
+        })
+        expect(invocation.args).toEqual(
+          expect.arrayContaining([
+            "features.shell_tool=false",
+            "features.unified_exec=false",
+            "features.multi_agent=false",
+            "read-only",
+            'web_search="disabled"',
+            'approval_policy="on-request"',
+            'mcp_servers.ocpp.default_tools_approval_mode="approve"',
+            // The user's own MCP servers stay off in the OC++ harness.
+            "mcp_servers.personal.enabled=false",
+            'mcp_servers.ocpp.bearer_token_env_var="OCPP_MCP_BEARER_TOKEN"',
+          ]),
+        )
+        // The bridge credential reaches Codex only through its environment.
+        expect(invocation.token).toMatch(/^[0-9a-f]{64}$/)
+        expect(invocation.args.join(" ")).not.toContain(String(invocation.token))
+      }
+      expect(idles).toHaveLength(4)
+      expect(checkpoints).toHaveLength(1)
+      expect(
+        stream.events.filter((event) => event.type === "text").map((event) => event.type === "text" && event.delta),
+      ).toEqual([
+        "answered Add numbers",
+        "answered Execution exe_1 saved notebook values: total.",
+        "answered [Attached file report.pdf (application/pdf) was not forwarded: Codex takes only images]",
+        "answered [Attached shot.png]",
+      ])
+
+      // A run that fails while preparing still removes its instructions directory and closes its bridge.
+      process.env.FAKE_CODEX_CATALOG_FAILS = "1"
+      expect((await Effect.runPromise(Effect.exit(ExternalAgentDriver.execute(CodexDriver, options))))._tag).toBe(
+        "Failure",
+      )
+      expect(await readdir(temporary)).toEqual([])
+    } finally {
+      process.env.PATH = previous.path
+      if (previous.tmpdir === undefined) delete process.env.TMPDIR
+      if (previous.tmpdir !== undefined) process.env.TMPDIR = previous.tmpdir
+      delete process.env.FAKE_CODEX_CATALOG_FAILS
     }
   })
 
@@ -344,8 +618,8 @@ if (process.argv[2] === "app-server") {
     expect(stream.events[2]).toHaveProperty("error", true)
   })
 
-  test("interruption waits for asynchronous SDK cleanup before releasing the activation", async () => {
-    const gateway = await Effect.runPromise(ExternalAgentGateway.make({}))
+  test("interruption waits for asynchronous SDK cleanup before settling the drain", async () => {
+    const gateway = ExternalAgentGateway.make([])
     const started = Promise.withResolvers<void>()
     const cleanup = Promise.withResolvers<void>()
     const stopped = Promise.withResolvers<void>()
@@ -372,12 +646,14 @@ if (process.argv[2] === "app-server") {
         directory: "/tmp",
         model: "fixture",
         history: [],
-        message: "wait",
+        message: [{ type: "text", text: "wait" }],
+        harness: { type: "ocpp", system: "" },
         gateway,
-        authorize: async () => {},
         emit: async () => {},
         linked: async () => {},
         checkpointed: async () => {},
+        next: async () => undefined,
+        idle: () => {},
       }),
     )
     await started.promise
@@ -388,34 +664,6 @@ if (process.argv[2] === "app-server") {
     await interrupted
     expect(fiber.pollUnsafe()).toBeDefined()
   })
-})
-
-test("Claude permission hooks fail closed and recheck modified tool input", async () => {
-  const { permissionHooks } = await import("../src/external-agent/claude.node")
-  const calls: string[] = []
-  const policy = permissionHooks(async (_name, input) => {
-    calls.push(String(input.file_path))
-    if (input.file_path === "denied") throw new Error("OC++ denied")
-  })
-  const hook = policy.hooks!.PreToolUse![0].hooks[0]
-  const signal = new AbortController().signal
-  const event = {
-    hook_event_name: "PreToolUse" as const,
-    session_id: "session",
-    transcript_path: "/tmp/transcript",
-    cwd: "/tmp",
-    tool_name: "Write",
-    tool_input: { file_path: "allowed" },
-    tool_use_id: "call",
-  }
-  expect(await hook(event, "call", { signal })).toEqual({})
-  expect(
-    await policy.canUseTool!("Write", { file_path: "denied" }, { signal, toolUseID: "call", requestId: "request" }),
-  ).toMatchObject({ behavior: "deny" })
-  expect(await hook({ ...event, tool_input: { file_path: "denied" } }, "denied", { signal })).toMatchObject({
-    hookSpecificOutput: { permissionDecision: "deny" },
-  })
-  expect(calls).toEqual(["allowed", "denied", "denied"])
 })
 
 test("Codex loads exact persisted history, pages all items and does not mistake transport errors for missing sessions", async () => {
@@ -541,8 +789,94 @@ test("Claude accounts for auxiliary usage without double-counting streamed token
   const fallback = collector()
   await normalize(event, fallback.emit, { outputTokens: 0 })
   expect(fallback.events).toContainEqual({ type: "text", id: "result", delta: "final answer" })
-  const submitted = collector()
-  await normalize(event, submitted.emit, { outputTokens: 0 }, true)
-  expect(submitted.events.some((event) => event.type === "text")).toBe(false)
-  expect(submitted.events[0]).toMatchObject({ type: "usage", input: 5, output: 3, cost: 0.1 })
+})
+
+test("the MCP bridge admits only its bearer token and no browser origin", async () => {
+  const gateway = ExternalAgentGateway.make([
+    {
+      name: "echo",
+      description: "Echo",
+      inputSchema: { type: "object", properties: { value: { type: "string" } } },
+      invoke: (input) => Effect.succeed(String(input.value)),
+    },
+  ])
+  const bridge = await ExternalAgentBridge.open(gateway, new AbortController().signal)
+  const client = new Client({ name: "bridge-test", version: "1" })
+  try {
+    const request = (headers: Record<string, string>) =>
+      fetch(bridge.url, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...headers },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      }).then((response) => response.status)
+    expect(await request({})).toBe(401)
+    expect(await request({ Authorization: "Bearer wrong" })).toBe(401)
+    expect(await request({ Authorization: "Bearer " + bridge.token, Origin: "https://example.com" })).toBe(401)
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(bridge.url), {
+        requestInit: { headers: { Authorization: "Bearer " + bridge.token } },
+      }),
+    )
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(["echo"])
+    expect((await client.callTool({ name: "echo", arguments: { value: "hi" } })).content).toEqual([
+      { type: "text", text: "hi" },
+    ])
+  } finally {
+    await client.close()
+    await bridge.close()
+  }
+})
+
+test("tests and OCPP_DISABLE_EXTERNAL_AGENTS never probe an installed vendor CLI", async () => {
+  await using dir = await tmpdir()
+  const marker = path.join(dir.path, "probed")
+  for (const name of ["claude", "codex"]) {
+    await Bun.write(path.join(dir.path, name), `#!/bin/sh\ntouch ${JSON.stringify(marker)}\n`)
+    await chmod(path.join(dir.path, name), 0o755)
+  }
+  const previous = process.env.PATH
+  process.env.PATH = dir.path + path.delimiter + previous
+  try {
+    const { available } = await import("../src/external-agent/platform.node")
+    expect(process.env.OCPP_DISABLE_EXTERNAL_AGENTS).toBe("true")
+    expect(await Promise.all(ExternalSession.Provider.literals.map((provider) => available(provider)))).toEqual([
+      false,
+      false,
+      false,
+    ])
+    expect(await Bun.file(marker).exists()).toBe(false)
+  } finally {
+    process.env.PATH = previous
+  }
+})
+
+describe("vendor readiness probes", () => {
+  it.effect("await only the first answer, then serve the last one while one background probe refreshes it", () =>
+    Effect.gen(function* () {
+      const answers: Array<Deferred.Deferred<boolean>> = []
+      const check = Effect.suspend(() => {
+        const answer = Deferred.makeUnsafe<boolean>()
+        answers.push(answer)
+        return Deferred.await(answer)
+      })
+      const probe = yield* ExternalAgentDrivers.refreshed(check, "5 minutes")
+      const first = yield* Effect.forkChild(probe)
+      yield* Effect.yieldNow
+      yield* Deferred.succeed(answers[0], true)
+      expect(yield* Fiber.join(first)).toBe(true)
+      expect(yield* probe).toBe(true)
+      expect(answers).toHaveLength(1)
+
+      yield* TestClock.adjust("6 minutes")
+      // The stale answer is served at once, and only one refresh starts however often it is read.
+      expect(yield* probe).toBe(true)
+      expect(yield* probe).toBe(true)
+      yield* Effect.yieldNow
+      expect(answers).toHaveLength(2)
+      yield* Deferred.succeed(answers[1], false)
+      yield* Effect.yieldNow
+      expect(yield* probe).toBe(false)
+      expect(answers).toHaveLength(2)
+    }),
+  )
 })

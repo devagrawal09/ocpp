@@ -98,8 +98,8 @@ Session context is mutable immediately before provider dispatch:
 
 ```ts
 await ctx.session.hook("context", (event) => {
-  event.tools.read.description = "Read a file using narrow line ranges."
-  delete event.tools.write
+  // `execute` is the only tool the model sees; removing it leaves the request without tools.
+  if (event.agent === "reviewer") delete event.tools.execute
 })
 
 await ctx.session.hook("retry", (event) => {
@@ -107,7 +107,19 @@ await ctx.session.hook("retry", (event) => {
 })
 ```
 
-Promise tools use complete executable tool values with async executors:
+Registered tools are reachable only from Code Mode, so shape them per request through the Code Mode catalog, keyed by path. An edited description reaches the catalog and `tools.search`; a deleted entry is neither listed nor callable:
+
+```ts
+await ctx.tool.hook("catalog", (event) => {
+  if (event.agent === "reviewer") delete event.tools["acme.deploy"]
+  const echo = event.tools.echo
+  if (echo) echo.description += "\nEcho preserves whitespace."
+})
+```
+
+Promise tools use complete executable tool values with async executors. The model never calls a
+registered tool directly: every tool is reachable only from code through `execute`, as
+`tools.<namespace>.<name>(input)`.
 
 ```ts
 import { Schema } from "effect"
@@ -115,7 +127,6 @@ import { Schema } from "effect"
 await ctx.tool.transform((tools) => {
   tools.add({
     name: "echo",
-    options: { codemode: false },
     description: "Echo text",
     input: Schema.Struct({ text: Schema.String }),
     output: Schema.Struct({ text: Schema.String }),

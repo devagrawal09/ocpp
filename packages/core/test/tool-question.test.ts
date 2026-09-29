@@ -3,22 +3,26 @@ import { Cause, Effect, Exit, Fiber, Layer } from "effect"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Form } from "@ocpp/core/form"
-import { Permission } from "@ocpp/core/permission"
 import { Session } from "@ocpp/core/session"
 import { Tool } from "@ocpp/core/tool"
 import { QuestionTool } from "@ocpp/core/tool/plugin/question"
 import { Image } from "@ocpp/core/image"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
-import { permissionLayer } from "./lib/permission"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
-import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { definition } from "@ocpp/core/tool/runtime"
+import {
+  toolIdentity,
+  codeModeTools,
+  executeTool,
+  registerToolPlugin,
+  registeredTools,
+  toolDefinitions,
+} from "./lib/tool"
 
 const sessionID = Session.ID.make("ses_question_tool_test")
-const assertions: Permission.AssertInput[] = []
 let captured: Form.CreateInput | undefined
 let reject = false
-let deny = false
 const capturedInput = () => captured
 const questionInput = {
   questions: [
@@ -29,22 +33,6 @@ const questionInput = {
     },
   ],
 }
-const permission = permissionLayer({
-  assert: (input) =>
-    Effect.sync(() => assertions.push(input)).pipe(
-      Effect.andThen(
-        deny
-          ? Effect.fail(
-              new Permission.BlockedError({
-                rules: [],
-                permission: input.action,
-                resources: input.resources,
-              }),
-            )
-          : Effect.void,
-      ),
-    ),
-})
 const form = Layer.mock(Form.Service, {
   ask: (input: Form.CreateInput) =>
     Effect.sync(() => {
@@ -61,12 +49,11 @@ const form = Layer.mock(Form.Service, {
 const questionToolNode = makeLocationNode({
   name: "test/question-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(QuestionTool.Plugin)),
-  deps: [Tool.node, Permission.node, Form.node],
+  deps: [Tool.node, Form.node],
 })
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Tool.node, questionToolNode]), [
-    [Permission.node, permission],
     [Form.node, form],
     [Image.node, imagePassthrough],
   ]),
@@ -77,12 +64,15 @@ describe("QuestionTool", () => {
     Effect.gen(function* () {
       captured = undefined
       const registry = yield* Tool.Service
-      const definition = (yield* toolDefinitions(registry)).find((tool) => tool.name === QuestionTool.name)
+      const question = (yield* registeredTools(registry)).get(QuestionTool.name)
+      expect(question).toBeDefined()
+      if (!question) return
+      const inputSchema = definition(question).inputSchema
 
-      expect(definition?.inputSchema).toHaveProperty("properties.questions.type", "array")
-      expect(definition?.inputSchema).toHaveProperty("properties.questions.minItems", 1)
-      expect(definition?.inputSchema).toHaveProperty("properties.questions.items")
-      expect(definition?.inputSchema).not.toHaveProperty("properties.questions.prefixItems")
+      expect(inputSchema).toHaveProperty("properties.questions.type", "array")
+      expect(inputSchema).toHaveProperty("properties.questions.minItems", 1)
+      expect(inputSchema).toHaveProperty("properties.questions.items")
+      expect(inputSchema).not.toHaveProperty("properties.questions.prefixItems")
       expect(
         yield* executeTool(registry, {
           sessionID,
@@ -101,41 +91,10 @@ describe("QuestionTool", () => {
     }),
   )
 
-  it.effect("omits a catalog-denied question and enforces its leaf permission", () =>
+  it.effect("registers question and projects user answers", () =>
     Effect.gen(function* () {
-      captured = undefined
-      deny = true
-      yield* Effect.addFinalizer(() => Effect.sync(() => (deny = false)))
-      const registry = yield* Tool.Service
-
-      expect(
-        (yield* toolDefinitions(registry, [{ action: "question", resource: "*", effect: "deny" }])).map(
-          (tool) => tool.name,
-        ),
-      ).toEqual(["execute"])
-      expect(
-        yield* executeTool(registry, {
-          sessionID,
-          ...toolIdentity,
-          call: { type: "tool-call", id: "call-question-denied", name: "question", input: questionInput },
-        }),
-      ).toEqual({
-        status: "error",
-        error: {
-          type: "permission.rejected",
-          message: "Permission denied: question",
-        },
-      })
-      expect(capturedInput()).toBeUndefined()
-    }),
-  )
-
-  it.effect("registers question and projects user answers without a permission assertion", () =>
-    Effect.gen(function* () {
-      assertions.length = 0
       captured = undefined
       reject = false
-      deny = false
       const registry = yield* Tool.Service
       const questions = [
         {
@@ -156,7 +115,8 @@ describe("QuestionTool", () => {
         },
       ]
 
-      expect((yield* toolDefinitions(registry)).map((definition) => definition.name)).toEqual(["question", "execute"])
+      expect((yield* toolDefinitions(registry)).map((definition) => definition.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(registry)).toEqual(["question"])
       expect(
         yield* executeTool(registry, {
           sessionID,
@@ -174,7 +134,6 @@ describe("QuestionTool", () => {
         ],
         metadata: { answers: [["Build"], ["Dev"], []] },
       })
-      expect(assertions).toMatchObject([{ sessionID, action: "question", resources: ["*"] }])
       expect(capturedInput()).toEqual({
         sessionID,
         title: "Questions",
@@ -213,7 +172,6 @@ describe("QuestionTool", () => {
     Effect.gen(function* () {
       captured = undefined
       reject = false
-      deny = false
       const registryService = yield* Tool.Service
 
       yield* executeTool(registryService, {
@@ -243,7 +201,6 @@ describe("QuestionTool", () => {
     Effect.gen(function* () {
       captured = undefined
       reject = true
-      deny = false
       const registryService = yield* Tool.Service
       const fiber = yield* executeTool(registryService, {
         sessionID,

@@ -18,6 +18,7 @@ import { Tool } from "@ocpp/core/tool"
 import { Vcs } from "@ocpp/core/vcs"
 import { Pty } from "@ocpp/schema/pty"
 import { testEffect } from "./lib/effect"
+import { codeModeTools, registeredTools, seedToolSession, toolDefinitions, waitForCodeMode } from "./lib/tool"
 import { PluginTestLayer } from "./plugin/fixture"
 
 const it = testEffect(PluginTestLayer)
@@ -134,6 +135,7 @@ describe("Plugin", () => {
             ...runtime,
             location: {
               agent: runtime.location.agent,
+              tool: runtime.location.tool,
               mcp: {
                 list: (ref) =>
                   Effect.sync(() => {
@@ -270,7 +272,6 @@ describe("Plugin", () => {
             source: { type: "package", package: "broken" },
             status: "failed",
             error: "failed to resolve",
-            tui: false,
           },
         ],
       )
@@ -331,7 +332,7 @@ describe("Plugin", () => {
         .pipe(Effect.exit)
 
       expect(Exit.isFailure(result)).toBe(true)
-      expect(yield* plugins.list()).toEqual([{ id: active, source: { type: "builtin" }, status: "active", tui: false }])
+      expect(yield* plugins.list()).toEqual([{ id: active, source: { type: "builtin" }, status: "active" }])
     }),
   )
 
@@ -361,13 +362,12 @@ describe("Plugin", () => {
 
       yield* plugins.activate([versioned(good), versioned(bad)])
       expect(yield* plugins.list()).toEqual([
-        { id: Plugin.ID.make("good"), source: { type: "builtin" }, status: "active", tui: false },
+        { id: Plugin.ID.make("good"), source: { type: "builtin" }, status: "active" },
         {
           id: Plugin.ID.make("bad"),
           source: { type: "builtin" },
           status: "failed",
           error: expect.stringContaining("materialization failed"),
-          tui: false,
         },
       ])
       expect((yield* agents.get(Agent.ID.make("configured")))?.description).toBe("loaded")
@@ -375,8 +375,8 @@ describe("Plugin", () => {
       fail = false
       yield* plugins.activate([versioned(good), versioned(bad, "2")])
       expect(yield* plugins.list()).toEqual([
-        { id: Plugin.ID.make("good"), source: { type: "builtin" }, status: "active", tui: false },
-        { id: Plugin.ID.make("bad"), source: { type: "builtin" }, status: "active", tui: false },
+        { id: Plugin.ID.make("good"), source: { type: "builtin" }, status: "active" },
+        { id: Plugin.ID.make("bad"), source: { type: "builtin" }, status: "active" },
       ])
     }),
   )
@@ -398,7 +398,6 @@ describe("Plugin", () => {
                   description: "Healthy tool",
                   input: Schema.Struct({}),
                   execute: () => Effect.succeed({ content: "ok" }),
-                  options: { codemode: false },
                 }
                 draft.add({ ...tool, name: "invalid", options: { namespace: "invalid..namespace" } })
                 draft.add(tool)
@@ -413,12 +412,14 @@ describe("Plugin", () => {
       ])
 
       expect(yield* plugins.list()).toEqual([
-        { id: Plugin.ID.make("partial-tools"), source: { type: "builtin" }, status: "active", tui: false },
+        { id: Plugin.ID.make("partial-tools"), source: { type: "builtin" }, status: "active" },
       ])
       expect((yield* agents.get(Agent.ID.make("configured")))?.description).toBe("setup continued")
-      expect((yield* tools.snapshot()).definitions.map((tool) => tool.name)).toEqual(["healthy", "execute"])
+      expect((yield* toolDefinitions(tools)).map((tool) => tool.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(tools)).toEqual(["healthy"])
       yield* plugins.activate([])
-      expect((yield* tools.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(yield* toolDefinitions(tools)).toEqual([])
+      expect(yield* codeModeTools(tools)).toEqual([])
     }),
   )
 
@@ -459,7 +460,6 @@ describe("Plugin", () => {
           source: { type: "builtin" },
           status: "failed",
           error: expect.stringContaining("replacement failed"),
-          tui: false,
         },
       ])
       expect((yield* agents.get(Agent.ID.make("configured")))?.description).toBe("previous")
@@ -499,7 +499,6 @@ describe("Plugin", () => {
           source: { type: "builtin" },
           status: "failed",
           error: expect.stringContaining("replacement failed"),
-          tui: false,
         },
       ])
       expect(yield* agents.get(Agent.ID.make("configured"))).toBeUndefined()
@@ -602,7 +601,6 @@ describe("Plugin", () => {
             .transform((draft) =>
               draft.add({
                 name: "plugin_tool",
-                options: { codemode: false },
                 description: "Plugin tool",
                 input: Schema.Struct({}),
                 output: Schema.Struct({ ok: Schema.Boolean }),
@@ -613,14 +611,14 @@ describe("Plugin", () => {
       })
 
       yield* plugins.activate([versioned(plugin)])
-      expect((yield* registry.snapshot()).definitions.map((tool) => tool.name)).toContain("plugin_tool")
+      expect(yield* codeModeTools(registry)).toContain("plugin_tool")
 
       yield* plugins.activate([])
-      expect((yield* registry.snapshot()).definitions.map((tool) => tool.name)).not.toContain("plugin_tool")
+      expect(yield* codeModeTools(registry)).not.toContain("plugin_tool")
     }),
   )
 
-  it.effect("namespaces tool names and routes codemode registrations through execute", () =>
+  it.effect("namespaces tool names and routes every registration through execute", () =>
     Effect.gen(function* () {
       const plugins = yield* Plugin.Service
       const registry = yield* Tool.Service
@@ -637,8 +635,8 @@ describe("Plugin", () => {
         effect: (ctx) =>
           ctx.tool
             .transform((draft) => {
-              draft.add(tool("plain", "Plain", { codemode: false }))
-              draft.add(tool("look/up", "Lookup", { namespace: "context7", codemode: false }))
+              draft.add(tool("plain", "Plain"))
+              draft.add(tool("look/up", "Lookup", { namespace: "context7" }))
               draft.add(tool("search", "Search", { namespace: "context7" }))
             })
             .pipe(Effect.orDie),
@@ -646,11 +644,13 @@ describe("Plugin", () => {
 
       yield* plugins.activate([versioned(plugin)])
 
-      expect((yield* registry.snapshot()).definitions.map((tool) => tool.name)).toEqual([
+      expect(Array.from((yield* registeredTools(registry)).keys()).toSorted()).toEqual([
         "context7_look_up",
+        "context7_search",
         "plain",
-        "execute",
       ])
+      expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
+      expect(yield* codeModeTools(registry)).toEqual(["context7.look_up", "context7.search", "plain"])
     }),
   )
 
@@ -660,9 +660,9 @@ describe("Plugin", () => {
       const registry = yield* Tool.Service
       const executed: unknown[] = []
       const seen: {
-        before?: { input: unknown; tool: string }
+        before: Array<{ input: unknown; tool: string }>
         after?: { input: unknown; status: string; content: unknown; metadata: unknown }
-      } = {}
+      } = { before: [] }
 
       const plugin = EffectPlugin.define({
         id: "tool-hooks",
@@ -672,7 +672,6 @@ describe("Plugin", () => {
               .transform((draft) =>
                 draft.add({
                   name: "echo",
-                  options: { codemode: false },
                   description: "Echo",
                   input: Schema.Struct({ text: Schema.String }),
                   output: Schema.Struct({ text: Schema.String }),
@@ -686,9 +685,9 @@ describe("Plugin", () => {
               .hook("execute.before", (event) =>
                 Effect.sync(() => {
                   expect(event).not.toHaveProperty("inputSchema")
-                  seen.before = { input: event.input, tool: event.tool }
-                  event.tool = "echo"
-                  event.input = { text: "before-mutated" }
+                  seen.before.push({ input: event.input, tool: event.tool })
+                  if (event.tool === "misspelled") event.tool = "execute"
+                  if (event.tool === "echo") event.input = { text: "before-mutated" }
                 }),
               )
               .pipe(Effect.asVoid)
@@ -696,6 +695,7 @@ describe("Plugin", () => {
             yield* ctx.tool
               .hook("execute.after", (event) =>
                 Effect.sync(() => {
+                  if (event.tool !== "echo") return
                   seen.after = {
                     input: event.input,
                     status: event.status,
@@ -703,20 +703,7 @@ describe("Plugin", () => {
                     metadata: event.status === "completed" ? event.result.metadata : event.error.metadata,
                   }
                   if (event.status !== "completed") return
-                  event.result = {
-                    ...event.result,
-                    content: [{ type: "text", text: "after-mutated" }],
-                    metadata: { rewritten: true },
-                  }
-                }),
-              )
-              .pipe(Effect.asVoid)
-
-            yield* ctx.tool
-              .hook("execute.after", (event) =>
-                Effect.sync(() => {
-                  if (event.status === "completed" && Array.isArray(event.result.content))
-                    event.result.content.splice(0)
+                  event.result = { ...event.result, output: { text: "after-mutated" } }
                 }),
               )
               .pipe(Effect.asVoid)
@@ -725,18 +712,27 @@ describe("Plugin", () => {
 
       yield* plugins.activate([versioned(plugin)])
 
+      const sessionID = Session.ID.make("ses_hooks")
+      const messageID = SessionMessage.ID.make("msg_hooks")
+      const code = 'return tools.echo({ text: "original" })'
+      yield* seedToolSession(sessionID, messageID)
       const toolSet = yield* registry.snapshot()
-      const execution = yield* toolSet.execute({
-        sessionID: Session.ID.make("ses_hooks"),
+      const started = yield* toolSet.execute({
+        sessionID,
         agent: Agent.ID.make("build"),
-        messageID: SessionMessage.ID.make("msg_hooks"),
-        call: { type: "tool-call", id: "call-hooks", name: "misspelled", input: { text: "original" } },
+        messageID,
+        call: { type: "tool-call", id: "call-hooks", name: "misspelled", input: { code } },
+      })
+      const outcome = yield* waitForCodeMode(started.output, {
+        sessionID,
+        assistantMessageID: messageID,
+        id: "call-hooks",
       })
 
-      expect(seen.before).toEqual({
-        input: { text: "original" },
-        tool: "misspelled",
-      })
+      expect(seen.before).toEqual([
+        { input: { code }, tool: "misspelled" },
+        { input: { text: "original" }, tool: "echo" },
+      ])
       expect(executed).toEqual([{ text: "before-mutated" }])
       expect(seen.after).toEqual({
         input: { text: "before-mutated" },
@@ -744,10 +740,7 @@ describe("Plugin", () => {
         content: [{ type: "text", text: '{"text":"before-mutated"}' }],
         metadata: undefined,
       })
-      expect(execution).toMatchObject({
-        content: [{ type: "text", text: '{"text":"before-mutated"}' }],
-        metadata: { rewritten: true },
-      })
+      expect(outcome).toMatchObject({ status: "saved", summary: expect.stringContaining('{"text":"after-mutated"}') })
     }),
   )
 
@@ -765,7 +758,6 @@ describe("Plugin", () => {
               .transform((draft) =>
                 draft.add({
                   name: "echo",
-                  options: { codemode: false },
                   description: "Echo",
                   input: Schema.Struct({ text: Schema.String }),
                   output: Schema.Struct({ text: Schema.String }),

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { AgentListOutput, ModelListOutput, ProviderListOutput } from "@ocpp/client/promise"
-import { directoryKey, normalizeAgentList, normalizeProviderList } from "./utils"
+import { directoryKey, normalizeAgentList, normalizeProviderList, withDrivers } from "./utils"
 
 describe("normalizeAgentList", () => {
   test("adapts current agents to the app agent shape", () => {
@@ -14,7 +14,6 @@ describe("normalizeAgentList", () => {
         model: { id: "gpt-5", providerID: "openai", variant: "high" },
         request: { settings: { temperature: 0.2, topP: 0.9 }, headers: {}, body: {} },
         system: "Build software",
-        permissions: [{ action: "read", resource: "*", effect: "allow" }],
       },
     ] as AgentListOutput["data"])
 
@@ -27,7 +26,6 @@ describe("normalizeAgentList", () => {
         temperature: 0.2,
         topP: 0.9,
         color: "primary",
-        permission: [{ permission: "read", pattern: "*", action: "allow" }],
         model: { providerID: "openai", modelID: "gpt-5" },
         variant: "high",
         prompt: "Build software",
@@ -99,5 +97,31 @@ describe("directoryKey", () => {
     expect(String(directoryKey("C:/Repos/sst/ocpp/"))).toBe("C:/Repos/sst/ocpp")
     expect(String(directoryKey("C:/"))).toBe("C:/")
     expect(String(directoryKey("/"))).toBe("/")
+  })
+})
+
+describe("withDrivers", () => {
+  test("offers vendor drivers as providers and connects only the ready ones", () => {
+    const catalog = { all: new Map(), connected: [], default: {} }
+    const result = withDrivers(catalog, [
+      {
+        id: "claude",
+        name: "Claude Code",
+        available: true,
+        model: "sonnet",
+        models: ["sonnet", "opus"],
+        variants: ["low", "high"],
+      },
+      { id: "codex", name: "Codex", available: false, model: "gpt-5.6-sol", models: ["gpt-5.6-sol"], variants: [] },
+    ])
+    expect(result.connected).toEqual(["claude"])
+    expect(result.default).toEqual({ claude: "sonnet", codex: "gpt-5.6-sol" })
+    expect(result.all.get("claude")?.name).toBe("Claude Code")
+    expect(Object.keys(result.all.get("claude")?.models ?? {})).toEqual(["sonnet", "opus"])
+    expect(result.all.get("claude")?.models.opus).toMatchObject({
+      providerID: "claude",
+      variants: { low: {}, high: {} },
+    })
+    expect(withDrivers(catalog, [])).toBe(catalog)
   })
 })

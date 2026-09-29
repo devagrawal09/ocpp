@@ -68,12 +68,13 @@ Azure supports either an API key or your existing Microsoft Entra ID session fro
      --output table
    ```
 
-3. In OC++, run `/connect`, select **Azure**, and choose **Microsoft Entra ID (Azure CLI)**. OC++ lists the Azure
-   resources visible to your active CLI session, including their resource groups. Select one, or choose **Type your own
-   answer** to enter a resource name that is not listed. If resource listing is unavailable, OC++ asks for the name
-   directly. If `AZURE_RESOURCE_NAME` is already set, OC++ uses it without prompting.
+3. In the web app, run **Connect provider** from the command palette, select **Azure**, and choose **Microsoft Entra ID
+   (Azure CLI)**. OC++ lists the Azure resources visible to your active CLI session, including their resource groups.
+   Select one, or choose **Type your own answer** to enter a resource name that is not listed. If resource listing is
+   unavailable, OC++ asks for the name directly. If `AZURE_RESOURCE_NAME` is already set, OC++ uses it without
+   prompting.
 
-4. Select a deployed model with `/models`.
+4. Select a deployed model with `/model`.
 
 OC++ discovers successful model deployments from the active Azure subscription and refreshes access tokens through your
 Azure CLI session. Set `AZURE_RESOURCE_GROUP` when you already know the resource group and want to skip subscription-wide

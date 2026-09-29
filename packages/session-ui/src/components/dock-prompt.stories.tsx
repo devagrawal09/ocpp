@@ -9,7 +9,7 @@ export default {
     docs: {
       description: {
         component:
-          "The shared production frame for active questions and permission requests. Complete interactive examples live under Session/Complete workspace.",
+          "The shared production frame for active questions. Complete interactive examples live under Session/Complete workspace.",
       },
     },
   },
@@ -32,27 +32,6 @@ export const Question = {
       }
     >
       <div class="text-13-regular text-text-base">Which Session layout should I implement?</div>
-    </DockPrompt>
-  ),
-}
-
-export const Permission = {
-  render: () => (
-    <DockPrompt
-      kind="permission"
-      header={<div class="text-13-medium text-text-strong">Permission required</div>}
-      footer={
-        <>
-          <Button size="normal" variant="ghost">
-            Deny
-          </Button>
-          <Button size="normal" variant="contrast">
-            Allow once
-          </Button>
-        </>
-      }
-    >
-      <code class="text-12-regular text-text-base">npm publish --tag canary</code>
     </DockPrompt>
   ),
 }

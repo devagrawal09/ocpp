@@ -8,6 +8,9 @@ import { Context, Effect, Scope } from "effect"
 import { HttpClient } from "effect/unstable/http"
 import { Agent } from "../agent.js"
 import { Catalog } from "../catalog.js"
+import { CodeModeCommand } from "../codemode/command.js"
+import { CodeModeEvent } from "../codemode/event.js"
+import { CodeModeInvocation } from "../codemode/invocation.js"
 import { Command } from "../command.js"
 import { Config } from "../config.js"
 import { Credential } from "../credential.js"
@@ -20,7 +23,6 @@ import { ConfigInstructionPlugin } from "../config/plugin/instruction.js"
 import { ConfigLocationWatcherPlugin } from "../config/plugin/location-watcher.js"
 import { ConfigMcpPlugin } from "../config/plugin/mcp.js"
 import { ConfigProviderPlugin } from "../config/plugin/provider.js"
-import { ConfigPolicyPlugin } from "../config/plugin/policy.js"
 import { ConfigReferencePlugin } from "../config/plugin/reference.js"
 import { ConfigShellPlugin } from "../config/plugin/shell.js"
 import { ConfigSnapshotPlugin } from "../config/plugin/snapshot.js"
@@ -46,7 +48,6 @@ import { LocationMutation } from "../location-mutation.js"
 import { ModelsDev } from "../models-dev.js"
 import { Mcp } from "../mcp/index.js"
 import { Npm } from "@ocpp/util/npm"
-import { Permission } from "../permission.js"
 import { Reference } from "../reference.js"
 import { WebSearch } from "../websearch.js"
 import { Ripgrep } from "../ripgrep.js"
@@ -59,6 +60,9 @@ import { Skill } from "../skill.js"
 import { SkillDiscovery } from "../skill/discovery.js"
 import { Watcher } from "../filesystem/watcher.js"
 import { PatchTool } from "../tool/plugin/patch.js"
+import { CommandTool } from "../tool/plugin/command.js"
+import { EventTool } from "../tool/plugin/event.js"
+import { NotifyTool } from "../tool/plugin/notify.js"
 import { EditTool } from "../tool/plugin/edit.js"
 import { GlobTool } from "../tool/plugin/glob.js"
 import { GrepTool } from "../tool/plugin/grep.js"
@@ -67,7 +71,7 @@ import { ReadToolFileSystem } from "../tool/read-filesystem.js"
 import { ReadTool } from "../tool/plugin/read.js"
 import { ShellTool } from "../tool/plugin/shell.js"
 import { SkillTool } from "../tool/plugin/skill.js"
-import { ExternalAgentTool } from "../tool/plugin/external-agent.js"
+import { ExternalAgentDrivers } from "../external-agent/drivers.js"
 import { ExternalAgentSession } from "../external-agent/session.js"
 import { SubagentTool } from "../tool/plugin/subagent.js"
 import { Tool } from "../tool.js"
@@ -80,7 +84,6 @@ import { AgentPlugin } from "./agent.js"
 import { CommandPlugin } from "./command.js"
 import { PlanPlugin } from "./plan.js"
 import { ModelsDevPlugin } from "./models-dev.js"
-import { McpCodeModeExclusionPlugin } from "./mcp-codemode-exclusion.js"
 import { ProviderPlugins } from "./provider.js"
 import { WebSearchPlugins } from "./websearch/index.js"
 import { PluginRuntime } from "./runtime.js"
@@ -94,9 +97,13 @@ import { WellKnownPlugin } from "../wellknown/plugin.js"
 
 const services = Effect.fn("PluginInternal.services")(function* () {
   const external = yield* ExternalAgentSession.Service
+  const drivers = yield* ExternalAgentDrivers.Service
   const agent = yield* Agent.Service
   const processes = yield* AppProcess.Service
   const catalog = yield* Catalog.Service
+  const codemodeCommand = yield* CodeModeCommand.Service
+  const codemodeEvent = yield* CodeModeEvent.Service
+  const codemodeInvocation = yield* CodeModeInvocation.Service
   const command = yield* Command.Service
   const config = yield* Config.Service
   const credential = yield* Credential.Service
@@ -119,7 +126,6 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const models = yield* ModelsDev.Service
   const mcp = yield* Mcp.Service
   const npm = yield* Npm.Service
-  const permission = yield* Permission.Service
   const runtime = yield* PluginRuntime.Service
   const form = yield* Form.Service
   const read = yield* ReadToolFileSystem.Service
@@ -139,9 +145,13 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const wellknown = yield* WellKnown.Service
   return Context.mergeAll(
     Context.make(ExternalAgentSession.Service, external),
+    Context.make(ExternalAgentDrivers.Service, drivers),
     Context.make(Agent.Service, agent),
     Context.make(AppProcess.Service, processes),
     Context.make(Catalog.Service, catalog),
+    Context.make(CodeModeCommand.Service, codemodeCommand),
+    Context.make(CodeModeEvent.Service, codemodeEvent),
+    Context.make(CodeModeInvocation.Service, codemodeInvocation),
     Context.make(Command.Service, command),
     Context.make(Config.Service, config),
     Context.make(Credential.Service, credential),
@@ -164,7 +174,6 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(ModelsDev.Service, models),
     Context.make(Mcp.Service, mcp),
     Context.make(Npm.Service, npm),
-    Context.make(Permission.Service, permission),
     Context.make(PluginRuntime.Service, runtime),
     Context.make(Form.Service, form),
     Context.make(ReadToolFileSystem.Service, read),
@@ -191,9 +200,13 @@ export type Requirements = ContextServices<Effect.Success<ReturnType<typeof serv
 
 export const requirements = LayerNode.group([
   ExternalAgentSession.node,
+  ExternalAgentDrivers.node,
   Agent.node,
   AppProcess.node,
   Catalog.node,
+  CodeModeCommand.node,
+  CodeModeEvent.node,
+  CodeModeInvocation.node,
   Command.node,
   Config.node,
   Credential.node,
@@ -216,7 +229,6 @@ export const requirements = LayerNode.group([
   ModelsDev.node,
   Mcp.node,
   Npm.node,
-  Permission.node,
   PluginRuntime.node,
   Form.node,
   ReadToolFileSystem.node,
@@ -240,7 +252,6 @@ export type InternalPlugin = Plugin<Requirements | Scope.Scope>
 
 const pre = [
   ConfigMcpPlugin.Plugin,
-  McpCodeModeExclusionPlugin.Plugin,
   WellKnownPlugin.Plugin,
   VcsGitPlugin.Plugin,
   AgentPlugin.Plugin,
@@ -261,10 +272,12 @@ const pre = [
   ShellTool.Plugin,
   SkillTool.Plugin,
   SubagentTool.Plugin,
-  ExternalAgentTool.Plugin,
   WebFetchTool.Plugin,
   WebSearchTool.Plugin,
   WriteTool.Plugin,
+  CommandTool.Plugin,
+  EventTool.Plugin,
+  NotifyTool.Plugin,
   WarmingPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 
@@ -284,7 +297,6 @@ const post = [
   ConfigProviderPlugin.Plugin,
   ConfigWebSearchPlugin.Plugin,
   VariantPlugin.Plugin,
-  ConfigPolicyPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 
 export const list = Effect.fn("PluginInternal.list")(function* () {

@@ -23,16 +23,17 @@ const reviewTabPanelID = "session-side-panel-review-tabpanel"
 const fileBrowserTabPanelID = "session-side-panel-file-browser-tabpanel"
 import { SessionContextTab } from "@/session/files/session-context-tab"
 import { SessionSubagentsTab } from "@/session/files/session-subagents-tab"
+import { SessionEventsTab } from "@/session/files/session-events-tab"
+import { SessionRunningTab, createSessionRunning } from "@/session/files/session-running-tab"
 import { SortableTab } from "@/session/files/tab"
-import { OpenInAppButton } from "@/session/files/open-in-app-button"
 import { useCommand } from "@/shell/commands/command"
 import { useFile, type SelectedLineRange } from "@/workspaces/files/model"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useLayout } from "@/shell/state/layout"
-import { useWorkspaceLocation } from "@/workspaces/location"
 import { useSettings } from "@/settings/model"
 import { createFileTabListSync } from "@/session/files/file-tab-scroll"
 import {
+  SESSION_ACTIVITY_TABS,
   SESSION_OPEN_FILE_TAB,
   createOpenSessionFileTab,
   createSessionTabs,
@@ -66,15 +67,15 @@ export function SessionSidePanel(props: {
   reviewPresent?: boolean
   size: Sizing
   stacked?: boolean
+  /** Scrolls the timeline to a turn, or to the row showing one of its parts. */
+  reveal: (target: { messageID: string; partID?: string }) => void
 }) {
   const layout = useLayout()
   const settings = useSettings()
   const file = useFile()
   const language = useLanguage()
   const command = useCommand()
-  const sdk = useWorkspaceLocation()
   const { sessionKey, tabs, view, params } = useSessionLayout()
-  const projectDirectory = createMemo(() => sdk().directory)
 
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const shown = settings.visibility.fileTree
@@ -165,7 +166,7 @@ export function SessionSidePanel(props: {
     normalizeTab,
     review: reviewTab,
     hasReview: () => props.canReview,
-    subagents: () => true,
+    activity: () => true,
     fileBrowser: () => true,
   })
   const contextOpen = tabState.contextOpen
@@ -176,6 +177,8 @@ export function SessionSidePanel(props: {
   const activeFileTab = tabState.activeFileTab
 
   const fileTreeTab = () => layout.fileTree.tab()
+  // Derived only while the panel shows, since it reads the whole loaded transcript.
+  const running = createSessionRunning(() => (visible() ? params.id : undefined))
 
   const setFileTreeTabValue = (value: string) => {
     if (value !== "changes" && value !== "all") return
@@ -218,7 +221,12 @@ export function SessionSidePanel(props: {
   })
   const fileBrowserVisible = createMemo(() => {
     const active = activeTab()
-    return active !== "review" && active !== "context" && active !== "subagents" && active !== "empty"
+    return (
+      active !== "review" &&
+      active !== "context" &&
+      active !== "empty" &&
+      !SESSION_ACTIVITY_TABS.some((tab) => tab === active)
+    )
   })
   const openFileKeybind = createMemo(() => command.keybindParts("file.open"))
   const closeTabKeybind = createMemo(() => command.keybindParts("tab.close"))
@@ -272,8 +280,7 @@ export function SessionSidePanel(props: {
                         activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
                         preventActivation: (event) =>
                           event.target instanceof Element &&
-                          (!!event.target.closest('[data-slot="tabs-trigger-close-button"]') ||
-                            !!event.target.closest(".session-review-v2-open-in-app-slot")),
+                          !!event.target.closest('[data-slot="tabs-trigger-close-button"]'),
                       }),
                     ]}
                     modifiers={[
@@ -345,6 +352,15 @@ export function SessionSidePanel(props: {
                               </div>
                             </Tabs.Trigger>
                           </Show>
+                          <Tabs.Trigger value="running">
+                            <div class="flex items-center gap-1.5">
+                              <span>{language.t("session.tab.running")}</span>
+                              <Show when={running().length > 0}>
+                                <span class="tabular-nums text-v2-text-text-muted">{running().length}</span>
+                              </Show>
+                            </div>
+                          </Tabs.Trigger>
+                          <Tabs.Trigger value="events">{language.t("session.tab.events")}</Tabs.Trigger>
                           <Tabs.Trigger value="subagents">{language.t("session.tab.subagents")}</Tabs.Trigger>
                           <For each={panelTabs()}>
                             {(tab) => (
@@ -415,13 +431,6 @@ export function SessionSidePanel(props: {
                             </Tooltip>
                           </div>
                         </Tabs.List>
-                        <div
-                          class="session-review-v2-open-in-app-slot shrink-0 flex items-center pr-3"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <OpenInAppButton directory={projectDirectory} />
-                        </div>
                       </div>
 
                       <Show when={reviewTab() && props.canReview && activeTab() === "review"}>
@@ -456,6 +465,20 @@ export function SessionSidePanel(props: {
                             <SessionContextTab />
                           </div>
                         </Tabs.Content>
+                      </Show>
+
+                      <Show when={activeTab() === "running"}>
+                        <Tabs.Content value="running" class="flex flex-col h-full overflow-hidden contain-strict">
+                          <SessionRunningTab running={running} reveal={props.reveal} />
+                        </Tabs.Content>
+                      </Show>
+
+                      <Show when={activeTab() === "events" ? params.id : undefined} keyed>
+                        {(sessionID) => (
+                          <Tabs.Content value="events" class="flex flex-col h-full overflow-hidden contain-strict">
+                            <SessionEventsTab sessionID={sessionID} reveal={props.reveal} />
+                          </Tabs.Content>
+                        )}
                       </Show>
 
                       <Show when={activeTab() === "subagents"}>

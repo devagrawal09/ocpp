@@ -5,8 +5,10 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { and, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database } from "../database/database.js"
+import { Job } from "../job.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
+import type { ToolLists } from "../tool/lists.js"
 import { SessionMessageTable } from "../session/sql.js"
 import { limits } from "./limits.js"
 import { CodeModeBindingTable, CodeModeExecutionTable, CodeModeJournalTable, CodeModeReservationTable } from "./sql.js"
@@ -19,8 +21,35 @@ export type Execution = {
   readonly assistantMessageID: SessionMessage.ID
   readonly toolCallID: string
   readonly program: CodeMode.Program
+  /** Machine input exposed to the program as `input`. */
+  readonly input?: CodeMode.DataValue
+  /** The tool list its catalog came from; absent for executions admitted before tool lists were stored. */
+  readonly tools?: ToolLists.Selection
   /** Completed notebook values captured when this execution was admitted. */
   readonly bindings: Readonly<Record<string, CodeMode.NotebookValue>>
+}
+
+/** One journaled tool call of an execution being resumed, in call order. */
+export type JournalEntry = {
+  readonly index: number
+  readonly tool: string
+  readonly input: unknown
+  readonly status: "scheduled" | "completed" | "failed" | "indeterminate"
+  readonly output: unknown
+  readonly error: string | undefined
+  readonly omitted: boolean
+  readonly impure: ReadonlyArray<number>
+  readonly progress: Readonly<Record<string, unknown>> | undefined
+}
+
+/** An execution that was running when its host stopped, with everything needed to replay it. */
+export type Resumable = {
+  readonly execution: Execution
+  readonly journal: ReadonlyArray<JournalEntry>
+  /** Resumes including this one. */
+  readonly resumes: number
+  /** Snapshot names whose values no longer exist, so the run cannot see what it saw before. */
+  readonly missing: ReadonlyArray<string>
 }
 
 /** Why a program was refused before it received an execution ID. */
@@ -47,6 +76,14 @@ export interface Interface {
     index: number
     tool: string
     input: unknown
+    /** Impure helper values the program read since the previous call. */
+    impure?: ReadonlyArray<number>
+  }) => Effect.Effect<void>
+  /** Records the latest progress of a call that can rejoin its work after a restart. */
+  readonly progressCall: (input: {
+    executionID: string
+    index: number
+    progress: Readonly<Record<string, unknown>>
   }) => Effect.Effect<void>
   readonly settleCall: (input: {
     executionID: string
@@ -63,10 +100,17 @@ export interface Interface {
   readonly indeterminate: (execution: Execution, error: string) => Effect.Effect<void>
   readonly discard: (executionID: string) => Effect.Effect<void>
   /**
-   * Settles executions that were still in flight, saving nothing and releasing their names. Runs at
-   * startup because the host cannot know whether an interrupted program finished its tool calls.
+   * Settles executions that restart recovery can never resume, saving nothing and releasing their
+   * names: those admitted but never started, and running ones without a pending background marker,
+   * such as one whose job ended without settling it. Runs at startup. Running executions with a
+   * marker are left to restart recovery, which resumes them by replay or settles them itself.
    */
   readonly recover: () => Effect.Effect<ReadonlyArray<string>>
+  /**
+   * Claims one more resume of a running execution and loads its program, snapshot, and journal.
+   * Undefined when the execution is no longer running.
+   */
+  readonly resume: (executionID: string) => Effect.Effect<Resumable | undefined>
   readonly get: (executionID: string) => Effect.Effect<
     | {
         readonly id: string
@@ -90,6 +134,7 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const { db } = yield* Database.Service
+    const jobs = yield* Job.Service
 
     const readBindings: Interface["bindings"] = Effect.fnUntraced(function* (sessionID) {
       return Object.fromEntries(
@@ -182,6 +227,8 @@ const layer = Layer.effect(
               program: input.program,
               ir_version: input.program.version,
               snapshot: bindings.map((binding) => binding.name),
+              ...(input.input === undefined ? {} : { input: input.input }),
+              ...(input.tools === undefined ? {} : { tools: input.tools }),
             })
             return {
               ok: true as const,
@@ -204,43 +251,69 @@ const layer = Layer.effect(
         .pipe(Effect.orDie),
     )
 
-    const scheduleCall: Interface["scheduleCall"] = Effect.fn("CodeModeStore.scheduleCall")((input) =>
-      db
+    // A resumed run re-reaches calls that are already journaled, so the first record of a call wins.
+    const scheduleCall: Interface["scheduleCall"] = Effect.fn("CodeModeStore.scheduleCall")((input) => {
+      const captured = boundedCapture(input.input)
+      return db
         .insert(CodeModeJournalTable)
         .values({
           execution_id: input.executionID,
           call_index: input.index,
           tool: input.tool,
-          input: boundedCapture(input.input) ?? "[input omitted: capture limit exceeded]",
+          input: captured ?? "[input omitted: capture limit exceeded]",
           status: "scheduled",
+          omitted: captured === undefined,
+          ...(input.impure === undefined || input.impure.length === 0 ? {} : { impure: input.impure }),
         })
         .onConflictDoNothing()
         .run()
-        .pipe(Effect.orDie),
-    )
+        .pipe(Effect.orDie)
+    })
 
-    const settleCall: Interface["settleCall"] = Effect.fn("CodeModeStore.settleCall")((input) =>
+    const progressCall: Interface["progressCall"] = Effect.fn("CodeModeStore.progressCall")((input) =>
       db
         .update(CodeModeJournalTable)
-        .set({
-          status: input.outcome,
-          ...(input.output === undefined
-            ? {}
-            : { output: boundedCapture(input.output) ?? "[output omitted: capture limit exceeded]" }),
-          ...(input.error === undefined ? {} : { error: truncate(input.error, limits.maxCaptureBytes) }),
-          time_completed: Date.now(),
-          time_updated: Date.now(),
-        })
+        .set({ progress: input.progress, time_updated: Date.now() })
         .where(
           and(
             eq(CodeModeJournalTable.execution_id, input.executionID),
             eq(CodeModeJournalTable.call_index, input.index),
-            eq(CodeModeJournalTable.status, "scheduled"),
           ),
         )
         .run()
         .pipe(Effect.orDie),
     )
+
+    const settleCall: Interface["settleCall"] = Effect.fn("CodeModeStore.settleCall")((input) => {
+      const output = input.output === undefined ? undefined : boundedCapture(input.output)
+      // A completed call replays only from its exact result, so a result the journal could not hold
+      // in full, or could not represent as JSON at all, marks the call as not replayable.
+      const omitted =
+        (input.outcome === "completed" && output === undefined) ||
+        (input.error !== undefined && new TextEncoder().encode(input.error).byteLength > limits.maxCaptureBytes)
+      return (
+        db
+          .update(CodeModeJournalTable)
+          .set({
+            status: input.outcome,
+            ...(input.output === undefined ? {} : { output: output ?? "[output omitted: capture limit exceeded]" }),
+            error: input.error === undefined ? null : truncate(input.error, limits.maxCaptureBytes),
+            ...(omitted ? { omitted } : {}),
+            time_completed: Date.now(),
+            time_updated: Date.now(),
+          })
+          // A call a shutdown interrupted is indeterminate until a resumed run settles it again.
+          .where(
+            and(
+              eq(CodeModeJournalTable.execution_id, input.executionID),
+              eq(CodeModeJournalTable.call_index, input.index),
+              inArray(CodeModeJournalTable.status, ["scheduled", "indeterminate"]),
+            ),
+          )
+          .run()
+          .pipe(Effect.orDie)
+      )
+    })
 
     // Saving verifies that this execution still owns every reserved name and that the history it was
     // admitted into still exists, so a stale worker can never write into a reverted notebook.
@@ -446,17 +519,84 @@ const layer = Layer.effect(
     )
 
     const recover: Interface["recover"] = Effect.fn("CodeModeStore.recover")(function* () {
-      const orphaned = yield* db
-        .select({ id: CodeModeExecutionTable.id })
+      // Restart recovery resumes an execution only through the background marker its job wrote
+      // before the execution started running.
+      const pending = new Set(
+        (yield* jobs.pendingBackground).flatMap((background) =>
+          background.recovery.kind === "codemode" ? [background.id] : [],
+        ),
+      )
+      const orphaned = (yield* db
+        .select({ id: CodeModeExecutionTable.id, status: CodeModeExecutionTable.status })
         .from(CodeModeExecutionTable)
-        .where(sql`${CodeModeExecutionTable.status} in ('scheduled', 'running')`)
+        .where(inArray(CodeModeExecutionTable.status, ["scheduled", "running"]))
         .all()
-        .pipe(Effect.orDie)
+        .pipe(Effect.orDie)).filter((execution) => execution.status === "scheduled" || !pending.has(execution.id))
       yield* Effect.forEach(orphaned, (execution) => settle(execution.id, "indeterminate", RESTART_MESSAGE), {
         discard: true,
       })
       return orphaned.map((execution) => execution.id)
     })
+
+    const resume: Interface["resume"] = Effect.fn("CodeModeStore.resume")((executionID) =>
+      db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            const row = yield* tx
+              .update(CodeModeExecutionTable)
+              .set({ resumes: sql`${CodeModeExecutionTable.resumes} + 1`, time_updated: Date.now() })
+              .where(and(eq(CodeModeExecutionTable.id, executionID), eq(CodeModeExecutionTable.status, "running")))
+              .returning()
+              .get()
+            if (row === undefined) return undefined
+            const bindings =
+              row.snapshot.length === 0
+                ? []
+                : yield* tx
+                    .select({ name: CodeModeBindingTable.name, value: CodeModeBindingTable.value })
+                    .from(CodeModeBindingTable)
+                    .where(
+                      and(
+                        eq(CodeModeBindingTable.session_id, row.session_id),
+                        inArray(CodeModeBindingTable.name, [...row.snapshot]),
+                      ),
+                    )
+                    .all()
+            const journal = yield* tx
+              .select()
+              .from(CodeModeJournalTable)
+              .where(eq(CodeModeJournalTable.execution_id, executionID))
+              .orderBy(CodeModeJournalTable.call_index)
+              .all()
+            return {
+              execution: {
+                id: row.id,
+                sessionID: row.session_id,
+                assistantMessageID: row.assistant_message_id,
+                toolCallID: row.tool_call_id,
+                program: row.program,
+                ...(row.input === null ? {} : { input: row.input }),
+                ...(row.tools === null ? {} : { tools: row.tools }),
+                bindings: Object.fromEntries(bindings.map((binding) => [binding.name, binding.value])),
+              },
+              journal: journal.map((entry) => ({
+                index: entry.call_index,
+                tool: entry.tool,
+                input: entry.input,
+                status: entry.status,
+                output: entry.output,
+                error: entry.error ?? undefined,
+                omitted: entry.omitted,
+                impure: entry.impure ?? [],
+                progress: entry.progress ?? undefined,
+              })),
+              resumes: row.resumes,
+              missing: row.snapshot.filter((name) => !bindings.some((binding) => binding.name === name)),
+            }
+          }),
+        )
+        .pipe(Effect.orDie),
+    )
 
     yield* recover()
 
@@ -464,12 +604,14 @@ const layer = Layer.effect(
       admit,
       running,
       scheduleCall,
+      progressCall,
       settleCall,
       commit,
       fail: (execution, error) => settle(execution.id, "failed", error),
       indeterminate: (execution, error) => settle(execution.id, "indeterminate", error),
       discard,
       recover,
+      resume,
       get,
       bindings: readBindings,
       reservations,
@@ -525,4 +667,4 @@ function truncate(value: string, limit: number) {
   return new TextDecoder().decode(bytes.slice(0, end))
 }
 
-export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node] })
+export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node, Job.node] })

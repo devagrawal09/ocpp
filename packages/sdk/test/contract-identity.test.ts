@@ -48,8 +48,6 @@ test("re-exports canonical contracts directly from Schema", () => {
     "Location",
     "Model",
     "Ocpp",
-    "Permission",
-    "PermissionSaved",
     "Project",
     "Prompt",
     "PromptInput",

@@ -486,15 +486,19 @@ const publish = Effect.fn("SessionInbox.publish")(function* (
     },
     { discard: true },
   )
-  return rows.length
+  return rows.map(fromRow)
 })
 
+/** Promotes pending input into visible messages and returns the promoted count. */
+export const promote = (db: DatabaseService, bus: Bus.Interface, sessionID: SessionSchema.ID, scope: Promotable) =>
+  promoteItems(db, bus, sessionID, scope).pipe(Effect.map((items) => items.length))
+
 /**
- * Promotes pending input into visible messages and returns the promoted count.
+ * Promotes pending input into visible messages and returns the promoted items in delivery order.
  * Steers always go first; only the "input" scope may fall through to one queued
  * input, and it then collects steers that arrived during promotion.
  */
-export const promote = Effect.fn("SessionInbox.promote")(function* (
+export const promoteItems = Effect.fn("SessionInbox.promoteItems")(function* (
   db: DatabaseService,
   bus: Bus.Interface,
   sessionID: SessionSchema.ID,
@@ -517,14 +521,14 @@ export const promote = Effect.fn("SessionInbox.promote")(function* (
         .limit(1)
         .get()
         .pipe(Effect.orDie)
-      if (!queued) return 0
+      if (!queued) return []
       const promoted = yield* publish(db, bus, sessionID, [queued])
       const arrivedSteers = yield* pendingSteers(db, sessionID)
       const control = arrivedSteers.findIndex((row) => row.type === "compaction" || row.type === "move")
-      return (
-        promoted +
-        (yield* publish(db, bus, sessionID, control === -1 ? arrivedSteers : arrivedSteers.slice(0, control)))
-      )
+      return [
+        ...promoted,
+        ...(yield* publish(db, bus, sessionID, control === -1 ? arrivedSteers : arrivedSteers.slice(0, control))),
+      ]
     }),
   )
 })

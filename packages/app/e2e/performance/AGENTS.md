@@ -1,7 +1,6 @@
 - Prioritize stability, then simplicity, then measurement overhead.
 - Use Playwright for scenario control, isolation, and completion checks.
 - Use Chrome Performance traces for generic browser profiling.
-- Use Electron `contentTracing` for packaged multi-process profiling.
 - Keep custom probes only for product-specific measurements.
 - Do not duplicate measurements across the harness, probes, and traces.
 - Run benchmarks serially to avoid cross-test contention.

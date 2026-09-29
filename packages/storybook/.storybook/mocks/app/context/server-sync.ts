@@ -9,7 +9,7 @@ const data = {
     default: {},
   },
   provider_auth: {} as Record<string, ProviderAuthMethod[]>,
-  config: { disabled_providers: [] as string[] },
+  config: {},
 }
 
 export function mockProviderAuth(provider: string, methods: ProviderAuthMethod[]) {

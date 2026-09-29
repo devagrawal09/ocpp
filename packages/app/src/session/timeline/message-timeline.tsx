@@ -311,7 +311,7 @@ type MessageTimelineProps = {
   workspaceMoveEligible: boolean
   onSummaryOpenChange: (open: boolean) => void
   anchor: (id: string) => string
-  setRevealMessage?: (fn: (id: string) => void) => void
+  setRevealMessage?: (fn: (id: string, partID?: string) => boolean) => void
   setScrollToEnd?: (fn: () => void) => void
 }
 

@@ -65,27 +65,6 @@ describe("buildPromptRequest", () => {
     expect(uploads.map((file) => file.name)).toEqual(["a.png", "b.pdf"])
   })
 
-  test("preserves an external attachment source path for the model", () => {
-    const result = buildPromptRequest({
-      prompt: [],
-      context: [],
-      images: [
-        {
-          type: "image",
-          id: "img_external",
-          filename: "ocpp.global.dat",
-          sourcePath: "C:\\Users\\Luke\\AppData\\Roaming\\ai.ocpp.desktop.beta\\ocpp.global.dat",
-          mime: "text/plain",
-          dataUrl: "data:text/plain;base64,AAA",
-        },
-      ],
-      text: "inspect this",
-      sessionDirectory: "C:\\Repos\\sst\\ocpp",
-    })
-
-    expect(result.files[0]?.name).toBe("C:\\Users\\Luke\\AppData\\Roaming\\ai.ocpp.desktop.beta\\ocpp.global.dat")
-  })
-
   test("preserves reference aliases as directory files", () => {
     const result = buildPromptRequest({
       prompt: [

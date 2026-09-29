@@ -5,7 +5,7 @@ import { fileURLToPath } from "url"
 import { SessionMessage } from "../message.js"
 import type { FileAttachment } from "@ocpp/schema/prompt"
 
-const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
+export const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
 
 const media = (file: FileAttachment): ContentPart => ({
   type: "media",
@@ -254,7 +254,15 @@ function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMe
         }),
       ]
     case "synthetic":
-      return [Message.make({ id: message.id, role: "user", content: message.text })]
+      return [
+        Message.make({
+          id: message.id,
+          role: "user",
+          content: message.files?.length
+            ? [Message.text(message.text), ...message.files.flatMap(attachmentContent)]
+            : message.text,
+        }),
+      ]
     case "skill":
       return [Message.make({ id: message.id, role: "user", content: message.text, metadata: message.metadata })]
     case "system":
@@ -270,6 +278,9 @@ function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMe
           metadata: message.metadata,
         }),
       ]
+    case "invocation":
+      // An invocation's outcome enters context once, through its execution's completion notification.
+      return []
     case "assistant":
       return assistant(message, model, providerMetadataKey)
     case "compaction":

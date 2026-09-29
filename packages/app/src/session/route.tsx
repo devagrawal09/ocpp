@@ -154,7 +154,7 @@ function PendingSessionState(props: { sessionID: string }) {
 
 function SessionStatePanel(props: ParentProps) {
   return (
-    <div class="flex min-h-0 flex-1 px-2 pb-2 pt-[var(--shell-top-inset,8px)]">
+    <div class="flex min-h-0 flex-1 p-2">
       <SessionPanelFrame raised>{props.children}</SessionPanelFrame>
     </div>
   )

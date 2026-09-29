@@ -30,8 +30,9 @@ isolate-based approach.
 - **Top-level declarations are durable.** Every direct top-level `const` and `function` declaration is
   saved to the notebook the host provides. `return` is only a preview.
 
-Unsupported syntax returns an `UnsupportedSyntax` diagnostic with a source location. The supported and
-rejected forms are listed in the [complete guide](./interpreter-support.md).
+Unsupported syntax returns an `UnsupportedSyntax` diagnostic with a source location and concrete
+`suggestions`, such as `line.startsWith("id-")` for `/^id-/.test(line)`. The supported and rejected
+forms are listed in the [complete guide](./interpreter-support.md).
 
 ## Quick Start
 
@@ -100,7 +101,10 @@ runtime.executeCompiled(program) // the same, from a precompiled program
 Effect environment is inferred from the supplied tools. `onToolCallStart` observes admitted calls with
 decoded input; `onToolCallEnd` observes settled outcomes and duration. `onTrace` observes semantic
 JavaScript steps in execution order as `assignment`, `branch`, `operation`, `log`, and `return`
-events. All three hooks return Effects and must not fail.
+events. All three hooks return Effects and must not fail. `impure` supplies the values `time.now()` and
+`Math.random()` return, in the order the program reads them; they are the only helpers whose results
+the program and its tool results do not determine. A host that records these values alongside tool
+results can replay an execution deterministically, for example to resume it after a restart.
 
 ### Compiling ahead of execution
 
@@ -187,6 +191,9 @@ validation or copying error. Interruption propagates without becoming an error d
 signature — for every visible tool. Hosts render their own model-facing instructions from these
 descriptors; `CodeMode.searchSignature` and `CodeMode.toolExpression(path)` supply the exact callable
 forms.
+
+`staticToolCalls(program.body)` lists every direct tool call in a compiled program, so a host can
+check the paths against its own catalog or policy before anything runs.
 
 The synchronous `tools.search(...)` built-in is always available. It supports exact-path lookup,
 namespace-scoped search, empty-query browsing, and pagination, and returns callable paths with full

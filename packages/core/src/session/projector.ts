@@ -24,6 +24,7 @@ import { Project } from "@ocpp/schema/project"
 import { AbsolutePath, RelativePath } from "../schema.js"
 import type { SessionSchema } from "./schema.js"
 import { ProjectTable } from "../project/sql.js"
+import { CodeModeHandler } from "../codemode/handler.js"
 import { CodeModeStore } from "../codemode/store.js"
 
 type DatabaseService = Database.Interface["db"]
@@ -160,6 +161,8 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
       path: parent.path,
       title: forkTitle(parent.title ?? undefined),
       agent: parent.agent,
+      // A fork keeps its parent's stored tool list, so a fork of a subagent keeps the tools it was given.
+      tools: parent.tools,
       model: parent.model,
       metadata: parent.metadata,
       version: parent.version,
@@ -195,6 +198,7 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
           sql`${SessionMessageTable.type} != 'assistant' or json_extract(${SessionMessageTable.data}, '$.time.completed') is not null`,
           sql`${SessionMessageTable.type} != 'shell' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
           sql`${SessionMessageTable.type} != 'compaction' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
+          sql`${SessionMessageTable.type} != 'invocation' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
         ),
       )
       .orderBy(asc(SessionMessageTable.seq))
@@ -227,6 +231,7 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
     to: event.data.sessionID,
     throughSeq: copiedSeq ?? -1,
   })
+  yield* CodeModeHandler.fork(db, { from: event.data.parentID, to: event.data.sessionID })
   if (event.data.instructions)
     yield* InstructionState.initialize(db, event.data.sessionID, event.durable.seq, event.data.instructions)
 })
@@ -423,9 +428,29 @@ function run(db: DatabaseService, event: MessageEvent) {
           return message.type === "compaction" ? message : undefined
         })
       },
+      getInvocation(messageID) {
+        return Effect.gen(function* () {
+          const row = yield* db
+            .select()
+            .from(SessionMessageTable)
+            .where(
+              and(
+                eq(SessionMessageTable.id, messageID),
+                eq(SessionMessageTable.session_id, event.data.sessionID),
+                eq(SessionMessageTable.type, "invocation"),
+              ),
+            )
+            .get()
+            .pipe(Effect.orDie)
+          if (!row) return
+          const message = decodeRow(row)
+          return message.type === "invocation" ? message : undefined
+        })
+      },
       updateAssistant: updateMessage,
       updateShell: updateMessage,
       updateCompaction: updateMessage,
+      updateInvocation: updateMessage,
       appendMessage,
     }
     yield* SessionMessageUpdater.update(adapter, event)
@@ -607,6 +632,14 @@ const layer = Layer.effectDiscard(
           .pipe(Effect.orDie)
       }),
     )
+    yield* bus.project(SessionEvent.ToolsSelected, (event) =>
+      db
+        .update(SessionTable)
+        .set({ tools: event.data.tools, time_updated: event.created })
+        .where(eq(SessionTable.id, event.data.sessionID))
+        .run()
+        .pipe(Effect.orDie),
+    )
     yield* bus.project(SessionEvent.ModelSelected, (event) =>
       Effect.gen(function* () {
         yield* run(db, event)
@@ -669,6 +702,7 @@ const layer = Layer.effectDiscard(
                 type: "synthetic",
                 text: input.payload.text,
                 description: input.payload.description,
+                files: input.payload.files,
                 metadata: input.payload.metadata,
                 time: { created: DateTime.makeUnsafe(event.created) },
               },
@@ -743,6 +777,7 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.CodeMode.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.CodeMode.Completed, (event) => run(db, event))
     yield* bus.project(SessionEvent.CodeMode.Failed, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Invocation.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Ended, (event) => run(db, event))
     yield* bus.project(SessionEvent.RetryScheduled, (event) => run(db, event))
@@ -811,6 +846,7 @@ const layer = Layer.effectDiscard(
           .run()
           .pipe(Effect.orDie)
         yield* codemode.revert({ sessionID: event.data.sessionID, beforeSeq: boundary.seq })
+        yield* CodeModeHandler.prune(db, event.data.sessionID)
         yield* InstructionState.reset(db, event.data.sessionID)
       }),
     )

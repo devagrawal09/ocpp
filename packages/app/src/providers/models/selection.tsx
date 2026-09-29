@@ -8,13 +8,14 @@ import { useSettings } from "@/settings/model"
 import { useProviders } from "@/providers/catalog/providers"
 import { Persist, persisted } from "@/runtime/persistence/storage"
 import { hasCustomAgent, resolveAgent } from "./agent"
-import { composerModel } from "./composer-model"
+import { composerModel, describeModel } from "./composer-model"
 import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "./variant"
 import { useWorkspaceLocation } from "@/workspaces/location"
 import { useData } from "@/runtime/server/current"
 import { normalizeAgentList } from "@/runtime/server/global-sync/utils"
 import { useServerSDK } from "@/runtime/server/client"
 import { ScopedKey, type ServerScope } from "@/runtime/server/scope"
+import { resolveSessionComposerSelection } from "@/session/composer/selection"
 
 export type ModelKey = { providerID: string; modelID: string; variant?: string }
 
@@ -25,29 +26,19 @@ type State = {
 }
 
 type Saved = {
+  // Since version 2 an entry holds only what the user picked for a Session, never a copy of the model it stores.
+  version: 2
   session: Record<string, State | undefined>
 }
 
-const WORKSPACE_KEY = "__workspace__"
 const handoff = new Map<string, State>()
 
 const handoffKey = (scope: ServerScope, dir: string, id: string) => ScopedKey.from(scope, dir, id)
 
-const migrate = (value: unknown) => {
-  if (!value || typeof value !== "object") return { session: {} }
-
-  const item = value as {
-    session?: Record<string, State | undefined>
-    pick?: Record<string, State | undefined>
-  }
-
-  if (item.session && typeof item.session === "object") return { session: item.session }
-  if (!item.pick || typeof item.pick !== "object") return { session: {} }
-
-  return {
-    session: Object.fromEntries(Object.entries(item.pick).filter(([key]) => key !== WORKSPACE_KEY)),
-  }
-}
+// Older entries mixed real picks with copies of a Session's stored model and with the fallback the composer showed
+// in its place, which cannot be told apart. They are dropped once, so every Session shows its stored model again.
+export const migrateModelSelection = (value: unknown) =>
+  value && typeof value === "object" && "version" in value && value.version === 2 ? value : { version: 2, session: {} }
 
 const clone = (value: State | undefined) => {
   if (!value) return
@@ -80,9 +71,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const [saved, setSaved, , savedReady] = persisted(
       {
         ...Persist.serverWorkspace(serverSDK.scope, sdk().directory, "model-selection"),
-        migrate,
+        migrate: migrateModelSelection,
       },
       createStore<Saved>({
+        version: 2,
         session: {},
       }),
     )
@@ -122,6 +114,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       setStore("current", items[0]?.name)
     })
 
+    // What the open Session records: its agent and the model it runs on. `scope` holds only what the user picked.
+    const stored = createMemo(() => {
+      const session = id()
+      return session ? resolveSessionComposerSelection(data.session.get(session), undefined) : undefined
+    })
+
     const scope = createMemo<State | undefined>(() => {
       const session = id()
       if (!session) return store.draft ?? store.promoting
@@ -159,7 +157,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       list,
       visible: agentsVisible,
       current() {
-        return pickAgent(agentsVisible() ? (scope()?.agent ?? store.current) : "build")
+        return pickAgent(agentsVisible() ? (scope()?.agent ?? stored()?.agent ?? store.current) : "build")
       },
       set(name: string | undefined) {
         const item = pickAgent(name)
@@ -206,8 +204,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       },
     }
 
+    const selected = () => {
+      const pick = scope()
+      return pick?.variant !== undefined ? pick.variant : stored()?.model?.variant
+    }
+
     const current = createMemo(() => {
       const item = composerModel({
+        session: id() ? (scope()?.model ?? stored()?.model) : undefined,
         pick: scope()?.model,
         agent: agent.current()?.model,
         recent: models.recent.list(),
@@ -216,7 +220,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         available: validModel,
       })
       if (!item) return
-      return models.find(item)
+      return models.find(item) ?? describeModel({ ...item, variant: selected() }, providers.all().get(item.providerID))
     })
 
     const configured = () => {
@@ -228,8 +232,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         model: { providerID: model.provider.id, modelID: model.id, variants: model.variants },
       })
     }
-
-    const selected = () => scope()?.variant
 
     const snapshot = () => {
       const model = current()
@@ -372,19 +374,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
           setStore("promoting", next)
           setStore("draft", undefined)
-        },
-        restore(msg: { sessionID: string; agent?: string; model: ModelKey }) {
-          const session = id()
-          if (!session) return
-          if (msg.sessionID !== session) return
-          if (saved.session[session] !== undefined) return
-          if (handoff.has(handoffKey(serverSDK.scope, sdk().directory, session))) return
-
-          setSaved("session", session, {
-            agent: msg.agent,
-            model: msg.model,
-            variant: msg.model?.variant ?? null,
-          })
         },
       },
     }

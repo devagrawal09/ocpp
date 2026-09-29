@@ -5,7 +5,7 @@ import type {
   ProviderListOutput,
   SessionDriverInfo,
 } from "@ocpp/client/promise"
-import type { Agent, Project, Provider, ProviderListResponse } from "@/runtime/server/types"
+import type { Agent, Model, Project, Provider, ProviderListResponse } from "@/runtime/server/types"
 import type { Project as CurrentProject } from "@ocpp/client/promise"
 import { unwrap } from "solid-js/store"
 export { pathKey as directoryKey, type PathKey as DirectoryKey } from "@/workspaces/path-key"
@@ -149,41 +149,44 @@ export function withDrivers(catalog: ProviderListResponse, drivers: ReadonlyArra
           source: "custom",
           env: [],
           options: {},
-          models: Object.fromEntries(
-            driver.models.map((id) => [
-              id,
-              {
-                id,
-                providerID: driver.id,
-                api: { id, url: "", npm: driver.id },
-                name: id,
-                capabilities: {
-                  temperature: false,
-                  reasoning: true,
-                  attachment: false,
-                  toolcall: true,
-                  input: { text: true, audio: false, image: false, video: false, pdf: false },
-                  output: { text: true, audio: false, image: false, video: false, pdf: false },
-                  interleaved: false,
-                },
-                // The vendor bills through the user's own subscription or key.
-                cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-                limit: { context: 200_000, output: 32_000 },
-                status: "active",
-                options: {},
-                headers: {},
-                // No release date keeps every driver model visible in the picker.
-                release_date: "",
-                variants: Object.fromEntries(driver.variants.map((variant) => [variant, {}])),
-              },
-            ]),
-          ),
+          models: Object.fromEntries(driver.models.map((id) => [id, referencedModel(driver.id, id, driver.variants)])),
         },
       ]),
     ]),
     connected: [...catalog.connected, ...drivers.filter((driver) => driver.available).map((driver) => driver.id)],
     default: { ...catalog.default, ...Object.fromEntries(drivers.map((driver) => [driver.id, driver.model])) },
   } satisfies ProviderListResponse
+}
+
+/**
+ * A model known only by its reference, with no catalog entry: a driver model, or a Session's model the catalog does
+ * not list.
+ */
+export function referencedModel(providerID: string, id: string, variants: ReadonlyArray<string>): Model {
+  return {
+    id,
+    providerID,
+    api: { id, url: "", npm: providerID },
+    name: id,
+    capabilities: {
+      temperature: false,
+      reasoning: true,
+      attachment: false,
+      toolcall: true,
+      input: { text: true, audio: false, image: false, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    // A driver bills through the user's own subscription or key.
+    cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+    limit: { context: 200_000, output: 32_000 },
+    status: "active",
+    options: {},
+    headers: {},
+    // No release date keeps every driver model visible in the picker.
+    release_date: "",
+    variants: Object.fromEntries(variants.map((variant) => [variant, {}])),
+  }
 }
 
 /** The config `model`, from the highest-priority document that sets one, as core's `Config.latest` reads it. */

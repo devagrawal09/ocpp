@@ -1,4 +1,10 @@
-import type { AgentListOutput, ModelListOutput, ProviderListOutput, SessionDriverInfo } from "@ocpp/client/promise"
+import type {
+  AgentListOutput,
+  ConfigEntry,
+  ModelListOutput,
+  ProviderListOutput,
+  SessionDriverInfo,
+} from "@ocpp/client/promise"
 import type { Agent, Project, Provider, ProviderListResponse } from "@/runtime/server/types"
 import type { Project as CurrentProject } from "@ocpp/client/promise"
 import { unwrap } from "solid-js/store"
@@ -176,6 +182,16 @@ export function withDrivers(catalog: ProviderListResponse, drivers: ReadonlyArra
     connected: [...catalog.connected, ...drivers.filter((driver) => driver.available).map((driver) => driver.id)],
     default: { ...catalog.default, ...Object.fromEntries(drivers.map((driver) => [driver.id, driver.model])) },
   } satisfies ProviderListResponse
+}
+
+/** The config `model`, from the highest-priority document that sets one, as core's `Config.latest` reads it. */
+export function configuredModel(entries: ReadonlyArray<ConfigEntry>) {
+  const model = entries
+    .flatMap((entry) => (entry.type === "document" && entry.info.model !== undefined ? [entry.info.model] : []))
+    .at(-1)
+  // The server sends the decoded selection, so the `provider/model` string form never arrives.
+  if (typeof model !== "object") return
+  return { providerID: model.providerID, modelID: model.model }
 }
 
 export function normalizeProjectInfo(project: Project | CurrentProject): Project {

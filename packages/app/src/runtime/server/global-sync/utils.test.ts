@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { AgentListOutput, ModelListOutput, ProviderListOutput } from "@ocpp/client/promise"
-import { directoryKey, normalizeAgentList, normalizeProviderList, withDrivers } from "./utils"
+import { configuredModel, directoryKey, normalizeAgentList, normalizeProviderList, withDrivers } from "./utils"
 
 describe("normalizeAgentList", () => {
   test("adapts current agents to the app agent shape", () => {
@@ -123,5 +123,27 @@ describe("withDrivers", () => {
       variants: { low: {}, high: {} },
     })
     expect(withDrivers(catalog, [])).toBe(catalog)
+  })
+})
+
+describe("configuredModel", () => {
+  test("reads the model from the highest-priority document that sets one", () => {
+    expect(
+      configuredModel([
+        { type: "document", path: "/global/ocpp.json", info: { model: { providerID: "openai", model: "gpt-5" } } },
+        { type: "document", path: "/project/ocpp.json", info: { model: { providerID: "demo", model: "scripted" } } },
+        { type: "document", path: "/project/.ocpp/ocpp.json", info: { username: "dev" } },
+        { type: "directory", path: "/project/.ocpp" },
+      ]),
+    ).toEqual({ providerID: "demo", modelID: "scripted" })
+  })
+
+  test("finds no model when no document sets one", () => {
+    expect(
+      configuredModel([
+        { type: "document", info: {} },
+        { type: "claude", path: "/home/.claude" },
+      ]),
+    ).toBeUndefined()
   })
 })

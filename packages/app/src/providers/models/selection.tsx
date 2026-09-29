@@ -225,6 +225,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const item = firstModel(
         () => scope()?.model,
         () => agent.current()?.model,
+        providers.configured,
         fallback,
       )
       if (!item) return

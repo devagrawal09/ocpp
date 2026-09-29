@@ -8,6 +8,7 @@ import type {
   CodeModeCommandInfo,
   CodeModeEventInfo,
   CommandInfo,
+  ConfigEntry,
   FormCancelInput,
   FormInfo,
   FormReplyInput,
@@ -76,6 +77,7 @@ type LocationData = {
   vcs?: VcsInfo
   agent?: AgentInfo[]
   command?: CommandInfo[]
+  config?: ConfigEntry[]
   driver?: SessionDriverInfo[]
   integration?: IntegrationInfo[]
   mcp?: {
@@ -1307,6 +1309,10 @@ export function createData(config: CreateDataInput) {
         ])
         break
       case "config.updated":
+        result.location.config.invalidate(location)
+        void result.location.config.sync(location)
+        void result.location.websearch.refresh(location)
+        break
       case "websearch.updated":
         void result.location.websearch.refresh(location)
         break
@@ -1854,6 +1860,7 @@ export function createData(config: CreateDataInput) {
         result.location.vcs.invalidate(location)
         result.location.agent.invalidate(location)
         result.location.command.invalidate(location)
+        result.location.config.invalidate(location)
         result.location.driver.invalidate(location)
         result.location.integration.invalidate(location)
         result.location.mcp.server.invalidate(location)
@@ -1911,6 +1918,22 @@ export function createData(config: CreateDataInput) {
         },
         invalidate(ref?: LocationRef) {
           sync.invalidate(`location.command:${locationKey(ref ?? defaultLocation())}`)
+        },
+      },
+      // Configuration documents and discovery sources, from lowest to highest priority.
+      config: {
+        list(location?: LocationRef) {
+          return store.location[locationKey(location ?? defaultLocation())]?.config
+        },
+        sync(ref?: LocationRef) {
+          const id = locationKey(ref ?? defaultLocation())
+          return sync.run(`location.config:${id}`, async () => {
+            const response = await api().config.get({ location: locationQuery(ref ?? defaultLocation()) })
+            setStore("location", id, { ...store.location[id], config: response })
+          })
+        },
+        invalidate(ref?: LocationRef) {
+          sync.invalidate(`location.config:${locationKey(ref ?? defaultLocation())}`)
         },
       },
       // Vendor agents that can drive a session, selected through a model whose provider is the driver ID.

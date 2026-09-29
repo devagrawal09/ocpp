@@ -60,8 +60,10 @@ export function make(
     return messageID
   })
   const finish = Effect.fn("ExternalAgentStream.finish")(function* (error?: unknown) {
-    if (state.messageID === undefined) return
-    const base = { sessionID, assistantMessageID: state.messageID }
+    // A turn that fails before the vendor produced anything still ends in a failed step, so its error shows in the
+    // timeline as a provider error does. A turn interrupted before any output leaves no step behind.
+    if (state.messageID === undefined && (error === undefined || toSessionError(error).type === "aborted")) return
+    const base = { sessionID, assistantMessageID: yield* begin() }
     for (const block of state.blocks.values()) {
       yield* bus.publish(block.type === "text" ? SessionEvent.Text.Ended : SessionEvent.Reasoning.Ended, {
         ...base,

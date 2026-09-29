@@ -9,6 +9,7 @@ import { normalizeAgentList } from "@/runtime/server/global-sync/utils"
 import { useModels } from "@/providers/models/models"
 import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "@/providers/models/variant"
 import { useComposerState } from "./persistence"
+import { composerModel } from "@/providers/models/composer-model"
 
 export function createComposerControls(input: { sessionKey: Accessor<string>; model?: ModelSelection }) {
   const layout = useLayout()
@@ -55,16 +56,20 @@ export function createComposerModelSelection(input: {
     const provider = providers.all().get(model.providerID)
     return !!provider?.models[model.modelID] && connected().has(model.providerID)
   }
-  const recent = () => models.recent.list().find(valid)
   const fallback = () =>
     providers.connected().flatMap((provider) => {
       const modelID = Object.values(provider.models)[0]?.id
       return modelID ? [{ providerID: provider.id, modelID }] : []
     })[0]
   const current = () => {
-    const key = [prompt.model.current(), input.agent()?.model, providers.configured(), recent(), fallback()].find(
-      (item): item is ModelKey => !!item && valid(item),
-    )
+    const key = composerModel({
+      pick: prompt.model.current(),
+      agent: input.agent()?.model,
+      recent: models.recent.list(),
+      configured: providers.configured(),
+      first: fallback(),
+      available: valid,
+    })
     return key ? models.find(key) : undefined
   }
   const recentModels = createMemo(() =>

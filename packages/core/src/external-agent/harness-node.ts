@@ -69,13 +69,6 @@ const layer = Layer.effect(
       const activation = yield* external.activation(sessionID)
       // Only a subagent call may run a vendor natively; everything else, including every top-level Session, is harnessed.
       const harness = activation?.harness ?? "ocpp"
-      const sdk = yield* drivers
-        .driver(provider)
-        .pipe(
-          Effect.mapError(
-            (error) => new StepFailedError({ error: { type: "driver.unavailable", message: error.message } }),
-          ),
-        )
       yield* settleStaleToolCalls(store, bus, sessionID)
       const selection = yield* context.select(sessionID)
       const agent = selection.agent.id
@@ -85,6 +78,21 @@ const layer = Layer.effect(
         initial: yield* Instructions.renderCurrent(selection.instructions),
       }).join("\n\n")
       const stream = ExternalAgentStream.make(bus, sessionID, agent, model)
+      const sdk = yield* drivers.driver(provider).pipe(
+        Effect.catch((error) =>
+          Effect.gen(function* () {
+            const failure = new StepFailedError({ error: { type: "driver.unavailable", message: error.message } })
+            // As a provider error answers a prompt for the OC++ runner, the failure answers the prompt in the timeline
+            // instead of leaving it pending. The vendor never answered it, so it still receives it once it is ready.
+            if (
+              !control &&
+              (yield* SessionInbox.promoteItems(db, bus, sessionID, input.promotable ?? "input")).length > 0
+            )
+              yield* stream.finish(failure)
+            return yield* failure
+          }),
+        ),
+      )
 
       // Rung by every admission to this Session's inbox; a waiter captures the bell before checking its condition.
       const bell = { current: Deferred.makeUnsafe<void>() }

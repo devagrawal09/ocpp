@@ -519,6 +519,35 @@ describe("vendor-driven sessions", () => {
       const failed = log.find((event) => event.type === SessionEvent.Execution.Failed.type)
       expect(JSON.stringify(failed)).toContain("Codex is not available on this machine")
       expect(JSON.stringify(failed)).toContain("codex login")
+      // The failure answers the prompt in the timeline, as a provider error does, instead of leaving it pending.
+      expect(yield* env.sessions.inbox(env.session.id)).toEqual([])
+      const [prompt, answer, ...rest] = yield* messages(env.session.id)
+      expect(rest).toEqual([])
+      expect(prompt).toMatchObject({ type: "user", text: "Hello" })
+      expect(answer).toMatchObject({
+        type: "assistant",
+        model: { providerID: "codex", id: "gpt-5.6-sol" },
+        error: { type: "driver.unavailable" },
+      })
+      expect(answer?.type === "assistant" ? answer.error?.message : undefined).toContain(
+        "Codex is not available on this machine",
+      )
+    }),
+  )
+
+  it.live("a vendor run that fails before any output shows its error in the timeline", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = async () => {
+        throw new Error("Invalid API key · Please run /login")
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Hello" })
+      yield* env.sessions.wait(env.session.id)
+      expect((yield* env.sessions.get(env.session.id)).outcome).toBe("failed")
+      expect(yield* messages(env.session.id)).toMatchObject([
+        { type: "user", text: "Hello" },
+        { type: "assistant", error: { message: "Invalid API key · Please run /login" } },
+      ])
     }),
   )
 })

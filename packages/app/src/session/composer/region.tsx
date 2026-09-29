@@ -20,7 +20,7 @@ import { useComposerCommands } from "@/composer/commands"
 import { useSessionCommands } from "../commands/use-session-commands"
 import type { SessionModel } from "../model"
 import type { SessionScreenLayout } from "../screen-layout"
-import { restorePromptModel, syncPromptModel, syncSessionModel } from "../session-model-helpers"
+import { syncPromptModel } from "../session-model-helpers"
 import type { SessionTimelineInteraction } from "../timeline/interaction"
 import { createSessionRevert } from "../revert"
 import { SessionComposerRegion } from "./session-composer-region"
@@ -49,20 +49,10 @@ export function createActiveSessionRegion(input: {
   })
   let promptRef: HTMLDivElement | undefined
 
-  createEffect(
-    on(
-      () => [input.timeline.lastUserMessage(), input.session.data.info()] as const,
-      () => syncSessionModel(local, input.session.data.info(), input.timeline.lastUserMessage()?.metadata),
-    ),
-  )
-  let restoredModelSession: string | undefined
+  // The prompt keeps a copy of the selection for new tabs opened from this Session; the Session's own model
+  // always comes from what it stores, never from this copy.
   createEffect(() => {
-    const id = input.session.identity.params.id
-    if (!id || !prompt.ready() || !local.session.ready()) return
-    if (restoredModelSession !== id) {
-      restoredModelSession = id
-      if (restorePromptModel(local, prompt)) return
-    }
+    if (!input.session.identity.params.id || !prompt.ready() || !local.session.ready()) return
     syncPromptModel(local, prompt)
   })
   createEffect(

@@ -1,31 +1,56 @@
 import { describe, expect, test } from "bun:test"
 import { resetSessionModel, restorePromptModel, syncPromptModel, syncSessionModel } from "./session-model-helpers"
 
-const message = (input?: { agent?: string; model?: { providerID: string; modelID: string; variant?: string } }) => ({
-  sessionID: "session",
-  agent: input?.agent ?? "build",
-  model: input?.model ?? { providerID: "anthropic", modelID: "claude-sonnet-4" },
-})
+const restore = (info: Parameters<typeof syncSessionModel>[1], metadata?: Record<string, unknown>) => {
+  const calls: unknown[] = []
+  syncSessionModel(
+    {
+      session: {
+        restore(value) {
+          calls.push(value)
+        },
+        reset() {},
+      },
+    },
+    info,
+    metadata,
+  )
+  return calls
+}
 
 describe("syncSessionModel", () => {
-  test("restores the last message through session state", () => {
-    const calls: unknown[] = []
-
-    syncSessionModel(
+  test("restores the Session's model and agent", () => {
+    expect(
+      restore({
+        id: "session",
+        agent: "build",
+        model: { id: "claude-sonnet-4", providerID: "anthropic", variant: "high" },
+      }),
+    ).toEqual([
       {
-        session: {
-          restore(value) {
-            calls.push(value)
-          },
-          reset() {},
-        },
+        sessionID: "session",
+        agent: "build",
+        model: { providerID: "anthropic", modelID: "claude-sonnet-4", variant: "high" },
       },
-      message({ model: { providerID: "anthropic", modelID: "claude-sonnet-4", variant: "high" } }),
-    )
-
-    expect(calls).toEqual([
-      message({ model: { providerID: "anthropic", modelID: "claude-sonnet-4", variant: "high" } }),
     ])
+  })
+
+  test("restores the model of a Session that records no agent", () => {
+    expect(restore({ id: "session", model: { id: "scripted", providerID: "demo", variant: "default" } })).toEqual([
+      {
+        sessionID: "session",
+        agent: undefined,
+        model: { providerID: "demo", modelID: "scripted", variant: "default" },
+      },
+    ])
+    expect(restore({ id: "session", model: { id: "opus", providerID: "claude" } })).toEqual([
+      { sessionID: "session", agent: undefined, model: { providerID: "claude", modelID: "opus", variant: undefined } },
+    ])
+  })
+
+  test("waits for a model", () => {
+    expect(restore(undefined, { agent: "build" })).toEqual([])
+    expect(restore({ id: "session", agent: "build" })).toEqual([])
   })
 })
 

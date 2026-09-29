@@ -1,9 +1,11 @@
+import { resolveSessionComposerSelection } from "./composer/selection"
+
 type Local = {
   session: {
     reset(): void
     restore(msg: {
       sessionID: string
-      agent: string
+      agent?: string
       model: { providerID: string; modelID: string; variant?: string }
     }): void
   }
@@ -33,9 +35,14 @@ export const resetSessionModel = (local: Local) => {
 
 export const syncSessionModel = (
   local: Local,
-  msg: { sessionID: string; agent: string; model: { providerID: string; modelID: string; variant?: string } },
+  info: { id: string; agent?: string; model?: { id: string; providerID: string; variant?: string } } | undefined,
+  metadata: Record<string, unknown> | undefined,
 ) => {
-  local.session.restore(msg)
+  const selection = resolveSessionComposerSelection(info, metadata)
+  // A Session created through the API may record no agent, and its prompts no metadata. Its model must still
+  // reach the composer, or the composer falls back to another model and the next prompt switches to it.
+  if (!info || !selection.model) return
+  local.session.restore({ sessionID: info.id, agent: selection.agent, model: selection.model })
 }
 
 export const syncPromptModel = (local: ModelSelection, prompt: PromptState) => {

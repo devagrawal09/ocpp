@@ -50,7 +50,7 @@ export function useProviders(directory: Accessor<string | undefined>) {
     },
     all: () => providers().all,
     default: () => providers().default,
-    // A new session starts on the config `model` unless its agent names one.
+    // A new session starts on the config `model` when neither its agent nor a recent pick names another.
     configured: () => configuredModel(data.location.config.list(location()) ?? []),
     // V2 servers list only available providers, so the connectable catalog
     // comes from the integration list, with the provider catalog as fallback.

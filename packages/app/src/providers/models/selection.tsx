@@ -8,6 +8,7 @@ import { useSettings } from "@/settings/model"
 import { useProviders } from "@/providers/catalog/providers"
 import { Persist, persisted } from "@/runtime/persistence/storage"
 import { hasCustomAgent, resolveAgent } from "./agent"
+import { composerModel } from "./composer-model"
 import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "./variant"
 import { useWorkspaceLocation } from "@/workspaces/location"
 import { useData } from "@/runtime/server/current"
@@ -107,14 +108,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       return !!provider?.models[model.modelID] && connected().has(model.providerID)
     }
 
-    const firstModel = (...items: Array<() => ModelKey | undefined>) => {
-      for (const item of items) {
-        const model = item()
-        if (!model) continue
-        if (validModel(model)) return model
-      }
-    }
-
     const pickAgent = (name: string | undefined) => {
       return resolveAgent(list(), name)
     }
@@ -153,12 +146,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       setStore("promoting", undefined)
     })
 
-    const recentModel = () => {
-      for (const item of models.recent.list()) {
-        if (validModel(item)) return item
-      }
-    }
-
     const defaultModel = () => {
       for (const provider of providers.connected()) {
         const first = Object.values(provider.models)[0]
@@ -167,8 +154,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         if (validModel(model)) return model
       }
     }
-
-    const fallback = createMemo<ModelKey | undefined>(() => recentModel() ?? defaultModel())
 
     const agent = {
       list,
@@ -222,12 +207,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     }
 
     const current = createMemo(() => {
-      const item = firstModel(
-        () => scope()?.model,
-        () => agent.current()?.model,
-        providers.configured,
-        fallback,
-      )
+      const item = composerModel({
+        pick: scope()?.model,
+        agent: agent.current()?.model,
+        recent: models.recent.list(),
+        configured: providers.configured(),
+        first: defaultModel(),
+        available: validModel,
+      })
       if (!item) return
       return models.find(item)
     })

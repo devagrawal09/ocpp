@@ -107,7 +107,9 @@ export function normalizeProviderList(
       status: model.status,
       options: model.settings ?? {},
       headers: model.headers ?? {},
-      release_date: new Date(model.time.released).toISOString().slice(0, 10),
+      // A model from config or a local provider has no known release (0). Undated, the picker keeps it
+      // visible instead of hiding it as decades old.
+      release_date: model.time.released ? new Date(model.time.released).toISOString().slice(0, 10) : "",
       variants: Object.fromEntries(model.variants.map((variant) => [variant.id, variant.settings ?? {}])),
     }
   }

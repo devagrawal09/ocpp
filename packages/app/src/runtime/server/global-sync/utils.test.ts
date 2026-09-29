@@ -81,6 +81,29 @@ describe("normalizeProviderList", () => {
       variants: { high: {} },
     })
   })
+
+  test("leaves a config-defined model undated so the picker shows it", () => {
+    const result = normalizeProviderList(
+      [{ id: "demo", name: "Demo", package: "aisdk:@ai-sdk/openai-compatible" }] as ProviderListOutput["data"],
+      [
+        {
+          id: "scripted",
+          modelID: "scripted",
+          providerID: "demo",
+          name: "Scripted model",
+          capabilities: { tools: true, input: ["text"], output: ["text"] },
+          variants: [],
+          time: { released: 0 },
+          cost: [],
+          status: "active",
+          enabled: true,
+          limit: { context: 200_000, output: 8_000 },
+        },
+      ] as ModelListOutput["data"],
+    )
+
+    expect(result.all.get("demo")?.models.scripted?.release_date).toBe("")
+  })
 })
 
 describe("directoryKey", () => {

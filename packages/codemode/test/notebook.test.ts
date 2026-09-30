@@ -23,6 +23,39 @@ const restarted = (values: Readonly<Record<string, CodeMode.NotebookValue>>) =>
   JSON.parse(JSON.stringify(values)) as Record<string, CodeMode.NotebookValue>
 
 describe("durable notebook declarations", () => {
+  test("passes only direct admitted notebook references through the opt-in boundary", async () => {
+    const bindings = restarted(
+      await declarations(
+        'const data = { text: "x".repeat(10000) }; const scalar = 3; function saved(input) { return input }',
+      ),
+    )
+    const inspect = Tool.make({
+      description: "Inspect a direct reference",
+      notebookReference: "value",
+      input: Schema.Struct({ value: Schema.String }),
+      output: Schema.String,
+      execute: (input) => Effect.succeed(input.value),
+    })
+    const evaluate = (code: string) => Effect.runPromise(CodeMode.execute({ code, bindings, tools: { inspect, echo } }))
+    for (const name of ["data", "scalar", "saved"])
+      expect(await evaluate(`return tools.inspect({ value: ${name} })`)).toMatchObject({ ok: true, value: name })
+    expect(await evaluate("function local() { return tools.inspect({ value: data }) }; return local()")).toMatchObject({
+      ok: true,
+      value: "data",
+    })
+    for (const code of [
+      'return tools.inspect({ value: "saved" })',
+      "let alias = saved; return tools.inspect({ value: alias })",
+      "return tools.inspect({ value: data.text })",
+      "return tools.inspect({ value: data, extra: 1 })",
+      "const fresh = 1; return tools.inspect({ value: fresh })",
+      "{ let scalar = 3; return tools.inspect({ value: scalar }) }",
+      "let argument = { value: saved }; return tools.inspect(argument)",
+    ])
+      expect(await evaluate(code)).toMatchObject({ ok: false, toolCalls: [] })
+    expect(await evaluate("return tools.echo({ value: saved })")).toMatchObject({ ok: false, toolCalls: [] })
+  })
+
   test("saves every direct top-level const and function without export syntax", async () => {
     const result = await run(`const response = tools.echo({ value: "ok" })
 const answer = { value: response.value }

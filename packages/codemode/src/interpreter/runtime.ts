@@ -292,6 +292,8 @@ export class Interpreter<R> {
     allowedTools?: ReadonlySet<string>,
     handles: Array<ToolHandle> = [],
     impure: (helper: ImpureHelper) => number = (helper) => (helper === "time.now" ? Date.now() : Math.random()),
+    private readonly notebookReference: (path: ReadonlyArray<string>) => string | undefined = () => undefined,
+    private readonly referenceBindings?: ReadonlyMap<string, Binding>,
   ) {
     const globalScope = new Map<string, Binding>()
     this.scopes = new ScopeStack([globalScope])
@@ -1771,13 +1773,38 @@ export class Interpreter<R> {
       if (callable === OptionalShortCircuit) return OptionalShortCircuit
       if ((callable === null || callable === undefined) && node.optional === true) return OptionalShortCircuit
 
-      const args = yield* self.evaluateCallArguments(argNodes)
       // Only a call that names its tool by a static path runs it, so the compile check has seen every tool a
       // program calls. A reference reached any other way is a value to pass on, which invokeCallable refuses.
       if (callable instanceof ToolReference && staticToolPath(callee) !== undefined) {
         if (callable.path.length === 0) throw new InterpreterRuntimeError("The tools root is not callable.", callee)
+        const property = self.notebookReference(callable.path)
+        if (property !== undefined) {
+          const input = argNodes.length === 1 ? asNode(argNodes[0], "Notebook reference input") : undefined
+          const properties = input?.type === "ObjectExpression" ? getArray(input, "properties") : []
+          const entry = properties.length === 1 ? asNode(properties[0], "Notebook reference property") : undefined
+          const key = entry?.type === "Property" ? getNode(entry, "key") : undefined
+          const value = entry?.type === "Property" ? getNode(entry, "value") : undefined
+          const name = value?.type === "Identifier" ? getString(value, "name") : undefined
+          const saved = name === undefined ? undefined : (self.referenceBindings ?? self.notebookScope).get(name)
+          if (
+            entry?.computed === true ||
+            (key?.type === "Identifier" ? key.name : key?.value) !== property ||
+            name === undefined ||
+            saved === undefined ||
+            self.scopes.resolve(name) !== saved
+          )
+            throw new InterpreterRuntimeError(
+              `This tool requires { ${property}: savedIdentifier }, using a direct identifier from the admitted notebook snapshot, not a string, alias, or expression.`,
+              node,
+            ).as("TypeError")
+          // Read for quarantine diagnostics, but never copy a function or large saved value into tool arguments.
+          self.scopes.get(name, node)
+          return yield* self.executeToolCall(callable.path, [{ [property]: name }])
+        }
+        const args = yield* self.evaluateCallArguments(argNodes)
         return yield* self.executeToolCall(callable.path, args)
       }
+      const args = yield* self.evaluateCallArguments(argNodes)
       return yield* self.invokeCallable(callable, args, node, callee)
     })
   }
@@ -2015,6 +2042,8 @@ export class Interpreter<R> {
       allowedTools,
       this.handles,
       this.impure,
+      this.notebookReference,
+      this.referenceBindings ?? this.notebookScope,
     )
     invocation.scopes = new ScopeStack([...fn.capturedScopes, new Map()], bindingOverrides)
     const run = Effect.gen(function* () {

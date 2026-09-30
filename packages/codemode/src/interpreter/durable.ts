@@ -30,6 +30,7 @@ type StoredFunction = {
   readonly [DURABLE_MARKER]: "function"
   readonly version: number
   readonly source: string
+  readonly signature?: string
   readonly node: AstNode
   readonly captures: Readonly<Record<string, NotebookValue>>
 }
@@ -142,6 +143,28 @@ export const encodeDeclarations = (
       [DURABLE_MARKER]: "function",
       version: IR_VERSION,
       source: value.source,
+      ...(typeof value.node.start === "number" && isRecord(value.node.body) && typeof value.node.body.start === "number"
+        ? {
+            signature: value.source
+              .slice(
+                0,
+                value.node.type === "ArrowFunctionExpression"
+                  ? value.source.indexOf(
+                      "=>",
+                      Math.max(
+                        value.node.start,
+                        ...(Array.isArray(value.node.params)
+                          ? value.node.params.map((param) =>
+                              isRecord(param) && typeof param.end === "number" ? param.end : 0,
+                            )
+                          : []),
+                      ) - value.node.start,
+                    ) + 2
+                  : value.node.body.start - value.node.start,
+              )
+              .trim(),
+          }
+        : {}),
       node: withoutPositions(value.node),
       captures: Object.fromEntries(
         [...value.captures].map(([name, binding]) => [

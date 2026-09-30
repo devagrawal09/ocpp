@@ -91,6 +91,32 @@ intentionally rejected.
 
 ## What Is Saved
 
+### Discovering And Inspecting Saved Values
+
+The host supplies a bounded notebook inventory in each Session request's initial instructions,
+read from durable storage rather than conversation history. Compaction and host restart do not
+erase discoverability. When the inventory overflows, it shows recent identifiers, an omitted
+count, and discovery instructions. Save notifications continue to announce additions.
+
+Use `tools.notebook.list({})`, `tools.notebook.list({ query: "text", offset: 0 })`, and the
+returned `next` offset to discover saved identifiers. Inspect an actual direct reference:
+
+```js
+return tools.notebook.inspect({ value: savedFunction })
+// Or: tools.notebook.inspect({ value: savedConst })
+```
+
+Inspection returns bounded stored metadata: data kind, encoded size, shallow shape and preview;
+functions additionally expose their own source, stored signature when available, capture shapes,
+direct captured notebook dependencies and static tool calls. It does not invoke a function or
+invent descriptions. Large metadata may return a truncated text preview instead.
+
+The interpreter's opt-in `notebookReference` tool boundary requires an object literal containing
+exactly the named property and a direct identifier bound in the admitted notebook snapshot. It
+converts that reference to its snapshot name before ordinary tool argument copying and journaling.
+String selectors, aliases, expressions, shadowed locals and newly declared unsaved values are
+rejected. All other tools keep their ordinary data-only argument boundary and static-path rules.
+
 Only **direct** top-level declarations are durable:
 
 ```ts

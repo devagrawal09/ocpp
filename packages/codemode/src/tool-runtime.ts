@@ -447,6 +447,7 @@ export type ToolRuntime<R = never> = {
   readonly execute: (path: ReadonlyArray<string>, args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
   readonly search: (args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
   readonly keys: (path: ReadonlyArray<string>) => ReadonlyArray<string>
+  readonly notebookReference: (path: ReadonlyArray<string>) => string | undefined
 }
 
 export const make = <R>(
@@ -531,6 +532,7 @@ export const make = <R>(
     root: new ToolReference([]),
     calls,
     keys: (path) => namespaceKeys(root, path),
+    notebookReference: (path) => resolve(root, path).notebookReference,
     search: (args) =>
       Effect.suspend(() =>
         executeTool(

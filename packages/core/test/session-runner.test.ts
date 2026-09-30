@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { CodeMode } from "@ocpp/codemode"
+import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
 import {
   AIError,
   LLMEvent,
@@ -972,6 +974,65 @@ const watchRename = Effect.fnUntraced(function* (sessionID: Session.ID) {
 })
 
 describe("SessionRunnerLLM", () => {
+  scenario("renders one notebook checkpoint across steps, retries and later prompts", function* (s) {
+    const save = (executionID: string, code: string) =>
+      Effect.gen(function* () {
+        const saved = yield* CodeMode.execute({ code })
+        if (!saved.ok) throw new Error(saved.error.message)
+        yield* s.db
+          .insert(CodeModeBindingTable)
+          .values(
+            Object.entries(saved.declarations).map(([name, value]) => ({
+              session_id: sessionID,
+              name,
+              value,
+              message_seq: 0,
+              execution_id: executionID,
+            })),
+          )
+          .run()
+      }).pipe(Effect.orDie)
+    yield* save(
+      "exe_notebook_awareness",
+      "const durableData = { answer: 42 }; function durableHelper(x) { return durableData.answer + x }",
+    )
+    yield* s.hooks.register("session", "retry", (event) =>
+      Effect.sync(() => {
+        event.decision = { retry: true, delay: 0 }
+      }),
+    )
+    yield* s.admit("Continue using the notebook")
+    yield* s.llm.push(
+      // Saved while the first step runs, so the second step's reload sees it in storage.
+      Stream.concat(
+        Stream.fromEffect(save("exe_step", "const stepValue = 1")).pipe(Stream.drain),
+        Stream.fromIterable([
+          LLMEvent.stepStart({ index: 0 }),
+          LLMEvent.toolCall({ id: "call-echo-notebook", name: "echo", input: { text: "saved" } }),
+          LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+          LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
+        ]),
+      ),
+      // Saved before the second step's first attempt fails, so its retry reloads after the save.
+      Stream.fromEffect(save("exe_retry", "const retryValue = 2")).pipe(
+        Stream.flatMap(() => Stream.fail(invalidRequest())),
+      ),
+      TestLLM.text("Notebook is available", "text-notebook"),
+    )
+    yield* s.resume
+    yield* s.llm.push(TestLLM.text("Still available", "text-later"))
+    yield* s.runPrompt("Keep going")
+
+    const systems = s.requests.map((request) => request.system.map((part) => part.text).join("\n"))
+    expect(systems).toHaveLength(4)
+    expect(new Set(systems).size).toBe(1)
+    expect(systems[0]).toContain("2 saved identifiers; 0 omitted")
+    expect(systems[0]).toContain("function durableHelper(x)")
+    expect(systems[0]).toContain("notebook.inspect({ value: savedIdentifier })")
+    expect(systems[0]).not.toContain("stepValue")
+    expect(systems[0]).not.toContain("retryValue")
+  })
+
   scenario("generates the title while the first model step is still running", function* (s) {
     yield* prepareTitleGeneration
 

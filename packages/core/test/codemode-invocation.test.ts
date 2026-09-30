@@ -301,6 +301,19 @@ const hold = (context: Setup) =>
   })
 
 describe("Code Mode commands", () => {
+  it.live("inspects saved notebook values through actual execute admission", () =>
+    Effect.gen(function* () {
+      const context = yield* setup
+      yield* execute(
+        context,
+        "const durableData = { answer: 42 }; function durableHelper(x) { return durableData.answer + x }",
+      )
+      const inspected = yield* execute(context, "return tools.notebook.inspect({ value: durableHelper })")
+      expect(inspected?.output).toContain("function durableHelper(x)")
+      expect(inspected?.output).toContain("durableData")
+    }),
+  )
+
   it.live("defines, lists, replaces, and removes commands", () =>
     Effect.gen(function* () {
       const context = yield* setup

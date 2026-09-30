@@ -2,6 +2,7 @@ import { describe, expect } from "bun:test"
 import { CodeMode } from "@ocpp/codemode"
 import { Agent } from "@ocpp/core/agent"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
+import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
 import { limits } from "@ocpp/core/codemode/limits"
 import { CodeModeBindingTable, CodeModeExecutionTable, CodeModeJournalTable } from "@ocpp/core/codemode/sql"
 import { Database } from "@ocpp/core/database/database"
@@ -93,6 +94,38 @@ const admitted = Effect.fnUntraced(function* (
 })
 
 describe("CodeModeStore", () => {
+  it.effect("rebuilds a notebook checkpoint from storage after fork and revert", () =>
+    Effect.gen(function* () {
+      const db = yield* seed()
+      const store = yield* CodeModeStore.Service
+      const early = yield* admitted(store, { id: "exe_inventory_early", source: "const early = 1" })
+      yield* store.commit(early, { early: 1 })
+      const late = yield* admitted(store, {
+        id: "exe_inventory_late",
+        messageID: secondMessage,
+        source: "const late = 2",
+      })
+      yield* store.commit(late, { late: 2 })
+      const checkpoint = (sessionID: Session.ID) =>
+        CodeModeStore.savedNames(db, sessionID).pipe(
+          Effect.flatMap((names) => CodeModeInstructions.notebook(store, sessionID, names)),
+        )
+      const inventory = yield* checkpoint(parent)
+      expect(inventory.indexOf("late:")).toBeLessThan(inventory.indexOf("early:"))
+      // A checkpoint renders only its own names, even after later values are saved.
+      expect(yield* CodeModeInstructions.notebook(store, parent, ["early"])).not.toContain("late:")
+      expect(yield* CodeModeInstructions.notebook(store, parent, [])).toBe("")
+      yield* store.fork({ from: parent, to: child, throughSeq: 1 })
+      const forked = yield* checkpoint(child)
+      expect(forked).toContain("early:")
+      expect(forked).not.toContain("late:")
+      yield* store.revert({ sessionID: parent, beforeSeq: 2 })
+      const reverted = yield* checkpoint(parent)
+      expect(reverted).toContain("early:")
+      expect(reverted).not.toContain("late:")
+    }),
+  )
+
   it.effect("reserves every declared name atomically and saves them together", () =>
     Effect.gen(function* () {
       const db = yield* seed()
@@ -335,6 +368,8 @@ describe("CodeModeStore", () => {
       const store = yield* CodeModeStore.Service
       const earlier = yield* admitted(store, { id: "exe_earlier", source: "const seen = 1" })
       yield* store.commit(earlier, { seen: 1 })
+      const newest = yield* admitted(store, { id: "exe_newest", messageID: secondMessage, source: "const zed = 9" })
+      yield* store.commit(newest, { zed: 9 })
       const execution = yield* store
         .admit({
           id: "exe_running",
@@ -346,6 +381,8 @@ describe("CodeModeStore", () => {
         })
         .pipe(Effect.map((admission) => (admission.ok ? admission.execution : undefined)))
       if (!execution) throw new Error("Expected admission")
+      expect(Object.keys(execution.bindings)).toEqual(["zed", "seen"])
+      expect(Object.keys(yield* store.bindings(parent))).toEqual(["zed", "seen"])
       // A value saved after admission is outside the snapshot the execution may see.
       const later = yield* admitted(store, { id: "exe_later", source: "const unseen = 2" })
       yield* store.commit(later, { unseen: 2 })
@@ -382,7 +419,7 @@ describe("CodeModeStore", () => {
 
       const resumable = yield* store.resume(execution.id)
       expect(resumable).toMatchObject({
-        execution: { id: "exe_running", input: { dataset: [1, 2] }, bindings: { seen: 1 } },
+        execution: { id: "exe_running", input: { dataset: [1, 2] }, bindings: { zed: 9, seen: 1 } },
         resumes: 1,
         missing: [],
         journal: [
@@ -398,7 +435,7 @@ describe("CodeModeStore", () => {
           { index: 1, tool: "subagent", status: "scheduled", impure: [], progress: { sessionID: child } },
         ],
       })
-      expect(Object.keys(resumable?.execution.bindings ?? {})).toEqual(["seen"])
+      expect(Object.keys(resumable?.execution.bindings ?? {})).toEqual(["zed", "seen"])
       expect((yield* store.resume(execution.id))?.resumes).toBe(2)
 
       yield* store.indeterminate(execution, "Replay diverged")

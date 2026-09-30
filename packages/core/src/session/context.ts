@@ -5,6 +5,7 @@ import { Context, Effect, Layer, Result } from "effect"
 import { Agent } from "../agent.js"
 import { Catalog } from "../catalog.js"
 import { CodeModeInstructions } from "../codemode/instructions.js"
+import { CodeModeStore } from "../codemode/store.js"
 import { Database } from "../database/database.js"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { InstructionDiscovery } from "../instruction-discovery.js"
@@ -83,6 +84,7 @@ const layer = Layer.effect(
     const agents = yield* Agent.Service
     const builtins = yield* InstructionBuiltIns.Service
     const catalog = yield* Catalog.Service
+    const notebook = yield* CodeModeStore.Service
     const db = (yield* Database.Service).db
     const discovery = yield* InstructionDiscovery.Service
     const entries = yield* InstructionEntry.Service
@@ -187,7 +189,14 @@ const layer = Layer.effect(
         session: selection.session,
         agent: selection.agent,
         model,
-        initial: history.initial,
+        // The notebook checkpoint moves with the instruction epoch. Values saved since then reach history
+        // through completion notifications, so steps, retries and restarts render the same baseline.
+        initial: [
+          history.initial,
+          yield* CodeModeInstructions.notebook(notebook, selection.session.id, history.notebook),
+        ]
+          .filter((part) => part.length > 0)
+          .join("\n\n"),
         messages: history.entries.map((entry) => entry.message),
         tools: selection.tools,
       }
@@ -206,6 +215,7 @@ export const node = makeLocationNode({
   deps: [
     Agent.node,
     Catalog.node,
+    CodeModeStore.node,
     Database.node,
     InstructionBuiltIns.node,
     InstructionDiscovery.node,

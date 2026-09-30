@@ -2,7 +2,7 @@ export * as CodeModeStore from "./store.js"
 
 import type { CodeMode } from "@ocpp/codemode"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database } from "../database/database.js"
 import { Job } from "../job.js"
@@ -128,6 +128,19 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/CodeModeStore") {}
 
+/**
+ * Names saved in a Session's notebook, read inside the caller's transaction. Saved names are immutable
+ * and only a committed revert removes them, so a set of names identifies a stable notebook checkpoint.
+ */
+export const savedNames = Effect.fnUntraced(function* (db: Database.Interface["db"], sessionID: SessionSchema.ID) {
+  return (yield* db
+    .select({ name: CodeModeBindingTable.name })
+    .from(CodeModeBindingTable)
+    .where(eq(CodeModeBindingTable.session_id, sessionID))
+    .all()
+    .pipe(Effect.orDie)).map((row) => row.name)
+})
+
 const RESTART_MESSAGE = "Execution became indeterminate because the host restarted before it settled."
 
 const layer = Layer.effect(
@@ -142,6 +155,7 @@ const layer = Layer.effect(
           .select({ name: CodeModeBindingTable.name, value: CodeModeBindingTable.value })
           .from(CodeModeBindingTable)
           .where(eq(CodeModeBindingTable.session_id, sessionID))
+          .orderBy(desc(CodeModeBindingTable.message_seq), asc(CodeModeBindingTable.name))
           .all()
           .pipe(Effect.orDie)).map((row) => [row.name, row.value]),
       )
@@ -170,6 +184,7 @@ const layer = Layer.effect(
               .select({ name: CodeModeBindingTable.name, value: CodeModeBindingTable.value })
               .from(CodeModeBindingTable)
               .where(eq(CodeModeBindingTable.session_id, input.sessionID))
+              .orderBy(desc(CodeModeBindingTable.message_seq), asc(CodeModeBindingTable.name))
               .all()
             const totals = yield* tx
               .select(notebookTotals)
@@ -561,6 +576,7 @@ const layer = Layer.effect(
                         inArray(CodeModeBindingTable.name, [...row.snapshot]),
                       ),
                     )
+                    .orderBy(desc(CodeModeBindingTable.message_seq), asc(CodeModeBindingTable.name))
                     .all()
             const journal = yield* tx
               .select()

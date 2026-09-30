@@ -34,7 +34,10 @@ export function refusal(journal: ReadonlyArray<CodeModeStore.JournalEntry>, poli
 }
 
 function entryRefusal(entry: CodeModeStore.JournalEntry, policy: Policy) {
-  const rules = entry.tool === "search" ? search : policy(entry.tool)
+  const rules =
+    entry.tool === "search" || entry.tool === "notebook.inspect" || entry.tool === "notebook.list"
+      ? search
+      : policy(entry.tool)
   const call = "Call " + (entry.index + 1) + " (" + toolExpression(entry.tool) + ")"
   if (rules === undefined)
     return call + " cannot be replayed because " + toolExpression(entry.tool) + " is no longer available."
@@ -128,8 +131,14 @@ export function make(journal: ReadonlyArray<CodeModeStore.JournalEntry>, policy:
         diverge(mismatch)
         return { impure, replayed: false }
       }
-      // tools.search runs inside the interpreter on every run, so it is never served from the journal.
-      if (!inFlight(entry) && !entry.omitted && entry.tool !== "search") {
+      // Discovery tools run from the interpreter/catalog or the immutable notebook snapshot on every run.
+      if (
+        !inFlight(entry) &&
+        !entry.omitted &&
+        entry.tool !== "search" &&
+        entry.tool !== "notebook.inspect" &&
+        entry.tool !== "notebook.list"
+      ) {
         replayed++
         decisions.set(call.index, { type: "replay", entry })
         return { impure, replayed: true }

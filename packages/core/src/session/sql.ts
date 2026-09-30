@@ -178,4 +178,9 @@ export const InstructionStateTable = sqliteTable("instruction_state", {
   through_seq: integer().notNull(),
   initial_values: text({ mode: "json" }).notNull().$type<Instruction.Values>(),
   current_values: text({ mode: "json" }).notNull().$type<Instruction.Values>(),
+  /**
+   * Notebook identifiers checkpointed with the epoch baseline. Their immutable values are read from
+   * `codemode_binding` when the baseline renders; values saved later are announced chronologically.
+   */
+  notebook: text({ mode: "json" }).notNull().$type<ReadonlyArray<string>>().default([]),
 })

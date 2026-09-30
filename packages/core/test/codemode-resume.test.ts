@@ -10,6 +10,7 @@ import { Catalog } from "@ocpp/core/catalog"
 import { CodeModeCommand } from "@ocpp/core/codemode/command"
 import { CodeModeResume } from "@ocpp/core/codemode/resume"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
+import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
 import { Config } from "@ocpp/core/config"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
@@ -619,6 +620,48 @@ const specs = Bun.serve({
 afterAll(() => specs.stop(true))
 
 describe("Code Mode crash recovery", () => {
+  test("rebuilds inventory and direct-reference inspection on a fresh host runtime", async () => {
+    await using dir = await tmpdir()
+    const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+    const run = hostProcess(path.join(dir.path, "ocpp.db"))
+    const started = await run(
+      Effect.gen(function* () {
+        const blocked = yield* registerBlocked(location, [])
+        const sessionID = yield* createSession(location)
+        const saved = yield* start(
+          location,
+          sessionID,
+          "call_notebook_save",
+          "const savedData = { answer: 42 }; function savedHelper(x) { return savedData.answer + x }",
+        )
+        yield* waitForCodeModeExecution(saved)
+        const executionID = yield* start(
+          location,
+          sessionID,
+          "call_notebook_inspect",
+          "let metadata = tools.notebook.inspect({ value: savedHelper }); tools.test.wait({ step: 1 }); return metadata",
+        )
+        yield* Deferred.await(blocked)
+        return { sessionID, executionID }
+      }),
+    )
+    const recovered = await run(
+      Effect.gen(function* () {
+        yield* register(location, testTools([]))
+        yield* restart
+        const info = yield* waitForCodeModeExecution(started.executionID)
+        const notebook = yield* CodeModeStore.Service
+        const names = yield* CodeModeStore.savedNames((yield* Database.Service).db, started.sessionID)
+        return { info, inventory: yield* CodeModeInstructions.notebook(notebook, started.sessionID, names) }
+      }),
+    )
+    expect(recovered.info).toMatchObject({ status: "completed" })
+    expect(recovered.info.output).toContain("function savedHelper(x)")
+    expect(recovered.info.output).toContain("savedData")
+    expect(recovered.inventory).toContain("2 saved identifiers; 0 omitted")
+    expect(recovered.inventory).toContain("function savedHelper(x)")
+  })
+
   test("a run torn down mid-call resumes on a fresh runtime without calling completed tools again", async () => {
     await using dir = await tmpdir()
     const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })

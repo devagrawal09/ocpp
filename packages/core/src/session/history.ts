@@ -74,6 +74,7 @@ export const entriesForRunner = Effect.fn("SessionHistory.entriesForRunner")(fun
         const messages = yield* messageEntries(db, sessionID)
         return {
           initial: yield* InstructionState.initial(db, sessionID, instructions),
+          notebook: yield* InstructionState.notebook(db, sessionID),
           entries: messages,
         }
       }),

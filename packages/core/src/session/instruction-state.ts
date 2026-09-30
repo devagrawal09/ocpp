@@ -4,6 +4,7 @@ import { eq, inArray, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import type { Database } from "../database/database.js"
 import type { Bus } from "../bus.js"
+import { CodeModeStore } from "../codemode/store.js"
 import { Instructions } from "../instructions/index.js"
 import { SessionEvent } from "./event.js"
 import { SessionSchema } from "./schema.js"
@@ -95,6 +96,7 @@ export const apply = Effect.fn("InstructionState.apply")(function* (
   const stored = yield* find(db, sessionID)
   const current = Instructions.applyHashDelta(stored?.current_values ?? {}, delta)
   if (!stored) {
+    // The initial sync establishes the epoch baseline, so it also checkpoints the notebook.
     yield* db
       .insert(InstructionStateTable)
       .values({
@@ -103,6 +105,7 @@ export const apply = Effect.fn("InstructionState.apply")(function* (
         through_seq: seq,
         initial_values: current,
         current_values: current,
+        notebook: yield* CodeModeStore.savedNames(db, sessionID),
       })
       .run()
       .pipe(Effect.orDie)
@@ -130,6 +133,7 @@ export const initialize = Effect.fn("InstructionState.initialize")(function* (
       through_seq: seq,
       initial_values: values,
       current_values: values,
+      notebook: yield* CodeModeStore.savedNames(db, sessionID),
     })
     .onConflictDoNothing()
     .run()
@@ -147,6 +151,7 @@ export const advanceEpoch = Effect.fn("InstructionState.advanceEpoch")(function*
       epoch_start: epochStart,
       through_seq: epochStart,
       initial_values: sql`${InstructionStateTable.current_values}`,
+      notebook: yield* CodeModeStore.savedNames(db, sessionID),
     })
     .where(eq(InstructionStateTable.session_id, sessionID))
     .run()
@@ -171,6 +176,14 @@ export const initial = Effect.fn("InstructionState.initial")(function* (
   if (!state) return yield* Effect.die(new Error(`Instruction state not found during assembly: ${sessionID}`))
   const blobs = yield* loadBlobs(db, Object.values(state.initial_values))
   return Instructions.renderInitial(instructions, dereference(state.initial_values, blobs))
+})
+
+/** Notebook names checkpointed with the epoch baseline; later saves reach history as completion notifications. */
+export const notebook = Effect.fn("InstructionState.notebook")(function* (
+  db: DatabaseService,
+  sessionID: SessionSchema.ID,
+) {
+  return (yield* find(db, sessionID))?.notebook ?? []
 })
 
 /** The current instruction values, used to seed a fork's baseline. */

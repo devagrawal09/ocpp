@@ -19,6 +19,7 @@ import { definition, normalizedName } from "../tool/runtime.js"
 import type { CodeModeCatalog } from "./catalog.js"
 import { CodeModeCompileCheck } from "./compile-check.js"
 import { limits } from "./limits.js"
+import { CodeModeNotebook } from "./notebook.js"
 import { CodeModeReplay } from "./replay.js"
 import type { CodeModeStore } from "./store.js"
 import type { ToolLists } from "../tool/lists.js"
@@ -628,7 +629,7 @@ export const catalog = (registrations: ReadonlyMap<string, Tool.Info>) => {
   )
   const entries = runtime(registrations, () => Effect.fail(toolError("Execute context is unavailable")))
     .catalog()
-    .map((entry) => ({ ...entry, pinned: pinned.has(entry.path) }))
+    .map((entry) => ({ ...entry, pinned: pinned.has(entry.path) || entry.path.startsWith("notebook.") }))
   catalogs.set(registrations, entries)
   return entries
 }
@@ -669,7 +670,7 @@ function runtime(
   },
 ) {
   return CodeMode.make({
-    tools: tools(registrations, executeTool),
+    tools: { ...tools(registrations, executeTool), ...CodeModeNotebook.tools(options?.bindings) },
     ...options,
     limits: {
       maxToolCalls: limits.maxToolCalls,

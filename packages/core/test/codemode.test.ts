@@ -23,13 +23,21 @@ describe("CodeMode", () => {
 
       const snapshot = yield* tools.snapshot()
       expect(snapshot.definitions.some((tool) => tool.name === "execute")).toBe(true)
-      expect(snapshot.codeModeCatalog).toStrictEqual([
+      expect(snapshot.codeModeCatalog?.filter((entry) => !entry.path.startsWith("notebook."))).toStrictEqual([
         {
           path: "echo",
           description: "Echo text",
           signature: "tools.echo(input: {\n  text: string,\n}): string",
           pinned: true,
         },
+      ])
+      expect(
+        snapshot.codeModeCatalog
+          ?.filter((entry) => entry.path.startsWith("notebook."))
+          .map((entry) => ({ path: entry.path, pinned: entry.pinned })),
+      ).toEqual([
+        { path: "notebook.inspect", pinned: true },
+        { path: "notebook.list", pinned: true },
       ])
     }).pipe(
       Effect.scoped,

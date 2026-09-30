@@ -20,6 +20,7 @@ import executionClaimsMigration from "@ocpp/core/database/migration/202608111612
 import sessionInboxMigration from "@ocpp/core/database/migration/20260812181746_session_inbox"
 import sessionViewedStateMigration from "@ocpp/core/database/migration/20260819222447_session_viewed_state"
 import toolListsMigration from "@ocpp/core/database/migration/20260928161342_tool_lists"
+import notebookCheckpointMigration from "@ocpp/core/database/migration/20260930223025_notebook_checkpoint"
 import { Global } from "@ocpp/util/global"
 
 const run = <A, E>(
@@ -199,6 +200,35 @@ describe("DatabaseMigration", () => {
           id: "exe_existing",
           tools: null,
         })
+      }),
+    )
+  })
+
+  test("checkpoints existing notebooks into instruction baselines and linked vendor sessions", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`CREATE TABLE instruction_state (session_id text PRIMARY KEY)`)
+        yield* db.run(sql`CREATE TABLE session_external (session_id text PRIMARY KEY, vendor_session_id text)`)
+        yield* db.run(sql`CREATE TABLE codemode_binding (session_id text NOT NULL, name text NOT NULL)`)
+        yield* db.run(sql`INSERT INTO instruction_state (session_id) VALUES ('ses_saved'), ('ses_empty')`)
+        yield* db.run(
+          sql`INSERT INTO session_external (session_id, vendor_session_id) VALUES ('ses_saved', 'vendor'), ('ses_unlinked', NULL)`,
+        )
+        yield* db.run(
+          sql`INSERT INTO codemode_binding (session_id, name) VALUES ('ses_saved', 'total'), ('ses_unlinked', 'draft')`,
+        )
+
+        yield* DatabaseMigration.applyOnly(db, [notebookCheckpointMigration])
+
+        expect(yield* db.all(sql`SELECT session_id, notebook FROM instruction_state ORDER BY session_id`)).toEqual([
+          { session_id: "ses_empty", notebook: "[]" },
+          { session_id: "ses_saved", notebook: '["total"]' },
+        ])
+        expect(yield* db.all(sql`SELECT session_id, notebook FROM session_external ORDER BY session_id`)).toEqual([
+          { session_id: "ses_saved", notebook: '["total"]' },
+          { session_id: "ses_unlinked", notebook: null },
+        ])
       }),
     )
   })

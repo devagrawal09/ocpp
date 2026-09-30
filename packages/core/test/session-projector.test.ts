@@ -215,6 +215,9 @@ describe("SessionProjector", () => {
       expect((yield* db.select().from(CodeModeBindingTable).all()).map((row) => row.name)).toEqual(["early"])
       // A committed revert resets the fold cache so the next boundary establishes a new epoch.
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toBeUndefined()
+      // That new epoch checkpoints the notebook left after the revert.
+      yield* bus.publish(SessionEvent.InstructionsUpdated, { sessionID, delta: {} })
+      expect((yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie))?.notebook).toEqual(["early"])
     }),
   )
 
@@ -244,6 +247,7 @@ describe("SessionProjector", () => {
         sessionID: child,
         parentID: sessionID,
         boundary: { type: "through", messageID: boundary },
+        instructions: {},
       })
 
       expect(
@@ -258,6 +262,11 @@ describe("SessionProjector", () => {
           .where(eq(SessionMessageTable.session_id, child))
           .all(),
       ).toEqual([{ seq: 0 }])
+      // The fork's baseline checkpoints the values it copied, not the parent's later ones.
+      expect(
+        (yield* db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, child)).get())
+          ?.notebook,
+      ).toEqual(["early"])
     }),
   )
 

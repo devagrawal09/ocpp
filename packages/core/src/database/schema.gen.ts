@@ -172,6 +172,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`vendor_session_id\` text,
           \`checkpoint\` text,
           \`history_hash\` text,
+          \`notebook\` text,
           \`status\` text NOT NULL,
           CONSTRAINT \`fk_session_external_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
         );
@@ -236,6 +237,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`through_seq\` integer NOT NULL,
           \`initial_values\` text NOT NULL,
           \`current_values\` text NOT NULL,
+          \`notebook\` text DEFAULT '[]' NOT NULL,
           CONSTRAINT \`fk_instruction_state_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
         );
       `)

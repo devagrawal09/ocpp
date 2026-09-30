@@ -4,6 +4,9 @@ import { searchSignature, toolExpression } from "@ocpp/codemode"
 import { Effect, Schema } from "effect"
 import { Instructions } from "../instructions/index.js"
 import { CodeModeCatalog } from "./catalog.js"
+import { CodeModeNotebook } from "./notebook.js"
+import type { CodeModeStore } from "./store.js"
+import type { SessionSchema } from "../session/schema.js"
 
 // prettier-ignore
 const prompt = (hasMoreTools: boolean) => `The Code Mode tool catalog below is ${hasMoreTools ? "partial" : "complete"}.
@@ -125,6 +128,22 @@ ${render(current)}`
 
 const key = Instructions.Key.make("core/codemode")
 const codec = Schema.toCodecJson(CodeModeCatalog.Summary)
+
+/**
+ * Renders a notebook checkpoint: only the checkpointed names, from their stored values. Saved values are
+ * immutable, so the text stays identical until a later checkpoint replaces the name set.
+ */
+export const notebook = Effect.fn("CodeModeInstructions.notebook")(function* (
+  store: Pick<CodeModeStore.Interface, "bindings">,
+  sessionID: SessionSchema.ID,
+  checkpoint: ReadonlyArray<string>,
+) {
+  if (checkpoint.length === 0) return ""
+  const names = new Set(checkpoint)
+  return CodeModeNotebook.inventory(
+    Object.fromEntries(Object.entries(yield* store.bindings(sessionID)).filter(([name]) => names.has(name))),
+  )
+})
 
 export const make = (entries?: ReadonlyArray<CodeModeCatalog.Entry>): Instructions.List => {
   const catalog = entries === undefined ? Instructions.removed : CodeModeCatalog.summarize(entries)

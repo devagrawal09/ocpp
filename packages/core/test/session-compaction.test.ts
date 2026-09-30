@@ -2,6 +2,10 @@ import { expect, test } from "bun:test"
 import { LLMClient, LLMEvent, LanguageModel, SystemPart, type LLMRequest } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols"
 import { Database } from "@ocpp/core/database/database"
+import { CodeMode } from "@ocpp/codemode"
+import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
+import { CodeModeStore } from "@ocpp/core/codemode/store"
+import { Instructions } from "@ocpp/core/instructions/index"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { llmClient } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -9,6 +13,8 @@ import { Bus } from "@ocpp/core/bus"
 import { EventTable } from "@ocpp/core/event/sql"
 import { SessionCompaction } from "@ocpp/core/session/compaction"
 import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionHistory } from "@ocpp/core/session/history"
+import { InstructionState } from "@ocpp/core/session/instruction-state"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionModelRequest } from "@ocpp/core/session/model-request"
 import { SessionProjector } from "@ocpp/core/session/projector"
@@ -81,6 +87,7 @@ const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([
       Database.node,
+      CodeModeStore.node,
       Bus.node,
       SessionProjector.node,
       SessionStore.node,
@@ -226,6 +233,93 @@ const insertSession = (id: Session.ID, overrides?: Partial<typeof SessionTable.$
       .get(id)
       .pipe(Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die(`session missing: ${id}`))))
   })
+
+it.effect("refreshes the notebook checkpoint only at successful compaction without accumulating it", () =>
+  Effect.gen(function* () {
+    requests = []
+    const session = yield* insertSession(Session.ID.make("ses_notebook_compactions"))
+    const db = (yield* Database.Service).db
+    const notebook = yield* CodeModeStore.Service
+    const bus = yield* Bus.Service
+    const compaction = yield* SessionCompaction.Service
+    const modelRequests = yield* SessionModelRequest.Service
+    const store = yield* SessionStore.Service
+    const assistantMessageID = SessionMessage.ID.create()
+    yield* bus.publish(SessionEvent.Step.Started, {
+      sessionID: session.id,
+      assistantMessageID,
+      agent: Agent.defaultID,
+      model: resolved.ref,
+    })
+    const save = Effect.fnUntraced(function* (id: string, source: string) {
+      const program = CodeMode.compile(source)
+      const admission = yield* notebook.admit({
+        id,
+        sessionID: session.id,
+        assistantMessageID,
+        toolCallID: `call_${id}`,
+        program,
+      })
+      if (!admission.ok) throw new Error(admission.message)
+      const saved = yield* CodeMode.execute({ code: program.source, program })
+      if (!saved.ok) throw new Error(saved.error.message)
+      return yield* notebook.commit(admission.execution, saved.declarations)
+    })
+    // The same history read and renderer SessionContext.load uses for the request baseline.
+    const baseline = Effect.gen(function* () {
+      const history = yield* SessionHistory.entriesForRunner(db, session.id, Instructions.empty)
+      return yield* CodeModeInstructions.notebook(notebook, session.id, history.notebook)
+    })
+
+    yield* save(
+      "exe_before",
+      "const durableData = { answer: 42 }; function durableHelper(x) { return durableData.answer + x }",
+    )
+    yield* InstructionState.prepare(db, bus, Instructions.empty, session.id)
+    const initial = yield* baseline
+    expect(initial).toContain("2 saved identifiers; 0 omitted")
+    expect(initial).toContain("function durableHelper(x)")
+    expect(yield* save("exe_after", "const laterValue = 'saved after the checkpoint'")).toEqual({
+      status: "saved",
+      saved: ["laterValue"],
+    })
+    // Between checkpoints the baseline is unchanged; the completion notification announces laterValue.
+    expect(yield* baseline).toBe(initial)
+
+    const refreshed = yield* Effect.forEach(
+      Array.from({ length: 25 }, (_, index) => index),
+      (index) =>
+        Effect.gen(function* () {
+          expect(
+            yield* compaction.compactManual({
+              session,
+              resolveModel: () => Effect.succeed(resolved),
+              prepare: modelRequests.prepare,
+              messages: [
+                ...(yield* store.context(session.id)),
+                SessionMessage.User.make({
+                  id: SessionMessage.ID.create(),
+                  type: "user",
+                  text: `Continue work ${index}`,
+                  time: { created: DateTime.makeUnsafe(index) },
+                }),
+              ],
+              inputID: SessionMessage.ID.make(`msg_notebook_compaction_${index}`),
+            }),
+          ).toEqual({ status: "completed" })
+          return yield* baseline
+        }),
+    )
+    expect(requests).toHaveLength(25)
+    expect(new Set(refreshed).size).toBe(1)
+    expect(refreshed[0]).toContain("3 saved identifiers; 0 omitted")
+    expect(refreshed[0]).toContain("laterValue")
+    expect(refreshed[0]).toContain("function durableHelper(x)")
+    expect(refreshed[0].split("## Durable Notebook")).toHaveLength(2)
+    // The inventory is rebuilt from notebook storage, never folded into the model-authored summary.
+    expect(JSON.stringify(yield* store.context(session.id))).not.toContain("Durable Notebook")
+  }),
+)
 
 it.effect("manual compaction summarizes short context instead of no-op", () =>
   Effect.gen(function* () {

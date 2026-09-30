@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "740b833f-1408-45c0-98df-41c9d24af227",
-  "prevIds": ["e870180b-6970-4e2c-a7e5-35696bedecf5"],
+  "id": "3c046595-5c4e-4df8-b58b-6eac2c5171d9",
+  "prevIds": ["740b833f-1408-45c0-98df-41c9d24af227"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -1146,6 +1146,16 @@
     },
     {
       "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "notebook",
+      "entityType": "columns",
+      "table": "session_external"
+    },
+    {
+      "type": "text",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -1491,6 +1501,16 @@
       "default": null,
       "generated": null,
       "name": "current_values",
+      "entityType": "columns",
+      "table": "instruction_state"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'[]'",
+      "generated": null,
+      "name": "notebook",
       "entityType": "columns",
       "table": "instruction_state"
     },

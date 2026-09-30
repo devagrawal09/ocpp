@@ -176,7 +176,10 @@ const Catalog = Schema.fromJsonString(
 
 /** The user's own MCP servers, as Codex resolves its configuration layers for this directory. */
 async function servers(directory: string, signal: AbortSignal) {
-  return Schema.decodeUnknownSync(Servers)(await codex(["mcp", "list", "--json"], signal, directory))
+  // Match the run's disabled plugins so plugin-only servers do not become transport-less overrides.
+  return Schema.decodeUnknownSync(Servers)(
+    await codex(["mcp", "list", "--json", "-c", "features.plugins=false"], signal, directory),
+  )
     .map((server) => server.name)
     .filter((name) => name !== "ocpp")
 }

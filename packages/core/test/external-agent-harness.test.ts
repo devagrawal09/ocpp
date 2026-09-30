@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect } from "bun:test"
 import { mkdir, realpath, symlink } from "node:fs/promises"
 import path from "node:path"
-import { ToolHandle, ToolReference } from "@ocpp/codemode"
+import { CodeMode, ToolHandle, ToolReference } from "@ocpp/codemode"
+import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
 import { LanguageModel, type LLMRequest } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols"
 import { TestLLM } from "@ocpp/ai/testing"
@@ -263,6 +264,70 @@ const texts = (list: ReadonlyArray<SessionMessage.Info>) =>
   )
 
 describe("vendor-driven sessions", () => {
+  it.live("keeps a vendor session's notebook checkpoint until the vendor session is rebuilt", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      const database = yield* Database.Service
+      const external = yield* ExternalAgentSession.Service
+      const save = (executionID: string, code: string) =>
+        Effect.gen(function* () {
+          const saved = yield* CodeMode.execute({ code })
+          if (!saved.ok) throw new Error(saved.error.message)
+          yield* database.db
+            .insert(CodeModeBindingTable)
+            .values(
+              Object.entries(saved.declarations).map(([name, value]) => ({
+                session_id: env.session.id,
+                name,
+                value,
+                message_seq: 0,
+                execution_id: executionID,
+              })),
+            )
+            .run()
+        })
+      const system = (index: number) => {
+        const harness = vendor.runs[index].harness
+        if (harness.type !== "ocpp") throw new Error("Expected the OC++ harness")
+        return harness.system
+      }
+      const turn = Effect.fnUntraced(function* (text: string) {
+        vendor.turn = say("Answered " + text)
+        yield* env.sessions.prompt({ sessionID: env.session.id, text })
+        yield* env.sessions.wait(env.session.id)
+      })
+
+      yield* save(
+        "exe_vendor_notebook",
+        "const savedData = { answer: 42 }; function savedHelper(x) { return savedData.answer + x }",
+      )
+      yield* turn("Continue")
+      expect(vendor.runs[0].vendorSessionID).toBeUndefined()
+      expect(system(0)).toContain("2 saved identifiers; 0 omitted")
+      expect(system(0)).toContain("function savedHelper(x)")
+      expect(system(0)).toContain("savedData")
+
+      // A resumed vendor session keeps identical instructions; later values arrive as notifications.
+      yield* save("exe_vendor_later", "const laterValue = 1")
+      yield* turn("Again")
+      const linked = (yield* external.get(env.session.id))?.vendorSessionID
+      expect(vendor.runs[1].vendorSessionID).toBe(linked)
+      expect(system(1)).toBe(system(0))
+
+      // Rebuilding the vendor session from canonical history checkpoints the notebook as it stands.
+      vendor.sessions.delete(linked!)
+      yield* turn("Rebuild")
+      expect(vendor.runs[2].vendorSessionID).toBeUndefined()
+      expect(system(2)).toContain("3 saved identifiers; 0 omitted")
+      expect(system(2)).toContain("laterValue")
+      expect([...((yield* external.get(env.session.id))?.notebook ?? [])].sort()).toEqual([
+        "laterValue",
+        "savedData",
+        "savedHelper",
+      ])
+    }),
+  )
+
   it.live("a prompt reaches the vendor in the OC++ harness and its events project into the Session", () =>
     Effect.gen(function* () {
       const env = yield* setup(ref("claude", "sonnet", "high"))
@@ -337,6 +402,19 @@ describe("vendor-driven sessions", () => {
       expect(texts(history).at(-1)).toBe("The total is 3")
       const store = yield* CodeModeStore.Service
       expect((yield* store.bindings(env.session.id)).total).toBe(3)
+      // Between checkpoints the completion notification, not the instructions, announces the saved name.
+      const system = (index: number) => {
+        const harness = vendor.runs[index].harness
+        return harness.type === "ocpp" ? harness.system : ""
+      }
+      expect(system(0)).not.toContain("Durable Notebook")
+      vendor.turn = say("Still 3")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Again" })
+      yield* env.sessions.wait(env.session.id)
+      const external = yield* ExternalAgentSession.Service
+      expect(vendor.runs[1].vendorSessionID).toBeString()
+      expect(vendor.runs[1].vendorSessionID).toBe((yield* external.get(env.session.id))?.vendorSessionID)
+      expect(system(1)).toBe(system(0))
     }),
   )
 

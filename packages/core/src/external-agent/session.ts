@@ -8,6 +8,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { eq } from "drizzle-orm"
 import { Context, Effect, Layer, Scope } from "effect"
 import { Bus } from "../bus.js"
+import { CodeModeStore } from "../codemode/store.js"
 import { Database } from "../database/database.js"
 import { StepFailedError } from "../session/error.js"
 import { SessionEvent } from "../session/event.js"
@@ -44,22 +45,28 @@ export const layer = Layer.effectContext(
             vendor_session_id: null,
             checkpoint: null,
             history_hash: null,
+            notebook: null,
           },
         })
         .run()
         .pipe(Effect.orDie),
     )
+    // A newly linked vendor session was just started from canonical history; the notebook as it stands now
+    // stays in its instructions for the vendor session's lifetime.
     yield* bus.project(ExternalSession.Linked, (event) =>
-      db
-        .update(ExternalSessionTable)
-        .set({
-          vendor_session_id: event.data.vendorSessionID,
-          checkpoint: null,
-          history_hash: null,
-        })
-        .where(eq(ExternalSessionTable.session_id, event.data.sessionID))
-        .run()
-        .pipe(Effect.orDie),
+      Effect.gen(function* () {
+        yield* db
+          .update(ExternalSessionTable)
+          .set({
+            vendor_session_id: event.data.vendorSessionID,
+            checkpoint: null,
+            history_hash: null,
+            notebook: yield* CodeModeStore.savedNames(db, event.data.sessionID),
+          })
+          .where(eq(ExternalSessionTable.session_id, event.data.sessionID))
+          .run()
+          .pipe(Effect.orDie)
+      }),
     )
     yield* bus.project(ExternalSession.Checkpointed, (event) =>
       db
@@ -107,6 +114,7 @@ export const layer = Layer.effectContext(
                     checkpoint: row.checkpoint ?? undefined,
                     historyHash: row.history_hash ?? undefined,
                     status: row.status,
+                    ...(row.notebook ? { notebook: row.notebook } : {}),
                   },
             ),
           ),
@@ -132,8 +140,13 @@ export const layer = Layer.effectContext(
   }),
 )
 
+/** The persisted binding, plus the notebook checkpoint the linked vendor session was started with. */
+export interface Stored extends ExternalSession.Info {
+  readonly notebook?: ReadonlyArray<string>
+}
+
 export interface Interface {
-  readonly get: (sessionID: ExternalSession.Info["sessionID"]) => Effect.Effect<ExternalSession.Info | undefined>
+  readonly get: (sessionID: ExternalSession.Info["sessionID"]) => Effect.Effect<Stored | undefined>
   /** Holds the subagent call's activation for a vendor child until the scope closes. */
   readonly activate: (
     sessionID: ExternalSession.Info["sessionID"],

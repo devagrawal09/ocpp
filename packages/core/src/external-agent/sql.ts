@@ -13,5 +13,7 @@ export const ExternalSessionTable = sqliteTable("session_external", {
   vendor_session_id: text(),
   checkpoint: text(),
   history_hash: text(),
+  /** Notebook identifiers checkpointed into the linked vendor session's instructions, fixed for its lifetime. */
+  notebook: text({ mode: "json" }).$type<ReadonlyArray<string>>(),
   status: text().$type<ExternalSession.Status>().notNull(),
 })

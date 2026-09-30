@@ -5,7 +5,7 @@ import { Deferred, Effect, Fiber } from "effect"
 import { TestClock } from "effect/testing"
 import { ExternalAgentDriver } from "../src/external-agent/driver"
 import { ExternalAgentGateway } from "../src/external-agent/gateway"
-import { ClaudeDriver, normalize } from "../src/external-agent/claude.node"
+import { ClaudeDriver, instructions, normalize } from "../src/external-agent/claude.node"
 import { CodexDriver } from "../src/external-agent/codex.node"
 import { PiDriver } from "../src/external-agent/pi.node"
 import { ExternalAgentBridge } from "../src/external-agent/bridge.node"
@@ -41,7 +41,7 @@ describe("external SDK drivers", () => {
     expect(ExternalAgentDriver.first({ history, message, vendorSessionID: "vendor" })).toEqual(message)
   })
 
-  test("Claude in the OC++ harness keeps only its model loop, OC++'s prompt and OC++'s execute", async () => {
+  test("Claude uses a small system prompt and reads OC++ instructions in execute's description", async () => {
     const { settings } = await import("../src/external-agent/claude.node")
     const mcp = { type: "sdk" as const, name: "ocpp", instance: undefined as never }
     const controller = new AbortController()
@@ -55,11 +55,12 @@ describe("external SDK drivers", () => {
       mcp,
       controller,
     )
+    expect(harnessed.systemPrompt).not.toContain("OC++ system prompt")
     expect(harnessed).toMatchObject({
       cwd: "/work",
       model: "opus",
       effort: "high",
-      systemPrompt: "OC++ system prompt",
+      systemPrompt: expect.stringContaining("mcp__ocpp__execute tool description"),
       tools: [],
       settingSources: [],
       strictMcpConfig: true,
@@ -212,13 +213,21 @@ describe("external SDK drivers", () => {
       },
     ])
     const mcp = createSdkMcpServer({ name: "ocpp", tools: [] })
-    ExternalAgentBridge.handlers(mcp.instance.server, gateway, new AbortController().signal)
+    ExternalAgentBridge.handlers(
+      mcp.instance.server,
+      instructions(gateway, "OC++ session instructions"),
+      new AbortController().signal,
+    )
     const pair = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: "test", version: "1" })
     await mcp.instance.server.connect(pair[0])
     await client.connect(pair[1])
     try {
       expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(["execute"])
+      expect((await client.listTools()).tools).toMatchObject([
+        { name: "execute", description: "Run code\n\n## Session Instructions\nOC++ session instructions" },
+      ])
+      expect(calls).toEqual([])
       expect(
         await client.callTool({
           name: "execute",
@@ -423,7 +432,11 @@ if (process.argv[2] === "app-server") {
   if (process.env.FAKE_CODEX_CATALOG_FAILS) process.exit(3)
   write({ models: [{ slug: "gpt-5.6-sol", tool_mode: "code_mode_only", multi_agent_version: "v2", supports_search_tool: true }] })
 } else if (process.argv[2] === "mcp") {
-  write([{ name: "personal", enabled: true }, { name: "ocpp", enabled: true }])
+  write([
+    { name: "personal", enabled: true },
+    { name: "ocpp", enabled: true },
+    ...(process.argv.includes("features.plugins=false") ? [] : [{ name: "code-review", enabled: false }]),
+  ])
 } else {
   const args = process.argv.slice(2)
   const read = (key) => {
@@ -495,6 +508,9 @@ if (process.argv[2] === "app-server") {
             },
         )
       expect(invocations).toHaveLength(4)
+      expect(
+        invocations.every((invocation) => !invocation.args.includes("mcp_servers.code-review.enabled=false")),
+      ).toBe(true)
       expect(invocations.map((item) => item.prompt)).toEqual([
         "Add numbers",
         "Execution exe_1 saved notebook values: total.",

@@ -10,6 +10,8 @@ import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Hash } from "@ocpp/util/hash"
 import { Cause, Deferred, Effect, Exit, FiberMap, Layer, Option, Schema } from "effect"
 import { Bus } from "../bus.js"
+import { CodeModeInstructions } from "../codemode/instructions.js"
+import { CodeModeStore } from "../codemode/store.js"
 import { Database } from "../database/database.js"
 import { Instructions } from "../instructions/index.js"
 import { SessionContext } from "../session/context.js"
@@ -41,6 +43,7 @@ const layer = Layer.effect(
     const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
     const store = yield* SessionStore.Service
+    const notebook = yield* CodeModeStore.Service
     const external = yield* ExternalAgentSession.Service
     const context = yield* SessionContext.Service
     const drivers = yield* ExternalAgentDrivers.Service
@@ -72,11 +75,16 @@ const layer = Layer.effect(
       yield* settleStaleToolCalls(store, bus, sessionID)
       const selection = yield* context.select(sessionID)
       const agent = selection.agent.id
-      const system = SessionModelRequest.systemPrompt({
-        agent: selection.agent.info,
-        tools: selection.tools,
-        initial: yield* Instructions.renderCurrent(selection.instructions),
-      }).join("\n\n")
+      const instructions = yield* Instructions.renderCurrent(selection.instructions)
+      const system = Effect.fnUntraced(function* (checkpoint: ReadonlyArray<string>) {
+        return SessionModelRequest.systemPrompt({
+          agent: selection.agent.info,
+          tools: selection.tools,
+          initial: [instructions, yield* CodeModeInstructions.notebook(notebook, sessionID, checkpoint)]
+            .filter((part) => part.length > 0)
+            .join("\n\n"),
+        }).join("\n\n")
+      })
       const stream = ExternalAgentStream.make(bus, sessionID, agent, model)
       const sdk = yield* drivers.driver(provider).pipe(
         Effect.catch((error) =>
@@ -275,7 +283,20 @@ const layer = Layer.effect(
           vendorSessionID,
           history: vendorSessionID === undefined ? settled : [],
           message,
-          harness: harness === "ocpp" ? { type: "ocpp", system } : { type: "native" },
+          // A resumed vendor session keeps the notebook checkpoint it started with, so its instructions stay
+          // identical; values saved since reach it as completion notifications. A new vendor session is rebuilt
+          // from canonical history and checkpoints the notebook as it stands, which linking persists.
+          harness:
+            harness === "ocpp"
+              ? {
+                  type: "ocpp",
+                  system: yield* system(
+                    vendorSessionID === undefined
+                      ? yield* CodeModeStore.savedNames(db, sessionID)
+                      : (record.notebook ?? []),
+                  ),
+                }
+              : { type: "native" },
           gateway,
           emit: (event) => Effect.runPromise(stream.emit(event).pipe(Effect.asVoid)),
           linked: (id) => {
@@ -458,6 +479,7 @@ export const node = makeLocationNode({
   layer,
   deps: [
     Bus.node,
+    CodeModeStore.node,
     Database.node,
     SessionStore.node,
     ExternalAgentSession.node,

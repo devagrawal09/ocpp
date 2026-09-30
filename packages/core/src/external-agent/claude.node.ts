@@ -6,6 +6,7 @@ import { ExternalAgentEffort } from "./effort.js"
 import { imageMimes } from "../session/runner/to-llm-message.js"
 import { which } from "../util/which.js"
 import { ExternalAgentBridge } from "./bridge.node.js"
+import type { ExternalAgentGateway } from "./gateway.js"
 
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
 
@@ -19,7 +20,11 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
   async run(options) {
     const { query, createSdkMcpServer, getSessionMessages } = await import("@anthropic-ai/claude-agent-sdk")
     const mcp = createSdkMcpServer({ name: "ocpp", version: "1", tools: [] })
-    ExternalAgentBridge.handlers(mcp.instance.server, options.gateway, options.signal)
+    ExternalAgentBridge.handlers(
+      mcp.instance.server,
+      options.harness.type === "ocpp" ? instructions(options.gateway, options.harness.system) : options.gateway,
+      options.signal,
+    )
     const controller = new AbortController()
     const abort = () => controller.abort()
     options.signal.throwIfAborted()
@@ -96,7 +101,19 @@ function isImage(mime: string): mime is ImageType {
   return imageMimes.has(mime)
 }
 
-/** Vendor options for one run. The OC++ harness keeps nothing of Claude Code but its model loop and OC++'s execute. */
+/** Keep the complete session instructions in execute's description rather than the system prompt. */
+export function instructions(gateway: ExternalAgentGateway.Gateway, system: string) {
+  return {
+    ...gateway,
+    definitions: gateway.definitions.map((tool) =>
+      tool.name === "execute"
+        ? { ...tool, description: `${tool.description}\n\n## Session Instructions\n${system}` }
+        : tool,
+    ),
+  }
+}
+
+/** Vendor options for one run. The OC++ harness exposes only execute, including its session instructions. */
 export function settings(
   options: Pick<ExternalAgentDriver.Options, "directory" | "model" | "effort" | "vendorSessionID" | "harness">,
   mcp: McpServerConfig,
@@ -117,7 +134,8 @@ export function settings(
   if (options.harness.type === "ocpp")
     return {
       ...common,
-      systemPrompt: options.harness.system,
+      systemPrompt:
+        "You are a coding assistant. Follow the session instructions in the mcp__ocpp__execute tool description. Use that tool for the supplied capabilities.",
       tools: [],
       settingSources: [],
       strictMcpConfig: true,

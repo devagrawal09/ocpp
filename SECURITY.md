@@ -20,7 +20,7 @@ If you need true isolation, run OC++ inside a Docker container or VM.
 
 ### Server Mode
 
-Server mode is opt-in only. When enabled, set `OCPP_SERVER_PASSWORD` to require HTTP Basic Auth. Without this, the server runs unauthenticated (with a warning). It is the end user's responsibility to secure the server - any functionality it provides is not a vulnerability.
+Server mode is opt-in only. The server does not authenticate requests, so it must only be exposed on localhost or a trusted network, or fronted by your own access control. It is the end user's responsibility to secure the server - any functionality it provides is not a vulnerability.
 
 ### Out of Scope
 

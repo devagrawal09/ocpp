@@ -12,7 +12,7 @@ import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/un
 import { context, layer, type LogOptions } from "../logging"
 import { OwnedFetch } from "./fetch"
 
-export interface CreateOptions extends Omit<ServerOptions, "hostname" | "port" | "password"> {
+export interface CreateOptions extends Omit<ServerOptions, "hostname" | "port"> {
   readonly log?: LogOptions
   readonly workspaceProviders?: Readonly<Record<string, WorkspaceDriver.Interface>>
 }

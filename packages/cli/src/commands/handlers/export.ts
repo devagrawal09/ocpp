@@ -22,7 +22,6 @@ export default Runtime.handler(
       })
       const client = Ocpp.make({
         baseUrl: server.endpoint.url,
-        headers: Service.headers(server.endpoint),
       })
       const sessionID = requested
         ? requested

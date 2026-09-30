@@ -9,12 +9,6 @@ import { PTY_CONNECT_TICKET_QUERY, PTY_CONNECT_TOKEN_HEADER, PTY_CONNECT_TOKEN_H
 
 export { PTY_CONNECT_TICKET_QUERY, PTY_CONNECT_TOKEN_HEADER, PTY_CONNECT_TOKEN_HEADER_VALUE }
 
-const CONNECT_PATH = /^\/api\/experimental\/persistent-pty\/[^/]+\/connect$/
-
-export function hasPersistentPtyConnectTicketURL(url: URL) {
-  return CONNECT_PATH.test(url.pathname) && !!url.searchParams.get(PTY_CONNECT_TICKET_QUERY)
-}
-
 const errors = [InvalidRequestError, ServiceUnavailableError] as const
 const terminalErrors = [PtyNotFoundError, ServiceUnavailableError] as const
 

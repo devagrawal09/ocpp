@@ -10,7 +10,7 @@ export default Runtime.handler(
   Commands.commands.plugin.commands.list,
   Effect.fn("cli.plugin.list")(function* (input) {
     const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
-    const client = Ocpp.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+    const client = Ocpp.make({ baseUrl: endpoint.url })
     const response = yield* Effect.promise(() => client.plugin.list({ location: { directory: process.cwd() } }))
     const output = format(response.data, input.builtin)
     if (!output) {

@@ -21,7 +21,6 @@ import { PtyGroup } from "./groups/pty.js"
 import { PersistentPtyGroup } from "./groups/persistent-pty.js"
 import { ShellGroup } from "./groups/shell.js"
 import { ReferenceGroup } from "./groups/reference.js"
-import { Authorization } from "./middleware/authorization.js"
 import { LocationGroup } from "./groups/location.js"
 import { IntegrationGroup } from "./groups/integration.js"
 import { WebSearchGroup } from "./groups/websearch.js"
@@ -100,17 +99,14 @@ export type Api<
 > = HttpApi.HttpApi<
   "server",
   HttpApiGroup.AddMiddleware<
-    HttpApiGroup.AddMiddleware<
-      ApiGroups<
-        LocationId,
-        LocationService,
-        FormLocationId,
-        FormLocationService,
-        SessionLocationId,
-        SessionLocationService,
-        Event
-      >,
-      Authorization
+    ApiGroups<
+      LocationId,
+      LocationService,
+      FormLocationId,
+      FormLocationService,
+      SessionLocationId,
+      SessionLocationService,
+      Event
     >,
     SchemaErrorMiddleware
   >
@@ -177,7 +173,6 @@ const makeApiFromGroup = <
         description: "Experimental HttpApi surface for selected instance routes.",
       }),
     )
-    .middleware(Authorization)
     .middleware(SchemaErrorMiddleware)
 
 export const makeApi = <

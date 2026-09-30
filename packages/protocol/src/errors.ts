@@ -11,12 +11,6 @@ export class InvalidRequestError extends Schema.TaggedError<InvalidRequestError>
   { httpApiStatus: 400 },
 ) {}
 
-export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
-  "UnauthorizedError",
-  { message: Schema.String },
-  { httpApiStatus: 401 },
-) {}
-
 export class ConflictError extends Schema.TaggedError<ConflictError>()(
   "ConflictError",
   {

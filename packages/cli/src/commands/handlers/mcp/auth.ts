@@ -13,7 +13,7 @@ export default Runtime.handler(
   Commands.commands.mcp.commands.auth,
   Effect.fn("cli.mcp.auth")(function* (input) {
     const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
-    const client = Ocpp.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+    const client = Ocpp.make({ baseUrl: endpoint.url })
 
     const integration = yield* resolveIntegration(client, input.name, location)
     if (!integration)

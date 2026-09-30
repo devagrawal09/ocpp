@@ -78,27 +78,6 @@ const workspaceDriver = WorkspaceDriver.make({
   destroy: () => Effect.void,
 })
 
-it.live("serves the HttpApi and enforces Basic auth like the Node server", () =>
-  Effect.gen(function* () {
-    const handler = yield* ServerFetch.make({ ...options, password: "secret" })
-
-    const denied = yield* Effect.promise(() => handler(new Request("http://ocpp.local/api/health")))
-    expect(denied.status).toBe(401)
-
-    const response = yield* Effect.promise(() =>
-      handler(
-        new Request("http://ocpp.local/api/health", {
-          headers: { authorization: `Basic ${btoa("ocpp:secret")}` },
-        }),
-      ),
-    )
-    expect(response.status).toBe(200)
-    const body: unknown = yield* Effect.promise(() => response.json())
-    if (typeof body !== "object" || body === null) throw new Error("Expected a health response object")
-    expect((body as Record<string, unknown>)["healthy"]).toBe(true)
-  }),
-)
-
 it.live("activates credentials through the HttpApi", () =>
   Effect.gen(function* () {
     const handler = yield* ServerFetch.make(options)
@@ -109,12 +88,15 @@ it.live("activates credentials through the HttpApi", () =>
   }),
 )
 
-it.live("serves unauthenticated and answers CORS preflight when no password is configured", () =>
+it.live("serves the HttpApi and answers CORS preflight", () =>
   Effect.gen(function* () {
     const handler = yield* ServerFetch.make(options)
 
     const response = yield* Effect.promise(() => handler(new Request("http://ocpp.local/api/health")))
     expect(response.status).toBe(200)
+    const body: unknown = yield* Effect.promise(() => response.json())
+    if (typeof body !== "object" || body === null) throw new Error("Expected a health response object")
+    expect((body as Record<string, unknown>)["healthy"]).toBe(true)
 
     const preflight = yield* Effect.promise(() =>
       handler(
@@ -135,7 +117,6 @@ it.live("applies custom CORS origins to HTTP responses and PTY ticket checks", (
   Effect.gen(function* () {
     const handler = yield* ServerFetch.make({
       ...options,
-      password: "secret",
       cors: ["http://192.168.1.10:3001"],
     })
     yield* Effect.forEach(
@@ -150,19 +131,19 @@ it.live("applies custom CORS origins to HTTP responses and PTY ticket checks", (
                 headers: {
                   origin,
                   "access-control-request-method": "GET",
-                  "access-control-request-headers": "authorization",
+                  "access-control-request-headers": "content-type",
                 },
               }),
             ),
           )
           expect(preflight.status).toBe(204)
           expect(preflight.headers.get("access-control-allow-origin")).toBe(allowed ? origin : null)
-          expect(preflight.headers.get("access-control-allow-headers")).toBe("authorization")
+          expect(preflight.headers.get("access-control-allow-headers")).toBe("content-type")
 
           const response = yield* Effect.promise(() =>
             handler(
               new Request("http://ocpp.local/api/health", {
-                headers: { origin, authorization: `Basic ${btoa("ocpp:secret")}` },
+                headers: { origin },
               }),
             ),
           )
@@ -173,7 +154,7 @@ it.live("applies custom CORS origins to HTTP responses and PTY ticket checks", (
             handler(
               new Request("http://ocpp.local/api/experimental/persistent-pty/pty_missing/connect-token", {
                 method: "POST",
-                headers: { origin, authorization: `Basic ${btoa("ocpp:secret")}`, "x-ocpp-ticket": "1" },
+                headers: { origin, "x-ocpp-ticket": "1" },
               }),
             ),
           )

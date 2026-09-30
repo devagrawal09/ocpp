@@ -128,14 +128,6 @@ function fallback() {
   return join(process.env["XDG_STATE_HOME"] ?? join(homedir(), ".local", "state"), "ocpp", "service.json")
 }
 
-/** Create HTTP authentication headers for a service endpoint. */
-export function headers(endpoint: Endpoint) {
-  if (endpoint.auth === undefined) return undefined
-  return {
-    authorization: "Basic " + Buffer.from(endpoint.auth.username + ":" + endpoint.auth.password).toString("base64"),
-  }
-}
-
 async function read(file?: string) {
   const text = await readFile(file ?? fallback(), "utf8").catch(() => undefined)
   if (text === undefined) return undefined
@@ -155,16 +147,9 @@ type LocalService = {
 }
 
 async function probeResult(info: Info, allowLegacy = false, timeout = defaultEnsureTiming.requestTimeout) {
-  const endpoint = {
-    url: info.url,
-    auth:
-      info.password === undefined ? undefined : { type: "basic" as const, username: "ocpp", password: info.password },
-  } satisfies Endpoint
+  const endpoint = { url: info.url } satisfies Endpoint
   const signal = AbortSignal.timeout(timeout)
-  const result = await fetch(new URL("/api/health", info.url), {
-    headers: headers(endpoint),
-    signal,
-  })
+  const result = await fetch(new URL("/api/health", info.url), { signal })
     .then(async (response) => ({
       response,
       body: (await response.json()) as ServiceHealth | { readonly healthy: true },
@@ -250,4 +235,4 @@ function delay(milliseconds: number) {
 }
 
 /** Promise-based local service lifecycle operations. */
-export const Service = { discover, ensure, stop, headers }
+export const Service = { discover, ensure, stop }

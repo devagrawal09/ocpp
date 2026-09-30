@@ -15,13 +15,7 @@ export async function prepare(file: string, info: Info, timeout: number) {
   const existing = await read(file)
   if (existing !== undefined && existing.expiresAt > Date.now() && same(existing.source, info)) return
   const { ClientError, Ocpp } = await import("./promise/index.js")
-  const client = Ocpp.make({
-    baseUrl: info.url,
-    headers:
-      info.password === undefined
-        ? undefined
-        : { authorization: "Basic " + Buffer.from(`ocpp:${info.password}`).toString("base64") },
-  })
+  const client = Ocpp.make({ baseUrl: info.url })
   const missing = (error: unknown) =>
     error instanceof ClientError &&
     error.reason === "UnexpectedStatus" &&

@@ -6,11 +6,10 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Global } from "@ocpp/util/global"
 import { OCPP_CHANNEL, OCPP_VERSION } from "./version"
 import { AppProcess } from "@ocpp/util/process"
-import { randomBytes, randomUUID } from "node:crypto"
-import { Effect, Option, Redacted, Schedule, Schema } from "effect"
+import { randomUUID } from "node:crypto"
+import { Effect, Option, Schedule, Schema } from "effect"
 import { PersistentPty } from "@ocpp/schema/persistent-pty"
 import { HttpServer } from "effect/unstable/http"
-import { Env } from "./env"
 import { ServiceConfig } from "./services/service-config"
 import { ServiceRegistration } from "./services/service-registration"
 import { Updater } from "./services/updater"
@@ -51,7 +50,6 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
   if (options.mode === "service") yield* Effect.sync(() => process.chdir(global.home))
   return yield* Effect.scoped(
     Effect.gen(function* () {
-      const foreground = options.mode === "default"
       const serviceOptions = options.mode === "service" ? yield* ServiceConfig.options() : undefined
       const config = options.mode === "service" ? yield* ServiceConfig.read() : {}
       const hostname = options.hostname ?? config.hostname ?? "127.0.0.1"
@@ -62,19 +60,6 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           : undefined
       if (incumbent !== undefined) return
       const { start } = yield* Effect.promise(() => import("@ocpp/server/process"))
-      const environmentPassword = yield* Env.password
-      // Keep the lease credential out of the environment inherited by tools.
-      if (options.mode === "stdio") {
-        delete process.env.OCPP_PASSWORD
-        delete process.env.OCPP_SERVER_PASSWORD
-      }
-      const password =
-        options.mode === "service"
-          ? config.password || randomBytes(32).toString("base64url")
-          : environmentPassword
-            ? Redacted.value(environmentPassword)
-            : randomBytes(32).toString("base64url")
-      if (!password) return yield* Effect.fail(new Error("Missing server password"))
       const instanceID = randomUUID()
       const transform = yield* WebUi.handler()
       const server = yield* start(
@@ -87,7 +72,6 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           hostname,
           port,
           cors: options.cors ?? config.cors,
-          password,
           pty: { handoff },
           simulation: truthy(process.env.OCPP_SIMULATE),
           database: {
@@ -125,15 +109,11 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           ? undefined
           : {
               onListen: (address, shutdown) =>
-                Effect.gen(function* () {
-                  if (!config.password) yield* ServiceConfig.password(password)
-                  return yield* ServiceRegistration.register({
-                    address,
-                    password,
-                    id: instanceID,
-                    file: serviceOptions.file,
-                    shutdown,
-                  })
+                ServiceRegistration.register({
+                  address,
+                  id: instanceID,
+                  file: serviceOptions.file,
+                  shutdown,
                 }),
             },
         transform,
@@ -158,7 +138,6 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
       if (server === undefined) return
       const url = HttpServer.formatAddress(server.address)
       console.log(options.mode === "stdio" ? JSON.stringify({ url }) : `server listening on ${url}`)
-      if (foreground && !environmentPassword) console.log(`server password ${password}`)
       const updater = yield* Updater.Service
       yield* updater.check().pipe(Effect.schedule(Schedule.spaced("10 minutes")), Effect.forkScoped)
       return yield* options.mode === "service"

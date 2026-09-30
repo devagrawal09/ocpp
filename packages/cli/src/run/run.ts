@@ -82,7 +82,6 @@ async function run(input: RunCommandInput, options: ExecutionOptions) {
 async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Endpoint, options: ExecutionOptions) {
   const client = Ocpp.make({
     baseUrl: endpoint.url,
-    headers: Service.headers(endpoint),
     // Bun's default five-minute deadline terminates the event stream used by long-running sessions.
     fetch: ((request: RequestInfo | URL, init?: RequestInit) =>
       fetch(request, { ...init, timeout: false } as BunFetchRequestInit)) as typeof fetch,

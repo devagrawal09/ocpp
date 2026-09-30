@@ -15,7 +15,7 @@ it.live("service CORS config persists multiple origins and preserves other setti
     const config = path.join(root, "config")
     const state = path.join(root, "state")
     const file = path.join(config, ServiceConfig.filename())
-    const existing = { hostname: "127.0.0.1", port: 4321, password: "test-secret", env: { TEST: "value" } }
+    const existing = { hostname: "127.0.0.1", port: 4321, env: { TEST: "value" } }
     yield* fs.makeDirectory(config)
     yield* fs.makeDirectory(state)
     yield* fs.writeFileString(file, JSON.stringify(existing))

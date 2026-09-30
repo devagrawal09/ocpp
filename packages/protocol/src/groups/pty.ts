@@ -10,14 +10,6 @@ export const PTY_CONNECT_TICKET_QUERY = "ticket"
 export const PTY_CONNECT_TOKEN_HEADER = "x-ocpp-ticket"
 export const PTY_CONNECT_TOKEN_HEADER_VALUE = "1"
 
-const PTY_CONNECT_PATH = /^\/api\/pty\/[^/]+\/connect$/
-
-// Authorization middleware skips credential checks when this matches; the PTY connect handler
-// is then responsible for consuming and validating the ticket.
-export function hasPtyConnectTicketURL(url: URL) {
-  return PTY_CONNECT_PATH.test(url.pathname) && !!url.searchParams.get(PTY_CONNECT_TICKET_QUERY)
-}
-
 export const PtyGroup = HttpApiGroup.make("server.pty")
   .add(
     HttpApiEndpoint.get("pty.list", "/api/pty", {

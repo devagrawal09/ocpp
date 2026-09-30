@@ -7,7 +7,7 @@ export const location = { directory: process.cwd() }
 
 export const createClient = Effect.fn("cli.auth.client")(function* (input: ServerConnection.Args) {
   const server = yield* ServerConnection.resolve(input)
-  return Ocpp.make({ baseUrl: server.endpoint.url, headers: Service.headers(server.endpoint) })
+  return Ocpp.make({ baseUrl: server.endpoint.url })
 })
 
 export function request<A>(run: (signal: AbortSignal) => Promise<A>) {

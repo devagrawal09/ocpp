@@ -2,8 +2,6 @@ export * as ServerProcess from "./process"
 
 import { NodeHttpServer } from "@effect/platform-node"
 import { SessionRestart } from "@ocpp/core/session/execution/restart"
-import { hasPtyConnectTicketURL } from "@ocpp/protocol/groups/pty"
-import { hasPersistentPtyConnectTicketURL } from "@ocpp/protocol/groups/persistent-pty"
 import { Cause, Context, Effect, Exit, Latch, Layer, Option, Ref, Scope } from "effect"
 import {
   HttpMiddleware,
@@ -14,9 +12,7 @@ import {
   HttpServerResponse,
 } from "effect/unstable/http"
 import { createServer } from "node:http"
-import { ServerAuth } from "./auth"
 import { isAllowedCorsOrigin } from "./cors"
-import { authorizedRequest } from "./middleware/authorization"
 import { withoutParentSpan } from "./request-tracing"
 import { createRoutes } from "./routes"
 import { ServerInfo } from "./server-info"
@@ -51,8 +47,6 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
   lifecycle?: Lifecycle<E, R>,
   transform?: Transform,
 ) {
-  const password = options.password
-  if (!password) return yield* Effect.fail(new Error("Missing server password"))
   const hostname = options.hostname ?? "127.0.0.1"
   const port = Option.fromNullishOr(options.port)
   const shutdown = yield* Latch.make()
@@ -62,7 +56,7 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
   // Request fibers may continue inbound trace context, but must not inherit the server startup parent.
   yield* bound.http
     .serve(
-      dispatch(password, status, application, options.app?.version ?? "unknown").pipe(
+      dispatch(status, application, options.app?.version ?? "unknown").pipe(
         HttpMiddleware.cors({ allowedOrigins: (origin) => isAllowedCorsOrigin(origin, options), maxAge: 86_400 }),
       ),
       errorResponseLogger,
@@ -87,18 +81,12 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
 
   const boot = Effect.gen(function* () {
     const context = yield* Layer.buildWithScope(
-      createRoutes(
-        {
-          ...options,
-          password,
-        },
-        () => {
-          const address = bound.server.address()
-          if (address === null || typeof address === "string") return []
-          const host = address.family === "IPv6" ? `[${address.address}]` : address.address
-          return ServerInfo.connectionURLs(`http://${host}:${address.port}`, hostname)
-        },
-      ).pipe(Layer.provideMerge(NodeHttpServer.layerHttpServices)),
+      createRoutes(options, () => {
+        const address = bound.server.address()
+        if (address === null || typeof address === "string") return []
+        const host = address.family === "IPv6" ? `[${address.address}]` : address.address
+        return ServerInfo.connectionURLs(`http://${host}:${address.port}`, hostname)
+      }).pipe(Layer.provideMerge(NodeHttpServer.layerHttpServices)),
       applicationScope,
     )
     yield* installRestartContinuity(Context.get(context, SessionRestart.Service)).pipe(
@@ -164,37 +152,15 @@ function addressInUse(error: unknown) {
   return typeof cause === "object" && cause !== null && "code" in cause && cause.code === "EADDRINUSE"
 }
 
-function dispatch(
-  password: string,
-  status: Status.Interface,
-  application: Ref.Ref<Option.Option<App>>,
-  version: string,
-): App {
-  const auth = ServerAuth.Config.of({ password: Option.some(password), username: "ocpp" })
+function dispatch(status: Status.Interface, application: Ref.Ref<Option.Option<App>>, version: string): App {
   return Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const url = new URL(request.url, "http://localhost")
-    if (request.method === "GET" && url.pathname === "/api/health") {
-      if (!(yield* authorizedRequest(request, auth))) return unauthorized()
-      return yield* healthResponse(status, version)
-    }
+    if (request.method === "GET" && url.pathname === "/api/health") return yield* healthResponse(status, version)
     const state = yield* status.current
     const app = yield* Ref.get(application)
-    const ready = state.type === "ready" && Option.isSome(app)
-    if (
-      (!ready || (!hasPtyConnectTicketURL(url) && !hasPersistentPtyConnectTicketURL(url))) &&
-      !(yield* authorizedRequest(request, auth))
-    )
-      return unauthorized()
-    if (ready) return yield* app.value
+    if (state.type === "ready" && Option.isSome(app)) return yield* app.value
     return unavailable(state)
-  })
-}
-
-function unauthorized() {
-  return HttpServerResponse.empty({
-    status: 401,
-    headers: { "www-authenticate": 'Basic realm="Secure Area"' },
   })
 }
 

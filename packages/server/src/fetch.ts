@@ -29,9 +29,8 @@ export interface BootOptions {
  * (Effect-TS/effect#6319 class). The embedder owns the lifecycle — closing the scope releases
  * the application layer.
  *
- * Auth follows `createRoutes` semantics: `options.password` enforces Basic auth; omitting it
- * serves unauthenticated, so an embedder without a password must front the handler with its own
- * access control.
+ * The handler performs no authentication, so an embedder must front it with its own access
+ * control.
  *
  * Sessions whose execution claim was never released resume once the layer is built, exactly as
  * the Node server process does: a runtime that dies without teardown — an evicted Durable

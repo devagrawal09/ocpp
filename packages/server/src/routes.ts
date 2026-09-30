@@ -34,12 +34,10 @@ import { Worktree } from "@ocpp/core/worktree"
 import { Watcher } from "@ocpp/core/filesystem/watcher"
 import { HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { Context, Effect, Layer, Option } from "effect"
+import { Context, Effect, Layer } from "effect"
 import { Api } from "./api"
-import { ServerAuth } from "./auth"
 import { CorsConfig } from "./cors"
 import { handlers } from "./handlers"
-import { authorizationLayer } from "./middleware/authorization"
 import { schemaErrorLayer } from "./middleware/schema-error"
 import { PtyEnvironment } from "./pty-environment"
 import { layer } from "./location"
@@ -76,31 +74,15 @@ const applicationServiceNodes = [
 ] as const
 const applicationServices = LayerNode.group(applicationServiceNodes)
 
+export function createEmbeddedRoutes(options: ServerOptions = {}, overrides: LayerNode.Replacements = []) {
+  return createRoutes(options, () => [], overrides)
+}
+
 export function createRoutes(
   options: ServerOptions = {},
   serviceURLs: () => ReadonlyArray<string> = () => [],
-  overrides: LayerNode.Replacements = [],
-) {
-  return makeRoutes(
-    options.password
-      ? ServerAuth.Config.configLayer({ password: Option.some(options.password) })
-      : ServerAuth.Config.layer,
-    options,
-    serviceURLs,
-    overrides,
-  )
-}
-
-export function createEmbeddedRoutes(options: ServerOptions = {}, overrides: LayerNode.Replacements = []) {
-  return makeRoutes(ServerAuth.Config.configLayer({ password: Option.none() }), options, () => [], overrides)
-}
-
-function makeRoutes<AuthError, AuthServices>(
-  auth: Layer.Layer<ServerAuth.Config, AuthError, AuthServices>,
-  options: ServerOptions,
-  serviceURLs: () => ReadonlyArray<string>,
   // Runtime-profile replacements (e.g. workerd) applied after the standard set, so later entries win.
-  overrides: LayerNode.Replacements,
+  overrides: LayerNode.Replacements = [],
 ) {
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const standard: LayerNode.Replacements = [
@@ -156,9 +138,7 @@ function makeRoutes<AuthError, AuthServices>(
         Layer.provide(formLocationLayer),
         Layer.provide(sessionLocationLayer),
         Layer.provide(layer),
-        Layer.provide(authorizationLayer),
         Layer.provide(schemaErrorLayer),
-        Layer.provide(auth),
         HttpRouter.provideRequest(requestServices),
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),

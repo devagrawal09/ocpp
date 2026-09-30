@@ -12,7 +12,6 @@ const decodeInfo = Schema.decodeUnknownEffect(infoJson)
 
 export const register = Effect.fnUntraced(function* (options: {
   readonly address: HttpServer.Address
-  readonly password: string
   readonly id: string
   readonly file: string
   readonly shutdown: Effect.Effect<void>
@@ -25,16 +24,11 @@ export const register = Effect.fnUntraced(function* (options: {
     version: OCPP_VERSION,
     url: HttpServer.formatAddress(options.address),
     pid: process.pid,
-    password: options.password,
   }
   const encoded = yield* encodeInfo(info)
   const current = fs.readFileString(options.file).pipe(Effect.flatMap(decodeInfo))
   const owns = (found: Info) =>
-    found.id === info.id &&
-    found.version === info.version &&
-    found.url === info.url &&
-    found.pid === info.pid &&
-    found.password === info.password
+    found.id === info.id && found.version === info.version && found.url === info.url && found.pid === info.pid
   yield* fs.writeFileString(temp, encoded, { mode: 0o600 }).pipe(Effect.andThen(fs.rename(temp, options.file)))
   yield* current.pipe(
     Effect.catchCause((cause) =>

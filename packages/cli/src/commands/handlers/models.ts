@@ -15,7 +15,6 @@ export default Runtime.handler(
     })
     const client = Ocpp.make({
       baseUrl: server.endpoint.url,
-      headers: Service.headers(server.endpoint),
     })
     const response = yield* Effect.promise(() => client.model.list({ location: { directory: process.cwd() } }))
     const models = response.data

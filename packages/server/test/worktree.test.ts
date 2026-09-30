@@ -21,35 +21,31 @@ it.live("lists, creates, and removes worktrees by project ID", () =>
     const location = new URL("/api/location", server.base)
     location.searchParams.set("location[directory]", project)
     const resolved = yield* Effect.promise(() =>
-      fetch(location, { headers: server.headers }).then((response) => response.json()),
+      fetch(location).then((response) => response.json()),
     )
     if (!isRecord(resolved) || !isRecord(resolved.project) || typeof resolved.project.id !== "string")
       throw new Error("Expected resolved project")
     const url = new URL(`/api/worktree/${resolved.project.id}`, server.base)
 
-    const initial = yield* Effect.promise(() =>
-      fetch(url, { headers: server.headers }).then((response) => response.json()),
-    )
+    const initial = yield* Effect.promise(() => fetch(url).then((response) => response.json()))
     expect(initial).toEqual([{ directory: project }])
 
     const created = yield* Effect.promise(() =>
       fetch(url, {
         method: "POST",
-        headers: { ...server.headers, "content-type": "application/json" },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ strategy: "git", directory: destination, name: "api" }),
       }).then((response) => response.json()),
     )
     expect(created).toEqual({ directory: path.join(destination, "api") })
 
-    const listed = yield* Effect.promise(() =>
-      fetch(url, { headers: server.headers }).then((response) => response.json()),
-    )
+    const listed = yield* Effect.promise(() => fetch(url).then((response) => response.json()))
     expect(listed).toContainEqual({ directory: path.join(destination, "api"), strategy: "git" })
 
     const removed = yield* Effect.promise(() =>
       fetch(url, {
         method: "DELETE",
-        headers: { ...server.headers, "content-type": "application/json" },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ directory: path.join(destination, "api"), force: false }),
       }),
     )

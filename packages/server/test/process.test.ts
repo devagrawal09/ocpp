@@ -14,7 +14,6 @@ it.live("recovers durable background work for a foreground server", () =>
     const options = {
       hostname: "127.0.0.1",
       port: 0,
-      password: "secret",
       database: { path: filename },
     }
     yield* ServerProcess.start<never, never>(options)
@@ -54,7 +53,6 @@ it.live("allows browser preflight requests without credentials", () =>
       {
         hostname: "127.0.0.1",
         port: 0,
-        password: "secret",
         cors: ["http://192.168.1.10:3001", "https://example.com"],
         app: { version: "test-version" },
         database: { path: ":memory:" },
@@ -74,21 +72,18 @@ it.live("allows browser preflight requests without credentials", () =>
         headers: {
           origin: "http://localhost:3000",
           "access-control-request-method": "GET",
-          "access-control-request-headers": "authorization",
+          "access-control-request-headers": "content-type",
         },
       }),
     )
 
     expect(response.status).toBe(204)
     expect(response.headers.get("access-control-allow-origin")).toBe("http://localhost:3000")
-    expect(response.headers.get("access-control-allow-headers")).toBe("authorization")
+    expect(response.headers.get("access-control-allow-headers")).toBe("content-type")
 
     const health = yield* Effect.promise(() =>
       fetch(new URL("/api/health", HttpServer.formatAddress(server.address)), {
-        headers: {
-          authorization: `Basic ${btoa("ocpp:secret")}`,
-          origin: "http://localhost:3000",
-        },
+        headers: { origin: "http://localhost:3000" },
       }),
     )
 
@@ -107,7 +102,7 @@ it.live("allows browser preflight requests without credentials", () =>
               headers: {
                 origin,
                 "access-control-request-method": "GET",
-                "access-control-request-headers": "authorization",
+                "access-control-request-headers": "content-type",
               },
             }),
           )
@@ -116,28 +111,18 @@ it.live("allows browser preflight requests without credentials", () =>
 
           const health = yield* Effect.promise(() =>
             fetch(new URL("/api/health", HttpServer.formatAddress(server.address)), {
-              headers: { origin, authorization: `Basic ${btoa("ocpp:secret")}` },
+              headers: { origin },
             }),
           )
           expect(health.status).toBe(200)
           expect(health.headers.get("access-control-allow-origin")).toBe(allowed)
           yield* Effect.promise(() => health.arrayBuffer())
-
-          const denied = yield* Effect.promise(() =>
-            fetch(new URL("/api/health", HttpServer.formatAddress(server.address)), { headers: { origin } }),
-          )
-          expect(denied.status).toBe(401)
-          expect(denied.headers.get("access-control-allow-origin")).toBe(allowed)
-          yield* Effect.promise(() => denied.arrayBuffer())
         }),
     )
 
     const event = yield* Effect.promise(() =>
       fetch(new URL("/api/event", HttpServer.formatAddress(server.address)), {
-        headers: {
-          "accept-encoding": "br",
-          authorization: `Basic ${btoa("ocpp:secret")}`,
-        },
+        headers: { "accept-encoding": "br" },
       }),
     )
     expect(event.status).toBe(200)
@@ -146,10 +131,7 @@ it.live("allows browser preflight requests without credentials", () =>
 
     const missing = yield* Effect.promise(() =>
       fetch(new URL("/missing", HttpServer.formatAddress(server.address)), {
-        headers: {
-          "accept-encoding": "br",
-          authorization: `Basic ${btoa("ocpp:secret")}`,
-        },
+        headers: { "accept-encoding": "br" },
       }),
     )
     expect(missing.status).toBe(200)

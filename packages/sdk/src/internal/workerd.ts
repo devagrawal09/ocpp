@@ -5,7 +5,7 @@ import { ServerWorkerd } from "@ocpp/server/workerd"
 
 export type Configuration = Omit<typeof Config.Info.Encoded, "plugins">
 
-export interface Options extends Omit<ServerWorkerd.Options, "password" | "config"> {
+export interface Options extends Omit<ServerWorkerd.Options, "config"> {
   readonly config?: Configuration
 }
 

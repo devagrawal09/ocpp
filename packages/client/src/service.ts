@@ -2,15 +2,6 @@
 export type Endpoint = {
   /** Base URL of the service. */
   readonly url: string
-  /** Authentication required by the service, when configured. */
-  readonly auth?: {
-    /** HTTP authentication scheme. */
-    readonly type: "basic"
-    /** Basic authentication username. */
-    readonly username: string
-    /** Basic authentication password. */
-    readonly password: string
-  }
 }
 
 /** Options used to discover the local OC++ service. */
@@ -50,6 +41,4 @@ export type Info = {
   readonly url: string
   /** Operating system process identifier. */
   readonly pid: number
-  /** Private service password, when authentication is enabled. */
-  readonly password?: string
 }

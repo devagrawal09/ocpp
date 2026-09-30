@@ -26,7 +26,7 @@ export default Runtime.handler(
     const endpoint = server.endpoint
     const params = Option.getOrElse(input.param, () => ({}))
     const request = yield* resolveRequest(endpoint, input.request, params)
-    const headers = new Headers(Service.headers(endpoint))
+    const headers = new Headers()
     for (const header of input.header) {
       const index = header.indexOf(":")
       if (index < 1) return yield* Effect.fail(new Error(`Invalid header, expected name:value: ${header}`))
@@ -67,7 +67,7 @@ function resolveRequest(endpoint: Endpoint, input: readonly string[], params: Re
   if (raw) return Effect.succeed(raw)
   if (input.length !== 1) return Effect.fail(new Error("Expected an operation name or an HTTP method and path"))
   return Effect.tryPromise(async () => {
-    const response = await fetch(new URL("/openapi.json", endpoint.url), { headers: Service.headers(endpoint) })
+    const response = await fetch(new URL("/openapi.json", endpoint.url))
     if (!response.ok) throw new Error(`Failed to load OpenAPI document: HTTP ${response.status}`)
     return resolveOperation((await response.json()) as OpenApi, input[0], params)
   })

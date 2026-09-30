@@ -29,7 +29,7 @@ it.live("lists session drivers and selects one through the session model", () =>
         if (init === undefined) url.searchParams.set("location[directory]", tmp.path)
         const response = await fetch(url, {
           method: init?.method ?? "GET",
-          headers: { ...server.headers, "content-type": "application/json" },
+          headers: { "content-type": "application/json" },
           ...(init?.body === undefined ? {} : { body: JSON.stringify(init.body) }),
         })
         return { status: response.status, body: response.status === 204 ? undefined : await response.json() }

@@ -35,38 +35,20 @@ try {
   spawnService()
   const registration = await waitForRegistration()
   const info = await Schema.decodeUnknownPromise(Service.Info)(await Bun.file(registration).json())
-  if (info.id === undefined || info.password === undefined) throw new Error("Registration is missing service identity")
-  const credential = btoa(`ocpp:${info.password}`)
-  const headers = { authorization: "Basic " + credential }
-  const token = encodeURIComponent(credential)
-  const health = await waitForReady(info.url, headers)
+  if (info.id === undefined) throw new Error("Registration is missing service identity")
+  const health = await waitForReady(info.url)
   if (health.pid !== info.pid) throw new Error("Health process does not match registration")
-  const tokenHealth = await fetch(new URL(`/api/health?auth_token=${token}`, info.url), {
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (tokenHealth.status !== 200) throw new Error("Compiled service rejected query authentication")
-  const tokenOpenApi = await fetch(new URL(`/openapi.json?auth_token=${token}`, info.url), {
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (tokenOpenApi.status !== 200) throw new Error("Compiled application rejected query authentication")
-  if ((await pluginIDs(info.url, headers)).includes("smoke")) throw new Error("Smoke plugin existed before creation")
+  const openApi = await fetch(new URL("/openapi.json", info.url), { signal: AbortSignal.timeout(5_000) })
+  if (openApi.status !== 200) throw new Error("Compiled application did not serve its OpenAPI document")
+  if ((await pluginIDs(info.url)).includes("smoke")) throw new Error("Smoke plugin existed before creation")
   const plugin = path.join(root, ".ocpp", "plugins", "smoke.ts")
   await fs.mkdir(path.dirname(plugin), { recursive: true })
   await fs.writeFile(plugin, pluginSource())
-  await waitForPlugin(info.url, headers)
+  await waitForPlugin(info.url)
 
-  const unauthorizedHealth = await fetch(new URL("/api/health", info.url), {
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (unauthorizedHealth.status !== 401) throw new Error("Compiled service exposed health without authentication")
-  const unauthorizedOpenApi = await fetch(new URL("/openapi.json", info.url), {
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (unauthorizedOpenApi.status !== 401)
-    throw new Error("Compiled service exposed application routes without authentication")
   const stopRoute = await fetch(new URL("/api/service/stop", info.url), {
     method: "POST",
-    headers: { ...headers, "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ instanceID: info.id }),
     signal: AbortSignal.timeout(5_000),
   })
@@ -116,13 +98,12 @@ async function waitForRegistration() {
   throw new Error("Compiled service did not publish registration")
 }
 
-async function waitForReady(url: string, headers: HeadersInit) {
+async function waitForReady(url: string) {
   const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
-    const response = await fetch(new URL("/api/health", url), {
-      headers,
-      signal: AbortSignal.timeout(1_000),
-    }).catch(() => undefined)
+    const response = await fetch(new URL("/api/health", url), { signal: AbortSignal.timeout(1_000) }).catch(
+      () => undefined,
+    )
     if (response?.ok) return Schema.decodeUnknownPromise(ServiceStatus.Health)(await response.json())
     await Bun.sleep(25)
   }
@@ -137,10 +118,10 @@ function pluginSource() {
   return 'export default { id: "smoke", setup: async () => {} }\n'
 }
 
-async function pluginIDs(url: string, headers: HeadersInit) {
+async function pluginIDs(url: string) {
   const endpoint = new URL("/api/plugin", url)
   endpoint.searchParams.set("location[directory]", root)
-  const response = await fetch(endpoint, { headers, signal: AbortSignal.timeout(5_000) })
+  const response = await fetch(endpoint, { signal: AbortSignal.timeout(5_000) })
   const body: unknown = await response.json()
   if (typeof body !== "object" || body === null || !("data" in body) || !Array.isArray(body.data)) {
     throw new Error("Compiled service returned an invalid plugin list")
@@ -150,10 +131,10 @@ async function pluginIDs(url: string, headers: HeadersInit) {
   )
 }
 
-async function waitForPlugin(url: string, headers: HeadersInit) {
+async function waitForPlugin(url: string) {
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
-    if ((await pluginIDs(url, headers)).includes("smoke")) return
+    if ((await pluginIDs(url)).includes("smoke")) return
     await Bun.sleep(25)
   }
   throw new Error("Compiled service did not discover the created plugin")

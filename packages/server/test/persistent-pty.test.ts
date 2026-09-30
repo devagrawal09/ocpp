@@ -22,21 +22,18 @@ smoke(
       const server = yield* ServerProcess.start<never, never>({
         hostname: "127.0.0.1",
         port: 0,
-        password: "secret",
         app: { version: "test-version" },
         database: { path: fixture.database },
         fs: { filewatcher: false },
       })
       const base = HttpServer.formatAddress(server.address)
-      const client = Ocpp.make({ baseUrl: base, headers: { authorization: `Basic ${btoa("ocpp:secret")}` } })
+      const client = Ocpp.make({ baseUrl: base })
       const sessionID = "ses_terminal_read"
       expect(yield* Effect.promise(() => client.experimental.persistentPty.read({ sessionID }))).toBeNull()
       expect(existsSync(fixture.directory)).toBeFalse()
       yield* Effect.promise(async () => {
         for (const lines of ["0", "-1", "1.5", "65536", "nope"]) {
-          const response = await fetch(`${base}/api/experimental/session/${sessionID}/terminal/read?lines=${lines}`, {
-            headers: { authorization: `Basic ${btoa("ocpp:secret")}` },
-          })
+          const response = await fetch(`${base}/api/experimental/session/${sessionID}/terminal/read?lines=${lines}`)
           expect(response.status).toBe(400)
           await response.arrayBuffer()
         }
@@ -146,7 +143,6 @@ smoke(
       const server = yield* ServerProcess.start<never, never>({
         hostname: "127.0.0.1",
         port: 0,
-        password: "secret",
         app: { version: "test-version" },
         database: { path: fixture.database },
         fs: { filewatcher: false },
@@ -321,7 +317,6 @@ smoke(
       const options = {
         hostname: "127.0.0.1",
         port: 0,
-        password: "secret",
         app: { version: "test-version" },
         database: { path: fixture.database },
         fs: { filewatcher: false },
@@ -440,7 +435,6 @@ function request(base: string, method: string, pathname: string, body?: unknown,
       const response = await fetch(new URL(pathname, base), {
         method,
         headers: {
-          authorization: `Basic ${btoa("ocpp:secret")}`,
           ...headers,
           ...(body === undefined ? {} : { "content-type": "application/json" }),
         },
@@ -457,9 +451,7 @@ function request(base: string, method: string, pathname: string, body?: unknown,
 }
 
 async function openEventStream(base: string) {
-  const response = await fetch(new URL("/api/event", base), {
-    headers: { authorization: `Basic ${btoa("ocpp:secret")}` },
-  })
+  const response = await fetch(new URL("/api/event", base))
   if (!response.ok || !response.body) throw new Error(`Persistent PTY event stream failed (${response.status})`)
   const reader = response.body.getReader()
   const decoder = new TextDecoder()

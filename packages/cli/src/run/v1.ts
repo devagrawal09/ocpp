@@ -15,6 +15,7 @@ export type V1RunCommandInput = {
   file: string[]
   title?: string
   server?: string
+  /** Accepted from V1 callers and ignored: the server no longer authenticates requests. */
   password?: string
   username?: string
   directory?: string
@@ -76,8 +77,5 @@ function nativeInput(input: V1RunCommandInput, endpoint: Endpoint): RunCommandIn
 function explicitEndpoint(input: V1RunCommandInput): Endpoint {
   const url = input.server
   if (!url) throw new Error("Missing V1 server URL")
-  return {
-    url,
-    auth: input.password ? { type: "basic", username: input.username ?? "ocpp", password: input.password } : undefined,
-  }
+  return { url }
 }

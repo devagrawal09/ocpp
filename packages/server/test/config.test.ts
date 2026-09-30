@@ -37,7 +37,7 @@ it.live("returns ordered config entries for the requested directory", () =>
     const server = yield* startServer(global)
     const url = new URL("/api/config", server.base)
     url.searchParams.set("location[directory]", project)
-    const response = yield* Effect.promise(() => fetch(url, { headers: server.headers }))
+    const response = yield* Effect.promise(() => fetch(url))
     const body: unknown = yield* Effect.promise(() => response.json())
     const entries = Schema.decodeUnknownSync(Schema.Array(Config.Entry))(body)
 

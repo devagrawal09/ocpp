@@ -3,7 +3,6 @@ import { OCPP_CHANNEL, OCPP_VERSION } from "../version"
 import { Hash } from "@ocpp/util/hash"
 import { Service } from "@ocpp/client/effect/service"
 import { Effect, FileSystem, Option, Schema } from "effect"
-import { randomBytes } from "crypto"
 import path from "path"
 import { selfCommand } from "../util/process"
 
@@ -14,13 +13,12 @@ import { selfCommand } from "../util/process"
 export const Info = Schema.Struct({
   hostname: Schema.optional(Schema.String),
   port: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(65_535))),
-  password: Schema.optional(Schema.String),
   cors: Schema.optional(Schema.Array(Schema.String)),
   env: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 })
 export type Info = typeof Info.Type
 
-const keys = ["hostname", "port", "password", "cors", "env"] as const
+const keys = ["hostname", "port", "cors", "env"] as const
 type Key = (typeof keys)[number]
 
 const decodeInfo = Schema.decodeUnknownEffect(Schema.fromJsonString(Info))
@@ -78,7 +76,7 @@ export const migrateConfig = Effect.fnUntraced(function* (legacy: string, file: 
 })
 
 function configKey(key: string): Key {
-  if (key === "hostname" || key === "port" || key === "password" || key === "cors" || key === "env") return key
+  if (key === "hostname" || key === "port" || key === "cors" || key === "env") return key
   throw new Error(`Unknown service config key: ${key}`)
 }
 
@@ -128,21 +126,9 @@ const write = Effect.fn("cli.service-config.write")(function* (value: Info) {
   yield* fs.rename(temp, configFile)
 })
 
-export const password = Effect.fn("cli.service-config.password")(function* (value?: string) {
-  const existing = yield* read()
-  if (value === undefined && existing.password) return existing.password
-  const next = value ?? randomBytes(32).toString("base64url")
-
-  // Keep one private credential across server restarts so discovered clients
-  // can reconnect without exposing a password flag or environment variable.
-  yield* write({ ...existing, password: next })
-  return next
-})
-
 export const get = Effect.fn("cli.service-config.get")(function* (key?: string, name?: string) {
   if (key === undefined) {
-    const { password: _password, ...safe } = yield* read()
-    return JSON.stringify(safe, null, 2)
+    return JSON.stringify(yield* read(), null, 2)
   }
   const selected = configKey(key)
   if (selected !== "env" && name !== undefined) throw new Error(`Usage: ocpp service get ${selected}`)
@@ -153,9 +139,6 @@ export const get = Effect.fn("cli.service-config.get")(function* (key?: string, 
     case "port": {
       const port = (yield* read()).port
       return port === undefined ? "" : String(port)
-    }
-    case "password": {
-      return yield* password()
     }
     case "cors": {
       return JSON.stringify((yield* read()).cors ?? [], null, 2)
@@ -182,11 +165,6 @@ export const set = Effect.fn("cli.service-config.set")(function* (key: string, v
       if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("Port must be between 1 and 65535")
       yield* Service.stop(yield* options())
       yield* write({ ...(yield* read()), port })
-      return
-    }
-    case "password": {
-      yield* Service.stop(yield* options())
-      yield* password(value)
       return
     }
     case "env": {
@@ -225,12 +203,6 @@ export const unset = Effect.fn("cli.service-config.unset")(function* (key: strin
     case "port": {
       yield* Service.stop(yield* options())
       const { port: _port, ...next } = yield* read()
-      yield* write(next)
-      return
-    }
-    case "password": {
-      yield* Service.stop(yield* options())
-      const { password: _password, ...next } = yield* read()
       yield* write(next)
       return
     }

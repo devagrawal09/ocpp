@@ -39,7 +39,6 @@ export interface Options {
   /** Durable Object storage whose SQLite database backs the ocpp database. */
   readonly storage: DurableObjectStorage
   readonly app?: ServerOptions["app"]
-  readonly password?: string
   /** Inline ocpp config content (JSON), same as `ServerOptions.config.content`. */
   readonly config?: { readonly content?: string }
   /** models.dev catalog options; the bundled snapshot is the boot-time floor either way. */
@@ -61,7 +60,6 @@ export function create(options: Options) {
 export function serverOptions(options: Options): ServerOptions {
   return {
     app: options.app,
-    password: options.password,
     fs: { filewatcher: false, fff: false },
     // Durable event history is how a turn orphaned by eviction is recovered:
     // the boot-time resume replays it. A runtime that dies without teardown

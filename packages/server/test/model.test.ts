@@ -26,7 +26,7 @@ it.live("waits for plugin initialization before listing models", () =>
     const server = yield* startServer(tmp.path)
     const url = new URL("/api/model", server.base)
     url.searchParams.set("location[directory]", tmp.path)
-    const response = yield* Effect.promise(() => fetch(url, { headers: server.headers }))
+    const response = yield* Effect.promise(() => fetch(url))
 
     expect(response.status).toBe(200)
     const body: unknown = yield* Effect.promise(() => response.json())

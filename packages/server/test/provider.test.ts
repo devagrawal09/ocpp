@@ -13,7 +13,7 @@ it.live(
       const fixture = yield* configuredProvider("ocpp-provider-list-endpoint-")
       const url = new URL("/api/provider", fixture.server.base)
       url.searchParams.set("location[directory]", fixture.path)
-      const response = yield* Effect.promise(() => fetch(url, { headers: fixture.server.headers }))
+      const response = yield* Effect.promise(() => fetch(url))
 
       expect(response.status).toBe(200)
       const body: unknown = yield* Effect.promise(() => response.json())
@@ -30,7 +30,7 @@ it.live(
       const fixture = yield* configuredProvider("ocpp-provider-get-endpoint-")
       const url = new URL("/api/provider/custom", fixture.server.base)
       url.searchParams.set("location[directory]", fixture.path)
-      const response = yield* Effect.promise(() => fetch(url, { headers: fixture.server.headers }))
+      const response = yield* Effect.promise(() => fetch(url))
 
       expect(response.status).toBe(200)
       const body: unknown = yield* Effect.promise(() => response.json())

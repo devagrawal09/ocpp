@@ -29,7 +29,6 @@ describe("debug config command", () => {
     ]
     let requested: URL | undefined
     let healthProbes = 0
-    const authorization: Array<string | null> = []
     const server = Bun.serve({
       port: 0,
       fetch(request) {
@@ -39,7 +38,6 @@ describe("debug config command", () => {
           return Response.json({ healthy: true, version: OCPP_VERSION, pid: process.pid })
         }
         requested = url
-        authorization.push(request.headers.get("authorization"))
         return Response.json(entries)
       },
     })
@@ -48,7 +46,7 @@ describe("debug config command", () => {
       await fs.mkdir(path.dirname(registration), { recursive: true })
       await fs.writeFile(
         registration,
-        JSON.stringify({ version: OCPP_VERSION, url: server.url.toString(), pid: process.pid, password: "secret" }),
+        JSON.stringify({ version: OCPP_VERSION, url: server.url.toString(), pid: process.pid }),
       )
       const result = await cli(["debug", "config"], project, { XDG_STATE_HOME: path.join(root, "state") })
 
@@ -56,7 +54,6 @@ describe("debug config command", () => {
       expect(JSON.parse(result.stdout)).toEqual(entries)
       expect(requested?.pathname).toBe("/api/config")
       expect(requested?.searchParams.get("location[directory]")).toBe(project)
-      expect(authorization).toEqual([`Basic ${btoa("ocpp:secret")}`])
       expect(healthProbes).toBe(1)
     } finally {
       server.stop(true)

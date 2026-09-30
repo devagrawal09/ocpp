@@ -18,7 +18,7 @@ const handler = Effect.fn("cli.stats")(function* (input: Runtime.Input<typeof Co
     server: Option.getOrUndefined(input.server),
     standalone: input.standalone,
   })
-  const client = Ocpp.make({ baseUrl: server.endpoint.url, headers: Service.headers(server.endpoint) })
+  const client = Ocpp.make({ baseUrl: server.endpoint.url })
   const range = statsRange({ days, year, all: input.all })
   const projectID =
     project === "."

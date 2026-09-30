@@ -20,10 +20,10 @@ export type Info = import("../service.js").Info
 // Find, start, and stop the local ocpp background service.
 //
 // The service daemon advertises itself through a registration file in the
-// user's state directory: url, pid, version, and the private password, with
+// user's state directory: url, pid, and version, with
 // 0600 permissions. That file is the complete discovery contract — reading it
 // is all a client needs to connect. The daemon's own configuration (port,
-// persisted password) is CLI-owned and never read here.
+// hostname) is CLI-owned and never read here.
 
 // Read-only lookup: registration file plus health check and version gate.
 // Never spawns; escalation to ensure() is the caller's policy.
@@ -155,19 +155,12 @@ function fallback() {
   return join(state, "ocpp", "service.json")
 }
 
-/** Create HTTP authentication headers for a service endpoint. */
-export function headers(endpoint: Endpoint) {
-  if (endpoint.auth === undefined) return undefined
-  return { authorization: "Basic " + btoa(endpoint.auth.username + ":" + endpoint.auth.password) }
-}
-
 /** Schema for the local service registration file. */
 export const Info = Schema.Struct({
   id: Schema.optional(Schema.String),
   version: Schema.optional(Schema.String),
   url: Schema.String,
   pid: Schema.Int.check(Schema.isGreaterThan(0)),
-  password: Schema.optional(Schema.String),
 })
 
 const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(Info))
@@ -200,17 +193,10 @@ const probeResult = Effect.fnUntraced(function* (
   allowLegacy = false,
   timeout = defaultEnsureTiming.requestTimeout,
 ) {
-  const endpoint = {
-    url: info.url,
-    auth:
-      info.password === undefined ? undefined : { type: "basic" as const, username: "ocpp", password: info.password },
-  } satisfies Endpoint
+  const endpoint = { url: info.url } satisfies Endpoint
   const signal = AbortSignal.timeout(timeout)
   const result = yield* Effect.promise(() =>
-    fetch(new URL("/api/health", info.url), {
-      headers: headers(endpoint),
-      signal,
-    })
+    fetch(new URL("/api/health", info.url), { signal })
       .then(async (response) => ({ response, body: (await response.json()) as unknown }))
       .then(
         (value) => ({ value }),
@@ -292,4 +278,4 @@ const terminate = Effect.fnUntraced(function* (info: Info, options: { readonly f
 })
 
 /** Effect-based local service lifecycle operations. */
-export const Service = { discover, incumbent, ensure, stop, headers, Info }
+export const Service = { discover, incumbent, ensure, stop, Info }

@@ -11,18 +11,13 @@ export default Runtime.handler(
   Commands.commands.pair,
   Effect.fn("cli.pair")(function* () {
     const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
-    const password = yield* ServiceConfig.password()
-    const server = yield* Effect.tryPromise(() =>
-      Ocpp.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) }).server.get(),
-    )
-    const info = { urls: server.urls, username: "ocpp", password }
+    const server = yield* Effect.tryPromise(() => Ocpp.make({ baseUrl: endpoint.url }).server.get())
+    const info = { urls: server.urls }
     process.stdout.write(
       [
         "",
         `  URLs      ${info.urls[0] ?? "(none)"}`,
         ...info.urls.slice(1).map((url) => `            ${url}`),
-        `  Username  ${info.username}`,
-        `  Password  ${info.password}`,
         "",
         "  Scan to pair",
         "",

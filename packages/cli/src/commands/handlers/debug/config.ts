@@ -10,7 +10,7 @@ export default Runtime.handler(
   Commands.commands.debug.commands.config,
   Effect.fn("cli.debug.config")(function* () {
     const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
-    const client = Ocpp.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+    const client = Ocpp.make({ baseUrl: endpoint.url })
     const entries = yield* Effect.promise(() => client.config.get({ location: { directory: process.cwd() } }))
     process.stdout.write(JSON.stringify(entries, null, 2) + EOL)
   }),

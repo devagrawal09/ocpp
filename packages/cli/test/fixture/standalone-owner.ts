@@ -1,5 +1,4 @@
 import { Effect } from "effect"
-import { Service } from "@ocpp/client/effect/service"
 import path from "node:path"
 import { Standalone } from "../../src/services/standalone"
 
@@ -11,9 +10,7 @@ await Effect.runPromise(
       const endpoint = yield* Standalone.start({
         command: [process.execPath, path.join(import.meta.dir, "../../src/index.ts"), "serve"],
       })
-      const response = yield* Effect.promise(() =>
-        fetch(new URL("/api/health", endpoint.url), { headers: Service.headers(endpoint) }),
-      )
+      const response = yield* Effect.promise(() => fetch(new URL("/api/health", endpoint.url)))
       console.log(`STANDALONE_READY ${endpoint.pid} ${endpoint.url} ${response.status}`)
       return yield* Effect.never
     }),

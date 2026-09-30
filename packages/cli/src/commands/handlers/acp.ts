@@ -12,7 +12,7 @@ export default Runtime.handler(
   Effect.fn("cli.acp")(function* () {
     process.env.OCPP_CLIENT = "acp"
     const endpoint = yield* Standalone.start()
-    const client = Ocpp.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+    const client = Ocpp.make({ baseUrl: endpoint.url })
     const input = new WritableStream<Uint8Array>({
       write: (chunk) =>
         new Promise<void>((resolve, reject) => {

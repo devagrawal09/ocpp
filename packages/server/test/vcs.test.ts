@@ -29,13 +29,13 @@ it.live(
       const server = yield* startServer(path.join(tmp.path, "config"))
       const url = new URL("/api/vcs/base", server.base)
       url.searchParams.set("location[directory]", tmp.path)
-      const base = yield* Effect.promise(() => fetch(url, { headers: server.headers }))
+      const base = yield* Effect.promise(() => fetch(url))
       expect(base.status).toBe(200)
       expect(yield* Effect.promise(() => base.json())).toMatchObject({
         data: { name: "main", ref: "refs/heads/main", source: "reflog" },
       })
       yield* Effect.promise(() => $`git branch -m ambiguous`.cwd(tmp.path).quiet())
-      const ambiguous = yield* Effect.promise(() => fetch(url, { headers: server.headers }))
+      const ambiguous = yield* Effect.promise(() => fetch(url))
       expect(ambiguous.status).toBe(503)
       expect(yield* Effect.promise(() => ambiguous.json())).toMatchObject({
         _tag: "ServiceUnavailableError",
@@ -44,13 +44,13 @@ it.live(
       url.pathname = "/api/vcs/diff"
       url.searchParams.set("mode", "committed")
       url.searchParams.set("base", "refs/heads/main")
-      const diff = yield* Effect.promise(() => fetch(url, { headers: server.headers }))
+      const diff = yield* Effect.promise(() => fetch(url))
       expect(diff.status).toBe(200)
       expect(yield* Effect.promise(() => diff.json())).toMatchObject({
         data: [{ file: "file.txt", patch: expect.stringContaining("-base\n+committed"), additions: 1, deletions: 1 }],
       })
       url.searchParams.set("base", "missing")
-      const unavailable = yield* Effect.promise(() => fetch(url, { headers: server.headers }))
+      const unavailable = yield* Effect.promise(() => fetch(url))
       expect(unavailable.status).toBe(503)
       expect(yield* Effect.promise(() => unavailable.json())).toMatchObject({
         _tag: "ServiceUnavailableError",
@@ -59,7 +59,7 @@ it.live(
       yield* Effect.promise(() => $`git branch -D main`.cwd(tmp.path).quiet())
       url.searchParams.delete("base")
       url.searchParams.set("mode", "branch")
-      const noBase = yield* Effect.promise(() => fetch(url, { headers: server.headers }))
+      const noBase = yield* Effect.promise(() => fetch(url))
       expect(noBase.status).toBe(503)
       expect(yield* Effect.promise(() => noBase.json())).toMatchObject({
         _tag: "ServiceUnavailableError",

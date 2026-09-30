@@ -3,7 +3,6 @@ import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Deferred, Effect, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
-import { randomBytes } from "node:crypto"
 import { selfCommand } from "../util/process"
 
 const Ready = Schema.Struct({ url: Schema.String })
@@ -15,14 +14,11 @@ type Options = {
 
 const startupDirectory = process.cwd()
 
-function command(password: string, options: Options) {
+function command(options: Options) {
   const [executable, ...args] = options.command ?? [...selfCommand(), "serve"]
   if (!executable) throw new Error("Failed to resolve standalone server command")
   return ChildProcess.make(executable, [...args, "--stdio", "--port", "0"], {
     cwd: startupDirectory,
-    // Explicit entry wins over anything inherited, so a user-exported
-    // OCPP_PASSWORD cannot shadow the child's lease credential.
-    env: { OCPP_PASSWORD: password },
     extendEnv: true,
     // The server treats EOF on this pipe as the end of its ownership lease.
     // The OS closes it even when the CLI is killed before Effect finalizers run.
@@ -35,9 +31,8 @@ function command(password: string, options: Options) {
 
 const makeEndpoint = Effect.fn("cli.standalone.endpoint")(
   function* (options: Options) {
-    const password = randomBytes(32).toString("base64url")
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-    const proc = yield* spawner.spawn(command(password, options))
+    const proc = yield* spawner.spawn(command(options))
     const readyLine = yield* Deferred.make<string, Error>()
     // Keep draining stdout after readiness so later server writes cannot hit EPIPE.
     yield* proc.stdout.pipe(
@@ -51,7 +46,6 @@ const makeEndpoint = Effect.fn("cli.standalone.endpoint")(
     const ready = yield* Effect.tryPromise(() => decodeReady(output))
     return {
       url: ready.url,
-      auth: { type: "basic" as const, username: "ocpp", password },
       pid: proc.pid,
     } satisfies Endpoint & { readonly pid: number }
   },

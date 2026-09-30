@@ -253,13 +253,8 @@ test("concurrent service processes elect one server", async () => {
     ).toEqual(losers.map(() => 0))
     expect(winner?.exitCode).toBe(null)
     expect(new URL(info.url).port).toBe(String(port))
-    expect((await Bun.file(config).json()).password).toBe(info.password)
     expect(await Bun.file(registration + ".lock").exists()).toBe(false)
-    expect(
-      await fetch(new URL("/api/health", info.url), {
-        headers: { authorization: "Basic " + btoa(`ocpp:${info.password}`) },
-      }).then((response) => response.json()),
-    ).toEqual({
+    expect(await fetch(new URL("/api/health", info.url)).then((response) => response.json())).toEqual({
       healthy: true,
       version: info.version,
       pid: info.pid,
@@ -294,7 +289,7 @@ test("configured managed service port overrides the channel default", async () =
   const registration = path.join(root, "state", "ocpp", "service-local.json")
   const config = path.join(root, "config", "ocpp", "service-local.json")
   await fs.mkdir(path.join(root, "config", "ocpp"), { recursive: true })
-  await fs.writeFile(config, JSON.stringify({ port, password: "" }))
+  await fs.writeFile(config, JSON.stringify({ port }))
   const owner = Bun.spawn([process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"], {
     env,
     stderr: "pipe",
@@ -303,8 +298,6 @@ test("configured managed service port overrides the channel default", async () =
   try {
     const info = await waitForInfo(registration)
     expect(new URL(info.url).port).toBe(String(port))
-    expect(info.password).not.toBe("")
-    expect((await Bun.file(config).json()).password).toBe(info.password)
     await Effect.runPromise(Service.stop({ file: registration }).pipe(Effect.provide(NodeFileSystem.layer)))
     await owner.exited
   } finally {
@@ -404,7 +397,6 @@ test("unresponsive managed port occupancy reports a bounded conflict", async () 
     version: OCPP_VERSION,
     url: "http://127.0.0.1:1",
     pid: process.pid,
-    password: "stale",
   }
   await fs.writeFile(registration, JSON.stringify(stale))
   const contender = Bun.spawn([process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"], {
@@ -452,7 +444,6 @@ test("port contender recognizes an incumbent registered during the bind race", a
       version: OCPP_VERSION,
       url: "http://127.0.0.1:1",
       pid: 2_147_483_647,
-      password: "stale",
     }),
   )
   const contender = Bun.spawn([process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"], {
@@ -469,7 +460,6 @@ test("port contender recognizes an incumbent registered during the bind race", a
       version: OCPP_VERSION,
       url: `http://127.0.0.1:${listener.port}`,
       pid: process.pid,
-      password: "incumbent",
     }
     await fs.writeFile(registration, JSON.stringify(info))
 
@@ -494,7 +484,6 @@ test("service registration replaces a stale owner with the bound address", async
     const cleanup = await Effect.runPromise(
       ServiceRegistration.register({
         address: { _tag: "TcpAddress", hostname: "127.0.0.1", port: 4321 },
-        password: "secret",
         id: "owner",
         file: registration,
         shutdown: Effect.never,
@@ -505,7 +494,6 @@ test("service registration replaces a stale owner with the bound address", async
       version: OCPP_VERSION,
       url: "http://127.0.0.1:4321",
       pid: process.pid,
-      password: "secret",
     })
     await Effect.runPromise(cleanup.pipe(Effect.provide(NodeFileSystem.layer)))
     expect(await Bun.file(registration).exists()).toBe(false)
@@ -572,9 +560,7 @@ async function waitForInfo(file: string, accept: (info: Info) => boolean = () =>
 
 async function waitForFailed(info: Info) {
   for (let attempt = 0; attempt < 400; attempt++) {
-    const status = await fetch(new URL("/api/health", info.url), {
-      headers: { authorization: "Basic " + btoa(`ocpp:${info.password}`) },
-    })
+    const status = await fetch(new URL("/api/health", info.url))
       .then((response) => response.status)
       .catch(() => undefined)
     if (status === 500) return

@@ -10,21 +10,11 @@ it.live("boots the workerd profile over durable object storage", () =>
   Effect.gen(function* () {
     const handler = yield* ServerWorkerd.create({
       storage: makeDurableObjectStorage(),
-      password: "secret",
       app: { version: "workerd-test" },
       config: { content: "{}" },
     })
 
-    const unauthorized = yield* Effect.promise(() => handler(new Request("http://ocpp.local/api/health")))
-    expect(unauthorized.status).toBe(401)
-
-    const health = yield* Effect.promise(() =>
-      handler(
-        new Request("http://ocpp.local/api/health", {
-          headers: { authorization: `Basic ${btoa("ocpp:secret")}` },
-        }),
-      ),
-    )
+    const health = yield* Effect.promise(() => handler(new Request("http://ocpp.local/api/health")))
     expect(health.status).toBe(200)
 
     const body: unknown = yield* Effect.promise(() => health.json())

@@ -32,16 +32,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Report the owning server process and its application status.",
@@ -81,16 +71,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -164,16 +144,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -260,16 +230,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -361,16 +321,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -467,16 +417,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -673,16 +613,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Retrieve sessions in the requested order. Items keep that order across pages; use cursor.next or cursor.previous to move through the ordered list.",
@@ -717,16 +647,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -927,16 +847,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Aggregate local session activity, usage, and tool reliability for a time range.",
@@ -973,16 +883,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -1105,16 +1005,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -1178,16 +1068,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Retrieve foreground Session drains currently owned by this OC++ process. Sessions absent from the result are inactive.",
@@ -1238,16 +1118,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -1287,16 +1157,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -1374,16 +1234,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError | MessageNotFoundError",
             "content": {
@@ -1452,16 +1302,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -1535,16 +1375,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -1610,16 +1440,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -1696,16 +1516,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -1803,16 +1613,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -1955,16 +1755,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError | CommandNotFoundError",
             "content": {
@@ -2093,16 +1883,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -2144,16 +1924,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -2261,16 +2031,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -2398,16 +2158,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -2498,16 +2248,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -2608,16 +2348,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -2690,16 +2420,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -2807,16 +2527,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -2884,16 +2594,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -2976,16 +2676,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -3058,16 +2748,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -3118,16 +2798,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -3196,16 +2866,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -3266,16 +2926,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -3352,16 +3002,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -3418,16 +3058,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -3515,16 +3145,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -3580,16 +3200,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -3792,16 +3402,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -3870,16 +3470,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -3928,16 +3518,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -4013,16 +3593,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -4103,16 +3673,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -4216,16 +3776,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -4287,16 +3837,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -4381,16 +3921,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -4454,16 +3984,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -4542,16 +4062,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError | EventNotFoundError",
             "content": {
@@ -4622,16 +4132,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -4731,16 +4231,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError | EventNotFoundError",
             "content": {
@@ -4805,16 +4295,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -4927,16 +4407,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError",
             "content": {
@@ -5043,16 +4513,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -5153,16 +4613,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -5259,16 +4709,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -5314,16 +4754,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -5451,16 +4881,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -5558,16 +4978,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -5677,16 +5087,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Retrieve available integrations and their authentication methods.",
@@ -5785,16 +5185,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Retrieve one integration and its authentication methods.",
@@ -5865,16 +5255,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -5973,16 +5353,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -6118,16 +5488,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -6267,16 +5627,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Poll the current status of an OAuth attempt.",
@@ -6354,16 +5704,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -6453,16 +5793,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -6584,16 +5914,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -6723,16 +6043,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Poll the current status and output of a command authentication attempt.",
@@ -6810,16 +6120,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -6909,16 +6209,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Retrieve configured MCP servers and their connection status.",
@@ -6990,16 +6280,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -7100,16 +6380,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "McpServerNotFoundError",
             "content": {
@@ -7194,16 +6464,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "McpServerNotFoundError",
             "content": {
@@ -7284,16 +6544,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -7390,16 +6640,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Retrieve resources and resource templates from connected MCP servers.",
@@ -7471,16 +6711,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -7573,16 +6803,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Remove a stored integration credential.",
@@ -7657,16 +6877,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Activate a stored integration credential.",
@@ -7699,16 +6909,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -7750,16 +6950,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -7868,16 +7058,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Resolve the project for the requested location.",
@@ -7964,16 +7144,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Retrieve pending forms for a location.",
@@ -8022,16 +7192,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -8095,16 +7255,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -8203,16 +7353,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError | FormNotFoundError",
             "content": {
@@ -8290,16 +7430,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "SessionNotFoundError | FormNotFoundError",
             "content": {
@@ -8366,16 +7496,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -8459,16 +7579,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -8576,16 +7686,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Serve one file relative to the requested location.",
@@ -8684,16 +7784,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -8815,16 +7905,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Find recursively ranked filesystem entries relative to the requested location.",
@@ -8911,16 +7991,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Retrieve currently registered commands.",
@@ -9004,16 +8074,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -9130,16 +8190,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Subscribe to native event payloads for the server. Volatile by contract: a slow consumer overflows and fails the stream, and events during disconnection are missed.",
@@ -9226,16 +8276,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "List PTY sessions for a location, including exited sessions retained until removal.",
@@ -9314,16 +8354,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -9454,16 +8484,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "PtyNotFoundError",
             "content": {
@@ -9560,16 +8580,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -9684,16 +8694,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -9815,16 +8815,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "403": {
             "description": "ForbiddenError",
             "content": {
@@ -9911,16 +8901,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -10017,16 +8997,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -10096,16 +9066,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -10168,16 +9128,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -10217,16 +9167,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -10285,16 +9225,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -10348,16 +9278,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -10427,16 +9347,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "PtyNotFoundError",
             "content": {
@@ -10494,16 +9404,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -10571,16 +9471,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -10663,16 +9553,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -10785,16 +9665,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -10915,16 +9785,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "List currently running shell commands for a location. Exited commands are not included.",
@@ -11003,16 +9863,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -11136,16 +9986,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "ShellNotFoundError",
             "content": {
@@ -11225,16 +10065,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -11337,16 +10167,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -11507,16 +10327,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "404": {
             "description": "ShellNotFoundError",
             "content": {
@@ -11612,16 +10422,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "List references available in the requested location.",
@@ -11660,16 +10460,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -11716,16 +10506,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -11797,16 +10577,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Remove a managed worktree from a project.",
@@ -11868,16 +10638,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Reconcile stored worktrees with the project repositories.",
@@ -11915,16 +10675,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -12015,16 +10765,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -12121,16 +10861,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Get current and default branch information for the requested location.",
@@ -12218,16 +10948,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -12324,16 +11044,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -12447,16 +11157,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -12578,16 +11278,6 @@
               }
             }
           },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "ServiceUnavailableError",
             "content": {
@@ -12629,16 +11319,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -12703,16 +11383,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -12817,16 +11487,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
           }
         },
         "description": "Return the progress of the V1 to V2 session history migration.",
@@ -12910,16 +11570,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -13020,16 +11670,6 @@
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -13136,16 +11776,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
                 }
               }
             }
@@ -19315,20 +17945,6 @@
           }
         },
         "required": ["type", "text"],
-        "additionalProperties": false
-      },
-      "UnauthorizedErrorEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": ["UnauthorizedError"]
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": ["_tag", "message"],
         "additionalProperties": false
       },
       "UnknownErrorEncoded": {

@@ -102,7 +102,7 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
     name: "ocpp-simulation-graph",
     setup(build) {
       build.onLoad(
-        { filter: /packages[/\\]simulation[/\\]src[/\\](frontend[/\\](simulation|server)|control-server)\.ts$/ },
+        { filter: /packages[/\\]simulation[/\\]src[/\\](backend[/\\]index|control-server)\.ts$/ },
         (args) => void simulationInputs.add(args.path),
       )
     },

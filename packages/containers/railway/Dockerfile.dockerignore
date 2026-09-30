@@ -1,0 +1,12 @@
+**/node_modules
+.git
+.railway
+.ocpp
+.agents
+.env*
+**/.env*
+**/dist
+**/dist-node
+**/*.db
+**/*.db-wal
+**/*.db-shm

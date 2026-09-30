@@ -234,12 +234,35 @@ const insertSession = (id: Session.ID, overrides?: Partial<typeof SessionTable.$
       .pipe(Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die(`session missing: ${id}`))))
   })
 
+/** Admits, runs, and commits one notebook program through the real CodeMode host path, against current bindings. */
+const runNotebook = Effect.fnUntraced(function* (
+  sessionID: Session.ID,
+  assistantMessageID: SessionMessage.ID,
+  id: string,
+  source: string,
+) {
+  const notebook = yield* CodeModeStore.Service
+  const program = CodeMode.compile(source)
+  const admission = yield* notebook.admit({ id, sessionID, assistantMessageID, toolCallID: `call_${id}`, program })
+  if (!admission.ok) throw new Error(admission.message)
+  const result = yield* CodeMode.execute({ code: program.source, program, bindings: admission.execution.bindings })
+  if (!result.ok) throw new Error(result.error.message)
+  return { settlement: yield* notebook.commit(admission.execution, result.declarations), value: result.value }
+})
+
+/** The same history read and renderer SessionContext.load uses for the request baseline. */
+const notebookBaseline = Effect.fnUntraced(function* (sessionID: Session.ID) {
+  const db = (yield* Database.Service).db
+  const notebook = yield* CodeModeStore.Service
+  const history = yield* SessionHistory.entriesForRunner(db, sessionID, Instructions.empty)
+  return yield* CodeModeInstructions.notebook(notebook, sessionID, history.notebook)
+})
+
 it.effect("refreshes the notebook checkpoint only at successful compaction without accumulating it", () =>
   Effect.gen(function* () {
     requests = []
     const session = yield* insertSession(Session.ID.make("ses_notebook_compactions"))
     const db = (yield* Database.Service).db
-    const notebook = yield* CodeModeStore.Service
     const bus = yield* Bus.Service
     const compaction = yield* SessionCompaction.Service
     const modelRequests = yield* SessionModelRequest.Service
@@ -251,25 +274,9 @@ it.effect("refreshes the notebook checkpoint only at successful compaction witho
       agent: Agent.defaultID,
       model: resolved.ref,
     })
-    const save = Effect.fnUntraced(function* (id: string, source: string) {
-      const program = CodeMode.compile(source)
-      const admission = yield* notebook.admit({
-        id,
-        sessionID: session.id,
-        assistantMessageID,
-        toolCallID: `call_${id}`,
-        program,
-      })
-      if (!admission.ok) throw new Error(admission.message)
-      const saved = yield* CodeMode.execute({ code: program.source, program })
-      if (!saved.ok) throw new Error(saved.error.message)
-      return yield* notebook.commit(admission.execution, saved.declarations)
-    })
-    // The same history read and renderer SessionContext.load uses for the request baseline.
-    const baseline = Effect.gen(function* () {
-      const history = yield* SessionHistory.entriesForRunner(db, session.id, Instructions.empty)
-      return yield* CodeModeInstructions.notebook(notebook, session.id, history.notebook)
-    })
+    const save = (id: string, source: string) =>
+      runNotebook(session.id, assistantMessageID, id, source).pipe(Effect.map((run) => run.settlement))
+    const baseline = notebookBaseline(session.id)
 
     yield* save(
       "exe_before",
@@ -286,10 +293,26 @@ it.effect("refreshes the notebook checkpoint only at successful compaction witho
     // Between checkpoints the baseline is unchanged; the completion notification announces laterValue.
     expect(yield* baseline).toBe(initial)
 
+    // Every epoch saves new values plus a helper calling the previous epoch's helper, so one saved
+    // dependency chain spans all 25 checkpoints back to durableHelper.
     const refreshed = yield* Effect.forEach(
       Array.from({ length: 25 }, (_, index) => index),
       (index) =>
         Effect.gen(function* () {
+          const before = yield* baseline
+          const checkpoint = yield* InstructionState.notebook(db, session.id)
+          expect(
+            yield* save(
+              `exe_epoch_${index}`,
+              `const epochData${index} = { step: ${index + 1} }; ` +
+                `function epochHelper${index}(x) { return ${index === 0 ? "durableHelper" : `epochHelper${index - 1}`}(x) + epochData${index}.step }`,
+            ),
+          ).toEqual({ status: "saved", saved: [`epochData${index}`, `epochHelper${index}`] })
+          // Values saved since the last checkpoint stay out of the baseline until compaction succeeds.
+          expect(yield* baseline).toBe(before)
+          expect(yield* InstructionState.notebook(db, session.id)).toEqual(checkpoint)
+          expect(before).not.toContain(`function epochHelper${index}(x)`)
+
           expect(
             yield* compaction.compactManual({
               session,
@@ -307,17 +330,51 @@ it.effect("refreshes the notebook checkpoint only at successful compaction witho
               inputID: SessionMessage.ID.make(`msg_notebook_compaction_${index}`),
             }),
           ).toEqual({ status: "completed" })
-          return yield* baseline
+          const names = 3 + 2 * (index + 1)
+          const checkpointed = yield* InstructionState.notebook(db, session.id)
+          expect(checkpointed).toHaveLength(names)
+          expect(checkpointed).toEqual(
+            expect.arrayContaining([
+              "durableData",
+              "durableHelper",
+              "laterValue",
+              `epochData${index}`,
+              `epochHelper${index}`,
+            ]),
+          )
+          const after = yield* baseline
+          expect(after).toContain(`${names} saved identifiers; 0 omitted`)
+          expect(after).toContain(`function epochHelper${index}(x)`)
+          expect(after).toContain(`epochData${index}`)
+          expect(after.split("## Durable Notebook")).toHaveLength(2)
+          return after
         }),
     )
     expect(requests).toHaveLength(25)
-    expect(new Set(refreshed).size).toBe(1)
-    expect(refreshed[0]).toContain("3 saved identifiers; 0 omitted")
-    expect(refreshed[0]).toContain("laterValue")
-    expect(refreshed[0]).toContain("function durableHelper(x)")
-    expect(refreshed[0].split("## Durable Notebook")).toHaveLength(2)
-    // The inventory is rebuilt from notebook storage, never folded into the model-authored summary.
-    expect(JSON.stringify(yield* store.context(session.id))).not.toContain("Durable Notebook")
+    expect(new Set(refreshed).size).toBe(25)
+    const latest = refreshed[24]
+    expect(latest).toContain("53 saved identifiers; 0 omitted")
+    expect(latest).toContain("laterValue")
+    expect(latest).toContain("function durableHelper(x)")
+    expect(latest).toContain("function epochHelper0(x)")
+    expect(latest).toContain("function epochHelper24(x)")
+    // The inventory is rebuilt from notebook storage, never folded into the model-authored summary
+    // or sent to the summarizer.
+    const context = yield* store.context(session.id)
+    expect(context).toMatchObject([{ type: "compaction", summary: "manual summary" }])
+    expect(JSON.stringify(context)).not.toContain("Durable Notebook")
+    expect(JSON.stringify(requests)).not.toContain("Durable Notebook")
+
+    // After the final compaction the oldest and newest helpers still run, resolving the saved chain
+    // from current bindings.
+    expect(
+      yield* runNotebook(
+        session.id,
+        assistantMessageID,
+        "exe_final",
+        "return [durableHelper(1), epochHelper0(1), epochHelper24(1), laterValue]",
+      ),
+    ).toEqual({ settlement: { status: "saved", saved: [] }, value: [43, 44, 368, "saved after the checkpoint"] })
   }),
 )
 
@@ -421,12 +478,29 @@ it.effect("manual compaction summarizes short context instead of no-op", () =>
 it.effect("manual compaction records model resolution failures without calling the model", () =>
   Effect.gen(function* () {
     requests = []
+    const db = (yield* Database.Service).db
+    const bus = yield* Bus.Service
     const compaction = yield* SessionCompaction.Service
     const store = yield* SessionStore.Service
     const sessionID = Session.ID.make("ses_manual_resolution_failure")
     const session = yield* insertSession(sessionID)
     const modelRequests = yield* SessionModelRequest.Service
     const inputID = SessionMessage.ID.make("msg_manual_resolution_failure")
+    const assistantMessageID = SessionMessage.ID.create()
+    yield* bus.publish(SessionEvent.Step.Started, {
+      sessionID,
+      assistantMessageID,
+      agent: Agent.defaultID,
+      model: resolved.ref,
+    })
+    yield* runNotebook(sessionID, assistantMessageID, "exe_checkpointed", "const checkpointedValue = 'in the baseline'")
+    yield* InstructionState.prepare(db, bus, Instructions.empty, sessionID)
+    const baseline = yield* notebookBaseline(sessionID)
+    expect(baseline).toContain("1 saved identifiers; 0 omitted")
+    expect(
+      (yield* runNotebook(sessionID, assistantMessageID, "exe_pending", "const pendingValue = 'after the checkpoint'"))
+        .settlement,
+    ).toEqual({ status: "saved", saved: ["pendingValue"] })
 
     expect(
       yield* compaction.compactManual({
@@ -454,7 +528,7 @@ it.effect("manual compaction records model resolution failures without calling t
       error: { type: "provider.no-route", message: "Model unavailable: test/missing" },
     })
     expect(requests).toHaveLength(0)
-    expect(yield* store.context(sessionID)).toMatchObject([
+    expect((yield* store.context(sessionID)).filter((message) => message.type === "compaction")).toMatchObject([
       {
         id: inputID,
         type: "compaction",
@@ -463,6 +537,9 @@ it.effect("manual compaction records model resolution failures without calling t
         error: { type: "provider.no-route", message: "Model unavailable: test/missing" },
       },
     ])
+    // A failed compaction keeps the established checkpoint; pendingValue waits for a successful one.
+    expect(yield* InstructionState.notebook(db, sessionID)).toEqual(["checkpointedValue"])
+    expect(yield* notebookBaseline(sessionID)).toBe(baseline)
   }),
 )
 

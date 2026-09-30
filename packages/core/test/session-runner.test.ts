@@ -975,27 +975,24 @@ const watchRename = Effect.fnUntraced(function* (sessionID: Session.ID) {
 
 describe("SessionRunnerLLM", () => {
   scenario("renders one notebook checkpoint across steps, retries and later prompts", function* (s) {
-    const save = (executionID: string, code: string) =>
-      Effect.gen(function* () {
-        const saved = yield* CodeMode.execute({ code })
-        if (!saved.ok) throw new Error(saved.error.message)
-        yield* s.db
-          .insert(CodeModeBindingTable)
-          .values(
-            Object.entries(saved.declarations).map(([name, value]) => ({
-              session_id: sessionID,
-              name,
-              value,
-              message_seq: 0,
-              execution_id: executionID,
-            })),
-          )
-          .run()
-      }).pipe(Effect.orDie)
-    yield* save(
-      "exe_notebook_awareness",
-      "const durableData = { answer: 42 }; function durableHelper(x) { return durableData.answer + x }",
-    )
+    s.directTools = false
+    const seeded = yield* CodeMode.execute({
+      code: "const durableData = { answer: 42 }; function durableHelper(x) { return durableData.answer + x }",
+    })
+    if (!seeded.ok) throw new Error(seeded.error.message)
+    yield* s.db
+      .insert(CodeModeBindingTable)
+      .values(
+        Object.entries(seeded.declarations).map(([name, value]) => ({
+          session_id: sessionID,
+          name,
+          value,
+          message_seq: 0,
+          execution_id: "exe_notebook_awareness",
+        })),
+      )
+      .run()
+      .pipe(Effect.orDie)
     yield* s.hooks.register("session", "retry", (event) =>
       Effect.sync(() => {
         event.decision = { retry: true, delay: 0 }
@@ -1003,34 +1000,47 @@ describe("SessionRunnerLLM", () => {
     )
     yield* s.admit("Continue using the notebook")
     yield* s.llm.push(
-      // Saved while the first step runs, so the second step's reload sees it in storage.
-      Stream.concat(
-        Stream.fromEffect(save("exe_step", "const stepValue = 1")).pipe(Stream.drain),
-        Stream.fromIterable([
-          LLMEvent.stepStart({ index: 0 }),
-          LLMEvent.toolCall({ id: "call-echo-notebook", name: "echo", input: { text: "saved" } }),
-          LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
-          LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
-        ]),
-      ),
-      // Saved before the second step's first attempt fails, so its retry reloads after the save.
-      Stream.fromEffect(save("exe_retry", "const retryValue = 2")).pipe(
-        Stream.flatMap(() => Stream.fail(invalidRequest())),
-      ),
+      TestLLM.tool("call-save", "execute", {
+        code: 'tools.echo({ text: "save" })\nconst stepValue = durableHelper(1)\nreturn stepValue',
+      }),
+      [],
+      // The completion wakes a turn whose first attempt fails, so its retry reloads after the save.
+      Stream.fail(invalidRequest()),
+      TestLLM.tool("call-use", "execute", { code: 'tools.echo({ text: "use" })\nreturn stepValue + 1' }),
+      [],
       TestLLM.text("Notebook is available", "text-notebook"),
     )
+    // Each program holds at echo until its admitting turn has ended, so its completion wakes a later turn.
+    const saving = yield* s.blockTools()
     yield* s.resume
+    yield* saving.started
+    const using = yield* s.blockTools()
+    yield* saving.release
+    yield* using.started
+    yield* s.llm.wait(5)
+    yield* using.release
+    yield* s.llm.wait(6)
+    yield* s.session.wait(sessionID)
     yield* s.llm.push(TestLLM.text("Still available", "text-later"))
     yield* s.runPrompt("Keep going")
 
+    const saved = "saved notebook values: stepValue. Read them by name in a later execution."
+    const preview = (value: number) => `BEGIN_UNTRUSTED_EXECUTION_DATA\n${value}\nEND_UNTRUSTED_EXECUTION_DATA`
+    expect(s.executions).toEqual(["save", "use"])
+    expect(userTexts(s.requests[1]).join("\n")).not.toContain(saved)
+    expect(userTexts(s.requests[2]).at(-1)).toContain(saved)
+    expect(userTexts(s.requests[2]).at(-1)).toContain(preview(43))
+    expect(userTexts(s.requests[3])).toEqual(userTexts(s.requests[2]))
+    expect(userTexts(s.requests[5]).at(-1)).toContain("completed and saved no notebook values.")
+    expect(userTexts(s.requests[5]).at(-1)).toContain(preview(44))
+
     const systems = s.requests.map((request) => request.system.map((part) => part.text).join("\n"))
-    expect(systems).toHaveLength(4)
+    expect(systems).toHaveLength(7)
     expect(new Set(systems).size).toBe(1)
     expect(systems[0]).toContain("2 saved identifiers; 0 omitted")
     expect(systems[0]).toContain("function durableHelper(x)")
     expect(systems[0]).toContain("notebook.inspect({ value: savedIdentifier })")
     expect(systems[0]).not.toContain("stepValue")
-    expect(systems[0]).not.toContain("retryValue")
   })
 
   scenario("generates the title while the first model step is still running", function* (s) {

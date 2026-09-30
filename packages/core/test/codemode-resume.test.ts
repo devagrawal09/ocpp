@@ -40,6 +40,9 @@ import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Global } from "@ocpp/util/global"
+import { Instructions } from "@ocpp/core/instructions/index"
+import { InstructionState } from "@ocpp/core/session/instruction-state"
+import { SessionHistory } from "@ocpp/core/session/history"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
@@ -620,10 +623,20 @@ const specs = Bun.serve({
 afterAll(() => specs.stop(true))
 
 describe("Code Mode crash recovery", () => {
-  test("rebuilds inventory and direct-reference inspection on a fresh host runtime", async () => {
+  test("preserves the checkpoint and inspects later bindings on a fresh host runtime", async () => {
     await using dir = await tmpdir()
     const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
     const run = hostProcess(path.join(dir.path, "ocpp.db"))
+    const baseline = (sessionID: Session.ID) =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const notebook = yield* CodeModeStore.Service
+        const history = yield* SessionHistory.entriesForRunner(database.db, sessionID, Instructions.empty)
+        return {
+          checkpoint: history.notebook,
+          inventory: yield* CodeModeInstructions.notebook(notebook, sessionID, history.notebook),
+        }
+      })
     const started = await run(
       Effect.gen(function* () {
         const blocked = yield* registerBlocked(location, [])
@@ -635,14 +648,23 @@ describe("Code Mode crash recovery", () => {
           "const savedData = { answer: 42 }; function savedHelper(x) { return savedData.answer + x }",
         )
         yield* waitForCodeModeExecution(saved)
+        const database = yield* Database.Service
+        const bus = yield* Bus.Service
+        yield* InstructionState.prepare(database.db, bus, Instructions.empty, sessionID)
+        const initial = yield* baseline(sessionID)
+        expect(initial.checkpoint).toEqual(["savedData", "savedHelper"])
+        expect(initial.inventory).toContain("2 saved identifiers; 0 omitted")
+        const later = yield* start(location, sessionID, "call_notebook_later", "const laterValue = savedHelper(1)")
+        yield* waitForCodeModeExecution(later)
+        expect(yield* baseline(sessionID)).toEqual(initial)
         const executionID = yield* start(
           location,
           sessionID,
           "call_notebook_inspect",
-          "let metadata = tools.notebook.inspect({ value: savedHelper }); tools.test.wait({ step: 1 }); return metadata",
+          "let metadata = { helper: tools.notebook.inspect({ value: savedHelper }), later: tools.notebook.inspect({ value: laterValue }) }; tools.test.wait({ step: 1 }); return metadata",
         )
         yield* Deferred.await(blocked)
-        return { sessionID, executionID }
+        return { sessionID, executionID, initial }
       }),
     )
     const recovered = await run(
@@ -651,15 +673,24 @@ describe("Code Mode crash recovery", () => {
         yield* restart
         const info = yield* waitForCodeModeExecution(started.executionID)
         const notebook = yield* CodeModeStore.Service
-        const names = yield* CodeModeStore.savedNames((yield* Database.Service).db, started.sessionID)
-        return { info, inventory: yield* CodeModeInstructions.notebook(notebook, started.sessionID, names) }
+        const database = yield* Database.Service
+        const bus = yield* Bus.Service
+        yield* InstructionState.prepare(database.db, bus, Instructions.empty, started.sessionID)
+        return {
+          info,
+          baseline: yield* baseline(started.sessionID),
+          bindings: yield* notebook.bindings(started.sessionID),
+        }
       }),
     )
     expect(recovered.info).toMatchObject({ status: "completed" })
     expect(recovered.info.output).toContain("function savedHelper(x)")
     expect(recovered.info.output).toContain("savedData")
-    expect(recovered.inventory).toContain("2 saved identifiers; 0 omitted")
-    expect(recovered.inventory).toContain("function savedHelper(x)")
+    expect(recovered.info.output).toContain("laterValue")
+    expect(recovered.bindings.laterValue).toBe(43)
+    expect(recovered.baseline).toEqual(started.initial)
+    expect(recovered.baseline.inventory).toContain("function savedHelper(x)")
+    expect(recovered.baseline.inventory).not.toContain("laterValue")
   })
 
   test("a run torn down mid-call resumes on a fresh runtime without calling completed tools again", async () => {

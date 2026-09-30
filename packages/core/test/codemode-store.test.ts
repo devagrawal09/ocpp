@@ -94,38 +94,6 @@ const admitted = Effect.fnUntraced(function* (
 })
 
 describe("CodeModeStore", () => {
-  it.effect("rebuilds a notebook checkpoint from storage after fork and revert", () =>
-    Effect.gen(function* () {
-      const db = yield* seed()
-      const store = yield* CodeModeStore.Service
-      const early = yield* admitted(store, { id: "exe_inventory_early", source: "const early = 1" })
-      yield* store.commit(early, { early: 1 })
-      const late = yield* admitted(store, {
-        id: "exe_inventory_late",
-        messageID: secondMessage,
-        source: "const late = 2",
-      })
-      yield* store.commit(late, { late: 2 })
-      const checkpoint = (sessionID: Session.ID) =>
-        CodeModeStore.savedNames(db, sessionID).pipe(
-          Effect.flatMap((names) => CodeModeInstructions.notebook(store, sessionID, names)),
-        )
-      const inventory = yield* checkpoint(parent)
-      expect(inventory.indexOf("late:")).toBeLessThan(inventory.indexOf("early:"))
-      // A checkpoint renders only its own names, even after later values are saved.
-      expect(yield* CodeModeInstructions.notebook(store, parent, ["early"])).not.toContain("late:")
-      expect(yield* CodeModeInstructions.notebook(store, parent, [])).toBe("")
-      yield* store.fork({ from: parent, to: child, throughSeq: 1 })
-      const forked = yield* checkpoint(child)
-      expect(forked).toContain("early:")
-      expect(forked).not.toContain("late:")
-      yield* store.revert({ sessionID: parent, beforeSeq: 2 })
-      const reverted = yield* checkpoint(parent)
-      expect(reverted).toContain("early:")
-      expect(reverted).not.toContain("late:")
-    }),
-  )
-
   it.effect("reserves every declared name atomically and saves them together", () =>
     Effect.gen(function* () {
       const db = yield* seed()
@@ -196,10 +164,14 @@ describe("CodeModeStore", () => {
       expect(right.bindings).toEqual({})
 
       expect(yield* store.commit(left, { left: 1 })).toMatchObject({ status: "saved" })
+      const checkpoint = yield* CodeModeInstructions.notebook(store, parent, ["left"])
+      expect(checkpoint).toContain("left:")
       // The later execution keeps the snapshot it was admitted with and still saves.
       expect(right.bindings).toEqual({})
       expect(yield* store.commit(right, { right: 2 })).toMatchObject({ status: "saved" })
       expect(yield* store.bindings(parent)).toEqual({ left: 1, right: 2 })
+      expect(yield* CodeModeInstructions.notebook(store, parent, ["left"])).toBe(checkpoint)
+      expect(yield* CodeModeInstructions.notebook(store, parent, [])).toBe("")
 
       const next = yield* admitted(store, { id: "exe_next", source: "const next = 3" })
       expect(next.bindings).toEqual({ left: 1, right: 2 })

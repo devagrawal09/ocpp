@@ -5,7 +5,7 @@ COPY . .
 RUN bun install --frozen-lockfile
 ARG OCPP_VERSION=1.18.4-railway.037ba0eef4
 ENV OCPP_CHANNEL=beta OCPP_VERSION=$OCPP_VERSION
-RUN bun run packages/cli/script/build.ts --target=ocpp-linux-x64-baseline --skip-install --skip-web-ui
+RUN bun run packages/cli/script/build.ts --target=ocpp-linux-x64-baseline --skip-install
 
 FROM tailscale/tailscale:stable AS tailscale
 FROM node:24-bookworm-slim

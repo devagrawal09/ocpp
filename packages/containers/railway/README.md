@@ -3,6 +3,9 @@
 One Docker service runs a supervised OC++ server, userspace Tailscale, and a
 small public Basic Auth recovery dashboard. Only the dashboard port is public.
 OC++ binds to `127.0.0.1:4096`; Tailscale Serve exposes it privately over HTTPS.
+The image bundles the production web UI alongside the API. Open the private
+Tailscale URL to use the web app directly; it connects to the same server
+automatically. The public Railway URL serves only the recovery dashboard.
 
 ## Deployment
 

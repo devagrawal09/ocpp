@@ -29,20 +29,21 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
     const abort = () => controller.abort()
     options.signal.throwIfAborted()
     options.signal.addEventListener("abort", abort, { once: true })
+    const state = { outputTokens: 0, inputID: crypto.randomUUID() }
     // Streaming input keeps one vendor turn loop per drain: steers join the running turn at its next boundary.
     const prompt = async function* (): AsyncGenerator<SDKUserMessage> {
-      yield message(ExternalAgentDriver.first(options))
+      yield { ...message(ExternalAgentDriver.first(options)), uuid: state.inputID }
       while (true) {
         const next = await options.next(controller.signal).catch(() => undefined)
         if (next === undefined) return
-        yield message(next)
+        state.inputID = crypto.randomUUID()
+        yield { ...message(next), uuid: state.inputID }
       }
     }
     const stream = query({
       prompt: prompt(),
       options: settings(options, mcp, controller, which("claude") ?? undefined),
     })
-    const state = { outputTokens: 0 }
     const identity = { id: options.vendorSessionID }
     try {
       for await (const event of stream) {
@@ -51,7 +52,13 @@ export const ClaudeDriver: ExternalAgentDriver.Driver = {
           await options.linked(event.session_id)
         }
         await normalize(event, options.emit, state)
-        if (event.type === "result") options.idle()
+        // A result must acknowledge the newest submitted input before idle can close the MCP control channel.
+        if (
+          event.type === "result" &&
+          !event.queued_turn_count &&
+          (event.user_message_uuids ?? [event.user_message_uuid]).includes(state.inputID)
+        )
+          options.idle()
       }
       options.signal.throwIfAborted()
       if (identity.id === undefined) throw new Error("Claude returned no session ID")

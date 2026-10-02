@@ -402,6 +402,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
       rename: runtime.session.rename,
       move: runtime.session.move,
       synthetic: runtime.session.synthetic,
+      display: runtime.session.display,
       interrupt: (input) =>
         runtime.session
           .interrupt(input.sessionID, { continue: input.continue })

@@ -44,3 +44,24 @@ test("renders each invocation as its own turn after the conversation", () => {
     "invocation:invocation-2",
   ])
 })
+
+test("renders displayed results as their own rows after the invocation that published them", () => {
+  const rows = Timeline.constructSessionMessageRows(
+    [
+      ...messages.slice(0, 3),
+      {
+        id: "display-1",
+        type: "display",
+        blocks: [{ type: "markdown", text: "Found it" }],
+        time: { created: 5 },
+      },
+    ],
+    false,
+    { type: "idle" },
+  ).rows
+  expect(rows.map(TimelineRow.key).slice(-3)).toEqual([
+    "turn-gap:invocation-1",
+    "invocation:invocation-1",
+    "notice:display-1",
+  ])
+})

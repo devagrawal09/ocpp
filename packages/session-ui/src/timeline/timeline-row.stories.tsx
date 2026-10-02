@@ -474,6 +474,55 @@ const MovedLocation = {
   ),
 }
 
+const DisplayedResults = {
+  render: () => (
+    <CurrentSessionTimelineStory
+      title="Displayed results"
+      description="Results published by a command render after its run, outside the collapsed execution trace."
+      document={{
+        sessionID: CURRENT_SESSION_ID,
+        status: { type: "idle" },
+        diffs: [],
+        messages: [
+          {
+            id: "msg_display_invocation",
+            type: "invocation",
+            trigger: { type: "command", name: "search", text: "login" },
+            code: 'return search({"text":"login","command":"search"})',
+            executionID: "exe_display",
+            status: "completed",
+            events: [{ type: "trace", kind: "return", value: "done" }],
+            time: { created: STORY_TIME, completed: STORY_TIME + 3 },
+          },
+          {
+            id: "msg_display_result",
+            type: "display",
+            title: "Search results",
+            blocks: [
+              { type: "markdown", text: "Found **2** matches for `login`." },
+              {
+                type: "table",
+                columns: [
+                  { key: "file", label: "File" },
+                  { key: "line", label: "Line" },
+                  { key: "exact", label: "Exact" },
+                ],
+                rows: [
+                  { file: { type: "file", path: "src/app.ts" }, line: 12, exact: true },
+                  { file: { type: "file", path: "src/login.ts" }, line: 3, exact: null },
+                ],
+              },
+              { type: "code", text: "login(user)", language: "ts" },
+            ],
+            time: { created: STORY_TIME + 1 },
+          },
+        ],
+      }}
+      width="720px"
+    />
+  ),
+}
+
 const InterruptedTurn = {
   render: () => (
     <CurrentSessionTimelineStory
@@ -584,6 +633,7 @@ const conversationScenarios = {
   compaction: CompactSession,
   location: MovedLocation,
   interruption: InterruptedTurn,
+  display: DisplayedResults,
   models: AliasedModelNotices,
   attachments: RichUserAttachments,
 }

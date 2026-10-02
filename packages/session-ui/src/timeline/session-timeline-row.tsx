@@ -23,6 +23,7 @@ import {
 import { AssistantReasoningContent, SessionCompactionMessage } from "../message/message-content"
 import type { ContextGroupPart } from "../tools/tool-renderer"
 import { SessionRetry } from "../components/session-retry"
+import { SessionDisplayResult } from "./display-result"
 import {
   createReactiveTimelineProjection,
   Timeline,
@@ -426,6 +427,10 @@ export function createSessionTimelineRowRenderer(input: {
         const value = message()
         return value?.type === "compaction" ? value : undefined
       })
+      const display = createMemo(() => {
+        const value = message()
+        return value?.type === "display" ? value : undefined
+      })
       const compactionError = createMemo(() => {
         const value = compaction()
         if (value?.status !== "failed") return ""
@@ -453,6 +458,13 @@ export function createSessionTimelineRowRenderer(input: {
       })
       return (
         <Frame row={current()}>
+          <Show when={display()}>
+            {(message) => (
+              <div data-slot="session-timeline-display" class={`w-full pt-3 pb-1 ${padding()}`}>
+                <SessionDisplayResult message={message()} openFile={input.actions?.openFile} />
+              </div>
+            )}
+          </Show>
           <Show when={compaction()}>
             {(message) => (
               <div data-slot="session-turn-message-container" class={`w-full ${padding()}`}>

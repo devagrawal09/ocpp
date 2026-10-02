@@ -30,6 +30,8 @@ import { SessionPrompt } from "../src/session/prompt.js"
 import { SessionProjector } from "../src/session/projector.js"
 import { SessionRevert } from "../src/session/revert.js"
 import { SessionRunCoordinator } from "../src/session/run-coordinator.js"
+import { toLLMMessages } from "../src/session/runner/to-llm-message.js"
+import { CodeModeLimits } from "../src/codemode/limits.js"
 import { SessionSchema } from "../src/session/schema.js"
 import { Session } from "../src/session/session.js"
 import { SessionTable } from "../src/session/sql.js"
@@ -578,6 +580,95 @@ describe("Session-owned handles", () => {
       expect((yield* handle.get()).revert).toBeUndefined()
       expect(yield* fixture.store.context(sessionID)).toEqual([])
       expect(fixture.locations).toHaveLength(acquisitions)
+    }),
+  )
+
+  it.live("displays bounded results as history that never reaches the model or wakes it", () =>
+    Effect.gen(function* () {
+      const fixture = yield* setup({
+        snapshot: () => Layer.mock(Snapshot.Service, { capture: () => Effect.undefined }),
+      })
+      const handle = fixture.sessions.forSession(sessionID)
+      const boundary = yield* handle.synthetic({ text: "Before results", resume: false })
+      yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")
+      const blocks = [
+        { type: "markdown", text: "**Done**" },
+        {
+          type: "table",
+          columns: [
+            { key: "file", label: "File" },
+            { key: "lines", label: "Lines" },
+          ],
+          rows: [{ file: { type: "file", path: "src/a.ts" }, lines: 3 }, { lines: null }],
+        },
+        { type: "code", text: "const a = 1", language: "ts" },
+      ] as const
+      const first = yield* handle.display({ title: "Summary", blocks })
+      const second = yield* handle.display({ blocks: [{ type: "markdown", text: "Second" }] })
+      // Reusing an ID returns the displayed result instead of publishing again.
+      expect(yield* handle.display({ id: first.id, blocks: [{ type: "markdown", text: "Retried" }] })).toEqual(first)
+
+      const context = yield* fixture.store.context(sessionID)
+      expect(context.map((message) => message.type)).toEqual(["synthetic", "display", "display"])
+      expect(context[1]).toMatchObject({ id: first.id, type: "display", title: "Summary", blocks })
+      expect(context[2]).toMatchObject({ id: second.id, blocks: [{ type: "markdown", text: "Second" }] })
+      const model = { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }
+      expect(toLLMMessages(context, model).map((message) => message.id)).toEqual([boundary.id])
+      expect(fixture.wakes).toEqual([])
+
+      const conflict = yield* handle.display({ id: boundary.id, blocks: [{ type: "markdown", text: "x" }] }).pipe(Effect.flip)
+      expect(conflict).toMatchObject({ _tag: "Session.DisplayConflictError", messageID: boundary.id })
+      const unknownKey = yield* handle
+        .display({ blocks: [{ type: "table", columns: [{ key: "a", label: "A" }], rows: [{ b: 1 }] }] })
+        .pipe(Effect.flip)
+      expect(unknownKey).toMatchObject({
+        _tag: "Session.DisplayInvalidError",
+        message: "Block 0, row 0: every key must name a column.",
+      })
+      const repeated = yield* handle
+        .display({
+          blocks: [
+            {
+              type: "table",
+              columns: [
+                { key: "a", label: "A" },
+                { key: "a", label: "Again" },
+              ],
+              rows: [],
+            },
+          ],
+        })
+        .pipe(Effect.flip)
+      expect(repeated.message).toBe("Block 0: column keys must be unique.")
+      const rows = Array.from({ length: SessionMessage.DisplayLimits.rows + 1 }, () => ({ a: 1 }))
+      const tooManyRows = yield* handle
+        .display({ blocks: [{ type: "table", columns: [{ key: "a", label: "A" }], rows }] })
+        .pipe(Effect.flip)
+      expect(tooManyRows._tag).toBe("Session.DisplayInvalidError")
+      // The total stays replayable: under the Code Mode journal's capture limit for one call.
+      expect(SessionMessage.DisplayLimits.bytes).toBe(128 * 1024)
+      expect(SessionMessage.DisplayLimits.bytes).toBeLessThan(CodeModeLimits.limits.maxCaptureBytes)
+      const block = (text: string) => ({ type: "markdown" as const, text })
+      const oversized = yield* handle
+        .display({ blocks: [block("x".repeat(70_000)), block("x".repeat(70_000))] })
+        .pipe(Effect.flip)
+      expect(oversized.message).toStartWith("A displayed result is limited to 131072 bytes of JSON")
+      // A block at the per-text limit still fits within the total.
+      const largest = yield* handle.display({ blocks: [block("x".repeat(SessionMessage.DisplayLimits.text))] })
+      expect(yield* handle.display({ blocks: [] }).pipe(Effect.flip)).toMatchObject({
+        _tag: "Session.DisplayInvalidError",
+      })
+      expect((yield* fixture.store.context(sessionID)).map((message) => message.id)).toEqual([
+        boundary.id,
+        first.id,
+        second.id,
+        largest.id,
+      ])
+
+      // Results are ordinary history: reverting to one removes it and everything after it.
+      yield* handle.revert.stage({ messageID: second.id, files: false })
+      yield* handle.revert.commit()
+      expect((yield* fixture.store.context(sessionID)).map((message) => message.id)).toEqual([boundary.id, first.id])
     }),
   )
 

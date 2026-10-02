@@ -11,5 +11,7 @@ export type SessionUserComment = {
 
 export type SessionUserActions = {
   openAttachment?: (file: PromptFileAttachment) => void
+  /** Opens a workspace file, such as one a displayed result names. */
+  openFile?: (path: string) => void
   revert?: (input: { sessionID: string; messageID: string }) => Promise<void> | void
 }

@@ -123,6 +123,92 @@ export const Shell = Schema.Struct({
   }),
 }).annotate({ identifier: "Session.Message.Shell" })
 
+/**
+ * Bounds on one displayed result. A result past them is rejected, never truncated. The Session checks
+ * `bytes` and table consistency when it publishes, since they span several fields. `bytes` stays well
+ * below the Code Mode journal's 256 KiB capture limit, so a call that displays a valid result can always
+ * be replayed after a restart.
+ */
+export const DisplayLimits = {
+  title: 200,
+  blocks: 50,
+  text: 100_000,
+  columns: 20,
+  rows: 1_000,
+  cell: 10_000,
+  bytes: 128 * 1024,
+} as const
+
+const DisplayText = Schema.String.check(Schema.isMaxLength(DisplayLimits.text))
+const DisplayLabel = Schema.String.check(Schema.isMaxLength(DisplayLimits.title))
+
+/** A table cell that names a file, opened like any other file reference. */
+export interface DisplayFile extends Schema.Schema.Type<typeof DisplayFile> {}
+export const DisplayFile = Schema.Struct({
+  type: Schema.tag("file"),
+  path: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096)),
+}).annotate({ identifier: "Session.Message.Display.File" })
+
+export const DisplayCell = Schema.Union([
+  Schema.Null,
+  Schema.Boolean,
+  Schema.Finite,
+  Schema.String.check(Schema.isMaxLength(DisplayLimits.cell)),
+  DisplayFile,
+]).annotate({ identifier: "Session.Message.Display.Cell" })
+export type DisplayCell = typeof DisplayCell.Type
+
+export interface DisplayMarkdown extends Schema.Schema.Type<typeof DisplayMarkdown> {}
+export const DisplayMarkdown = Schema.Struct({
+  type: Schema.tag("markdown"),
+  text: DisplayText,
+}).annotate({ identifier: "Session.Message.Display.Markdown" })
+
+export interface DisplayCode extends Schema.Schema.Type<typeof DisplayCode> {}
+export const DisplayCode = Schema.Struct({
+  type: Schema.tag("code"),
+  text: DisplayText,
+  language: Schema.String.check(Schema.isMaxLength(64)).pipe(optional),
+}).annotate({ identifier: "Session.Message.Display.Code" })
+
+export interface DisplayColumn extends Schema.Schema.Type<typeof DisplayColumn> {}
+export const DisplayColumn = Schema.Struct({
+  key: DisplayLabel.check(Schema.isMinLength(1)),
+  label: DisplayLabel,
+}).annotate({ identifier: "Session.Message.Display.Column" })
+
+export interface DisplayTable extends Schema.Schema.Type<typeof DisplayTable> {}
+export const DisplayTable = Schema.Struct({
+  type: Schema.tag("table"),
+  columns: Schema.Array(DisplayColumn).check(Schema.isMinLength(1), Schema.isMaxLength(DisplayLimits.columns)),
+  rows: Schema.Array(Schema.Record(Schema.String, DisplayCell)).check(Schema.isMaxLength(DisplayLimits.rows)),
+}).annotate({ identifier: "Session.Message.Display.Table" })
+
+export const DisplayBlock = Schema.Union([DisplayMarkdown, DisplayTable, DisplayCode])
+  .pipe(Schema.toTaggedUnion("type"))
+  .annotate({ identifier: "Session.Message.Display.Block" })
+export type DisplayBlock = DisplayMarkdown | DisplayTable | DisplayCode
+
+/** What code publishes as one result: an optional title and its ordered blocks. */
+export const DisplayFields = {
+  title: DisplayLabel.pipe(optional),
+  blocks: Schema.Array(DisplayBlock).check(Schema.isMinLength(1), Schema.isMaxLength(DisplayLimits.blocks)),
+}
+
+export interface DisplayInput extends Schema.Schema.Type<typeof DisplayInput> {}
+export const DisplayInput = Schema.Struct(DisplayFields).annotate({ identifier: "Session.Message.DisplayInput" })
+
+/**
+ * A user-facing result that code published with `display_result`. It is presentation history only and
+ * never reaches the model.
+ */
+export interface Display extends Schema.Schema.Type<typeof Display> {}
+export const Display = Schema.Struct({
+  ...Base,
+  type: Schema.tag("display"),
+  ...DisplayFields,
+}).annotate({ identifier: "Session.Message.Display" })
+
 export const InvocationTrigger = Schema.Union([
   Schema.Struct({ type: Schema.tag("command"), name: Schema.String, text: Schema.String }),
   Schema.Struct({ type: Schema.tag("event"), name: Schema.String }),
@@ -311,6 +397,7 @@ export const Info = Schema.Union([
   System,
   Skill,
   Shell,
+  Display,
   Invocation,
   Assistant,
   Compaction,
@@ -324,6 +411,7 @@ export type Info =
   | System
   | Skill
   | Shell
+  | Display
   | Invocation
   | Assistant
   | Compaction

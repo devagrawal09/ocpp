@@ -733,6 +733,55 @@ describe("Code Mode events", () => {
     }),
   )
 
+  it.live("displays results in order outside the trace, keeping them when the handler fails", () =>
+    Effect.gen(function* () {
+      const context = yield* setup
+      const sessions = yield* Session.Service
+      yield* execute(
+        context,
+        [
+          "function report(input) {",
+          '  tools.display_result({ title: "Report", blocks: [{ type: "markdown", text: "First for " + input.text }] })',
+          '  tools.display_result({ blocks: [{ type: "table", columns: [{ key: "path", label: "Path" }], rows: [{ path: { type: "file", path: "README.md" } }] }] })',
+          '  throw new Error("after displaying")',
+          "}",
+          'tools.command.define({ name: "report", handler: "report" })',
+        ].join("\n"),
+      )
+      wakes.length = 0
+      yield* sessions.command({ sessionID: context.session.id, command: "report", text: "x" })
+      const [invocation] = yield* settled(context.session.id, 1)
+      expect(invocation?.status).toBe("error")
+      const messages = yield* sessions.messages({ sessionID: context.session.id, order: "asc" })
+      const shown = messages.filter((message) => message.type === "display")
+      expect(shown).toMatchObject([
+        { title: "Report", blocks: [{ type: "markdown", text: "First for x" }] },
+        { blocks: [{ type: "table", rows: [{ path: { type: "file", path: "README.md" } }] }] },
+      ])
+      expect(messages.findIndex((message) => message.id === shown[0]?.id)).toBeGreaterThan(
+        messages.findIndex((message) => message.id === invocation?.id),
+      )
+      expect(wakes).toEqual([])
+
+      // A program the model runs gets only a receipt back.
+      const own = yield* execute(context, 'return tools.display_result({ blocks: [{ type: "code", text: "ok" }] })')
+      // The completion preview's only data line is the returned value.
+      const receipt = JSON.parse(own?.output?.split("\n").at(-2) ?? "{}")
+      expect(Object.keys(receipt)).toEqual(["id"])
+      expect((yield* sessions.message({ sessionID: context.session.id, messageID: receipt.id }))?.type).toBe("display")
+
+      const forked = yield* sessions.fork({ sessionID: context.session.id, boundary: { type: "through" } })
+      const copied = (yield* sessions.messages({ sessionID: forked.id, order: "asc" })).filter(
+        (message) => message.type === "display",
+      )
+      expect(copied.map((message) => message.blocks)).toEqual(
+        [...shown, yield* sessions.message({ sessionID: context.session.id, messageID: receipt.id })].map((message) =>
+          message?.type === "display" ? message.blocks : [],
+        ),
+      )
+    }),
+  )
+
   it.live("leaves one pending outcome and one notification however often an event fires", () =>
     Effect.gen(function* () {
       const context = yield* setup

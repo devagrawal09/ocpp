@@ -425,6 +425,26 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         ),
     )
     .add(
+      HttpApiEndpoint.post("session.display", "/api/session/:sessionID/display", {
+        params: { sessionID: Session.ID },
+        payload: Schema.Struct({
+          id: SessionMessage.ID.pipe(Schema.optional),
+          ...SessionMessage.DisplayFields,
+        }),
+        success: Schema.Struct({ data: Schema.Struct({ id: SessionMessage.ID }) }),
+        error: [ConflictError, InvalidRequestError, SessionNotFoundError],
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.display",
+            summary: "Display result",
+            description:
+              "Append a user-facing result of markdown, table, and code blocks to the session timeline. It does not wake the model or enter its history. Reusing the ID of a displayed result returns it unchanged.",
+          }),
+        ),
+    )
+    .add(
       HttpApiEndpoint.post("session.shell", "/api/session/:sessionID/shell", {
         params: { sessionID: Session.ID },
         payload: Schema.Struct({

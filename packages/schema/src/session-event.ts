@@ -283,6 +283,17 @@ export const Synthetic = Event.durable({
 })
 export type Synthetic = typeof Synthetic.Type
 
+/** Code published a user-facing result. The message ID derives from this event ID. */
+export const Displayed = Event.durable({
+  type: "session.displayed",
+  ...options,
+  schema: {
+    ...Base,
+    ...SessionMessage.DisplayFields,
+  },
+})
+export type Displayed = typeof Displayed.Type
+
 export namespace Skill {
   export const Activated = Event.durable({
     type: "session.skill.activated",
@@ -728,6 +739,7 @@ export const Definitions = Event.inventory(
   Execution.Interrupted,
   InstructionsUpdated,
   Synthetic,
+  Displayed,
   Skill.Activated,
   Shell.Started,
   Shell.Ended,

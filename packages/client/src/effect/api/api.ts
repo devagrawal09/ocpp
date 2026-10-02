@@ -287,6 +287,15 @@ export type SessionSyntheticOperation<E = never> = (
   input: SessionSyntheticInput,
 ) => Effect.Effect<SessionSyntheticOutput, E>
 
+export type SessionDisplayInput = {
+  readonly sessionID: Session.ID
+  readonly id?: SessionMessage.ID | undefined
+  readonly title?: string | undefined
+  readonly blocks: ReadonlyArray<SessionMessage.DisplayBlock>
+}
+export type SessionDisplayOutput = { readonly id: SessionMessage.ID }
+export type SessionDisplayOperation<E = never> = (input: SessionDisplayInput) => Effect.Effect<SessionDisplayOutput, E>
+
 export type SessionShellInput = {
   readonly sessionID: Session.ID
   readonly id?: Event.ID | undefined
@@ -614,6 +623,19 @@ export type SessionLogOutput =
             readonly text: string
             readonly description?: string | undefined
             readonly metadata?: { readonly [x: string]: unknown } | undefined
+          }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.displayed"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: {
+            readonly sessionID: Session.ID
+            readonly title?: string | undefined
+            readonly blocks: ReadonlyArray<SessionMessage.DisplayBlock>
           }
         }
       | {
@@ -1320,6 +1342,7 @@ export interface SessionApi<E = never> {
   readonly command: SessionCommandOperation<E>
   readonly skill: SessionSkillOperation<E>
   readonly synthetic: SessionSyntheticOperation<E>
+  readonly display: SessionDisplayOperation<E>
   readonly shell: SessionShellOperation<E>
   readonly compact: SessionCompactOperation<E>
   readonly wait: SessionWaitOperation<E>

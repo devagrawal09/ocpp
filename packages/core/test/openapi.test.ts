@@ -105,6 +105,7 @@ const runtimeLayer = Layer.unwrap(
         selectTools: () => Effect.die("Unavailable in OpenAPI tests"),
         switchModel: () => Effect.die("Unavailable in OpenAPI tests"),
         interrupt: () => Effect.die("Unavailable in OpenAPI tests"),
+        display: () => Effect.die("unused session.display"),
         synthetic: () => Effect.never,
         wait: () => Effect.die("Unavailable in OpenAPI tests"),
         context: () => Effect.die("Unavailable in OpenAPI tests"),
@@ -190,7 +191,13 @@ describe("OpenAPI", () => {
         const snapshot = yield* registry.snapshot()
 
         expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
-        expect(yield* codeModeTools(registry)).toEqual(["store.getItem", "store.items.create", "store.listItems"])
+        expect(yield* codeModeTools(registry)).toEqual([
+          "notebook.inspect",
+          "notebook.list",
+          "store.getItem",
+          "store.items.create",
+          "store.listItems",
+        ])
         expect(snapshot.codeModeCatalog?.find((tool) => tool.path === "store.listItems")).toMatchObject({
           description: "List items in stock",
           signature: expect.stringContaining("limit?: number"),
@@ -298,6 +305,8 @@ describe("OpenAPI", () => {
       store({ spec: `${baseURL}/openapi.json` }),
       Effect.gen(function* () {
         expect(yield* codeModeTools(yield* Tool.Service)).toEqual([
+          "notebook.inspect",
+          "notebook.list",
           "store.getItem",
           "store.items.create",
           "store.listItems",
@@ -310,7 +319,11 @@ describe("OpenAPI", () => {
     project(
       store({ spec: `${baseURL}/openapi.yaml` }),
       Effect.gen(function* () {
-        expect(yield* codeModeTools(yield* Tool.Service)).toEqual(["store.getStatusByComponent"])
+        expect(yield* codeModeTools(yield* Tool.Service)).toEqual([
+          "notebook.inspect",
+          "notebook.list",
+          "store.getStatusByComponent",
+        ])
       }),
     ),
   )

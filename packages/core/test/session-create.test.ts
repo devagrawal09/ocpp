@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
-import { DateTime, Effect, Layer, Stream } from "effect"
+import { DateTime, Effect, Layer, Schema, Stream } from "effect"
 import { Money } from "@ocpp/schema/money"
 import { Shell } from "@ocpp/schema/shell"
 import { Skill } from "@ocpp/schema/skill"
@@ -1222,6 +1222,67 @@ describe("SessionTransfer", () => {
       })
 
       expect((yield* transfer.export({ sessionID: source.id })).messages).toMatchObject([Expected.user("Settled")])
+    }),
+  )
+
+  it.effect("sanitizes displayed results without disclosing any of their data", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const transfer = yield* SessionTransfer.Service
+      const source = yield* session.create({ location })
+      const blocks = [
+        { type: "markdown", text: "MARKDOWN_DATA" },
+        { type: "code", text: "CODE_DATA()", language: "LANG_DATA" },
+        {
+          type: "table",
+          columns: [
+            { key: "KEY_DATA", label: "HEADER_DATA" },
+            { key: "amount", label: "AMOUNT_HEADER" },
+          ],
+          rows: [{ KEY_DATA: { type: "file", path: "PATH_DATA.ts" }, amount: 987654 }, { KEY_DATA: "CELL_DATA" }],
+        },
+      ] as const
+      const shown = yield* session.display({ sessionID: source.id, title: "TITLE_DATA", blocks })
+
+      expect((yield* transfer.export({ sessionID: source.id })).messages).toMatchObject([
+        { id: shown.id, type: "display", title: "TITLE_DATA", blocks },
+      ])
+
+      const sanitized = yield* transfer.export({ sessionID: source.id, sanitize: true })
+      expect(sanitized.messages).toMatchObject([
+        {
+          id: shown.id,
+          type: "display",
+          title: `[redacted:display-title:${shown.id}]`,
+          blocks: [{ type: "markdown", text: `[redacted:display:${shown.id}]` }],
+        },
+      ])
+      const encoded = JSON.stringify(Schema.encodeSync(SessionTransfer.Data)(sanitized))
+      ;[
+        "TITLE_DATA",
+        "MARKDOWN_DATA",
+        "CODE_DATA",
+        "LANG_DATA",
+        "KEY_DATA",
+        "HEADER_DATA",
+        "AMOUNT_HEADER",
+        "PATH_DATA",
+        "CELL_DATA",
+        "987654",
+      ].forEach((value) => expect(encoded).not.toContain(value))
+
+      // The sanitized export stays a valid transfer document that imports as a new Session.
+      const decoded = Schema.decodeUnknownSync(SessionTransfer.Data)(JSON.parse(encoded))
+      const imported = yield* transfer.import({
+        data: {
+          info: { ...decoded.info, id: Session.ID.create() },
+          messages: decoded.messages.map((message) => ({ ...message, id: SessionMessage.ID.create() })),
+        },
+        location,
+      })
+      expect(yield* session.messages({ sessionID: imported.id })).toMatchObject([
+        { type: "display", blocks: [{ type: "markdown", text: `[redacted:display:${shown.id}]` }] },
+      ])
     }),
   )
 

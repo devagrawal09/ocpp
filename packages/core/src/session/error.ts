@@ -96,6 +96,16 @@ export class SyntheticConflictError extends Schema.TaggedError<SyntheticConflict
   },
 ) {}
 
+/** A displayed result reused an ID that already belongs to another message. */
+export class DisplayConflictError extends Schema.TaggedError<DisplayConflictError>()("Session.DisplayConflictError", {
+  sessionID: SessionSchema.ID,
+  messageID: SessionMessage.ID,
+}) {}
+
+export class DisplayInvalidError extends Schema.TaggedError<DisplayInvalidError>()("Session.DisplayInvalidError", {
+  message: Schema.String,
+}) {}
+
 export class AttachmentError extends Schema.TaggedError<AttachmentError>()("Session.AttachmentError", {
   uri: Schema.String,
   message: Schema.String,

@@ -42,7 +42,7 @@ it.live("lists session drivers and selects one through the session model", () =>
       expect.objectContaining({ id: "codex", name: "Codex", available: false, model: "gpt-5.6-sol" }),
       expect.objectContaining({ id: "pi", name: "Pi", available: false }),
     ])
-    expect(drivers.body.data[0].models).toEqual(["opus", "sonnet", "haiku"])
+    expect(drivers.body.data[0].models).toEqual(["opus", "sonnet", "haiku", "fable"])
     expect(drivers.body.data[0].variants).toContain("high")
 
     const created = yield* call("/api/session", {

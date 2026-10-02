@@ -170,6 +170,17 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
           }),
         )
       },
+      "session.displayed": (event) =>
+        adapter.appendMessage(
+          SessionMessage.Display.make({
+            id: SessionMessage.ID.fromEvent(event.id),
+            type: "display",
+            metadata: event.metadata,
+            title: event.data.title,
+            blocks: event.data.blocks,
+            time: { created },
+          }),
+        ),
       "session.skill.activated": (event) => {
         return adapter.appendMessage(
           SessionMessage.Skill.make({

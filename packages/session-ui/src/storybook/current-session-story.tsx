@@ -83,6 +83,9 @@ export function CurrentSessionTimelineStory(props: {
     openAttachment: (file) => {
       setActivity(`Opened ${file.name ?? file.mime}`)
     },
+    openFile: (path) => {
+      setActivity(`Opened ${path}`)
+    },
     revert: (input) => {
       setActivity(`Selected revert boundary ${input.messageID}`)
     },

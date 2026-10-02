@@ -35,6 +35,7 @@ export function createActiveSessionRegion(input: {
   session: SessionModel
   screen: SessionScreenLayout
   timeline: SessionTimelineInteraction
+  openFile: (path: string) => void
 }) {
   const command = useCommand()
   const dialog = useDialog()
@@ -159,6 +160,7 @@ export function createActiveSessionRegion(input: {
           return revertMessage
         },
         openAttachment,
+        openFile: input.openFile,
       } satisfies SessionUserActions,
     },
     region: {

@@ -241,6 +241,14 @@ function sanitizeMessage(message: SessionMessage.Info): SessionMessage.Info {
       files: sanitizeFiles(message.files),
     }
   if (message.type === "system") return { ...message, metadata: meta, text: redact("system", message.id, message.text) }
+  if (message.type === "display")
+    return {
+      ...message,
+      metadata: meta,
+      title: message.title === undefined ? undefined : redact("display-title", message.id, message.title),
+      // Every block, including table headers, numbers, and code languages, is result data the user wrote.
+      blocks: [{ type: "markdown", text: `[redacted:display:${message.id}]` }],
+    }
   if (message.type === "skill") return { ...message, metadata: meta, text: redact("skill", message.id, message.text) }
   if (message.type === "shell")
     return {

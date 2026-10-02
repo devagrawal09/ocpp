@@ -29,6 +29,7 @@ export interface Interface {
     | "switchModel"
     | "interrupt"
     | "synthetic"
+    | "display"
     | "wait"
     | "context"
   >
@@ -101,6 +102,7 @@ export const layerWithCell = (cell: Cell) =>
         switchModel: (input) => require(cell, (runtime) => runtime.session.switchModel(input)),
         interrupt: (sessionID, options) => require(cell, (runtime) => runtime.session.interrupt(sessionID, options)),
         synthetic: (input) => require(cell, (runtime) => runtime.session.synthetic(input)),
+        display: (input) => require(cell, (runtime) => runtime.session.display(input)),
         wait: (sessionID) => require(cell, (runtime) => runtime.session.wait(sessionID)),
         context: (sessionID) => require(cell, (runtime) => runtime.session.context(sessionID)),
       },

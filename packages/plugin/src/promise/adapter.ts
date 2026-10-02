@@ -395,6 +395,7 @@ export function fromPromise(plugin: Plugin) {
             generate: adaptApiMethod(SessionEndpoints["session.generate"], host.session.generate),
             command: adaptApiMethod(SessionEndpoints["session.command"], host.session.command),
             synthetic: adaptApiMethod(SessionEndpoints["session.synthetic"], host.session.synthetic),
+            display: adaptApiMethod(SessionEndpoints["session.display"], host.session.display),
             interrupt: adaptApiMethod(SessionEndpoints["session.interrupt"], host.session.interrupt),
             rename: adaptApiMethod(SessionEndpoints["session.rename"], host.session.rename),
             move: adaptApiMethod(SessionEndpoints["session.move"], host.session.move),

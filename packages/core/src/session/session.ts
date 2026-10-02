@@ -14,6 +14,8 @@ import { Reference } from "../reference.js"
 import {
   BusyError,
   CompactionConflictError,
+  DisplayConflictError,
+  DisplayInvalidError,
   InboxConflictError,
   MessageIncompleteError,
   MessageNotAssistantError,
@@ -366,6 +368,31 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     (sessionID: SessionSchema.ID, options?: { readonly continue?: boolean }) =>
       Effect.uninterruptible(execution.interrupt(sessionID, options)),
   )
+  /**
+   * Appends a user-facing result to the timeline without waking or informing the model. Reusing an ID
+   * that already names a displayed result in this Session returns it unchanged, so a retried call
+   * publishes once.
+   */
+  const display = Effect.fn("Session.display")(function* (
+    sessionID: SessionSchema.ID,
+    input: SessionMessage.DisplayInput & { readonly id?: SessionMessage.ID },
+  ) {
+    yield* get(sessionID)
+    if (input.id) {
+      const stored = yield* store.message(input.id)
+      if (stored?.sessionID === sessionID && stored.message.type === "display") return { id: input.id }
+      if (stored) return yield* new DisplayConflictError({ sessionID, messageID: input.id })
+    }
+    const content = yield* Schema.decodeUnknownEffect(SessionMessage.DisplayInput)({
+      ...(input.title === undefined ? {} : { title: input.title }),
+      blocks: input.blocks,
+    }).pipe(Effect.mapError((error) => new DisplayInvalidError({ message: error.message })))
+    const problem = displayProblem(content)
+    if (problem) return yield* new DisplayInvalidError({ message: problem })
+    const eventID = input.id ? Event.ID.make("evt_" + input.id.slice("msg_".length)) : Event.ID.create()
+    yield* bus.publish(SessionEvent.Displayed, { sessionID, ...content }, { id: eventID })
+    return { id: SessionMessage.ID.fromEvent(eventID) }
+  })
   const stage = Effect.fn("Session.revert.stage")(function* (
     sessionID: SessionSchema.ID,
     input: { messageID: SessionMessage.ID; files?: boolean },
@@ -407,6 +434,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     wait,
     resume,
     interrupt,
+    display,
     cancelInbox,
     steerInbox,
     queueInbox,
@@ -430,6 +458,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     const wait = operations.wait.bind(undefined, sessionID)
     const resume = operations.resume.bind(undefined, sessionID)
     const interrupt = operations.interrupt.bind(undefined, sessionID)
+    const display = operations.display.bind(undefined, sessionID)
     const cancelInbox = operations.cancelInbox.bind(undefined, sessionID)
     const steerInbox = operations.steerInbox.bind(undefined, sessionID)
     const queueInbox = operations.queueInbox.bind(undefined, sessionID)
@@ -456,6 +485,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       wait,
       resume,
       interrupt,
+      display,
       cancelInbox,
       steerInbox,
       queueInbox,
@@ -469,6 +499,24 @@ export type Handle = ReturnType<Effect.Success<ReturnType<typeof make>>["forSess
 
 function isUnfinishedTool(content: SessionMessage.AssistantContent) {
   return content.type === "tool" && (content.state.status === "streaming" || content.state.status === "running")
+}
+
+/** Rules the schema cannot express per field: table keys that match their columns, and the total size. */
+function displayProblem(content: SessionMessage.DisplayInput) {
+  const table = content.blocks
+    .map((block, index) => {
+      if (block.type !== "table") return undefined
+      const keys = new Set(block.columns.map((column) => column.key))
+      if (keys.size !== block.columns.length) return "Block " + index + ": column keys must be unique."
+      const row = block.rows.findIndex((cells) => Object.keys(cells).some((key) => !keys.has(key)))
+      return row === -1 ? undefined : "Block " + index + ", row " + row + ": every key must name a column."
+    })
+    .find((problem) => problem !== undefined)
+  if (table) return table
+  const bytes = new TextEncoder().encode(JSON.stringify(content)).length
+  if (bytes > SessionMessage.DisplayLimits.bytes)
+    return "A displayed result is limited to " + SessionMessage.DisplayLimits.bytes + " bytes of JSON; this one has " + bytes + "."
+  return undefined
 }
 
 // Mirrors the shell tool's in-memory preview safety limit.

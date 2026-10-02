@@ -47,6 +47,7 @@ const runtime = Layer.mock(PluginRuntime.Service, {
     selectTools: unavailable,
     switchModel: unavailable,
     interrupt: unavailable,
+    display: () => Effect.die("unused session.display"),
     synthetic: (input) =>
       Effect.sync(() => {
         delivered.push(input)

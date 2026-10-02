@@ -80,6 +80,7 @@ export function SessionScreen(props: { session: SessionModel }) {
     session,
     screen,
     timeline,
+    openFile: review.openFile,
   })
 
   useUsageExceededDialogs()

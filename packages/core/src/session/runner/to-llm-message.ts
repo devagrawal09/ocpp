@@ -281,6 +281,9 @@ function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMe
     case "invocation":
       // An invocation's outcome enters context once, through its execution's completion notification.
       return []
+    case "display":
+      // Displayed results are for the user; code returns whatever the model should see.
+      return []
     case "assistant":
       return assistant(message, model, providerMetadataKey)
     case "compaction":

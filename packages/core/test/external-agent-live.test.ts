@@ -17,6 +17,7 @@ for (const provider of ExternalSession.Provider.literals)
       await using dir = await tmpdir()
       const sdk = await driver(provider)
       const calls: string[] = []
+      const started = Promise.withResolvers<void>()
       const gateway = ExternalAgentGateway.make([
         {
           name: "execute",
@@ -30,6 +31,7 @@ for (const provider of ExternalSession.Provider.literals)
           invoke: (input) =>
             Effect.sync(() => {
               calls.push(String(input.code))
+              started.resolve()
               return "Execution exe_live started. Its outcome arrives in a later notification."
             }),
         },
@@ -37,6 +39,7 @@ for (const provider of ExternalSession.Provider.literals)
       const identity = { id: undefined as string | undefined, checkpoint: undefined as string | undefined }
       for (const round of [1, 2]) {
         const events: ExternalAgentDriver.Event[] = []
+        const idle = Promise.withResolvers<void>()
         const signal = AbortSignal.timeout(180_000)
         const queue =
           round === 1
@@ -44,7 +47,7 @@ for (const provider of ExternalSession.Provider.literals)
                 [
                   {
                     type: "text" as const,
-                    text: "Execution exe_live saved notebook values: answer. Reply with the word done.",
+                    text: "Execution exe_live saved notebook values: answer. Call execute once with the code `return 2 + 2`, then reply with the word done.",
                   },
                 ],
               ]
@@ -82,13 +85,22 @@ for (const provider of ExternalSession.Provider.literals)
           emit: async (event) => {
             events.push(event)
           },
-          next: async () => queue.shift(),
-          idle: () => {},
+          next: async () => {
+            const item = queue.shift()
+            if (item !== undefined) {
+              await started.promise
+              return item
+            }
+            await idle.promise
+            return undefined
+          },
+          idle: () => idle.resolve(),
         })
         expect(identity.id).toBeString()
         expect(identity.checkpoint).toBeString()
         if (round === 1) {
           expect(calls.some((code) => code.includes("42"))).toBe(true)
+          expect(calls.some((code) => code.replace(/\s/g, "").includes("2+2"))).toBe(true)
           expect(events.some((event) => event.type === "tool-start" && event.name.endsWith("execute"))).toBe(true)
         }
       }

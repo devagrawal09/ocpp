@@ -425,6 +425,33 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         }),
       )
       .handle(
+        "session.display",
+        Effect.fn(function* (ctx) {
+          const data = yield* session
+            .display({
+              sessionID: ctx.params.sessionID,
+              id: ctx.payload.id,
+              title: ctx.payload.title,
+              blocks: ctx.payload.blocks,
+            })
+            .pipe(
+              Effect.catchTag("Session.NotFoundError", missingSession),
+              Effect.catchTag("Session.DisplayInvalidError", (error) =>
+                Effect.fail(new InvalidRequestError({ message: error.message })),
+              ),
+              Effect.catchTag("Session.DisplayConflictError", (error) =>
+                Effect.fail(
+                  new ConflictError({
+                    message: `Display ID conflicts with an existing message: ${error.messageID}`,
+                    resource: error.messageID,
+                  }),
+                ),
+              ),
+            )
+          return { data }
+        }),
+      )
+      .handle(
         "session.shell",
         Effect.fn(function* (ctx) {
           yield* session

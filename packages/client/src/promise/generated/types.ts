@@ -96,6 +96,14 @@ export type SessionMessageShell = {
   output?: { output: string; cursor: number; size: number; truncated: boolean }
 }
 
+export type SessionMessageDisplayMarkdown = { type: "markdown"; text: string }
+
+export type SessionMessageDisplayColumn = { key: string; label: string }
+
+export type SessionMessageDisplayFile = { type: "file"; path: string }
+
+export type SessionMessageDisplayCode = { type: "code"; text: string; language?: string }
+
 export type SessionMessageInvocationTrigger =
   | { type: "command"; name: string; text: string }
   | { type: "event"; name: string }
@@ -508,6 +516,8 @@ export type PromptFileAttachment = {
 export type PromptAgentAttachment = { name: string; mention?: PromptMention }
 
 export type PromptSkillAttachment = { id: string; name: string; text?: string; mention?: PromptMention }
+
+export type SessionMessageDisplayCell = null | boolean | number | string | SessionMessageDisplayFile
 
 export type CodeModeExecutionEntry = CodeModeExecutionToolEvent | CodeModeExecutionTraceEvent
 
@@ -1723,6 +1733,12 @@ export type SessionInboxUserPayload1 = {
   metadata?: { [x: string]: any }
 }
 
+export type SessionMessageDisplayTable = {
+  type: "table"
+  columns: Array<SessionMessageDisplayColumn>
+  rows: Array<{ [x: string]: SessionMessageDisplayCell }>
+}
+
 export type CodeModeExecutionEntries = Array<CodeModeExecutionEntry>
 
 export type SessionMessageToolStateCompleted = {
@@ -2059,6 +2075,11 @@ export type SessionInboxItem =
   | { type: "compaction"; payload: SessionInboxCompactionPayload; delivery: SessionInboxDelivery }
   | { type: "move"; payload: SessionInboxMovePayload; delivery: SessionInboxDelivery }
 
+export type SessionMessageDisplayBlock =
+  | SessionMessageDisplayMarkdown
+  | SessionMessageDisplayTable
+  | SessionMessageDisplayCode
+
 export type SessionMessageInvocation = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -2170,6 +2191,25 @@ export type SessionInboxEnqueued = {
   data: { sessionID: string; inboxID: string; item: SessionInboxItem }
 }
 
+export type SessionMessageDisplay = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  type: "display"
+  title?: string
+  blocks: Array<SessionMessageDisplayBlock>
+}
+
+export type SessionDisplayed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.displayed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; title?: string; blocks: Array<SessionMessageDisplayBlock> }
+}
+
 export type SessionMessageAssistant = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -2210,6 +2250,7 @@ export type SessionMessageInfo =
   | SessionMessageSystem
   | SessionMessageSkill
   | SessionMessageShell
+  | SessionMessageDisplay
   | SessionMessageInvocation
   | SessionMessageAssistant
   | SessionMessageCompaction
@@ -2266,6 +2307,7 @@ export type SessionEventDurable =
   | SessionExecutionInterrupted
   | SessionInstructionsUpdated
   | SessionSynthetic
+  | SessionDisplayed
   | SessionSkillActivated
   | SessionShellStarted
   | SessionShellEnded
@@ -2331,6 +2373,7 @@ export type V2Event =
   | SessionExecutionInterrupted
   | SessionInstructionsUpdated
   | SessionSynthetic
+  | SessionDisplayed
   | SessionSkillActivated
   | SessionShellStarted
   | SessionShellEnded
@@ -2979,6 +3022,29 @@ export type SessionImportInput = {
       | {
           readonly id: string
           readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "display"
+          readonly title?: string
+          readonly blocks: ReadonlyArray<
+            | { readonly type: "markdown"; readonly text: string }
+            | {
+                readonly type: "table"
+                readonly columns: ReadonlyArray<{ readonly key: string; readonly label: string }>
+                readonly rows: ReadonlyArray<{
+                  readonly [x: string]:
+                    | null
+                    | boolean
+                    | number
+                    | string
+                    | { readonly type: "file"; readonly path: string }
+                }>
+              }
+            | { readonly type: "code"; readonly text: string; readonly language?: string }
+          >
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
           readonly time: { readonly created: number; readonly completed?: number }
           readonly type: "invocation"
           readonly trigger:
@@ -3313,6 +3379,29 @@ export type SessionImportInput = {
       | {
           readonly id: string
           readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "display"
+          readonly title?: string
+          readonly blocks: ReadonlyArray<
+            | { readonly type: "markdown"; readonly text: string }
+            | {
+                readonly type: "table"
+                readonly columns: ReadonlyArray<{ readonly key: string; readonly label: string }>
+                readonly rows: ReadonlyArray<{
+                  readonly [x: string]:
+                    | null
+                    | boolean
+                    | number
+                    | string
+                    | { readonly type: "file"; readonly path: string }
+                }>
+              }
+            | { readonly type: "code"; readonly text: string; readonly language?: string }
+          >
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
           readonly time: { readonly created: number; readonly completed?: number }
           readonly type: "invocation"
           readonly trigger:
@@ -3643,6 +3732,29 @@ export type SessionImportInput = {
             readonly size: number
             readonly truncated: boolean
           }
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "display"
+          readonly title?: string
+          readonly blocks: ReadonlyArray<
+            | { readonly type: "markdown"; readonly text: string }
+            | {
+                readonly type: "table"
+                readonly columns: ReadonlyArray<{ readonly key: string; readonly label: string }>
+                readonly rows: ReadonlyArray<{
+                  readonly [x: string]:
+                    | null
+                    | boolean
+                    | number
+                    | string
+                    | { readonly type: "file"; readonly path: string }
+                }>
+              }
+            | { readonly type: "code"; readonly text: string; readonly language?: string }
+          >
         }
       | {
           readonly id: string
@@ -4269,6 +4381,57 @@ export type SessionSyntheticInput = {
 }
 
 export type SessionSyntheticOutput = { data: SessionInboxSynthetic }["data"]
+
+export type SessionDisplayInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly id?: {
+    readonly id?: string | null
+    readonly title?: string
+    readonly blocks: ReadonlyArray<
+      | { readonly type: "markdown"; readonly text: string }
+      | {
+          readonly type: "table"
+          readonly columns: ReadonlyArray<{ readonly key: string; readonly label: string }>
+          readonly rows: ReadonlyArray<{
+            readonly [x: string]: null | boolean | number | string | { readonly type: "file"; readonly path: string }
+          }>
+        }
+      | { readonly type: "code"; readonly text: string; readonly language?: string }
+    >
+  }["id"]
+  readonly title?: {
+    readonly id?: string | null
+    readonly title?: string
+    readonly blocks: ReadonlyArray<
+      | { readonly type: "markdown"; readonly text: string }
+      | {
+          readonly type: "table"
+          readonly columns: ReadonlyArray<{ readonly key: string; readonly label: string }>
+          readonly rows: ReadonlyArray<{
+            readonly [x: string]: null | boolean | number | string | { readonly type: "file"; readonly path: string }
+          }>
+        }
+      | { readonly type: "code"; readonly text: string; readonly language?: string }
+    >
+  }["title"]
+  readonly blocks: {
+    readonly id?: string | null
+    readonly title?: string
+    readonly blocks: ReadonlyArray<
+      | { readonly type: "markdown"; readonly text: string }
+      | {
+          readonly type: "table"
+          readonly columns: ReadonlyArray<{ readonly key: string; readonly label: string }>
+          readonly rows: ReadonlyArray<{
+            readonly [x: string]: null | boolean | number | string | { readonly type: "file"; readonly path: string }
+          }>
+        }
+      | { readonly type: "code"; readonly text: string; readonly language?: string }
+    >
+  }["blocks"]
+}
+
+export type SessionDisplayOutput = { data: { id: string } }["data"]
 
 export type SessionShellInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]

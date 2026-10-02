@@ -2128,6 +2128,134 @@
         }
       }
     },
+    "/api/session/{sessionID}/display": {
+      "post": {
+        "tags": ["session"],
+        "operationId": "v2.session.display",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^msg_"
+                        }
+                      },
+                      "required": ["id"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Append a user-facing result of markdown, table, and code blocks to the session timeline. It does not wake the model or enter its history. Reusing the ID of a displayed result returns it unchanged.",
+        "summary": "Display result",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^msg_"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "blocks": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Session.Message.Display.Block"
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  }
+                },
+                "required": ["blocks"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/api/session/{sessionID}/shell": {
       "post": {
         "tags": ["session"],
@@ -16700,6 +16828,174 @@
         "required": ["type", "id", "time", "status", "reason", "summary", "recent"],
         "additionalProperties": false
       },
+      "Session.Message.Display": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^msg_"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["display"]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session.Message.Display.Block"
+            },
+            "minItems": 1,
+            "maxItems": 50
+          }
+        },
+        "required": ["id", "time", "type", "blocks"],
+        "additionalProperties": false
+      },
+      "Session.Message.Display.Block": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Session.Message.Display.Markdown"
+          },
+          {
+            "$ref": "#/components/schemas/Session.Message.Display.Table"
+          },
+          {
+            "$ref": "#/components/schemas/Session.Message.Display.Code"
+          }
+        ]
+      },
+      "Session.Message.Display.Cell": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string",
+            "maxLength": 10000
+          },
+          {
+            "$ref": "#/components/schemas/Session.Message.Display.File"
+          }
+        ]
+      },
+      "Session.Message.Display.Code": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["code"]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": ["type", "text"],
+        "additionalProperties": false
+      },
+      "Session.Message.Display.Column": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": ["key", "label"],
+        "additionalProperties": false
+      },
+      "Session.Message.Display.File": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["file"]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": ["type", "path"],
+        "additionalProperties": false
+      },
+      "Session.Message.Display.Markdown": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["markdown"]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 100000
+          }
+        },
+        "required": ["type", "text"],
+        "additionalProperties": false
+      },
+      "Session.Message.Display.Table": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["table"]
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session.Message.Display.Column"
+            },
+            "minItems": 1,
+            "maxItems": 20
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/components/schemas/Session.Message.Display.Cell"
+              }
+            },
+            "maxItems": 1000
+          }
+        },
+        "required": ["type", "columns", "rows"],
+        "additionalProperties": false
+      },
       "Session.Message.Info": {
         "anyOf": [
           {
@@ -16725,6 +17021,9 @@
           },
           {
             "$ref": "#/components/schemas/Session.Message.Shell"
+          },
+          {
+            "$ref": "#/components/schemas/Session.Message.Display"
           },
           {
             "$ref": "#/components/schemas/Session.Message.Invocation"

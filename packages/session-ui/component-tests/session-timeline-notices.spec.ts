@@ -40,3 +40,43 @@ story("renders the moved location notice in its compact timeline style", async (
   await expect(tooltipTrigger).toBeFocused()
   await expect(tooltip).toBeVisible()
 })
+
+for (const width of [1280, 390]) {
+  for (const direction of ["ltr", "rtl"] as const) {
+    story(
+      `renders displayed results outside the collapsed trace at ${width}px in ${direction}`,
+      async ({ mount, page }) => {
+        await page.setViewportSize({ width, height: 900 })
+        const timeline = await mount("current-session-timeline-rows--conversation", { args: { scenario: "display" } })
+        const result = timeline.locator('[data-component="session-display-result"]')
+        await page.evaluate((direction) => {
+          document.documentElement.dir = direction
+        }, direction)
+        await expect(page.locator("html")).toHaveAttribute("dir", direction)
+        await expect(result).toHaveCSS("direction", direction)
+
+        await expect(
+          timeline.locator('[data-timeline-row="Notice"] [data-component="session-display-result"]'),
+        ).toHaveCount(1)
+        await expect(
+          timeline.locator('[data-timeline-row="Invocation"] [data-component="session-display-result"]'),
+        ).toHaveCount(0)
+        await expect(result).toHaveAttribute("aria-label", "Search results")
+        await expect(result.locator('[data-slot="session-display-result-title"]')).toHaveText("Search results")
+        await expect(result.locator("strong")).toHaveText("2")
+        await expect(result.locator("th")).toHaveText(["File", "Line", "Exact"])
+        await expect(result.locator("tbody tr").first().locator("td")).toHaveText(["src/app.ts", "12", "true"])
+        await expect(result.locator("tbody tr").nth(1).locator("td").nth(2)).toHaveText("")
+        await expect(result.locator("pre code")).toHaveText("login(user)")
+
+        await expect(result).toBeVisible()
+        await expect(result.locator("table")).toBeVisible()
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+          .toBe(true)
+        await result.getByRole("button", { name: "src/app.ts", exact: true }).click()
+        await expect(page.getByText("Story action: Opened src/app.ts")).toBeVisible()
+      },
+    )
+  }
+}

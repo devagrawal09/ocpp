@@ -63,6 +63,7 @@ import { PatchTool } from "../tool/plugin/patch.js"
 import { CommandTool } from "../tool/plugin/command.js"
 import { EventTool } from "../tool/plugin/event.js"
 import { NotifyTool } from "../tool/plugin/notify.js"
+import { DisplayResultTool } from "../tool/plugin/display-result.js"
 import { EditTool } from "../tool/plugin/edit.js"
 import { GlobTool } from "../tool/plugin/glob.js"
 import { GrepTool } from "../tool/plugin/grep.js"
@@ -278,6 +279,7 @@ const pre = [
   CommandTool.Plugin,
   EventTool.Plugin,
   NotifyTool.Plugin,
+  DisplayResultTool.Plugin,
   WarmingPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 

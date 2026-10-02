@@ -738,6 +738,7 @@ describe("LocationServiceMap", () => {
             "command.define",
             "command.list",
             "command.remove",
+            "display_result",
             "edit",
             "event.define",
             "event.disable",

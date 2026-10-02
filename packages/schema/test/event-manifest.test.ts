@@ -134,6 +134,7 @@ describe("public event manifest", () => {
         "session.instructions.updated.2",
         "session.invocation.started.1",
         "session.synthetic.1",
+        "session.displayed.1",
         "session.skill.activated.1",
         "session.shell.started.1",
         "session.shell.ended.1",

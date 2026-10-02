@@ -98,6 +98,7 @@ const runtimeLayer = Layer.unwrap(
         selectTools: () => Effect.die("Unavailable in Tool registry tests"),
         switchModel: () => Effect.die("Unavailable in Tool registry tests"),
         interrupt: () => Effect.die("Unavailable in Tool registry tests"),
+        display: () => Effect.die("unused session.display"),
         synthetic: (input) => Effect.sync(() => void deliveries.push(input)).pipe(Effect.andThen(Effect.never)),
         wait: () => Effect.die("Unavailable in Tool registry tests"),
         context: () => Effect.die("Unavailable in Tool registry tests"),

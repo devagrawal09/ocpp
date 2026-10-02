@@ -247,6 +247,103 @@ describe("external SDK drivers", () => {
     }
   })
 
+  for (const backlog of [1, 2, 0])
+    test(`Claude keeps its MCP input open with a reported backlog of ${backlog} until its input finishes`, async () => {
+      const queued = Math.max(1, backlog)
+      await using dir = await tmpdir()
+      await Bun.write(
+        path.join(dir.path, "claude"),
+        `#!${process.execPath}
+const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n")
+const session_id = crypto.randomUUID()
+const inputs = []
+const tool = { type: "tool_use", id: "toolu_fixture", name: "mcp__ocpp__execute", input: { code: "return 2 + 2;" } }
+const result = (queued_turn_count, messages) => ({
+  type: "result", subtype: "success", session_id, uuid: crypto.randomUUID(), result: "done", is_error: false,
+  duration_ms: 0, duration_api_ms: 0, num_turns: 1, total_cost_usd: 0, permission_denials: [], modelUsage: {},
+  usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+  queued_turn_count, user_message_uuids: messages.map((message) => message.uuid),
+})
+let completed = false
+for await (const line of console) {
+  if (!line.trim()) continue
+  const message = JSON.parse(line)
+  if (message.type === "control_request") {
+    write({ type: "control_response", response: { subtype: "success", request_id: message.request_id, response: {} } })
+    continue
+  }
+  if (message.type === "user") {
+    inputs.push(message)
+    if (inputs.length !== ${queued + 1}) continue
+    write(result(${backlog}, inputs.slice(0, 1)))
+    write({ type: "assistant", session_id, message: { content: [tool] } })
+    write({ type: "control_request", request_id: "fixture_mcp", request: {
+      subtype: "mcp_message", server_name: "ocpp", message: { jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "execute", arguments: tool.input, _meta: { "claudecode/toolUseId": tool.id } } },
+    } })
+    continue
+  }
+  if (message.type === "control_response" && message.response.request_id === "fixture_mcp") {
+    completed = true
+    write({ type: "user", session_id, message: { content: [{ type: "tool_result", tool_use_id: tool.id, content: "4" }] } })
+    write(result(0, inputs.slice(1)))
+  }
+}
+if (!completed) write(result(0, inputs.slice(1)))
+`,
+      )
+      await chmod(path.join(dir.path, "claude"), 0o755)
+      const previous = process.env.PATH
+      process.env.PATH = dir.path + path.delimiter + previous
+      const idle = Promise.withResolvers<void>()
+      const queue = Array.from({ length: queued }, () => [{ type: "text" as const, text: "Execution completed" }])
+      const calls: string[] = []
+      const idles: number[] = []
+      const state = { results: 0 }
+      try {
+        await ClaudeDriver.run({
+          directory: dir.path,
+          model: "fixture",
+          history: [],
+          message: [{ type: "text", text: "Start" }],
+          harness: { type: "ocpp", system: "Test instructions" },
+          gateway: ExternalAgentGateway.make([
+            {
+              name: "execute",
+              description: "Run code",
+              inputSchema: { type: "object" },
+              invoke: (input) =>
+                Effect.sync(() => {
+                  calls.push(String(input.code))
+                  return "4"
+                }),
+            },
+          ]),
+          signal: AbortSignal.timeout(5_000),
+          emit: async (event) => {
+            if (event.type === "step-end") state.results++
+          },
+          linked: async () => {},
+          checkpointed: async () => {},
+          next: async () => {
+            const item = queue.shift()
+            if (item !== undefined) return item
+            await idle.promise
+            return undefined
+          },
+          idle: () => {
+            idles.push(state.results)
+            idle.resolve()
+          },
+        })
+        expect(idles).toEqual([2])
+        expect(calls).toEqual(["return 2 + 2;"])
+      } finally {
+        idle.resolve()
+        process.env.PATH = previous
+      }
+    }, 10_000)
+
   test("Codex projects incremental snapshots once, native and MCP tool lifecycle, usage and errors", async () => {
     const { normalize } = await import("../src/external-agent/codex.node")
     const stream = collector()

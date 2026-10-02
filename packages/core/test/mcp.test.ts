@@ -393,6 +393,7 @@ const runtimeLayer = Layer.unwrap(
         selectTools: () => Effect.die("Unavailable in MCP tests"),
         switchModel: () => Effect.die("Unavailable in MCP tests"),
         interrupt: () => Effect.die("Unavailable in MCP tests"),
+        display: () => Effect.die("unused session.display"),
         synthetic: () => Effect.never,
         wait: () => Effect.die("Unavailable in MCP tests"),
         context: () => Effect.die("Unavailable in MCP tests"),

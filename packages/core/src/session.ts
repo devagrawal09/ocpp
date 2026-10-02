@@ -29,6 +29,8 @@ import {
   AttachmentError,
   BusyError,
   CompactionConflictError,
+  DisplayConflictError,
+  DisplayInvalidError,
   ForkEmptyError,
   InboxConflictError,
   MessageDecodeError,
@@ -120,6 +122,8 @@ export {
   AttachmentError,
   BusyError,
   CompactionConflictError,
+  DisplayConflictError,
+  DisplayInvalidError,
   InboxConflictError,
   MessageDecodeError,
   MessageIncompleteError,
@@ -264,6 +268,13 @@ export interface Interface {
   readonly synthetic: (
     input: Parameters<Session.Handle["synthetic"]>[0] & { sessionID: SessionSchema.ID },
   ) => ReturnType<Session.Handle["synthetic"]>
+  /**
+   * Appends a user-facing result to the Session timeline. It does not wake the model and never enters
+   * its history. Reusing the ID of a result already displayed in this Session returns it unchanged.
+   */
+  readonly display: (
+    input: Parameters<Session.Handle["display"]>[0] & { sessionID: SessionSchema.ID },
+  ) => ReturnType<Session.Handle["display"]>
   readonly revert: {
     readonly stage: (input: {
       sessionID: SessionSchema.ID
@@ -509,6 +520,7 @@ const layer = Layer.effect(
       }),
       message: (input) => sessions.forSession(input.sessionID).message(input.messageID),
       updateMessage: (input) => sessions.forSession(input.sessionID).updateMessage(input),
+      display: (input) => sessions.forSession(input.sessionID).display(input),
       context: Effect.fn("Session.context")(function* (sessionID) {
         yield* result.get(sessionID)
         return yield* store.context(sessionID)

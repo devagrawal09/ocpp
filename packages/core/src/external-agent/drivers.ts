@@ -18,7 +18,7 @@ export interface Platform {
 /** Each vendor's model when `external_agents` names none. */
 export const defaults = { claude: "sonnet", codex: "gpt-5.6-sol", pi: "anthropic/claude-sonnet-4-6" }
 const suggested = {
-  claude: ["opus", "sonnet", "haiku"],
+  claude: ["opus", "sonnet", "haiku", "fable"],
   codex: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
   pi: [],
 }

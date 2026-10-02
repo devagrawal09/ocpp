@@ -67,6 +67,7 @@ const runtimeLayer = Layer.unwrap(
         selectTools: () => Effect.die("Unavailable in Plugin tests"),
         switchModel: () => Effect.die("Unavailable in Plugin tests"),
         interrupt: () => Effect.die("Unavailable in Plugin tests"),
+        display: () => Effect.die("unused session.display"),
         synthetic: () => Effect.never,
         wait: () => Effect.die("Unavailable in Plugin tests"),
         context: () => Effect.die("Unavailable in Plugin tests"),

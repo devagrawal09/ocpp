@@ -742,6 +742,18 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
+      case "session.displayed":
+        message.update(event.data.sessionID, (draft, index) => {
+          message.append(draft, index, {
+            id: messageIDFromEvent(event.id),
+            type: "display",
+            title: event.data.title,
+            blocks: event.data.blocks,
+            metadata: event.metadata,
+            time: { created: event.created },
+          })
+        })
+        return
       case "session.shell.started":
         message.update(event.data.sessionID, (draft, index) => {
           message.append(draft, index, {

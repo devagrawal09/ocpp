@@ -42,6 +42,8 @@ import type {
   SessionSkillOutput,
   SessionSyntheticInput,
   SessionSyntheticOutput,
+  SessionDisplayInput,
+  SessionDisplayOutput,
   SessionShellInput,
   SessionShellOutput,
   SessionCompactInput,
@@ -705,6 +707,18 @@ export function make(options: ClientOptions) {
             },
             successStatus: 200,
             declaredStatuses: [409, 404, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      display: (input: SessionDisplayInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionDisplayOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/display`,
+            body: { id: input["id"], title: input["title"], blocks: input["blocks"] },
+            successStatus: 200,
+            declaredStatuses: [409, 400, 404],
             empty: false,
           },
           requestOptions,

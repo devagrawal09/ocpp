@@ -940,6 +940,51 @@ test("the MCP bridge admits only its bearer token and no browser origin", async 
   }
 })
 
+test.skipIf(process.platform === "win32")(
+  "compiled drivers are available without unpacked SDK packages",
+  async () => {
+    await using dir = await tmpdir()
+    await Promise.all(
+      ["claude", "codex"].map(async (name) => {
+        await Bun.write(path.join(dir.path, name), "#!/bin/sh\nexit 0\n")
+        await chmod(path.join(dir.path, name), 0o755)
+      }),
+    )
+    const entry = path.join(dir.path, "probe.ts")
+    await Bun.write(
+      entry,
+      `import { available, driver } from ${JSON.stringify(path.join(import.meta.dirname, "../src/external-agent/platform.node.ts"))}
+console.log(JSON.stringify(await Promise.all(["claude", "codex"].map(async (provider) => ({
+  provider, available: await available(provider), driver: (await driver(provider)).provider,
+})))))`,
+    )
+    const binary = path.join(dir.path, "probe")
+    const build = await Bun.build({
+      entrypoints: [entry],
+      target: "bun",
+      minify: true,
+      compile: { outfile: binary },
+    })
+    expect(build.success).toBe(true)
+    const child = Bun.spawn([binary], {
+      cwd: dir.path,
+      env: {
+        ...process.env,
+        PATH: dir.path + path.delimiter + process.env.PATH,
+        OCPP_DISABLE_EXTERNAL_AGENTS: "false",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    expect(await child.exited).toBe(0)
+    expect(await new Response(child.stdout).json()).toEqual([
+      { provider: "claude", available: true, driver: "claude" },
+      { provider: "codex", available: true, driver: "codex" },
+    ])
+  },
+  30000,
+)
+
 test("tests and OCPP_DISABLE_EXTERNAL_AGENTS never probe an installed vendor CLI", async () => {
   await using dir = await tmpdir()
   const marker = path.join(dir.path, "probed")

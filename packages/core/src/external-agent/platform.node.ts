@@ -3,19 +3,11 @@ import { ExternalSession } from "@ocpp/schema/external-session"
 import { which } from "../util/which.js"
 import type { ExternalAgentDriver } from "./driver.js"
 
-const packages = {
-  claude: "@anthropic-ai/claude-agent-sdk",
-  codex: "@openai/codex-sdk",
-  pi: "@earendil-works/pi-coding-agent",
-}
 export async function available(provider: ExternalSession.Provider): Promise<boolean> {
   // Offers no drivers without probing a vendor CLI or runtime; tests set it.
   if (process.env.OCPP_DISABLE_EXTERNAL_AGENTS === "true") return false
   if (provider !== "pi" && !which(provider)) return false
-  const resolved = await Promise.resolve()
-    .then(() => import.meta.resolve(packages[provider]))
-    .catch(() => undefined)
-  if (!resolved) return false
+  // SDKs are bundled in standalone binaries and need not resolve from node_modules at runtime.
   if (provider === "pi") {
     const { ModelRuntime } = await import("@earendil-works/pi-coding-agent")
     const runtime = await ModelRuntime.create({ allowModelNetwork: false })

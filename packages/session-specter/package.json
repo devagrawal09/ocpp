@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ocpp/session-specter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/session-app.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit",
+    "bench": "bun bench/spike.ts"
+  },
+  "dependencies": {
+    "@specter-ts/core": "link:@specter-ts/core",
+    "@specter-ts/jsonl": "link:@specter-ts/jsonl",
+    "@specter-ts/memory": "link:@specter-ts/memory",
+    "@specter-ts/reaction-outbox": "link:@specter-ts/reaction-outbox",
+    "@specter-ts/spec": "link:@specter-ts/spec",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

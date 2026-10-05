@@ -36,11 +36,13 @@ export function createSessionBackground(input: {
           if (typeof sessionID !== "string") return
           const description = part.state.input.description
           const agent = part.state.input.agent
+          // A continued call may omit both; the child session keeps its own.
+          const child = input.sessions().find((session) => session.id === sessionID)
           subagents.push({
             id: sessionID,
             type: "subagent",
-            label: typeof description === "string" ? description : sessionID,
-            agent: typeof agent === "string" ? agent : undefined,
+            label: typeof description === "string" ? description : (child?.title ?? sessionID),
+            agent: typeof agent === "string" ? agent : child?.agent,
           })
           return
         }

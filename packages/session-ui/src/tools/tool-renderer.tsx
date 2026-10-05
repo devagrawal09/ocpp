@@ -340,7 +340,13 @@ export function getToolInfo(
       return {
         icon: "task",
         title: agentTitle(i18n, type),
-        subtitle: typeof input.description === "string" ? input.description : undefined,
+        // A continued subagent call may name only its sessionID.
+        subtitle:
+          typeof input.description === "string"
+            ? input.description
+            : typeof input.sessionID === "string"
+              ? input.sessionID
+              : undefined,
       }
     }
     case "shell":
@@ -1336,7 +1342,8 @@ export function ToolDisplay(
     if (!Delegation.isTool(props.tool)) return undefined
     const value = props.input.description
     if (typeof value === "string" && value) return value
-    return taskId()
+    const id = taskId()
+    return (id && data.store.session?.find((session) => session.id === id)?.title) || id
   })
   const errorSubtitle = createMemo(() => toolErrorSubtitle(props, i18n))
   const error = createMemo(() =>
@@ -1664,10 +1671,20 @@ ToolRegistry.register({
     const childSessionId = createMemo(() => {
       const value = props.metadata.sessionID
       if (typeof value === "string" && value) return value
+      // A continued call names its child before the child reports back.
+      if (typeof props.input.sessionID === "string" && props.input.sessionID) return props.input.sessionID
       return taskSession(props.input, data.sessionID, data.store.session)
     })
+    // A continued call may omit agent and description; the child session keeps both.
+    const childSession = createMemo(() => {
+      const id = childSessionId()
+      return id ? data.store.session?.find((session) => session.id === id) : undefined
+    })
     const agent = createMemo(() =>
-      taskAgent(props.input.agent ?? (props.tool === "subagent" ? undefined : props.tool), data.store.agent),
+      taskAgent(
+        props.input.agent ?? (props.tool === "subagent" ? childSession()?.agent : props.tool),
+        data.store.agent,
+      ),
     )
     const title = createMemo(() => agent().name ?? i18n.t("ui.tool.agent.default"))
     const tone = createMemo(() => agent().color)
@@ -1679,7 +1696,7 @@ ToolRegistry.register({
       const value =
         typeof props.input.description === "string" && props.input.description
           ? props.input.description
-          : childSessionId()
+          : childSession()?.title || childSessionId()
       if (!value) return value
       if (background()) return `${value} (background)`
       return value

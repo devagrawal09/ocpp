@@ -8,7 +8,7 @@ import type {
 import { createSimpleContext } from "@ocpp/ui/context"
 import { PreloadMultiFileDiffResult } from "@pierre/diffs/ssr"
 
-export type SessionSummary = Pick<SessionInfo, "id" | "parentID" | "title" | "time">
+export type SessionSummary = Pick<SessionInfo, "id" | "parentID" | "title" | "time" | "agent">
 
 type ProviderCatalog = {
   all: Map<string, { models: Record<string, { name: string }> }>

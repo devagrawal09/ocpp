@@ -126,7 +126,9 @@ export function runningItems(input: {
       // The child's model names its driver once it exists; until then the call's explicit choice does.
       const driven = child?.model ? SessionDriver.of(child.model) : text(event.input.driver)
       const working = childID ? input.status(childID) === "running" : undefined
-      const label = text(event.input.description) ?? text(event.input.prompt) ?? text(event.input.message)
+      // A continued call may omit description; its child keeps the title.
+      const label =
+        text(event.input.description) ?? child?.title ?? text(event.input.prompt) ?? text(event.input.message)
       return [
         {
           id: childID ?? `${run.item.id}:${index}`,

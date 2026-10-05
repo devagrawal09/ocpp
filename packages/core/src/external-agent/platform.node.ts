@@ -2,6 +2,7 @@ import { spawn } from "node:child_process"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import { which } from "../util/which.js"
 import type { ExternalAgentDriver } from "./driver.js"
+import type { ExternalAgentModels } from "./models.js"
 
 export async function available(provider: ExternalSession.Provider): Promise<boolean> {
   // Offers no drivers without probing a vendor CLI or runtime; tests set it.
@@ -24,6 +25,12 @@ export async function available(provider: ExternalSession.Provider): Promise<boo
     child.once("error", () => resolve(false))
     child.once("exit", (code) => resolve(code === 0))
   })
+}
+/** The vendor's own model catalog. Only Codex lists one; Claude Code resolves its aliases itself. */
+export async function models(provider: ExternalSession.Provider): Promise<ReadonlyArray<ExternalAgentModels.Model>> {
+  if (process.env.OCPP_DISABLE_EXTERNAL_AGENTS === "true" || provider !== "codex") return []
+  const { catalog } = await import("./codex.node.js")
+  return (await catalog(AbortSignal.timeout(30_000))).models
 }
 export async function driver(provider: ExternalSession.Provider): Promise<ExternalAgentDriver.Driver> {
   if (provider === "claude") {

@@ -16,6 +16,7 @@ import { Catalog } from "../../catalog.js"
 import { Config } from "../../config.js"
 import { ExternalAgentDrivers } from "../../external-agent/drivers.js"
 import { ExternalAgentEffort } from "../../external-agent/effort.js"
+import { ExternalAgentModels } from "../../external-agent/models.js"
 import { ExternalAgentSession } from "../../external-agent/session.js"
 import { Location } from "../../location.js"
 import { PluginRuntime } from "../../plugin/runtime.js"
@@ -54,7 +55,7 @@ export const Input = Schema.Struct({
   }),
   model: Schema.optionalKey(Schema.String).annotate({
     description:
-      "Model to use. For the ocpp driver, provider/model with an optional variant after #. For claude or codex, the vendor's own model name without a provider, with an optional effort after #, such as opus#high; for pi, Pi's provider/model",
+      "Model to use. For the ocpp driver, provider/model with an optional variant after #. For claude or codex, the vendor's own model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi, Pi's provider/model",
   }),
   driver: Schema.optionalKey(SessionDriver.ID).annotate({
     description:
@@ -99,14 +100,14 @@ export const Output = Schema.Struct({
   message: Schema.String,
   /** The submitted structured result, or null when no outputSchema was requested. */
   output: Schema.Json,
-  /** Which tools a continued child lost because its caller no longer has them. */
+  /** Which tools a continued child lost because its caller no longer has them, and a newer version of its pinned vendor model. */
   notice: Schema.optionalKey(Schema.String),
 })
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
   "tools sets exactly what the child can call: pass your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles, for example tools: [tools.read, tools.glob, tools.grep]. You can pass only tools you have. Without tools the child has none, only tools.submit_result when you pass outputSchema. The agent is a prompt and model preset and grants no tools.",
   "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready.",
-  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; for pi it is Pi's provider/model.",
+  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi it is Pi's provider/model.",
   'Vendor-driven children run in the OC++ harness by default: their only tool is execute over the tools you pass. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt as well; OC++ execute over the tools you pass, tool.define handles and submit_result remain available to it over MCP.',
   "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child runs under that directory's own config (agents, MCP servers, plugins, instructions), the agent must be defined there, and the tools you pass must exist there by the same paths. The child keeps that directory when continued.",
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
@@ -378,6 +379,20 @@ export const Plugin = {
                   return yield* new ToolFailure({
                     message: `Unsupported ${SessionDriver.names[provider]} effort: ${effort}. Use one of: ${ExternalAgentEffort[provider].literals.join(", ")}.`,
                   })
+                // Read again at every call: an alias runs the vendor's newest model, and a pinned model is checked
+                // for a newer one.
+                const listed = yield* drivers.models(provider)
+                const runs = listed.find((model) => model.id === ExternalAgentModels.resolve(id, listed))
+                if (
+                  effort !== undefined &&
+                  runs !== undefined &&
+                  runs.efforts.length > 0 &&
+                  !runs.efforts.includes(effort)
+                )
+                  return yield* new ToolFailure({
+                    message: `${runs.id === id ? id : `${id} (${runs.id})`} does not support effort ${effort}. Use one of: ${runs.efforts.join(", ")}.`,
+                  })
+                const upgrade = ExternalAgentModels.newer(id, listed)
                 return {
                   model: Model.Ref.make({
                     providerID: Provider.ID.make(provider),
@@ -385,6 +400,17 @@ export const Plugin = {
                     ...(effort === undefined ? {} : { variant: Model.VariantID.make(effort) }),
                   }),
                   requested: true,
+                  ...(upgrade === undefined
+                    ? {}
+                    : {
+                        notice: [
+                          `${SessionDriver.names[provider]} model ${id} has a newer version: ${upgrade.id}.`,
+                          ...(upgrade.alias === undefined
+                            ? []
+                            : [`Pass model "${upgrade.alias}" to always run the newest ${upgrade.alias}.`]),
+                          ...(upgrade.message === undefined ? [] : [upgrade.message]),
+                        ].join(" "),
+                      }),
                 }
               })
               const chosen = yield* choose(yield* agentAt())
@@ -392,6 +418,8 @@ export const Plugin = {
               const driver = chosen.driver
               const harness = chosen.harness
               const selected = chosen.selected?.model
+              const upgrade =
+                chosen.selected !== undefined && "notice" in chosen.selected ? chosen.selected.notice : undefined
               // A rooted child resolves the same tool paths in its own Location, which must provide every one.
               if (!same(location, parent.location)) {
                 const there = yield* runtime.location.tool.paths(location)
@@ -667,10 +695,17 @@ export const Plugin = {
                   sessionID: child.id,
                   status: "completed" as const,
                   ...result,
-                  ...(lost.length === 0
+                  ...(lost.length === 0 && upgrade === undefined
                     ? {}
                     : {
-                        notice: `The subagent no longer has ${lost.map((path) => "tools." + path).join(", ")}: you no longer have ${lost.length === 1 ? "that tool" : "those tools"}, and a subagent keeps only tools its caller has.`,
+                        notice: [
+                          ...(lost.length === 0
+                            ? []
+                            : [
+                                `The subagent no longer has ${lost.map((path) => "tools." + path).join(", ")}: you no longer have ${lost.length === 1 ? "that tool" : "those tools"}, and a subagent keeps only tools its caller has.`,
+                              ]),
+                          ...(upgrade === undefined ? [] : [upgrade]),
+                        ].join("\n"),
                       }),
                 },
                 structured: outputCodec !== undefined,
@@ -773,7 +808,13 @@ export function listDrivers(drivers: ReadonlyArray<SessionDriver.Info>) {
     "- ocpp: the OC++ runner with a provider model",
     ...ready.map(
       (driver) =>
-        `- ${driver.id}: ${driver.name}, default model ${driver.model} (efforts: ${driver.variants.join(", ")})`,
+        `- ${driver.id}: ${driver.name}, default model ${driver.model} (efforts: ${driver.variants.join(", ")})${
+          driver.aliases === undefined
+            ? ""
+            : `; aliases run their newest models: ${Object.entries(driver.aliases)
+                .map(([alias, model]) => `${alias} = ${model}`)
+                .join(", ")}`
+        }`,
     ),
   ]
 }

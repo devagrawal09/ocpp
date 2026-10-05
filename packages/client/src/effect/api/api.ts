@@ -1423,6 +1423,7 @@ export type ModelDriversOutput = {
     readonly available: boolean
     readonly model: string
     readonly models: ReadonlyArray<string>
+    readonly aliases?: { readonly [x: string]: string }
     readonly variants: ReadonlyArray<string>
   }>
 }

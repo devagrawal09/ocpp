@@ -1,6 +1,6 @@
 export * as ExternalAgentDrivers from "./drivers.js"
 
-import { available, driver } from "#external-agents"
+import { available, driver, models } from "#external-agents"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
@@ -8,18 +8,22 @@ import { Clock, Context, Duration, Effect, Layer } from "effect"
 import { Config } from "../config.js"
 import { ExternalAgentDriver } from "./driver.js"
 import { ExternalAgentEffort } from "./effort.js"
+import { ExternalAgentModels } from "./models.js"
 
 /** The runtime that probes vendor readiness and loads SDK drivers. The workerd adapter offers none. */
 export interface Platform {
   readonly available: (provider: ExternalSession.Provider) => Promise<boolean>
   readonly driver: (provider: ExternalSession.Provider) => Promise<ExternalAgentDriver.Driver>
+  /** The vendor's own model catalog. Absent, the vendor lists none. */
+  readonly models?: (provider: ExternalSession.Provider) => Promise<ReadonlyArray<ExternalAgentModels.Model>>
 }
 
 /** Each vendor's model when `external_agents` names none. */
-export const defaults = { claude: "sonnet", codex: "gpt-5.6-sol", pi: "anthropic/claude-sonnet-4-6" }
+export const defaults = { claude: "sonnet", codex: "sol", pi: "anthropic/claude-sonnet-4-6" }
+/** Models offered besides each vendor's own catalog. Claude Code's aliases always run its newest models. */
 const suggested = {
   claude: ["opus", "sonnet", "haiku", "fable"],
-  codex: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+  codex: [],
   pi: [],
 }
 const setup = {
@@ -31,6 +35,8 @@ const setup = {
 export interface Interface {
   /** Every vendor driver and whether it is ready: enabled in `external_agents`, installed, and signed in. */
   readonly list: () => Effect.Effect<ReadonlyArray<SessionDriver.Info>>
+  /** The vendor's own model catalog, read again at each call, or empty when it lists none. */
+  readonly models: (provider: ExternalSession.Provider) => Effect.Effect<ReadonlyArray<ExternalAgentModels.Model>>
   /** The configured model and effort for a vendor. */
   readonly settings: (
     provider: ExternalSession.Provider,
@@ -72,18 +78,40 @@ export const layer = (platform: Platform) =>
           ...(selected?.effort === undefined ? {} : { effort: selected.effort }),
         }
       })
+      const models = Effect.fn("ExternalAgentDrivers.models")(function* (provider: ExternalSession.Provider) {
+        const listing = platform.models
+        if (listing === undefined) return []
+        return yield* Effect.promise(() => listing(provider).catch(() => []))
+      })
       const list = Effect.fn("ExternalAgentDrivers.list")(function* () {
         return yield* Effect.forEach(
           ExternalSession.Provider.literals,
           (provider) =>
             Effect.gen(function* () {
               const model = (yield* settings(provider)).model
+              const listed = yield* models(provider)
+              const aliases = ExternalAgentModels.aliases(listed)
+              // Aliases stand for their newest models; older and superseded models still run when named.
+              const current = listed.filter(
+                (item) =>
+                  item.listed &&
+                  !Object.values(aliases).includes(item.id) &&
+                  ExternalAgentModels.newer(item.id, listed) === undefined,
+              )
               return {
                 id: provider,
                 name: SessionDriver.names[provider],
                 available: (yield* unavailable(provider)) === undefined,
                 model,
-                models: [...new Set([model, ...suggested[provider]])],
+                models: [
+                  ...new Set([
+                    model,
+                    ...suggested[provider],
+                    ...Object.keys(aliases),
+                    ...current.map((item) => item.id),
+                  ]),
+                ],
+                ...(Object.keys(aliases).length === 0 ? {} : { aliases }),
                 variants: [...ExternalAgentEffort[provider].literals],
               }
             }),
@@ -94,6 +122,7 @@ export const layer = (platform: Platform) =>
       yield* list().pipe(Effect.forkScoped)
       return Service.of({
         list,
+        models,
         settings,
         unavailable,
         driver: Effect.fn("ExternalAgentDrivers.driver")(function* (provider: ExternalSession.Provider) {
@@ -147,4 +176,8 @@ function probe(platform: Platform, provider: ExternalSession.Provider) {
   return Effect.promise(() => platform.available(provider).catch(() => false))
 }
 
-export const node = makeLocationNode({ service: Service, layer: layer({ available, driver }), deps: [Config.node] })
+export const node = makeLocationNode({
+  service: Service,
+  layer: layer({ available, driver, models }),
+  deps: [Config.node],
+})

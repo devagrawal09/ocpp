@@ -516,7 +516,7 @@ describe("SubagentTool", () => {
             ],
             drivers: [
               { id: "claude", name: "Claude Code", available: false, model: "sonnet" },
-              { id: "codex", name: "Codex", available: false, model: "gpt-5.6-sol" },
+              { id: "codex", name: "Codex", available: false, model: "sol" },
               { id: "pi", name: "Pi", available: false },
             ],
           })

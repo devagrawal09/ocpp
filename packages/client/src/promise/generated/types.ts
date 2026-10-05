@@ -1393,6 +1393,7 @@ export type SessionDriverInfo = {
   available: boolean
   model: string
   models: Array<string>
+  aliases?: { [x: string]: string }
   variants: Array<string>
 }
 

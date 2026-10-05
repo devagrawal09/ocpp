@@ -28,7 +28,7 @@ const model = process.env.SESSION_SPECTER_MODEL === "real" ? await realModel() :
 const ids = Array.from({ length: sessions }, (_, index) => `ses_${String(index).padStart(4, "0")}`)
 
 // Phase 1: N concurrent Sessions, one turn each.
-const metrics: TurnMetrics = { commitMs: [], tokens: 0, deltaWrites: 0 }
+const metrics: TurnMetrics = { commits: [], tokens: 0, deltaWrites: 0 }
 let peakRss = process.memoryUsage().rss
 const sampler = setInterval(() => {
   peakRss = Math.max(peakRss, process.memoryUsage().rss)
@@ -41,14 +41,18 @@ const turns = await Promise.all(
     const session = await openSessionApp({ root, sessionId, model, metrics })
     const openMs = performance.now() - opening
     const commits = [
-      () => session.app.command({ type: "createSession", payload: { sessionId } }),
-      () => session.app.command({ type: "enqueuePrompt", payload: { promptId: `prm_${sessionId}`, text: "hello" } }),
-    ]
+      ["createSession", () => session.app.command({ type: "createSession", payload: { sessionId } })],
+      [
+        "enqueuePrompt",
+        () => session.app.command({ type: "enqueuePrompt", payload: { promptId: `prm_${sessionId}`, text: "hello" } }),
+      ],
+    ] as const
     const enqueued = performance.now()
-    for (const commit of commits) {
+    for (const [step, commit] of commits) {
       const started = performance.now()
       await commit()
-      metrics.commitMs.push(performance.now() - started)
+      const endedAt = performance.now()
+      metrics.commits.push({ sessionId, step, endedAt, ms: endedAt - started })
     }
     await session.awaitIdle()
     return { openMs, turnMs: performance.now() - enqueued }
@@ -66,8 +70,22 @@ results.concurrency = {
   wallMs: round(wallMs),
   open: stats(turns.map((turn) => turn.openMs)),
   turn: stats(turns.map((turn) => turn.turnMs)),
-  commit: stats(metrics.commitMs),
-  commits: metrics.commitMs.length,
+  commit: stats(metrics.commits.map((commit) => commit.ms)),
+  commits: metrics.commits.length,
+  // Every outbox worker dispatches `start` inside the same saturated event loop, so its latency is
+  // mostly time queued behind other Sessions' synchronous work; executionStart shows when it lands.
+  commitByStep: Object.fromEntries(
+    Map.groupBy(metrics.commits, (commit) => commit.step.split(":")[0])
+      .entries()
+      .map(([step, commits]) => [step, stats(commits.map((commit) => commit.ms))]),
+  ),
+  executionStart: stats(
+    ids.map((sessionId) => {
+      const ended = (step: string) =>
+        metrics.commits.find((commit) => commit.sessionId === sessionId && commit.step === step)?.endedAt ?? NaN
+      return ended("start") - ended("enqueuePrompt")
+    }),
+  ),
   rssBeforeMb: mb(rssBefore),
   rssPeakMb: mb(peakRss),
   rssAfterMb: mb(process.memoryUsage().rss),

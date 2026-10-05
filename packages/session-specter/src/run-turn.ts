@@ -56,7 +56,12 @@ export class SessionTurns extends Context.Service<
   }
 >()("@ocpp/session-specter/SessionTurns") {}
 
-export type TurnMetrics = { commitMs: number[]; tokens: number; deltaWrites: number }
+export type TurnMetrics = {
+  /** Commands timed from dispatch to receipt; `step` is the idempotency key's step, e.g. `start` or `text:0`. */
+  commits: { sessionId: string; step: string; endedAt: number; ms: number }[]
+  tokens: number
+  deltaWrites: number
+}
 
 const executionIdFor = (promptId: string) => `exe_${promptId}`
 
@@ -162,7 +167,8 @@ function runTurnPlugin(capabilities: ReactionPluginContext) {
         Effect.gen(function* () {
           const started = performance.now()
           const receipt = yield* capabilities.command(envelope, { idempotencyKey: `${delivery.deliveryId}:${step}` })
-          turns.metrics?.commitMs.push(performance.now() - started)
+          const endedAt = performance.now()
+          turns.metrics?.commits.push({ sessionId: turn.sessionId, step, endedAt, ms: endedAt - started })
           return receipt
         })
       return Effect.gen(function* () {

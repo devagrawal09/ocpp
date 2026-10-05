@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs"
+import { createRequire } from "node:module"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -11,7 +12,7 @@ import { Ocpp } from "../../client/src/promise/index"
 import { it } from "../../core/test/lib/effect"
 import { ServerProcess } from "../src/process"
 
-const binary = process.env.OCPP_PTY_BIN ?? "/root/projects/opencode-pty/target/debug/opencode-pty"
+const binary = process.env.OCPP_PTY_BIN ?? installedDaemon()
 const smoke = existsSync(binary) ? it.live : it.live.skip
 
 smoke(
@@ -727,4 +728,16 @@ function restore(key: string, value: string | undefined) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function installedDaemon() {
+  const suffix = [process.platform, process.arch, process.platform === "linux" ? "gnu" : undefined]
+    .filter(Boolean)
+    .join("-")
+  const core = createRequire(path.resolve(import.meta.dirname, "../../core/package.json"))
+  try {
+    return createRequire(core.resolve("@opencode-ai/pty/package.json")).resolve(`@opencode-ai/pty-${suffix}/bin/opencode-pty`)
+  } catch {
+    return ""
+  }
 }

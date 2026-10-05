@@ -230,7 +230,9 @@ export const makeDaemonTransport = Effect.fn("PersistentPty.makeDaemonTransport"
           const child = spawn(executable, ["daemon"], {
             detached: true,
             stdio: "ignore",
-            env: { ...process.env, OCPP_PTY_RUNTIME_DIR: directory },
+            // The opencode-pty daemon reads OPENCODE_PTY_RUNTIME_DIR; without it the daemon writes
+            // service.json to its default directory and the client never finds it.
+            env: { ...process.env, OCPP_PTY_RUNTIME_DIR: directory, OPENCODE_PTY_RUNTIME_DIR: directory },
           })
           child.once("spawn", () => {
             child.unref()

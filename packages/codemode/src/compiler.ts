@@ -619,6 +619,18 @@ function validate(node: AstNode): void {
   }
   if (node.type === "CallExpression") {
     const callee = requireNode(node.callee)
+    if (
+      callee.type === "MemberExpression" &&
+      identifierName(callee.object) === "Object" &&
+      ["keys", "values", "entries"].includes(memberName(callee) ?? "")
+    ) {
+      const argument = requireArray(node.arguments, node)[0]
+      if (identifierName(argument) === "tools")
+        throw unsupported("Cannot enumerate the tools root.", requireNode(argument), [
+          'Use tools.search({}) to list available tools, or tools.search({ namespace: "shell" }) to browse a namespace. Results are paginated and include callable signatures.',
+          "Pass next.offset as offset to get more results, then call a returned path literally in a subsequent execution.",
+        ])
+    }
     const regex = Suggestions.regexCall(node)
     if (regex) throw unsupported(regexUnavailable + ".", regex.node, regex.suggestions)
     if (isPromiseAllCall(node)) {

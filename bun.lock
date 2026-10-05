@@ -2799,7 +2799,7 @@
 
     "@specter-ts/core": ["@specter-ts/core@/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-core-0.4.0.tgz", { "dependencies": { "@specter-ts/spec": "0.4.0", "@standard-schema/spec": "^1.1.0" }, "peerDependencies": { "effect": "4.0.1", "vitest": "^4.1.5" }, "optionalPeers": ["vitest"] }, "sha512-D/dWWcu2Jx4Ry26uPMPm97l/pJOTIUdS5pzq+diec7oHH9O6nhPw4z8UTXa4zM0wO1nO+fyngF/oJzjb4IugDw=="],
 
-    "@specter-ts/jsonl": ["@specter-ts/jsonl@/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-jsonl-0.4.0.tgz", { "dependencies": { "@specter-ts/core": "0.4.0", "@specter-ts/reaction-outbox": "0.4.0" }, "peerDependencies": { "effect": "4.0.1" } }, "sha512-cuO5CgFaOwUrxGQZcarGkidSmyDGqylT8Ad07sMs9tntatTsjULDUEdK0bB6ONVKEya/1BePAZuuzavPW4uNJw=="],
+    "@specter-ts/jsonl": ["@specter-ts/jsonl@/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-jsonl-0.4.0.tgz", { "dependencies": { "@specter-ts/core": "0.4.0", "@specter-ts/reaction-outbox": "0.4.0" }, "peerDependencies": { "effect": "4.0.1" } }, "sha512-ngty+XrQF5NdtA5Ep+BYpD17TLz71nsKsDt518hSwbntioR1vVO3kirU8/kQujC8t9S7ZgfuYnQ2hb8r3fsefw=="],
 
     "@specter-ts/memory": ["@specter-ts/memory@/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-memory-0.4.0.tgz", { "dependencies": { "@specter-ts/core": "0.4.0" }, "peerDependencies": { "effect": "4.0.1" } }, "sha512-miuktuTVk9gz9f2YRvwDENj75QIhszfZaOnYTfsYESQbuwjstT7lYPjX8QNFQRChvg5wqoRyt1rqBCAAiRlCUg=="],
 

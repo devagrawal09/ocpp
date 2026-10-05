@@ -158,41 +158,55 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
   }, 10_000)
   first.kill("SIGKILL")
   await first.exited
-  // JSONL adapters never take over a dead writer's lock file. The worker has exited, so the
-  // harness, standing in for a supervisor that knows the owner is gone, removes them.
-  const staleLocks = [...new Bun.Glob("**/*.lock").scanSync(sessionDir)].sort((left, right) =>
-    left.localeCompare(right),
-  )
-  await Promise.all(staleLocks.map((lock) => rm(join(sessionDir, lock))))
+  // The dead worker's lock files stay behind; reopening must take them over on its own.
+  const locks = () =>
+    [...new Bun.Glob("**/*.lock").scanSync(sessionDir)].sort((left, right) => left.localeCompare(right))
+  const staleLocks = locks()
   const beforeRestart = eventTypes((await readLog(join(sessionDir, "events.jsonl"), 0)).records)
   const outboxAtKill = await outboxTransitions(join(sessionDir, "outbox.jsonl"))
   const second = worker("resume")
   const exitCode = await Promise.race([second.exited, Bun.sleep(30_000).then(() => "timeout")])
+  const holder = Schema.optional(Schema.Struct({ pid: Schema.Number, hostname: Schema.optional(Schema.String) }))
+  const recovered = Schema.decodeUnknownSync(
+    Schema.fromJsonString(Schema.Struct({ eventLog: holder, outbox: holder })),
+  )((await new Response(second.stdout).text()).trim() || "{}")
   const events = (await readLog(join(sessionDir, "events.jsonl"), 0)).records
   const types = eventTypes(events)
   const finalTexts = events
     .flatMap((record) => record.events)
     .flatMap((event) => (event.type === "text-ended" ? [JSON.stringify(event.payload)] : []))
   const step = (await readLog(stepPath, 0)).records
+  const stepAttempts = step
+    .flatMap((record) => record.events)
+    .filter((event) => event.type === "attempt-started").length
   const outbox = await outboxTransitions(join(sessionDir, "outbox.jsonl"))
   const stepText = deltaText(step)
   results.killRecover = {
     killedAfterDeltaRecords: deltasAtKill,
     killedExit: first.signalCode,
+    killedPid: first.pid,
     staleLocks,
     eventsBeforeRestart: beforeRestart,
     outboxAtKill,
     resumeExit: exitCode,
     resumeStderr: (await new Response(second.stderr).text()).slice(0, 500),
+    recoveredStaleLock: recovered,
+    locksAfterResume: locks(),
     eventsAfterRestart: types,
     executionSucceeded: types["execution-succeeded"] ?? 0,
     textEnded: types["text-ended"] ?? 0,
     distinctFinalTexts: new Set(finalTexts).size,
-    stepAttempts: step.flatMap((record) => record.events).filter((event) => event.type === "attempt-started").length,
+    // The resumed attempt appends a second marker only if it reopened the dead worker's step log.
+    stepAttempts,
     stepTextMatchesTextEnded: finalTexts.length === 1 && JSON.parse(finalTexts[0]).text === stepText,
     outboxFinal: outbox,
     passed:
       exitCode === 0 &&
+      staleLocks.length === 3 &&
+      recovered.eventLog?.pid === first.pid &&
+      recovered.outbox?.pid === first.pid &&
+      stepAttempts === 2 &&
+      locks().length === 0 &&
       types["execution-succeeded"] === 1 &&
       types["text-ended"] === 1 &&
       types["execution-started"] === 1,

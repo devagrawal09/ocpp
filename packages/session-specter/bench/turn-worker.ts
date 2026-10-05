@@ -1,5 +1,6 @@
 // Child process for the kill/recover phase of spike.ts: `start` opens a fresh Session and
 // enqueues one prompt; `resume` reopens the same root and lets the outbox finish the turn.
+// It prints the lock files the open took over, as JSON, once the Session is idle.
 import { fakeModel } from "../src/fake-model"
 import { realModel } from "../src/real-model"
 import { openSessionApp } from "../src/session-app"
@@ -20,4 +21,4 @@ if (Bun.argv[4] === "start") {
 }
 await session.awaitIdle()
 await session.close()
-console.log("idle")
+console.log(JSON.stringify(session.recoveredStaleLock))

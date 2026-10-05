@@ -1,6 +1,6 @@
 import { join } from "node:path"
-import { createSpecterApp, prepareSpecterApp } from "@specter-ts/core"
-import { createJsonlEventLogLayer, createJsonlReactionOutboxStore, createJsonlSliceStoreLayer } from "@specter-ts/jsonl"
+import { createSpecterApp, EventLog, prepareSpecterApp } from "@specter-ts/core"
+import { createJsonlEventLog, createJsonlReactionOutboxStore, createJsonlSliceStoreLayer } from "@specter-ts/jsonl"
 import { createMemorySliceStoreLayer } from "@specter-ts/memory"
 import type { OutboxedReaction, ReactionOutboxTransitionListener } from "@specter-ts/reaction-outbox"
 import { Layer } from "effect"
@@ -71,11 +71,19 @@ export function closeAllSessionApps() {
 }
 
 async function open(sessionDir: string, options: SessionAppOptions) {
+  // Both files are opened here rather than through scoped Layers so the Session can report a lock
+  // file it took over from a worker that died without closing them.
   const outbox = createJsonlReactionOutboxStore<OutboxedReaction<RunTurn>>({ path: join(sessionDir, "outbox.jsonl") })
+  const log = await Promise.try(() => createJsonlEventLog({ path: join(sessionDir, "events.jsonl") })).catch(
+    (cause) => {
+      outbox.close()
+      throw cause
+    },
+  )
   const app = await createSpecterApp(
     await prepared,
     Layer.mergeAll(
-      createJsonlEventLogLayer({ path: join(sessionDir, "events.jsonl") }),
+      Layer.succeed(EventLog, log),
       // The transcript grows with the log and Decision/Status State is cheap to replay, so only
       // the Reaction, whose cursor must survive a restart, keeps a JSON file.
       createMemorySliceStoreLayer(DecisionStore, createSessionDecision),
@@ -100,6 +108,7 @@ async function open(sessionDir: string, options: SessionAppOptions) {
     ),
   ).catch((cause) => {
     outbox.close()
+    log.close()
     throw cause
   })
   return {
@@ -107,6 +116,7 @@ async function open(sessionDir: string, options: SessionAppOptions) {
     sessionDir,
     app,
     outbox,
+    recoveredStaleLock: { eventLog: log.recoveredStaleLock, outbox: outbox.recoveredStaleLock },
     /** Resolves once the Session is idle with nothing queued. */
     awaitIdle: async () => {
       for await (const status of app.subscribe({ type: "sessionStatus", payload: {} }))
@@ -118,6 +128,7 @@ async function open(sessionDir: string, options: SessionAppOptions) {
       // Closing the app drains a running turn first, so the outbox records its outcome.
       await app.close()
       outbox.close()
+      log.close()
     },
   }
 }

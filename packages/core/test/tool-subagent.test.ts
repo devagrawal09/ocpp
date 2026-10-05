@@ -731,6 +731,98 @@ describe("SubagentTool", () => {
     ),
   )
 
+  it.live("continues a child with only sessionID and message, keeping its agent, title and model", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+
+          const first = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-subagent-minimal-first",
+              name: SubagentTool.name,
+              input: { agent: "reviewer", description: "review", message: "review this" },
+            },
+          })
+          const childID = outputSessionID(first.metadata)
+          const before = yield* sessions.get(childID)
+          const second = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-subagent-minimal-second",
+              name: SubagentTool.name,
+              input: { sessionID: childID, message: "continue this" },
+            },
+          })
+
+          expect(second).toMatchObject({ status: "completed", metadata: { sessionID: childID, status: "completed" } })
+          expect(yield* sessions.get(childID)).toMatchObject({
+            agent: "reviewer",
+            title: "review",
+            model: before.model,
+          })
+          expect(before.model).toMatchObject(childModel)
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
+          expect(
+            (yield* sessions.inbox(childID)).flatMap((message) =>
+              message.type === "user" ? [message.payload.text] : [],
+            ),
+          ).toEqual(["You are a subagent spawned by another session.\nreview this", "continue this"])
+        }),
+      ),
+    ),
+  )
+
+  it.live("requires agent and description to start a new child and creates none without them", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const call = (id: string, input: Record<string, unknown>) =>
+            executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: { type: "tool-call" as const, id, name: SubagentTool.name, input: { message: "work", ...input } },
+            })
+          const required = {
+            status: "error" as const,
+            error: {
+              type: "tool.execution" as const,
+              message:
+                "agent and description are required to start a new subagent. To continue a previous subagent, pass its sessionID.",
+            },
+          }
+
+          expect(yield* call("call-new-bare", {})).toEqual(required)
+          expect(yield* call("call-new-no-description", { agent: "reviewer" })).toEqual(required)
+          expect(yield* call("call-new-no-agent", { description: "review" })).toEqual(required)
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(0)
+        }),
+      ),
+    ),
+  )
+
   it.live("returns child runner failures as tool errors", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),

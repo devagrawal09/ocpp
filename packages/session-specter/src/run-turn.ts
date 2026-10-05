@@ -1,10 +1,9 @@
 import { join } from "node:path"
 import {
-  EventLog,
   implementReaction,
-  type CommandDispatch,
   type CommandEnvelope,
   type ReactionDeliveryContext,
+  type ReactionPluginContext,
   type SliceStoreService,
 } from "@specter-ts/core"
 import { createJsonlEventLog } from "@specter-ts/jsonl"
@@ -16,14 +15,9 @@ import {
 } from "@specter-ts/reaction-outbox"
 import { createReactionSlice, event } from "@specter-ts/spec"
 import { Context, Effect, Stream } from "effect"
-import {
-  executionFailed,
-  executionSucceeded,
-  promptDelivered,
-  promptEnqueued,
-  sessionCreated,
-} from "./events"
-import type { Model, ModelPart } from "./fake-model"
+import { executionFailed, executionSucceeded, promptDelivered, promptEnqueued, sessionCreated } from "./events"
+import type { ModelPart, TurnModel } from "./fake-model"
+import { sessionMessages, sessionStatus } from "./queries"
 
 export type RunTurn = {
   type: "runTurn"
@@ -55,9 +49,8 @@ export class SessionTurns extends Context.Service<
   SessionTurns,
   {
     readonly sessionDir: string
-    readonly model: Model
+    readonly model: TurnModel
     readonly outbox: ReactionOutboxStore<OutboxedReaction<RunTurn>>
-    readonly pollIntervalMs: number
     readonly onTransition?: ReactionOutboxTransitionListener<OutboxedReaction<RunTurn>>
     readonly metrics?: TurnMetrics
   }
@@ -97,9 +90,7 @@ export const runTurn = implementReaction(
           enqueuedSecond,
           event("execution-succeeded", { executionId: "exe_prm_1" }),
         ],
-        expect: [
-          { type: "runTurn", payload: { sessionId: "ses_1", promptId: "prm_2", executionId: "exe_prm_2" } },
-        ],
+        expect: [{ type: "runTurn", payload: { sessionId: "ses_1", promptId: "prm_2", executionId: "exe_prm_2" } }],
       },
       {
         description: "Runs the next queued prompt after an execution fails.",
@@ -110,9 +101,7 @@ export const runTurn = implementReaction(
           enqueuedSecond,
           event("execution-failed", { executionId: "exe_prm_1", error: "Provider overloaded" }),
         ],
-        expect: [
-          { type: "runTurn", payload: { sessionId: "ses_1", promptId: "prm_2", executionId: "exe_prm_2" } },
-        ],
+        expect: [{ type: "runTurn", payload: { sessionId: "ses_1", promptId: "prm_2", executionId: "exe_prm_2" } }],
       },
       {
         description: "Goes idle when nothing is queued.",
@@ -156,43 +145,38 @@ function settle(state: RunTurnState) {
 /**
  * Enqueues each output into the app's outbox; the scoped worker streams the model outside the
  * Reaction Slice transaction. Every Command uses a deliveryId-derived idempotency key, so an
- * attempt retried after a crash re-dispatches duplicates instead of new Events.
+ * attempt retried after a crash gets the first commit back as a duplicate, even when the
+ * re-streamed response differs.
  */
-function runTurnPlugin(command: CommandDispatch) {
+function runTurnPlugin(capabilities: ReactionPluginContext) {
   return Effect.gen(function* () {
+    // The outbox Store is per Session, so the wrapper is built per app from its Layer.
     const turns = yield* SessionTurns
-    const eventLog = yield* EventLog
-    const outboxed = withReactionOutbox<RunTurn>(
-      () => Effect.succeed((output, context) => executeTurn(output.payload, context)),
-      {
-        store: turns.outbox,
-        pollIntervalMs: turns.pollIntervalMs,
-        worker: { leaseMs: 5 * 60_000, backoffMs: () => 100, onTransition: turns.onTransition },
-      },
-    )
-    return yield* outboxed(command)
+    return yield* withReactionOutbox<RunTurn>(
+      () => Effect.succeed((output, delivery) => executeTurn(output.payload, delivery)),
+      { store: turns.outbox, worker: { leaseMs: 5 * 60_000, backoffMs: () => 100, onTransition: turns.onTransition } },
+    )(capabilities)
 
-    function executeTurn(turn: Turn, context: ReactionDeliveryContext) {
+    function executeTurn(turn: Turn, delivery: ReactionDeliveryContext) {
       const dispatch = (envelope: CommandEnvelope, step: string) =>
         Effect.gen(function* () {
           const started = performance.now()
-          yield* command(envelope, { idempotencyKey: `${context.deliveryId}:${step}` })
+          const receipt = yield* capabilities.command(envelope, { idempotencyKey: `${delivery.deliveryId}:${step}` })
           turns.metrics?.commitMs.push(performance.now() - started)
+          return receipt
         })
       return Effect.gen(function* () {
-        // The durable outbox already dedupes replayed outputs; this guards a lost or memory outbox.
-        const completed = yield* eventLog.findCommit(`${context.deliveryId}:complete`)
-        const failed = yield* eventLog.findCommit(`${context.deliveryId}:fail`)
-        if (completed || failed) return
-        yield* dispatch({ type: "startExecution", payload: { executionId: turn.executionId, promptId: turn.promptId } }, "start")
-        // Plugins get Command dispatch only, so model input comes from the Event Log directly.
-        const prompt = (
-          yield* Effect.forEach(yield* eventLog.query(0, ["prompt-enqueued"]), (persisted) =>
-            Effect.promise(() => promptEnqueued.decode(persisted.payload)),
-          )
-        ).find((payload) => payload.promptId === turn.promptId)
+        const start = yield* dispatch(
+          { type: "startExecution", payload: { executionId: turn.executionId, promptId: turn.promptId } },
+          "start",
+        )
+        // An earlier attempt started this turn; if it also ended it, do not stream the model again.
+        if (start.duplicate && (yield* capabilities.query(sessionStatus, {})).executionId !== turn.executionId) return
+        const prompt = (yield* capabilities.query(sessionMessages, {})).find((message) => message.id === turn.promptId)
         const deltas = yield* Effect.acquireRelease(
-          Effect.sync(() => createJsonlEventLog({ path: join(turns.sessionDir, "steps", `${turn.executionId}.jsonl`) })),
+          Effect.sync(() =>
+            createJsonlEventLog({ path: join(turns.sessionDir, "steps", `${turn.executionId}.jsonl`) }),
+          ),
           (log) => Effect.sync(() => log.close()),
         )
         // A retried attempt appends a new marker; tail consumers drop text from earlier attempts.
@@ -216,16 +200,18 @@ function runTurnPlugin(command: CommandDispatch) {
           return deltas.append([{ type: "text-delta", payload: { delta: pending.join("") } }])
         })
         const streamed = yield* Effect.result(
-          turns.model.stream({ executionId: turn.executionId, prompt: prompt?.text ?? "" }).pipe(
-            Stream.runForEach((part) => {
-              if (part.type === "tool-call") {
-                calls.push(part)
-                return flush
-              }
-              text.push(part.text)
-              return performance.now() - window.at >= 50 ? flush : Effect.void
-            }),
-          ),
+          turns.model
+            .stream({ executionId: turn.executionId, prompt: prompt?.role === "user" ? prompt.text : "" })
+            .pipe(
+              Stream.runForEach((part) => {
+                if (part.type === "tool-call") {
+                  calls.push(part)
+                  return flush
+                }
+                text.push(part.text)
+                return performance.now() - window.at >= 50 ? flush : Effect.void
+              }),
+            ),
         )
         yield* flush
         if (streamed._tag === "Failure") {
@@ -250,20 +236,30 @@ function runTurnPlugin(command: CommandDispatch) {
           calls,
           (call) =>
             Effect.gen(function* () {
-          yield* dispatch(
-            {
-              type: "recordToolCall",
-              payload: { executionId: turn.executionId, messageId, callId: call.callId, tool: call.tool, input: call.input },
-            },
-            `tool:${call.callId}`,
-          )
-          yield* dispatch(
-            {
-              type: "recordToolResult",
-              payload: { executionId: turn.executionId, callId: call.callId, output: `contents of ${call.input.path}` },
-            },
-            `tool-result:${call.callId}`,
-          )
+              yield* dispatch(
+                {
+                  type: "recordToolCall",
+                  payload: {
+                    executionId: turn.executionId,
+                    messageId,
+                    callId: call.callId,
+                    tool: call.tool,
+                    input: call.input,
+                  },
+                },
+                `tool:${call.callId}`,
+              )
+              yield* dispatch(
+                {
+                  type: "recordToolResult",
+                  payload: {
+                    executionId: turn.executionId,
+                    callId: call.callId,
+                    output: `contents of ${call.input.path}`,
+                  },
+                },
+                `tool-result:${call.callId}`,
+              )
             }),
           { discard: true },
         )

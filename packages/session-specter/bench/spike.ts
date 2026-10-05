@@ -1,11 +1,13 @@
 // Spike harness: one Specter app per Session. Run with `bun bench/spike.ts` from this package.
 // SESSIONS (default 200), TOKENS (300), DELAY_MS (2) and HISTORY_TURNS (200) tune the phases.
+// SESSION_SPECTER_MODEL=real streams phase 1 and the kill/recover worker through OC++'s model stack.
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Effect } from "effect"
+import { Schema } from "effect"
 import { deltaText, readLog, type LogRecord } from "../src/delta-log"
 import { fakeModel } from "../src/fake-model"
+import { realModel } from "../src/real-model"
 import type { TurnMetrics } from "../src/run-turn"
 import { closeAllSessionApps, openSessionApp } from "../src/session-app"
 
@@ -14,7 +16,15 @@ const tokens = Number(process.env.TOKENS ?? 300)
 const delayMs = Number(process.env.DELAY_MS ?? 2)
 const historyTurns = Number(process.env.HISTORY_TURNS ?? 200)
 const root = await mkdtemp(join(tmpdir(), "session-specter-spike-"))
-const results: Record<string, unknown> = { bun: Bun.version, sessions, tokens, delayMs, root }
+const results: Record<string, unknown> = {
+  bun: Bun.version,
+  model: process.env.SESSION_SPECTER_MODEL ?? "fake",
+  sessions,
+  tokens,
+  delayMs,
+  root,
+}
+const model = process.env.SESSION_SPECTER_MODEL === "real" ? await realModel() : fakeModel({ tokens, delayMs })
 const ids = Array.from({ length: sessions }, (_, index) => `ses_${String(index).padStart(4, "0")}`)
 
 // Phase 1: N concurrent Sessions, one turn each.
@@ -28,7 +38,7 @@ const wallStart = performance.now()
 const turns = await Promise.all(
   ids.map(async (sessionId) => {
     const opening = performance.now()
-    const session = await openSessionApp({ root, sessionId, model: fakeModel({ tokens, delayMs }), metrics })
+    const session = await openSessionApp({ root, sessionId, model, metrics })
     const openMs = performance.now() - opening
     const commits = [
       () => session.app.command({ type: "createSession", payload: { sessionId } }),
@@ -37,7 +47,7 @@ const turns = await Promise.all(
     const enqueued = performance.now()
     for (const commit of commits) {
       const started = performance.now()
-      await Effect.runPromise(commit())
+      await commit()
       metrics.commitMs.push(performance.now() - started)
     }
     await session.awaitIdle()
@@ -49,7 +59,7 @@ clearInterval(sampler)
 const statuses = await Promise.all(
   ids.map(async (sessionId) => {
     const session = await openSessionApp({ root, sessionId })
-    return Effect.runPromise(session.app.query({ type: "sessionStatus", payload: {} }))
+    return session.app.query({ type: "sessionStatus", payload: {} })
   }),
 )
 results.concurrency = {
@@ -80,7 +90,7 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
       const session = await openSessionApp({ root, sessionId, reactionStore })
       const openMs = performance.now() - opening
       // Command and Query Slices use memory Stores, so the first read replays their projections.
-      await Effect.runPromise(session.app.query({ type: "sessionMessages", payload: {} }))
+      await session.app.query({ type: "sessionMessages", payload: {} })
       return { openMs, firstQueryMs: performance.now() - opening - openMs }
     }),
   )
@@ -90,7 +100,7 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
   for (const sessionId of ids) {
     const opening = performance.now()
     const session = await openSessionApp({ root, sessionId, reactionStore })
-    await Effect.runPromise(session.app.query({ type: "sessionMessages", payload: {} }))
+    await session.app.query({ type: "sessionMessages", payload: {} })
     sequential.push(performance.now() - opening)
   }
   await closeAllSessionApps()
@@ -104,11 +114,9 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
 // Phase 2b: one Session with a long history, to show Reaction replay cost on reopen.
 {
   const session = await openSessionApp({ root, sessionId: "ses_history", model: fakeModel({ tokens: 3 }) })
-  await Effect.runPromise(session.app.command({ type: "createSession", payload: { sessionId: "ses_history" } }))
+  await session.app.command({ type: "createSession", payload: { sessionId: "ses_history" } })
   for (const turn of Array.from({ length: historyTurns }, (_, index) => index)) {
-    await Effect.runPromise(
-      session.app.command({ type: "enqueuePrompt", payload: { promptId: `prm_${turn}`, text: `turn ${turn}` } }),
-    )
+    await session.app.command({ type: "enqueuePrompt", payload: { promptId: `prm_${turn}`, text: `turn ${turn}` } })
     await session.awaitIdle()
   }
   await session.close()
@@ -150,8 +158,14 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
   }, 10_000)
   first.kill("SIGKILL")
   await first.exited
+  // JSONL adapters never take over a dead writer's lock file. The worker has exited, so the
+  // harness, standing in for a supervisor that knows the owner is gone, removes them.
+  const staleLocks = [...new Bun.Glob("**/*.lock").scanSync(sessionDir)].sort((left, right) =>
+    left.localeCompare(right),
+  )
+  await Promise.all(staleLocks.map((lock) => rm(join(sessionDir, lock))))
   const beforeRestart = eventTypes((await readLog(join(sessionDir, "events.jsonl"), 0)).records)
-  const outboxAtKill = (await Bun.file(join(sessionDir, "outbox.jsonl")).text()).trim().split("\n").at(-1)
+  const outboxAtKill = await outboxTransitions(join(sessionDir, "outbox.jsonl"))
   const second = worker("resume")
   const exitCode = await Promise.race([second.exited, Bun.sleep(30_000).then(() => "timeout")])
   const events = (await readLog(join(sessionDir, "events.jsonl"), 0)).records
@@ -160,13 +174,14 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
     .flatMap((record) => record.events)
     .flatMap((event) => (event.type === "text-ended" ? [JSON.stringify(event.payload)] : []))
   const step = (await readLog(stepPath, 0)).records
-  const outbox = (await Bun.file(join(sessionDir, "outbox.jsonl")).text()).trim().split("\n").at(-1)
+  const outbox = await outboxTransitions(join(sessionDir, "outbox.jsonl"))
   const stepText = deltaText(step)
   results.killRecover = {
     killedAfterDeltaRecords: deltasAtKill,
     killedExit: first.signalCode,
+    staleLocks,
     eventsBeforeRestart: beforeRestart,
-    outboxAtKill: outboxAtKill ? pick(JSON.parse(outboxAtKill), ["status", "attemptCount"]) : null,
+    outboxAtKill,
     resumeExit: exitCode,
     resumeStderr: (await new Response(second.stderr).text()).slice(0, 500),
     eventsAfterRestart: types,
@@ -175,7 +190,7 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
     distinctFinalTexts: new Set(finalTexts).size,
     stepAttempts: step.flatMap((record) => record.events).filter((event) => event.type === "attempt-started").length,
     stepTextMatchesTextEnded: finalTexts.length === 1 && JSON.parse(finalTexts[0]).text === stepText,
-    outboxFinal: outbox ? pick(JSON.parse(outbox), ["status", "attemptCount", "lastError"]) : null,
+    outboxFinal: outbox,
     passed:
       exitCode === 0 &&
       types["execution-succeeded"] === 1 &&
@@ -190,11 +205,10 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
     root,
     sessionId: "ses_tail",
     model: fakeModel({ tokens: 300, delayMs: 5 }),
-    pollIntervalMs: 10,
   })
   const stepPath = join(session.sessionDir, "steps", "exe_prm_tail.jsonl")
-  await Effect.runPromise(session.app.command({ type: "createSession", payload: { sessionId: "ses_tail" } }))
-  await Effect.runPromise(session.app.command({ type: "enqueuePrompt", payload: { promptId: "prm_tail", text: "tail" } }))
+  await session.app.command({ type: "createSession", payload: { sessionId: "ses_tail" } })
+  await session.app.command({ type: "enqueuePrompt", payload: { promptId: "prm_tail", text: "tail" } })
   const prefix = await waitFor(async () => {
     const read = await readLog(stepPath, 0)
     return read.records.length >= 5 ? read : undefined
@@ -216,7 +230,7 @@ for (const reactionStore of ["jsonl", "memory"] as const) {
   const full = (await readLog(stepPath, 0)).records
   const combined = [...prefix.records, ...seen]
   const versions = combined.map((record) => record.version)
-  const messages = await Effect.runPromise(session.app.query({ type: "sessionMessages", payload: {} }))
+  const messages = await session.app.query({ type: "sessionMessages", payload: {} })
   const recorded = messages.flatMap((message) =>
     message.role === "assistant" ? message.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])) : [],
   )
@@ -256,8 +270,17 @@ function eventTypes(records: readonly LogRecord[]) {
     .reduce<Record<string, number>>((counts, event) => ({ ...counts, [event.type]: (counts[event.type] ?? 0) + 1 }), {})
 }
 
-function pick(value: Record<string, unknown>, keys: readonly string[]) {
-  return Object.fromEntries(keys.map((key) => [key, value[key]]))
+async function outboxTransitions(path: string) {
+  const decodeTransition = Schema.decodeUnknownSync(
+    Schema.fromJsonString(Schema.Struct({ type: Schema.String, attemptCount: Schema.optional(Schema.Number) })),
+  )
+  return (await Bun.file(path).text())
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => decodeTransition(line))
+    .map((transition) =>
+      transition.attemptCount === undefined ? transition.type : `${transition.type}#${transition.attemptCount}`,
+    )
 }
 
 async function waitFor<A>(check: () => Promise<A | undefined>, timeoutMs: number): Promise<A> {

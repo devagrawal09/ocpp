@@ -6,17 +6,17 @@ export type ModelPart =
 
 export class ModelError extends Data.TaggedError("ModelError")<{ readonly message: string }> {}
 
-export type Model = {
+export type TurnModel = {
   readonly stream: (request: { executionId: string; prompt: string }) => Stream.Stream<ModelPart, ModelError>
 }
 
 /**
- * Deterministic streaming model: the same request always yields the same tokens, so a
- * retried turn re-records identical payloads and deliveryId-keyed Commands deduplicate.
+ * Streaming model for tests and the harness. Output is deterministic only so assertions can
+ * compare it; a re-streamed turn may differ, because the first commit for a delivery key wins.
  */
 export function fakeModel(
   options: { tokens?: number; delayMs?: number; toolCall?: boolean; failAfter?: number } = {},
-): Model {
+): TurnModel {
   const tokens = options.tokens ?? 20
   const delayMs = options.delayMs ?? 0
   return {

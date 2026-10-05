@@ -3,14 +3,7 @@
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "noUncheckedIndexedAccess": false,
-    // OC++ overrides effect to the catalog version, but Specter's built packages load their own
-    // effect@4.0.0-beta.78. Point this package at that exact copy so only one Effect runtime loads.
-    "paths": {
-      "effect": [
-        "../../../specter/node_modules/.pnpm/effect@4.0.0-beta.78/node_modules/effect/dist/index"
-      ]
-    }
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src", "bench", "test"]
 }

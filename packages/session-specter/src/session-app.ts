@@ -1,9 +1,9 @@
 import { join } from "node:path"
-import { makeSpecterRuntime } from "@specter-ts/core/effect"
-import { createJsonlEventLogLayer, createJsonlSliceStoreLayer } from "@specter-ts/jsonl"
+import { createSpecterApp, prepareSpecterApp } from "@specter-ts/core"
+import { createJsonlEventLogLayer, createJsonlReactionOutboxStore, createJsonlSliceStoreLayer } from "@specter-ts/jsonl"
 import { createMemorySliceStoreLayer } from "@specter-ts/memory"
 import type { OutboxedReaction, ReactionOutboxTransitionListener } from "@specter-ts/reaction-outbox"
-import { Effect, Exit, Layer, Option, Scope, Stream } from "effect"
+import { Layer } from "effect"
 import {
   completeExecution,
   createSession,
@@ -17,8 +17,7 @@ import {
   startExecution,
 } from "./commands"
 import { sessionEvents } from "./events"
-import { fakeModel, type Model } from "./fake-model"
-import { openFileReactionOutboxStore } from "./outbox-store"
+import { fakeModel, type TurnModel } from "./fake-model"
 import { MessagesStore, sessionMessages, sessionStatus, StatusStore } from "./queries"
 import { createRunTurnState, runTurn, RunTurnStore, SessionTurns, type RunTurn, type TurnMetrics } from "./run-turn"
 
@@ -39,13 +38,15 @@ export const sessionAppConfig = {
   },
 } as const
 
+// Conformance runs once per process; every Session binds this to its own Event Log.
+const prepared = prepareSpecterApp(sessionAppConfig)
+
 export type SessionAppOptions = {
   readonly root: string
   readonly sessionId: string
-  readonly model?: Model
+  readonly model?: TurnModel
   /** `jsonl` persists the Reaction cursor; `memory` replays every commit through the Reaction on open. */
   readonly reactionStore?: "jsonl" | "memory"
-  readonly pollIntervalMs?: number
   readonly metrics?: TurnMetrics
   readonly onTransition?: ReactionOutboxTransitionListener<OutboxedReaction<RunTurn>>
 }
@@ -70,49 +71,53 @@ export function closeAllSessionApps() {
 }
 
 async function open(sessionDir: string, options: SessionAppOptions) {
-  const outbox = await openFileReactionOutboxStore<OutboxedReaction<RunTurn>>(join(sessionDir, "outbox.jsonl"))
-  const dependencies = Layer.mergeAll(
-    createJsonlEventLogLayer({ path: join(sessionDir, "events.jsonl") }),
-    createMemorySliceStoreLayer(DecisionStore, createSessionDecision),
-    createMemorySliceStoreLayer(MessagesStore, () => ({ pending: {}, messages: [] })),
-    createMemorySliceStoreLayer(StatusStore, () => ({ created: false, running: null, queued: [], succeeded: 0, failed: 0 })),
-    options.reactionStore === "memory"
-      ? createMemorySliceStoreLayer(RunTurnStore, createRunTurnState)
-      : createJsonlSliceStoreLayer(RunTurnStore, createRunTurnState, { directory: join(sessionDir, "slices") }),
-    Layer.succeed(SessionTurns, {
-      sessionDir,
-      model: options.model ?? fakeModel(),
-      outbox,
-      pollIntervalMs: options.pollIntervalMs ?? 20,
-      onTransition: options.onTransition,
-      metrics: options.metrics,
-    }),
-  )
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const context = yield* Layer.buildWithScope(dependencies, scope)
-      // The runtime catches the Reaction up and forks the outbox worker in this scope.
-      const app = yield* makeSpecterRuntime(sessionAppConfig).pipe(Effect.provide(context), Scope.provide(scope))
-      return {
-        sessionId: options.sessionId,
+  const outbox = createJsonlReactionOutboxStore<OutboxedReaction<RunTurn>>({ path: join(sessionDir, "outbox.jsonl") })
+  const app = await createSpecterApp(
+    await prepared,
+    Layer.mergeAll(
+      createJsonlEventLogLayer({ path: join(sessionDir, "events.jsonl") }),
+      // The transcript grows with the log and Decision/Status State is cheap to replay, so only
+      // the Reaction, whose cursor must survive a restart, keeps a JSON file.
+      createMemorySliceStoreLayer(DecisionStore, createSessionDecision),
+      createMemorySliceStoreLayer(MessagesStore, () => ({ pending: {}, messages: [] })),
+      createMemorySliceStoreLayer(StatusStore, () => ({
+        created: false,
+        running: null,
+        queued: [],
+        succeeded: 0,
+        failed: 0,
+      })),
+      options.reactionStore === "memory"
+        ? createMemorySliceStoreLayer(RunTurnStore, createRunTurnState)
+        : createJsonlSliceStoreLayer(RunTurnStore, createRunTurnState, { directory: join(sessionDir, "slices") }),
+      Layer.succeed(SessionTurns, {
         sessionDir,
-        app,
+        model: options.model ?? fakeModel(),
         outbox,
-        /** Resolves once the Session is idle with nothing queued. */
-        awaitIdle: () =>
-          Effect.runPromise(
-            app.subscribe({ type: "sessionStatus", payload: {} }).pipe(
-              Stream.filter((status) => status.status === "idle" && status.queued === 0),
-              Stream.runHead,
-              Effect.map(Option.getOrThrow),
-            ),
-          ),
-        close: async () => {
-          opened.delete(sessionDir)
-          await Effect.runPromise(Scope.close(scope, Exit.void))
-        },
-      }
-    }),
-  )
+        onTransition: options.onTransition,
+        metrics: options.metrics,
+      }),
+    ),
+  ).catch((cause) => {
+    outbox.close()
+    throw cause
+  })
+  return {
+    sessionId: options.sessionId,
+    sessionDir,
+    app,
+    outbox,
+    /** Resolves once the Session is idle with nothing queued. */
+    awaitIdle: async () => {
+      for await (const status of app.subscribe({ type: "sessionStatus", payload: {} }))
+        if (status.status === "idle" && status.queued === 0) return status
+      throw new Error("Session status subscription ended before the Session went idle")
+    },
+    close: async () => {
+      opened.delete(sessionDir)
+      // Closing the app drains a running turn first, so the outbox records its outcome.
+      await app.close()
+      outbox.close()
+    },
+  }
 }

@@ -4,7 +4,7 @@ import { Schema } from "effect"
 import { ascending } from "./identifier.js"
 import { optional, statics } from "./schema.js"
 
-const IDSchema = Schema.String.check(Schema.isStartsWith("exe_")).pipe(Schema.brand("CodeModeExecution.ID"))
+const IDSchema = Schema.String.check(Schema.isStartingWith("exe_")).pipe(Schema.brand("CodeModeExecution.ID"))
 
 export const ID = IDSchema.pipe(
   statics((schema: typeof IDSchema) => ({

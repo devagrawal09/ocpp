@@ -1,5 +1,5 @@
 import { Cause, Context, Duration, Effect, Layer, Option, Schedule, Schema, Semaphore } from "effect"
-import { HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest } from "effect/http"
 import { ModelsDev } from "@ocpp/schema/models-dev"
 import { Money } from "@ocpp/schema/money"
 import { App } from "./app.js"

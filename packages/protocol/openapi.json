@@ -605,9 +605,6 @@
                     },
                     {
                       "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                     }
                   ]
                 }
@@ -836,14 +833,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -1050,7 +1040,8 @@
                         "^ses": {
                           "$ref": "#/components/schemas/SessionActive"
                         }
-                      }
+                      },
+                      "additionalProperties": false
                     }
                   },
                   "required": ["data"],
@@ -1166,14 +1157,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -1222,14 +1206,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -1241,13 +1218,10 @@
                 "schema": {
                   "anyOf": [
                     {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
                       "$ref": "#/components/schemas/MessageNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     }
                   ]
                 }
@@ -1311,14 +1285,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -1380,14 +1347,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -1449,14 +1409,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -1508,14 +1461,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -1605,14 +1551,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -1622,14 +1561,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -1743,14 +1675,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -1762,13 +1687,10 @@
                 "schema": {
                   "anyOf": [
                     {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
                       "$ref": "#/components/schemas/CommandNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     }
                   ]
                 }
@@ -1935,13 +1857,10 @@
                 "schema": {
                   "anyOf": [
                     {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
                       "$ref": "#/components/schemas/SkillNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     }
                   ]
                 }
@@ -2040,14 +1959,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -2175,14 +2087,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -2192,14 +2097,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -2291,14 +2189,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -2385,14 +2276,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -2481,14 +2365,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -2560,9 +2437,6 @@
                   "anyOf": [
                     {
                       "$ref": "#/components/schemas/MessageNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     },
                     {
                       "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
@@ -2660,14 +2534,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -2731,14 +2598,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -3135,14 +2995,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -3195,14 +3048,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -3278,14 +3124,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -3337,14 +3176,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -3453,7 +3285,7 @@
                       "$ref": "#/components/schemas/SessionLogItemEncoded"
                     }
                   },
-                  "required": ["id", "event", "data"],
+                  "required": ["event", "data"],
                   "additionalProperties": false
                 },
                 "x-effect-stream": {
@@ -3515,7 +3347,7 @@
                   "errorSchema": {
                     "not": {}
                   },
-                  "failureEvent": "effect/httpapi/stream/failure"
+                  "failureEvent": "effect/http-api/stream/failure"
                 }
               }
             }
@@ -3603,14 +3435,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -3655,14 +3480,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -3793,14 +3611,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -4271,13 +4082,10 @@
                 "schema": {
                   "anyOf": [
                     {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
                       "$ref": "#/components/schemas/EventNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     }
                   ]
                 }
@@ -4874,14 +4682,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -5375,14 +5176,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -5473,14 +5267,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -5608,14 +5395,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -5913,14 +5693,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -6034,14 +5807,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -7375,14 +7141,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -7392,14 +7151,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                 }
               }
             }
@@ -7488,13 +7240,10 @@
                 "schema": {
                   "anyOf": [
                     {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
                       "$ref": "#/components/schemas/FormNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     }
                   ]
                 }
@@ -7565,13 +7314,10 @@
                 "schema": {
                   "anyOf": [
                     {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
                       "$ref": "#/components/schemas/FormNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     }
                   ]
                 }
@@ -7635,13 +7381,10 @@
                 "schema": {
                   "anyOf": [
                     {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
                       "$ref": "#/components/schemas/FormNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     }
                   ]
                 }
@@ -7718,13 +7461,10 @@
                 "schema": {
                   "anyOf": [
                     {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
                       "$ref": "#/components/schemas/FormNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
                     }
                   ]
                 }
@@ -8242,7 +7982,7 @@
                       "$ref": "#/components/schemas/V2EventEncoded"
                     }
                   },
-                  "required": ["id", "event", "data"],
+                  "required": ["event", "data"],
                   "additionalProperties": false
                 },
                 "x-effect-stream": {
@@ -8304,7 +8044,7 @@
                   "errorSchema": {
                     "not": {}
                   },
-                  "failureEvent": "effect/httpapi/stream/failure"
+                  "failureEvent": "effect/http-api/stream/failure"
                 }
               }
             }
@@ -9182,14 +8922,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -9244,14 +8977,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -11790,14 +11516,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -12317,23 +12036,19 @@
           "model": {
             "anyOf": [
               {
-                "type": "string",
-                "pattern": "^[^/#]+\\/[^#]+(?:#[^#]+)?$"
+                "type": "string"
               },
               {
                 "type": "object",
                 "properties": {
                   "providerID": {
-                    "type": "string",
-                    "pattern": "^[^/#]+$"
+                    "type": "string"
                   },
                   "model": {
-                    "type": "string",
-                    "pattern": "^[^#]+$"
+                    "type": "string"
                   },
                   "variant": {
-                    "type": "string",
-                    "pattern": "^[^#]+$"
+                    "type": "string"
                   }
                 },
                 "required": ["providerID", "model"],
@@ -12370,8 +12085,7 @@
             "type": "boolean"
           },
           "color": {
-            "type": "string",
-            "pattern": "^#[0-9a-fA-F]{6}$"
+            "type": "string"
           },
           "steps": {
             "type": "integer",
@@ -12426,23 +12140,19 @@
           "model": {
             "anyOf": [
               {
-                "type": "string",
-                "pattern": "^[^/#]+\\/[^#]+(?:#[^#]+)?$"
+                "type": "string"
               },
               {
                 "type": "object",
                 "properties": {
                   "providerID": {
-                    "type": "string",
-                    "pattern": "^[^/#]+$"
+                    "type": "string"
                   },
                   "model": {
-                    "type": "string",
-                    "pattern": "^[^#]+$"
+                    "type": "string"
                   },
                   "variant": {
-                    "type": "string",
-                    "pattern": "^[^#]+$"
+                    "type": "string"
                   }
                 },
                 "required": ["providerID", "model"],
@@ -12543,23 +12253,19 @@
           "model": {
             "anyOf": [
               {
-                "type": "string",
-                "pattern": "^[^/#]+\\/[^#]+(?:#[^#]+)?$"
+                "type": "string"
               },
               {
                 "type": "object",
                 "properties": {
                   "providerID": {
-                    "type": "string",
-                    "pattern": "^[^/#]+$"
+                    "type": "string"
                   },
                   "model": {
-                    "type": "string",
-                    "pattern": "^[^#]+$"
+                    "type": "string"
                   },
                   "variant": {
-                    "type": "string",
-                    "pattern": "^[^#]+$"
+                    "type": "string"
                   }
                 },
                 "required": ["providerID", "model"],
@@ -13963,7 +13669,6 @@
       },
       "InstructionEntry.Key": {
         "type": "string",
-        "pattern": "^[a-z0-9][a-z0-9._-]*$",
         "description": "Instruction entry key (lowercase alphanumerics plus . _ -)"
       },
       "InstructionEntryValueTooLargeErrorEncoded": {
@@ -15656,8 +15361,7 @@
         "additionalProperties": false
       },
       "Project.Vcs": {
-        "type": "string",
-        "pattern": "^[a-z][a-z0-9._-]*$"
+        "type": "string"
       },
       "ProjectNotFoundErrorEncoded": {
         "type": "object",
@@ -15690,8 +15394,7 @@
         "additionalProperties": false
       },
       "Prompt.Base64": {
-        "type": "string",
-        "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+        "type": "string"
       },
       "Prompt.FileAttachment": {
         "type": "object",
@@ -16167,14 +15870,9 @@
         "additionalProperties": false
       },
       "Session.Inbox.CompactionPayload": {
-        "anyOf": [
-          {
-            "type": "object"
-          },
-          {
-            "type": "array"
-          }
-        ]
+        "not": {
+          "type": "null"
+        }
       },
       "Session.Inbox.Delivery": {
         "type": "string",

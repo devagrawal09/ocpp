@@ -1,7 +1,7 @@
 import { Workspace } from "@ocpp/core/workspace"
 import { ConflictError, ProviderNotFoundError, UnknownError } from "@ocpp/protocol/errors"
 import { Effect } from "effect"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api"
 
 export const WorkspaceHandler = HttpApiBuilder.group(Api, "server.workspace", (handlers) =>

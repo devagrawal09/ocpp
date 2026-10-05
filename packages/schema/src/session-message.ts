@@ -20,7 +20,7 @@ import { Snapshot } from "./snapshot.js"
 import { TokenUsage } from "./token-usage.js"
 import { CodeModeExecution } from "./codemode-execution.js"
 
-export const ID = Schema.String.check(Schema.isStartsWith("msg_")).pipe(
+export const ID = Schema.String.check(Schema.isStartingWith("msg_")).pipe(
   Schema.brand("Session.Message.ID"),
   statics((schema) => ({
     create: () => schema.make("msg_" + ascending()),

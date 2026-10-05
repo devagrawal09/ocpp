@@ -2,7 +2,7 @@ import { Model } from "@ocpp/schema/model"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import { Location } from "@ocpp/schema/location"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { ServiceUnavailableError } from "../errors.js"
 import { LocationQuery, locationQueryOpenApi } from "./location.js"
 

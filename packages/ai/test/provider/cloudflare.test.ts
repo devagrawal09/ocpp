@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { ConfigProvider, Effect, Schema } from "effect"
-import { HttpClientRequest } from "effect/unstable/http"
+import { HttpClientRequest } from "effect/http"
 import { LLM, LLMEvent } from "../../src/index.js"
 import { CloudflareAIGateway, CloudflareWorkersAI } from "../../src/providers/cloudflare.js"
 import { compileRequest } from "../../src/route/client.js"

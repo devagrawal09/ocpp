@@ -1,5 +1,5 @@
 import { Effect } from "effect"
-import { ChildProcess } from "effect/unstable/process"
+import { ChildProcess } from "effect/process"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Npm } from "@ocpp/util/npm"
 import { AppProcess } from "@ocpp/util/process"

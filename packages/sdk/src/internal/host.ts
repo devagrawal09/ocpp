@@ -8,7 +8,7 @@ import { createEmbeddedRoutes } from "@ocpp/server/routes"
 import type { ServerOptions } from "@ocpp/server/options"
 import type { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Context, Effect, Layer, ManagedRuntime, Scope } from "effect"
-import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http"
+import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { context, layer, type LogOptions } from "../logging"
 import { OwnedFetch } from "./fetch"
 

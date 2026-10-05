@@ -4,14 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Effect, FileSystem, Schema, SchemaAST, SchemaGetter } from "effect"
-import {
-  HttpApi,
-  HttpApiEndpoint,
-  HttpApiGroup,
-  HttpApiMiddleware,
-  HttpApiSchema,
-  OpenApi,
-} from "effect/unstable/httpapi"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
 import { format } from "prettier"
 import {
   compile as compileContract,
@@ -596,6 +589,17 @@ describe("HttpApiCodegen.generate", () => {
 
     expect(types).toContain('readonly "name": "NamedError"')
     expect(types).toContain('"name" in value && value["name"] === "NamedError"')
+  })
+
+  test("requires the authoritative import for name-discriminated Effect errors", () => {
+    class NamedError extends Schema.Error<NamedError>("NamedError")(
+      { name: Schema.Literal("NamedError"), message: Schema.String },
+      { httpApiStatus: 400 },
+    ) {}
+
+    expect(() =>
+      compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String, error: NamedError }))),
+    ).toThrow("Effect schema requires authoritative import: session.get")
   })
 
   test("preserves reflected default error statuses", () => {
@@ -1428,7 +1432,7 @@ describe("HttpApiCodegen.generate", () => {
 
   test("rejects spoofed and aborted validation checks", () => {
     const Spoofed = Schema.Number.check(
-      Schema.makeFilter(() => "always fails", { meta: { _tag: "isFinite" }, arbitrary: {} }),
+      Schema.makeFilter(() => "always fails", { meta: { _tag: "isFinite" }, arbitraryConstraint: {} }),
     )
     const Aborted = Schema.Number.check(Schema.isFinite().abort())
 

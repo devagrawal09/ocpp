@@ -6,7 +6,7 @@ import type { Agent } from "@ocpp/schema/agent"
 import type { Model } from "@ocpp/schema/model"
 import type { Content } from "@ocpp/schema/tool"
 import { Cause, Config, Context, Effect, Layer, Result, Stream } from "effect"
-import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { HttpClientRequest, HttpClientResponse } from "effect/http"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { App } from "../app.js"
 import { PluginHooks } from "../plugin/hooks.js"
@@ -345,7 +345,7 @@ export const layer = Layer.effect(
         (yield* hooks.has("session", "http.response", resolved.ref.providerID))
       const webSocket =
         resolved.capabilities.responsesWebsockets === true
-          ? yield* Config.boolean(responsesWebSocketFlag(resolved.ref.providerID)).pipe(
+          ? yield* Config.Boolean(responsesWebSocketFlag(resolved.ref.providerID)).pipe(
               Config.withDefault(false),
               Effect.orDie,
             )

@@ -5,7 +5,7 @@ import { AbsolutePath } from "@ocpp/core/schema"
 import { InvalidRequestError, ServiceUnavailableError } from "@ocpp/protocol/errors"
 import { Global } from "@ocpp/util/global"
 import { Effect } from "effect"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api"
 import { pluginReadiness } from "./plugin-readiness"
 

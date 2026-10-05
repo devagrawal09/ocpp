@@ -3,7 +3,7 @@ import { EventManifest } from "@ocpp/schema/event-manifest"
 import { Location } from "@ocpp/schema/location"
 import type { Definition } from "@ocpp/schema/event"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 
 const fields = {
   id: Event.ID,

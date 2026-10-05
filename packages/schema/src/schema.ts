@@ -20,7 +20,9 @@ export const optional = <S extends Schema.Top>(schema: S) =>
 export const statics =
   <S extends object, M extends Record<string, unknown>>(methods: (schema: S) => M) =>
   (schema: S): S & M =>
-    Object.assign(schema, methods(schema))
+    // Schema members such as `make` are prototype getters without setters, so assignment cannot shadow them.
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- defineProperties adds every method in M.
+    Object.defineProperties(schema, Object.getOwnPropertyDescriptors(methods(schema))) as S & M
 
 export const DateTimeUtcFromMillis = Schema.Finite.pipe(
   Schema.decodeTo(Schema.DateTimeUtc, {

@@ -748,6 +748,8 @@ describe("LocationServiceMap", () => {
             "event.trigger",
             "glob",
             "grep",
+            "notebook.inspect",
+            "notebook.list",
             "patch",
             "question",
             "read",

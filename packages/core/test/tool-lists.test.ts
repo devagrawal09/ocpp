@@ -128,7 +128,7 @@ describe("ToolLists", () => {
       )
       const file = path.join(context.session.location.directory, ".ocpp", ToolLists.FILE)
       expect(selected).toEqual({ init: { source: project, agent: build, file } })
-      expect((yield* catalog(context, context.session, build)).paths).toEqual(["grep"])
+      expect((yield* catalog(context, context.session, build)).paths).toEqual(["grep", "notebook.inspect", "notebook.list"])
       // The project's init.ts has no plan list, and the global one does not fill it in. The notice names the file.
       expect(yield* catalog(context, context.session, plan)).toEqual({
         paths: [],
@@ -141,7 +141,13 @@ describe("ToolLists", () => {
     Effect.gen(function* () {
       const context = yield* setup()
       yield* globalInit("return { build: [tools.read, tools.subagent] }")
-      expect((yield* catalog(context, context.session, build)).paths).toEqual(["read", "subagent", "subagent.models"])
+      expect((yield* catalog(context, context.session, build)).paths).toEqual([
+        "notebook.inspect",
+        "notebook.list",
+        "read",
+        "subagent",
+        "subagent.models",
+      ])
     }),
   )
 
@@ -167,7 +173,13 @@ describe("ToolLists", () => {
       yield* context.sessions.selectTools({ sessionID: created.id, tools: ["glob", "shell"] })
       const child = yield* context.sessions.get(created.id)
       expect(child.tools).toEqual(["glob", "shell"])
-      expect((yield* catalog(context, child, build)).paths).toEqual(["glob", "shell"])
+      // The notebook tools only read the child's own notebook, so every Code Mode catalog pins them.
+      expect((yield* catalog(context, child, build)).paths).toEqual([
+        "glob",
+        "notebook.inspect",
+        "notebook.list",
+        "shell",
+      ])
     }),
   )
 
@@ -219,7 +231,7 @@ describe("ToolLists", () => {
       expect(yield* lists.select(context.session, build)).toEqual({
         init: { source: "return { build: [tools.grep] }", agent: build, file },
       })
-      expect((yield* catalog(context, context.session, build)).paths).toEqual(["grep"])
+      expect((yield* catalog(context, context.session, build)).paths).toEqual(["grep", "notebook.inspect", "notebook.list"])
     }),
   )
 
@@ -242,11 +254,20 @@ describe("ToolLists", () => {
         const forkedChild = yield* fork(child.id)
         expect(forkedChild.parentID).toBeUndefined()
         expect(forkedChild.tools).toEqual(["glob"])
-        expect((yield* catalog(context, forkedChild, build)).paths).toEqual(["glob"])
+        expect((yield* catalog(context, forkedChild, build)).paths).toEqual([
+          "glob",
+          "notebook.inspect",
+          "notebook.list",
+        ])
 
         const forkedTop = yield* fork(context.session.id)
         expect(forkedTop.tools).toBeUndefined()
-        expect((yield* catalog(context, forkedTop, build)).paths).toEqual(["grep", "read"])
+        expect((yield* catalog(context, forkedTop, build)).paths).toEqual([
+          "grep",
+          "notebook.inspect",
+          "notebook.list",
+          "read",
+        ])
       }),
   )
 })

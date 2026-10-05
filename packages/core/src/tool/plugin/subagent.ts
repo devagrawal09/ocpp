@@ -7,7 +7,7 @@ import { Model } from "@ocpp/schema/model"
 import { Provider } from "@ocpp/schema/provider"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import { FSUtil } from "@ocpp/util/fs-util"
-import { Deferred, Effect, Schema } from "effect"
+import { Deferred, Effect, Option, Schema } from "effect"
 import { realpath, stat } from "node:fs/promises"
 import path from "path"
 import { Agent } from "../../agent.js"
@@ -21,6 +21,8 @@ import { ExternalAgentSession } from "../../external-agent/session.js"
 import { Location } from "../../location.js"
 import { PluginRuntime } from "../../plugin/runtime.js"
 import { SessionEvent } from "../../session/event.js"
+import { SessionMessage } from "../../session/message.js"
+import { untrusted } from "../../codemode/untrusted.js"
 import { AbsolutePath } from "../../schema.js"
 import { SessionSchema } from "../../session/schema.js"
 import { Tool } from "../../tool.js"
@@ -37,6 +39,11 @@ const CONTINUE_AFTER_RESTART =
 
 /** Progress a subagent call records once its child holds the task, so a restart can rejoin that child. */
 const Attached = Schema.Struct({ sessionID: SessionSchema.ID })
+
+/** How many ancestors the transcript tool walks from a session to find its caller. */
+const MAX_DESCENDANT_DEPTH = 16
+/** Stored records the transcript tool reads per call, as a multiple of its limit. */
+const TRANSCRIPT_SCAN = 10
 
 type Submission = { readonly message: string; readonly output: typeof Schema.Json.Type }
 
@@ -97,6 +104,55 @@ const ModelsOutput = Schema.Struct({
   drivers: Schema.Array(SessionDriver.Info),
 })
 
+const TRANSCRIPT_LIMIT = 20
+const TRANSCRIPT_MAX = 100
+/** Characters kept of each text, reasoning, tool input or tool result in a transcript. */
+const TRANSCRIPT_TEXT = 4_000
+
+export const TranscriptInput = Schema.Struct({
+  sessionID: SessionSchema.ID.annotate({
+    description: "The sessionID of a subagent you started, or of any subagent below it",
+  }),
+  limit: Schema.optionalKey(Schema.Number).annotate({
+    description: `How many of the newest messages to return (default ${TRANSCRIPT_LIMIT}, at most ${TRANSCRIPT_MAX})`,
+  }),
+  cursor: Schema.optionalKey(SessionMessage.ID).annotate({
+    description: "The cursor a previous call returned, to read the messages before that page",
+  }),
+  include: Schema.optionalKey(Schema.Array(Schema.Literals(["reasoning", "tools"]))).annotate({
+    description:
+      "Also return assistant reasoning, and tool calls as name, status, input (just the code for execute) and result text",
+  }),
+})
+
+const TranscriptToolCall = Schema.Struct({
+  name: Schema.String,
+  status: Schema.Literals(["streaming", "running", "completed", "error"]),
+  input: Schema.String,
+  result: Schema.optionalKey(Schema.String),
+})
+
+const TranscriptMessage = Schema.Struct({
+  id: Schema.String,
+  role: Schema.Literals(["user", "synthetic", "assistant", "compaction"]),
+  text: Schema.String,
+  reasoning: Schema.optionalKey(Schema.String),
+  tools: Schema.optionalKey(Schema.Array(TranscriptToolCall)),
+  error: Schema.optionalKey(Schema.String),
+  /** Set when a text in this message was cut to TRANSCRIPT_TEXT characters. */
+  clipped: Schema.optionalKey(Schema.Boolean),
+})
+
+export const TranscriptOutput = Schema.Struct({
+  sessionID: SessionSchema.ID,
+  title: Schema.optionalKey(Schema.String),
+  agent: Schema.optionalKey(Schema.String),
+  /** Oldest first. */
+  messages: Schema.Array(TranscriptMessage),
+  /** Pass back as cursor to read older messages; absent when there are none. */
+  cursor: Schema.optionalKey(Schema.String),
+})
+
 export const Output = Schema.Struct({
   sessionID: SessionSchema.ID,
   status: Schema.Literal("completed"),
@@ -110,7 +166,7 @@ export const Output = Schema.Struct({
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
   "tools sets exactly what the child can call: pass your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles, for example tools: [tools.read, tools.glob, tools.grep]. You can pass only tools you have. Without tools the child has none, only tools.submit_result when you pass outputSchema. The agent is a prompt and model preset and grants no tools.",
-  "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready.",
+  "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready. Call tools.subagent.transcript({ sessionID }) to read the recent messages of a subagent you started, or of any subagent below it, without prompting it.",
   "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi it is Pi's provider/model.",
   'Vendor-driven children run in the OC++ harness by default: their only tool is execute over the tools you pass. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt as well; OC++ execute over the tools you pass, tool.define handles and submit_result remain available to it over MCP.',
   "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child runs under that directory's own config (agents, MCP servers, plugins, instructions), the agent must be defined there, and the tools you pass must exist there by the same paths. The child keeps that directory when continued.",
@@ -157,7 +213,7 @@ export const Plugin = {
       return text.length > 0 ? text : NO_TEXT
     })
 
-    // A caller reaches only its own children.
+    // A caller reaches only its own children, whether to continue one or to read its transcript.
     const ownChild = Effect.fnUntraced(function* (sessionID: SessionSchema.ID, parentID: SessionSchema.ID) {
       const child = yield* runtime.session
         .get(sessionID)
@@ -167,6 +223,22 @@ export const Plugin = {
       if (child.parentID !== parentID)
         return yield* new ToolFailure({ message: `Session ${child.id} is not a child of the current session` })
       return child
+    })
+    // A caller reads the transcript of any of its descendants: a child, a grandchild and so on, up to
+    // MAX_DESCENDANT_DEPTH levels down. Only a direct child can be continued.
+    const ownDescendant = Effect.fnUntraced(function* (sessionID: SessionSchema.ID, ancestorID: SessionSchema.ID) {
+      const target = yield* runtime.session
+        .get(sessionID)
+        .pipe(
+          Effect.mapError((error) => new ToolFailure({ message: `Subagent session not found: ${sessionID}`, error })),
+        )
+      let parentID = target.parentID
+      for (let depth = 0; depth < MAX_DESCENDANT_DEPTH && parentID !== undefined; depth++) {
+        if (parentID === ancestorID) return target
+        const parent = yield* runtime.session.get(parentID).pipe(Effect.option)
+        parentID = Option.isSome(parent) ? parent.value.parentID : undefined
+      }
+      return yield* new ToolFailure({ message: `Session ${target.id} is not a descendant of the current session` })
     })
 
     yield* ctx.tool
@@ -197,6 +269,81 @@ export const Plugin = {
                 metadata: { count: models.length },
               })),
             ),
+        })
+        draft.add({
+          name: "transcript",
+          options: { namespace: name, readOnly: true },
+          description: [
+            "Reads the recent messages of a subagent you started, or of any subagent below it, by its sessionID, without prompting it. Returns up to limit of the newest messages oldest first, and a cursor for older ones.",
+            "Assistant messages carry their text; pass include: [\"reasoning\"] or [\"tools\"] for reasoning and tool calls. Long texts are clipped.",
+          ].join("\n"),
+          input: TranscriptInput,
+          output: TranscriptOutput,
+          execute: (input, context) =>
+            Effect.gen(function* () {
+              const child = yield* ownDescendant(input.sessionID, context.sessionID)
+              const limit =
+                input.limit === undefined || !Number.isFinite(input.limit)
+                  ? TRANSCRIPT_LIMIT
+                  : Math.min(TRANSCRIPT_MAX, Math.max(1, Math.floor(input.limit)))
+              const include = {
+                reasoning: input.include?.includes("reasoning") ?? false,
+                tools: input.include?.includes("tools") ?? false,
+              }
+              // limit counts returned entries, and records with nothing to show are skipped, so pages are read until
+              // limit entries are found, history runs out, or limit × TRANSCRIPT_SCAN records were scanned. The cursor
+              // then names the last record scanned, so the next call resumes exactly there.
+              const budget = limit * TRANSCRIPT_SCAN
+              const found: TranscriptEntry[] = []
+              let scanned = 0
+              let last: SessionMessage.ID | undefined = input.cursor
+              let more = true
+              while (more && found.length < limit && scanned < budget) {
+                const take = Math.min(TRANSCRIPT_MAX, budget - scanned)
+                // One extra record tells whether older ones remain.
+                const page = yield* runtime.session
+                  .messages({
+                    sessionID: child.id,
+                    order: "desc",
+                    limit: take + 1,
+                    ...(last === undefined ? {} : { cursor: { id: last, direction: "next" as const } }),
+                  })
+                  .pipe(
+                    Effect.mapError(
+                      (error) => new ToolFailure({ message: `Failed to read subagent transcript: ${child.id}`, error }),
+                    ),
+                  )
+                const records = page.slice(0, take)
+                more = page.length > take
+                for (const [index, message] of records.entries()) {
+                  scanned++
+                  last = message.id
+                  const entry = transcriptEntry(message, include)
+                  if (entry !== undefined) found.push(entry)
+                  if (found.length === limit) {
+                    more = more || index < records.length - 1
+                    break
+                  }
+                }
+              }
+              const messages = found.toReversed()
+              const cursor = more ? last : undefined
+              return {
+                output: {
+                  sessionID: child.id,
+                  ...(child.title === undefined ? {} : { title: child.title }),
+                  ...(child.agent === undefined ? {} : { agent: child.agent }),
+                  messages,
+                  ...(cursor === undefined ? {} : { cursor }),
+                },
+                content: [
+                  `Transcript of subagent session ${child.id}: ${messages.length === 0 ? "no messages" : `${messages.length} messages, oldest first`}.`,
+                  ...untrusted("Subagent transcript", renderTranscript(messages)),
+                  ...(cursor === undefined ? [] : [`Older messages remain: pass cursor "${cursor}" to read them.`]),
+                ].join("\n"),
+                metadata: { sessionID: child.id, count: messages.length },
+              }
+            }),
         })
         draft.add({
           name,
@@ -912,6 +1059,101 @@ function unsupportedModel(
     ].join(" "),
     ...(error === undefined ? {} : { error }),
   })
+}
+
+type TranscriptEntry = typeof TranscriptMessage.Type
+type TranscriptCall = typeof TranscriptToolCall.Type
+
+function clip(text: string) {
+  return text.length > TRANSCRIPT_TEXT ? { text: text.slice(0, TRANSCRIPT_TEXT) + "…", clipped: true } : { text, clipped: false }
+}
+
+/**
+ * One stored message as a caller may read it, or nothing for records it has no use for (switches, displays,
+ * invocations, system updates). Tool metadata is never read: it carries Code Mode traces with private input and
+ * submitted output.
+ */
+function transcriptEntry(
+  message: SessionMessage.Info,
+  include: { readonly reasoning: boolean; readonly tools: boolean },
+): TranscriptEntry | undefined {
+  let clipped = false
+  const take = (value: string) => {
+    const result = clip(value)
+    if (result.clipped) clipped = true
+    return result.text
+  }
+  const marked = () => (clipped ? { clipped: true } : {})
+  switch (message.type) {
+    case "user":
+    case "synthetic":
+      return { id: message.id, role: message.type, text: take(message.text), ...marked() }
+    case "compaction":
+      return message.status === "failed"
+        ? undefined
+        : { id: message.id, role: "compaction", text: take(message.summary), ...marked() }
+    case "assistant": {
+      const text = take(message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(""))
+      const reasoning = include.reasoning
+        ? message.content.flatMap((part) => (part.type === "reasoning" ? [part.text] : [])).join("\n")
+        : ""
+      const calls = include.tools
+        ? message.content.flatMap((part) => (part.type === "tool" ? [transcriptCall(part, take)] : []))
+        : []
+      const error = message.error === undefined ? undefined : take(message.error.message)
+      if (text === "" && reasoning === "" && calls.length === 0 && error === undefined) return undefined
+      return {
+        id: message.id,
+        role: "assistant",
+        text,
+        ...(reasoning === "" ? {} : { reasoning: take(reasoning) }),
+        ...(calls.length === 0 ? {} : { tools: calls }),
+        ...(error === undefined ? {} : { error }),
+        ...marked(),
+      }
+    }
+    default:
+      return undefined
+  }
+}
+
+/** A tool call's name, status, input and model-visible result. Never its metadata. */
+function transcriptCall(part: SessionMessage.AssistantTool, take: (value: string) => string): TranscriptCall {
+  const state = part.state
+  const input =
+    state.status === "streaming"
+      ? state.input
+      : part.name === "execute" && typeof state.input.code === "string"
+        ? state.input.code
+        : (JSON.stringify(state.input) ?? "")
+  const result =
+    state.status === "completed"
+      ? state.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n")
+      : state.status === "error"
+        ? state.error.message
+        : undefined
+  return {
+    name: part.name,
+    status: state.status,
+    input: take(input),
+    ...(result === undefined ? {} : { result: take(result) }),
+  }
+}
+
+function renderTranscript(messages: ReadonlyArray<TranscriptEntry>) {
+  return messages
+    .map((message) =>
+      [
+        `[${message.role}] ${message.text}`,
+        ...(message.reasoning === undefined ? [] : [`[reasoning] ${message.reasoning}`]),
+        ...(message.tools ?? []).map(
+          (call) =>
+            `[tool ${call.name} ${call.status}] ${call.input}${call.result === undefined ? "" : `\n[result] ${call.result}`}`,
+        ),
+        ...(message.error === undefined ? [] : [`[error] ${message.error}`]),
+      ].join("\n"),
+    )
+    .join("\n\n")
 }
 
 /** Narrows a log item to a child execution lifecycle event that carries a Session ID. */

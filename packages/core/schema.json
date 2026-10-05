@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "3c046595-5c4e-4df8-b58b-6eac2c5171d9",
-  "prevIds": ["740b833f-1408-45c0-98df-41c9d24af227"],
+  "id": "2c157cd4-51c6-443f-9ccf-e7a686c32c0c",
+  "prevIds": ["3c046595-5c4e-4df8-b58b-6eac2c5171d9"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -1161,6 +1161,16 @@
       "default": null,
       "generated": null,
       "name": "status",
+      "entityType": "columns",
+      "table": "session_external"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "harness",
       "entityType": "columns",
       "table": "session_external"
     },

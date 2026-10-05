@@ -10,6 +10,8 @@ import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
 import type { ToolLists } from "../tool/lists.js"
 import { SessionMessageTable } from "../session/sql.js"
+import type { CodeModeCompletion } from "../session/codemode-completion.js"
+import { CodeModeChildren } from "./children.js"
 import { limits } from "./limits.js"
 import { CodeModeBindingTable, CodeModeExecutionTable, CodeModeJournalTable, CodeModeReservationTable } from "./sql.js"
 
@@ -111,6 +113,12 @@ export interface Interface {
    * Undefined when the execution is no longer running.
    */
   readonly resume: (executionID: string) => Effect.Effect<Resumable | undefined>
+  /**
+   * The child sessions an execution's journaled calls named, with each call's outcome; a call that
+   * never settled is interrupted. Lets a notification written after a restart list them as the live
+   * run would have. Empty once the execution is discarded.
+   */
+  readonly children: (executionID: string) => Effect.Effect<ReadonlyArray<CodeModeCompletion.Child>>
   readonly get: (executionID: string) => Effect.Effect<
     | {
         readonly id: string
@@ -614,6 +622,20 @@ const layer = Layer.effect(
         .pipe(Effect.orDie),
     )
 
+    const children: Interface["children"] = Effect.fn("CodeModeStore.children")((executionID) =>
+      db
+        .select({
+          status: CodeModeJournalTable.status,
+          output: CodeModeJournalTable.output,
+          progress: CodeModeJournalTable.progress,
+        })
+        .from(CodeModeJournalTable)
+        .where(eq(CodeModeJournalTable.execution_id, executionID))
+        .orderBy(CodeModeJournalTable.call_index)
+        .all()
+        .pipe(Effect.orDie, Effect.map(CodeModeChildren.fromJournal)),
+    )
+
     yield* recover()
 
     return Service.of({
@@ -628,6 +650,7 @@ const layer = Layer.effect(
       discard,
       recover,
       resume,
+      children,
       get,
       bindings: readBindings,
       reservations,

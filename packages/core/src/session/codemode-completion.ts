@@ -16,6 +16,8 @@ export const deliver = Effect.fnUntraced(function* (
     kind?: string
     /** Media returned by the execution's tool calls, which Code Mode values cannot carry to the model. */
     attachments?: { readonly files: ReadonlyArray<FileAttachment>; readonly note: string }
+    /** Child sessions the execution's tool calls started or continued, listed whether or not the program kept their IDs. */
+    children?: ReadonlyArray<Child>
   },
 ) {
   if (input.status === "running") return
@@ -37,9 +39,11 @@ export const deliver = Effect.fnUntraced(function* (
   // The job carries the bounded execution summary: saved notebook names, diagnostics, and a small
   // preview. The notebook itself holds the durable output.
   const summary =
-    ((input.status === "completed" ? input.output : input.error) ??
-      "Execution " + input.id + " is " + state + " and saved nothing.") +
-    (input.attachments ? "\n\n" + input.attachments.note : "")
+    withChildren(
+      (input.status === "completed" ? input.output : input.error) ??
+        "Execution " + input.id + " is " + state + " and saved nothing.",
+      input.children,
+    ) + (input.attachments ? "\n\n" + input.attachments.note : "")
   const metadata = {
     source: "codemode",
     executionID: input.id,
@@ -75,6 +79,38 @@ export const deliver = Effect.fnUntraced(function* (
   })
   if (input.notificationID) yield* jobs.completeBackground(input.notificationID)
 })
+
+/** Where a child session's work stood when the execution that called it ended. */
+export type ChildStatus = "running" | "completed" | "failed" | "interrupted"
+
+export type Child = { readonly sessionID: string; readonly status: ChildStatus }
+
+const MAX_LISTED_CHILDREN = 20
+// Session IDs are harness-generated, so a well-formed one is safe on a harness-trusted line. Anything
+// else a tool put in its metadata is dropped instead of reaching the model outside an untrusted block.
+const CHILD_SESSION_ID = /^ses[A-Za-z0-9_-]{1,96}$/
+
+/**
+ * Adds one harness-written line naming the execution's child sessions right after the summary's
+ * header line, so it survives the summary's truncation from the end. It carries only IDs and
+ * statuses, never titles or other text a child controls.
+ */
+function withChildren(summary: string, children: ReadonlyArray<Child> | undefined) {
+  const valid = (children ?? []).filter((child) => CHILD_SESSION_ID.test(child.sessionID))
+  if (valid.length === 0) return summary
+  const listed = valid
+    .slice(0, MAX_LISTED_CHILDREN)
+    .map((child) => child.sessionID + " (" + child.status + ")")
+    .join(", ")
+  const more = valid.length > MAX_LISTED_CHILDREN ? ", and " + (valid.length - MAX_LISTED_CHILDREN) + " more" : ""
+  const line =
+    "Subagent sessions: " +
+    listed +
+    more +
+    ". Pass a sessionID to tools.subagent to continue one, or to tools.subagent.transcript to read it."
+  const header = summary.indexOf("\n")
+  return header === -1 ? summary + "\n" + line : summary.slice(0, header) + "\n" + line + summary.slice(header)
+}
 
 /** What the model reads for a command's or event's latest outcome, counting the ones it replaces. */
 function outcome(

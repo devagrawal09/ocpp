@@ -441,6 +441,11 @@ if (!completed) write(result(0, inputs.slice(1)))
       path.join(dir.path, "codex"),
       `#!${process.execPath}
 const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n")
+if (process.argv[2] === "debug" && process.argv[3] === "models") {
+  if (process.env.FAKE_CODEX_CATALOG_FAILS) process.exit(3)
+  write({ models: [] })
+  process.exit(0)
+}
 if (process.argv[2] === "app-server") {
   for await (const line of console) {
     const message = JSON.parse(line)
@@ -516,6 +521,11 @@ if (process.argv[2] === "app-server") {
       `#!${process.execPath}
 const fs = require("node:fs")
 const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n")
+if (process.argv[2] === "debug" && process.argv[3] === "models") {
+  if (process.env.FAKE_CODEX_CATALOG_FAILS) process.exit(3)
+  write({ models: [] })
+  process.exit(0)
+}
 if (process.argv[2] === "app-server") {
   for await (const line of console) {
     const message = JSON.parse(line)
@@ -525,9 +535,6 @@ if (process.argv[2] === "app-server") {
       write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [] } } })
     else write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [{ id: "t" }] } } })
   }
-} else if (process.argv[2] === "debug") {
-  if (process.env.FAKE_CODEX_CATALOG_FAILS) process.exit(3)
-  write({ models: [{ slug: "gpt-5.6-sol", tool_mode: "code_mode_only", multi_agent_version: "v2", supports_search_tool: true }] })
 } else if (process.argv[2] === "mcp") {
   write([
     { name: "personal", enabled: true },
@@ -621,10 +628,7 @@ if (process.argv[2] === "app-server") {
       expect(invocations[3].args).toEqual(expect.arrayContaining(["resume", "fake-thread", "--image"]))
       for (const invocation of invocations) {
         expect(invocation.instructions).toBe("OC++ system prompt for Codex")
-        // The catalog stops Codex from wrapping tools in its own code mode, sub-agents and deferred search.
-        expect(JSON.parse(invocation.catalog!)).toEqual({
-          models: [{ slug: "gpt-5.6-sol", supports_search_tool: false }],
-        })
+        expect(JSON.parse(invocation.catalog!)).toEqual({ models: [] })
         expect(invocation.args).toEqual(
           expect.arrayContaining([
             "features.shell_tool=false",

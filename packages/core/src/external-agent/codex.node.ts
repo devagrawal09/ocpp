@@ -6,6 +6,7 @@ import path from "node:path"
 import { Schema } from "effect"
 import { ExternalAgentDriver } from "./driver.js"
 import { ExternalAgentEffort } from "./effort.js"
+import { ExternalAgentModels } from "./models.js"
 import { ExternalAgentBridge } from "./bridge.node.js"
 import { CodexHistory } from "./codex-history.node.js"
 import { imageMimes } from "../session/runner/to-llm-message.js"
@@ -60,12 +61,14 @@ export const CodexDriver: ExternalAgentDriver.Driver = {
       // Holds the OC++ harness's instructions and the images delivered during this run.
       const workspace = await mkdtemp(path.join(tmpdir(), "ocpp-codex-"))
       owned.workspace = workspace
+      // Read at every run, so an alias such as sol runs the newest model Codex lists for it.
+      const listed = await catalog(options.signal)
       if (options.harness.type === "ocpp") {
         await writeFile(path.join(workspace, "instructions.md"), options.harness.system)
-        await writeFile(path.join(workspace, "catalog.json"), await catalog(options.signal))
+        await writeFile(path.join(workspace, "catalog.json"), harnessCatalog(listed.text))
       }
       const settings = configure(
-        options,
+        { ...options, model: ExternalAgentModels.resolve(options.model, listed.models) },
         bridge,
         workspace,
         options.harness.type === "ocpp" ? await servers(options.directory, options.signal) : [],
@@ -152,12 +155,51 @@ export async function input(message: ExternalAgentDriver.Input, directory: strin
   return [...parts, { type: "text", text: `[Attached ${names.join(", ")}]` }]
 }
 
+/** Codex's own model catalog as `codex debug models` prints it, and the models in it. */
+export async function catalog(signal: AbortSignal) {
+  const text = await codex(["debug", "models"], signal)
+  return {
+    text,
+    models: Schema.decodeUnknownSync(Listing)(text).models.map(
+      (model): ExternalAgentModels.Model => ({
+        id: model.slug,
+        listed: model.visibility === "list",
+        efforts: (model.supported_reasoning_levels ?? []).map((level) => level.effort),
+        ...(model.upgrade
+          ? {
+              upgrade: {
+                id: model.upgrade.model,
+                ...(model.upgrade.migration_markdown === undefined
+                  ? {}
+                  : { message: model.upgrade.migration_markdown }),
+              },
+            }
+          : {}),
+      }),
+    ),
+  }
+}
+const Listing = Schema.fromJsonString(
+  Schema.Struct({
+    models: Schema.Array(
+      Schema.Struct({
+        slug: Schema.String,
+        visibility: Schema.optional(Schema.String),
+        supported_reasoning_levels: Schema.optional(Schema.Array(Schema.Struct({ effort: Schema.String }))),
+        upgrade: Schema.optional(
+          Schema.NullOr(Schema.Struct({ model: Schema.String, migration_markdown: Schema.optional(Schema.String) })),
+        ),
+      }),
+    ),
+  }),
+)
+
 /**
- * Codex's own model catalog with the per-model switches that force its JavaScript code mode, its sub-agent tools and
- * deferred tool search turned off, so OC++'s execute is offered to the model directly.
+ * The catalog with the per-model switches that force Codex's JavaScript code mode, its sub-agent tools and deferred
+ * tool search turned off, so OC++'s execute is offered to the model directly.
  */
-async function catalog(signal: AbortSignal) {
-  const parsed = Schema.decodeUnknownSync(Catalog)(await codex(["debug", "models"], signal))
+function harnessCatalog(text: string) {
+  const parsed = Schema.decodeUnknownSync(Catalog)(text)
   return JSON.stringify({
     ...parsed,
     models: parsed.models.map((model) => ({

@@ -39,7 +39,7 @@ it.live("lists session drivers and selects one through the session model", () =>
     expect(drivers.status).toBe(200)
     expect(drivers.body.data).toEqual([
       expect.objectContaining({ id: "claude", name: "Claude Code", available: false, model: "opus" }),
-      expect.objectContaining({ id: "codex", name: "Codex", available: false, model: "gpt-5.6-sol" }),
+      expect.objectContaining({ id: "codex", name: "Codex", available: false, model: "sol" }),
       expect.objectContaining({ id: "pi", name: "Pi", available: false }),
     ])
     expect(drivers.body.data[0].models).toEqual(["opus", "sonnet", "haiku", "fable"])

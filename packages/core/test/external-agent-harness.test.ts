@@ -23,6 +23,7 @@ import { CodeModeResume } from "@ocpp/core/codemode/resume"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Database } from "@ocpp/core/database/database"
 import { ExternalAgentDriver } from "@ocpp/core/external-agent/driver"
+import type { ExternalAgentModels } from "@ocpp/core/external-agent/models"
 import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
 import { ExternalAgentSession } from "@ocpp/core/external-agent/session"
 import { Job } from "@ocpp/core/job"
@@ -71,6 +72,8 @@ const vendor = {
   wire: [] as unknown[],
   sessions: new Map<string, string>(),
   turn: (async () => {}) as Turn,
+  /** Codex's model catalog as `codex debug models` would list it. */
+  catalog: [] as ReadonlyArray<ExternalAgentModels.Model>,
 }
 /** Delivered input as text, each attachment by its type. */
 const plain = (input: ExternalAgentDriver.Input) =>
@@ -113,6 +116,7 @@ const fake = (provider: ExternalSession.Provider): ExternalAgentDriver.Driver =>
 const drivers = vendorDrivers({
   available: async (provider) => vendor.ready[provider],
   driver: async (provider) => fake(provider),
+  models: async (provider) => (provider === "codex" ? vendor.catalog : []),
 })
 const transport = Layer.succeed(
   SessionModelTransport.Service,
@@ -987,11 +991,42 @@ describe("subagent drivers", () => {
       expect(vendor.runs.at(-1)?.harness.type).toBe("ocpp")
       const overridden = yield* call(env, { driver: "codex" })
       expect(overridden._tag).toBe("Success")
-      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "gpt-5.6-sol" })
+      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "sol" })
       expect(SessionDriver.of((yield* child(env))?.model)).toBe("codex")
       if (overridden._tag === "Success")
         expect(overridden.success.content).toEqual([{ type: "text", text: expect.stringContaining("Child answer") }])
     }),
+  )
+
+  it.live("a pinned Codex model hears of its newer version, and an effort its model lacks is refused", () =>
+    Effect.gen(function* () {
+      vendor.catalog = [
+        { id: "gpt-6.1-sol", listed: true, efforts: ["low", "high"] },
+        { id: "gpt-5.6-sol", listed: true, efforts: ["low", "high"] },
+      ]
+      const env = yield* setup(ref("claude", "opus"))
+      vendor.turn = say("Child answer")
+      const notice = (result: Effect.Success<ReturnType<typeof call>>) =>
+        result._tag === "Success"
+          ? Schema.decodeUnknownSync(SubagentTool.Output)(result.success.output).notice
+          : "failed"
+      const failure = (result: Effect.Success<ReturnType<typeof call>>) =>
+        result._tag === "Failure" ? result.failure.message : "succeeded"
+      expect(notice(yield* call(env, { driver: "codex", model: "gpt-5.6-sol" }))).toBe(
+        'Codex model gpt-5.6-sol has a newer version: gpt-6.1-sol. Pass model "sol" to always run the newest sol.',
+      )
+      expect(notice(yield* call(env, { driver: "codex", model: "sol#high" }))).toBeUndefined()
+      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "sol", effort: "high" })
+      expect(failure(yield* call(env, { driver: "codex", model: "sol#max" }))).toContain(
+        "sol (gpt-6.1-sol) does not support effort max. Use one of: low, high.",
+      )
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          vendor.catalog = []
+        }),
+      ),
+    ),
   )
 
   it.live("an ocpp parent gives an ocpp child, and the native harness is refused for it", () =>

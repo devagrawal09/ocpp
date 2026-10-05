@@ -177,10 +177,32 @@ describe("HttpApiCodegen.generate", () => {
     const Path = Schema.String.pipe(Schema.brand("Path"))
 
     expect(() =>
-      emitEffectShape(compileContract(api(HttpApiEndpoint.get("get", "/session", { success: Path }))), {
+      emitEffectShape(compileContract(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String }))), {
         typeReferences: [{ schema: Path, name: "Path", import: 'import type { Path } from "@example/schema/path"' }],
       }),
-    ).toThrow("Branded Effect type reference requires a brands annotation: Path")
+    ).toThrow("Branded Effect type reference requires a brands annotation: Path (Path)")
+  })
+
+  test("rejects inline branded endpoint schemas without a brands annotation", () => {
+    expect(() =>
+      compileContract(
+        api(
+          HttpApiEndpoint.get("get", "/session/:id", {
+            params: { id: Schema.String.pipe(Schema.brand("SessionID")) },
+            success: Schema.String,
+          }),
+        ),
+      ),
+    ).toThrow("Branded schema requires a brands annotation: session.get.params (SessionID)")
+    expect(() =>
+      compileContract(
+        api(
+          HttpApiEndpoint.get("get", "/session", {
+            success: Schema.Struct({ data: Schema.Array(Schema.optional(Schema.Finite.pipe(Schema.brand("USD")))) }),
+          }),
+        ),
+      ),
+    ).toThrow("Branded schema requires a brands annotation: session.get.success (USD)")
   })
 
   test("allows composed Effect outputs to use an authoritative named type", () => {

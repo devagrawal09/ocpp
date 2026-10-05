@@ -218,7 +218,11 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
             ),
             attachment.detach,
           ).pipe(
-            Effect.catchReason("SocketError", "SocketCloseError", () => Effect.void),
+            // A client may also disconnect before the upgrade completes; neither case is a server defect.
+            Effect.catchReasons("SocketError", {
+              SocketCloseError: () => Effect.void,
+              SocketOpenError: () => Effect.void,
+            }),
             Effect.orDie,
           )
           return HttpServerResponse.empty()

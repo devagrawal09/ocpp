@@ -460,15 +460,10 @@ function effectTypeReferences(input: ReadonlyArray<EffectTypeReference>) {
       name === undefined
         ? undefined
         : (document.references.nonRecursives.find((item) => item.$ref === name)?.code.Type ?? name)
-    // `Schema.brand` keeps its identifier only on the schema value, so an unannotated brand would silently erase.
-    if (
-      "identifier" in reference.schema &&
-      "schema" in reference.schema &&
-      Schema.isSchema(reference.schema.schema) &&
-      !type?.includes("Brand.Brand<")
-    ) {
+    const brand = unannotatedBrand(reference.schema)
+    if (brand !== undefined) {
       throw new GenerationError({
-        reason: `Branded Effect type reference requires a brands annotation: ${reference.name}`,
+        reason: `Branded Effect type reference requires a brands annotation: ${reference.name} (${brand})`,
       })
     }
     if (type?.includes("Brand.Brand<") && !brands.has(type)) brands.set(type, value)
@@ -1266,6 +1261,30 @@ function brandRepresentation(representation: SchemaRepresentation.Representation
 
 const isBrands = Schema.is(Schema.Array(Schema.String))
 
+// `Schema.brand` keeps its identifier only on the schema value and leaves the AST untouched, so a brand without the
+// `brands` annotation would silently erase. Walk the schema values (fields, members, wrapped schemas) to find one.
+function unannotatedBrand(value: unknown, seen = new Set<unknown>()): string | undefined {
+  if (typeof value !== "object" && typeof value !== "function") return undefined
+  if (value === null || seen.has(value)) return undefined
+  seen.add(value)
+  const schema = Schema.isSchema(value)
+  if (
+    schema &&
+    "identifier" in value &&
+    typeof value.identifier === "string" &&
+    "schema" in value &&
+    Schema.isSchema(value.schema) &&
+    ![value.ast.annotations, ...(value.ast.checks ?? []).map((check) => check.annotations)].some((annotations) =>
+      isBrands(annotations?.brands),
+    )
+  )
+    return value.identifier
+  if (!schema && !Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype) return undefined
+  return Object.values(value)
+    .map((child) => unannotatedBrand(child, seen))
+    .find((found) => found !== undefined)
+}
+
 function mapRepresentationChildren(
   representation: SchemaRepresentation.Representation,
   f: (representation: SchemaRepresentation.Representation) => SchemaRepresentation.Representation,
@@ -1383,6 +1402,12 @@ function normalizeTransport(
   operation: string,
 ) {
   if (schema === undefined) return undefined
+  const brand = unannotatedBrand(schema)
+  if (brand !== undefined) {
+    throw new GenerationError({
+      reason: `Branded schema requires a brands annotation: ${operation}.${source} (${brand})`,
+    })
+  }
   if (isStreamSchema(schema)) return { schema, effectPortable: true } as const
   if (!metadataPortable(schema.ast, new Set())) {
     throw new GenerationError({ reason: `Unportable schema: ${operation}.${source}` })

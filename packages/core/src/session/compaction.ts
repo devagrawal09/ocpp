@@ -83,16 +83,26 @@ export type ManualInput = {
   readonly prepare: SessionModelRequest.Interface["prepare"]
 }
 
+export type GeneratedInput = {
+  readonly session: SessionSchema.Info
+  readonly messages: readonly SessionMessage.Info[]
+  readonly reason: SessionMessage.Compaction["reason"]
+  readonly inputID?: SessionMessage.ID
+  readonly started?: boolean
+  readonly generate: (
+    prompt: string,
+    delta: (text: string) => Effect.Effect<void>,
+  ) => Effect.Effect<{ readonly text: string; readonly usage?: SessionUsage.Recorded }, unknown>
+}
+
 type Plan = {
   readonly session: SessionSchema.Info
-  readonly resolved: SessionRunnerModel.Resolved
   readonly reason: SessionMessage.Compaction["reason"]
   readonly prompt: string
   readonly recent: string
   readonly inputID?: SessionMessage.ID
   readonly started?: boolean
-  readonly prepare: SessionModelRequest.Interface["prepare"]
-}
+} & (Pick<AutoInput, "resolved" | "prepare"> | Pick<GeneratedInput, "generate">)
 
 export type Outcome =
   | Pick<SessionMessage.CompactionCompleted, "status">
@@ -103,6 +113,7 @@ export interface Interface extends State.Transformable<Draft> {
   readonly required: (input: RequiredInput) => boolean
   readonly compact: (input: AutoInput) => Effect.Effect<Outcome>
   readonly compactManual: (input: ManualInput) => Effect.Effect<Outcome>
+  readonly compactWith: (input: GeneratedInput) => Effect.Effect<Outcome>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionCompaction") {}
@@ -284,36 +295,52 @@ export const layer = Layer.effect(
             })
           : Effect.void,
       )
-      const prepared = yield* plan.prepare({
-        scope: { session: plan.session, agentID: Agent.ID.make("compaction"), model: plan.resolved },
-        transcript: { system: [], messages: [Message.user(plan.prompt)] },
-        contextHooks: false,
-      })
-      yield* llm.stream(prepared.request, prepared.options).pipe(
-        Stream.runForEach((event) => {
-          if (LLMEvent.is.providerError(event))
-            failure = {
-              type: event.classification === "context-overflow" ? "provider.invalid-request" : "provider.error",
-              message: event.message,
+      yield* Effect.gen(function* () {
+        if ("generate" in plan) {
+          const result = yield* plan
+            .generate(plan.prompt, (text) =>
+              bus.publish(SessionEvent.Compaction.Delta, { sessionID: plan.session.id, text }).pipe(Effect.asVoid),
+            )
+            .pipe(Effect.result)
+          if (result._tag === "Failure") failure = toSessionError(result.failure)
+          if (result._tag === "Success") {
+            chunks.push(result.success.text)
+            usage = result.success.usage
+          }
+          return
+        }
+        const prepared = yield* plan.prepare({
+          scope: { session: plan.session, agentID: Agent.ID.make("compaction"), model: plan.resolved },
+          transcript: { system: [], messages: [Message.user(plan.prompt)] },
+          contextHooks: false,
+        })
+        yield* llm.stream(prepared.request, prepared.options).pipe(
+          Stream.runForEach((event) => {
+            if (LLMEvent.is.providerError(event))
+              failure = {
+                type: event.classification === "context-overflow" ? "provider.invalid-request" : "provider.error",
+                message: event.message,
+              }
+            if (LLMEvent.is.textDelta(event)) {
+              chunks.push(event.text)
+              return bus.publish(SessionEvent.Compaction.Delta, {
+                sessionID: plan.session.id,
+                text: event.text,
+              })
             }
-          if (LLMEvent.is.textDelta(event)) {
-            chunks.push(event.text)
-            return bus.publish(SessionEvent.Compaction.Delta, {
-              sessionID: plan.session.id,
-              text: event.text,
-            })
-          }
-          if (LLMEvent.is.stepFinish(event)) {
-            const step = SessionUsage.record(event.usage, plan.resolved.cost)
-            usage = usage ? SessionUsage.add(usage, step) : step
-          }
-          return Effect.void
-        }),
-        Effect.catchTag("AI.Error", (error) =>
-          Effect.sync(() => {
-            failure = toSessionError(error)
+            if (LLMEvent.is.stepFinish(event)) {
+              const step = SessionUsage.record(event.usage, plan.resolved.cost)
+              usage = usage ? SessionUsage.add(usage, step) : step
+            }
+            return Effect.void
           }),
-        ),
+          Effect.catchTag("AI.Error", (error) =>
+            Effect.sync(() => {
+              failure = toSessionError(error)
+            }),
+          ),
+        )
+      }).pipe(
         Effect.onInterrupt(() =>
           recordUsage.pipe(
             Effect.andThen(
@@ -420,6 +447,17 @@ export const layer = Layer.effect(
         }),
       )
     })
+    const compactWith = Effect.fn("SessionCompaction.compactWith")(function* (input: GeneratedInput) {
+      const content = planContent(input.messages, state.get().tokens)
+      if (!content)
+        return yield* failed({
+          sessionID: input.session.id,
+          reason: input.reason,
+          error: { type: "compaction.unavailable", message: "Nothing to compact yet" },
+          inputID: input.inputID,
+        })
+      return yield* execute({ ...input, ...content })
+    })
     return Service.of({
       transform: state.transform,
       reload: state.reload,
@@ -427,6 +465,7 @@ export const layer = Layer.effect(
       required,
       compact,
       compactManual,
+      compactWith,
     })
   }),
 )

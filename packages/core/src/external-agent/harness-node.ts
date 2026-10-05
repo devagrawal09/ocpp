@@ -1,9 +1,10 @@
 export * as ExternalAgentHarnessNode from "./harness-node.js"
 
-import { Message, type ToolResultValue } from "@ocpp/ai"
+import { Message, isContextOverflow, type ToolResultValue } from "@ocpp/ai"
 import { ProviderShared } from "@ocpp/ai/protocols/shared"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import type { Model } from "@ocpp/schema/model"
+import { Money } from "@ocpp/schema/money"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import type { SessionError } from "@ocpp/schema/session-error"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
@@ -15,6 +16,7 @@ import { CodeModeStore } from "../codemode/store.js"
 import { Database } from "../database/database.js"
 import { Instructions } from "../instructions/index.js"
 import { SessionContext } from "../session/context.js"
+import { SessionCompaction } from "../session/compaction.js"
 import { StepFailedError } from "../session/error.js"
 import { ExternalAgentHarness } from "./harness.js"
 import { SessionEvent } from "../session/event.js"
@@ -46,6 +48,7 @@ const layer = Layer.effect(
     const notebook = yield* CodeModeStore.Service
     const external = yield* ExternalAgentSession.Service
     const context = yield* SessionContext.Service
+    const compaction = yield* SessionCompaction.Service
     const drivers = yield* ExternalAgentDrivers.Service
     const title = yield* SessionTitle.Service
     // Title generation starts once input is visible and must not delay the vendor.
@@ -73,10 +76,23 @@ const layer = Layer.effect(
       // Only a subagent call may run a vendor natively; everything else, including every top-level Session, is harnessed.
       const harness = activation?.harness ?? "ocpp"
       yield* settleStaleToolCalls(store, bus, sessionID)
+      const stale = (yield* store.context(sessionID)).filter(
+        (message): message is SessionMessage.CompactionRunning =>
+          message.type === "compaction" && message.status === "running",
+      )
+      yield* Effect.forEach(stale, (message) =>
+        bus.publish(SessionEvent.Compaction.Failed, {
+          sessionID,
+          reason: message.reason,
+          inputID: message.id,
+          error: { type: "compaction.interrupted", message: "Compaction was interrupted" },
+        }),
+      )
       const selection = yield* context.select(sessionID)
       const agent = selection.agent.id
-      const instructions = yield* Instructions.renderCurrent(selection.instructions)
       const system = Effect.fnUntraced(function* (checkpoint: ReadonlyArray<string>) {
+        const current = yield* context.select(sessionID)
+        const instructions = yield* Instructions.renderCurrent(current.instructions)
         return SessionModelRequest.systemPrompt({
           agent: selection.agent.info,
           tools: selection.tools,
@@ -121,7 +137,68 @@ const layer = Layer.effect(
         }),
         (unsubscribe) => unsubscribe,
       )
-      const state = { idle: true, moved: false, started: false, vendor: undefined as string | undefined }
+      const state = {
+        idle: true,
+        moved: false,
+        started: false,
+        vendor: undefined as string | undefined,
+        compacting: false,
+        continuation: false,
+        overflow: false,
+      }
+      const compact = Effect.fnUntraced(function* (reason: "manual" | "auto", inputID?: SessionMessage.ID) {
+        const current = yield* store.get(sessionID)
+        if (!current) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
+        const outcome = yield* compaction.compactWith({
+          session: current,
+          messages: yield* store.context(sessionID),
+          reason,
+          inputID,
+          started: reason === "manual",
+          generate: (prompt, delta) =>
+            Effect.gen(function* () {
+              const chunks: string[] = []
+              const usage = {
+                tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+                cost: Money.USD.zero,
+              }
+              // OC++ owns the plan and durable result. The vendor only answers a fresh, tool-free summary request.
+              yield* ExternalAgentDriver.execute(sdk, {
+                directory,
+                model: model.id,
+                effort: model.variant === "default" ? undefined : model.variant,
+                history: [],
+                message: [{ type: "text", text: prompt }],
+                harness: {
+                  type: "ocpp",
+                  system: "Summarize the supplied conversation. Do not use tools. Follow the requested summary format.",
+                },
+                gateway: ExternalAgentGateway.make([]),
+                emit: async (event) => {
+                  if (event.type === "text") {
+                    chunks.push(event.delta)
+                    await Effect.runPromise(delta(event.delta))
+                  }
+                  if (event.type === "tool-start") throw new Error("The summary driver attempted tools")
+                  if (event.type !== "usage") return
+                  usage.tokens.input += event.input
+                  usage.tokens.output += event.output
+                  usage.tokens.reasoning += event.reasoning ?? 0
+                  usage.tokens.cache.read += event.cacheRead
+                  usage.tokens.cache.write += event.cacheWrite ?? 0
+                  usage.cost = Money.USD.make(usage.cost + (event.cost ?? 0))
+                },
+                linked: async () => {},
+                checkpointed: async () => {},
+                next: async () => undefined,
+                idle: () => {},
+              })
+              return { text: chunks.join(""), usage }
+            }),
+        })
+        if (outcome.status === "failed") return yield* new StepFailedError({ error: outcome.error })
+        state.vendor = undefined
+      })
 
       const deliver = Effect.fnUntraced(function* (items: ReadonlyArray<SessionInbox.Info>) {
         const messages = yield* Effect.forEach(items, (item) => store.message(item.id))
@@ -141,8 +218,8 @@ const layer = Layer.effect(
                 return undefined
               }
               if (next?.type === "compaction") {
-                yield* refuseCompaction(sessionID, scope, provider)
-                continue
+                state.compacting = true
+                return undefined
               }
             }
             const items = yield* SessionInbox.promoteItems(db, bus, sessionID, state.idle ? scope : "steer")
@@ -258,7 +335,50 @@ const layer = Layer.effect(
 
       const scope = { next: input.promotable ?? "input" }
       while (true) {
-        const history = canonical(yield* store.context(sessionID), model)
+        yield* Effect.uninterruptibleMask((restore) =>
+          Effect.gen(function* () {
+            const requested = yield* SessionInbox.serialized(
+              sessionID,
+              Effect.gen(function* () {
+                const next = yield* SessionInbox.nextPromotable(db, sessionID, scope.next)
+                if (next?.type !== "compaction") return
+                yield* bus.publishAll([
+                  [SessionEvent.InboxDelivered, { sessionID, inboxID: next.id }],
+                  [SessionEvent.Compaction.Started, { sessionID, reason: "manual", recent: "", inputID: next.id }],
+                ])
+                return next.id
+              }),
+            )
+            if (requested === undefined) return
+            yield* restore(compact("manual", requested)).pipe(
+              Effect.onInterrupt(() =>
+                bus.publish(SessionEvent.Compaction.Failed, {
+                  sessionID,
+                  reason: "manual",
+                  inputID: requested,
+                  error: { type: "aborted", message: "Compaction cancelled" },
+                }),
+              ),
+            )
+          }),
+        )
+        state.compacting = false
+        const messages = yield* store.context(sessionID)
+        const boundary = messages.findLast(
+          (message) => message.type === "assistant" || message.type === "user" || message.type === "compaction",
+        )
+        // A completed automatic compaction still owes a continuation if the process stopped before the next attempt.
+        if (
+          !state.started &&
+          input.force &&
+          boundary?.type === "compaction" &&
+          boundary.status === "completed" &&
+          boundary.reason === "auto"
+        ) {
+          state.continuation = true
+          state.overflow = true
+        }
+        const history = canonical(messages, model)
         const settled = answered(history)
         // Input admitted before a restart or failure that the vendor never answered is delivered again, once, with
         // its attachments.
@@ -269,13 +389,22 @@ const layer = Layer.effect(
         const next = yield* take(scope.next)
         scope.next = "input"
         if (state.moved) return yield* move
-        const message = ExternalAgentDriver.join([...unanswered, next ?? []])
-        if (message.length === 0) return DrainResult.Complete()
+        if (state.compacting) continue
+        const message = ExternalAgentDriver.join([
+          ...unanswered,
+          next ?? (state.continuation ? [{ type: "text", text: "Continue from the restored OC++ history." }] : []),
+        ])
+        state.continuation = false
+        if (message.length === 0) {
+          const pending = yield* SessionInbox.nextPromotable(db, sessionID, "input")
+          if (pending?.type === "compaction" || pending?.type === "move") continue
+          return DrainResult.Complete()
+        }
         state.idle = false
         if (!session.parentID && SessionTitle.isUntitled(session))
           yield* FiberMap.run(titles, sessionID, title.generate(sessionID), { onlyIfMissing: true })
         const checkpoint = { value: undefined as string | undefined, vendor: vendorSessionID }
-        yield* ExternalAgentDriver.execute(sdk, {
+        const result = yield* ExternalAgentDriver.execute(sdk, {
           directory,
           model: model.id,
           // The "default" variant is OC++'s name for no explicit effort.
@@ -335,6 +464,8 @@ const layer = Layer.effect(
                   events: stream.diagnostics(),
                 })
               if (checkpoint.value === undefined) return
+              if (Exit.isFailure(exit) && Cause.squash(exit.cause) instanceof ExternalAgentDriver.CompactionError)
+                return
               yield* bus.publish(ExternalSession.Checkpointed, {
                 sessionID,
                 checkpoint: checkpoint.value,
@@ -343,42 +474,20 @@ const layer = Layer.effect(
             }),
           ),
           Effect.mapError((error) => new StepFailedError({ error: toSessionError(error) })),
+          Effect.result,
         )
         state.vendor = checkpoint.vendor
         state.idle = true
+        if (result._tag === "Failure") {
+          if (!compaction.enabled() || state.overflow || !isContextOverflow(result.failure.error.message))
+            return yield* result.failure
+          state.overflow = true
+          yield* compact("auto")
+          state.continuation = true
+        }
         if (state.moved) return yield* move
       }
     }, Effect.scoped)
-
-    // Checked and consumed in one serialized block, like a move: the request may be cancelled until it is delivered.
-    const refuseCompaction = (
-      sessionID: SessionSchema.ID,
-      scope: SessionInbox.Promotable,
-      provider: ExternalSession.Provider,
-    ) =>
-      SessionInbox.serialized(
-        sessionID,
-        Effect.gen(function* () {
-          const next = yield* SessionInbox.nextPromotable(db, sessionID, scope)
-          if (next?.type !== "compaction") return
-          yield* bus.publishAll([
-            [SessionEvent.InboxDelivered, { sessionID, inboxID: next.id }],
-            [SessionEvent.Compaction.Started, { sessionID, reason: "manual", recent: "", inputID: next.id }],
-            [
-              SessionEvent.Compaction.Failed,
-              {
-                sessionID,
-                reason: "manual",
-                error: {
-                  type: "compaction.unsupported",
-                  message: `${SessionDriver.names[provider]} manages its own context; OC++ compaction does not apply to this session.`,
-                },
-                inputID: next.id,
-              },
-            ],
-          ])
-        }),
-      )
 
     return ExternalAgentHarness.Service.of({ drain })
   }),
@@ -390,13 +499,22 @@ const layer = Layer.effect(
  * rewrites it after the checkpoint.
  */
 function canonical(messages: ReadonlyArray<SessionMessage.Info>, model: Model.Ref) {
+  const checkpoints = new Set<string>(
+    messages.filter((message) => message.type === "compaction").map((message) => message.id),
+  )
   return toLLMMessages(messages, model).flatMap((message) => {
     // Current instructions are rendered into each vendor run's system prompt instead.
     if (message.role === "system") return []
     const input = lower(message)
     if (input.length === 0) return []
     // A tool result belongs to the vendor turn that called the tool.
-    return [{ role: message.role === "user" ? ("user" as const) : ("assistant" as const), input }]
+    return [
+      {
+        role: message.role === "user" ? ("user" as const) : ("assistant" as const),
+        input,
+        checkpoint: checkpoints.has(message.id ?? ""),
+      },
+    ]
   })
 }
 
@@ -406,14 +524,16 @@ function canonical(messages: ReadonlyArray<SessionMessage.Info>, model: Model.Re
  * replaying every image and PDF of a long Session into one message would outgrow what a vendor accepts.
  */
 function answered(history: ReturnType<typeof canonical>): ExternalAgentDriver.History[] {
-  return history.slice(0, history.findLastIndex((item) => item.role === "assistant") + 1).map((item) => ({
-    role: item.role,
-    text: item.input
-      .map((part) =>
-        part.type === "text" ? part.text : `[Attached file ${part.name ?? "(unnamed)"} (${part.mime}), not re-sent]`,
-      )
-      .join("\n"),
-  }))
+  return history
+    .slice(0, history.findLastIndex((item) => item.role === "assistant" || item.checkpoint) + 1)
+    .map((item) => ({
+      role: item.role,
+      text: item.input
+        .map((part) =>
+          part.type === "text" ? part.text : `[Attached file ${part.name ?? "(unnamed)"} (${part.mime}), not re-sent]`,
+        )
+        .join("\n"),
+    }))
 }
 
 function isEnqueued(event: Bus.LogItem): event is SessionEvent.InboxEnqueued {
@@ -484,6 +604,7 @@ export const node = makeLocationNode({
     SessionStore.node,
     ExternalAgentSession.node,
     SessionContext.node,
+    SessionCompaction.node,
     ExternalAgentDrivers.node,
     SessionTitle.node,
   ],

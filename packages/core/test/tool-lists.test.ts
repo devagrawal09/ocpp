@@ -147,6 +147,7 @@ describe("ToolLists", () => {
         "read",
         "subagent",
         "subagent.models",
+        "subagent.transcript",
       ])
     }),
   )

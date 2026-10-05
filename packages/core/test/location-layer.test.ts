@@ -758,6 +758,7 @@ describe("LocationServiceMap", () => {
             "skill",
             "subagent",
             "subagent.models",
+            "subagent.transcript",
             "webfetch",
             "websearch",
             "write",

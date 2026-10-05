@@ -36,6 +36,7 @@ export const layer = Layer.effectContext(
           provider: event.data.provider,
           directory: event.data.directory,
           status: "idle",
+          harness: activations.get(event.data.sessionID)?.harness ?? null,
         })
         .onConflictDoUpdate({
           target: ExternalSessionTable.session_id,
@@ -46,6 +47,7 @@ export const layer = Layer.effectContext(
             checkpoint: null,
             history_hash: null,
             notebook: null,
+            ...harnessOf(activations.get(event.data.sessionID)),
           },
         })
         .run()
@@ -115,6 +117,7 @@ export const layer = Layer.effectContext(
                     historyHash: row.history_hash ?? undefined,
                     status: row.status,
                     ...(row.notebook ? { notebook: row.notebook } : {}),
+                    ...(row.harness ? { harness: row.harness } : {}),
                   },
             ),
           ),
@@ -128,7 +131,14 @@ export const layer = Layer.effectContext(
                 }),
               )
             activations.set(sessionID, activation)
-            return Effect.void
+            // A later call that continues this child without naming a harness keeps this one. A child not bound
+            // yet records it when its first drain binds it, while this activation is still held.
+            return db
+              .update(ExternalSessionTable)
+              .set({ harness: activation.harness })
+              .where(eq(ExternalSessionTable.session_id, sessionID))
+              .run()
+              .pipe(Effect.orDie, Effect.asVoid)
           }),
           () =>
             Effect.sync(() => {
@@ -143,7 +153,13 @@ export const layer = Layer.effectContext(
 /** The persisted binding, plus the notebook checkpoint the linked vendor session was started with. */
 export interface Stored extends ExternalSession.Info {
   readonly notebook?: ReadonlyArray<string>
+  /** The harness the last subagent call ran this child with. Absent for a binding no subagent call has held. */
+  readonly harness?: SessionDriver.Harness
 }
+
+/** The harness a rebinding keeps: the active call's, else whatever was stored. */
+const harnessOf = (activation: Activation | undefined) =>
+  activation === undefined ? {} : { harness: activation.harness }
 
 export interface Interface {
   readonly get: (sessionID: ExternalSession.Info["sessionID"]) => Effect.Effect<Stored | undefined>

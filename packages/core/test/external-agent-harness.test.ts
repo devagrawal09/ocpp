@@ -1485,12 +1485,12 @@ describe("subagent drivers", () => {
       )
       expect(tools.map((tool) => tool.type === "tool" && tool.name)).toContain("command_execution")
 
-      // The harness belongs to the call: continuing the same child without it runs in the OC++ harness.
-      vendor.turn = say("Harnessed again")
+      // Continuing the same child without naming a harness keeps the native one it last ran with.
+      vendor.turn = say("Native again")
       const continued = yield* call(env, { sessionID, message: "Continue" })
       expect(continued._tag).toBe("Success")
-      expect(vendor.runs.at(-1)?.harness.type).toBe("ocpp")
-      // Nor does it keep the call's handle, and without tools a child has no execute either.
+      expect(vendor.runs.at(-1)?.harness.type).toBe("native")
+      // It does not keep the earlier call's handle, and without tools a child has no execute either.
       expect(vendor.runs.at(-1)?.gateway.definitions).toEqual([])
     }),
   )
@@ -1577,6 +1577,36 @@ describe("subagent drivers", () => {
       expect(vendor.runs[1]).toMatchObject({ provider: "claude", harness: { type: "ocpp" } })
       expect(vendor.runs[1].message).toContain("Hello child")
       expect(texts(yield* messages(sessionID))).toContain("Direct answer")
+    }),
+  )
+
+  it.live("a continued vendor child keeps the harness it last ran with unless the call names another", () =>
+    Effect.gen(function* () {
+      const env = yield* setup()
+      const external = yield* ExternalAgentSession.Service
+      vendor.turn = say("Child answer")
+      const first = yield* call(env, { driver: "claude", harness: "native" })
+      expect(first._tag).toBe("Success")
+      const sessionID = sessionOf(first)!
+      expect((yield* external.get(sessionID))?.harness).toBe("native")
+      // A direct prompt runs in the OC++ harness without changing what a continuation keeps.
+      vendor.turn = say("Direct answer")
+      yield* env.sessions.prompt({ sessionID, text: "Hello child" })
+      yield* env.sessions.wait(sessionID)
+      expect(vendor.runs[1]).toMatchObject({ harness: { type: "ocpp" } })
+
+      vendor.turn = say("Continued natively")
+      expect((yield* call(env, { sessionID, message: "Continue" }))._tag).toBe("Success")
+      expect(vendor.runs[2]).toMatchObject({ provider: "claude", harness: { type: "native" } })
+
+      vendor.turn = say("Continued harnessed")
+      expect((yield* call(env, { sessionID, message: "Continue harnessed", harness: "ocpp" }))._tag).toBe("Success")
+      expect(vendor.runs[3]).toMatchObject({ harness: { type: "ocpp" } })
+      expect((yield* external.get(sessionID))?.harness).toBe("ocpp")
+
+      vendor.turn = say("Still harnessed")
+      expect((yield* call(env, { sessionID, message: "Continue again" }))._tag).toBe("Success")
+      expect(vendor.runs[4]).toMatchObject({ harness: { type: "ocpp" } })
     }),
   )
 

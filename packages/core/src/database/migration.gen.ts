@@ -54,6 +54,7 @@ import m51 from "./migration/20260927095058_codemode_resume.js"
 import m52 from "./migration/20260927100205_codemode_commands_events.js"
 import m53 from "./migration/20260928161342_tool_lists.js"
 import m54 from "./migration/20260930223025_notebook_checkpoint.js"
+import m55 from "./migration/20261005220037_session_external_harness.js"
 
 export const migrations = [
   m00,
@@ -111,4 +112,5 @@ export const migrations = [
   m52,
   m53,
   m54,
+  m55,
 ] satisfies DatabaseMigration.Migration[]

@@ -74,7 +74,7 @@ export const Input = Schema.Struct({
   }),
   harness: Schema.optionalKey(SessionDriver.Harness).annotate({
     description:
-      "Vendor drivers only. ocpp (default): the vendor's only tool is OC++ execute with this catalog, under the OC++ system prompt. native: the vendor's own tools and prompt, plus OC++ execute, tool.define handles and submit_result over MCP",
+      "Vendor drivers only. ocpp (default): the vendor's only tool is OC++ execute with this catalog, under the OC++ system prompt. native: the vendor's own tools and prompt, plus OC++ execute, tool.define handles and submit_result over MCP. A continued session keeps the harness it last ran with",
   }),
   outputSchema: Schema.optionalKey(SubagentCustomTool.JSONSchema).annotate({
     description:
@@ -170,7 +170,7 @@ export const description = [
   "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi it is Pi's provider/model.",
   'Vendor-driven children run in the OC++ harness by default: their only tool is execute over the tools you pass. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt as well; OC++ execute over the tools you pass, tool.define handles and submit_result remain available to it over MCP.',
   "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child runs under that directory's own config (agents, MCP servers, plugins, instructions), the agent must be defined there, and the tools you pass must exist there by the same paths. The child keeps that directory when continued.",
-  "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent. To continue, pass just { sessionID, message }: the child keeps its agent, title, model, driver, root and tools unless you pass new ones. Only your own direct children can be continued.",
+  "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent. To continue, pass just { sessionID, message }: the child keeps its agent, title, model, driver, harness, root and tools unless you pass new ones. Only your own direct children can be continued.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "The subagent runs to completion and returns its final response as message. With outputSchema it must call tools.submit_result({ message, output }): message is returned in full, and output is returned only as machine data with a short summary in metadata.",
   "input is never shown to either model; it is available directly as `input` in the subagent's Code Mode executions. Pass existing notebook values by reference and describe them in message.",
@@ -473,13 +473,18 @@ export const Plugin = {
                 // configured model's driver, else its caller's.
                 const driver = input.driver ?? SessionDriver.of(existing?.model ?? agent.model ?? parent.model)
                 yield* precheck(driver)
+                // A continued vendor child keeps the harness it last ran with, unless the call names one.
+                const kept =
+                  existing === undefined || driver === undefined || driver === "ocpp"
+                    ? undefined
+                    : (yield* external.get(existing.id))?.harness
                 const selected =
                   reattached !== undefined
                     ? undefined
                     : driver === "ocpp"
                       ? yield* runnerModel(agent)
                       : yield* vendorModel(driver, agent)
-                return { agent, driver, harness: input.harness ?? "ocpp", selected }
+                return { agent, driver, harness: input.harness ?? kept ?? "ocpp", selected }
               })
               // The model for an OC++-run child: requested, else a provider model its agent or caller already uses.
               const runnerModel = Effect.fnUntraced(function* (agent: Agent.Info) {

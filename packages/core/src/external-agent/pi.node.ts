@@ -72,6 +72,7 @@ export const PiDriver: ExternalAgentDriver.Driver = {
       // The OC++ harness keeps Pi's model loop and OC++'s execute, never Pi's read, bash, edit or write.
       ...(options.harness.type === "ocpp" ? { noTools: "builtin" as const } : {}),
     })
+    disableVendorCompaction(result.session)
     await result.session.bindExtensions({})
     const queue = { pending: Promise.resolve() }
     const unsubscribe = result.session.subscribe((event) => {
@@ -103,6 +104,17 @@ export const PiDriver: ExternalAgentDriver.Driver = {
       await options.checkpointed(fingerprint(manager.buildSessionContext().messages))
     }
   },
+}
+
+/** Disable automatic threshold/overflow compaction and reject `/compact`, RPC, and extension requests. */
+export function disableVendorCompaction(session: {
+  setAutoCompactionEnabled(enabled: boolean): void
+  compact(customInstructions?: string): Promise<unknown>
+}) {
+  session.setAutoCompactionEnabled(false)
+  session.compact = async () => {
+    throw new Error("Pi vendor compaction is disabled; OC++ owns context compaction")
+  }
 }
 
 /** Input as Pi's prompt takes it: the text, then each image. Pi has no PDF input. */

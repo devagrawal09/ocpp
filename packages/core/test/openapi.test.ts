@@ -109,6 +109,7 @@ const runtimeLayer = Layer.unwrap(
         synthetic: () => Effect.never,
         wait: () => Effect.die("Unavailable in OpenAPI tests"),
         context: () => Effect.die("Unavailable in OpenAPI tests"),
+        inbox: () => Effect.die("Unavailable in OpenAPI tests"),
       },
       persistentPty: { read: () => Effect.die("Unavailable in OpenAPI tests") },
       location: {

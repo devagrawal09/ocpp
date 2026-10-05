@@ -102,6 +102,7 @@ const runtimeLayer = Layer.unwrap(
         synthetic: (input) => Effect.sync(() => void deliveries.push(input)).pipe(Effect.andThen(Effect.never)),
         wait: () => Effect.die("Unavailable in Tool registry tests"),
         context: () => Effect.die("Unavailable in Tool registry tests"),
+        inbox: () => Effect.die("Unavailable in Tool registry tests"),
       },
       persistentPty: { read: () => Effect.die("Unavailable in Tool registry tests") },
       location: {

@@ -71,6 +71,7 @@ const runtimeLayer = Layer.unwrap(
         synthetic: () => Effect.never,
         wait: () => Effect.die("Unavailable in Plugin tests"),
         context: () => Effect.die("Unavailable in Plugin tests"),
+        inbox: () => Effect.die("Unavailable in Plugin tests"),
       },
       persistentPty: { read: () => Effect.die("Unavailable in Plugin tests") },
       location: {

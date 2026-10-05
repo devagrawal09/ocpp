@@ -32,6 +32,7 @@ export interface Interface {
     | "display"
     | "wait"
     | "context"
+    | "inbox"
   >
   readonly job: Pick<
     Job.Interface,
@@ -105,6 +106,7 @@ export const layerWithCell = (cell: Cell) =>
         display: (input) => require(cell, (runtime) => runtime.session.display(input)),
         wait: (sessionID) => require(cell, (runtime) => runtime.session.wait(sessionID)),
         context: (sessionID) => require(cell, (runtime) => runtime.session.context(sessionID)),
+        inbox: (sessionID) => require(cell, (runtime) => runtime.session.inbox(sessionID)),
       },
       job: {
         start: (input) => require(cell, (runtime) => runtime.job.start(input)),

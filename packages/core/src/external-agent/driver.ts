@@ -74,6 +74,9 @@ export interface Driver {
   readonly run: (options: Options) => Promise<void>
 }
 export class Error extends Schema.TaggedError<Error>()("ExternalAgent.Error", { message: Schema.String }) {}
+export class CompactionError extends Schema.TaggedError<CompactionError>()("ExternalAgent.CompactionError", {
+  message: Schema.String,
+}) {}
 
 export function replay(history: ReadonlyArray<History>) {
   return history.map((item) => `${item.role}:\n${item.text}`).join("\n\n")
@@ -108,20 +111,37 @@ export function omitted(media: Media, reason: string) {
 
 /** Interruption waits for the SDK to relinquish its tools and subprocesses. */
 export function execute(driver: Driver, options: Omit<Options, "signal">) {
-  return Effect.callback<void, Error>((resume) => {
+  return Effect.callback<void, Error | CompactionError>((resume) => {
     const controller = new AbortController()
-    const pending = driver.run({ ...options, signal: controller.signal })
+    const state = { compaction: undefined as CompactionError | undefined }
+    const pending = driver.run({
+      ...options,
+      signal: controller.signal,
+      emit: async (event) => {
+        // Codex has no hard disable control, so its compaction remains a best-effort exception.
+        if (driver.provider !== "codex" && event.type === "status" && event.status === "compacting") {
+          state.compaction = new CompactionError({
+            message: "Vendor compaction is disabled; OC++ owns session compaction",
+          })
+          controller.abort()
+          throw state.compaction
+        }
+        await options.emit(event)
+      },
+    })
     void pending.then(
-      () => resume(Effect.void),
+      () => resume(state.compaction ? Effect.fail(state.compaction) : Effect.void),
       (error: unknown) =>
         resume(
           Effect.fail(
-            new Error({
-              message:
-                typeof error === "object" && error !== null && "message" in error
-                  ? String(error.message)
-                  : String(error),
-            }),
+            state.compaction
+              ? state.compaction
+              : new Error({
+                  message:
+                    typeof error === "object" && error !== null && "message" in error
+                      ? String(error.message)
+                      : String(error),
+                }),
           ),
         ),
     )

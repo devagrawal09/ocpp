@@ -265,11 +265,17 @@ export function configure(
   } satisfies ThreadOptions
   if (options.harness.type === "native")
     return {
-      config: { features: { multi_agent: true }, mcp_servers: mcp },
+      config: {
+        // Defer normal auto-compaction; Codex's independent full-context fallback can still compact.
+        model_auto_compact_token_limit: Number.MAX_SAFE_INTEGER,
+        features: { multi_agent: true },
+        mcp_servers: mcp,
+      },
       thread: { ...common, sandboxMode: "workspace-write", webSearchMode: "live" } satisfies ThreadOptions,
     }
   return {
     config: {
+      model_auto_compact_token_limit: Number.MAX_SAFE_INTEGER,
       features: Object.fromEntries(NATIVE_FEATURES.map((feature) => [feature, false])),
       ...(workspace === undefined
         ? {}

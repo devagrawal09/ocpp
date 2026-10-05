@@ -37,8 +37,23 @@ const MAX_SUMMARY_KEYS = 20
 const CONTINUE_AFTER_RESTART =
   "The server restarted while you were working on this task. Continue from where you left off without repeating completed work."
 
-/** Progress a subagent call records once its child holds the task, so a restart can rejoin that child. */
-const Attached = Schema.Struct({ sessionID: SessionSchema.ID })
+/**
+ * Progress a subagent call records once its child holds the task, so a restart can rejoin that child. Only a
+ * "running" record rejoins: "starting" names a child that exists but may not hold its task yet.
+ */
+const Attached = Schema.Struct({
+  sessionID: SessionSchema.ID,
+  // A record without a status predates "starting" and always meant "running".
+  status: Schema.optionalKey(Schema.Literal("running")),
+})
+/**
+ * Progress a subagent call records as soon as its child exists (created, or resolved for a continuation), so the
+ * child's ID is never lost to a failure or an interruption before it holds its task. It also makes the call resumable
+ * after a restart (a call with no progress is refused): a new child is rejoined if it already admitted the task and is
+ * otherwise given it; a continuation fails, naming the child, since its history cannot show whether the message arrived.
+ */
+const Starting = Schema.Struct({ sessionID: SessionSchema.ID, status: Schema.Literal("starting") })
+const Recovered = Schema.Union([Attached, Starting])
 
 /** How many ancestors the transcript tool walks from a session to find its caller. */
 const MAX_DESCENDANT_DEPTH = 16
@@ -355,15 +370,65 @@ export const Plugin = {
             Effect.gen(function* () {
               // After a restart the call rejoins the child that already holds its task. Its checks
               // passed and its prompt was admitted before the restart, so none of that repeats.
-              const reattached =
+              // A "starting" record is not rejoined (see Starting): the call starts over as if it never ran.
+              const recovered =
                 context.recovered === undefined
                   ? undefined
-                  : yield* Schema.decodeUnknownEffect(Attached)(context.recovered).pipe(
-                      Effect.flatMap((attached) => runtime.session.get(attached.sessionID)),
+                  : yield* Schema.decodeUnknownEffect(Recovered)(context.recovered).pipe(
                       Effect.mapError(
                         (error) => new ToolFailure({ message: "Subagent session to rejoin was not found", error }),
                       ),
                     )
+              const recoveredChild =
+                recovered === undefined
+                  ? undefined
+                  : yield* runtime.session
+                      .get(recovered.sessionID)
+                      .pipe(
+                        Effect.mapError(
+                          (error) => new ToolFailure({ message: "Subagent session to rejoin was not found", error }),
+                        ),
+                      )
+              if (recoveredChild !== undefined && recoveredChild.parentID !== context.sessionID)
+                return yield* new ToolFailure({
+                  message: `Session ${recoveredChild.id} is not a child of the current session`,
+                })
+              // A continued child already holds earlier work, so it cannot tell whether this call's message arrived
+              // before the restart. Rather than risk delivering it twice, the call fails and names the child.
+              if (recovered?.status === "starting" && input.sessionID !== undefined)
+                return yield* new ToolFailure({
+                  message: `The server restarted while continuing subagent session ${recovered.sessionID}, which may or may not have received the message. Read it with tools.subagent.transcript and continue it with its sessionID if needed.`,
+                  metadata: failure(recovered.sessionID, "setup-failed"),
+                })
+              // A "starting" child that already holds work, in its history or its inbox, admitted this call's prompt
+              // before the restart and is rejoined like a "running" one. An empty one is adopted as this call's new
+              // child, so the restart neither delivers the task twice nor leaves an orphan behind.
+              const holdsTask =
+                recoveredChild === undefined || recovered?.status !== "starting"
+                  ? true
+                  : yield* Effect.all([
+                      runtime.session.messages({ sessionID: recoveredChild.id, order: "desc", limit: 20 }),
+                      runtime.session.inbox(recoveredChild.id),
+                    ]).pipe(
+                      // Creating and configuring a child records only switches, never conversation.
+                      Effect.map(
+                        ([messages, inbox]) =>
+                          inbox.length > 0 ||
+                          messages.some((message) =>
+                            ["user", "synthetic", "assistant", "compaction"].includes(message.type),
+                          ),
+                      ),
+                      Effect.mapError(
+                        (error) =>
+                          new ToolFailure({
+                            message: `Failed to read subagent session: ${recoveredChild.id}`,
+                            error,
+                            metadata: failure(recoveredChild.id, "setup-failed"),
+                          }),
+                      ),
+                    )
+              const reattached = holdsTask ? recoveredChild : undefined
+              const adopted = holdsTask ? undefined : recoveredChild
 
               const parent = yield* runtime.session
                 .get(context.sessionID)
@@ -612,12 +677,34 @@ export const Plugin = {
                   ),
                   Effect.mapError(
                     (error) =>
-                      new ToolFailure({ message: `Failed to configure subagent session: ${existing.id}`, error }),
+                      new ToolFailure({
+                        message: `Failed to configure subagent session: ${existing.id}`,
+                        error,
+                        metadata: failure(existing.id, "setup-failed"),
+                      }),
                   ),
                 )
 
+              if (
+                adopted !== undefined &&
+                selected !== undefined &&
+                (adopted.model?.providerID !== selected.providerID ||
+                  adopted.model?.id !== selected.id ||
+                  adopted.model?.variant !== selected.variant)
+              )
+                yield* runtime.session.switchModel({ sessionID: adopted.id, model: selected }).pipe(
+                  Effect.mapError(
+                    (error) =>
+                      new ToolFailure({
+                        message: `Failed to configure subagent session: ${adopted.id}`,
+                        error,
+                        metadata: failure(adopted.id, "setup-failed"),
+                      }),
+                  ),
+                )
               const child =
                 existing ??
+                adopted ??
                 (yield* runtime.session
                   .create({
                     parentID: context.sessionID,
@@ -631,7 +718,13 @@ export const Plugin = {
                     Effect.mapError(
                       (error) => new ToolFailure({ message: `Parent session not found: ${context.sessionID}`, error }),
                     ),
+                    // Reported in the same uninterruptible step as the create, so no failure or interruption after
+                    // it can lose the child's ID. Every failure from here on also carries it as metadata.
+                    Effect.tap((created) => context.progress({ sessionID: created.id, status: "starting" })),
+                    Effect.uninterruptible,
                   ))
+              if (existing !== undefined && reattached === undefined)
+                yield* context.progress({ sessionID: existing.id, status: "starting" })
               const vendor = SessionDriver.of(selected ?? existing?.model) !== "ocpp"
               // A new child gets exactly the tools the call passes, and none without them. A continued child keeps its
               // list unless the call passes a new one, less every tool its caller no longer has, such as after the
@@ -650,7 +743,11 @@ export const Plugin = {
                   .pipe(
                     Effect.mapError(
                       (error) =>
-                        new ToolFailure({ message: `Failed to give the subagent its tools: ${child.id}`, error }),
+                        new ToolFailure({
+                          message: `Failed to give the subagent its tools: ${child.id}`,
+                          error,
+                          metadata: failure(child.id, "setup-failed"),
+                        }),
                     ),
                   )
 
@@ -703,7 +800,12 @@ export const Plugin = {
                       .registerSession(child.id, temporary, machine === undefined ? undefined : { input: machine })
                       .pipe(
                         Effect.mapError(
-                          (error) => new ToolFailure({ message: `Invalid subagent tool: ${error.message}`, error }),
+                          (error) =>
+                            new ToolFailure({
+                              message: `Invalid subagent tool: ${error.message}`,
+                              error,
+                              metadata: failure(child.id, "setup-failed"),
+                            }),
                         ),
                       )
               const cleanup = registration?.dispose ?? Effect.void
@@ -846,13 +948,25 @@ export const Plugin = {
               const result = yield* Effect.scoped(
                 (vendor
                   ? external.activate(child.id, { harness, tools: temporary }).pipe(
-                      Effect.mapError((error) => new ToolFailure({ message: error.error.message, error })),
+                      Effect.mapError(
+                        (error) =>
+                          new ToolFailure({
+                            message: error.error.message,
+                            error,
+                            metadata: failure(child.id, "setup-failed"),
+                          }),
+                      ),
                       Effect.andThen(
                         runtime.session
                           .wait(child.id)
                           .pipe(
                             Effect.mapError(
-                              (error) => new ToolFailure({ message: `Subagent session not found: ${child.id}`, error }),
+                              (error) =>
+                                new ToolFailure({
+                                  message: `Subagent session not found: ${child.id}`,
+                                  error,
+                                  metadata: failure(child.id, "setup-failed"),
+                                }),
                             ),
                           ),
                       ),
@@ -1006,12 +1120,18 @@ export function listing(subagents: ReadonlyArray<{ readonly id: string; readonly
 
 /**
  * Metadata for a failure after the child exists. `reason` separates the child's own run failing,
- * the host failing to reach it, and a structured child that never submitted, so callers and
+ * the host failing to reach it or set it up, and a structured child that never submitted, so callers and
  * analytics never classify by message text.
  */
 function failure(
   sessionID: SessionSchema.ID,
-  reason: "child-failed" | "prompt-failed" | "reminder-failed" | "output-unavailable" | "no-submission",
+  reason:
+    | "setup-failed"
+    | "child-failed"
+    | "prompt-failed"
+    | "reminder-failed"
+    | "output-unavailable"
+    | "no-submission",
 ) {
   return { sessionID, status: "error" as const, reason }
 }

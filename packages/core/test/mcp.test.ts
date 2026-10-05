@@ -397,6 +397,7 @@ const runtimeLayer = Layer.unwrap(
         synthetic: () => Effect.never,
         wait: () => Effect.die("Unavailable in MCP tests"),
         context: () => Effect.die("Unavailable in MCP tests"),
+        inbox: () => Effect.die("Unavailable in MCP tests"),
       },
       persistentPty: { read: () => Effect.die("Unavailable in MCP tests") },
       location: {

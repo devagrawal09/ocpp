@@ -72,6 +72,7 @@ const description = [
   "Tool calls block and return values directly. await and Promise.all are accepted only as ignored compatibility no-ops that produce a warning; do not use them. Other Promise forms, async, generators, dynamic tool dispatch, imports, filesystem access, fetch, and timers are unavailable.",
   "Calls within one execution always run serially, including subagent calls. To run independent subagents concurrently, issue one execute call per subagent; never put parallel subagent work in the same execution.",
   "Call only exact static paths from the catalog, for example tools.fs.read(input).",
+  'To discover tools, call tools.search({ query: "what you need" }). To browse available tools, call tools.search({}), optionally filtering by namespace, and follow next.offset for more results. The bare tools root is not a runtime object: do not use Object.keys(tools) or computed paths such as tools[name]. Use returned paths literally in a subsequent execution.',
   "Use local let for scalar working state. Arrays and objects are immutable; use map, filter, slice, spread, and object literals to derive values.",
   "Every direct top-level const and function declaration is saved to the durable notebook automatically and is visible to later executions. Declarations inside blocks and functions are temporary.",
   "Notebook names are immutable: a name can never be redefined or reused. Saving is all-or-nothing, so a failed program saves nothing.",

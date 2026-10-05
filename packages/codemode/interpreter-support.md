@@ -89,6 +89,11 @@ return tools.search({ query: "read file", namespace: "repository" })
 Do not assign a discovered path to a variable and invoke it dynamically. Dynamic dispatch is
 intentionally rejected.
 
+To browse without a query, call `tools.search({})`, optionally filtering by `namespace`. Pass
+`next.offset` as `offset` for the next page. The bare `tools` root is not a runtime object;
+`Object.keys(tools)`, `Object.values(tools)`, and `Object.entries(tools)` are rejected with
+suggestions to use paginated discovery instead.
+
 ## What Is Saved
 
 ### Discovering And Inspecting Saved Values

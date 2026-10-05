@@ -203,6 +203,31 @@ describe("compile suggestions", () => {
     expect(suggestions(`let fs = tools`)).toEqual(expected)
   })
 
+  test.each(["Object.keys", "Object.values", "Object.entries", 'Object["keys"]'])(
+    "%s on the tools root points to paginated discovery",
+    async (method) => {
+      const result = await run(`return ${method}(tools)`)
+      expect(result).toMatchObject({
+        ok: false,
+        error: {
+          kind: "UnsupportedSyntax",
+          location: { line: 1, column: method.length + 9 },
+          suggestions: [
+            'Use tools.search({}) to list available tools, or tools.search({ namespace: "shell" }) to browse a namespace. Results are paginated and include callable signatures.',
+            "Pass next.offset as offset to get more results, then call a returned path literally in a subsequent execution.",
+          ],
+        },
+      })
+      if (result.ok) return
+      expect(result.error.message).toStartWith("Cannot enumerate the tools root.")
+    },
+  )
+
+  test("enumeration of data and static tool namespaces still compiles", () => {
+    expect(() => compile(`return Object.keys({ name: "read" })`)).not.toThrow()
+    expect(() => compile(`return Object.keys(tools.fs)`)).not.toThrow()
+  })
+
   test("a saved tool reference is rebound with let", () => {
     expect(suggestions(`const fs = tools.fs`)).toEqual([
       "Bind it with let so it lives for this execution only: let fs = tools.fs",

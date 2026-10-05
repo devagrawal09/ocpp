@@ -5,14 +5,14 @@ import { ephemeral, inventory } from "./event.js"
 import { optional } from "./schema.js"
 import { Model } from "./model.js"
 import { Provider } from "./provider.js"
-import { PositiveInt, statics } from "./schema.js"
+import { PositiveInt, brand, statics } from "./schema.js"
 
 const Updated = ephemeral({ type: "agent.updated", schema: {} })
 
-export const ID = Schema.String.pipe(Schema.brand("Agent.ID"))
+export const ID = Schema.String.pipe(brand("Agent.ID"))
 export type ID = typeof ID.Type
 
-export const Name = Schema.String.pipe(Schema.brand("Agent.Name"))
+export const Name = Schema.String.pipe(brand("Agent.Name"))
 export type Name = typeof Name.Type
 
 export const Color = Schema.String.annotate({ identifier: "Agent.Color" })

@@ -3,12 +3,12 @@ export * as QuestionV1 from "./question.js"
 import { Schema } from "effect"
 import { ephemeral, inventory } from "../event.js"
 import { ascending } from "../identifier.js"
-import { statics } from "../schema.js"
+import { brand, statics } from "../schema.js"
 import { SessionID } from "../session-id.js"
 import { SessionV1 } from "./session.js"
 
 export const ID = Schema.String.check(Schema.isStartingWith("que")).pipe(
-  Schema.brand("QuestionV1.ID"),
+  brand("QuestionV1.ID"),
   statics((schema) => ({ ascending: (id?: string) => schema.make(id ?? "que_" + ascending()) })),
 )
 

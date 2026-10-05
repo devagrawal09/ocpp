@@ -2,13 +2,13 @@ export * as Skill from "./skill.js"
 
 import { Schema } from "effect"
 import { optional } from "./schema.js"
-import { AbsolutePath } from "./schema.js"
+import { AbsolutePath, brand } from "./schema.js"
 import { ephemeral, inventory } from "./event.js"
 
-export const ID = Schema.String.pipe(Schema.brand("Skill.ID"))
+export const ID = Schema.String.pipe(brand("Skill.ID"))
 export type ID = typeof ID.Type
 
-export const Name = Schema.String.pipe(Schema.brand("Skill.Name"))
+export const Name = Schema.String.pipe(brand("Skill.Name"))
 export type Name = typeof Name.Type
 
 export interface DirectorySource extends Schema.Schema.Type<typeof DirectorySource> {}

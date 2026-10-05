@@ -136,6 +136,53 @@ describe("HttpApiCodegen.generate", () => {
     expect(source).not.toContain("@example/api")
   })
 
+  test("restores annotated brands in Effect API types and runtime schemas", () => {
+    // Effect 4 erases `Schema.brand` from the AST; the `brands` annotation is the only runtime trace codegen can read.
+    const SessionID = Schema.String.check(Schema.isStartingWith("ses"))
+      .pipe(Schema.brand("SessionID"))
+      .annotate({ brands: ["SessionID"] })
+    const Path = Schema.String.pipe(Schema.brand("Path")).annotate({ brands: ["Path"] })
+    const USD = Schema.Finite.pipe(Schema.brand("USD")).annotate({ brands: ["USD"] })
+    const contract = compileContract(
+      api(
+        HttpApiEndpoint.get("get", "/session/:sessionID", {
+          params: { sessionID: SessionID },
+          query: { directory: Schema.optional(Path) },
+          success: Schema.Struct({
+            data: Schema.Struct({ active: Schema.Record(SessionID, Schema.Boolean), cost: USD, title: Schema.String }),
+          }),
+        }),
+      ),
+    )
+    const source = emitEffectShape(contract, {
+      typeReferences: [
+        { schema: SessionID, name: "Session.ID", import: 'import type { Session } from "@example/schema/session"' },
+        { schema: Path, name: "Path", import: 'import type { Path } from "@example/schema/path"' },
+      ],
+    }).files[0]?.content
+
+    expect(source).toContain('import type { Brand } from "effect"')
+    expect(source).toContain(
+      'export type SessionGetInput = { readonly "sessionID": Session.ID; readonly "directory"?: Path | undefined }',
+    )
+    expect(source).toContain(
+      'export type SessionGetOutput = { readonly "active": { readonly [x: Session.ID]: boolean }, readonly "cost": number & Brand.Brand<"USD">, readonly "title": string }',
+    )
+    expect(emitEffect(contract).files.find((file) => file.path === "session.ts")?.content).toContain(
+      '.pipe(Schema.brand("SessionID"))',
+    )
+  })
+
+  test("rejects branded Effect type references without a brands annotation", () => {
+    const Path = Schema.String.pipe(Schema.brand("Path"))
+
+    expect(() =>
+      emitEffectShape(compileContract(api(HttpApiEndpoint.get("get", "/session", { success: Path }))), {
+        typeReferences: [{ schema: Path, name: "Path", import: 'import type { Path } from "@example/schema/path"' }],
+      }),
+    ).toThrow("Branded Effect type reference requires a brands annotation: Path")
+  })
+
   test("allows composed Effect outputs to use an authoritative named type", () => {
     const output = emitEffectShape(
       compileContract(api(HttpApiEndpoint.get("events", "/event", { success: Schema.Unknown }))),
@@ -618,8 +665,10 @@ describe("HttpApiCodegen.generate", () => {
       compileContract(
         api(
           HttpApiEndpoint.get("get", "/session/:sessionID", {
-            params: { sessionID: Schema.String.pipe(Schema.brand("SessionID")) },
-            success: Schema.Struct({ data: Schema.String.pipe(Schema.brand("SessionID")) }),
+            params: { sessionID: Schema.String.pipe(Schema.brand("SessionID")).annotate({ brands: ["SessionID"] }) },
+            success: Schema.Struct({
+              data: Schema.String.pipe(Schema.brand("SessionID")).annotate({ brands: ["SessionID"] }),
+            }),
           }),
         ),
       ),

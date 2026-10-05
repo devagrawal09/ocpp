@@ -453,13 +453,24 @@ function effectTypeReferences(input: ReadonlyArray<EffectTypeReference>) {
   for (const reference of input) {
     const value = { name: reference.name, import: reference.import, ast: reference.schema.ast }
     const document = SchemaRepresentation.toCodeDocument(
-      SchemaRepresentation.toRepresentations([codegenAst(Schema.toType(reference.schema).ast)]),
+      codegenRepresentations([codegenAst(Schema.toType(reference.schema).ast)]),
     )
     const name = document.codes[0]?.Type
     const type =
       name === undefined
         ? undefined
         : (document.references.nonRecursives.find((item) => item.$ref === name)?.code.Type ?? name)
+    // `Schema.brand` keeps its identifier only on the schema value, so an unannotated brand would silently erase.
+    if (
+      "identifier" in reference.schema &&
+      "schema" in reference.schema &&
+      Schema.isSchema(reference.schema.schema) &&
+      !type?.includes("Brand.Brand<")
+    ) {
+      throw new GenerationError({
+        reason: `Branded Effect type reference requires a brands annotation: ${reference.name}`,
+      })
+    }
     if (type?.includes("Brand.Brand<") && !brands.has(type)) brands.set(type, value)
     if (SchemaAST.resolveIdentifier(reference.schema.ast) !== undefined || type?.includes("Brand.Brand<")) {
       asts.set(reference.schema.ast, value)
@@ -485,9 +496,7 @@ function effectType(schema: Schema.Top, references: ReturnType<typeof effectType
     imports.add(direct.import)
     return direct.name
   }
-  const document = SchemaRepresentation.toCodeDocument(
-    SchemaRepresentation.toRepresentations([codegenAst(projected.ast)]),
-  )
+  const document = SchemaRepresentation.toCodeDocument(codegenRepresentations([codegenAst(projected.ast)]))
   const source = new Map(document.references.nonRecursives.map((reference) => [reference.$ref, reference.code.Type]))
   const expand = (type: string, seen = new Set<string>()): string => {
     for (const [name, value] of source) {
@@ -1036,9 +1045,7 @@ function identifierPart(value: string) {
 
 function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, reservedNames: ReadonlySet<string>) {
   if (schemas.length === 0) return { types: [], definitions: [] }
-  const representations = SchemaRepresentation.toRepresentations(
-    promiseTypeAsts(schemas) as [SchemaAST.AST, ...Array<SchemaAST.AST>],
-  )
+  const representations = codegenRepresentations(promiseTypeAsts(schemas) as [SchemaAST.AST, ...Array<SchemaAST.AST>])
   const document = SchemaRepresentation.toCodeDocument(representations)
   if (
     document.artifacts.some(
@@ -1127,7 +1134,7 @@ function uniqueTypeName(seed: string, used: ReadonlySet<string>, suffix = 1): st
 }
 
 function structuralType(schema: Schema.Top) {
-  const document = SchemaRepresentation.toCodeDocument(SchemaRepresentation.toRepresentations([promiseTypeAst(schema)]))
+  const document = SchemaRepresentation.toCodeDocument(codegenRepresentations([promiseTypeAst(schema)]))
   if (
     document.artifacts.some(
       (artifact) =>
@@ -1213,6 +1220,84 @@ function codegenAsts(roots: ReadonlyArray<SchemaAST.AST>) {
     return ast.recur(recur)
   }
   return roots.map(recur)
+}
+
+// Effect 4 erases `Schema.brand` from the AST and its representations, so branded schemas carry a `brands`
+// annotation instead. Wrapping those nodes in declarations restores `T & Brand.Brand<B>` and `.pipe(Schema.brand(B))`.
+function codegenRepresentations(
+  asts: readonly [SchemaAST.AST, ...Array<SchemaAST.AST>],
+): SchemaRepresentation.MultiDocument {
+  const document = SchemaRepresentation.toRepresentations(asts)
+  return {
+    representations: [
+      brandRepresentation(document.representations[0]),
+      ...document.representations.slice(1).map(brandRepresentation),
+    ],
+    references: Object.fromEntries(
+      Object.entries(document.references).map(([name, representation]) => [name, brandRepresentation(representation)]),
+    ),
+  }
+}
+
+function brandRepresentation(representation: SchemaRepresentation.Representation): SchemaRepresentation.Representation {
+  const node = mapRepresentationChildren(representation, brandRepresentation)
+  if (node._tag === "Reference") return node
+  // `Schema.annotate` stores annotations on the last check when a schema has checks.
+  const brands = [node.annotations, ...node.checks.map((check) => check.annotations)].flatMap((annotations) =>
+    isBrands(annotations?.brands) ? annotations.brands : [],
+  )
+  if (brands.length === 0) return node
+  return {
+    _tag: "Declaration",
+    typeParameters: [node],
+    checks: [],
+    annotations: {
+      ...node.annotations,
+      toCode: (input: SchemaRepresentation.Generation.DeclarationInput) => {
+        const type = input.typeParameters[0]
+        return {
+          runtime: `${type.runtime}.pipe(${brands.map((brand) => `Schema.brand(${JSON.stringify(brand)})`).join(", ")})`,
+          Type: `${type.Type.includes("|") ? `(${type.Type})` : type.Type}${brands.map((brand) => ` & Brand.Brand<${JSON.stringify(brand)}>`).join("")}`,
+        }
+      },
+    },
+  }
+}
+
+const isBrands = Schema.is(Schema.Array(Schema.String))
+
+function mapRepresentationChildren(
+  representation: SchemaRepresentation.Representation,
+  f: (representation: SchemaRepresentation.Representation) => SchemaRepresentation.Representation,
+): SchemaRepresentation.Representation {
+  switch (representation._tag) {
+    case "Declaration":
+      return { ...representation, typeParameters: representation.typeParameters.map(f) }
+    case "Suspend":
+      return { ...representation, thunk: f(representation.thunk) }
+    case "Arrays":
+      return {
+        ...representation,
+        elements: representation.elements.map((element) => ({ ...element, type: f(element.type) })),
+        rest: representation.rest.map(f),
+      }
+    case "Objects":
+      return {
+        ...representation,
+        propertySignatures: representation.propertySignatures.map((property) => ({
+          ...property,
+          type: f(property.type),
+        })),
+        indexSignatures: representation.indexSignatures.map((signature) => ({
+          parameter: f(signature.parameter),
+          type: f(signature.type),
+        })),
+      }
+    case "Union":
+      return { ...representation, types: representation.types.map(f) }
+    default:
+      return representation
+  }
 }
 
 function preserveStringSuggestions(type: string) {
@@ -1893,7 +1978,7 @@ function renderSchemas(slots: ReadonlyArray<Slot>) {
   ]
   const [first, ...rest] = expanded
   const document = SchemaRepresentation.toCodeDocument(
-    SchemaRepresentation.toRepresentations(
+    codegenRepresentations(
       codegenAsts(expanded.map((slot) => slot.schema.ast)) as [SchemaAST.AST, ...Array<SchemaAST.AST>],
     ),
   )

@@ -6,7 +6,7 @@ import { Session } from "@ocpp/schema/session"
 import { SessionStats } from "@ocpp/schema/session-stats"
 import { InstructionEntry } from "@ocpp/schema/instruction-entry"
 import { Project } from "@ocpp/schema/project"
-import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, statics } from "@ocpp/schema/schema"
+import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, brand, statics } from "@ocpp/schema/schema"
 import { Event } from "@ocpp/schema/event"
 import { Workspace } from "@ocpp/schema/workspace"
 import { Context, Effect, Result, Schema, SchemaGetter, SchemaParser, Struct } from "effect"
@@ -90,7 +90,7 @@ const decodeSessionsCursor = Schema.decodeUnknownEffect(SessionsCursorJson)
 const invalidCursor = "Invalid cursor" as const
 
 export const SessionsCursor = Schema.String.pipe(
-  Schema.brand("SessionsCursor"),
+  brand("SessionsCursor"),
   statics((schema) => {
     // Reading `schema.make` would memoize it as a read-only property that the override below cannot replace.
     const make = SchemaParser.make(schema)

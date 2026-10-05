@@ -2,10 +2,10 @@ export * as Provider from "./provider.js"
 
 import { Effect, Schema } from "effect"
 import { Integration } from "./integration.js"
-import { optional, statics } from "./schema.js"
+import { brand, optional, statics } from "./schema.js"
 
 export const ID = Schema.String.pipe(
-  Schema.brand("Provider.ID"),
+  brand("Provider.ID"),
   statics((schema) => ({
     opencode: schema.make("opencode"),
     anthropic: schema.make("anthropic"),

@@ -5,7 +5,7 @@ import { optional } from "./schema.js"
 import { ephemeral, inventory } from "./event.js"
 import { Connection } from "./connection.js"
 import { ascending } from "./identifier.js"
-import { statics } from "./schema.js"
+import { brand, statics } from "./schema.js"
 import { IntegrationID, IntegrationMethodID } from "./integration-id.js"
 import { Form } from "./form.js"
 
@@ -72,7 +72,7 @@ export const Info = Schema.Struct({
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
 export const AttemptID = Schema.String.pipe(
-  Schema.brand("Integration.AttemptID"),
+  brand("Integration.AttemptID"),
   statics((schema) => ({ create: () => schema.make("con_" + ascending()) })),
 )
 export type AttemptID = typeof AttemptID.Type

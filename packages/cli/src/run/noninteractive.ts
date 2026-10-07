@@ -88,6 +88,9 @@ export async function runNonInteractivePrompt(input: Input) {
   let finalizing = false
   let admission: AbortController | undefined
   let pendingStep: { timestamp: number; part: Record<string, unknown>; label: string } | undefined
+  // The model can end its turn while a Code Mode execution it started still runs. That execution's completion wakes
+  // the session for another turn, so the prompt is not done until none of its executions remain.
+  const runningCodeMode = new Set<string>()
 
   const emit = (type: string, timestamp: number, data: Record<string, unknown>) => {
     if (input.format !== "json") return false
@@ -194,6 +197,9 @@ export async function runNonInteractivePrompt(input: Input) {
       )
         return
       if (!promoted) continue
+      if (event.type === "session.codemode.started") runningCodeMode.add(event.data.executionID)
+      if (event.type === "session.codemode.completed" || event.type === "session.codemode.failed")
+        runningCodeMode.delete(event.data.executionID)
       if (finalizing && !event.type.startsWith("session.execution.")) continue
 
       if (event.type === "session.step.started") {
@@ -474,7 +480,7 @@ export async function runNonInteractivePrompt(input: Input) {
         }
         return
       }
-      if (event.type === "session.execution.succeeded") return
+      if (event.type === "session.execution.succeeded" && runningCodeMode.size === 0) return
     }
   }
 
@@ -610,7 +616,8 @@ export async function runNonInteractivePrompt(input: Input) {
     interrupted = true
     process.exitCode = 130
     admission?.abort()
-    void input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
+    // Ctrl-C ends the run: stop background executions and their subagents too, not just the turn.
+    void input.client.session.interrupt({ sessionID: input.sessionID, scope: "all" }).catch(() => {})
   }
   process.on("SIGINT", interrupt)
 
@@ -689,6 +696,8 @@ export async function runNonInteractivePrompt(input: Input) {
 
     const waiting = input.client.session.wait({ sessionID: input.sessionID })
     await Promise.race([waiting, completed.then(() => waiting)])
+    // The session is idle between turns while an execution runs; the event stream ends after the turn it wakes.
+    if (runningCodeMode.size > 0) await completed
     finalizing = true
     const projected = await reconcile()
     if (!projected.responded && !interrupted && !formCancelled && !emittedError && !prePromotionError) {

@@ -335,6 +335,56 @@ describe("runNonInteractivePrompt", () => {
     expect(events[0].part.state.metadata.result).toBeUndefined()
   })
 
+  test("keeps streaming until Code Mode executions started before the turn ended have settled", async () => {
+    const durable = (seq: number) => ({ aggregateID: "ses_1", seq, version: 1 as const })
+    const output = await capture({
+      format: "json",
+      turn: (inboxID) => [
+        prompted(inboxID),
+        {
+          id: "evt_codemode_started",
+          created: 1,
+          type: "session.codemode.started",
+          durable: durable(1),
+          data: { sessionID: "ses_1", assistantMessageID: "msg_first", id: "call_execute", executionID: "exe_1" },
+        },
+        // The model ends its turn while exe_1 still runs.
+        settled(),
+        {
+          id: "evt_codemode_completed",
+          created: 2,
+          type: "session.codemode.completed",
+          durable: durable(3),
+          data: { sessionID: "ses_1", assistantMessageID: "msg_first", id: "call_execute", executionID: "exe_1", events: [] },
+        },
+        // Its completion wakes the session for the turn that answers.
+        {
+          id: "evt_text_ended",
+          created: 3,
+          type: "session.text.ended",
+          durable: durable(4),
+          data: { sessionID: "ses_1", assistantMessageID: "msg_second", ordinal: 0, text: "Label: numeric value" },
+        },
+        {
+          id: "evt_succeeded_after_wake",
+          created: 4,
+          type: "session.execution.succeeded",
+          durable: durable(5),
+          data: { sessionID: "ses_1" },
+        },
+      ],
+    })
+    const events = output.stdout
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "text", part: expect.objectContaining({ text: "Label: numeric value" }) }),
+    )
+    expect(output.exitCode).toBe(0)
+  })
+
   test("uses session.wait then reconciles projected output without a terminal event", async () => {
     const idle = Promise.withResolvers<void>()
     let done = false

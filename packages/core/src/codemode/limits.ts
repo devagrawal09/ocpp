@@ -17,4 +17,12 @@ export const limits = {
   maxDeclarationsPerExecution: 64,
   maxNotebookValues: 512,
   maxNotebookBytes: 8 * 1024 * 1024,
+  /**
+   * Speculative look-ahead starts read-only tool calls before the program reaches them and serves the
+   * held result when it does. These bound one execution's speculative calls held at once and started
+   * in total; calls over either are dropped before they start, never queued, and an unconsumed call
+   * never counts against maxToolCalls. Zero disables speculation, which is the default.
+   */
+  maxSpeculativeCalls: 0,
+  maxSpeculativeCallsPerExecution: 0,
 } as const

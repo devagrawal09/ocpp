@@ -42,6 +42,8 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
       {
         onToolCallStart: (call) => options.onToolCallStart?.(call) ?? Effect.void,
         onToolCallEnd: (call) => options.onToolCallEnd?.(call) ?? Effect.void,
+        ...(options.onSpeculate === undefined ? {} : { onSpeculate: options.onSpeculate }),
+        ...(options.speculatable === undefined ? {} : { speculatable: options.speculatable }),
       },
     )
     const logs: Array<string> = []
@@ -79,6 +81,8 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
             [],
             options.impure,
             tools.notebookReference,
+            undefined,
+            tools.speculation,
           )
           const executed = yield* interpreter.run(parsed.body)
           const result = copyOut(copyIn(executed.value, "Execution preview"), "nullify") as DataValue

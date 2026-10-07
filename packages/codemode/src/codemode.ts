@@ -7,7 +7,15 @@ import type { Tools } from "./tools.js"
 import type { TraceHook } from "./trace.js"
 
 /** A tool call admitted during an execution. */
-export type { ToolCall, ToolCallEnded, ToolCallHooks, ToolCallStarted, ToolDescription } from "./tool-runtime.js"
+export type {
+  ToolCall,
+  ToolCallEnded,
+  ToolCallHooks,
+  SpeculationClass,
+  ToolCallProposal,
+  ToolCallStarted,
+  ToolDescription,
+} from "./tool-runtime.js"
 export type { TraceEvent, TraceHook } from "./trace.js"
 /** Signature-construction helpers for host-owned catalog instructions. */
 export { searchSignature, toolExpression } from "./tool-runtime.js"
@@ -58,6 +66,17 @@ export type ExecuteOptions<Provided extends Record<string, unknown> = {}> = {
   onToolCallStart?: (call: ToolRuntime.ToolCallStarted) => Effect.Effect<void, never, Services<Provided>>
   /** Observes each admitted tool call as it succeeds, fails, or is interrupted. */
   onToolCallEnd?: (call: ToolRuntime.ToolCallEnded) => Effect.Effect<void, never, Services<Provided>>
+  /**
+   * Receives read-ahead proposals: the calls the program makes next, decoded and in order, so a host
+   * may start some early. Absent means the interpreter does no look-ahead at all.
+   */
+  onSpeculate?: (calls: ReadonlyArray<ToolRuntime.ToolCallProposal>) => Effect.Effect<void, never, Services<Provided>>
+  /**
+   * Host policy for read-ahead, by canonical tool path, consulted before an argument is evaluated: a
+   * "barrier" ends the window, a "skip" takes its call index but is never proposed. Absent means every
+   * call may be proposed.
+   */
+  speculatable?: (path: string) => ToolRuntime.SpeculationClass
   /** Observes semantic JavaScript steps in execution order. */
   onTrace?: TraceHook<Services<Provided>>
   /**

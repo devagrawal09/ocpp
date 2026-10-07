@@ -66,7 +66,7 @@ const setup = (tools: ReadonlyArray<Info>) => {
       image: { normalize: () => Effect.die("No tool returns media in these tests") },
       scope: Effect.runSync(Scope.make()),
     },
-    { selection: {}, lent: new Set() },
+    { selection: {}, lent: new Set(), intercepted: Effect.succeed(false) },
   )
   return {
     admitted,

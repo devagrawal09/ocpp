@@ -23,6 +23,7 @@ import { CodeModeCompileCheck } from "./compile-check.js"
 import { limits } from "./limits.js"
 import { CodeModeNotebook } from "./notebook.js"
 import { CodeModeReplay } from "./replay.js"
+import { CodeModeSpeculation } from "./speculation.js"
 import type { CodeModeStore } from "./store.js"
 import type { ToolLists } from "../tool/lists.js"
 import { neutralize, untrusted } from "./untrusted.js"
@@ -103,6 +104,17 @@ type Catalog = {
   readonly handles?: (context: Tool.Context) => Effect.Effect<ReadonlyMap<string, Tool.Info>, never, Scope.Scope>
 }
 
+/** Whether an execution may start read-only tool calls before its program reaches them. */
+type Speculation = {
+  /** Caps on speculative calls. Defaults to the host limits, which disable speculation. */
+  readonly speculation?: CodeModeSpeculation.Caps
+  /**
+   * True while something outside the program, such as a plugin hook, observes or can refuse tool calls;
+   * nothing starts early then. Required, so no caller can enable speculation without answering it.
+   */
+  readonly intercepted: Effect.Effect<boolean>
+}
+
 export const create = (
   registrations: ReadonlyMap<string, Tool.Info>,
   executeTool: ExecuteToolFn,
@@ -111,7 +123,7 @@ export const create = (
     /** The tool list the catalog came from, stored with each execution so a resumed run rebuilds it. */
     readonly selection: ToolLists.Selection
     readonly input?: CodeMode.DataValue
-  },
+  } & Speculation,
 ) =>
   ({
     name: "execute",
@@ -246,7 +258,7 @@ export const resume = (
     readonly context: Tool.Context
     readonly resumable: CodeModeStore.Resumable
     readonly notificationID: SessionMessage.ID
-  },
+  } & Speculation,
 ) =>
   Effect.gen(function* () {
     const refused = CodeModeReplay.refusal(input.resumable.journal, policy(registrations))
@@ -256,6 +268,8 @@ export const resume = (
     const launched = yield* launch(registrations, executeTool, services, input.context, input.resumable.execution, {
       lent: input.lent,
       ...(input.handles === undefined ? {} : { handles: input.handles }),
+      ...(input.speculation === undefined ? {} : { speculation: input.speculation }),
+      intercepted: input.intercepted,
       gate,
       notificationID: input.notificationID,
       journal: input.resumable.journal,
@@ -285,10 +299,17 @@ const launch = (
     readonly gate: Deferred.Deferred<void>
     readonly notificationID: SessionMessage.ID
     readonly journal?: ReadonlyArray<CodeModeStore.JournalEntry>
-  },
+  } & Speculation,
 ) =>
   Effect.gen(function* () {
     const executionID = decodeExecutionID(execution.id)
+    // Checked before the job starts, so invalid caps refuse the launch instead of failing the program.
+    const caps = CodeModeSpeculation.validate(
+      options.speculation ?? {
+        maxSpeculativeCalls: limits.maxSpeculativeCalls,
+        maxSpeculativeCallsPerExecution: limits.maxSpeculativeCallsPerExecution,
+      },
+    )
     const resumed = options.journal === undefined ? {} : { resumed: true }
     const replay = CodeModeReplay.make(options.journal ?? [], policy(registrations))
     const events = yield* Ref.make<Array<ExecuteEvent>>([])
@@ -395,12 +416,52 @@ const launch = (
       const catalog = new Map(
         Array.from(current, ([name, tool]) => [qualifiedName(tool), { tool, lent: options.lent.has(name) }] as const),
       )
+      // Read-only calls the program makes next may start early, through the same executeTool path and
+      // context as a live call. The gateway serves a held result only to the exact call it was started for.
+      const paths = new Map(Array.from(current, ([name, tool]) => [qualifiedName(tool), { name, tool }] as const))
+      // The one speculation rule: the interpreter consults it before evaluating an argument, and the
+      // speculator applies it again at admission, so the two cannot drift apart.
+      const rule = (path: string): CodeModeSpeculation.Admission => {
+        // Discovery runs inside the interpreter or against the notebook snapshot and never reaches the gateway.
+        if (path === "search" || path === "notebook.inspect" || path === "notebook.list") return "skip"
+        const entry = paths.get(path)
+        const rules = entry?.tool.options
+        // Only a plain read-only tool may start early. A call that rejoins earlier work, receives tool
+        // handles, or is a lent or init.ts wrapper may run other calls, so it is treated like a write.
+        if (
+          entry === undefined ||
+          rules?.readOnly !== true ||
+          rules.reattach === true ||
+          rules.acceptsToolHandles === true ||
+          options.lent.has(entry.name) ||
+          live?.has(entry.name) === true
+        )
+          return "barrier"
+        return "speculate"
+      }
+      const speculator = CodeModeSpeculation.make<Tool.Result, Tool.Error, Tool.Metadata>({
+        caps,
+        firstLive: options.journal?.length ?? 0,
+        admission: rule,
+        intercepted: options.intercepted,
+        scope: yield* Scope.Scope,
+        start: (call, progress) => {
+          const entry = paths.get(call.name)
+          if (entry === undefined) return Effect.die(new Error("Speculative call to unknown tool " + call.name))
+          return executeTool(entry.name, entry.tool, call.input, {
+            ...context,
+            id: Tool.CallID.make(context.id + ":" + call.index),
+            progress,
+          })
+        },
+      })
       const exit = yield* runtime(
         current,
         (name, tool, input, index) =>
           Effect.gen(function* () {
             const decision = yield* replay.call(index)
             if (decision.type === "replay") {
+              yield* speculator.drop(index)
               yield* noteChild(
                 childSessionID(decision.entry.progress) ?? childSessionID(decision.entry.output),
                 decision.entry.status === "failed" ? "failed" : "completed",
@@ -413,27 +474,38 @@ const launch = (
             // metadata or error does not name it again.
             let child = childSessionID(decision.recovered)
             yield* noteChild(child, "running")
-            const executed = yield* executeTool(name, tool, input, {
-              ...context,
-              id: Tool.CallID.make(context.id + ":" + index),
-              ...(decision.recovered === undefined ? {} : { recovered: decision.recovered }),
-              ...(tool.options?.acceptsToolHandles === true ? { catalog } : {}),
-              progress: (metadata) => {
-                const shown = displayMetadata(metadata)
-                child = childSessionID(metadata) ?? child
-                return Effect.all(
-                  [
-                    noteChild(childSessionID(metadata), "running"),
-                    updateTool(index, (current) => ({ ...current, ...(shown ? { metadata: shown } : {}) })),
-                    // A call that can rejoin its work after a restart keeps where that work lives.
-                    tool.options?.reattach === true && isJsonMetadata(metadata)
-                      ? services.store.progressCall({ executionID, index, progress: metadata })
-                      : Effect.void,
-                  ],
-                  { discard: true },
-                )
-              },
-            }).pipe(
+            const progress = (metadata: Tool.Metadata) => {
+              const shown = displayMetadata(metadata)
+              child = childSessionID(metadata) ?? child
+              return Effect.all(
+                [
+                  noteChild(childSessionID(metadata), "running"),
+                  updateTool(index, (current) => ({ ...current, ...(shown ? { metadata: shown } : {}) })),
+                  // A call that can rejoin its work after a restart keeps where that work lives.
+                  tool.options?.reattach === true && isJsonMetadata(metadata)
+                    ? services.store.progressCall({ executionID, index, progress: metadata })
+                    : Effect.void,
+                ],
+                { discard: true },
+              )
+            }
+            // Journal replay was decided first. A call that runs live with nothing to rejoin may be served
+            // the result speculation already started for exactly this call; either way the outcome flows
+            // through the same handling below.
+            const held =
+              decision.recovered === undefined
+                ? yield* speculator.take(index, qualifiedName(tool), input, progress)
+                : yield* speculator.drop(index).pipe(Effect.as(undefined))
+            const executed = yield* (
+              held ??
+              executeTool(name, tool, input, {
+                ...context,
+                id: Tool.CallID.make(context.id + ":" + index),
+                ...(decision.recovered === undefined ? {} : { recovered: decision.recovered }),
+                ...(tool.options?.acceptsToolHandles === true ? { catalog } : {}),
+                progress,
+              })
+            ).pipe(
               Effect.tapError((error) =>
                 Effect.andThen(
                   noteChild(childSessionID(error.metadata) ?? child, "failed"),
@@ -466,6 +538,7 @@ const launch = (
           bindings: execution.bindings,
           ...(execution.input === undefined ? {} : { input: execution.input }),
           impure: replay.impure,
+          ...(speculator.enabled ? { onSpeculate: speculator.offer, speculatable: rule } : {}),
           onToolCallStart: (call) =>
             Effect.suspend(() => {
               const started = replay.start(call)
@@ -518,7 +591,8 @@ const launch = (
         },
       )
         .executeCompiled(execution.program)
-        .pipe(Effect.exit)
+        // Unconsumed speculative calls stop with the program, however it ends.
+        .pipe(Effect.ensuring(speculator.close), Effect.exit)
       const notes =
         options.journal === undefined
           ? []

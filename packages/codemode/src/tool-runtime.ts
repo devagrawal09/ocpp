@@ -51,9 +51,54 @@ export type ToolCallEnded = {
   readonly message?: string
 }
 
+/**
+ * A tool call the program will make, offered before the program reaches it. The input is decoded
+ * exactly as the real call's input will be, and `index` is the position the call will take among the
+ * execution's tool calls.
+ */
+export type ToolCallProposal = {
+  readonly index: number
+  readonly name: string
+  readonly input: unknown
+}
+
+/**
+ * How a host treats a proposed call to a tool path. "speculate" may start it early; "skip" never
+ * starts it but it changes nothing, so later calls may still be proposed; "barrier" ends the window,
+ * so no later call is proposed and its argument is never evaluated early.
+ */
+export type SpeculationClass = "speculate" | "skip" | "barrier"
+
+/** What the interpreter needs to propose calls; present only when the host accepts proposals. */
+export type Speculation<R = never> = {
+  /** The index the program's next tool call will take. */
+  readonly next: () => number
+  /** Calls at or past this index fail without running, so they are never proposed. */
+  readonly maxToolCalls: number | undefined
+  /** The host's policy for a static tool path. */
+  readonly classify: (path: ReadonlyArray<string>) => SpeculationClass
+  /** Decodes one argument list exactly as the real call will, or undefined when it would not decode. Runs nothing. */
+  readonly decode: (path: ReadonlyArray<string>, args: ReadonlyArray<unknown>) => ToolCallProposalInput | undefined
+  /** Hands proposals to the host. */
+  readonly offer: (calls: ReadonlyArray<ToolCallProposal>) => Effect.Effect<void, never, R>
+}
+
+export type ToolCallProposalInput = { readonly name: string; readonly input: unknown }
+
 export type ToolCallHooks<R = never> = {
   readonly onToolCallStart?: ((call: ToolCallStarted) => Effect.Effect<void, never, R>) | undefined
   readonly onToolCallEnd?: ((call: ToolCallEnded) => Effect.Effect<void, never, R>) | undefined
+  /**
+   * Receives the calls the program makes next, in the order it makes them, starting with its next
+   * call. A host may start some of them early and serve the held result when the program reaches the
+   * call. Proposals are advisory: the program still makes every call itself, in order.
+   */
+  readonly onSpeculate?: ((calls: ReadonlyArray<ToolCallProposal>) => Effect.Effect<void, never, R>) | undefined
+  /**
+   * Host policy for proposals, by canonical tool path. Consulted before an argument is evaluated, so a
+   * barrier's argument is never evaluated early. Absent means every call may be proposed.
+   */
+  readonly speculatable?: ((path: string) => SpeculationClass) | undefined
 }
 
 export type ToolDescription = {
@@ -448,6 +493,8 @@ export type ToolRuntime<R = never> = {
   readonly search: (args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
   readonly keys: (path: ReadonlyArray<string>) => ReadonlyArray<string>
   readonly notebookReference: (path: ReadonlyArray<string>) => string | undefined
+  /** Proposal support for the interpreter, present only when the host has an onSpeculate hook. */
+  readonly speculation: Speculation<R> | undefined
 }
 
 export const make = <R>(
@@ -528,9 +575,41 @@ export const make = <R>(
       )
     })
 
+  // A proposal is decoded exactly as executeTool decodes the real call, but never records a call,
+  // fires a hook, or runs a tool. Anything it cannot decode is not proposed.
+  const onSpeculate = hooks?.onSpeculate
+  const speculatable = hooks?.speculatable
+  const speculation: Speculation<R> | undefined =
+    onSpeculate === undefined
+      ? undefined
+      : {
+          next: () => calls.length,
+          maxToolCalls,
+          classify: (path) => {
+            try {
+              return speculatable?.(canonicalSegments(path).join(".")) ?? "speculate"
+            } catch {
+              return "barrier"
+            }
+          },
+          decode: (path, args) => {
+            if (args.length !== 1) return undefined
+            try {
+              const name = canonicalSegments(path).join(".")
+              const tool = resolve(root, path)
+              const external = copyOut(copyIn(args[0], `Arguments for tool '${name}'`), "json")
+              return { name, input: decodeToolInput(tool, external) }
+            } catch {
+              return undefined
+            }
+          },
+          offer: (proposed) => (proposed.length === 0 ? Effect.void : onSpeculate(proposed)),
+        }
+
   return {
     root: new ToolReference([]),
     calls,
+    speculation,
     keys: (path) => namespaceKeys(root, path),
     notebookReference: (path) => resolve(root, path).notebookReference,
     search: (args) =>

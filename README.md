@@ -22,3 +22,17 @@ OC++ models Code Mode as an append-only durable notebook that a Session writes t
 - **Agent-written commands and events:** `tools.command.define` turns a saved notebook function into a slash command, and `tools.event.define` runs one on an interval, a cron schedule, or once. Each run is its own execution whose outcome waits for the model's next step, merged with the same command's or event's earlier unseen outcomes; `tools.session.notify` wakes the model with fenced, attributed text.
 
 This design is intentionally incompatible with the earlier Promise-oriented Code Mode runtime. See the single [Code Mode guide](packages/codemode/interpreter-support.md) for architecture diagrams, examples, lifecycle semantics, limits, and the full language contract.
+
+### Recursive Language Models
+
+OC++ makes the same bet as [Recursive Language Models](https://arxiv.org/abs/2512.24601) (RLMs, [repository](https://github.com/alexzhang13/rlm)). Instead of calling tools and subagents through JSON, the model writes code in a REPL where they are ordinary functions, and data the model does not need to read stays in variables instead of its context window.
+
+| RLM | OC++ |
+| --- | --- |
+| A REPL that lasts for one completion, or across calls with `persistent=True` | The Session notebook, which lasts across turns and also survives restarts, forks, and reverts |
+| The prompt loaded as a `context` variable | Tool results and notebook values, which stay out of the model's context unless a program returns or logs them |
+| `rlm_query(prompt)` starts a child RLM | `tools.subagent({ message, input })` starts a child Session with its own Code Mode. `input` is a variable in the child's programs and is never rendered into either model's context. Children can start their own subagents up to `experimental.subagent_depth` levels deep (default 1) |
+| `rlm_query_batched(prompts)` fans out | The model starts one execution per subagent, up to 10 at a time, and combines their saved values in a later execution |
+| A sandboxed Python REPL | An interpreter that runs only the language features it implements and reaches the outside world only through host tools |
+
+Two differences are deliberate. The user's messages go into the root model's context directly, as in any chat agent, because OC++ is an interactive coding agent rather than a replacement for a single completion call. Fan-out is decided by the root model when it starts executions rather than computed inside one program, so each branch is a separate execution that can be inspected, reverted, and resumed on its own.

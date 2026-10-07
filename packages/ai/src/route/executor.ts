@@ -1,4 +1,4 @@
-import { Cause, Context, Effect, Layer, Option, Schema, Stream } from "effect"
+import { Cause, Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect"
 import {
   FetchHttpClient,
   Headers,
@@ -228,6 +228,57 @@ export const responseStream = (response: HttpClientResponse.HttpClientResponse):
       httpError({ error, request: response.request, operation: "read", http: responseHttp(response) }),
     ),
   )
+
+const idleTimeoutError = (input: {
+  readonly millis: number
+  readonly url: string
+  readonly operation: HttpOperation
+  readonly http?: HttpContext
+}) =>
+  new AIError({
+    reason: new TransportError({
+      message: `No response data for ${input.millis} ms`,
+      http: input.http,
+      transport: "http",
+      operation: input.operation,
+      phase: "receive",
+      code: "IdleTimeout",
+      url: input.url,
+    }),
+  })
+
+/**
+ * Fails a request whose response headers do not arrive within `millis`. A provider that accepts a connection and then
+ * stalls would otherwise hold the request until the connection drops, which can take tens of minutes.
+ */
+export const headersIdleTimeout = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  input: { readonly millis: number | undefined; readonly url: string },
+): Effect.Effect<A, E | AIError, R> => {
+  const millis = input.millis
+  if (millis === undefined || millis <= 0) return effect
+  return effect.pipe(
+    Effect.timeoutOrElse({
+      duration: Duration.millis(millis),
+      orElse: () => Effect.fail(idleTimeoutError({ millis, url: input.url, operation: "request" })),
+    }),
+  )
+}
+
+/** Fails a response body that delivers no bytes for `millis`, including before its first byte. */
+export const bodyIdleTimeout = (
+  body: Stream.Stream<Uint8Array, AIError>,
+  input: { readonly millis: number | undefined; readonly url: string; readonly http?: HttpContext },
+): Stream.Stream<Uint8Array, AIError> => {
+  const millis = input.millis
+  if (millis === undefined || millis <= 0) return body
+  return body.pipe(
+    Stream.timeoutOrElse({
+      duration: Duration.millis(millis),
+      orElse: () => Stream.fail(idleTimeoutError({ millis, url: input.url, operation: "read", http: input.http })),
+    }),
+  )
+}
 
 export const stream = (
   executor: Interface,

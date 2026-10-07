@@ -230,6 +230,7 @@ const applyModelHooks = (hooks: PluginHooks.Interface, scope: HookScope, request
         body: request.http?.body,
         headers: Object.keys(event.headers).length === 0 ? undefined : event.headers,
         query: request.http?.query,
+        idleTimeout: request.http?.idleTimeout,
       }),
     })
   })

@@ -47,6 +47,11 @@ export class HttpOptions extends Schema.Class<HttpOptions>("AI.HttpOptions")({
   body: Schema.optional(JsonSchema),
   headers: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   query: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  /**
+   * Milliseconds a streamed request may wait for its response headers or for its next body bytes, including the
+   * first, before it fails as a transport timeout. Unset waits as long as the connection stays open.
+   */
+  idleTimeout: Schema.optional(Schema.Number),
 }) {}
 
 export namespace HttpOptions {
@@ -60,8 +65,9 @@ export const mergeHttpOptions = (...items: ReadonlyArray<HttpOptions | undefined
   const body = mergeJsonRecords(...items.map((item) => item?.body))
   const headers = mergeStringRecords(...items.map((item) => item?.headers))
   const query = mergeStringRecords(...items.map((item) => item?.query))
-  if (!body && !headers && !query) return undefined
-  return new HttpOptions({ body, headers, query })
+  const idleTimeout = items.reduce<number | undefined>((latest, item) => item?.idleTimeout ?? latest, undefined)
+  if (!body && !headers && !query && idleTimeout === undefined) return undefined
+  return new HttpOptions({ body, headers, query, idleTimeout })
 }
 
 export class GenerationOptions extends Schema.Class<GenerationOptions>("LLM.GenerationOptions")({

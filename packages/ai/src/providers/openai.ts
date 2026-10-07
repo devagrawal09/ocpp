@@ -64,7 +64,13 @@ export interface Settings extends ProviderPackage.Settings {
   readonly project?: string
   readonly queryParams?: Readonly<Record<string, string>>
   readonly providerOptions?: OpenAIProviderOptionsInput
+  /** Milliseconds a response may stay silent before it fails as a retryable transport timeout; 0 waits indefinitely. */
+  readonly chunkTimeout?: number
 }
+
+// OpenAI sends its first stream event as soon as it accepts a response, before any reasoning, so two minutes of
+// silence means a stalled request. Without a limit such a request waits until the connection drops.
+const DEFAULT_IDLE_TIMEOUT = 120_000
 
 const auth = (options: ProviderAuthOption<"optional">) => AuthOptions.bearer(options, "OPENAI_API_KEY")
 
@@ -123,7 +129,10 @@ const config = (settings: Settings): Config => {
     apiKey: settings.apiKey,
     baseURL: settings.baseURL,
     headers: Object.keys(headers).length === 0 ? undefined : headers,
-    http: settings.body === undefined ? undefined : { body: { ...settings.body } },
+    http: {
+      ...(settings.body === undefined ? {} : { body: { ...settings.body } }),
+      idleTimeout: settings.chunkTimeout ?? DEFAULT_IDLE_TIMEOUT,
+    },
     providerOptions: settings.providerOptions,
     queryParams: settings.queryParams === undefined ? undefined : { ...settings.queryParams },
   }

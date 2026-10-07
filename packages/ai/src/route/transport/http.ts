@@ -87,12 +87,19 @@ export const httpJson = <Body, Frame>(input: HttpJsonInput<Body, Frame>): HttpJs
         middleware: prepareInput.middleware,
       }
     }),
-  execute: (prepared, _request, runtime) =>
+  execute: (prepared, request, runtime) =>
     Effect.gen(function* () {
-      const response = yield* runtime.http.execute(prepared.request, prepared.middleware)
+      const idle = { millis: request.http?.idleTimeout, url: prepared.request.url }
+      const response = yield* RequestExecutor.headersIdleTimeout(
+        runtime.http.execute(prepared.request, prepared.middleware),
+        idle,
+      )
+      const http = RequestExecutor.responseHttp(response)
       return {
-        frames: prepared.framing.frame(RequestExecutor.responseStream(response)),
-        http: RequestExecutor.responseHttp(response),
+        frames: prepared.framing.frame(
+          RequestExecutor.bodyIdleTimeout(RequestExecutor.responseStream(response), { ...idle, http }),
+        ),
+        http,
         body: prepared.framing.body,
       }
     }),

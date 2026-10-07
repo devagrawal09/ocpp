@@ -9,6 +9,7 @@ import { dynamicResponse, fixedResponse, systemError } from "./lib/http.js"
 import { deltaChunk } from "./lib/openai-chunks.js"
 import { sseEvents, sseRaw } from "./lib/sse.js"
 import { it } from "./lib/effect.js"
+import * as TestClock from "effect/testing/TestClock"
 
 const request = HttpClientRequest.post("https://provider.test/v1/chat?api_key=secret&key=secret&debug=1").pipe(
   HttpClientRequest.setHeaders(Headers.fromInput({ authorization: "Bearer secret", "x-safe": "visible" })),
@@ -55,6 +56,53 @@ describe("RequestExecutor", () => {
       )
       expect(RequestExecutor.httpFailure({ message: "No response", url: request.url }).reason.http).toBeUndefined()
       expect(RequestExecutor.httpFailure({ message: "No URL", status: 500 }).reason.http).toBeUndefined()
+    }),
+  )
+
+  it.effect("fails a response body that stays silent past its idle timeout", () =>
+    Effect.gen(function* () {
+      const body = Stream.make(new Uint8Array([1])).pipe(Stream.concat(Stream.never))
+      const fiber = yield* RequestExecutor.bodyIdleTimeout(body, { millis: 120_000, url: request.url }).pipe(
+        Stream.runCollect,
+        Effect.flip,
+        Effect.forkChild({ startImmediately: true }),
+      )
+      yield* TestClock.adjust("119 seconds")
+      expect(fiber.pollUnsafe()).toBeUndefined()
+      yield* TestClock.adjust("1 second")
+      const error = expectAIError(yield* Fiber.join(fiber))
+      expect(error.reason).toBeInstanceOf(TransportError)
+      expect(error.reason).toMatchObject({ code: "IdleTimeout", operation: "read", phase: "receive", url: request.url })
+    }),
+  )
+
+  it.effect("passes a response body through when it finishes before its idle timeout", () =>
+    Effect.gen(function* () {
+      const chunks = yield* RequestExecutor.bodyIdleTimeout(Stream.make(new Uint8Array([1]), new Uint8Array([2])), {
+        millis: 120_000,
+        url: request.url,
+      }).pipe(Stream.runCollect)
+      expect(Array.from(chunks)).toEqual([new Uint8Array([1]), new Uint8Array([2])])
+    }),
+  )
+
+  it.effect("fails a request whose response headers do not arrive within its idle timeout", () =>
+    Effect.gen(function* () {
+      const fiber = yield* RequestExecutor.headersIdleTimeout(Effect.never, { millis: 120_000, url: request.url }).pipe(
+        Effect.flip,
+        Effect.forkChild({ startImmediately: true }),
+      )
+      yield* TestClock.adjust("120 seconds")
+      const error = expectAIError(yield* Fiber.join(fiber))
+      expect(error.reason).toMatchObject({ code: "IdleTimeout", operation: "request", phase: "receive" })
+    }),
+  )
+
+  it.effect("waits indefinitely without an idle timeout", () =>
+    Effect.gen(function* () {
+      const body = Stream.make(new Uint8Array([1]))
+      expect(RequestExecutor.bodyIdleTimeout(body, { millis: undefined, url: request.url })).toBe(body)
+      expect(RequestExecutor.bodyIdleTimeout(body, { millis: 0, url: request.url })).toBe(body)
     }),
   )
 

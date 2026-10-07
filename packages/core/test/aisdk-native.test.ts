@@ -375,6 +375,12 @@ describe("AISDKNative", () => {
     })
   })
 
+  test("passes OpenAI chunkTimeout as a setting instead of a provider option", () => {
+    const mapped = map("@ai-sdk/openai", { chunkTimeout: 30_000, reasoningEffort: "high" })
+    expect(mapped).toMatchObject({ package: "@ocpp/ai/providers/openai", settings: { chunkTimeout: 30_000 } })
+    expect(mapped?.settings.providerOptions).not.toHaveProperty("chunkTimeout")
+  })
+
   test("maps every Google thinking setting", () => {
     expect(
       map("@ai-sdk/google", {

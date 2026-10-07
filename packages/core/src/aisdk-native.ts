@@ -127,7 +127,15 @@ export function map(input: MapInput): Mapping | undefined {
           ...(typeof input.settings.organization === "string" ? { organization: input.settings.organization } : {}),
           ...(typeof input.settings.project === "string" ? { project: input.settings.project } : {}),
           ...(isStringRecord(input.settings.queryParams) ? { queryParams: input.settings.queryParams } : {}),
-          ...mapProviderOptions(input.settings, ["apiKey", "baseURL", "organization", "project", "queryParams"]),
+          ...(typeof input.settings.chunkTimeout === "number" ? { chunkTimeout: input.settings.chunkTimeout } : {}),
+          ...mapProviderOptions(input.settings, [
+            "apiKey",
+            "baseURL",
+            "chunkTimeout",
+            "organization",
+            "project",
+            "queryParams",
+          ]),
         },
       }
     case "@ai-sdk/openai-compatible":

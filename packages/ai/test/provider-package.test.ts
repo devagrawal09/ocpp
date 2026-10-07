@@ -4,6 +4,16 @@ import { LLM } from "../src/index.js"
 import { Endpoint } from "../src/route/endpoint.js"
 
 describe("provider package entrypoints", () => {
+  test("OpenAI fails stalled responses after an idle timeout that chunkTimeout overrides", () => {
+    expect(model("gpt-5.5", {}).route.defaults.http?.idleTimeout).toBe(120_000)
+    expect(model("gpt-5.5", { chunkTimeout: 30_000 }).route.defaults.http?.idleTimeout).toBe(30_000)
+    expect(model("gpt-5.5", { chunkTimeout: 0 }).route.defaults.http?.idleTimeout).toBe(0)
+    expect(model("gpt-5.5", { body: { store: false } }).route.defaults.http).toMatchObject({
+      body: { store: false },
+      idleTimeout: 120_000,
+    })
+  })
+
   test("semantic API aliases expose the same contract", async () => {
     const modules = await Promise.all([
       import("@ocpp/ai/providers/openai"),

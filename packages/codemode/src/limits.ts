@@ -16,6 +16,18 @@ export const MAX_COLLECTION_ITEMS = 1_000_000
 /** Maximum UTF-16 code units in one string. */
 export const MAX_STRING_LENGTH = 4_000_000
 
+/**
+ * Speculative look-ahead bounds. Before each top-level statement, the interpreter may propose the
+ * tool calls the program makes next so a host can start read-only ones early. These cap the work one
+ * proposal does up front, so look-ahead stays linear in the program however long it is.
+ */
+
+/** Maximum tool calls one look-ahead proposes. */
+export const MAX_SPECULATIVE_LOOKAHEAD_CALLS = 16
+
+/** Maximum top-level statements one look-ahead scans. */
+export const MAX_SPECULATIVE_LOOKAHEAD_STATEMENTS = 64
+
 export const collectionLimitMessage = (label: string, items: number) =>
   `${label} would hold ${items} items, over the ${MAX_COLLECTION_ITEMS}-item limit for one value.`
 

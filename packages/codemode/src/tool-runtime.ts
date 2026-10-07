@@ -51,9 +51,32 @@ export type ToolCallEnded = {
   readonly message?: string
 }
 
+/**
+ * A tool call the program will make, offered before the program reaches it. The input is decoded
+ * exactly as the real call's input will be, and `index` is the position the call will take among the
+ * execution's tool calls.
+ */
+export type ToolCallProposal = {
+  readonly index: number
+  readonly name: string
+  readonly input: unknown
+}
+
+/** A later call the interpreter proposes, as a static path and argument values evaluated without side effects. */
+export type SpeculativeToolCall = {
+  readonly path: ReadonlyArray<string>
+  readonly args: ReadonlyArray<unknown>
+}
+
 export type ToolCallHooks<R = never> = {
   readonly onToolCallStart?: ((call: ToolCallStarted) => Effect.Effect<void, never, R>) | undefined
   readonly onToolCallEnd?: ((call: ToolCallEnded) => Effect.Effect<void, never, R>) | undefined
+  /**
+   * Receives the calls the program makes next, in the order it makes them, starting with its next
+   * call. A host may start some of them early and serve the held result when the program reaches the
+   * call. Proposals are advisory: the program still makes every call itself, in order.
+   */
+  readonly onSpeculate?: ((calls: ReadonlyArray<ToolCallProposal>) => Effect.Effect<void, never, R>) | undefined
 }
 
 export type ToolDescription = {
@@ -448,6 +471,8 @@ export type ToolRuntime<R = never> = {
   readonly search: (args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
   readonly keys: (path: ReadonlyArray<string>) => ReadonlyArray<string>
   readonly notebookReference: (path: ReadonlyArray<string>) => string | undefined
+  /** Offers proposed calls to the host's onSpeculate hook, decoded like real calls. Never runs a tool. */
+  readonly speculate: (calls: ReadonlyArray<SpeculativeToolCall>) => Effect.Effect<void, never, R>
 }
 
 export const make = <R>(
@@ -528,9 +553,41 @@ export const make = <R>(
       )
     })
 
+  // A proposal is decoded exactly as executeTool decodes the real call, but never records a call,
+  // fires a hook, or runs a tool. Anything it cannot decode is not proposed, and nor is anything after it.
+  const proposal = (call: SpeculativeToolCall): { name: string; input: unknown } | undefined => {
+    if (call.args.length !== 1) return undefined
+    try {
+      const name = canonicalSegments(call.path).join(".")
+      const tool = resolve(root, call.path)
+      const external = copyOut(copyIn(call.args[0], `Arguments for tool '${name}'`), "json")
+      return { name, input: decodeToolInput(tool, external) }
+    } catch {
+      return undefined
+    }
+  }
+
+  const speculate = (proposed: ReadonlyArray<SpeculativeToolCall>): Effect.Effect<void, never, R> => {
+    const onSpeculate = hooks?.onSpeculate
+    if (onSpeculate === undefined) return Effect.void
+    return Effect.suspend(() => {
+      const offered: Array<ToolCallProposal> = []
+      for (const call of proposed) {
+        const index = calls.length + offered.length
+        // A call past the limit fails without running, so it is never proposed.
+        if (maxToolCalls !== undefined && index >= maxToolCalls) break
+        const decoded = proposal(call)
+        if (decoded === undefined) break
+        offered.push({ index, ...decoded })
+      }
+      return offered.length === 0 ? Effect.void : onSpeculate(offered)
+    })
+  }
+
   return {
     root: new ToolReference([]),
     calls,
+    speculate,
     keys: (path) => namespaceKeys(root, path),
     notebookReference: (path) => resolve(root, path).notebookReference,
     search: (args) =>

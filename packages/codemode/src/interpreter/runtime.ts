@@ -3,12 +3,20 @@ import { coercionFunctions, errorConstructorNames, globalNamespaces, uriFunction
 import type { ImpureHelper } from "../codemode.js"
 import { ToolHandle } from "../tool-handle.js"
 import { isPromiseAllCall, staticToolCalls, staticToolPath } from "../ir.js"
-import { isBlockedMember, toolExpression, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
+import {
+  isBlockedMember,
+  type SpeculativeToolCall,
+  toolExpression,
+  ToolReference,
+  ToolRuntimeError,
+  type SafeObject,
+} from "../tool-runtime.js"
 import {
   type AstNode,
   AsyncIteratorSymbol,
   asNode,
   type Binding,
+  BrokenNotebookValue,
   CodeModeFunction,
   CodeModeGenerator,
   CoercionFunction,
@@ -68,9 +76,18 @@ import {
 } from "./promises.js"
 import { containsOpaqueReference, isRuntimeReference, rejectCircularInsertion, typeofValue } from "./references.js"
 import { collectPatternNames, freeIdentifiers } from "./captures.js"
-import { collectionLimitMessage, MAX_COLLECTION_ITEMS, MAX_STRING_LENGTH, stringLimitMessage } from "../limits.js"
+import {
+  collectionLimitMessage,
+  MAX_COLLECTION_ITEMS,
+  MAX_SPECULATIVE_LOOKAHEAD_CALLS,
+  MAX_SPECULATIVE_LOOKAHEAD_STATEMENTS,
+  MAX_STRING_LENGTH,
+  stringLimitMessage,
+} from "../limits.js"
 import { decodeNotebook, type NotebookValue } from "./durable.js"
 import { ScopeStack } from "./scope.js"
+import { evaluateSpeculatively, refused } from "./speculate.js"
+import { plan, type SpeculationPlan } from "../speculation.js"
 import { arrayMethods } from "../stdlib/collections.js"
 import { consoleMethods, formatConsoleMessage } from "../stdlib/console.js"
 import { traceSource, traceValue, type TraceEvent, type TraceHook } from "../trace.js"
@@ -294,6 +311,7 @@ export class Interpreter<R> {
     impure: (helper: ImpureHelper) => number = (helper) => (helper === "time.now" ? Date.now() : Math.random()),
     private readonly notebookReference: (path: ReadonlyArray<string>) => string | undefined = () => undefined,
     private readonly referenceBindings?: ReadonlyMap<string, Binding>,
+    private readonly speculate?: (calls: ReadonlyArray<SpeculativeToolCall>) => Effect.Effect<void, never, R>,
   ) {
     const globalScope = new Map<string, Binding>()
     this.scopes = new ScopeStack([globalScope])
@@ -366,7 +384,10 @@ export class Interpreter<R> {
       self.predeclareLexical(program.body)
       self.hoistFunctions(program.body)
       let value: unknown = undefined
+      // Computed only for a host that accepts proposals; speculation is never needed for correctness.
+      const speculation = self.speculate === undefined ? undefined : plan(program)
       for (const [index, statement] of program.body.entries()) {
+        if (speculation !== undefined) yield* self.lookAhead(speculation, index)
         if (index === program.body.length - 1 && statement.type === "ExpressionStatement") {
           value = yield* self.evaluateExpression(getNode(statement, "expression"))
           break
@@ -396,6 +417,41 @@ export class Interpreter<R> {
         }),
       ),
     )
+  }
+
+  /**
+   * Proposes the tool calls the program will make next, before top-level statement `from` runs. It
+   * walks planned calls in run order from that statement and stops at the first opaque statement, the
+   * first call whose argument reads a binding that is unset or assigned earlier in the window, and the
+   * first argument that cannot be evaluated without side effects. The window is therefore exactly the
+   * calls the program makes next, in order, which lets the host keep a read from passing a write.
+   * Evaluation reads scope only: no tool, program code, impure helper, trace, or console output runs.
+   */
+  private lookAhead(speculation: SpeculationPlan, from: number): Effect.Effect<void, never, R> {
+    const speculate = this.speculate
+    if (speculate === undefined) return Effect.void
+    const calls: Array<SpeculativeToolCall> = []
+    const written = new Set<string>()
+    const read = (name: string) => {
+      const binding = this.scopes.resolve(name)
+      if (binding === undefined || binding.initialized === false || binding.value instanceof BrokenNotebookValue) return
+      return { value: binding.value }
+    }
+    const last = Math.min(speculation.statements.length, from + MAX_SPECULATIVE_LOOKAHEAD_STATEMENTS)
+    scan: for (let index = from; index < last; index++) {
+      const statement = speculation.statements[index]
+      if (statement === undefined || statement.opaque) break
+      for (const call of statement.calls) {
+        if (calls.length >= MAX_SPECULATIVE_LOOKAHEAD_CALLS) break scan
+        if (call.argument === undefined || call.reads.some((name) => written.has(name))) break scan
+        if (this.allowedTools !== undefined && !this.allowedTools.has(call.path)) break scan
+        const argument = evaluateSpeculatively(call.argument, read)
+        if (argument === refused) break scan
+        calls.push({ path: call.path.split("."), args: [argument] })
+      }
+      for (const name of statement.writes) written.add(name)
+    }
+    return calls.length === 0 ? Effect.void : speculate(calls)
   }
 
   private emitTrace(event: TraceEvent): Effect.Effect<void, never, R> {

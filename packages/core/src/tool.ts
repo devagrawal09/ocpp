@@ -116,6 +116,11 @@ const layer = Layer.effect(
         input,
       })
     const codemodeServices = { bus, jobs: runtime.job, sessions: runtime.session, image, store: codemodeStore, scope }
+    // A plugin hook sees every tool call and execute.before can refuse one, so speculation starts nothing while one is registered.
+    const intercepted = Effect.map(
+      Effect.all([hooks.has("tool", "execute.before"), hooks.has("tool", "execute.after")]),
+      ([before, after]) => before || after,
+    )
 
     const executeTool = Effect.fn("Tool.execute")(function* (
       tool: Tool.Info,
@@ -365,6 +370,7 @@ const layer = Layer.effect(
           resumable: input.resumable,
           notificationID: input.notificationID,
           lent: own.lent,
+          intercepted,
           ...(input.selection.init === undefined ? {} : { handles: handles(input.selection) }),
         })
       }),
@@ -382,6 +388,7 @@ const layer = Layer.effect(
             : CodeModeTool.create(registrations, executeCodeModeTool, codemodeServices, {
                 selection: selection ?? {},
                 lent: own.lent,
+                intercepted,
                 ...(activeInput(sessionID) === undefined ? {} : { input: activeInput(sessionID) }),
                 ...(selection?.init === undefined ? {} : { handles: handles(selection) }),
               })

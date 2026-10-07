@@ -53,7 +53,7 @@ const createCodeMode = (tools: ReadonlyMap<string, Info>) =>
       image: { normalize: () => Effect.die("No tool returns media in these tests") },
       scope: Effect.runSync(Scope.make()),
     },
-    { selection: {}, lent: new Set() },
+    { selection: {}, lent: new Set(), intercepted: Effect.succeed(false) },
   )
 
 test("execute describes invariant Code Mode behavior", () => {
@@ -138,7 +138,7 @@ test("a refused execution names the running executions instead of only the cap",
       image: { normalize: () => Effect.die("No tool returns media in these tests") },
       scope: Effect.runSync(Scope.make()),
     },
-    { selection: {}, lent: new Set() },
+    { selection: {}, lent: new Set(), intercepted: Effect.succeed(false) },
   )
 
   const error = await Effect.runPromise(codemode.execute({ code: "return 1" }, context).pipe(Effect.flip))
@@ -213,7 +213,7 @@ test("a failed execution's completion carries a stable failure kind in its metad
       image: { normalize: () => Effect.die("No tool returns media in these tests") },
       scope: Effect.runSync(Scope.make()),
     },
-    { selection: {}, lent: new Set() },
+    { selection: {}, lent: new Set(), intercepted: Effect.succeed(false) },
   )
 
   await Effect.runPromise(codemode.execute({ code: "const saved = 1" }, context))
@@ -342,7 +342,7 @@ test("a Session deleted mid-execution still finishes the background notification
       image: { normalize: () => Effect.die("No tool returns media in these tests") },
       scope: Effect.runSync(Scope.make()),
     },
-    { selection: {}, lent: new Set() },
+    { selection: {}, lent: new Set(), intercepted: Effect.succeed(false) },
   )
 
   const result = await Effect.runPromise(codemode.execute({ code: "const saved = 1" }, context))

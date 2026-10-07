@@ -5,7 +5,8 @@ import { ToolHandle } from "../tool-handle.js"
 import { isPromiseAllCall, staticToolCalls, staticToolPath } from "../ir.js"
 import {
   isBlockedMember,
-  type SpeculativeToolCall,
+  type Speculation,
+  type ToolCallProposal,
   toolExpression,
   ToolReference,
   ToolRuntimeError,
@@ -86,7 +87,7 @@ import {
 } from "../limits.js"
 import { decodeNotebook, type NotebookValue } from "./durable.js"
 import { ScopeStack } from "./scope.js"
-import { evaluateSpeculatively, refused } from "./speculate.js"
+import { evaluateSpeculatively, type Refused, refused } from "./speculate.js"
 import { plan, type SpeculationPlan } from "../speculation.js"
 import { arrayMethods } from "../stdlib/collections.js"
 import { consoleMethods, formatConsoleMessage } from "../stdlib/console.js"
@@ -285,6 +286,8 @@ export class Interpreter<R> {
   private readonly handles: Array<ToolHandle>
   private readonly impure: (helper: ImpureHelper) => number
   private generatorState?: GeneratorState
+  /** Proposals and refusals by the call index they predict; see lookAhead for why they never change. */
+  private readonly proposals = new Map<number, ToolCallProposal | Refused>()
   private generatorAsync = false
   private readonly runner: CallbackRunner<R> & SyncIteratorRunner<R> = {
     invokeFunction: (fn, args) => this.invokeFunction(fn, args, false),
@@ -311,7 +314,7 @@ export class Interpreter<R> {
     impure: (helper: ImpureHelper) => number = (helper) => (helper === "time.now" ? Date.now() : Math.random()),
     private readonly notebookReference: (path: ReadonlyArray<string>) => string | undefined = () => undefined,
     private readonly referenceBindings?: ReadonlyMap<string, Binding>,
-    private readonly speculate?: (calls: ReadonlyArray<SpeculativeToolCall>) => Effect.Effect<void, never, R>,
+    private readonly speculation?: Speculation<R>,
   ) {
     const globalScope = new Map<string, Binding>()
     this.scopes = new ScopeStack([globalScope])
@@ -385,7 +388,7 @@ export class Interpreter<R> {
       self.hoistFunctions(program.body)
       let value: unknown = undefined
       // Computed only for a host that accepts proposals; speculation is never needed for correctness.
-      const speculation = self.speculate === undefined ? undefined : plan(program)
+      const speculation = self.speculation === undefined ? undefined : plan(program)
       for (const [index, statement] of program.body.entries()) {
         if (speculation !== undefined) yield* self.lookAhead(speculation, index)
         if (index === program.body.length - 1 && statement.type === "ExpressionStatement") {
@@ -422,36 +425,84 @@ export class Interpreter<R> {
   /**
    * Proposes the tool calls the program will make next, before top-level statement `from` runs. It
    * walks planned calls in run order from that statement and stops at the first opaque statement, the
-   * first call whose argument reads a binding that is unset or assigned earlier in the window, and the
-   * first argument that cannot be evaluated without side effects. The window is therefore exactly the
-   * calls the program makes next, in order, which lets the host keep a read from passing a write.
+   * first call the host classifies as a barrier or that passes a notebook reference, the first call
+   * whose argument reads a binding that is unset or assigned earlier in the window, and the first
+   * argument that cannot be evaluated without side effects or decoded. The window is therefore exactly
+   * the calls the program makes next, in order, which lets the host keep a read from passing a write.
    * Evaluation reads scope only: no tool, program code, impure helper, trace, or console output runs.
    */
-  private lookAhead(speculation: SpeculationPlan, from: number): Effect.Effect<void, never, R> {
-    const speculate = this.speculate
-    if (speculate === undefined) return Effect.void
-    const calls: Array<SpeculativeToolCall> = []
+  private lookAhead(plan: SpeculationPlan, from: number): Effect.Effect<void, never, R> {
+    const speculation = this.speculation
+    if (speculation === undefined) return Effect.void
+    const first = speculation.next()
+    // Proposals for calls the program has already made can never be offered again.
+    for (const index of this.proposals.keys()) if (index < first) this.proposals.delete(index)
+    const offered: Array<ToolCallProposal> = []
     const written = new Set<string>()
     const read = (name: string) => {
       const binding = this.scopes.resolve(name)
       if (binding === undefined || binding.initialized === false || binding.value instanceof BrokenNotebookValue) return
       return { value: binding.value }
     }
-    const last = Math.min(speculation.statements.length, from + MAX_SPECULATIVE_LOOKAHEAD_STATEMENTS)
-    scan: for (let index = from; index < last; index++) {
-      const statement = speculation.statements[index]
+    let index = first
+    let seen = 0
+    const last = Math.min(plan.statements.length, from + MAX_SPECULATIVE_LOOKAHEAD_STATEMENTS)
+    scan: for (let position = from; position < last; position++) {
+      const statement = plan.statements[position]
       if (statement === undefined || statement.opaque) break
-      for (const call of statement.calls) {
-        if (calls.length >= MAX_SPECULATIVE_LOOKAHEAD_CALLS) break scan
-        if (call.argument === undefined || call.reads.some((name) => written.has(name))) break scan
-        if (this.allowedTools !== undefined && !this.allowedTools.has(call.path)) break scan
-        const argument = evaluateSpeculatively(call.argument, read)
-        if (argument === refused) break scan
-        calls.push({ path: call.path.split("."), args: [argument] })
-      }
+      // A statement's own assignments may run before its calls, so they count from its start.
       for (const name of statement.writes) written.add(name)
+      for (const call of statement.calls) {
+        if (seen++ >= MAX_SPECULATIVE_LOOKAHEAD_CALLS) break scan
+        if (speculation.maxToolCalls !== undefined && index >= speculation.maxToolCalls) break scan
+        const path = call.path.split(".")
+        if (this.allowedTools !== undefined && !this.allowedTools.has(call.path)) break scan
+        // Host policy comes first, so a barrier's argument is never evaluated or decoded early.
+        const kind = speculation.classify(path)
+        if (kind === "barrier" || this.passesNotebookReference(path)) break scan
+        if (kind === "skip") {
+          index++
+          continue
+        }
+        // A proposal never changes once made. It is made only when every statement from the proposal
+        // point up to the call is transparent, so every assignment between them is tracked in `written`,
+        // none of them assigns a name the argument reads, and every name it reads was already bound to a
+        // value that cannot be mutated. Re-offering the memoized proposal is therefore exact, and each
+        // argument is evaluated and decoded at most once.
+        const memo = this.proposals.get(index)
+        if (memo === refused) break scan
+        if (memo !== undefined) {
+          offered.push(memo)
+          index++
+          continue
+        }
+        const argument = call.argument
+        if (argument === undefined || call.reads.some((name) => written.has(name) || read(name) === undefined))
+          break scan
+        const value = evaluateSpeculatively(argument, read)
+        const decoded = value === refused ? undefined : speculation.decode(path, [value])
+        // With every read bound and unchanged, a refusal is as stable as a proposal, so it is kept too.
+        if (decoded === undefined) {
+          this.proposals.set(index, refused)
+          break scan
+        }
+        const proposal = { index, ...decoded }
+        this.proposals.set(index, proposal)
+        offered.push(proposal)
+        index++
+      }
     }
-    return calls.length === 0 ? Effect.void : speculate(calls)
+    return offered.length === 0 ? Effect.void : speculation.offer(offered)
+  }
+
+  /** True when the real call passes a saved notebook name instead of the evaluated argument. */
+  private passesNotebookReference(path: ReadonlyArray<string>): boolean {
+    try {
+      return this.notebookReference(path) !== undefined
+    } catch {
+      // An unknown tool fails when called, so nothing past it runs.
+      return true
+    }
   }
 
   private emitTrace(event: TraceEvent): Effect.Effect<void, never, R> {

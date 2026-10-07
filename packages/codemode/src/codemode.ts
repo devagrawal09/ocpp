@@ -11,6 +11,7 @@ export type {
   ToolCall,
   ToolCallEnded,
   ToolCallHooks,
+  SpeculationClass,
   ToolCallProposal,
   ToolCallStarted,
   ToolDescription,
@@ -70,6 +71,12 @@ export type ExecuteOptions<Provided extends Record<string, unknown> = {}> = {
    * may start some early. Absent means the interpreter does no look-ahead at all.
    */
   onSpeculate?: (calls: ReadonlyArray<ToolRuntime.ToolCallProposal>) => Effect.Effect<void, never, Services<Provided>>
+  /**
+   * Host policy for read-ahead, by canonical tool path, consulted before an argument is evaluated: a
+   * "barrier" ends the window, a "skip" takes its call index but is never proposed. Absent means every
+   * call may be proposed.
+   */
+  speculatable?: (path: string) => ToolRuntime.SpeculationClass
   /** Observes semantic JavaScript steps in execution order. */
   onTrace?: TraceHook<Services<Provided>>
   /**

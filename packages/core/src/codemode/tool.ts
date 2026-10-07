@@ -108,8 +108,11 @@ type Catalog = {
 type Speculation = {
   /** Caps on speculative calls. Defaults to the host limits, which disable speculation. */
   readonly speculation?: CodeModeSpeculation.Caps
-  /** True while something outside the program observes or can refuse tool calls; nothing starts early then. */
-  readonly intercepted?: Effect.Effect<boolean>
+  /**
+   * True while something outside the program, such as a plugin hook, observes or can refuse tool calls;
+   * nothing starts early then. Required, so no caller can enable speculation without answering it.
+   */
+  readonly intercepted: Effect.Effect<boolean>
 }
 
 export const create = (
@@ -266,7 +269,7 @@ export const resume = (
       lent: input.lent,
       ...(input.handles === undefined ? {} : { handles: input.handles }),
       ...(input.speculation === undefined ? {} : { speculation: input.speculation }),
-      ...(input.intercepted === undefined ? {} : { intercepted: input.intercepted }),
+      intercepted: input.intercepted,
       gate,
       notificationID: input.notificationID,
       journal: input.resumable.journal,
@@ -416,28 +419,31 @@ const launch = (
       // Read-only calls the program makes next may start early, through the same executeTool path and
       // context as a live call. The gateway serves a held result only to the exact call it was started for.
       const paths = new Map(Array.from(current, ([name, tool]) => [qualifiedName(tool), { name, tool }] as const))
+      // The one speculation rule: the interpreter consults it before evaluating an argument, and the
+      // speculator applies it again at admission, so the two cannot drift apart.
+      const rule = (path: string): CodeModeSpeculation.Admission => {
+        // Discovery runs inside the interpreter or against the notebook snapshot and never reaches the gateway.
+        if (path === "search" || path === "notebook.inspect" || path === "notebook.list") return "skip"
+        const entry = paths.get(path)
+        const rules = entry?.tool.options
+        // Only a plain read-only tool may start early. A call that rejoins earlier work, receives tool
+        // handles, or is a lent or init.ts wrapper may run other calls, so it is treated like a write.
+        if (
+          entry === undefined ||
+          rules?.readOnly !== true ||
+          rules.reattach === true ||
+          rules.acceptsToolHandles === true ||
+          options.lent.has(entry.name) ||
+          live?.has(entry.name) === true
+        )
+          return "barrier"
+        return "speculate"
+      }
       const speculator = CodeModeSpeculation.make<Tool.Result, Tool.Error, Tool.Metadata>({
         caps,
         firstLive: options.journal?.length ?? 0,
-        admission: (path) => {
-          // Discovery runs inside the interpreter or against the notebook snapshot and never reaches the gateway.
-          if (path === "search" || path === "notebook.inspect" || path === "notebook.list") return "skip"
-          const entry = paths.get(path)
-          const rules = entry?.tool.options
-          // Only a plain read-only tool may start early. A call that rejoins earlier work, receives tool
-          // handles, or is a lent or init.ts wrapper may run other calls, so it is treated like a write.
-          if (
-            entry === undefined ||
-            rules?.readOnly !== true ||
-            rules.reattach === true ||
-            rules.acceptsToolHandles === true ||
-            options.lent.has(entry.name) ||
-            live?.has(entry.name) === true
-          )
-            return "barrier"
-          return "speculate"
-        },
-        intercepted: options.intercepted ?? Effect.succeed(false),
+        admission: rule,
+        intercepted: options.intercepted,
         scope: yield* Scope.Scope,
         start: (call, progress) => {
           const entry = paths.get(call.name)
@@ -532,7 +538,7 @@ const launch = (
           bindings: execution.bindings,
           ...(execution.input === undefined ? {} : { input: execution.input }),
           impure: replay.impure,
-          ...(speculator.enabled ? { onSpeculate: speculator.offer } : {}),
+          ...(speculator.enabled ? { onSpeculate: speculator.offer, speculatable: rule } : {}),
           onToolCallStart: (call) =>
             Effect.suspend(() => {
               const started = replay.start(call)

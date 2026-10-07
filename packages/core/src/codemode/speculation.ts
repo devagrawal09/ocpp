@@ -12,14 +12,13 @@ export type Caps = {
   readonly maxSpeculativeCallsPerExecution: number
 }
 
-/** How a proposed call is treated, decided from the host's tool policy. */
-export type Admission =
-  /** A read-only call that may start before the program reaches it. */
-  | "speculate"
-  /** A call that changes nothing and never reaches the host gateway, such as tools.search. */
-  | "skip"
-  /** Anything else. Neither it nor any later call in the window starts early, so a read never passes a write. */
-  | "barrier"
+/**
+ * How a proposed call is treated, decided from the host's tool policy: "speculate" for a read-only call
+ * that may start early, "skip" for one that changes nothing and never reaches the gateway, such as
+ * tools.search, and "barrier" for anything else, which ends the window so a read never passes a write.
+ * The interpreter applies the same classification before evaluating an argument.
+ */
+export type Admission = CodeMode.SpeculationClass
 
 /** Progress a speculative call reports before the program reaches it, kept until the call is consumed. */
 const MAX_BUFFERED_PROGRESS = 32
@@ -77,15 +76,11 @@ export const make = <A, E, M>(input: {
         const admission = input.admission(call.name)
         if (admission === "skip") continue
         if (admission === "barrier") return
+        // The interpreter never changes a proposal once made, so a held index needs no new key; take
+        // still compares keys before serving anything.
+        if (entries.has(call.index)) continue
         const key = keyOf(call.name, call.input)
         if (key === undefined) return
-        const held = entries.get(call.index)
-        if (held?.key === key) continue
-        // The program's bindings changed since this call was proposed, so its input did too.
-        if (held !== undefined) {
-          entries.delete(call.index)
-          yield* abandon(held)
-        }
         if (entries.size >= caps.maxSpeculativeCalls || started >= caps.maxSpeculativeCallsPerExecution) return
         started++
         const router = route<M>()

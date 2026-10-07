@@ -11,7 +11,7 @@ import { ascending } from "@ocpp/schema/identifier"
 import { Session } from "@ocpp/schema/session"
 import { SessionMessage } from "@ocpp/schema/session-message"
 import type { Info } from "@ocpp/schema/tool"
-import { Duration, Effect, Exit, Fiber, Schema, Scope } from "effect"
+import { Deferred, Duration, Effect, Exit, Fiber, Schema, Scope } from "effect"
 
 const context = {
   sessionID: Session.ID.make("ses_speculation"),
@@ -181,7 +181,7 @@ const start = (
       notificationID: SessionMessage.ID.create(),
       lent: new Set(),
       ...(options.speculation === undefined ? {} : { speculation: options.speculation }),
-      ...(options.intercepted === undefined ? {} : { intercepted: Effect.succeed(options.intercepted) }),
+      intercepted: Effect.succeed(options.intercepted ?? false),
     }),
   )
   expect(refused).toBeUndefined()
@@ -306,6 +306,54 @@ describe("Code Mode speculation", () => {
     ])
     expect(result.speculative()).toEqual(expect.arrayContaining([1, 2]))
     expect(tools.peak()).toBe(3)
+  })
+
+  test("a later read starts while an earlier one is still blocked, and runs once", async () => {
+    const releaseFirst = Effect.runSync(Deferred.make<void>())
+    const secondStarted = Effect.runSync(Deferred.make<void>())
+    const runs: Array<string> = []
+    const gated: ReadonlyArray<Info> = [
+      {
+        name: "first",
+        options: { readOnly: true },
+        description: "Blocks until released.",
+        input: Schema.Struct({}),
+        output: Schema.Struct({ value: Schema.String }),
+        execute: () =>
+          Effect.sync(() => runs.push("first")).pipe(
+            Effect.andThen(Deferred.await(releaseFirst)),
+            Effect.as({ output: { value: "A" } }),
+          ),
+      },
+      {
+        name: "second",
+        options: { readOnly: true },
+        description: "Signals when it starts.",
+        input: Schema.Struct({}),
+        output: Schema.Struct({ value: Schema.String }),
+        execute: () =>
+          Effect.sync(() => runs.push("second")).pipe(
+            Effect.andThen(Deferred.succeed(secondStarted, undefined)),
+            Effect.as({ output: { value: "B" } }),
+          ),
+      },
+    ]
+    const execution = start(lines("const a = tools.first({})", "const b = tools.second({})"), gated, {
+      speculation: on,
+    })
+    // The program is blocked on the first call, yet the second has already started.
+    await Effect.runPromise(Deferred.await(secondStarted))
+    expect(Effect.runSync(Deferred.isDone(releaseFirst))).toBe(false)
+    expect(execution.events).not.toContain("schedule:1")
+    await Effect.runPromise(Deferred.succeed(releaseFirst, undefined))
+    const outcome = await execution.settled()
+    expect(outcome.saved).toBe(true)
+    expect(execution.declarations()).toEqual({ a: { value: "A" }, b: { value: "B" } })
+    expect(runs.filter((run) => run === "second")).toHaveLength(1)
+    expect(execution.journal().map((entry) => [entry.tool, entry.status, entry.output])).toEqual([
+      ["first", "completed", { value: "A" }],
+      ["second", "completed", { value: "B" }],
+    ])
   })
 
   test("a read after a write is never served a result computed before the write", async () => {

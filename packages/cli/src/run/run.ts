@@ -1,6 +1,7 @@
 import { Service, type Endpoint } from "@ocpp/client/effect/service"
 import { Ocpp, type OcppClient, type SessionMessageAssistantTool } from "@ocpp/client/promise"
 import { FSUtil } from "@ocpp/util/fs-util"
+import { realpathSync } from "node:fs"
 import { open } from "node:fs/promises"
 import path from "node:path"
 import { readStdin } from "../util/io"
@@ -69,7 +70,7 @@ export function runNonInteractiveWithOptions(input: RunCommandInput, options: Ex
 
 async function run(input: RunCommandInput, options: ExecutionOptions) {
   if (input.fork && !input.continue && !input.session) fail("--fork requires --continue or --session")
-  const root = options.root ?? process.env.PWD ?? process.cwd()
+  const root = options.root ?? invocationDirectory()
   const local = localDirectory(root)
   const directory = options.useServerDirectory ? undefined : (options.directory ?? local)
   const message = mergeInput(formatMessage(input.message), process.stdin.isTTY ? undefined : await readStdin())
@@ -159,6 +160,25 @@ export function mergeInput(message: string | undefined, piped: string | undefine
 function formatMessage(message: string[]) {
   const value = message.map((part) => (part.includes(" ") ? `"${part.replace(/"/g, '\\"')}"` : part)).join(" ")
   return value || undefined
+}
+
+const CLI_PACKAGE_DIRECTORY = path.resolve(import.meta.dirname, "../..")
+
+/**
+ * The directory the CLI was invoked from. The dev script (`bun run --cwd packages/cli`) starts the CLI in its own
+ * package directory and leaves $PWD at the caller's directory, so $PWD is the answer there. Otherwise the working
+ * directory is: a parent that starts the CLI in another directory, such as a script setting a child's cwd, usually
+ * leaves $PWD stale. $PWD still wins when it names the working directory, to keep the symlinked path the user typed.
+ */
+export function invocationDirectory(cwd = process.cwd(), pwd = process.env.PWD, cliPackage = CLI_PACKAGE_DIRECTORY) {
+  if (!pwd) return cwd
+  if (cwd === cliPackage) return pwd
+  try {
+    if (realpathSync(pwd) === realpathSync(cwd)) return pwd
+  } catch {
+    return cwd
+  }
+  return cwd
 }
 
 function localDirectory(root: string) {

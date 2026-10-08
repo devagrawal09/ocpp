@@ -185,9 +185,7 @@ function decode(file: { directory: string; filepath: string; primary: boolean },
           ConfigMigrateV1.migrateAgent,
         ),
       )
-    : Option.getOrUndefined(
-        decodeAgent({ ...markdown.data, system: body }, { errors: "all" }),
-      )
+    : Option.getOrUndefined(decodeAgent({ ...markdown.data, system: body }, { errors: "all" }))
   if (!agent) return
   const info = Option.getOrUndefined(
     decodeConfig({

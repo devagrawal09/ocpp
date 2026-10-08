@@ -5,7 +5,7 @@ import { durable, ephemeral, inventory } from "../event.js"
 import { Project } from "../project.js"
 import { Provider } from "../provider.js"
 import { Model } from "../model.js"
-import { NonNegativeInt, optional, statics } from "../schema.js"
+import { NonNegativeInt, isPrefixed, optional, statics } from "../schema.js"
 import { ascending } from "../identifier.js"
 import { SessionID } from "../session-id.js"
 import { WorkspaceID } from "../workspace-id.js"
@@ -14,13 +14,13 @@ import { FileDiff } from "../file-diff.js"
 
 const Timestamp = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))
 
-export const MessageID = Schema.String.check(Schema.isStartsWith("msg")).pipe(
+export const MessageID = Schema.String.check(isPrefixed("msg")).pipe(
   Schema.brand("SessionV1.MessageID"),
   statics((schema) => ({ ascending: (id?: string) => schema.make(id ?? "msg_" + ascending()) })),
 )
 export type MessageID = typeof MessageID.Type
 
-export const PartID = Schema.String.check(Schema.isStartsWith("prt")).pipe(
+export const PartID = Schema.String.check(isPrefixed("prt")).pipe(
   Schema.brand("SessionV1.PartID"),
   statics((schema) => ({ ascending: (id?: string) => schema.make(id ?? "prt_" + ascending()) })),
 )

@@ -11,9 +11,7 @@ export type Object = Schema.Schema.Type<typeof Object>
 export const Rule = Schema.Union([Action, Object]).annotate({ identifier: "PermissionRuleConfig" })
 export type Rule = Schema.Schema.Type<typeof Rule>
 
-// Known permission keys get explicit types in the Effect schema for generated
-// docs/types. Runtime config parsing uses Effect's `propertyOrder: "original"`
-// parse option so user key order is preserved for permission precedence.
+// Known permission keys get explicit types; InputObject defines the accepted shape.
 const InputObject = Schema.StructWithRest(
   Schema.Struct({
     read: Schema.optional(Rule),
@@ -34,16 +32,20 @@ const InputObject = Schema.StructWithRest(
   [Schema.Record(Schema.String, Rule)],
 )
 
-const InputSchema = Schema.Union([Action, InputObject])
+// Key order is permission precedence. Struct decoding emits recognized keys first, so the object is
+// decoded as a Record, which keeps input key order, and narrowed to InputObject's shape.
+const OrderedObject = Schema.Record(Schema.String, Rule).pipe(Schema.refine(Schema.is(InputObject)))
 
-const normalizeInput = (input: Schema.Schema.Type<typeof InputSchema>): Schema.Schema.Type<typeof InputObject> =>
+const InputSchema = Schema.Union([Action, OrderedObject])
+
+const normalizeInput = (input: Schema.Schema.Type<typeof InputSchema>): Schema.Schema.Type<typeof OrderedObject> =>
   typeof input === "string" ? { "*": input } : input
 
 export const Info = InputSchema.pipe(
-  Schema.decodeTo(InputObject, {
+  Schema.decodeTo(OrderedObject, {
     decode: SchemaGetter.transform(normalizeInput),
     encode: SchemaGetter.passthrough({ strict: false }),
   }),
 ).annotate({ identifier: "PermissionConfig" })
-type _Info = Schema.Schema.Type<typeof InputObject>
+type _Info = Schema.Schema.Type<typeof OrderedObject>
 export type Info = { -readonly [K in keyof _Info]: _Info[K] }

@@ -92,7 +92,7 @@ export const layer = (options?: Options) =>
       const names = ["opencode.json", "opencode.jsonc"]
       const reloadLock = Semaphore.makeUnsafe(1)
       const fileTargets = new Set<AbsolutePath>()
-      const decodeOptions = { errors: "all", onExcessProperty: "ignore", propertyOrder: "original" } as const
+      const decodeOptions = { errors: "all", onExcessProperty: "ignore" } as const
       const decodeInfo = Schema.decodeUnknownOption(Info, decodeOptions)
       const parseInfo = Effect.fn("Config.parseInfo")(function* (text: string, source: string) {
         const errors: ParseError[] = []

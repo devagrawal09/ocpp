@@ -3,7 +3,7 @@ import { Arbitrary, Duration, Effect, Schema } from "effect"
 import { ConfigNormalize } from "@opencode-ai/core/config/normalize"
 import { Info } from "@opencode-ai/schema/config"
 
-const options = { errors: "all", onExcessProperty: "ignore", propertyOrder: "original" } as const
+const options = { errors: "all", onExcessProperty: "ignore" } as const
 
 function normalized(input: unknown) {
   const result = ConfigNormalize.normalize(input)
@@ -238,6 +238,22 @@ describe("ConfigNormalize", () => {
       { action: "subagent", resource: "*", effect: "allow" },
       { action: "native", resource: "*", effect: "deny" },
     ])
+  })
+
+  test("preserves agent permission key order after tool-derived rules", () => {
+    // Recognized permission keys (read, edit, ...) must not move ahead of custom keys: order is precedence.
+    const agent = { tools: { zt: true }, permission: { custom: "deny", "*": "ask", read: "allow", edit: "deny" } }
+    const expected = [
+      { action: "zt", resource: "*", effect: "allow" },
+      { action: "custom", resource: "*", effect: "deny" },
+      { action: "*", resource: "*", effect: "ask" },
+      { action: "read", resource: "*", effect: "allow" },
+      { action: "edit", resource: "*", effect: "deny" },
+    ]
+    expect(normalized({ agent: { build: agent }, mode: { focus: agent } }).encoded.agents).toMatchObject({
+      build: { permissions: expected },
+      focus: { permissions: expected },
+    })
   })
 
   test("redacts permission resource keys from invalid diagnostics", () => {

@@ -4,9 +4,9 @@ import { Schema, SchemaTransformation } from "effect"
 import { optional } from "./schema.js"
 import { ascending } from "./identifier.js"
 import { Location } from "./location.js"
-import { statics } from "./schema.js"
+import { isPrefixed, statics } from "./schema.js"
 
-export const ID = Schema.String.check(Schema.isStartsWith("evt_")).pipe(
+export const ID = Schema.String.check(isPrefixed("evt_")).pipe(
   Schema.brand("Event.ID"),
   statics((schema) => ({ create: () => schema.make("evt_" + ascending()) })),
 )

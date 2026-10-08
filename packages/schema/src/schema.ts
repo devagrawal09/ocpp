@@ -28,3 +28,7 @@ export const DateTimeUtcFromMillis = Schema.Finite.pipe(
     encode: SchemaGetter.transform((value) => DateTime.toEpochMillis(value)),
   }),
 )
+
+// Equivalent to Schema.isStartsWith, which effect 4.0.1 renamed to isStartingWith; isPattern exists in both.
+export const isPrefixed = (prefix: string) =>
+  Schema.isPattern(new RegExp("^" + prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))

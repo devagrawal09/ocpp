@@ -1,5 +1,5 @@
 import { Schema, SchemaGetter } from "effect"
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 
 const Json = Schema.Json.pipe(
   Schema.decodeTo(Schema.Unknown, {

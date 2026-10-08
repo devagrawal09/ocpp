@@ -2,7 +2,7 @@ import { Service, type Endpoint } from "@ocpp/client/effect/service"
 import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Deferred, Effect, Schema, Stream } from "effect"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { selfCommand } from "../util/process"
 
 const Ready = Schema.Struct({ url: Schema.String })

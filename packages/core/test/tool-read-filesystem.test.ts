@@ -8,7 +8,7 @@ import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
 import { LayerNodePlatform } from "@ocpp/util/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Effect, FileSystem } from "effect"
-import { ChildProcessSpawner } from "effect/unstable/process"
+import { ChildProcessSpawner } from "effect/process"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(LayerNode.compile(LayerNode.group([CrossSpawnSpawner.node, LayerNodePlatform.filesystem])))

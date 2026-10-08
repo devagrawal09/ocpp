@@ -1,5 +1,5 @@
 import { Effect, Layer } from "effect"
-import { HttpClient, HttpClientResponse } from "effect/unstable/http"
+import { HttpClient, HttpClientResponse } from "effect/http"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Credential } from "@ocpp/core/credential"

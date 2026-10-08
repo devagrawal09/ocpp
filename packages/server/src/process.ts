@@ -3,14 +3,8 @@ export * as ServerProcess from "./process"
 import { NodeHttpServer } from "@effect/platform-node"
 import { SessionRestart } from "@ocpp/core/session/execution/restart"
 import { Cause, Context, Effect, Exit, Latch, Layer, Option, Ref, Scope } from "effect"
-import {
-  HttpMiddleware,
-  HttpPlatform,
-  HttpRouter,
-  HttpServer,
-  HttpServerRequest,
-  HttpServerResponse,
-} from "effect/unstable/http"
+import { HttpMiddleware, HttpPlatform, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { NetAddress } from "effect/net"
 import { createServer } from "node:http"
 import { isAllowedCorsOrigin } from "./cors"
 import { withoutParentSpan } from "./request-tracing"
@@ -21,7 +15,7 @@ import type { ServerOptions } from "./options"
 
 export interface Lifecycle<E = never, R = never> {
   readonly onListen: (
-    address: HttpServer.Address,
+    address: NetAddress.SocketAddress,
     shutdown: Effect.Effect<void>,
   ) => Effect.Effect<Effect.Effect<void>, E, R>
 }

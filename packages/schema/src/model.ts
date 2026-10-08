@@ -1,14 +1,14 @@
 export * as Model from "./model.js"
 
 import { Schema } from "effect"
-import { optional, statics } from "./schema.js"
+import { brand, optional, statics } from "./schema.js"
 import { Provider } from "./provider.js"
 import { Money } from "./money.js"
 
-export const ID = Schema.String.pipe(Schema.brand("Model.ID"))
+export const ID = Schema.String.pipe(brand("Model.ID"))
 export type ID = typeof ID.Type
 
-export const VariantID = Schema.String.pipe(Schema.brand("Model.VariantID"))
+export const VariantID = Schema.String.pipe(brand("Model.VariantID"))
 export type VariantID = typeof VariantID.Type
 
 export const Ref = Schema.Struct({
@@ -38,7 +38,7 @@ export const Ref = Schema.Struct({
   )
 export interface Ref extends Schema.Schema.Type<typeof Ref> {}
 
-export const Family = Schema.String.pipe(Schema.brand("Model.Family"))
+export const Family = Schema.String.pipe(brand("Model.Family"))
 export type Family = typeof Family.Type
 
 export type ReasoningField = "reasoning" | "reasoning_content" | "reasoning_text" | (string & {})

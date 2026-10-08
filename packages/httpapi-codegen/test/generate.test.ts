@@ -4,14 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Effect, FileSystem, Schema, SchemaAST, SchemaGetter } from "effect"
-import {
-  HttpApi,
-  HttpApiEndpoint,
-  HttpApiGroup,
-  HttpApiMiddleware,
-  HttpApiSchema,
-  OpenApi,
-} from "effect/unstable/httpapi"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
 import { format } from "prettier"
 import {
   compile as compileContract,
@@ -141,6 +134,75 @@ describe("HttpApiCodegen.generate", () => {
     expect(source).toContain("export type SessionGetOutput = Session.Info")
     expect(source).not.toContain("HttpApiClient")
     expect(source).not.toContain("@example/api")
+  })
+
+  test("restores annotated brands in Effect API types and runtime schemas", () => {
+    // Effect 4 erases `Schema.brand` from the AST; the `brands` annotation is the only runtime trace codegen can read.
+    const SessionID = Schema.String.check(Schema.isStartingWith("ses"))
+      .pipe(Schema.brand("SessionID"))
+      .annotate({ brands: ["SessionID"] })
+    const Path = Schema.String.pipe(Schema.brand("Path")).annotate({ brands: ["Path"] })
+    const USD = Schema.Finite.pipe(Schema.brand("USD")).annotate({ brands: ["USD"] })
+    const contract = compileContract(
+      api(
+        HttpApiEndpoint.get("get", "/session/:sessionID", {
+          params: { sessionID: SessionID },
+          query: { directory: Schema.optional(Path) },
+          success: Schema.Struct({
+            data: Schema.Struct({ active: Schema.Record(SessionID, Schema.Boolean), cost: USD, title: Schema.String }),
+          }),
+        }),
+      ),
+    )
+    const source = emitEffectShape(contract, {
+      typeReferences: [
+        { schema: SessionID, name: "Session.ID", import: 'import type { Session } from "@example/schema/session"' },
+        { schema: Path, name: "Path", import: 'import type { Path } from "@example/schema/path"' },
+      ],
+    }).files[0]?.content
+
+    expect(source).toContain('import type { Brand } from "effect"')
+    expect(source).toContain(
+      'export type SessionGetInput = { readonly "sessionID": Session.ID; readonly "directory"?: Path | undefined }',
+    )
+    expect(source).toContain(
+      'export type SessionGetOutput = { readonly "active": { readonly [x: Session.ID]: boolean }, readonly "cost": number & Brand.Brand<"USD">, readonly "title": string }',
+    )
+    expect(emitEffect(contract).files.find((file) => file.path === "session.ts")?.content).toContain(
+      '.pipe(Schema.brand("SessionID"))',
+    )
+  })
+
+  test("rejects branded Effect type references without a brands annotation", () => {
+    const Path = Schema.String.pipe(Schema.brand("Path"))
+
+    expect(() =>
+      emitEffectShape(compileContract(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String }))), {
+        typeReferences: [{ schema: Path, name: "Path", import: 'import type { Path } from "@example/schema/path"' }],
+      }),
+    ).toThrow("Branded Effect type reference requires a brands annotation: Path (Path)")
+  })
+
+  test("rejects inline branded endpoint schemas without a brands annotation", () => {
+    expect(() =>
+      compileContract(
+        api(
+          HttpApiEndpoint.get("get", "/session/:id", {
+            params: { id: Schema.String.pipe(Schema.brand("SessionID")) },
+            success: Schema.String,
+          }),
+        ),
+      ),
+    ).toThrow("Branded schema requires a brands annotation: session.get.params (SessionID)")
+    expect(() =>
+      compileContract(
+        api(
+          HttpApiEndpoint.get("get", "/session", {
+            success: Schema.Struct({ data: Schema.Array(Schema.optional(Schema.Finite.pipe(Schema.brand("USD")))) }),
+          }),
+        ),
+      ),
+    ).toThrow("Branded schema requires a brands annotation: session.get.success (USD)")
   })
 
   test("allows composed Effect outputs to use an authoritative named type", () => {
@@ -598,6 +660,17 @@ describe("HttpApiCodegen.generate", () => {
     expect(types).toContain('"name" in value && value["name"] === "NamedError"')
   })
 
+  test("requires the authoritative import for name-discriminated Effect errors", () => {
+    class NamedError extends Schema.Error<NamedError>("NamedError")(
+      { name: Schema.Literal("NamedError"), message: Schema.String },
+      { httpApiStatus: 400 },
+    ) {}
+
+    expect(() =>
+      compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String, error: NamedError }))),
+    ).toThrow("Effect schema requires authoritative import: session.get")
+  })
+
   test("preserves reflected default error statuses", () => {
     class MissingStatus extends Schema.TaggedError<MissingStatus>()("MissingStatus", {
       message: Schema.String,
@@ -614,8 +687,10 @@ describe("HttpApiCodegen.generate", () => {
       compileContract(
         api(
           HttpApiEndpoint.get("get", "/session/:sessionID", {
-            params: { sessionID: Schema.String.pipe(Schema.brand("SessionID")) },
-            success: Schema.Struct({ data: Schema.String.pipe(Schema.brand("SessionID")) }),
+            params: { sessionID: Schema.String.pipe(Schema.brand("SessionID")).annotate({ brands: ["SessionID"] }) },
+            success: Schema.Struct({
+              data: Schema.String.pipe(Schema.brand("SessionID")).annotate({ brands: ["SessionID"] }),
+            }),
           }),
         ),
       ),
@@ -1428,7 +1503,7 @@ describe("HttpApiCodegen.generate", () => {
 
   test("rejects spoofed and aborted validation checks", () => {
     const Spoofed = Schema.Number.check(
-      Schema.makeFilter(() => "always fails", { meta: { _tag: "isFinite" }, arbitrary: {} }),
+      Schema.makeFilter(() => "always fails", { meta: { _tag: "isFinite" }, arbitraryConstraint: {} }),
     )
     const Aborted = Schema.Number.check(Schema.isFinite().abort())
 

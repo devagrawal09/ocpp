@@ -1,5 +1,5 @@
 import { Config } from "@ocpp/core/config"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api"
 
 export const ConfigHandler = HttpApiBuilder.group(Api, "server.config", (handlers) =>

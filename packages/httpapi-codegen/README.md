@@ -25,6 +25,7 @@ The package is private while its API is explored. Its tests are the executable s
 - Reject ambiguous multiple-success contracts.
 - Expose streaming success as `Stream`, not `Effect<Stream>`.
 - Reject schemas whose wire/domain transformation cannot be generated exactly.
+- Restore `Schema.brand` nominal types from a `brands: [identifier]` annotation. Effect 4 erases brands from the AST, so branded schemas must carry it; Effect type references to unannotated brands are rejected.
 - Map transport, unexpected-status, and response-decoding failures to one stable generated `ClientError`.
 - Commit generated source for review; CI regenerates and fails when the worktree changes.
 - Track generated files in `.httpapi-codegen.json` so regeneration removes only stale files previously owned by the generator.

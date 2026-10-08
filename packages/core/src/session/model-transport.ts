@@ -13,7 +13,7 @@ import {
 import { AIError, AIErrorReason, TransportError, type TransportOperation } from "@ocpp/ai"
 import { Hash } from "@ocpp/util/hash"
 import { Cause, Clock, Context, Effect, Fiber, Layer, Metric, Queue, Scope, Semaphore, Stream } from "effect"
-import { Socket } from "effect/unstable/socket"
+import { Socket } from "effect/socket"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { SessionSchema } from "./schema.js"
 import { webSocketConstructor } from "../effect/app-node-platform.js"

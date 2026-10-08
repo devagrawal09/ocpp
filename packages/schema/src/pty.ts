@@ -4,9 +4,9 @@ import { Schema } from "effect"
 import { optional } from "./schema.js"
 import { ephemeral, inventory } from "./event.js"
 import { ascending } from "./identifier.js"
-import { NonNegativeInt, PositiveInt, statics } from "./schema.js"
+import { NonNegativeInt, PositiveInt, brand, statics } from "./schema.js"
 
-const IDSchema = Schema.String.check(Schema.isStartsWith("pty")).pipe(Schema.brand("PtyID"))
+const IDSchema = Schema.String.check(Schema.isStartingWith("pty")).pipe(brand("PtyID"))
 
 export const ID = IDSchema.pipe(
   statics((schema: typeof IDSchema) => {

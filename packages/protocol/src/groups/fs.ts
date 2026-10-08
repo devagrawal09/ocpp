@@ -2,7 +2,7 @@ import { FileSystem } from "@ocpp/schema/filesystem"
 import { Location } from "@ocpp/schema/location"
 import { PositiveInt, RelativePath } from "@ocpp/schema/schema"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { LocationQuery, locationQueryOpenApi } from "./location.js"
 
 const ListQuery = Schema.Struct({

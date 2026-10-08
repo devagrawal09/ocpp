@@ -9,7 +9,7 @@ import {
   InvalidRequestError,
 } from "@ocpp/protocol/errors"
 import { Effect, Option } from "effect"
-import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiBuilder, HttpApiSchema } from "effect/http-api"
 import { Api } from "../api"
 import { requestRef, response, sessionRef, withLoadedLocationServices } from "../location"
 

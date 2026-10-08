@@ -169,7 +169,8 @@ const standardJsonSchema = (schema: StandardSchemaV1<any, any>, io: "input" | "o
 }
 
 const toJsonSchema = (schema: Schema.Top): JsonSchema.JsonSchema => {
-  const document = Schema.toJsonSchemaDocument(schema)
+  // Effect emits open objects by default; keep tool schemas closed (`additionalProperties: false`) for provider strict modes.
+  const document = Schema.toJsonSchemaDocument(schema, { onExcessProperty: "error" })
   // Effect emits valid JSON Schema that some inference providers handle poorly. Simplify it
   // without changing validation: `{ type: "integer", allOf: [{ minimum: 0 }] }` becomes
   // `{ type: "integer", minimum: 0 }` only when no keyword would be overwritten. Named schemas

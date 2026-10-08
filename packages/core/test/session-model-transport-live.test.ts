@@ -12,8 +12,8 @@ import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { WebSocketConstructor } from "@ocpp/core/effect/websocket-constructor"
 import { Session } from "@ocpp/schema/session"
 import { Effect, Fiber, Layer, Stream } from "effect"
-import { Headers } from "effect/unstable/http"
-import { Socket } from "effect/unstable/socket"
+import { Headers } from "effect/http"
+import { Socket } from "effect/socket"
 import { makeWebSocketServer, type WebSocketServerFixture, type WebSocketServerOptions } from "./lib/websocket-server"
 
 const sessionID = Session.ID.make("ses_live_websocket")

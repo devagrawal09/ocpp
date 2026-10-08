@@ -591,6 +591,21 @@ describe("HttpApiCodegen.generate", () => {
     expect(types).toContain('"name" in value && value["name"] === "NamedError"')
   })
 
+  test("requires an authoritative import for name-discriminated errors", () => {
+    class NamedError extends Schema.Error<NamedError>("NamedError")(
+      { name: Schema.Literal("NamedError"), message: Schema.String },
+      { httpApiStatus: 400 },
+    ) {}
+    const contract = compileContract(
+      api(HttpApiEndpoint.get("get", "/session", { success: Schema.String, error: NamedError })),
+    )
+
+    expect(contract.groups.flatMap((group) => group.endpoints).map((endpoint) => endpoint.effectPortable)).toEqual([
+      false,
+    ])
+    expect(() => emitEffect(contract)).toThrow("Effect schema requires authoritative import")
+  })
+
   test("preserves reflected default error statuses", () => {
     class MissingStatus extends Schema.TaggedError<MissingStatus>()("MissingStatus", {
       message: Schema.String,

@@ -1347,6 +1347,10 @@ function normalizeTransport(
               : Array.from(rebuilt.error)[0]
   if (normalized === undefined) throw new GenerationError({ reason: `Unportable schema: ${operation}.${source}` })
   if (!sameEncoding(schema.ast, normalized.ast)) return { schema, effectPortable: false } as const
+  // The standalone Effect emitter reconstructs only `_tag` error classes; name-discriminated errors need
+  // the authoritative schema import.
+  if (source === "error" && declaredErrorFields(schema)?.key === "name")
+    return { schema, effectPortable: false } as const
   return { schema: decoded, effectPortable: true } as const
 }
 
@@ -1609,9 +1613,8 @@ function checksPortable(checks: SchemaAST.Checks | undefined): boolean {
       ? !check.aborted &&
         check.annotations?.representation !== undefined &&
         serializable(check.annotations.representation) &&
-        typeof check.annotations.arbitrary === "object" &&
-        check.annotations.arbitrary !== null &&
-        "constraint" in check.annotations.arbitrary
+        typeof check.annotations.arbitraryConstraint === "object" &&
+        check.annotations.arbitraryConstraint !== null
       : checksPortable(check.checks),
   )
 }
@@ -1650,7 +1653,7 @@ function annotationsPortable(annotations: Schema.Annotations.Annotations | undef
         "toCodec",
         "toCodecJson",
         "toCodecStringTree",
-        "toArbitrary",
+        "toCodecArbitrary",
         "toFormatter",
         "toEquivalence",
         "toCode",

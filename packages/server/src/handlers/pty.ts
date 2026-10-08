@@ -167,15 +167,19 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
               : undefined
 
           const socket = yield* Effect.orDie(ctx.request.upgrade)
-          const write = yield* socket.writer
+          const writer = yield* socket.writer
+          // Acquiring the reader performs the upgrade handshake; wait for the peer to finish the
+          // close handshake, bounded so a silent peer cannot hold the request open.
           const closeAccepted = (event: Socket.CloseEvent) =>
-            socket
-              .runRaw(() => Effect.void, { onOpen: write(event).pipe(Effect.catch(() => Effect.void)) })
-              .pipe(
-                Effect.timeout("1 second"),
-                Effect.catchReason("SocketError", "SocketCloseError", () => Effect.void),
-                Effect.catch(() => Effect.void),
-              )
+            Effect.gen(function* () {
+              const reader = yield* socket.reader
+              yield* writer.write(event).pipe(Effect.catch(() => Effect.void))
+              yield* Effect.forever(reader.pull)
+            }).pipe(
+              Effect.scoped,
+              Effect.timeout("1 second"),
+              Effect.catch(() => Effect.void),
+            )
 
           // Outbound frames flow through one queue drained by a single writer so replay, live
           // output, and the close frame keep their order.
@@ -204,18 +208,26 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
           const drain = Effect.gen(function* () {
             while (true) {
               const item = yield* Queue.take(outbox)
-              yield* write(item)
+              yield* writer.write(item)
               if (item instanceof Socket.CloseEvent) return
             }
           })
 
-          yield* Effect.race(
-            drain,
-            socket.runRaw((message) => {
-              const decoded = PtyProtocol.decodeInput(message)
-              if (decoded !== undefined) attachment.write(decoded)
-            }),
-          ).pipe(
+          // Every socket termination, including a clean client close, fails the pull with a
+          // SocketError, so whichever side finishes first ends the connection.
+          yield* Effect.gen(function* () {
+            const reader = yield* socket.reader
+            const input = Effect.gen(function* () {
+              while (true) {
+                for (const message of yield* reader.pull) {
+                  const decoded = PtyProtocol.decodeInput(message)
+                  if (decoded !== undefined) attachment.write(decoded)
+                }
+              }
+            })
+            yield* Effect.raceFirst(drain, input)
+          }).pipe(
+            Effect.scoped,
             Effect.catchReason("SocketError", "SocketCloseError", () => Effect.void),
             Effect.ensuring(Effect.sync(() => attachment.detach())),
             Effect.orDie,

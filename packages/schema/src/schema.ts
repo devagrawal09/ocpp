@@ -17,10 +17,12 @@ export const optional = <S extends Schema.Top>(schema: S) =>
     }),
   )
 
+// Defines statics as own properties: effect 4.0.1 exposes schema members such as `make` as prototype
+// getters without setters, which plain assignment (Object.assign) cannot shadow.
 export const statics =
   <S extends object, M extends Record<string, unknown>>(methods: (schema: S) => M) =>
   (schema: S): S & M =>
-    Object.assign(schema, methods(schema))
+    Object.defineProperties(schema, Object.getOwnPropertyDescriptors(methods(schema))) as S & M
 
 export const DateTimeUtcFromMillis = Schema.Finite.pipe(
   Schema.decodeTo(Schema.DateTimeUtc, {

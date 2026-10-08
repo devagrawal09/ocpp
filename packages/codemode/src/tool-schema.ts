@@ -168,7 +168,8 @@ const renderSchema = (
 export const toTypeScript = (schema: Schema.Top, decoded = false, pretty = false): string => {
   try {
     const visible = decoded ? Schema.toType(schema) : schema
-    const document = Schema.toJsonSchemaDocument(visible) as {
+    // Structs are closed (`additionalProperties: false`) only when excess properties are rejected.
+    const document = Schema.toJsonSchemaDocument(visible, { onExcessProperty: "error" }) as {
       readonly schema: JsonSchema
       readonly definitions?: Readonly<Record<string, JsonSchema>>
     }
@@ -195,7 +196,7 @@ export type InputProperty = {
 export const inputProperties = <R>(tool: Tool<R>): Array<InputProperty> => {
   try {
     const document = isEffectSchema(tool.input)
-      ? (Schema.toJsonSchemaDocument(tool.input) as {
+      ? (Schema.toJsonSchemaDocument(tool.input, { onExcessProperty: "error" }) as {
           readonly schema: JsonSchema
           readonly definitions?: Readonly<Record<string, JsonSchema>>
         })

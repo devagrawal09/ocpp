@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { statics } from "@opencode-ai/schema/schema"
 import { Tool } from "@opencode-ai/schema/tool"
 import {
   CacheHint,
@@ -29,13 +30,15 @@ export type SystemPart = Schema.Schema.Type<typeof systemPartSchema>
 
 const makeSystemPart = (text: string): SystemPart => ({ type: "text", text })
 
-export const SystemPart = Object.assign(systemPartSchema, {
-  make: makeSystemPart,
-  content: (input?: string | SystemPart | ReadonlyArray<SystemPart>) => {
-    if (input === undefined) return []
-    return typeof input === "string" ? [makeSystemPart(input)] : Array.isArray(input) ? [...input] : [input]
-  },
-})
+export const SystemPart = systemPartSchema.pipe(
+  statics(() => ({
+    make: makeSystemPart,
+    content: (input?: string | SystemPart | ReadonlyArray<SystemPart>) => {
+      if (input === undefined) return []
+      return typeof input === "string" ? [makeSystemPart(input)] : Array.isArray(input) ? [...input] : [input]
+    },
+  })),
+)
 
 export const TextPart = Schema.Struct({
   type: Schema.Literal("text"),
@@ -81,47 +84,50 @@ const toolResultValueSchema = Schema.Union([
 ]).annotate({ identifier: "LLM.ToolResult" })
 export type ToolResultValue = Schema.Schema.Type<typeof toolResultValueSchema>
 
-export const ToolResultValue = Object.assign(toolResultValueSchema, {
-  is: isToolResultValue,
-  make: (value: unknown, type: ToolResultValue["type"] = "json"): ToolResultValue => {
-    if (isToolResultValue(value)) return value
-    if (type === "content") return { type, value: Array.isArray(value) ? value : [] }
-    return { type, value }
-  },
-})
+export const ToolResultValue = toolResultValueSchema.pipe(
+  statics(() => ({
+    is: isToolResultValue,
+    make: (value: unknown, type: ToolResultValue["type"] = "json"): ToolResultValue => {
+      if (isToolResultValue(value)) return value
+      if (type === "content") return { type, value: Array.isArray(value) ? value : [] }
+      return { type, value }
+    },
+  })),
+)
 
 export interface ToolOutput {
   readonly structured: unknown
   readonly content: ReadonlyArray<Tool.Content>
 }
 
-export const ToolOutput = Object.assign(
-  Schema.Struct({
-    structured: Schema.Unknown,
-    content: Schema.Array(Tool.Content),
-  }).annotate({ identifier: "LLM.ToolOutput" }),
-  {
-    make: (structured: unknown, content: ReadonlyArray<Tool.Content> = []): ToolOutput => ({ structured, content }),
-    fromResultValue: (result: ToolResultValue): ToolOutput | undefined => {
-      switch (result.type) {
-        case "json":
-          return { structured: result.value, content: [] }
-        case "text":
-          return { structured: {}, content: [{ type: "text", text: toolResultText(result.value) }] }
-        case "content":
-          return { structured: {}, content: result.value }
-        case "error":
-          return undefined
-      }
-    },
-    toResultValue: (output: ToolOutput): ToolResultValue => {
-      if (output.content.length === 0) return { type: "json", value: output.structured }
-      if (output.content.length === 1 && output.content[0]?.type === "text")
-        return { type: "text", value: output.content[0].text }
-      return { type: "content", value: output.content }
-    },
-  },
-)
+export const ToolOutput = Schema.Struct({
+  structured: Schema.Unknown,
+  content: Schema.Array(Tool.Content),
+})
+  .annotate({ identifier: "LLM.ToolOutput" })
+  .pipe(
+    statics(() => ({
+      make: (structured: unknown, content: ReadonlyArray<Tool.Content> = []): ToolOutput => ({ structured, content }),
+      fromResultValue: (result: ToolResultValue): ToolOutput | undefined => {
+        switch (result.type) {
+          case "json":
+            return { structured: result.value, content: [] }
+          case "text":
+            return { structured: {}, content: [{ type: "text", text: toolResultText(result.value) }] }
+          case "content":
+            return { structured: {}, content: result.value }
+          case "error":
+            return undefined
+        }
+      },
+      toResultValue: (output: ToolOutput): ToolResultValue => {
+        if (output.content.length === 0) return { type: "json", value: output.structured }
+        if (output.content.length === 1 && output.content[0]?.type === "text")
+          return { type: "text", value: output.content[0].text }
+        return { type: "content", value: output.content }
+      },
+    })),
+  )
 
 const toolResultText = (value: unknown) => {
   if (typeof value === "string") return value
@@ -132,52 +138,54 @@ const toolResultText = (value: unknown) => {
   }
 }
 
-export const ToolCallPart = Object.assign(
-  Schema.Struct({
-    type: Schema.Literal("tool-call"),
-    id: Schema.String,
-    name: Schema.String,
-    input: Schema.Unknown,
-    providerExecuted: Schema.optional(Schema.Boolean),
-    cache: Schema.optional(CacheHint),
-    metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-    providerMetadata: Schema.optional(ProviderMetadata),
-  }).annotate({ identifier: "LLM.Content.ToolCall" }),
-  {
-    make: (input: Omit<ToolCallPart, "type">): ToolCallPart => ({ type: "tool-call", ...input }),
-  },
-)
+export const ToolCallPart = Schema.Struct({
+  type: Schema.Literal("tool-call"),
+  id: Schema.String,
+  name: Schema.String,
+  input: Schema.Unknown,
+  providerExecuted: Schema.optional(Schema.Boolean),
+  cache: Schema.optional(CacheHint),
+  metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  providerMetadata: Schema.optional(ProviderMetadata),
+})
+  .annotate({ identifier: "LLM.Content.ToolCall" })
+  .pipe(
+    statics(() => ({
+      make: (input: Omit<ToolCallPart, "type">): ToolCallPart => ({ type: "tool-call", ...input }),
+    })),
+  )
 export type ToolCallPart = Schema.Schema.Type<typeof ToolCallPart>
 
-export const ToolResultPart = Object.assign(
-  Schema.Struct({
-    type: Schema.Literal("tool-result"),
-    id: Schema.String,
-    name: Schema.String,
-    result: ToolResultValue,
-    providerExecuted: Schema.optional(Schema.Boolean),
-    cache: Schema.optional(CacheHint),
-    metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-    providerMetadata: Schema.optional(ProviderMetadata),
-  }).annotate({ identifier: "LLM.Content.ToolResult" }),
-  {
-    make: (
-      input: Omit<ToolResultPart, "type" | "result"> & {
-        readonly result: unknown
-        readonly resultType?: ToolResultValue["type"]
-      },
-    ): ToolResultPart => ({
-      type: "tool-result",
-      id: input.id,
-      name: input.name,
-      result: ToolResultValue.make(input.result, input.resultType),
-      providerExecuted: input.providerExecuted,
-      cache: input.cache,
-      metadata: input.metadata,
-      providerMetadata: input.providerMetadata,
-    }),
-  },
-)
+export const ToolResultPart = Schema.Struct({
+  type: Schema.Literal("tool-result"),
+  id: Schema.String,
+  name: Schema.String,
+  result: ToolResultValue,
+  providerExecuted: Schema.optional(Schema.Boolean),
+  cache: Schema.optional(CacheHint),
+  metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  providerMetadata: Schema.optional(ProviderMetadata),
+})
+  .annotate({ identifier: "LLM.Content.ToolResult" })
+  .pipe(
+    statics(() => ({
+      make: (
+        input: Omit<ToolResultPart, "type" | "result"> & {
+          readonly result: unknown
+          readonly resultType?: ToolResultValue["type"]
+        },
+      ): ToolResultPart => ({
+        type: "tool-result",
+        id: input.id,
+        name: input.name,
+        result: ToolResultValue.make(input.result, input.resultType),
+        providerExecuted: input.providerExecuted,
+        cache: input.cache,
+        metadata: input.metadata,
+        providerMetadata: input.providerMetadata,
+      }),
+    })),
+  )
 export type ToolResultPart = Schema.Schema.Type<typeof ToolResultPart>
 
 export const ReasoningPart = Schema.Struct({

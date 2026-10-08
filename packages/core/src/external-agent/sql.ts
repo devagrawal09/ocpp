@@ -1,5 +1,6 @@
 import { sqliteTable, text } from "drizzle-orm/sqlite-core"
 import type { ExternalSession } from "@ocpp/schema/external-session"
+import type { SessionDriver } from "@ocpp/schema/session-driver"
 import { SessionTable } from "../session/sql.js"
 import { directoryColumn } from "../database/path.js"
 
@@ -16,4 +17,6 @@ export const ExternalSessionTable = sqliteTable("session_external", {
   /** Notebook identifiers checkpointed into the linked vendor session's instructions, fixed for its lifetime. */
   notebook: text({ mode: "json" }).$type<ReadonlyArray<string>>(),
   status: text().$type<ExternalSession.Status>().notNull(),
+  /** The harness the last subagent call ran this child with; a continuation that names none keeps it. */
+  harness: text().$type<SessionDriver.Harness>(),
 })

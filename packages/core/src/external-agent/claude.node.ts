@@ -137,6 +137,12 @@ export function settings(
     abortController: controller,
     includePartialMessages: true,
     mcpServers: { ocpp: mcp },
+    // Environment controls reach native subagents. Flag settings outrank user and project settings.
+    env: { ...process.env, DISABLE_AUTO_COMPACT: "1", DISABLE_COMPACT: "1" },
+    managedSettings: { autoCompactEnabled: false, precomputeCompactionEnabled: false },
+    extraArgs: {
+      settings: JSON.stringify({ autoCompactEnabled: false, precomputeCompactionEnabled: false }),
+    },
   } satisfies Options
   if (options.harness.type === "ocpp")
     return {

@@ -7,7 +7,7 @@ import { Model } from "@ocpp/schema/model"
 import { Provider } from "@ocpp/schema/provider"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import { FSUtil } from "@ocpp/util/fs-util"
-import { Deferred, Effect, Schema } from "effect"
+import { Deferred, Effect, Option, Schema } from "effect"
 import { realpath, stat } from "node:fs/promises"
 import path from "path"
 import { Agent } from "../../agent.js"
@@ -16,10 +16,13 @@ import { Catalog } from "../../catalog.js"
 import { Config } from "../../config.js"
 import { ExternalAgentDrivers } from "../../external-agent/drivers.js"
 import { ExternalAgentEffort } from "../../external-agent/effort.js"
+import { ExternalAgentModels } from "../../external-agent/models.js"
 import { ExternalAgentSession } from "../../external-agent/session.js"
 import { Location } from "../../location.js"
 import { PluginRuntime } from "../../plugin/runtime.js"
 import { SessionEvent } from "../../session/event.js"
+import { SessionMessage } from "../../session/message.js"
+import { untrusted } from "../../codemode/untrusted.js"
 import { AbsolutePath } from "../../schema.js"
 import { SessionSchema } from "../../session/schema.js"
 import { Tool } from "../../tool.js"
@@ -34,16 +37,40 @@ const MAX_SUMMARY_KEYS = 20
 const CONTINUE_AFTER_RESTART =
   "The server restarted while you were working on this task. Continue from where you left off without repeating completed work."
 
-/** Progress a subagent call records once its child holds the task, so a restart can rejoin that child. */
-const Attached = Schema.Struct({ sessionID: SessionSchema.ID })
+/**
+ * Progress a subagent call records once its child holds the task, so a restart can rejoin that child. Only a
+ * "running" record rejoins: "starting" names a child that exists but may not hold its task yet.
+ */
+const Attached = Schema.Struct({
+  sessionID: SessionSchema.ID,
+  // A record without a status predates "starting" and always meant "running".
+  status: Schema.optionalKey(Schema.Literal("running")),
+})
+/**
+ * Progress a subagent call records as soon as its child exists (created, or resolved for a continuation), so the
+ * child's ID is never lost to a failure or an interruption before it holds its task. It also makes the call resumable
+ * after a restart (a call with no progress is refused): a new child is rejoined if it already admitted the task and is
+ * otherwise given it; a continuation fails, naming the child, since its history cannot show whether the message arrived.
+ */
+const Starting = Schema.Struct({ sessionID: SessionSchema.ID, status: Schema.Literal("starting") })
+const Recovered = Schema.Union([Attached, Starting])
+
+/** How many ancestors the transcript tool walks from a session to find its caller. */
+const MAX_DESCENDANT_DEPTH = 16
+/** Stored records the transcript tool reads per call, as a multiple of its limit. */
+const TRANSCRIPT_SCAN = 10
 
 type Submission = { readonly message: string; readonly output: typeof Schema.Json.Type }
 
 export const Input = Schema.Struct({
-  agent: Schema.String.annotate({
-    description: "The agent preset to use: a prompt and model for the child. It grants no tools; pass them as tools",
+  agent: Schema.optionalKey(Schema.String).annotate({
+    description:
+      "The agent preset to use: a prompt and model for the child. It grants no tools; pass them as tools. Required for a new subagent; a continued session keeps its own unless you pass another",
   }),
-  description: Schema.String.annotate({ description: "A short 3-5 word label for the task, displayed to the user" }),
+  description: Schema.optionalKey(Schema.String).annotate({
+    description:
+      "A short 3-5 word label for the task, displayed to the user. Required for a new subagent; a continued session keeps its own title",
+  }),
   message: Schema.String.annotate({ description: "The task for the subagent to perform, shown to it in full" }),
   input: Schema.optionalKey(Schema.Json).annotate({
     description:
@@ -54,7 +81,7 @@ export const Input = Schema.Struct({
   }),
   model: Schema.optionalKey(Schema.String).annotate({
     description:
-      "Model to use. For the ocpp driver, provider/model with an optional variant after #. For claude or codex, the vendor's own model name without a provider, with an optional effort after #, such as opus#high; for pi, Pi's provider/model",
+      "Model to use. For the ocpp driver, provider/model with an optional variant after #. For claude or codex, the vendor's own model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi, Pi's provider/model",
   }),
   driver: Schema.optionalKey(SessionDriver.ID).annotate({
     description:
@@ -62,7 +89,7 @@ export const Input = Schema.Struct({
   }),
   harness: Schema.optionalKey(SessionDriver.Harness).annotate({
     description:
-      "Vendor drivers only. ocpp (default): the vendor's only tool is OC++ execute with this catalog, under the OC++ system prompt. native: the vendor's own tools and prompt, plus OC++ execute, tool.define handles and submit_result over MCP",
+      "Vendor drivers only. ocpp (default): the vendor's only tool is OC++ execute with this catalog, under the OC++ system prompt. native: the vendor's own tools and prompt, plus OC++ execute, tool.define handles and submit_result over MCP. A continued session keeps the harness it last ran with",
   }),
   outputSchema: Schema.optionalKey(SubagentCustomTool.JSONSchema).annotate({
     description:
@@ -74,7 +101,7 @@ export const Input = Schema.Struct({
   }),
   sessionID: Schema.optionalKey(SessionSchema.ID).annotate({
     description:
-      "Continue a specific previous subagent conversation by passing its sessionID. Calls without a sessionID start a new conversation.",
+      "Continue a specific previous subagent conversation by passing its sessionID; then only message is required. Calls without a sessionID start a new conversation.",
   }),
   root: Schema.optionalKey(Schema.String).annotate({
     description:
@@ -92,6 +119,55 @@ const ModelsOutput = Schema.Struct({
   drivers: Schema.Array(SessionDriver.Info),
 })
 
+const TRANSCRIPT_LIMIT = 20
+const TRANSCRIPT_MAX = 100
+/** Characters kept of each text, reasoning, tool input or tool result in a transcript. */
+const TRANSCRIPT_TEXT = 4_000
+
+export const TranscriptInput = Schema.Struct({
+  sessionID: SessionSchema.ID.annotate({
+    description: "The sessionID of a subagent you started, or of any subagent below it",
+  }),
+  limit: Schema.optionalKey(Schema.Number).annotate({
+    description: `How many of the newest messages to return (default ${TRANSCRIPT_LIMIT}, at most ${TRANSCRIPT_MAX})`,
+  }),
+  cursor: Schema.optionalKey(SessionMessage.ID).annotate({
+    description: "The cursor a previous call returned, to read the messages before that page",
+  }),
+  include: Schema.optionalKey(Schema.Array(Schema.Literals(["reasoning", "tools"]))).annotate({
+    description:
+      "Also return assistant reasoning, and tool calls as name, status, input (just the code for execute) and result text",
+  }),
+})
+
+const TranscriptToolCall = Schema.Struct({
+  name: Schema.String,
+  status: Schema.Literals(["streaming", "running", "completed", "error"]),
+  input: Schema.String,
+  result: Schema.optionalKey(Schema.String),
+})
+
+const TranscriptMessage = Schema.Struct({
+  id: Schema.String,
+  role: Schema.Literals(["user", "synthetic", "assistant", "compaction"]),
+  text: Schema.String,
+  reasoning: Schema.optionalKey(Schema.String),
+  tools: Schema.optionalKey(Schema.Array(TranscriptToolCall)),
+  error: Schema.optionalKey(Schema.String),
+  /** Set when a text in this message was cut to TRANSCRIPT_TEXT characters. */
+  clipped: Schema.optionalKey(Schema.Boolean),
+})
+
+export const TranscriptOutput = Schema.Struct({
+  sessionID: SessionSchema.ID,
+  title: Schema.optionalKey(Schema.String),
+  agent: Schema.optionalKey(Schema.String),
+  /** Oldest first. */
+  messages: Schema.Array(TranscriptMessage),
+  /** Pass back as cursor to read older messages; absent when there are none. */
+  cursor: Schema.optionalKey(Schema.String),
+})
+
 export const Output = Schema.Struct({
   sessionID: SessionSchema.ID,
   status: Schema.Literal("completed"),
@@ -99,17 +175,17 @@ export const Output = Schema.Struct({
   message: Schema.String,
   /** The submitted structured result, or null when no outputSchema was requested. */
   output: Schema.Json,
-  /** Which tools a continued child lost because its caller no longer has them. */
+  /** Which tools a continued child lost because its caller no longer has them, and a newer version of its pinned vendor model. */
   notice: Schema.optionalKey(Schema.String),
 })
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
   "tools sets exactly what the child can call: pass your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles, for example tools: [tools.read, tools.glob, tools.grep]. You can pass only tools you have. Without tools the child has none, only tools.submit_result when you pass outputSchema. The agent is a prompt and model preset and grants no tools.",
-  "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready.",
-  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; for pi it is Pi's provider/model.",
+  "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready. Call tools.subagent.transcript({ sessionID }) to read the recent messages of a subagent you started, or of any subagent below it, without prompting it.",
+  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi it is Pi's provider/model.",
   'Vendor-driven children run in the OC++ harness by default: their only tool is execute over the tools you pass. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt as well; OC++ execute over the tools you pass, tool.define handles and submit_result remain available to it over MCP.',
   "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child runs under that directory's own config (agents, MCP servers, plugins, instructions), the agent must be defined there, and the tools you pass must exist there by the same paths. The child keeps that directory when continued.",
-  "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
+  "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent. To continue, pass just { sessionID, message }: the child keeps its agent, title, model, driver, harness, root and tools unless you pass new ones. Only your own direct children can be continued.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "The subagent runs to completion and returns its final response as message. With outputSchema it must call tools.submit_result({ message, output }): message is returned in full, and output is returned only as machine data with a short summary in metadata.",
   "input is never shown to either model; it is available directly as `input` in the subagent's Code Mode executions. Pass existing notebook values by reference and describe them in message.",
@@ -152,6 +228,34 @@ export const Plugin = {
       return text.length > 0 ? text : NO_TEXT
     })
 
+    // A caller reaches only its own children, whether to continue one or to read its transcript.
+    const ownChild = Effect.fnUntraced(function* (sessionID: SessionSchema.ID, parentID: SessionSchema.ID) {
+      const child = yield* runtime.session
+        .get(sessionID)
+        .pipe(
+          Effect.mapError((error) => new ToolFailure({ message: `Subagent session not found: ${sessionID}`, error })),
+        )
+      if (child.parentID !== parentID)
+        return yield* new ToolFailure({ message: `Session ${child.id} is not a child of the current session` })
+      return child
+    })
+    // A caller reads the transcript of any of its descendants: a child, a grandchild and so on, up to
+    // MAX_DESCENDANT_DEPTH levels down. Only a direct child can be continued.
+    const ownDescendant = Effect.fnUntraced(function* (sessionID: SessionSchema.ID, ancestorID: SessionSchema.ID) {
+      const target = yield* runtime.session
+        .get(sessionID)
+        .pipe(
+          Effect.mapError((error) => new ToolFailure({ message: `Subagent session not found: ${sessionID}`, error })),
+        )
+      let parentID = target.parentID
+      for (let depth = 0; depth < MAX_DESCENDANT_DEPTH && parentID !== undefined; depth++) {
+        if (parentID === ancestorID) return target
+        const parent = yield* runtime.session.get(parentID).pipe(Effect.option)
+        parentID = Option.isSome(parent) ? parent.value.parentID : undefined
+      }
+      return yield* new ToolFailure({ message: `Session ${target.id} is not a descendant of the current session` })
+    })
+
     yield* ctx.tool
       .transform((draft) => {
         draft.add({
@@ -182,6 +286,81 @@ export const Plugin = {
             ),
         })
         draft.add({
+          name: "transcript",
+          options: { namespace: name, readOnly: true },
+          description: [
+            "Reads the recent messages of a subagent you started, or of any subagent below it, by its sessionID, without prompting it. Returns up to limit of the newest messages oldest first, and a cursor for older ones.",
+            "Assistant messages carry their text; pass include: [\"reasoning\"] or [\"tools\"] for reasoning and tool calls. Long texts are clipped.",
+          ].join("\n"),
+          input: TranscriptInput,
+          output: TranscriptOutput,
+          execute: (input, context) =>
+            Effect.gen(function* () {
+              const child = yield* ownDescendant(input.sessionID, context.sessionID)
+              const limit =
+                input.limit === undefined || !Number.isFinite(input.limit)
+                  ? TRANSCRIPT_LIMIT
+                  : Math.min(TRANSCRIPT_MAX, Math.max(1, Math.floor(input.limit)))
+              const include = {
+                reasoning: input.include?.includes("reasoning") ?? false,
+                tools: input.include?.includes("tools") ?? false,
+              }
+              // limit counts returned entries, and records with nothing to show are skipped, so pages are read until
+              // limit entries are found, history runs out, or limit × TRANSCRIPT_SCAN records were scanned. The cursor
+              // then names the last record scanned, so the next call resumes exactly there.
+              const budget = limit * TRANSCRIPT_SCAN
+              const found: TranscriptEntry[] = []
+              let scanned = 0
+              let last: SessionMessage.ID | undefined = input.cursor
+              let more = true
+              while (more && found.length < limit && scanned < budget) {
+                const take = Math.min(TRANSCRIPT_MAX, budget - scanned)
+                // One extra record tells whether older ones remain.
+                const page = yield* runtime.session
+                  .messages({
+                    sessionID: child.id,
+                    order: "desc",
+                    limit: take + 1,
+                    ...(last === undefined ? {} : { cursor: { id: last, direction: "next" as const } }),
+                  })
+                  .pipe(
+                    Effect.mapError(
+                      (error) => new ToolFailure({ message: `Failed to read subagent transcript: ${child.id}`, error }),
+                    ),
+                  )
+                const records = page.slice(0, take)
+                more = page.length > take
+                for (const [index, message] of records.entries()) {
+                  scanned++
+                  last = message.id
+                  const entry = transcriptEntry(message, include)
+                  if (entry !== undefined) found.push(entry)
+                  if (found.length === limit) {
+                    more = more || index < records.length - 1
+                    break
+                  }
+                }
+              }
+              const messages = found.toReversed()
+              const cursor = more ? last : undefined
+              return {
+                output: {
+                  sessionID: child.id,
+                  ...(child.title === undefined ? {} : { title: child.title }),
+                  ...(child.agent === undefined ? {} : { agent: child.agent }),
+                  messages,
+                  ...(cursor === undefined ? {} : { cursor }),
+                },
+                content: [
+                  `Transcript of subagent session ${child.id}: ${messages.length === 0 ? "no messages" : `${messages.length} messages, oldest first`}.`,
+                  ...untrusted("Subagent transcript", renderTranscript(messages)),
+                  ...(cursor === undefined ? [] : [`Older messages remain: pass cursor "${cursor}" to read them.`]),
+                ].join("\n"),
+                metadata: { sessionID: child.id, count: messages.length },
+              }
+            }),
+        })
+        draft.add({
           name,
           options: { acceptsToolHandles: true, reattach: true },
           description,
@@ -191,15 +370,65 @@ export const Plugin = {
             Effect.gen(function* () {
               // After a restart the call rejoins the child that already holds its task. Its checks
               // passed and its prompt was admitted before the restart, so none of that repeats.
-              const reattached =
+              // A "starting" record is not rejoined (see Starting): the call starts over as if it never ran.
+              const recovered =
                 context.recovered === undefined
                   ? undefined
-                  : yield* Schema.decodeUnknownEffect(Attached)(context.recovered).pipe(
-                      Effect.flatMap((attached) => runtime.session.get(attached.sessionID)),
+                  : yield* Schema.decodeUnknownEffect(Recovered)(context.recovered).pipe(
                       Effect.mapError(
                         (error) => new ToolFailure({ message: "Subagent session to rejoin was not found", error }),
                       ),
                     )
+              const recoveredChild =
+                recovered === undefined
+                  ? undefined
+                  : yield* runtime.session
+                      .get(recovered.sessionID)
+                      .pipe(
+                        Effect.mapError(
+                          (error) => new ToolFailure({ message: "Subagent session to rejoin was not found", error }),
+                        ),
+                      )
+              if (recoveredChild !== undefined && recoveredChild.parentID !== context.sessionID)
+                return yield* new ToolFailure({
+                  message: `Session ${recoveredChild.id} is not a child of the current session`,
+                })
+              // A continued child already holds earlier work, so it cannot tell whether this call's message arrived
+              // before the restart. Rather than risk delivering it twice, the call fails and names the child.
+              if (recovered?.status === "starting" && input.sessionID !== undefined)
+                return yield* new ToolFailure({
+                  message: `The server restarted while continuing subagent session ${recovered.sessionID}, which may or may not have received the message. Read it with tools.subagent.transcript and continue it with its sessionID if needed.`,
+                  metadata: failure(recovered.sessionID, "setup-failed"),
+                })
+              // A "starting" child that already holds work, in its history or its inbox, admitted this call's prompt
+              // before the restart and is rejoined like a "running" one. An empty one is adopted as this call's new
+              // child, so the restart neither delivers the task twice nor leaves an orphan behind.
+              const holdsTask =
+                recoveredChild === undefined || recovered?.status !== "starting"
+                  ? true
+                  : yield* Effect.all([
+                      runtime.session.messages({ sessionID: recoveredChild.id, order: "desc", limit: 20 }),
+                      runtime.session.inbox(recoveredChild.id),
+                    ]).pipe(
+                      // Creating and configuring a child records only switches, never conversation.
+                      Effect.map(
+                        ([messages, inbox]) =>
+                          inbox.length > 0 ||
+                          messages.some((message) =>
+                            ["user", "synthetic", "assistant", "compaction"].includes(message.type),
+                          ),
+                      ),
+                      Effect.mapError(
+                        (error) =>
+                          new ToolFailure({
+                            message: `Failed to read subagent session: ${recoveredChild.id}`,
+                            error,
+                            metadata: failure(recoveredChild.id, "setup-failed"),
+                          }),
+                      ),
+                    )
+              const reattached = holdsTask ? recoveredChild : undefined
+              const adopted = holdsTask ? undefined : recoveredChild
 
               const parent = yield* runtime.session
                 .get(context.sessionID)
@@ -250,19 +479,21 @@ export const Plugin = {
               }
               const existing =
                 reattached ??
-                (input.sessionID === undefined
-                  ? undefined
-                  : yield* runtime.session
-                      .get(input.sessionID)
-                      .pipe(
-                        Effect.mapError(
-                          (error) =>
-                            new ToolFailure({ message: `Subagent session not found: ${input.sessionID}`, error }),
-                        ),
-                      ))
+                (input.sessionID === undefined ? undefined : yield* ownChild(input.sessionID, context.sessionID))
               if (existing !== undefined && existing.parentID !== context.sessionID)
                 return yield* new ToolFailure({
                   message: `Session ${existing.id} is not a child of the current session`,
+                })
+              // A new child needs both; a continued one keeps its own agent and title unless the call names another agent.
+              if (existing === undefined && (input.agent === undefined || input.description === undefined))
+                return yield* new ToolFailure({
+                  message:
+                    "agent and description are required to start a new subagent. To continue a previous subagent, pass its sessionID.",
+                })
+              const agentID = input.agent ?? existing?.agent
+              if (agentID === undefined)
+                return yield* new ToolFailure({
+                  message: `Subagent session ${existing?.id} has no agent; pass agent to choose one`,
                 })
               const location = yield* place(input.root, existing?.location ?? parent.location, existing !== undefined)
               const directory = location.directory
@@ -270,16 +501,16 @@ export const Plugin = {
               // What the child is: its agent where it runs, its driver, harness and model.
               const agentAt = Effect.fnUntraced(function* () {
                 const found = same(location, parent.location)
-                  ? yield* agents.resolve(input.agent)
-                  : (yield* runtime.location.agent.list(location)).data.find((item) => item.id === input.agent)
+                  ? yield* agents.resolve(agentID)
+                  : (yield* runtime.location.agent.list(location)).data.find((item) => item.id === agentID)
                 if (found === undefined)
                   return yield* new ToolFailure({
                     message: same(location, parent.location)
-                      ? `Unknown agent: ${input.agent}`
-                      : `Unknown agent: ${input.agent} is not defined in ${directory}`,
+                      ? `Unknown agent: ${agentID}`
+                      : `Unknown agent: ${agentID} is not defined in ${directory}`,
                   })
                 if (found.mode === "primary")
-                  return yield* new ToolFailure({ message: `Agent ${input.agent} cannot run as a subagent` })
+                  return yield* new ToolFailure({ message: `Agent ${agentID} cannot run as a subagent` })
                 return found
               })
               // What the call alone decides, so a mistake fails before any child exists.
@@ -307,13 +538,18 @@ export const Plugin = {
                 // configured model's driver, else its caller's.
                 const driver = input.driver ?? SessionDriver.of(existing?.model ?? agent.model ?? parent.model)
                 yield* precheck(driver)
+                // A continued vendor child keeps the harness it last ran with, unless the call names one.
+                const kept =
+                  existing === undefined || driver === undefined || driver === "ocpp"
+                    ? undefined
+                    : (yield* external.get(existing.id))?.harness
                 const selected =
                   reattached !== undefined
                     ? undefined
                     : driver === "ocpp"
                       ? yield* runnerModel(agent)
                       : yield* vendorModel(driver, agent)
-                return { agent, driver, harness: input.harness ?? "ocpp", selected }
+                return { agent, driver, harness: input.harness ?? kept ?? "ocpp", selected }
               })
               // The model for an OC++-run child: requested, else a provider model its agent or caller already uses.
               const runnerModel = Effect.fnUntraced(function* (agent: Agent.Info) {
@@ -378,6 +614,20 @@ export const Plugin = {
                   return yield* new ToolFailure({
                     message: `Unsupported ${SessionDriver.names[provider]} effort: ${effort}. Use one of: ${ExternalAgentEffort[provider].literals.join(", ")}.`,
                   })
+                // Read again at every call: an alias runs the vendor's newest model, and a pinned model is checked
+                // for a newer one.
+                const listed = yield* drivers.models(provider)
+                const runs = listed.find((model) => model.id === ExternalAgentModels.resolve(id, listed))
+                if (
+                  effort !== undefined &&
+                  runs !== undefined &&
+                  runs.efforts.length > 0 &&
+                  !runs.efforts.includes(effort)
+                )
+                  return yield* new ToolFailure({
+                    message: `${runs.id === id ? id : `${id} (${runs.id})`} does not support effort ${effort}. Use one of: ${runs.efforts.join(", ")}.`,
+                  })
+                const upgrade = ExternalAgentModels.newer(id, listed)
                 return {
                   model: Model.Ref.make({
                     providerID: Provider.ID.make(provider),
@@ -385,6 +635,17 @@ export const Plugin = {
                     ...(effort === undefined ? {} : { variant: Model.VariantID.make(effort) }),
                   }),
                   requested: true,
+                  ...(upgrade === undefined
+                    ? {}
+                    : {
+                        notice: [
+                          `${SessionDriver.names[provider]} model ${id} has a newer version: ${upgrade.id}.`,
+                          ...(upgrade.alias === undefined
+                            ? []
+                            : [`Pass model "${upgrade.alias}" to always run the newest ${upgrade.alias}.`]),
+                          ...(upgrade.message === undefined ? [] : [upgrade.message]),
+                        ].join(" "),
+                      }),
                 }
               })
               const chosen = yield* choose(yield* agentAt())
@@ -392,6 +653,8 @@ export const Plugin = {
               const driver = chosen.driver
               const harness = chosen.harness
               const selected = chosen.selected?.model
+              const upgrade =
+                chosen.selected !== undefined && "notice" in chosen.selected ? chosen.selected.notice : undefined
               // A rooted child resolves the same tool paths in its own Location, which must provide every one.
               if (!same(location, parent.location)) {
                 const there = yield* runtime.location.tool.paths(location)
@@ -414,17 +677,39 @@ export const Plugin = {
                   ),
                   Effect.mapError(
                     (error) =>
-                      new ToolFailure({ message: `Failed to configure subagent session: ${existing.id}`, error }),
+                      new ToolFailure({
+                        message: `Failed to configure subagent session: ${existing.id}`,
+                        error,
+                        metadata: failure(existing.id, "setup-failed"),
+                      }),
                   ),
                 )
 
+              if (
+                adopted !== undefined &&
+                selected !== undefined &&
+                (adopted.model?.providerID !== selected.providerID ||
+                  adopted.model?.id !== selected.id ||
+                  adopted.model?.variant !== selected.variant)
+              )
+                yield* runtime.session.switchModel({ sessionID: adopted.id, model: selected }).pipe(
+                  Effect.mapError(
+                    (error) =>
+                      new ToolFailure({
+                        message: `Failed to configure subagent session: ${adopted.id}`,
+                        error,
+                        metadata: failure(adopted.id, "setup-failed"),
+                      }),
+                  ),
+                )
               const child =
                 existing ??
+                adopted ??
                 (yield* runtime.session
                   .create({
                     parentID: context.sessionID,
                     title: input.description,
-                    agent: Agent.ID.make(input.agent),
+                    agent: Agent.ID.make(agentID),
                     model: selected,
                     // Otherwise the child inherits the caller's Location, workspace included.
                     ...(same(location, parent.location) ? {} : { location }),
@@ -433,7 +718,13 @@ export const Plugin = {
                     Effect.mapError(
                       (error) => new ToolFailure({ message: `Parent session not found: ${context.sessionID}`, error }),
                     ),
+                    // Reported in the same uninterruptible step as the create, so no failure or interruption after
+                    // it can lose the child's ID. Every failure from here on also carries it as metadata.
+                    Effect.tap((created) => context.progress({ sessionID: created.id, status: "starting" })),
+                    Effect.uninterruptible,
                   ))
+              if (existing !== undefined && reattached === undefined)
+                yield* context.progress({ sessionID: existing.id, status: "starting" })
               const vendor = SessionDriver.of(selected ?? existing?.model) !== "ocpp"
               // A new child gets exactly the tools the call passes, and none without them. A continued child keeps its
               // list unless the call passes a new one, less every tool its caller no longer has, such as after the
@@ -452,7 +743,11 @@ export const Plugin = {
                   .pipe(
                     Effect.mapError(
                       (error) =>
-                        new ToolFailure({ message: `Failed to give the subagent its tools: ${child.id}`, error }),
+                        new ToolFailure({
+                          message: `Failed to give the subagent its tools: ${child.id}`,
+                          error,
+                          metadata: failure(child.id, "setup-failed"),
+                        }),
                     ),
                   )
 
@@ -505,7 +800,12 @@ export const Plugin = {
                       .registerSession(child.id, temporary, machine === undefined ? undefined : { input: machine })
                       .pipe(
                         Effect.mapError(
-                          (error) => new ToolFailure({ message: `Invalid subagent tool: ${error.message}`, error }),
+                          (error) =>
+                            new ToolFailure({
+                              message: `Invalid subagent tool: ${error.message}`,
+                              error,
+                              metadata: failure(child.id, "setup-failed"),
+                            }),
                         ),
                       )
               const cleanup = registration?.dispose ?? Effect.void
@@ -648,13 +948,25 @@ export const Plugin = {
               const result = yield* Effect.scoped(
                 (vendor
                   ? external.activate(child.id, { harness, tools: temporary }).pipe(
-                      Effect.mapError((error) => new ToolFailure({ message: error.error.message, error })),
+                      Effect.mapError(
+                        (error) =>
+                          new ToolFailure({
+                            message: error.error.message,
+                            error,
+                            metadata: failure(child.id, "setup-failed"),
+                          }),
+                      ),
                       Effect.andThen(
                         runtime.session
                           .wait(child.id)
                           .pipe(
                             Effect.mapError(
-                              (error) => new ToolFailure({ message: `Subagent session not found: ${child.id}`, error }),
+                              (error) =>
+                                new ToolFailure({
+                                  message: `Subagent session not found: ${child.id}`,
+                                  error,
+                                  metadata: failure(child.id, "setup-failed"),
+                                }),
                             ),
                           ),
                       ),
@@ -667,10 +979,17 @@ export const Plugin = {
                   sessionID: child.id,
                   status: "completed" as const,
                   ...result,
-                  ...(lost.length === 0
+                  ...(lost.length === 0 && upgrade === undefined
                     ? {}
                     : {
-                        notice: `The subagent no longer has ${lost.map((path) => "tools." + path).join(", ")}: you no longer have ${lost.length === 1 ? "that tool" : "those tools"}, and a subagent keeps only tools its caller has.`,
+                        notice: [
+                          ...(lost.length === 0
+                            ? []
+                            : [
+                                `The subagent no longer has ${lost.map((path) => "tools." + path).join(", ")}: you no longer have ${lost.length === 1 ? "that tool" : "those tools"}, and a subagent keeps only tools its caller has.`,
+                              ]),
+                          ...(upgrade === undefined ? [] : [upgrade]),
+                        ].join("\n"),
                       }),
                 },
                 structured: outputCodec !== undefined,
@@ -773,7 +1092,13 @@ export function listDrivers(drivers: ReadonlyArray<SessionDriver.Info>) {
     "- ocpp: the OC++ runner with a provider model",
     ...ready.map(
       (driver) =>
-        `- ${driver.id}: ${driver.name}, default model ${driver.model} (efforts: ${driver.variants.join(", ")})`,
+        `- ${driver.id}: ${driver.name}, default model ${driver.model} (efforts: ${driver.variants.join(", ")})${
+          driver.aliases === undefined
+            ? ""
+            : `; aliases run their newest models: ${Object.entries(driver.aliases)
+                .map(([alias, model]) => `${alias} = ${model}`)
+                .join(", ")}`
+        }`,
     ),
   ]
 }
@@ -795,12 +1120,18 @@ export function listing(subagents: ReadonlyArray<{ readonly id: string; readonly
 
 /**
  * Metadata for a failure after the child exists. `reason` separates the child's own run failing,
- * the host failing to reach it, and a structured child that never submitted, so callers and
+ * the host failing to reach it or set it up, and a structured child that never submitted, so callers and
  * analytics never classify by message text.
  */
 function failure(
   sessionID: SessionSchema.ID,
-  reason: "child-failed" | "prompt-failed" | "reminder-failed" | "output-unavailable" | "no-submission",
+  reason:
+    | "setup-failed"
+    | "child-failed"
+    | "prompt-failed"
+    | "reminder-failed"
+    | "output-unavailable"
+    | "no-submission",
 ) {
   return { sessionID, status: "error" as const, reason }
 }
@@ -853,6 +1184,101 @@ function unsupportedModel(
     ].join(" "),
     ...(error === undefined ? {} : { error }),
   })
+}
+
+type TranscriptEntry = typeof TranscriptMessage.Type
+type TranscriptCall = typeof TranscriptToolCall.Type
+
+function clip(text: string) {
+  return text.length > TRANSCRIPT_TEXT ? { text: text.slice(0, TRANSCRIPT_TEXT) + "…", clipped: true } : { text, clipped: false }
+}
+
+/**
+ * One stored message as a caller may read it, or nothing for records it has no use for (switches, displays,
+ * invocations, system updates). Tool metadata is never read: it carries Code Mode traces with private input and
+ * submitted output.
+ */
+function transcriptEntry(
+  message: SessionMessage.Info,
+  include: { readonly reasoning: boolean; readonly tools: boolean },
+): TranscriptEntry | undefined {
+  let clipped = false
+  const take = (value: string) => {
+    const result = clip(value)
+    if (result.clipped) clipped = true
+    return result.text
+  }
+  const marked = () => (clipped ? { clipped: true } : {})
+  switch (message.type) {
+    case "user":
+    case "synthetic":
+      return { id: message.id, role: message.type, text: take(message.text), ...marked() }
+    case "compaction":
+      return message.status === "failed"
+        ? undefined
+        : { id: message.id, role: "compaction", text: take(message.summary), ...marked() }
+    case "assistant": {
+      const text = take(message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(""))
+      const reasoning = include.reasoning
+        ? message.content.flatMap((part) => (part.type === "reasoning" ? [part.text] : [])).join("\n")
+        : ""
+      const calls = include.tools
+        ? message.content.flatMap((part) => (part.type === "tool" ? [transcriptCall(part, take)] : []))
+        : []
+      const error = message.error === undefined ? undefined : take(message.error.message)
+      if (text === "" && reasoning === "" && calls.length === 0 && error === undefined) return undefined
+      return {
+        id: message.id,
+        role: "assistant",
+        text,
+        ...(reasoning === "" ? {} : { reasoning: take(reasoning) }),
+        ...(calls.length === 0 ? {} : { tools: calls }),
+        ...(error === undefined ? {} : { error }),
+        ...marked(),
+      }
+    }
+    default:
+      return undefined
+  }
+}
+
+/** A tool call's name, status, input and model-visible result. Never its metadata. */
+function transcriptCall(part: SessionMessage.AssistantTool, take: (value: string) => string): TranscriptCall {
+  const state = part.state
+  const input =
+    state.status === "streaming"
+      ? state.input
+      : part.name === "execute" && typeof state.input.code === "string"
+        ? state.input.code
+        : (JSON.stringify(state.input) ?? "")
+  const result =
+    state.status === "completed"
+      ? state.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n")
+      : state.status === "error"
+        ? state.error.message
+        : undefined
+  return {
+    name: part.name,
+    status: state.status,
+    input: take(input),
+    ...(result === undefined ? {} : { result: take(result) }),
+  }
+}
+
+function renderTranscript(messages: ReadonlyArray<TranscriptEntry>) {
+  return messages
+    .map((message) =>
+      [
+        `[${message.role}] ${message.text}`,
+        ...(message.reasoning === undefined ? [] : [`[reasoning] ${message.reasoning}`]),
+        ...(message.tools ?? []).map(
+          (call) =>
+            `[tool ${call.name} ${call.status}] ${call.input}${call.result === undefined ? "" : `\n[result] ${call.result}`}`,
+        ),
+        ...(message.error === undefined ? [] : [`[error] ${message.error}`]),
+      ].join("\n"),
+    )
+    .join("\n\n")
 }
 
 /** Narrows a log item to a child execution lifecycle event that carries a Session ID. */

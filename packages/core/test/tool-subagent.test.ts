@@ -516,7 +516,7 @@ describe("SubagentTool", () => {
             ],
             drivers: [
               { id: "claude", name: "Claude Code", available: false, model: "sonnet" },
-              { id: "codex", name: "Codex", available: false, model: "gpt-5.6-sol" },
+              { id: "codex", name: "Codex", available: false, model: "sol" },
               { id: "pi", name: "Pi", available: false },
             ],
           })
@@ -566,7 +566,11 @@ describe("SubagentTool", () => {
           const child = yield* sessions.get(outputSessionID(settled.metadata))
           expect(settled.content).toEqual([{ type: "text", text: completedOutput(child.id) }])
           expect(settled.metadata).toEqual({ sessionID: child.id, status: "completed" })
-          expect(progress[0]).toEqual({ sessionID: child.id, status: "running" })
+          // Reported once the child exists, then again once it holds its task.
+          expect(progress.slice(0, 2)).toEqual([
+            { sessionID: child.id, status: "starting" },
+            { sessionID: child.id, status: "running" },
+          ])
           expect(child).toMatchObject({
             parentID: parent.id,
             location: parent.location,
@@ -725,6 +729,230 @@ describe("SubagentTool", () => {
           expect(yield* sessions.get(switched.id)).toMatchObject({
             agent: "fallback",
             model: childModel,
+          })
+        }),
+      ),
+    ),
+  )
+
+  it.live("continues a child with only sessionID and message, keeping its agent, title and model", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+
+          const first = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-subagent-minimal-first",
+              name: SubagentTool.name,
+              input: { agent: "reviewer", description: "review", message: "review this" },
+            },
+          })
+          const childID = outputSessionID(first.metadata)
+          const before = yield* sessions.get(childID)
+          const second = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-subagent-minimal-second",
+              name: SubagentTool.name,
+              input: { sessionID: childID, message: "continue this" },
+            },
+          })
+
+          expect(second).toMatchObject({ status: "completed", metadata: { sessionID: childID, status: "completed" } })
+          expect(yield* sessions.get(childID)).toMatchObject({
+            agent: "reviewer",
+            title: "review",
+            model: before.model,
+          })
+          expect(before.model).toMatchObject(childModel)
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
+          expect(
+            (yield* sessions.inbox(childID)).flatMap((message) =>
+              message.type === "user" ? [message.payload.text] : [],
+            ),
+          ).toEqual(["You are a subagent spawned by another session.\nreview this", "continue this"])
+        }),
+      ),
+    ),
+  )
+
+  it.live("requires agent and description to start a new child and creates none without them", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const call = (id: string, input: Record<string, unknown>) =>
+            executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: { type: "tool-call" as const, id, name: SubagentTool.name, input: { message: "work", ...input } },
+            })
+          const required = {
+            status: "error" as const,
+            error: {
+              type: "tool.execution" as const,
+              message:
+                "agent and description are required to start a new subagent. To continue a previous subagent, pass its sessionID.",
+            },
+          }
+
+          expect(yield* call("call-new-bare", {})).toEqual(required)
+          expect(yield* call("call-new-no-description", { agent: "reviewer" })).toEqual(required)
+          expect(yield* call("call-new-no-agent", { description: "review" })).toEqual(required)
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(0)
+        }),
+      ),
+    ),
+  )
+
+  it.live("reads an own child's transcript without tool metadata and pages older messages", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const bus = yield* Bus.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          const otherParent = yield* sessions.create({ location, model: parentModel })
+          const unrelated = yield* sessions.create({
+            parentID: otherParent.id,
+            title: "other review",
+            agent: Agent.ID.make("reviewer"),
+          })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          expect((yield* registry.snapshot()).codeModeCatalog?.map((tool) => tool.path)).toContain(
+            "subagent.transcript",
+          )
+
+          const first = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-subagent-transcript-child",
+              name: SubagentTool.name,
+              input: { agent: "reviewer", description: "review", message: "review this" },
+            },
+          })
+          const childID = outputSessionID(first.metadata)
+          // The test runner answers without delivering the prompt, so deliver it here.
+          yield* SessionInbox.promote((yield* Database.Service).db, bus, childID, "input")
+          // A later step that ran a Code Mode execution whose metadata carries private data.
+          const assistantMessageID = SessionMessage.ID.create()
+          const base = { sessionID: childID, assistantMessageID, id: "call-child-execute" }
+          yield* bus.publish(SessionEvent.Step.Started, {
+            sessionID: childID,
+            assistantMessageID,
+            agent: Agent.ID.make("reviewer"),
+            model: childModel,
+          })
+          yield* bus.publish(SessionEvent.Tool.Input.Started, { ...base, name: "execute" })
+          yield* bus.publish(SessionEvent.Tool.Input.Ended, { ...base, text: JSON.stringify({ code: "return 1" }) })
+          yield* bus.publish(SessionEvent.Tool.Called, { ...base, input: { code: "return 1" }, executed: true })
+          yield* bus.publish(SessionEvent.Tool.Success, {
+            ...base,
+            content: [{ type: "text", text: "Preview: 1" }],
+            metadata: { executionID: "exe_secret", events: [{ input: secret }] },
+            executed: true,
+          })
+          yield* bus.publish(SessionEvent.Step.Ended, {
+            sessionID: childID,
+            assistantMessageID,
+            finish: "stop",
+            cost: Money.USD.zero,
+            tokens,
+          })
+
+          const transcript = (id: string, input: Record<string, unknown>) =>
+            executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: { type: "tool-call" as const, id, name: "subagent_transcript", input },
+            })
+          const read = (id: string, input: Record<string, unknown>) =>
+            transcript(id, input).pipe(
+              Effect.map((result) => {
+                if (result.status !== "completed") throw new Error(JSON.stringify(result))
+                return { ...result, output: Schema.decodeUnknownSync(SubagentTool.TranscriptOutput)(result.output) }
+              }),
+            )
+
+          const plain = yield* read("call-transcript-plain", { sessionID: childID })
+          expect(plain.output).toMatchObject({ sessionID: childID, title: "review", agent: "reviewer" })
+          expect(plain.output.cursor).toBeUndefined()
+          // Without include, the tool-only step has nothing to show.
+          expect(plain.output.messages.map((message) => [message.role, message.text])).toEqual([
+            ["assistant", childText],
+            ["user", "You are a subagent spawned by another session.\nreview this"],
+          ])
+          expect(JSON.stringify(plain.content)).toContain("BEGIN_UNTRUSTED_EXECUTION_DATA")
+
+          const full = yield* read("call-transcript-tools", { sessionID: childID, include: ["tools"] })
+          expect(full.output.messages.at(-1)).toEqual({
+            id: assistantMessageID,
+            role: "assistant",
+            text: "",
+            tools: [{ name: "execute", status: "completed", input: "return 1", result: "Preview: 1" }],
+          })
+          expect(JSON.stringify(full)).not.toContain("secret-token")
+          expect(JSON.stringify(full)).not.toContain("exe_secret")
+
+          // Paging one stored message at a time yields the same transcript, newest page first.
+          const paged: (typeof full.output.messages)[number][][] = []
+          let cursor: string | undefined
+          for (let page = 0; page < 20; page++) {
+            const next = yield* read(`call-transcript-page-${page}`, {
+              sessionID: childID,
+              include: ["tools"],
+              limit: 1,
+              ...(cursor === undefined ? {} : { cursor }),
+            })
+            paged.push([...next.output.messages])
+            cursor = next.output.cursor
+            if (cursor === undefined) break
+          }
+          expect(cursor).toBeUndefined()
+          expect(paged.length).toBeGreaterThan(2)
+          expect(paged.toReversed().flat()).toEqual([...full.output.messages])
+
+          expect(yield* transcript("call-transcript-unrelated", { sessionID: unrelated.id })).toEqual({
+            status: "error",
+            error: {
+              type: "tool.execution",
+              message: `Session ${unrelated.id} is not a descendant of the current session`,
+            },
+          })
+          const missing = Session.ID.create()
+          expect(yield* transcript("call-transcript-missing", { sessionID: missing })).toEqual({
+            status: "error",
+            error: { type: "tool.execution", message: `Subagent session not found: ${missing}` },
           })
         }),
       ),
@@ -1106,6 +1334,228 @@ describe("SubagentTool", () => {
           expect(prompts[1]).toBe(
             "You did not submit the required result. Call tools.submit_result now with { message, output }, where output matches the requested schema.",
           )
+        }),
+      ),
+    ),
+  )
+
+  it.live("reports a new child as soon as it exists and names it in failures before it holds its task", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const subagent = (yield* registeredTools(registry)).get(SubagentTool.name)
+          if (!subagent) return yield* Effect.die("subagent is not registered")
+          const reported: unknown[] = []
+          // Another registration takes the new child's machine input as soon as the child is reported, so
+          // registering this call's input fails after the create and before the child receives its task.
+          const failed = yield* execute(
+            subagent,
+            { agent: "reviewer", description: "review", message: "review this", input: { value: 1 } },
+            {
+              sessionID: parent.id,
+              ...toolIdentity,
+              id: Tool.CallID.make("call-subagent-setup-failed"),
+              progress: (update) => {
+                reported.push(update)
+                const value = update as { readonly sessionID?: Session.ID; readonly status?: string }
+                return value.status === "starting" && value.sessionID !== undefined
+                  ? registry.registerSession(value.sessionID, [], { input: 0 }).pipe(Effect.orDie, Effect.asVoid)
+                  : Effect.void
+              },
+            },
+          ).pipe(Effect.flip)
+          const children = (yield* sessions.list({ parentID: parent.id })).data
+          expect(children).toHaveLength(1)
+          const childID = children[0]!.id
+          expect(reported).toEqual([{ sessionID: childID, status: "starting" }])
+          expect(failed.message).toMatch(/^Invalid subagent tool: Machine input is already registered/)
+          expect(failed.metadata).toEqual({ sessionID: childID, status: "error", reason: "setup-failed" })
+        }),
+      ),
+    ),
+  )
+
+  it.live("after a restart gives an empty starting child its task and rejoins one that already holds it", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const subagent = (yield* registeredTools(registry)).get(SubagentTool.name)
+          if (!subagent) return yield* Effect.die("subagent is not registered")
+          const prompt = "You are a subagent spawned by another session.\nreview this"
+          const recover = (id: string, sessionID: Session.ID, input: Record<string, unknown> = {}) =>
+            execute(
+              subagent,
+              { agent: "reviewer", description: "review", message: "review this", ...input },
+              {
+                sessionID: parent.id,
+                ...toolIdentity,
+                id: Tool.CallID.make(id),
+                progress: () => Effect.void,
+                recovered: { sessionID, status: "starting" },
+              },
+            )
+          const prompts = (sessionID: Session.ID) =>
+            sessions
+              .inbox(sessionID)
+              .pipe(Effect.map((items) => items.flatMap((item) => (item.type === "user" ? [item.payload.text] : []))))
+
+          // Created before the restart but never given its task: this call gives it the task as a new child.
+          const empty = yield* sessions.create({
+            parentID: parent.id,
+            title: "review",
+            agent: Agent.ID.make("reviewer"),
+          })
+          const adopted = yield* recover("call-subagent-adopt", empty.id)
+          expect(adopted.metadata).toMatchObject({ sessionID: empty.id, status: "completed" })
+          expect(yield* prompts(empty.id)).toEqual([prompt])
+
+          // Admitted its task just before the restart: rejoined and told to continue, never prompted twice.
+          const held = yield* sessions.create({
+            parentID: parent.id,
+            title: "review",
+            agent: Agent.ID.make("reviewer"),
+          })
+          yield* sessions.prompt({ sessionID: held.id, text: prompt, resume: false })
+          const rejoined = yield* recover("call-subagent-rejoin", held.id)
+          expect(rejoined.metadata).toMatchObject({ sessionID: held.id, status: "completed" })
+          expect(yield* prompts(held.id)).toEqual([prompt])
+          expect(JSON.stringify(yield* sessions.inbox(held.id))).toContain("The server restarted while you were working")
+
+          // Neither recovery created another child.
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(2)
+
+          // A continued child's history cannot show whether the message arrived, so the call fails and names it.
+          const refused = yield* recover("call-subagent-refuse", held.id, { sessionID: held.id }).pipe(Effect.flip)
+          expect(refused.message).toContain(`continuing subagent session ${held.id}, which may or may not have received`)
+          expect(refused.metadata).toEqual({ sessionID: held.id, status: "error", reason: "setup-failed" })
+          expect(yield* prompts(held.id)).toEqual([prompt])
+        }),
+      ),
+    ),
+  )
+
+  it.live("reads any descendant's transcript, counts returned entries and bounds the records it scans", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const bus = yield* Bus.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const first = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-subagent-transcript-bounded",
+              name: SubagentTool.name,
+              input: { agent: "reviewer", description: "review", message: "review this" },
+            },
+          })
+          const childID = outputSessionID(first.metadata)
+          yield* SessionInbox.promote((yield* Database.Service).db, bus, childID, "input")
+          // Twelve newer steps with nothing to show.
+          for (let step = 0; step < 12; step++) {
+            const assistantMessageID = SessionMessage.ID.create()
+            yield* bus.publish(SessionEvent.Step.Started, {
+              sessionID: childID,
+              assistantMessageID,
+              agent: Agent.ID.make("reviewer"),
+              model: childModel,
+            })
+            yield* bus.publish(SessionEvent.Step.Ended, {
+              sessionID: childID,
+              assistantMessageID,
+              finish: "stop",
+              cost: Money.USD.zero,
+              tokens,
+            })
+          }
+          const transcript = (id: string, input: Record<string, unknown>) =>
+            executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: { type: "tool-call" as const, id, name: "subagent_transcript", input },
+            })
+          const read = (id: string, input: Record<string, unknown>) =>
+            transcript(id, input).pipe(
+              Effect.map((result) => {
+                if (result.status !== "completed") throw new Error(JSON.stringify(result))
+                return Schema.decodeUnknownSync(SubagentTool.TranscriptOutput)(result.output)
+              }),
+            )
+          const shown = (output: typeof SubagentTool.TranscriptOutput.Type) =>
+            output.messages.map((message) => [message.role, message.text])
+
+          // limit counts returned entries: the empty steps are read past to find two.
+          const counted = yield* read("call-transcript-counted", { sessionID: childID, limit: 2 })
+          expect(shown(counted)).toEqual([
+            ["assistant", childText],
+            ["user", "You are a subagent spawned by another session.\nreview this"],
+          ])
+
+          // At most ten records per entry asked for are scanned; the cursor resumes after the last one scanned.
+          const bounded = yield* read("call-transcript-bounded", { sessionID: childID, limit: 1 })
+          expect(bounded.messages).toEqual([])
+          expect(bounded.cursor).toBeDefined()
+          const resumed = yield* read("call-transcript-resumed", {
+            sessionID: childID,
+            limit: 1,
+            cursor: bounded.cursor,
+          })
+          expect(shown(resumed)).toEqual([["user", "You are a subagent spawned by another session.\nreview this"]])
+          expect(resumed.cursor).toBeDefined()
+
+          // A grandchild's transcript is readable from here, but only a direct child can be continued.
+          const grandchild = yield* sessions.create({
+            parentID: childID,
+            title: "deeper review",
+            agent: Agent.ID.make("reviewer"),
+          })
+          expect(yield* read("call-transcript-grandchild", { sessionID: grandchild.id })).toMatchObject({
+            sessionID: grandchild.id,
+            title: "deeper review",
+            messages: [],
+          })
+          expect(
+            yield* executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id: "call-subagent-continue-grandchild",
+                name: SubagentTool.name,
+                input: { sessionID: grandchild.id, message: "continue" },
+              },
+            }),
+          ).toMatchObject({
+            status: "error",
+            error: { message: `Session ${grandchild.id} is not a child of the current session` },
+          })
         }),
       ),
     ),

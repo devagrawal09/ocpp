@@ -62,6 +62,7 @@ const runtime = Layer.mock(PluginRuntime.Service, {
       }),
     wait: unavailable,
     context: unavailable,
+    inbox: unavailable,
   },
   job: {
     start: unavailable,

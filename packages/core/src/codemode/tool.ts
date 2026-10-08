@@ -14,9 +14,11 @@ import type { Session } from "../session.js"
 import { SessionEvent } from "../session/event.js"
 import { CodeModeCompletion } from "../session/codemode-completion.js"
 import { SessionMessage } from "../session/message.js"
+import type { SessionSchema } from "../session/schema.js"
 import { imageMimes } from "../session/runner/to-llm-message.js"
 import { definition, normalizedName } from "../tool/runtime.js"
 import type { CodeModeCatalog } from "./catalog.js"
+import { CodeModeChildren } from "./children.js"
 import { CodeModeCompileCheck } from "./compile-check.js"
 import { limits } from "./limits.js"
 import { CodeModeNotebook } from "./notebook.js"
@@ -72,6 +74,7 @@ const description = [
   "Tool calls block and return values directly. await and Promise.all are accepted only as ignored compatibility no-ops that produce a warning; do not use them. Other Promise forms, async, generators, dynamic tool dispatch, imports, filesystem access, fetch, and timers are unavailable.",
   "Calls within one execution always run serially, including subagent calls. To run independent subagents concurrently, issue one execute call per subagent; never put parallel subagent work in the same execution.",
   "Call only exact static paths from the catalog, for example tools.fs.read(input).",
+  'To discover tools, call tools.search({ query: "what you need" }). To browse available tools, call tools.search({}), optionally filtering by namespace, and follow next.offset for more results. The bare tools root is not a runtime object: do not use Object.keys(tools) or computed paths such as tools[name]. Use returned paths literally in a subsequent execution.',
   "Use local let for scalar working state. Arrays and objects are immutable; use map, filter, slice, spread, and object literals to derive values.",
   "Every direct top-level const and function declaration is saved to the durable notebook automatically and is visible to later executions. Declarations inside blocks and functions are temporary.",
   "Notebook names are immutable: a name can never be redefined or reused. Saving is all-or-nothing, so a failed program saves nothing.",
@@ -295,6 +298,12 @@ const launch = (
     // Images and PDFs that tool calls return cannot become Code Mode values, so they are collected
     // here and attached to the completion notification instead.
     const media = yield* Ref.make<Media>({ files: [], omitted: new Set() })
+    // Child sessions that tool calls reported through a `sessionID` in their metadata. The completion
+    // notification always lists them, so the model can reach a child even when the program never
+    // returned its ID, threw, caught the call's failure, or was cancelled.
+    const children = yield* Ref.make<ReadonlyMap<SessionSchema.ID, CodeModeCompletion.ChildStatus>>(new Map())
+    const noteChild = (sessionID: SessionSchema.ID | undefined, status: CodeModeCompletion.ChildStatus) =>
+      sessionID === undefined ? Effect.void : Ref.update(children, (current) => new Map(current).set(sessionID, status))
     const slots = yield* Ref.make<Array<number>>([])
     const toolCount = yield* Ref.make(0)
     const traceCount = yield* Ref.make(0)
@@ -391,10 +400,19 @@ const launch = (
         (name, tool, input, index) =>
           Effect.gen(function* () {
             const decision = yield* replay.call(index)
-            if (decision.type === "replay")
+            if (decision.type === "replay") {
+              yield* noteChild(
+                childSessionID(decision.entry.progress) ?? childSessionID(decision.entry.output),
+                decision.entry.status === "failed" ? "failed" : "completed",
+              )
               return decision.entry.status === "failed"
                 ? yield* Effect.fail(toolError(decision.entry.error ?? "Tool failed"))
                 : decision.entry.output
+            }
+            // The child this call reported while running, settled with the call even when its final
+            // metadata or error does not name it again.
+            let child = childSessionID(decision.recovered)
+            yield* noteChild(child, "running")
             const executed = yield* executeTool(name, tool, input, {
               ...context,
               id: Tool.CallID.make(context.id + ":" + index),
@@ -402,8 +420,10 @@ const launch = (
               ...(tool.options?.acceptsToolHandles === true ? { catalog } : {}),
               progress: (metadata) => {
                 const shown = displayMetadata(metadata)
+                child = childSessionID(metadata) ?? child
                 return Effect.all(
                   [
+                    noteChild(childSessionID(metadata), "running"),
                     updateTool(index, (current) => ({ ...current, ...(shown ? { metadata: shown } : {}) })),
                     // A call that can rejoin its work after a restart keeps where that work lives.
                     tool.options?.reattach === true && isJsonMetadata(metadata)
@@ -415,11 +435,14 @@ const launch = (
               },
             }).pipe(
               Effect.tapError((error) =>
-                updateTool(index, (current) => ({
-                  ...current,
-                  status: "error",
-                  error: boundToolEventText(error.message),
-                })),
+                Effect.andThen(
+                  noteChild(childSessionID(error.metadata) ?? child, "failed"),
+                  updateTool(index, (current) => ({
+                    ...current,
+                    status: "error",
+                    error: boundToolEventText(error.message),
+                  })),
+                ),
               ),
             )
             const content =
@@ -428,6 +451,7 @@ const launch = (
                 : (executed.content ?? [])
             yield* Ref.update(media, (current) => content.filter(isAttachable).reduce(collect, current))
             const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+            yield* noteChild(childSessionID(executed.metadata) ?? child, "completed")
             const metadata = displayMetadata(executed.metadata)
             yield* updateTool(index, (current) => ({
               ...current,
@@ -588,6 +612,20 @@ const launch = (
                 ? ((yield* Ref.get(failureKind)) ?? "ExecutionFailure")
                 : undefined
           const attachments = yield* attach(yield* Ref.get(media), services.image)
+          // The execution has ended, so a child whose call never settled was interrupted with it. A
+          // resumed run also lists the children its journal names, since a run that diverged or
+          // stopped early never reached those calls again; what the live run saw takes precedence.
+          const spawned = Array.from(
+            new Map([
+              ...(options.journal === undefined ? [] : CodeModeChildren.fromJournal(options.journal)).map(
+                (child) => [child.sessionID, child.status] as const,
+              ),
+              ...Array.from(yield* Ref.get(children), ([sessionID, status]) =>
+                [sessionID, status === "running" ? ("interrupted" as const) : status] as const,
+              ),
+            ]),
+            ([sessionID, status]) => ({ sessionID, status }),
+          )
           // The Session can be deleted while the execution runs. Restart recovery already
           // tolerates that, so finish the background bookkeeping instead of dying here.
           yield* CodeModeCompletion.deliver(services.sessions, services.jobs, {
@@ -595,6 +633,7 @@ const launch = (
             recovery,
             ...(kind === undefined ? {} : { kind }),
             ...(attachments === undefined ? {} : { attachments }),
+            ...(spawned.length === 0 ? {} : { children: spawned }),
           }).pipe(
             Effect.catchTag("Session.NotFoundError", () =>
               info.notificationID ? services.jobs.completeBackground(info.notificationID) : Effect.void,
@@ -781,6 +820,8 @@ function displayInput(input: unknown): Record<string, Schema.Json> | undefined {
 }
 
 const isJsonMetadata = Schema.is(Schema.Record(Schema.String, Schema.Json))
+
+const childSessionID = CodeModeChildren.sessionID
 
 function displayMetadata(metadata: Tool.Metadata | undefined) {
   return isJsonMetadata(metadata) ? boundToolEventRecord(metadata) : undefined

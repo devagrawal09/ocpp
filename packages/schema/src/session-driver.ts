@@ -27,6 +27,8 @@ export const Info = Schema.Struct({
   /** The configured default model. */
   model: Schema.String,
   models: Schema.Array(Schema.String),
+  /** Each model alias with the model it runs now, such as sol with gpt-6.1-sol. */
+  aliases: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   /** Reasoning efforts, selected as model variants. */
   variants: Schema.Array(Schema.String),
 }).annotate({ identifier: "SessionDriver.Info" })

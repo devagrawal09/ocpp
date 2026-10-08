@@ -1,6 +1,7 @@
 export * as SessionContext from "./context.js"
 
 import { Model } from "@ocpp/schema/model"
+import { SessionDriver } from "@ocpp/schema/session-driver"
 import { Context, Effect, Layer, Result } from "effect"
 import { Agent } from "../agent.js"
 import { Catalog } from "../catalog.js"
@@ -108,7 +109,14 @@ const layer = Layer.effect(
     const selectTitle = Effect.fn("SessionContext.selectTitle")(function* (session: SessionSchema.Info) {
       const agent = yield* agents.get(Agent.ID.make("title"))
       if (!agent) return
-      const primary = yield* resolveModel(session).pipe(Effect.orElseSucceed(() => undefined))
+      const own = yield* resolveModel(session).pipe(Effect.orElseSucceed(() => undefined))
+      // A vendor driver's model (claude/sonnet) is never in the provider catalog, so a vendor-driven Session
+      // titles with the model a Session without one would run on.
+      const primary =
+        own ??
+        (SessionDriver.of(session.model) === "ocpp"
+          ? undefined
+          : yield* resolveModel({ ...session, model: undefined }).pipe(Effect.orElseSucceed(() => undefined)))
       const info = yield* Effect.gen(function* () {
         if (agent.model) return yield* catalog.model.get(agent.model.providerID, agent.model.id)
         if (!primary) return

@@ -99,13 +99,33 @@ Every other subagent option works as usual, including `input`, `inputSchema`,
 `sessionID`. A vendor subagent with no running call answers a direct prompt in
 the OC++ harness.
 
+## Compaction
+
+OC++ prefers to own compaction for driver sessions, including native subagents.
+Claude and Pi vendor compaction is disabled; Codex remains a best-effort
+exception because its CLI cannot fully disable compaction. A manual compaction
+request uses OC++'s history selection, summary format, durable events, and
+context replacement.
+The summary is generated in a fresh, tool-free vendor session using your
+existing login; it does not resume or modify the conversation being compacted.
+The next conversation run starts a fresh vendor session from OC++'s compacted
+history. If summary generation fails, the original context is preserved.
+
+When automatic compaction is enabled, a context-overflow error allows one OC++
+compact-and-rebuild attempt. A second unrecovered overflow stops execution.
+
+Codex currently exposes a compaction threshold, not a hard disable switch.
+OC++ raises that threshold to suppress normal automatic compaction, but
+Codex's independent full-context fallback can still compact. OC++ keeps
+Codex available and tolerates that fallback. Choosing Codex does not
+guarantee exclusive OC++ compaction ownership.
+
 ## What driver sessions lack
 
-The vendor manages its own context and model calls, so these OC++ behaviors do
+The vendor manages its own model loop, so these OC++ behaviors do
 not apply:
 
-- Step retries, overflow compaction, and manual compaction. A compaction request
-  is refused with a message.
+- Generic step retries.
 - Instruction epochs. Current instructions are rendered into each vendor run's
   system prompt instead.
 - Agent step limits, plan-mode reminders, per-step snapshots, and file diffs.

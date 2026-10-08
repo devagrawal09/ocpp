@@ -82,6 +82,14 @@ const client = Layer.mock(LLMClient.Service)({
 const models = Layer.mock(SessionRunnerModel.Service)({
   resolve: (session) => {
     selections.push(session.model)
+    // Like the real resolver: a vendor driver's model is never in the provider catalog.
+    if (session.model?.providerID === "claude")
+      return Effect.fail(
+        new SessionRunnerModel.ModelUnavailableError({
+          providerID: session.model.providerID,
+          modelID: session.model.id,
+        }),
+      )
     return Effect.succeed(
       SessionRunnerModel.resolved(session.model?.id === "title-small" ? smallModel : model, {
         capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
@@ -245,6 +253,29 @@ it.effect("uses a small model from the primary provider", () =>
 
     expect(requests.map((request) => String(request.model.id))).toEqual(["title-small"])
     expect(selections[1]?.variant).toBe(Model.VariantID.make("none"))
+    const store = yield* SessionStore.Service
+    expect((yield* store.get(sessionID))?.title).toBe("Generated Title")
+  }),
+)
+
+it.effect("titles a vendor-driven session with the default model's provider", () =>
+  Effect.gen(function* () {
+    selectedSmall = small
+    yield* enableTitleAgent
+    const sessionID = Session.ID.make("ses_title_vendor_driver")
+    yield* insertSession(
+      sessionID,
+      undefined,
+      undefined,
+      Model.Ref.make({ providerID: Provider.ID.make("claude"), id: Model.ID.make("sonnet") }),
+    )
+    yield* prompt(sessionID, "Title a Claude Code session")
+
+    const title = yield* SessionTitle.Service
+    yield* title.generate(sessionID)
+
+    expect(selections[1]).toBeUndefined()
+    expect(requests.map((request) => String(request.model.id))).toEqual(["title-small"])
     const store = yield* SessionStore.Service
     expect((yield* store.get(sessionID))?.title).toBe("Generated Title")
   }),

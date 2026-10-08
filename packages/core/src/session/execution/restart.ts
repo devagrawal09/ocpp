@@ -13,6 +13,7 @@ import { ShellResult } from "../../shell/result.js"
 import { SubagentCompletion } from "../subagent-completion.js"
 import { CodeModeCompletion } from "../codemode-completion.js"
 import { CodeModeResume } from "../../codemode/resume.js"
+import { CodeModeStore } from "../../codemode/store.js"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
 
 const CONTINUE_AFTER_SERVER_RESTART =
@@ -75,6 +76,7 @@ export const layer = (options?: Options) =>
       const jobs = yield* Job.Service
       const sessions = yield* Session.Service
       const codemode = yield* CodeModeResume.Service
+      const codemodeStore = yield* CodeModeStore.Service
       const scope = yield* Effect.scope
       const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS
 
@@ -191,6 +193,9 @@ export const layer = (options?: Options) =>
             { commit: () => jobs.markBackgroundTerminal(background.notificationID) },
           )
         }
+        // The journal outlives the execution's settlement, so the child sessions its calls named are
+        // listed here as the live run would have, with calls that never settled as interrupted.
+        const children = yield* codemodeStore.children(background.id)
         yield* CodeModeCompletion.deliver(sessions, jobs, {
           id: background.id,
           status,
@@ -198,6 +203,7 @@ export const layer = (options?: Options) =>
           ...(background.output === undefined ? {} : { output: background.output }),
           error,
           recovery,
+          ...(children.length === 0 ? {} : { children }),
           resume: suspended.has(recovery.parentSessionID) ? false : undefined,
         }).pipe(
           Effect.catchTag("Session.NotFoundError", () => jobs.completeBackground(background.notificationID)),
@@ -320,5 +326,5 @@ export const layer = (options?: Options) =>
 export const node = makeGlobalNode({
   service: Service,
   layer: layer(),
-  deps: [SessionStore.node, SessionExecution.node, Bus.node, Job.node, Session.node, CodeModeResume.node],
+  deps: [SessionStore.node, SessionExecution.node, Bus.node, Job.node, Session.node, CodeModeResume.node, CodeModeStore.node],
 })

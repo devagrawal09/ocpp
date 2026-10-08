@@ -68,6 +68,11 @@ describe("external SDK drivers", () => {
       allowedTools: ["mcp__ocpp__execute"],
       permissionMode: "dontAsk",
       mcpServers: { ocpp: mcp },
+      env: expect.objectContaining({ DISABLE_AUTO_COMPACT: "1", DISABLE_COMPACT: "1" }),
+      managedSettings: { autoCompactEnabled: false, precomputeCompactionEnabled: false },
+      extraArgs: {
+        settings: JSON.stringify({ autoCompactEnabled: false, precomputeCompactionEnabled: false }),
+      },
     })
     expect(harnessed.hooks).toBeUndefined()
     expect(harnessed.sandbox).toBeUndefined()
@@ -83,6 +88,11 @@ describe("external SDK drivers", () => {
       permissionMode: "default",
       sandbox: { enabled: true, allowUnsandboxedCommands: false },
       mcpServers: { ocpp: mcp },
+      env: expect.objectContaining({ DISABLE_AUTO_COMPACT: "1", DISABLE_COMPACT: "1" }),
+      managedSettings: { autoCompactEnabled: false, precomputeCompactionEnabled: false },
+      extraArgs: {
+        settings: JSON.stringify({ autoCompactEnabled: false, precomputeCompactionEnabled: false }),
+      },
     })
     expect(native.systemPrompt).toBeUndefined()
     expect(native.tools).toBeUndefined()
@@ -97,6 +107,18 @@ describe("external SDK drivers", () => {
     ).toMatchObject({ behavior: "allow", updatedInput: { file_path: "file" } })
   })
 
+  test("Pi disables vendor compaction before prompting", async () => {
+    const { disableVendorCompaction } = await import("../src/external-agent/pi.node")
+    const calls: boolean[] = []
+    const session = {
+      setAutoCompactionEnabled: (enabled: boolean) => calls.push(enabled),
+      compact: async () => ({ summary: "vendor" }),
+    }
+    disableVendorCompaction(session)
+    expect(calls).toEqual([false])
+    await expect(session.compact()).rejects.toThrow("Pi vendor compaction is disabled; OC++ owns context compaction")
+  })
+
   test("Codex in the OC++ harness turns off native tool features and replaces its instructions", async () => {
     const { configure, NATIVE_FEATURES } = await import("../src/external-agent/codex.node")
     const bridge = { url: "http://127.0.0.1:1/mcp" }
@@ -107,6 +129,7 @@ describe("external SDK drivers", () => {
     )
     expect(NATIVE_FEATURES).toEqual(expect.arrayContaining(["shell_tool", "unified_exec", "multi_agent", "apps"]))
     expect(harnessed.config).toMatchObject({
+      model_auto_compact_token_limit: Number.MAX_SAFE_INTEGER,
       model_instructions_file: "/tmp/ocpp-codex/instructions.md",
       model_catalog_json: "/tmp/ocpp-codex/catalog.json",
       include_permissions_instructions: false,
@@ -134,7 +157,11 @@ describe("external SDK drivers", () => {
       modelReasoningEffort: "high",
     })
     const native = configure({ directory: "/work", model: "gpt-5.6-sol", harness: { type: "native" } }, bridge)
-    expect(native.config).toEqual({ features: { multi_agent: true }, mcp_servers: harnessed.config.mcp_servers })
+    expect(native.config).toEqual({
+      features: { multi_agent: true },
+      mcp_servers: harnessed.config.mcp_servers,
+      model_auto_compact_token_limit: Number.MAX_SAFE_INTEGER,
+    })
     expect(native.thread).toMatchObject({ sandboxMode: "workspace-write", webSearchMode: "live" })
   })
 
@@ -441,6 +468,11 @@ if (!completed) write(result(0, inputs.slice(1)))
       path.join(dir.path, "codex"),
       `#!${process.execPath}
 const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n")
+if (process.argv[2] === "debug" && process.argv[3] === "models") {
+  if (process.env.FAKE_CODEX_CATALOG_FAILS) process.exit(3)
+  write({ models: [] })
+  process.exit(0)
+}
 if (process.argv[2] === "app-server") {
   for await (const line of console) {
     const message = JSON.parse(line)
@@ -516,6 +548,11 @@ if (process.argv[2] === "app-server") {
       `#!${process.execPath}
 const fs = require("node:fs")
 const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n")
+if (process.argv[2] === "debug" && process.argv[3] === "models") {
+  if (process.env.FAKE_CODEX_CATALOG_FAILS) process.exit(3)
+  write({ models: [] })
+  process.exit(0)
+}
 if (process.argv[2] === "app-server") {
   for await (const line of console) {
     const message = JSON.parse(line)
@@ -525,9 +562,6 @@ if (process.argv[2] === "app-server") {
       write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [] } } })
     else write({ id: message.id, result: { thread: { id: "fake-thread", historyMode: "legacy", turns: [{ id: "t" }] } } })
   }
-} else if (process.argv[2] === "debug") {
-  if (process.env.FAKE_CODEX_CATALOG_FAILS) process.exit(3)
-  write({ models: [{ slug: "gpt-5.6-sol", tool_mode: "code_mode_only", multi_agent_version: "v2", supports_search_tool: true }] })
 } else if (process.argv[2] === "mcp") {
   write([
     { name: "personal", enabled: true },
@@ -621,10 +655,7 @@ if (process.argv[2] === "app-server") {
       expect(invocations[3].args).toEqual(expect.arrayContaining(["resume", "fake-thread", "--image"]))
       for (const invocation of invocations) {
         expect(invocation.instructions).toBe("OC++ system prompt for Codex")
-        // The catalog stops Codex from wrapping tools in its own code mode, sub-agents and deferred search.
-        expect(JSON.parse(invocation.catalog!)).toEqual({
-          models: [{ slug: "gpt-5.6-sol", supports_search_tool: false }],
-        })
+        expect(JSON.parse(invocation.catalog!)).toEqual({ models: [] })
         expect(invocation.args).toEqual(
           expect.arrayContaining([
             "features.shell_tool=false",

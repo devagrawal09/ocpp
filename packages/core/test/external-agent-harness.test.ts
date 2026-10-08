@@ -23,6 +23,7 @@ import { CodeModeResume } from "@ocpp/core/codemode/resume"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Database } from "@ocpp/core/database/database"
 import { ExternalAgentDriver } from "@ocpp/core/external-agent/driver"
+import type { ExternalAgentModels } from "@ocpp/core/external-agent/models"
 import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
 import { ExternalAgentSession } from "@ocpp/core/external-agent/session"
 import { Job } from "@ocpp/core/job"
@@ -71,6 +72,8 @@ const vendor = {
   wire: [] as unknown[],
   sessions: new Map<string, string>(),
   turn: (async () => {}) as Turn,
+  /** Codex's model catalog as `codex debug models` would list it. */
+  catalog: [] as ReadonlyArray<ExternalAgentModels.Model>,
 }
 /** Delivered input as text, each attachment by its type. */
 const plain = (input: ExternalAgentDriver.Input) =>
@@ -113,6 +116,7 @@ const fake = (provider: ExternalSession.Provider): ExternalAgentDriver.Driver =>
 const drivers = vendorDrivers({
   available: async (provider) => vendor.ready[provider],
   driver: async (provider) => fake(provider),
+  models: async (provider) => (provider === "codex" ? vendor.catalog : []),
 })
 const transport = Layer.succeed(
   SessionModelTransport.Service,
@@ -689,22 +693,211 @@ describe("vendor-driven session control", () => {
     }),
   )
 
-  it.live("compaction is refused for a vendor-driven Session and leaves its inbox", () =>
+  it.live("OC++ compacts vendor history and rebuilds a fresh vendor session", () =>
     Effect.gen(function* () {
       const env = yield* setup(ref("claude", "sonnet"))
       vendor.turn = say("Hi")
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "One" })
       yield* env.sessions.wait(env.session.id)
+      const external = yield* ExternalAgentSession.Service
+      const original = yield* external.get(env.session.id)
+      vendor.turn = say("OC++ summary")
       yield* env.sessions.compact({ sessionID: env.session.id })
       yield* env.sessions.wait(env.session.id)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      const failed = log.find((event) => event.type === SessionEvent.Compaction.Failed.type)
-      expect(failed?.type === SessionEvent.Compaction.Failed.type && failed.data.error.type).toBe(
-        "compaction.unsupported",
-      )
+      const completed = log.find((event) => event.type === SessionEvent.Compaction.Ended.type)
+      expect(completed?.type === SessionEvent.Compaction.Ended.type && completed.data.text).toBe("OC++ summary")
       expect(log.filter((event) => event.type === SessionEvent.InboxDelivered.type)).toHaveLength(2)
-      // Refusing compaction never started the vendor.
+      expect(vendor.runs).toHaveLength(2)
+      expect(vendor.runs[1].vendorSessionID).toBeUndefined()
+      expect(vendor.runs[1].gateway.definitions).toEqual([])
+      expect(vendor.runs[1].history).toEqual([])
+      expect(vendor.runs[1].message).toContain("[User]: One")
+      expect((yield* external.get(env.session.id))?.vendorSessionID).toBe(original?.vendorSessionID)
+      vendor.turn = say("Continued")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Two" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs[2].vendorSessionID).toBeUndefined()
+      expect(vendor.runs[2].history.map((item) => item.text).join("\n")).toContain("OC++ summary")
+      expect(vendor.runs[2].message).toBe("Two")
+    }),
+  )
+
+  it.live("overflow compacts with OC++ and continues in a fresh vendor session", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = async (options) => {
+        if (vendor.runs.length === 1) throw new Error("prompt is too long")
+        await say(vendor.runs.length === 2 ? "Overflow summary" : "Recovered")(options, "")
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Finish the task" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs).toHaveLength(3)
+      expect(vendor.runs[1].gateway.definitions).toEqual([])
+      expect(vendor.runs[2].vendorSessionID).toBeUndefined()
+      expect(vendor.runs[2].history.map((item) => item.text).join("\n")).toContain("Overflow summary")
+      expect(vendor.runs[2].message).toContain("Continue from the restored OC++ history")
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
+      expect(log.find((event) => event.type === SessionEvent.Compaction.Ended.type)?.data).toMatchObject({
+        reason: "auto",
+      })
+    }),
+  )
+
+  it.live("a second overflow stops instead of repeatedly compacting", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("pi", "anthropic/claude-sonnet-4-6"))
+      vendor.turn = async (options) => {
+        if (vendor.runs.length === 2) return say("Summary")(options, "")
+        throw new Error("prompt is too long")
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Finish the task" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs).toHaveLength(3)
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
+      expect(log.filter((event) => event.type === SessionEvent.Step.Failed.type)).toHaveLength(2)
+    }),
+  )
+
+  it.live("a resumed drain continues a durable automatic compaction without compacting again", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = say("Before restart")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Finish the task" })
+      yield* env.sessions.wait(env.session.id)
+      const bus = yield* Bus.Service
+      yield* bus.publishAll([
+        [SessionEvent.Compaction.Started, { sessionID: env.session.id, reason: "auto", recent: "" }],
+        [
+          SessionEvent.Compaction.Ended,
+          { sessionID: env.session.id, reason: "auto", recent: "", text: "Durable summary" },
+        ],
+      ])
+      vendor.turn = async () => {
+        throw new Error("prompt is too long")
+      }
+      yield* env.sessions.resume(env.session.id).pipe(Effect.result)
+      expect(vendor.runs).toHaveLength(2)
+      expect(vendor.runs[1].vendorSessionID).toBeUndefined()
+      expect(vendor.runs[1].history.map((item) => item.text).join("\n")).toContain("Durable summary")
+      expect(vendor.runs[1].message).toContain("Continue from the restored OC++ history")
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
+    }),
+  )
+
+  it.live("failed OC++ compaction preserves the original vendor history", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = say("Original answer")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Original prompt" })
+      yield* env.sessions.wait(env.session.id)
+      const external = yield* ExternalAgentSession.Service
+      const original = yield* external.get(env.session.id)
+      vendor.turn = async () => {
+        throw new Error("Summary unavailable")
+      }
+      yield* env.sessions.compact({ sessionID: env.session.id })
+      yield* env.sessions.wait(env.session.id)
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      expect(log.filter((event) => event.type === SessionEvent.Compaction.Failed.type)).toHaveLength(1)
+      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(0)
+      vendor.turn = say("Continued")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Next prompt" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs[2].vendorSessionID).toBe(original?.vendorSessionID)
+    }),
+  )
+
+  it.live("interrupting manual compaction settles its durable running message", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = say("Original answer")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Original prompt" })
+      yield* env.sessions.wait(env.session.id)
+      const started = yield* Deferred.make<void>()
+      vendor.turn = async (options) => {
+        const pending = new Promise<void>((_resolve, reject) =>
+          options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }),
+        )
+        Effect.runSync(Deferred.succeed(started, undefined))
+        await pending
+      }
+      yield* env.sessions.compact({ sessionID: env.session.id })
+      yield* Deferred.await(started)
+      yield* env.sessions.interrupt(env.session.id)
+      yield* env.sessions.wait(env.session.id)
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      const failures = log.filter((event) => event.type === SessionEvent.Compaction.Failed.type)
+      expect(failures).toHaveLength(1)
+      expect(failures[0]?.data).toMatchObject({ reason: "manual", error: { type: "aborted" } })
+    }),
+  )
+
+  it.live("restart settles an unfinished manual compaction", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = say("Original answer")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Original prompt" })
+      yield* env.sessions.wait(env.session.id)
+      const bus = yield* Bus.Service
+      yield* bus.publish(SessionEvent.Compaction.Started, { sessionID: env.session.id, reason: "manual", recent: "" })
+      yield* env.sessions.resume(env.session.id)
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      const failures = log.filter((event) => event.type === SessionEvent.Compaction.Failed.type)
+      expect(failures).toHaveLength(1)
+      expect(failures[0]?.data).toMatchObject({ error: { type: "compaction.interrupted" } })
       expect(vendor.runs).toHaveLength(1)
+    }),
+  )
+
+  it.live("Codex stays available with vendor compaction while OC++ manual compaction still rebuilds it", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("codex", "gpt-5.6-sol"))
+      vendor.turn = async (options) => {
+        await options.emit({ type: "status", status: "compacting" })
+        await say(vendor.runs.length === 2 ? "Codex summary" : "Codex answer")(options, "")
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "One" })
+      yield* env.sessions.wait(env.session.id)
+      expect((yield* env.sessions.get(env.session.id)).outcome).toBe("succeeded")
+      yield* env.sessions.compact({ sessionID: env.session.id })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs[1].gateway.definitions).toEqual([])
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Two" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs).toHaveLength(3)
+      expect(vendor.runs[2].vendorSessionID).toBeUndefined()
+      expect(vendor.runs[2].history.map((item) => item.text).join("\n")).toContain("Codex summary")
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
+      expect(log.filter((event) => event.type === SessionEvent.Step.Failed.type)).toHaveLength(0)
+    }),
+  )
+
+  it.live("vendor compaction is rejected even when the SDK swallows the abort error", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = async (options) => {
+        await options.emit({ type: "status", status: "compacting" }).catch(() => undefined)
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "One" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs).toHaveLength(1)
+      const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
+      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(0)
+      const failure = log.find((event) => event.type === SessionEvent.Step.Failed.type)
+      expect(failure?.type === SessionEvent.Step.Failed.type && failure.data.error.message).toContain(
+        "OC++ owns session compaction",
+      )
+      const external = yield* ExternalAgentSession.Service
+      expect((yield* external.get(env.session.id))?.checkpoint).toBeUndefined()
+      vendor.turn = say("Safe answer")
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Try again" })
+      yield* env.sessions.wait(env.session.id)
+      expect(vendor.runs[1].vendorSessionID).toBeUndefined()
     }),
   )
 })
@@ -987,11 +1180,42 @@ describe("subagent drivers", () => {
       expect(vendor.runs.at(-1)?.harness.type).toBe("ocpp")
       const overridden = yield* call(env, { driver: "codex" })
       expect(overridden._tag).toBe("Success")
-      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "gpt-5.6-sol" })
+      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "sol" })
       expect(SessionDriver.of((yield* child(env))?.model)).toBe("codex")
       if (overridden._tag === "Success")
         expect(overridden.success.content).toEqual([{ type: "text", text: expect.stringContaining("Child answer") }])
     }),
+  )
+
+  it.live("a pinned Codex model hears of its newer version, and an effort its model lacks is refused", () =>
+    Effect.gen(function* () {
+      vendor.catalog = [
+        { id: "gpt-6.1-sol", listed: true, efforts: ["low", "high"] },
+        { id: "gpt-5.6-sol", listed: true, efforts: ["low", "high"] },
+      ]
+      const env = yield* setup(ref("claude", "opus"))
+      vendor.turn = say("Child answer")
+      const notice = (result: Effect.Success<ReturnType<typeof call>>) =>
+        result._tag === "Success"
+          ? Schema.decodeUnknownSync(SubagentTool.Output)(result.success.output).notice
+          : "failed"
+      const failure = (result: Effect.Success<ReturnType<typeof call>>) =>
+        result._tag === "Failure" ? result.failure.message : "succeeded"
+      expect(notice(yield* call(env, { driver: "codex", model: "gpt-5.6-sol" }))).toBe(
+        'Codex model gpt-5.6-sol has a newer version: gpt-6.1-sol. Pass model "sol" to always run the newest sol.',
+      )
+      expect(notice(yield* call(env, { driver: "codex", model: "sol#high" }))).toBeUndefined()
+      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "sol", effort: "high" })
+      expect(failure(yield* call(env, { driver: "codex", model: "sol#max" }))).toContain(
+        "sol (gpt-6.1-sol) does not support effort max. Use one of: low, high.",
+      )
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          vendor.catalog = []
+        }),
+      ),
+    ),
   )
 
   it.live("an ocpp parent gives an ocpp child, and the native harness is refused for it", () =>
@@ -1261,12 +1485,12 @@ describe("subagent drivers", () => {
       )
       expect(tools.map((tool) => tool.type === "tool" && tool.name)).toContain("command_execution")
 
-      // The harness belongs to the call: continuing the same child without it runs in the OC++ harness.
-      vendor.turn = say("Harnessed again")
+      // Continuing the same child without naming a harness keeps the native one it last ran with.
+      vendor.turn = say("Native again")
       const continued = yield* call(env, { sessionID, message: "Continue" })
       expect(continued._tag).toBe("Success")
-      expect(vendor.runs.at(-1)?.harness.type).toBe("ocpp")
-      // Nor does it keep the call's handle, and without tools a child has no execute either.
+      expect(vendor.runs.at(-1)?.harness.type).toBe("native")
+      // It does not keep the earlier call's handle, and without tools a child has no execute either.
       expect(vendor.runs.at(-1)?.gateway.definitions).toEqual([])
     }),
   )
@@ -1353,6 +1577,36 @@ describe("subagent drivers", () => {
       expect(vendor.runs[1]).toMatchObject({ provider: "claude", harness: { type: "ocpp" } })
       expect(vendor.runs[1].message).toContain("Hello child")
       expect(texts(yield* messages(sessionID))).toContain("Direct answer")
+    }),
+  )
+
+  it.live("a continued vendor child keeps the harness it last ran with unless the call names another", () =>
+    Effect.gen(function* () {
+      const env = yield* setup()
+      const external = yield* ExternalAgentSession.Service
+      vendor.turn = say("Child answer")
+      const first = yield* call(env, { driver: "claude", harness: "native" })
+      expect(first._tag).toBe("Success")
+      const sessionID = sessionOf(first)!
+      expect((yield* external.get(sessionID))?.harness).toBe("native")
+      // A direct prompt runs in the OC++ harness without changing what a continuation keeps.
+      vendor.turn = say("Direct answer")
+      yield* env.sessions.prompt({ sessionID, text: "Hello child" })
+      yield* env.sessions.wait(sessionID)
+      expect(vendor.runs[1]).toMatchObject({ harness: { type: "ocpp" } })
+
+      vendor.turn = say("Continued natively")
+      expect((yield* call(env, { sessionID, message: "Continue" }))._tag).toBe("Success")
+      expect(vendor.runs[2]).toMatchObject({ provider: "claude", harness: { type: "native" } })
+
+      vendor.turn = say("Continued harnessed")
+      expect((yield* call(env, { sessionID, message: "Continue harnessed", harness: "ocpp" }))._tag).toBe("Success")
+      expect(vendor.runs[3]).toMatchObject({ harness: { type: "ocpp" } })
+      expect((yield* external.get(sessionID))?.harness).toBe("ocpp")
+
+      vendor.turn = say("Still harnessed")
+      expect((yield* call(env, { sessionID, message: "Continue again" }))._tag).toBe("Success")
+      expect(vendor.runs[4]).toMatchObject({ harness: { type: "ocpp" } })
     }),
   )
 

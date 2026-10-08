@@ -34,5 +34,6 @@ export const DateTimeUtcFromMillis = Schema.Finite.pipe(
 )
 
 // Equivalent to Schema.isStartsWith, which effect 4.0.1 renamed to isStartingWith; isPattern exists in both.
+// effect 4.0.1 exports a JSON Schema `pattern` only for unicode-mode regular expressions, hence the `u` flag.
 export const isPrefixed = (prefix: string) =>
-  Schema.isPattern(new RegExp("^" + prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+  Schema.isPattern(new RegExp("^" + prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"))

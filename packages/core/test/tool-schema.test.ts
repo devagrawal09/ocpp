@@ -50,7 +50,8 @@ test("Effect tool schemas use exact optional keys and flatten compatible constra
     description: "Constraints",
     input: Schema.Struct({
       offset: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-      code: Schema.String.check(Schema.isPattern(/^a/), Schema.isPattern(/z$/)),
+      // effect exports JSON Schema patterns only for unicode-mode regular expressions.
+      code: Schema.String.check(Schema.isPattern(/^a/u), Schema.isPattern(/z$/u)),
     }),
     execute: () => Effect.succeed({ content: "unused" }),
   }

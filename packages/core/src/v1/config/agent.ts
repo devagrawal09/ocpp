@@ -5,7 +5,7 @@ import { PositiveInt } from "../../schema.js"
 import { ConfigPermissionV1 } from "./permission.js"
 
 const Color = Schema.Union([
-  Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/)),
+  Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/u)),
   Schema.Literals(["primary", "secondary", "accent", "success", "warning", "error", "info"]),
 ])
 

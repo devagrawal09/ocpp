@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 
 const OptionalString = Schema.optionalKey(Schema.String)
 const PickerOptions = Schema.Struct({

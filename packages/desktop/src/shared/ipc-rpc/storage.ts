@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 
 export const StorageGet = Rpc.make("StorageGet", {
   payload: { name: Schema.String, key: Schema.String },

@@ -33,7 +33,7 @@ import {
 import { Auth, Endpoint, RequestExecutor, type AnyRoute } from "@opencode-ai/ai/route"
 import { ProviderShared } from "@opencode-ai/ai/protocols/shared"
 import { Cause, Context, Effect, Layer, Option, Schema, Scope, Stream } from "effect"
-import { makeParser } from "effect/unstable/encoding/Sse"
+import { makeParser } from "effect/encoding/Sse"
 import type { ID, Info } from "./model.js"
 import { Provider } from "./provider.js"
 import { State } from "./state.js"

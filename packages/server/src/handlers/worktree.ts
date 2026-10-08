@@ -2,7 +2,7 @@ import { Git } from "@opencode-ai/core/git"
 import { Worktree } from "@opencode-ai/core/worktree"
 import { WorktreeError } from "@opencode-ai/protocol/groups/worktree"
 import { Effect } from "effect"
-import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiBuilder, HttpApiSchema } from "effect/http-api"
 import { Api } from "../api"
 
 export const WorktreeHandler = HttpApiBuilder.group(Api, "server.worktree", (handlers) =>

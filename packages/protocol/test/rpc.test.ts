@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { Schema } from "effect"
-import { OpenApi } from "effect/unstable/httpapi"
+import { OpenApi } from "effect/http-api"
 import { ClientApi, groupNames } from "../src/client.js"
 import { RpcError, RpcInternalError } from "../src/errors.js"
 import { RpcInput, RpcOutput } from "../src/groups/rpc.js"

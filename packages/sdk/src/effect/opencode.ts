@@ -4,7 +4,7 @@ import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/effect"
 import type { Workspace } from "@opencode-ai/core/workspace"
 import { Context, Effect, Layer } from "effect"
 import type { Config, Scope } from "effect"
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 import { EmbeddedHost } from "../internal/host"
 
 export type { LogEntry, LogLevel, LogOptions, LogWriter } from "../logging"

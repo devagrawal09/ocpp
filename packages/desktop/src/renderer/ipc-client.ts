@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, ManagedRuntime, Queue, Stream } from "effect"
-import { RpcClient, RpcMessage, RpcSerialization } from "effect/unstable/rpc"
+import { RpcClient, RpcMessage, RpcSerialization } from "effect/rpc"
 import { DesktopRpcs, type DesktopRpcClient } from "../shared/ipc-rpc"
 import type { DesktopEvent } from "../shared/ipc-rpc/events"
 import { IpcTransportPort } from "../shared/ipc-transport"

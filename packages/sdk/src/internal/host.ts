@@ -8,7 +8,7 @@ import { createEmbeddedRoutes } from "@opencode-ai/server/routes"
 import type { ServerOptions } from "@opencode-ai/server/options"
 import type { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Context, Effect, Layer, ManagedRuntime, Scope } from "effect"
-import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http"
+import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { context, layer, type LogOptions } from "../logging"
 import { OwnedFetch } from "./fetch"
 

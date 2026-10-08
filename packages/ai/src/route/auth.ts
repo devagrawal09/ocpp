@@ -1,5 +1,5 @@
 import { Config, Effect, Redacted } from "effect"
-import { Headers } from "effect/unstable/http"
+import { Headers } from "effect/http"
 import { AuthenticationError, InvalidRequestError, AIError, type HttpOptions } from "../schema/index.js"
 
 export class MissingCredentialError extends Error {

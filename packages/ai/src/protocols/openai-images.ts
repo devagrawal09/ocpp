@@ -1,5 +1,5 @@
 import { Effect, Encoding, Schema } from "effect"
-import { Headers, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { Headers, HttpClientRequest, HttpClientResponse } from "effect/http"
 import {
   ImageModel,
   GeneratedImage,

@@ -1,4 +1,4 @@
-import { Argument, Flag, GlobalFlag } from "effect/unstable/cli"
+import { Argument, Flag, GlobalFlag } from "effect/cli"
 import { Schema } from "effect"
 import { Spec } from "../framework/spec"
 

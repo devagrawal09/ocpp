@@ -1,5 +1,5 @@
 import { Effect, Encoding, Schema } from "effect"
-import { Headers } from "effect/unstable/http"
+import { Headers } from "effect/http"
 import { Route } from "../route/client.js"
 import { Auth } from "../route/auth.js"
 import { Endpoint } from "../route/endpoint.js"

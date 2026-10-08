@@ -1,7 +1,7 @@
 import { Workspace } from "@opencode-ai/core/workspace"
 import { ConflictError, ProviderNotFoundError, UnknownError } from "@opencode-ai/protocol/errors"
 import { Effect } from "effect"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api"
 
 export const WorkspaceHandler = HttpApiBuilder.group(Api, "server.workspace", (handlers) =>

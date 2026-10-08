@@ -1,7 +1,7 @@
 import { Form } from "@opencode-ai/schema/form"
 import { Location } from "@opencode-ai/schema/location"
 import { Context, Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
 import {
   ConflictError,
   FormAlreadySettledError,

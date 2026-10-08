@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { Rpc } from "@opencode-ai/schema/rpc"
 import { Cause, Context, Effect, Exit, Fiber, Schema, Stream } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { OpenCode } from "../src/effect/index"
 
 const definition = Rpc.define({

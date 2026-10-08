@@ -2,8 +2,8 @@ import { Database } from "@opencode-ai/core/database/database"
 import { LocationServiceMap } from "@opencode-ai/core/location-services"
 import { InvalidRequestError, SessionNotFoundError } from "@opencode-ai/protocol/errors"
 import { Effect, Layer } from "effect"
-import { HttpRouter, HttpServerRequest } from "effect/unstable/http"
-import { HttpApiMiddleware } from "effect/unstable/httpapi"
+import { HttpRouter, HttpServerRequest } from "effect/http"
+import { HttpApiMiddleware } from "effect/http-api"
 import { requestRef, sessionRef, type LocationServices } from "../location"
 
 export class FormLocationMiddleware extends HttpApiMiddleware.Service<

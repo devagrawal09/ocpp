@@ -1,7 +1,7 @@
 export * as ServerFetch from "./fetch"
 
 import { Context, Effect, Layer } from "effect"
-import { HttpEffect, HttpMiddleware, HttpRouter, HttpServer } from "effect/unstable/http"
+import { HttpEffect, HttpMiddleware, HttpRouter, HttpServer } from "effect/http"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import type { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { isAllowedCorsOrigin } from "./cors"

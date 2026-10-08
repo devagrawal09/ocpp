@@ -1,6 +1,6 @@
 import { Workspace } from "@opencode-ai/schema/workspace"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { ConflictError, ProviderNotFoundError, UnknownError } from "../errors.js"
 
 export const WorkspaceGroup = HttpApiGroup.make("server.workspace")

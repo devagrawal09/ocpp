@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events"
 import { MessageChannel } from "node:worker_threads"
 import type { MessagePortMain, WebContents } from "electron"
 import { Context, Effect, Layer, ManagedRuntime, Option, Queue, Schema, Stream } from "effect"
-import { Rpc, RpcClient, RpcClientError, RpcGroup, RpcMessage, RpcSerialization, RpcServer } from "effect/unstable/rpc"
+import { Rpc, RpcClient, RpcClientError, RpcGroup, RpcMessage, RpcSerialization, RpcServer } from "effect/rpc"
 import { IpcPortHandoff, IpcServerProtocolLive } from "./ipc-transport"
 
 describe("desktop RPC transport", () => {

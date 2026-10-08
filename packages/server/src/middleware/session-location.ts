@@ -1,8 +1,8 @@
 import { Database } from "@opencode-ai/core/database/database"
 import { LocationServiceMap } from "@opencode-ai/core/location-services"
 import { Effect, Layer } from "effect"
-import { HttpRouter } from "effect/unstable/http"
-import { HttpApiMiddleware } from "effect/unstable/httpapi"
+import { HttpRouter } from "effect/http"
+import { HttpApiMiddleware } from "effect/http-api"
 import { InvalidRequestError, SessionNotFoundError } from "@opencode-ai/protocol/errors"
 import { sessionRef, type LocationServices } from "../location"
 

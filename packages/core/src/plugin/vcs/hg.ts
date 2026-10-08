@@ -2,7 +2,7 @@ export * as VcsHgPlugin from "./hg.js"
 
 import path from "path"
 import { Effect } from "effect"
-import { ChildProcess } from "effect/unstable/process"
+import { ChildProcess } from "effect/process"
 import { define } from "@opencode-ai/plugin/effect/plugin"
 import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { FileStatus, Info, Mode } from "@opencode-ai/schema/vcs"

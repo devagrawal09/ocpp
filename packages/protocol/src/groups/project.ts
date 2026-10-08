@@ -1,6 +1,6 @@
 import { Project } from "@opencode-ai/schema/project"
 import { Schema, Struct } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { LocationQuery, locationQueryOpenApi } from "./location.js"
 import { ProjectNotFoundError } from "../errors.js"
 

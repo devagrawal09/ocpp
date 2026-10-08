@@ -1,4 +1,4 @@
-import { Headers } from "effect/unstable/http"
+import { Headers } from "effect/http"
 import { Auth } from "../route/auth.js"
 import { type AtLeastOne, type ProviderAuthOption } from "../route/auth-options.js"
 import type { Route as RouteDef, RouteDefaultsInput } from "../route/client.js"

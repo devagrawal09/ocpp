@@ -1,7 +1,7 @@
 import { Project } from "@opencode-ai/schema/project"
 import { Worktree } from "@opencode-ai/schema/worktree"
 import { Schema, Struct } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 
 const root = "/api/worktree/:projectID"
 

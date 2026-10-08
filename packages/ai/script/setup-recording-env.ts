@@ -5,7 +5,7 @@ import * as path from "node:path"
 import * as prompts from "@clack/prompts"
 import { AwsV4Signer } from "aws4fetch"
 import { Config, ConfigProvider, Effect, FileSystem, PlatformError, Redacted } from "effect"
-import { FetchHttpClient, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/unstable/http"
+import { FetchHttpClient, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import * as ProviderShared from "../src/protocols/shared"
 import * as Cloudflare from "../src/providers/cloudflare"
 

@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer"
 import { Tool } from "@opencode-ai/schema/tool"
 import { Effect, Schema, Stream } from "effect"
-import * as Sse from "effect/unstable/encoding/Sse"
-import { Headers, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import * as Sse from "effect/encoding/Sse"
+import { Headers, HttpClientRequest, HttpClientResponse } from "effect/http"
 import {
   InvalidProviderOutputError,
   InvalidRequestError,

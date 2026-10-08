@@ -9,7 +9,7 @@ import { Project } from "@opencode-ai/schema/project"
 import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, statics } from "@opencode-ai/schema/schema"
 import { Event } from "@opencode-ai/schema/event"
 import { Workspace } from "@opencode-ai/schema/workspace"
-import { Context, Effect, Result, Schema, SchemaGetter, Struct } from "effect"
+import { Context, Effect, Result, Schema, SchemaGetter, SchemaParser, Struct } from "effect"
 import { Base64Url } from "effect/encoding"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
 import {
@@ -88,7 +88,7 @@ const invalidCursor = "Invalid cursor" as const
 export const SessionsCursor = Schema.String.pipe(
   Schema.brand("SessionsCursor"),
   statics((schema) => {
-    const make = schema.make.bind(schema)
+    const make = SchemaParser.make(schema)
     return {
       make: (input: typeof SessionsCursorInput.Type) => make(Base64Url.encode(encodeSessionsCursor(input))),
       parse: (input: string) =>

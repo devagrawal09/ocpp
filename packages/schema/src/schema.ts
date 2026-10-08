@@ -18,7 +18,9 @@ export const optional = <S extends Schema.Top>(schema: S) =>
   )
 
 // Defines statics as own properties: effect 4.0.1 exposes schema members such as `make` as prototype
-// getters without setters, which plain assignment (Object.assign) cannot shadow.
+// getters without setters, which plain assignment (Object.assign) cannot shadow. Reading `schema.make`
+// memoizes it as a non-configurable own property, so a static that overrides `make` must build the
+// original with SchemaParser.make(schema) instead of reading it.
 export const statics =
   <S extends object, M extends Record<string, unknown>>(methods: (schema: S) => M) =>
   (schema: S): S & M =>

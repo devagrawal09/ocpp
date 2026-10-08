@@ -343,7 +343,7 @@ export const layer = Layer.effect(
         (yield* hooks.has("session", "http.response", resolved.ref.providerID))
       const webSocket =
         resolved.capabilities.responsesWebsockets === true
-          ? yield* Config.boolean(responsesWebSocketFlag(resolved.ref.providerID)).pipe(
+          ? yield* Config.Boolean(responsesWebSocketFlag(resolved.ref.providerID)).pipe(
               Config.withDefault(false),
               Effect.orDie,
             )

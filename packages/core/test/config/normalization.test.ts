@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Duration, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import { Arbitrary, Duration, Effect, Schema } from "effect"
 import { ConfigNormalize } from "@opencode-ai/core/config/normalize"
 import { Info } from "@opencode-ai/schema/config"
 
@@ -79,17 +78,23 @@ describe("ConfigNormalize", () => {
     expect(Duration.toMillis(info.warming.duration ?? Duration.zero)).toBe(1_800_000)
   })
 
-  test("preserves arbitrary JSON-round-tripped native configuration", () => {
-    FastCheck.assert(
-      FastCheck.property(Schema.toArbitrary(Info)(FastCheck), (info) => {
-        const source = JSON.parse(JSON.stringify(Schema.encodeSync(Info)(info)))
-        const result = normalized(source)
-        expect(Schema.decodeUnknownSync(Info)(result.encoded)).toEqual(
-          Schema.decodeUnknownSync(Info)(withoutEmptyCompatibilityContainers(source)),
-        )
-      }),
-      { numRuns: 100 },
+  test("preserves arbitrary JSON-round-tripped native configuration", async () => {
+    const result = await Effect.runPromise(
+      Arbitrary.checkEffect(
+        Arbitrary.schema(Info),
+        (info) =>
+          Effect.try(() => {
+            const source = JSON.parse(JSON.stringify(Schema.encodeSync(Info)(info)))
+            const result = normalized(source)
+            expect(Schema.decodeUnknownSync(Info)(result.encoded)).toEqual(
+              Schema.decodeUnknownSync(Info)(withoutEmptyCompatibilityContainers(source)),
+            )
+            return true
+          }),
+        { runs: 100 },
+      ),
     )
+    expect(Arbitrary.formatCheckFailure(result)).toBeUndefined()
   })
 
   test("merges named maps by entry and gives valid native entries precedence", () => {

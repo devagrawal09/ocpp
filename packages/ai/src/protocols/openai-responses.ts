@@ -1,4 +1,5 @@
-import { Effect, Encoding, Schema } from "effect"
+import { Effect, Schema } from "effect"
+import { Base64 } from "effect/encoding"
 import { Headers } from "effect/http"
 import { Route } from "../route/client.js"
 import { Auth } from "../route/auth.js"
@@ -148,7 +149,7 @@ const fromRequest = Effect.fn("OpenAIResponses.fromRequest")(function* (request:
 const hostedToolResult = Effect.fn("OpenAIResponses.hostedToolResult")(function* (item: ResponsesHostedTools.Item) {
   const isError = item.error !== undefined && item.error !== null
   if (item.type === "image_generation_call" && item.result) {
-    yield* Effect.fromResult(Encoding.decodeBase64(item.result)).pipe(
+    yield* Effect.fromResult(Base64.decode(item.result)).pipe(
       Effect.mapError((cause) =>
         ProviderShared.eventError(ADAPTER, "OpenAI Responses returned invalid image base64", undefined, cause),
       ),

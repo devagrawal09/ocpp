@@ -1,8 +1,7 @@
 import path from "path"
 import fs from "fs/promises"
 import { describe, expect, test } from "bun:test"
-import { Effect, Fiber, Layer, Logger, Schema, Stream } from "effect"
-import { FastCheck } from "effect/testing"
+import { Arbitrary, Effect, Fiber, Layer, Logger, Schema, Stream } from "effect"
 import { Config } from "@opencode-ai/core/config"
 import { AgentsDirectory, Directory, Document, Event, Info } from "@opencode-ai/schema/config"
 import { ConfigModel } from "@opencode-ai/schema/config/model"
@@ -557,18 +556,24 @@ describe("Config", () => {
     ).pipe(Effect.provide(Logger.layer([logger])))
   })
 
-  test("migrates arbitrary v1 configuration into valid v2 configuration", () => {
-    FastCheck.assert(
-      FastCheck.property(Schema.toArbitrary(ConfigV1.Info)(FastCheck), (info) => {
-        const parsed = Schema.decodeUnknownSync(ConfigV1.Info)(
-          Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(
-            Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(info),
-          ),
-        )
-        Schema.decodeUnknownSync(Info)(ConfigMigrateV1.migrate(parsed), { errors: "all" })
-      }),
-      { numRuns: 100 },
+  test("migrates arbitrary v1 configuration into valid v2 configuration", async () => {
+    const result = await Effect.runPromise(
+      Arbitrary.checkEffect(
+        Arbitrary.schema(ConfigV1.Info),
+        (info) =>
+          Effect.try(() => {
+            const parsed = Schema.decodeUnknownSync(ConfigV1.Info)(
+              Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(
+                Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(info),
+              ),
+            )
+            Schema.decodeUnknownSync(Info)(ConfigMigrateV1.migrate(parsed), { errors: "all" })
+            return true
+          }),
+        { runs: 100 },
+      ),
     )
+    expect(Arbitrary.formatCheckFailure(result)).toBeUndefined()
   }, 30_000)
 
   test("migrates the v1 experimental subagent depth", () => {

@@ -111,5 +111,5 @@ function clientProtocol(value: MessagePort) {
         }
       }),
     ),
-  ).pipe(Layer.provide(RpcSerialization.layerMsgPack))
+  ).pipe(Layer.provide(RpcSerialization.layerSchemaBinary({ maxFrameSize: "unbounded" })))
 }

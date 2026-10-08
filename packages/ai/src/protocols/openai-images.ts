@@ -1,4 +1,5 @@
-import { Effect, Encoding, Schema } from "effect"
+import { Effect, Schema } from "effect"
+import { Base64 } from "effect/encoding"
 import { Headers, HttpClientRequest, HttpClientResponse } from "effect/http"
 import {
   ImageModel,
@@ -204,7 +205,7 @@ const parseResponse = Effect.fn("OpenAIImages.parseResponse")(function* (
     decoded.output_format ?? (typeof requestBody?.output_format === "string" ? requestBody.output_format : "png")
   const images = yield* Effect.forEach(decoded.data, (item, index) => {
     if (item.b64_json)
-      return Effect.fromResult(Encoding.decodeBase64(item.b64_json)).pipe(
+      return Effect.fromResult(Base64.decode(item.b64_json)).pipe(
         Effect.mapError((cause) => output.invalid(`OpenAI Images result ${index} contains invalid base64 data`, cause)),
         Effect.map(
           (data) =>

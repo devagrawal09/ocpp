@@ -20,6 +20,8 @@ type Handoff = {
 
 export class IpcPortHandoff extends Context.Service<IpcPortHandoff, Handoff>()("opencode/desktop/IpcPortHandoff") {}
 
+// effect 4.0.1 removed MessagePack RPC serialization; SchemaBinary is its binary successor. The renderer client
+// must use the same serialization, and frames stay unbounded as they were with MessagePack.
 export const IpcServerProtocolLive = Layer.unwrap(
   Effect.gen(function* () {
     const handoffs = yield* Queue.unbounded<readonly [WebContents, MessagePortMain]>()
@@ -123,4 +125,4 @@ export const IpcServerProtocolLive = Layer.unwrap(
       }),
     )
   }),
-).pipe(Layer.provide(RpcSerialization.layerMsgPack))
+).pipe(Layer.provide(RpcSerialization.layerSchemaBinary({ maxFrameSize: "unbounded" })))

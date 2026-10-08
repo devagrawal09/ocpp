@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Option, Path } from "effect"
+import { ByteSize, Effect, FileSystem, Option, Path } from "effect"
 
 const EMPTY_STORE_MAX_BYTES = 128
 const DRAFT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
@@ -87,8 +87,8 @@ function storeKind(name: string): StoreKind | undefined {
   if (/^opencode\.workspace\..+\.dat$/.test(name)) return "workspace"
 }
 
-const isEmptyStore = Effect.fn("Storage.isEmptyStore")(function* (file: string, size: FileSystem.Size) {
-  if (size > FileSystem.Size(EMPTY_STORE_MAX_BYTES)) return false
+const isEmptyStore = Effect.fn("Storage.isEmptyStore")(function* (file: string, size: ByteSize.ByteSize) {
+  if (size > ByteSize.bytes(EMPTY_STORE_MAX_BYTES)) return false
 
   const fs = yield* FileSystem.FileSystem
   const raw = yield* fs.readFileString(file).pipe(Effect.orElseSucceed(() => undefined))

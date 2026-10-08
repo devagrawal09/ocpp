@@ -2,7 +2,7 @@ export * as DesktopLogging from "./logging"
 
 import log from "electron-log/main.js"
 import { app, crashReporter, netLog, shell } from "electron"
-import { Context, Effect, FileSystem, Layer, Logger, Option, Path, References } from "effect"
+import { ByteSize, Context, Effect, FileSystem, Layer, Logger, Option, Path, References } from "effect"
 import { homedir } from "node:os"
 import { VERSION } from "../constants"
 
@@ -242,7 +242,7 @@ function collect(fs: FileSystem.FileSystem, path: Path.Path, dir: string, prefix
         const info = yield* fs.stat(file)
         if (info.type === "Directory") return null
         if (Option.getOrElse(info.mtime, () => new Date(0)).getTime() < cutoff) return null
-        if (info.size > FileSystem.Size(MAX_EXPORT_FILE_SIZE)) return null
+        if (info.size > ByteSize.bytes(MAX_EXPORT_FILE_SIZE)) return null
         if (file.endsWith(".heapsnapshot")) return null
         return { name: path.join(prefix, entry).replace(/\\/g, "/"), path: file }
       }),

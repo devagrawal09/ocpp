@@ -142,7 +142,7 @@ function clientProtocol(port: MessagePort) {
         }
       }),
     ),
-  ).pipe(Layer.provide(RpcSerialization.layerMsgPack))
+  ).pipe(Layer.provide(RpcSerialization.layerSchemaBinary({ maxFrameSize: "unbounded" })))
 }
 
 function sender(id: number) {

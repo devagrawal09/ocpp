@@ -146,7 +146,7 @@ describe("ReadTool", () => {
       const registry = yield* Tool.Service
 
       expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
-      expect(yield* codeModeTools(registry)).toEqual(["read"])
+      expect(yield* codeModeTools(registry)).toEqual(["notebook.inspect", "notebook.list", "read"])
       expect(yield* toolDefinitions(registry, { paths: ["glob"] })).toEqual([])
       expect(yield* codeModeTools(registry, { paths: ["glob"] })).toEqual([])
       const execution = yield* executeTool(registry, {

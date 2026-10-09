@@ -963,6 +963,8 @@ describe("fromPromise", () => {
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
       expect(snapshot.codeModeCatalog).toEqual([
         expect.objectContaining({ path: "acme.hello", description: "Wrapped" }),
+        expect.objectContaining({ path: "notebook.inspect" }),
+        expect.objectContaining({ path: "notebook.list" }),
       ])
       expect((yield* registeredTools(registry)).get("acme_hello")?.output).toBeUndefined()
       expect(
@@ -983,7 +985,12 @@ describe("fromPromise", () => {
       yield* Effect.promise(() => registration.dispose())
       yield* Effect.promise(() => registration.dispose())
       const restored = yield* registry.snapshot()
-      expect(restored.codeModeCatalog?.map((tool) => tool.path)).toEqual(["acme.hello", "temporary"])
+      expect(restored.codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "acme.hello",
+        "notebook.inspect",
+        "notebook.list",
+        "temporary",
+      ])
       expect(restored.codeModeCatalog?.[0]?.description).toBe("Hello")
     }),
   )
@@ -1003,8 +1010,11 @@ describe("fromPromise", () => {
           execute: () => Effect.succeed({ output: "Hello" }),
         })
       })
+      // Code Mode's built-in notebook tools are always pinned; the registered tool's pin is what changes.
       const pins = (snapshot: Tool.Snapshot) =>
-        snapshot.codeModeCatalog?.map((tool) => ({ path: tool.path, pinned: tool.pinned }))
+        snapshot.codeModeCatalog
+          ?.filter((tool) => !tool.path.startsWith("notebook."))
+          .map((tool) => ({ path: tool.path, pinned: tool.pinned }))
       const original = yield* registry.snapshot()
       expect(pins(original)).toEqual([{ path: "acme.hello", pinned: true }])
 

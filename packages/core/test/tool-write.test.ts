@@ -87,7 +87,7 @@ describe("WriteTool", () => {
       return withTool(tmp.path, fixture, (registry) =>
         Effect.gen(function* () {
           expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
-          expect(yield* codeModeTools(registry)).toEqual(["write"])
+          expect(yield* codeModeTools(registry)).toEqual(["notebook.inspect", "notebook.list", "write"])
           const settled = yield* executeTool(registry, call({ path: "src/new.txt", content: "created" }))
           expect(settled).toEqual({
             status: "completed",

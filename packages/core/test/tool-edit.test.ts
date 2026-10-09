@@ -100,7 +100,7 @@ describe("EditTool", () => {
           withTool(tmp.path, edit, (registry) =>
             Effect.gen(function* () {
               expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
-              expect(yield* codeModeTools(registry)).toEqual(["edit"])
+              expect(yield* codeModeTools(registry)).toEqual(["edit", "notebook.inspect", "notebook.list"])
               expect(yield* toolDefinitions(registry, { paths: ["read"] })).toEqual([])
               expect(yield* codeModeTools(registry, { paths: ["read"] })).toEqual([])
               const settled = yield* executeTool(

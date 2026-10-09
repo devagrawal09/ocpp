@@ -1504,7 +1504,12 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
           .pipe(Effect.map((toolSet) => toolSet.codeModeCatalog?.find((tool) => tool.path === path)?.description))
       yield* registration.flush
       expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
-      expect(yield* codeModeTools(registry)).toEqual(["demo.search", "other.lookup"])
+      expect(yield* codeModeTools(registry)).toEqual([
+        "demo.search",
+        "notebook.inspect",
+        "notebook.list",
+        "other.lookup",
+      ])
       const override = yield* registry.transform((draft) => {
         draft.add({
           name: "search",
@@ -1525,7 +1530,13 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
       yield* Ref.set(catalog, [tool("demo", "y".repeat(65)), ...healthy, tool("demo", "added"), namespace])
       yield* bus.publish(McpEvent.ToolsChanged, { server: "demo" })
       yield* waitForTool(registry, "demo_added")
-      expect(yield* codeModeTools(registry)).toEqual(["demo.added", "demo.search", "other.lookup"])
+      expect(yield* codeModeTools(registry)).toEqual([
+        "demo.added",
+        "demo.search",
+        "notebook.inspect",
+        "notebook.list",
+        "other.lookup",
+      ])
       expect(yield* description("demo.search")).toBe("Override search")
       expect(yield* description("other.lookup")).toBe("lookup updated")
       yield* Effect.forEach(["demo_search", "other_lookup"], (name) =>
@@ -1553,7 +1564,14 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
       ])
       yield* bus.publish(McpEvent.ToolsChanged, { server: "demo" })
       yield* waitForTool(registry, "demo_status")
-      expect(yield* codeModeTools(registry)).toEqual(["demo.added", "demo.search", "demo.status", "other.lookup"])
+      expect(yield* codeModeTools(registry)).toEqual([
+        "demo.added",
+        "demo.search",
+        "demo.status",
+        "notebook.inspect",
+        "notebook.list",
+        "other.lookup",
+      ])
       expect(yield* description("demo.search")).toBe("Override search")
       expect(yield* description("other.lookup")).toBe("lookup updated")
       yield* mutation.dispose
@@ -1566,7 +1584,12 @@ testEffect(Layer.empty).live("isolates invalid MCP tools and preserves plugin tr
       expect(yield* description("demo.search")).toBe("Override search")
 
       yield* override.dispose
-      expect(yield* codeModeTools(registry)).toEqual(["demo.refreshed", "demo.search"])
+      expect(yield* codeModeTools(registry)).toEqual([
+        "demo.refreshed",
+        "demo.search",
+        "notebook.inspect",
+        "notebook.list",
+      ])
       expect(yield* description("demo.search")).toBe("Latest search")
       expect(
         yield* executeTool(registry, {
@@ -1609,14 +1632,14 @@ testEffect(Layer.empty).effect("coalesces queued MCP tool notifications after in
     const bus = yield* Bus.Service
     yield* registration.flush
     expect(reads).toBe(1)
-    expect(yield* codeModeTools(registry)).toEqual(["demo.read_1"])
+    expect(yield* codeModeTools(registry)).toEqual(["demo.read_1", "notebook.inspect", "notebook.list"])
 
     yield* bus.publish(McpEvent.ToolsChanged, { server: "demo" })
     yield* TestClock.adjust("250 millis")
     yield* Effect.forEach(Array.from({ length: 20 }), () => bus.publish(McpEvent.ToolsChanged, { server: "demo" }))
     yield* TestClock.adjust("2 seconds")
     expect(reads).toBe(3)
-    expect(yield* codeModeTools(registry)).toEqual(["demo.read_3"])
+    expect(yield* codeModeTools(registry)).toEqual(["demo.read_3", "notebook.inspect", "notebook.list"])
   }).pipe(
     Effect.provide(
       AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node, Bus.node]), [
@@ -1749,6 +1772,8 @@ it.effect("offers every MCP server's tools only through Code Mode", () =>
       "archive.media",
       "demo.search",
       "demo.status",
+      "notebook.inspect",
+      "notebook.list",
     ])
     expect(execute?.description).not.toContain("tools.archive.lookup")
   }),

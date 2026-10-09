@@ -222,9 +222,15 @@ describe("Tool", () => {
         { ...constant("temporary"), name: "temporary" },
       ])
 
-      expect((yield* service.snapshot(undefined, other)).codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo"])
+      expect((yield* service.snapshot(undefined, other)).codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "echo",
+        "notebook.inspect",
+        "notebook.list",
+      ])
       expect((yield* service.snapshot(undefined, sessionID)).codeModeCatalog?.map((tool) => tool.path)).toEqual([
         "echo",
+        "notebook.inspect",
+        "notebook.list",
         "temporary",
       ])
       expect((yield* executeTool(service, call("echo"))).output).toEqual({ text: "session" })
@@ -233,6 +239,8 @@ describe("Tool", () => {
       yield* first.dispose
       expect((yield* service.snapshot(undefined, sessionID)).codeModeCatalog?.map((tool) => tool.path)).toEqual([
         "echo",
+        "notebook.inspect",
+        "notebook.list",
       ])
       expect((yield* service.registrations(undefined, sessionID)).map((tool) => tool.name)).toEqual(["echo"])
     }),
@@ -411,7 +419,7 @@ describe("Tool", () => {
       })
       const scope = yield* Scope.make()
       yield* service.transform((draft) => draft.remove("hidden")).pipe(Scope.provide(scope))
-      expect(yield* codeModeTools(service)).toEqual(["acme.echo"])
+      expect(yield* codeModeTools(service)).toEqual(["acme.echo", "notebook.inspect", "notebook.list"])
       expect((yield* executeTool(service, call("acme_echo"))).output).toEqual({ text: "original updated" })
 
       text = "refreshed"
@@ -421,6 +429,8 @@ describe("Tool", () => {
       const refreshed = yield* service.snapshot()
       expect(refreshed.codeModeCatalog).toEqual([
         expect.objectContaining({ path: "acme.echo", description: "Updated" }),
+        expect.objectContaining({ path: "notebook.inspect" }),
+        expect.objectContaining({ path: "notebook.list" }),
       ])
       const echo = 'return tools.acme.echo({ text: "echo" })'
       expect(yield* run(refreshed, "call-refreshed", echo)).toMatchObject({
@@ -434,7 +444,7 @@ describe("Tool", () => {
       yield* update.dispose
       expect((yield* executeTool(service, call("acme_echo"))).output).toEqual({ text: "refreshed" })
       yield* Scope.close(scope, Exit.void)
-      expect(yield* codeModeTools(service)).toEqual(["acme.echo", "hidden"])
+      expect(yield* codeModeTools(service)).toEqual(["acme.echo", "hidden", "notebook.inspect", "notebook.list"])
 
       yield* service.transform((draft) =>
         draft.update("acme_echo", (tool) => {
@@ -466,7 +476,7 @@ describe("Tool", () => {
           tool.execute = ({ value }) => Effect.succeed({ output: value + 1 })
         })
       })
-      expect(yield* codeModeTools(service)).toEqual(["acme.tools.echo"])
+      expect(yield* codeModeTools(service)).toEqual(["acme.tools.echo", "notebook.inspect", "notebook.list"])
       expect((yield* service.snapshot()).codeModeCatalog?.[0]?.signature).toContain("value")
       expect(
         (yield* executeTool(service, {
@@ -642,7 +652,13 @@ describe("Tool", () => {
       })
       const snapshot = yield* service.snapshot()
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
-      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["after", "before", "echo_tool"])
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "after",
+        "before",
+        "echo_tool",
+        "notebook.inspect",
+        "notebook.list",
+      ])
       expect((yield* executeTool(service, call("before"))).output).toEqual({ text: "before" })
       expect((yield* executeTool(service, call("after"))).output).toEqual({ text: "after" })
       expect((yield* executeTool(service, call("echo_tool"))).output).toEqual({ text: "last" })
@@ -675,6 +691,8 @@ describe("Tool", () => {
         "123._private.-tools.2d_get_scene",
         "2d_get_scene",
         "_lookup",
+        "notebook.inspect",
+        "notebook.list",
       ])
       const result = yield* snapshot.execute({
         ...call("execute"),
@@ -836,7 +854,12 @@ describe("Tool", () => {
 
       const snapshot = yield* service.snapshot()
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
-      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["first", "invalid__namespace.second"])
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "first",
+        "invalid__namespace.second",
+        "notebook.inspect",
+        "notebook.list",
+      ])
     }),
   )
 
@@ -869,7 +892,12 @@ describe("Tool", () => {
       ])
       const snapshot = yield* service.snapshot()
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
-      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["codemode", "healthy"])
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "codemode",
+        "healthy",
+        "notebook.inspect",
+        "notebook.list",
+      ])
       expect((yield* snapshot.execute(call("phone_type")).pipe(Effect.flip)).message).toBe("Unknown tool: phone_type")
     }).pipe(Effect.provide(Logger.layer([logger])))
   })
@@ -884,11 +912,11 @@ describe("Tool", () => {
             draft.add({ ...constant("invalid"), name: "echo", description: undefined } as unknown as Info)
             draft.add({ ...make(), name: "temporary" })
           })
-          expect(yield* codeModeTools(service)).toEqual(["echo", "temporary"])
+          expect(yield* codeModeTools(service)).toEqual(["echo", "notebook.inspect", "notebook.list", "temporary"])
           expect((yield* executeTool(service, call("echo"))).output).toEqual({ text: "original" })
         }),
       )
-      expect(yield* codeModeTools(service)).toEqual(["echo"])
+      expect(yield* codeModeTools(service)).toEqual(["echo", "notebook.inspect", "notebook.list"])
     }),
   )
 
@@ -919,7 +947,14 @@ describe("Tool", () => {
 
       expect(first).toEqual(second)
       expect(first.definitions.map((definition) => definition.name)).toEqual(["execute"])
-      expect(first.catalog?.map((entry) => entry.path)).toEqual(["alpha", "alpha.beta", "echo", "zeta"])
+      expect(first.catalog?.map((entry) => entry.path)).toEqual([
+        "alpha",
+        "alpha.beta",
+        "echo",
+        "notebook.inspect",
+        "notebook.list",
+        "zeta",
+      ])
     }),
   )
 
@@ -967,10 +1002,22 @@ describe("Tool", () => {
       yield* transform(service, { create: make(), list: make() }, { namespace: "linear" })
       const names = (paths: ReadonlyArray<string>) => codeModeTools(service, { paths })
 
-      expect(yield* codeModeTools(service)).toEqual(["bash", "linear.create", "linear.list", "question"])
-      expect(yield* names(["question"])).toEqual(["question"])
-      expect(yield* names(["linear"])).toEqual(["linear.create", "linear.list"])
-      expect(yield* names(["linear.list", "bash"])).toEqual(["bash", "linear.list"])
+      expect(yield* codeModeTools(service)).toEqual([
+        "bash",
+        "linear.create",
+        "linear.list",
+        "notebook.inspect",
+        "notebook.list",
+        "question",
+      ])
+      expect(yield* names(["question"])).toEqual(["notebook.inspect", "notebook.list", "question"])
+      expect(yield* names(["linear"])).toEqual(["linear.create", "linear.list", "notebook.inspect", "notebook.list"])
+      expect(yield* names(["linear.list", "bash"])).toEqual([
+        "bash",
+        "linear.list",
+        "notebook.inspect",
+        "notebook.list",
+      ])
       // A path selects a namespace only at a segment boundary.
       expect(yield* names(["line", "ques"])).toEqual([])
     }),
@@ -1025,6 +1072,8 @@ describe("Tool", () => {
       expect(seen).toEqual([{ sessionID, agent: identity.agent, model, tools: ["echo", "acme.deploy"] }])
       expect(snapshot.codeModeCatalog?.map((entry) => [entry.path, entry.description])).toEqual([
         ["echo", "Echo text for gpt-5"],
+        ["notebook.inspect", expect.any(String)],
+        ["notebook.list", expect.any(String)],
       ])
       expect(CodeModeInstructions.render(CodeModeCatalog.summarize(snapshot.codeModeCatalog ?? []))).toContain(
         "// Echo text for gpt-5",
@@ -1033,6 +1082,8 @@ describe("Tool", () => {
       expect((yield* service.registrations()).map((tool) => tool.description)).toEqual(["Echo text", "Echo text"])
       expect((yield* service.snapshot()).codeModeCatalog?.map((entry) => entry.description)).toEqual([
         "Echo text for no model",
+        expect.any(String),
+        expect.any(String),
       ])
 
       const refused = yield* snapshot
@@ -1067,7 +1118,7 @@ describe("Tool", () => {
       const service = yield* Tool.Service
       const scope = yield* Scope.make()
       yield* transform(service, { echo: make() }).pipe(Scope.provide(scope))
-      expect(yield* codeModeTools(service)).toEqual(["echo"])
+      expect(yield* codeModeTools(service)).toEqual(["echo", "notebook.inspect", "notebook.list"])
       yield* Scope.close(scope, Exit.void)
       expect(yield* codeModeTools(service)).toEqual([])
     }),
@@ -1087,7 +1138,7 @@ describe("Tool", () => {
       yield* Deferred.await(registered)
       yield* Fiber.interrupt(fiber)
 
-      expect(yield* codeModeTools(service)).toEqual(["echo"])
+      expect(yield* codeModeTools(service)).toEqual(["echo", "notebook.inspect", "notebook.list"])
       yield* Scope.close(scope, Exit.void)
       expect(yield* codeModeTools(service)).toEqual([])
     }),
@@ -1724,8 +1775,18 @@ describe("init.ts tool lists", () => {
       yield* transform(service, { echo: make() })
       yield* transform(service, { create: make(), list: make() }, { namespace: "linear" })
       const selection = init(shout + "\nreturn { build: [tools.linear, shout], plan: [tools.echo] }")
-      expect(yield* codeModeTools(service, selection)).toEqual(["linear.create", "linear.list", "shout"])
-      expect(yield* codeModeTools(service, init(selection.init.source, "plan"))).toEqual(["echo"])
+      expect(yield* codeModeTools(service, selection)).toEqual([
+        "linear.create",
+        "linear.list",
+        "notebook.inspect",
+        "notebook.list",
+        "shout",
+      ])
+      expect(yield* codeModeTools(service, init(selection.init.source, "plan"))).toEqual([
+        "echo",
+        "notebook.inspect",
+        "notebook.list",
+      ])
 
       const snapshot = yield* service.snapshot(selection, sessionID)
       expect(yield* run(snapshot, "call-shout", 'return tools.shout({ text: "hi" })')).toMatchObject({
@@ -1753,7 +1814,7 @@ describe("init.ts tool lists", () => {
       const service = yield* Tool.Service
       yield* transform(service, { echo: make() })
       const snapshot = yield* service.snapshot(init("return { build: [tools.echo, tools.missing] }"))
-      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo"])
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo", "notebook.inspect", "notebook.list"])
       expect(snapshot.notice).toBe(
         "init.ts lists tools.missing for the build agent, but no tool here provides it. The rest of its list applies.",
       )
@@ -1772,7 +1833,12 @@ describe("init.ts tool lists", () => {
         ),
       )
       expect(snapshot.notice).toBeUndefined()
-      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo", "shout"])
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "echo",
+        "notebook.inspect",
+        "notebook.list",
+        "shout",
+      ])
     }),
   )
 

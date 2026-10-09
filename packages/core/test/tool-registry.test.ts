@@ -1696,6 +1696,8 @@ describe("Tool", () => {
       const jobs = testJobs ?? (yield* Effect.die("Job test service is unavailable"))
       yield* jobs.cancel(executionID)
       yield* Fiber.interrupt(fiber)
+      // The execution's report settles it once its job ends, recording the fact asynchronously.
+      while ((yield* store.get(executionID))?.status === "running") yield* Effect.promise(() => Bun.sleep(1))
       expect(yield* store.get(executionID)).toMatchObject({ status: "indeterminate", saved: [] })
       expect(yield* store.bindings(sessionID)).toEqual({})
       expect(yield* store.reservations(sessionID)).toEqual([])

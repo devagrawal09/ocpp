@@ -46,7 +46,11 @@ function occupy(port: number, cancel = false) {
     )
     yield* Effect.forEach(servers, (item) =>
       Effect.callback<void, Error>((resume) => {
-        const onError = (error: Error) => resume(Effect.fail(error))
+        const onError = (error: Error & { readonly code?: string }) =>
+          // A host without IPv6 has no ::1 to occupy: the port is busy on the family it has.
+          item.host === "::1" && (error.code === "EAFNOSUPPORT" || error.code === "EADDRNOTAVAIL")
+            ? resume(Effect.void)
+            : resume(Effect.fail(error))
         item.server.once("error", onError)
         item.server.listen(port, item.host, () => {
           item.server.off("error", onError)

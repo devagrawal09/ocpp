@@ -250,7 +250,7 @@ describe("contract hygiene", () => {
     }
   })
 
-  test("current source limits Any to provider options and avoids mutable contract wrappers", async () => {
+  test("current source limits Any to provider options and integration metadata and avoids mutable contract wrappers", async () => {
     const files = [...new Bun.Glob("*.ts").scanSync(new URL("../src", import.meta.url).pathname)].filter(
       (file) => !file.endsWith("-v1.ts"),
     )
@@ -261,11 +261,17 @@ describe("contract hygiene", () => {
 
     expect(
       sources
-        .filter((item) => item.file !== "provider.ts")
+        .filter((item) => item.file !== "provider.ts" && item.file !== "integration.ts")
         .map((item) => item.source)
         .join("\n"),
     ).not.toContain("Schema.Any")
     expect(sources.find((item) => item.file === "provider.ts")?.source.match(/Schema\.Any/g)).toHaveLength(4)
+    expect(
+      sources
+        .find((item) => item.file === "integration.ts")
+        ?.source.match(/metadata: optional\(Schema\.Record\(Schema\.String, Schema\.Any\)\)/g),
+    ).toHaveLength(2)
+    expect(sources.find((item) => item.file === "integration.ts")?.source.match(/Schema\.Any/g)).toHaveLength(2)
     expect(source).not.toContain("Schema.mutable")
   })
 

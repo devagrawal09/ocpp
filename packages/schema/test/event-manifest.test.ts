@@ -13,6 +13,10 @@ import {
   Workspace,
 } from "../src/index.js"
 import { EventManifest } from "../src/event-manifest.js"
+import { CredentialFact } from "../src/credential-fact.js"
+import { KeyValueFact } from "../src/key-value-fact.js"
+import { ProjectFact } from "../src/project-fact.js"
+import { SessionFact } from "../src/session-fact.js"
 import { FileSystemV1 } from "../src/filesystem-v1.js"
 import { IdeEvent } from "../src/ide-event.js"
 import { McpEvent } from "../src/mcp-event.js"
@@ -162,8 +166,56 @@ describe("public event manifest", () => {
         "session.revert.cleared.1",
         "session.revert.committed.1",
         "worktree.resolved.1",
+        // Internal facts: recorded in Specter's log, projected into OC++'s tables, never sent to clients.
+        "project.created.1",
+        "project.vcs.changed.1",
+        "project.relocated.1",
+        "project.edited.1",
+        "worktree.recorded.1",
+        "worktree.removed.1",
+        "workspace.created.1",
+        "workspace.bound.1",
+        "workspace.used.1",
+        "workspace.destroyed.1",
+        "session.imported.1",
+        "session.instruction.blobs.stored.1",
+        "session.instruction.entry.set.1",
+        "session.instruction.entry.removed.1",
+        "session.codemode.execution.admitted.1",
+        "session.codemode.execution.started.1",
+        "session.codemode.execution.resumed.1",
+        "session.codemode.execution.settled.1",
+        "session.codemode.execution.discarded.1",
+        "session.codemode.call.scheduled.1",
+        "session.codemode.call.progressed.1",
+        "session.codemode.call.settled.1",
+        "session.codemode.command.defined.1",
+        "session.codemode.command.removed.1",
+        "session.codemode.event.defined.1",
+        "session.codemode.event.toggled.1",
+        "session.codemode.event.removed.1",
+        "session.codemode.event.planned.1",
+        "session.codemode.event.fired.1",
+        "session.codemode.event.skipped.1",
+        "session.background.recorded.1",
+        "session.background.terminal.1",
+        "session.background.completed.1",
+        "credential.created.1",
+        "credential.activated.1",
+        "credential.relabeled.1",
+        "credential.rotated.1",
+        "credential.removed.1",
+        "kv.stored.1",
+        "kv.removed.1",
       ].toSorted(),
     )
+    for (const definition of [
+      ...ProjectFact.Definitions,
+      ...SessionFact.Definitions,
+      ...CredentialFact.Definitions,
+      ...KeyValueFact.Definitions,
+    ])
+      expect(EventManifest.Server.has(definition.type)).toBe(false)
     expect(SessionEvent.DurableDefinitions).toEqual([
       ...SessionEvent.Definitions.filter((definition) => definition.durability === "durable"),
       SessionEvent.UsageRecorded,

@@ -1595,33 +1595,26 @@ describe("SessionRunnerLLM", () => {
     expect(messageRoles(s.requests[0])).toEqual(["user"])
   })
 
-  scenario(
-    "preserves instruction state and interrupts the source Location runner after a Session moves",
-    function* (s) {
-      yield* s.runPrompt("First")
-      const instructionState = yield* s.db
-        .select()
-        .from(InstructionStateTable)
-        .where(eq(InstructionStateTable.session_id, sessionID))
-        .get()
+  // OC++'s runner ran per Location and interrupted a run whose Session had moved away; the runtime runs
+  // every Session in whichever Location it is now (here every Location shares /project's services, so
+  // a step in /moved cannot run).
+  scenario("preserves instruction state after a Session moves", function* (s) {
+    yield* s.runPrompt("First")
+    const instructionState = yield* s.db
+      .select()
+      .from(InstructionStateTable)
+      .where(eq(InstructionStateTable.session_id, sessionID))
+      .get()
 
-      yield* s.bus.publish(SessionEvent.Moved, {
-        sessionID,
-        location: Location.Ref.make({ directory: AbsolutePath.make("/moved") }),
-        projectID: Project.ID.global,
-      })
-      expect(
-        yield* s.db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, sessionID)).get(),
-      ).toEqual(instructionState)
-
-      yield* s.admit("Second")
-      const exit = yield* s.resume.pipe(Effect.exit)
-
-      expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(true)
-      expect(s.requests).toHaveLength(1)
-      expect(yield* SessionInbox.has(s.db, sessionID, "steer")).toBe(true)
-    },
-  )
+    yield* s.bus.publish(SessionEvent.Moved, {
+      sessionID,
+      location: Location.Ref.make({ directory: AbsolutePath.make("/moved") }),
+      projectID: Project.ID.global,
+    })
+    expect(
+      yield* s.db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, sessionID)).get(),
+    ).toEqual(instructionState)
+  })
 
   scenario("delivers controls without preflighting unavailable initial instructions", function* (s) {
     s.systemUnavailable = true
@@ -3892,7 +3885,8 @@ describe("SessionRunnerLLM", () => {
     yield* s.bus.project(SessionEvent.InboxDelivered, () => (fail ? Effect.die(defect) : Effect.void))
     yield* s.admit("Recover promoted input")
 
-    expect(yield* s.resume.pipe(Effect.catchDefect(Effect.succeed))).toBe(defect)
+    // The runtime fails the execution with it; the input stays pending for the next wake.
+    expect(yield* s.resume.pipe(Effect.flip)).toEqual(stepFailure(defect))
     fail = false
     s.requests.length = 0
     yield* s.llm.push(TestLLM.stop())

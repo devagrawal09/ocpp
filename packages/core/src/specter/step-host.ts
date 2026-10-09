@@ -1,6 +1,6 @@
 export * as SpecterStepHost from "./step-host.js"
 
-import { Cause, Clock, Context, Effect, Exit, FiberMap, Layer } from "effect"
+import { Cause, Clock, Context, Effect, Exit, Fiber, FiberMap, Layer } from "effect"
 import { LLMClient, Message } from "@ocpp/ai"
 import { Event } from "@ocpp/schema/event"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
@@ -95,6 +95,8 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
       case SessionEvent.Step.Started.type:
         settled.started = true
         return recorded(record.started())
+      case SessionEvent.Step.Streamed.type:
+        return recorded(record.streamed())
       case SessionEvent.Tool.Input.Started.type:
         names.set(data.id, data.name)
         return Effect.void
@@ -162,7 +164,14 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
   const publish: Bus.Interface["publish"] = (definition, data, options) =>
     stepFacts.has(definition.type)
       ? Effect.gen(function* () {
-          yield* recordFact(definition.type, data).pipe(Effect.orDie)
+          // A record that began completes: the Bus notifies listeners interruptibly, so stopping the attempt
+          // mid-record would cut short the uninterruptible tail that records what the attempt produced.
+          yield* recordFact(definition.type, data).pipe(
+            Effect.orDie,
+            Effect.forkChild,
+            Effect.flatMap(Fiber.join),
+            Effect.uninterruptible,
+          )
           return {
             id: options?.id ?? Event.ID.create(),
             created: yield* Clock.currentTimeMillis,

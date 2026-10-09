@@ -267,6 +267,7 @@ describe("Sessions on the Specter runtime", () => {
         "session.step.started",
         "session.text.started",
         "session.text.ended",
+        "session.step.streamed",
         "session.step.ended",
         "session.execution.succeeded",
       ])
@@ -304,6 +305,7 @@ describe("Sessions on the Specter runtime", () => {
         "session.step.started",
         "session.text.started",
         "session.text.ended",
+        "session.step.streamed",
         "session.step.ended",
         "session.execution.succeeded",
       ])
@@ -357,7 +359,7 @@ describe("Sessions on the Specter runtime", () => {
       })
       expect(messages.slice(notice + 1).map((message) => message.type)).toEqual(["assistant"])
       const types = yield* eventTypes
-      expect(types.slice(0, 10)).toEqual([
+      expect(types.slice(0, 9)).toEqual([
         "session.inbox.enqueued",
         "session.execution.started",
         "session.instructions.updated",
@@ -367,8 +369,9 @@ describe("Sessions on the Specter runtime", () => {
         "session.tool.input.ended",
         "session.tool.called",
         "session.codemode.started",
-        "session.tool.success",
       ])
+      // The program's result and the end of the provider stream race.
+      expect(types.slice(9, 11).toSorted()).toEqual(["session.step.streamed", "session.tool.success"])
       expect(types).toContain("session.codemode.completed")
       expect(types.slice(-2)).toEqual(["session.step.ended", "session.execution.succeeded"])
     }),
@@ -561,7 +564,7 @@ describe("Sessions on the Specter runtime", () => {
       yield* session.wait(sessionID)
 
       // The runtime delivers the compaction item; OC++ compacts and records its own facts.
-      expect((yield* eventTypes).slice(9)).toEqual([
+      expect((yield* eventTypes).slice(10)).toEqual([
         "session.inbox.enqueued",
         "session.execution.started",
         "session.inbox.delivered",

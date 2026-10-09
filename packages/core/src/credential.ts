@@ -8,7 +8,8 @@ import { Integration } from "@ocpp/schema/integration"
 import { Database } from "./database/database.js"
 import { Bus } from "./bus.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
-import { CredentialSecretTable, CredentialTable } from "./credential/sql.js"
+import { CredentialSeal } from "./credential/seal.js"
+import { CredentialKeyTable, CredentialSecretTable, CredentialTable } from "./credential/sql.js"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 
 export const ID = Credential.ID
@@ -64,8 +65,9 @@ const layer = Layer.effect(
     // An integration's credentials are decided one at a time: which is active, which replaces it.
     const locks = KeyedMutex.makeUnsafe<string>()
 
-    // Credentials are the projection of their facts in Specter's Event Log. A fact never carries the
-    // secret: it is written by the publish that records the fact (`secret`), in the same transaction.
+    // Credentials are the projection of their facts in Specter's Event Log. A fact carries the secret
+    // sealed under the credential's key, which the publish of its creation stores beside the log, in the
+    // same transaction (`keyed`).
     const activate = (integrationID: Integration.ID, credentialID: ID) =>
       Effect.gen(function* () {
         yield* db
@@ -93,6 +95,10 @@ const layer = Layer.effect(
             time_updated: event.created,
           })
           .run()
+        yield* db
+          .insert(CredentialSecretTable)
+          .values({ credential_id: event.data.credentialID, value: event.data.secret })
+          .run()
       }).pipe(Effect.orDie),
     )
     yield* bus.project(CredentialFact.Activated, (event) => activate(event.data.integrationID, event.data.credentialID))
@@ -105,16 +111,22 @@ const layer = Layer.effect(
         .pipe(Effect.orDie, Effect.asVoid),
     )
     yield* bus.project(CredentialFact.Rotated, (event) =>
-      db
-        .update(CredentialTable)
-        .set({ time_updated: event.created })
-        .where(eq(CredentialTable.id, event.data.credentialID))
-        .run()
-        .pipe(Effect.orDie, Effect.asVoid),
+      Effect.gen(function* () {
+        yield* db
+          .update(CredentialTable)
+          .set({ time_updated: event.created })
+          .where(eq(CredentialTable.id, event.data.credentialID))
+          .run()
+        yield* db
+          .insert(CredentialSecretTable)
+          .values({ credential_id: event.data.credentialID, value: event.data.secret })
+          .onConflictDoUpdate({ target: CredentialSecretTable.credential_id, set: { value: event.data.secret } })
+          .run()
+      }).pipe(Effect.orDie),
     )
     yield* bus.project(CredentialFact.Removed, (event) =>
       Effect.gen(function* () {
-        // The secret goes with the row.
+        // The secret and its key go with the row, so no sealed copy of the secret can be read again.
         yield* db
           .delete(CredentialTable)
           .where(eq(CredentialTable.id, event.data.credentialID))
@@ -124,41 +136,61 @@ const layer = Layer.effect(
           yield* activate(event.data.integrationID, event.data.replacement)
       }),
     )
-    const secret = (credentialID: ID, value: Value) => ({
+    const keyed = (credentialID: ID, key: string) => ({
       commit: () =>
         db
-          .insert(CredentialSecretTable)
-          .values({ credential_id: credentialID, value })
-          .onConflictDoUpdate({ target: CredentialSecretTable.credential_id, set: { value } })
+          .insert(CredentialKeyTable)
+          .values({ credential_id: credentialID, key })
           .run()
           .pipe(Effect.orDie, Effect.asVoid),
     })
+    const keyOf = (credentialID: ID) =>
+      db
+        .select({ key: CredentialKeyTable.key })
+        .from(CredentialKeyTable)
+        .where(eq(CredentialKeyTable.credential_id, credentialID))
+        .get()
+        .pipe(
+          Effect.orDie,
+          Effect.flatMap((row) =>
+            row ? Effect.succeed(row.key) : Effect.die(new Error(`Credential ${credentialID} has no key`)),
+          ),
+        )
 
     const columns = {
       id: CredentialTable.id,
       integration_id: CredentialTable.integration_id,
       label: CredentialTable.label,
-      value: CredentialSecretTable.value,
+      sealed: CredentialSecretTable.value,
+      key: CredentialKeyTable.key,
     }
-    const stored = (row: { id: ID; integration_id: Integration.ID | null; label: string; value: unknown }) => {
-      if (!row.integration_id) return
-      return new Info({
-        id: row.id,
-        integrationID: row.integration_id,
-        label: row.label,
-        value: decode(row.value),
-      })
+    type Row = {
+      id: ID
+      integration_id: Integration.ID | null
+      label: string
+      sealed: CredentialFact.Sealed
+      key: string
     }
-    const storedRows = (rows: ReadonlyArray<Parameters<typeof stored>[0]>) =>
-      rows.flatMap((row) => {
-        const credential = stored(row)
-        return credential ? [credential] : []
+    const stored = (row: Row) =>
+      Effect.gen(function* () {
+        if (!row.integration_id) return undefined
+        return new Info({
+          id: row.id,
+          integrationID: row.integration_id,
+          label: row.label,
+          value: decode(yield* CredentialSeal.open(row.key, row.sealed)),
+        })
       })
+    const storedRows = (rows: ReadonlyArray<Row>) =>
+      Effect.forEach(rows, stored).pipe(
+        Effect.map((credentials) => credentials.flatMap((credential) => (credential ? [credential] : []))),
+      )
     const select = () =>
       db
         .select(columns)
         .from(CredentialTable)
         .innerJoin(CredentialSecretTable, eq(CredentialSecretTable.credential_id, CredentialTable.id))
+        .innerJoin(CredentialKeyTable, eq(CredentialKeyTable.credential_id, CredentialTable.id))
     // The credential an integration uses: the active one, else the newest.
     const current = (integrationID: Integration.ID) =>
       db
@@ -176,18 +208,18 @@ const layer = Layer.effect(
         select()
           .orderBy(asc(CredentialTable.active), asc(CredentialTable.time_created), asc(CredentialTable.id))
           .all()
-          .pipe(Effect.orDie, Effect.map(storedRows)),
+          .pipe(Effect.orDie, Effect.flatMap(storedRows)),
       ),
       list: Effect.fn("Credential.list")((integrationID) =>
         select()
           .where(eq(CredentialTable.integration_id, integrationID))
           .orderBy(asc(CredentialTable.active), asc(CredentialTable.time_created), asc(CredentialTable.id))
           .all()
-          .pipe(Effect.orDie, Effect.map(storedRows)),
+          .pipe(Effect.orDie, Effect.flatMap(storedRows)),
       ),
       get: Effect.fn("Credential.get")(function* (id) {
         const row = yield* select().where(eq(CredentialTable.id, id)).get().pipe(Effect.orDie)
-        return row ? stored(row) : undefined
+        return row ? yield* stored(row) : undefined
       }),
       create: Effect.fn("Credential.create")(function* (input) {
         const credential = new Info({
@@ -196,11 +228,18 @@ const layer = Layer.effect(
           label: input.label ?? "default",
           value: input.value,
         })
+        const key = CredentialSeal.generateKey()
+        const sealed = yield* CredentialSeal.seal(key, credential.value)
         yield* locks.withLock(credential.integrationID)(
           bus.publish(
             CredentialFact.Created,
-            { credentialID: credential.id, integrationID: credential.integrationID, label: credential.label },
-            secret(credential.id, credential.value),
+            {
+              credentialID: credential.id,
+              integrationID: credential.integrationID,
+              label: credential.label,
+              secret: sealed,
+            },
+            keyed(credential.id, key),
           ),
         )
         yield* bus.publish(Event.Updated, {}, { global: true })
@@ -233,7 +272,11 @@ const layer = Layer.effect(
         if (relabeled)
           yield* bus.publish(CredentialFact.Relabeled, { credentialID: id, integrationID, label: updates.label! })
         if (updates.value !== undefined)
-          yield* bus.publish(CredentialFact.Rotated, { credentialID: id, integrationID }, secret(id, updates.value))
+          yield* bus.publish(CredentialFact.Rotated, {
+            credentialID: id,
+            integrationID,
+            secret: yield* CredentialSeal.seal(yield* keyOf(id), updates.value),
+          })
         if (relabeled) yield* bus.publish(Event.Updated, {}, { global: true })
       }),
       remove: Effect.fn("Credential.remove")(function* (id) {

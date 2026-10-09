@@ -4,7 +4,9 @@ import { eq, like } from "drizzle-orm"
 import { Effect } from "effect"
 import { Bus } from "@ocpp/core/bus"
 import { Credential } from "@ocpp/core/credential"
-import { CredentialSecretTable, CredentialTable } from "@ocpp/core/credential/sql"
+import { CredentialFact } from "@ocpp/schema/credential-fact"
+import { CredentialSeal } from "@ocpp/core/credential/seal"
+import { CredentialKeyTable, CredentialSecretTable, CredentialTable } from "@ocpp/core/credential/sql"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { Database } from "@ocpp/core/database/database"
 import { Location } from "@ocpp/core/location"
@@ -19,7 +21,7 @@ import { testEffect } from "./lib/effect"
 const it = testEffect(LayerNode.compile(LayerNode.group([Credential.node, Bus.node, Database.node])))
 
 describe("Credential", () => {
-  it.effect("records what happens to a credential in Specter's log, and keeps its secret out of it", () =>
+  it.effect("records a credential's secret in Specter's log sealed under a key that removal erases", () =>
     Effect.gen(function* () {
       const credentials = yield* Credential.Service
       const { db } = yield* Database.Service
@@ -40,9 +42,26 @@ describe("Credential", () => {
       expect(facts.map((fact) => fact.type)).toEqual(["credential-created", "credential-rotated"])
       expect(JSON.stringify(facts)).not.toContain("sk-")
 
-      // The secret goes with its credential.
+      // Each fact carries the secret of its time, which the credential's key opens.
+      const key = (yield* db.select().from(CredentialKeyTable).get().pipe(Effect.orDie))!.key
+      const secrets = facts.map((fact) => (fact.payload as { readonly secret: CredentialFact.Sealed }).secret)
+      expect(yield* Effect.forEach(secrets, (secret) => CredentialSeal.open(key, secret))).toEqual([
+        { type: "key", key: "sk-never-logged" },
+        { type: "key", key: "sk-rotated" },
+      ])
+
+      // Removal erases the key with the credential: what the log keeps of its secret can no longer be read.
       yield* credentials.remove(created.id)
       expect(yield* db.select().from(CredentialSecretTable).all().pipe(Effect.orDie)).toEqual([])
+      expect(yield* db.select().from(CredentialKeyTable).all().pipe(Effect.orDie)).toEqual([])
+      expect(
+        yield* db
+          .select({ type: SpecterEventTable.type })
+          .from(SpecterEventTable)
+          .where(like(SpecterEventTable.type, "credential-%"))
+          .all()
+          .pipe(Effect.orDie),
+      ).toHaveLength(3)
     }),
   )
 

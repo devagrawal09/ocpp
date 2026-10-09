@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "fabc55d1-c267-4e01-b9cb-f9c008c04c21",
-  "prevIds": ["9c21d0e9-d9d0-47a7-9573-f8fc68f1e320"],
+  "id": "efbb62d1-8be0-4d96-bc6b-f03fff7aab8e",
+  "prevIds": ["fabc55d1-c267-4e01-b9cb-f9c008c04c21"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -30,6 +30,10 @@
     },
     {
       "name": "codemode_reservation",
+      "entityType": "tables"
+    },
+    {
+      "name": "credential_key",
       "entityType": "tables"
     },
     {
@@ -761,6 +765,26 @@
       "name": "time_created",
       "entityType": "columns",
       "table": "codemode_reservation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "credential_id",
+      "entityType": "columns",
+      "table": "credential_key"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "key",
+      "entityType": "columns",
+      "table": "credential_key"
     },
     {
       "type": "text",
@@ -2375,6 +2399,17 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
+      "name": "fk_credential_key_credential_id_credential_id_fk",
+      "entityType": "fks",
+      "table": "credential_key"
+    },
+    {
+      "columns": ["credential_id"],
+      "tableTo": "credential",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
       "name": "fk_credential_secret_credential_id_credential_id_fk",
       "entityType": "fks",
       "table": "credential_secret"
@@ -2528,6 +2563,13 @@
       "nameExplicit": false,
       "name": "codemode_execution_pk",
       "table": "codemode_execution",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["credential_id"],
+      "nameExplicit": false,
+      "name": "credential_key_pk",
+      "table": "credential_key",
       "entityType": "pks"
     },
     {

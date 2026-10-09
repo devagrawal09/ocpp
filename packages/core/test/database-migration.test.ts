@@ -15,6 +15,8 @@ import type { SqlClient } from "effect/sql/SqlClient"
 import legacyCredentialsMigration from "@ocpp/core/database/migration/20260805200742_import_legacy_credentials"
 import credentialSecretMigration from "@ocpp/core/database/migration/20261009205324_credential_secret"
 import cacheMigration from "@ocpp/core/database/migration/20261009220914_cache"
+import credentialKeyMigration from "@ocpp/core/database/migration/20261009221545_credential_key"
+import { CredentialSeal } from "@ocpp/core/credential/seal"
 import jobBackgroundMigration from "@ocpp/core/database/migration/20261009210354_job_background"
 import worktreeMigration from "@ocpp/core/database/migration/20260812213948_worktree"
 import previousV2Migration from "@ocpp/core/database/migration/20260804233008_loose_psylocke"
@@ -488,13 +490,15 @@ describe("DatabaseMigration", () => {
         yield* db.run(sql`DELETE FROM migration WHERE id = ${legacyCredentialsMigration.id}`)
         yield* DatabaseMigration.applyOnly(db, [legacyCredentialsMigration])
         yield* DatabaseMigration.applyOnly(db, [legacyCredentialsMigration])
-        yield* DatabaseMigration.applyOnly(db, migrations)
+        yield* DatabaseMigration.applyOnly(
+          db,
+          migrations.filter((migration) => migration.id < credentialKeyMigration.id),
+        )
 
-        expect(
-          yield* db.all(
-            sql`SELECT integration_id, label, value FROM credential JOIN credential_secret ON credential_id = id ORDER BY integration_id`,
-          ),
-        ).toEqual([
+        const plain = yield* db.all<{ integration_id: string; label: string; value: string }>(
+          sql`SELECT integration_id, label, value FROM credential JOIN credential_secret ON credential_id = id ORDER BY integration_id`,
+        )
+        expect(plain).toEqual([
           {
             integration_id: "anthropic",
             label: "Existing",
@@ -542,6 +546,24 @@ describe("DatabaseMigration", () => {
         expect(yield* db.get(sql`SELECT value FROM kv WHERE key = 'wellknown:sources'`)).toEqual({
           value: JSON.stringify(["https://example.com"]),
         })
+
+        // Each secret is then sealed under a key of its own credential.
+        yield* DatabaseMigration.applyOnly(db, migrations)
+        const sealed = yield* db.all<{ integration_id: string; label: string; value: string; key: string }>(
+          sql`SELECT integration_id, label, value, key FROM credential JOIN credential_secret ON credential_secret.credential_id = id JOIN credential_key ON credential_key.credential_id = id ORDER BY integration_id`,
+        )
+        expect(sealed.map((row) => row.value)).not.toContain(plain[0]!.value)
+        expect(
+          yield* Effect.forEach(sealed, (row) =>
+            CredentialSeal.open(row.key, JSON.parse(row.value)).pipe(
+              Effect.map((value) => ({
+                integration_id: row.integration_id,
+                label: row.label,
+                value: JSON.stringify(value),
+              })),
+            ),
+          ),
+        ).toEqual(plain)
       }),
       Global.make({ data: tmp.path }),
     )

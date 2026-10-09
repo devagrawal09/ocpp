@@ -10,15 +10,19 @@ import { optional } from "./schema.js"
 const byCredential = { aggregate: "credentialID", version: 1 } as const
 const credential = { credentialID: Credential.ID, integrationID: IntegrationID }
 
-// A credential's secret never enters the log: an append-only log cannot forget it. The facts say what
-// happened to the credential, and its secret is kept apart, written in the transaction that records
-// the fact and deleted with the credential.
+// A credential's secret enters the log sealed with a key of its own, which is kept apart from the log
+// and deleted with the credential: an append-only log cannot forget a secret, but without its key every
+// copy of it is unreadable.
+
+/** A secret encrypted with AES-GCM under its credential's key: the IV and ciphertext, base64. */
+export const Sealed = Schema.Struct({ iv: Schema.String, data: Schema.String })
+export type Sealed = typeof Sealed.Type
 
 /** A credential was stored for its integration and became the one the integration uses. */
 export const Created = Event.durable({
   type: "credential.created",
   durable: byCredential,
-  schema: { ...credential, label: Schema.String },
+  schema: { ...credential, label: Schema.String, secret: Sealed },
 })
 /** The integration switched to this credential. */
 export const Activated = Event.durable({
@@ -35,7 +39,7 @@ export const Relabeled = Event.durable({
 export const Rotated = Event.durable({
   type: "credential.rotated",
   durable: byCredential,
-  schema: credential,
+  schema: { ...credential, secret: Sealed },
 })
 /** The credential was removed with its secret; when it was in use, the newest remaining one replaces it. */
 export const Removed = Event.durable({

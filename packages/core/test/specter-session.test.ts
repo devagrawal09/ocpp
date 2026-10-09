@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import { asc, eq } from "drizzle-orm"
-import { LanguageModel } from "@ocpp/ai"
+import { AIError, LanguageModel, RateLimitError } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols/openai-chat"
 import { TestLLM } from "@ocpp/ai/testing"
 import { hostModel } from "@specter/agent-runtime"
@@ -112,6 +112,43 @@ describe("Sessions on the Specter runtime", () => {
         "session.inbox.enqueued",
         "session.execution.started",
         "session.inbox.delivered",
+        "session.step.started",
+        "session.text.started",
+        "session.text.ended",
+        "session.step.ended",
+        "session.execution.succeeded",
+      ])
+    }),
+  )
+
+  it.live("retries a rate-limited step as the same assistant message", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const llm = yield* TestLLM.Service
+      yield* llm.push(
+        Stream.fail(new AIError({ reason: new RateLimitError({ message: "Rate limited" }) })),
+        TestLLM.text("Second try", "text_1"),
+      )
+      const session = yield* Session.Service
+
+      yield* session.prompt({ sessionID, text: "Hi" })
+      yield* session.wait(sessionID)
+
+      const messages = yield* session.messages({ sessionID, order: "asc" })
+      expect(messages.map((message) => message.type)).toEqual(["user", "assistant"])
+      expect(
+        messages[1]?.type === "assistant"
+          ? messages[1].content.flatMap((part) => (part.type === "text" ? [part.text] : []))
+          : [],
+      ).toEqual(["Second try"])
+      expect(llm.requests).toHaveLength(2)
+      expect(yield* eventTypes).toEqual([
+        "session.inbox.enqueued",
+        "session.execution.started",
+        "session.inbox.delivered",
+        "session.step.started",
+        "session.step.failed",
+        "session.retry.scheduled",
         "session.step.started",
         "session.text.started",
         "session.text.ended",

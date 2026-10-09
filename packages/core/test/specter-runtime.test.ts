@@ -40,6 +40,34 @@ describe("embedded Specter runtime", () => {
     expect(settled({ outcome: "interrupted", reason: "user" })).toEqual([
       ["session.execution.interrupted", { sessionID: "ses_1", reason: "user" }, "evt_1"],
     ])
+    const step = (payload: Record<string, unknown>) =>
+      SpecterTranslate.toWire({
+        id: "evt_2",
+        order: 2,
+        type: "session-step-settled",
+        payload: { sessionID: "ses_1", assistantMessageID: "msg_1", ...payload },
+        recordedAt: new Date(0).toISOString(),
+      }).map((wire) => [wire.definition.type, wire.data, wire.id])
+    const tokens = { input: 1, output: 2, reasoning: 0, cache: { read: 0, write: 0 } }
+    const error = { type: "transport", message: "reset" }
+    expect(step({ outcome: "succeeded", finish: "stop", cost: 0, tokens })).toEqual([
+      [
+        "session.step.ended",
+        { sessionID: "ses_1", assistantMessageID: "msg_1", finish: "stop", cost: 0, tokens },
+        "evt_2",
+      ],
+    ])
+    expect(step({ outcome: "failed", error })).toEqual([
+      ["session.step.failed", { sessionID: "ses_1", assistantMessageID: "msg_1", error }, "evt_2"],
+    ])
+    expect(step({ outcome: "failed", error, retry: { attempt: 1, at: 5 } })).toEqual([
+      ["session.step.failed", { sessionID: "ses_1", assistantMessageID: "msg_1", error }, "evt_2"],
+      [
+        "session.retry.scheduled",
+        { sessionID: "ses_1", assistantMessageID: "msg_1", attempt: 1, at: 5, error },
+        "evt_2_retry",
+      ],
+    ])
   })
 
   test("validates payloads with OC++'s schemas", async () => {

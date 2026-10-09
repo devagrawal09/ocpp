@@ -37,6 +37,33 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
       return [{ definition: SessionEvent.Execution.Failed, data: { sessionID, error: payload.error }, id }]
     return [{ definition: SessionEvent.Execution.Interrupted, data: { sessionID, reason: payload.reason }, id }]
   }
+  if (event.type === "session-step-settled") {
+    const { outcome, retry, ...data } = event.payload as {
+      readonly outcome: "succeeded" | "failed"
+      readonly retry?: { readonly attempt: number; readonly at: number }
+      readonly sessionID: string
+      readonly assistantMessageID: string
+      readonly error?: unknown
+    }
+    if (outcome === "succeeded") return [{ definition: SessionEvent.Step.Ended, data, id }]
+    const failed: WireEvent = { definition: SessionEvent.Step.Failed, data, id }
+    if (!retry) return [failed]
+    return [
+      failed,
+      {
+        definition: SessionEvent.RetryScheduled,
+        data: {
+          sessionID: data.sessionID,
+          assistantMessageID: data.assistantMessageID,
+          attempt: retry.attempt,
+          at: retry.at,
+          error: data.error,
+        },
+        // A second OC++ event from one fact: its ID derives from the fact's.
+        id: Event.ID.make(`${event.id}_retry`),
+      },
+    ]
+  }
   const definition = durable.get(toOcppEventType(event.type))
   if (!definition) throw new Error(`Specter recorded ${event.type}, which OC++ cannot project`)
   return [{ definition, data: event.payload, id }]

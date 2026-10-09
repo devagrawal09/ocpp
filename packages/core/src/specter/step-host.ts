@@ -1,7 +1,7 @@
 export * as SpecterStepHost from "./step-host.js"
 
-import { Cause, Clock, Context, Effect, Exit, Layer } from "effect"
-import { LLMClient } from "@ocpp/ai"
+import { Cause, Clock, Context, Effect, Exit, FiberMap, Layer } from "effect"
+import { LLMClient, Message } from "@ocpp/ai"
 import { Event } from "@ocpp/schema/event"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import type { SessionError } from "@ocpp/schema/session-error"
@@ -27,10 +27,12 @@ import { SessionMessage } from "../session/message.js"
 import { SessionModelTransport } from "../session/model-transport.js"
 import { InstructionState } from "../session/instruction-state.js"
 import { SessionModelRequest } from "../session/model-request.js"
+import { MAX_STEPS_PROMPT } from "../session/runner/max-steps.js"
 import { SessionRunnerRetry } from "../session/runner/retry.js"
 import { SessionStep } from "../session/runner/step.js"
 import { SessionSchema } from "../session/schema.js"
 import { SessionStore } from "../session/store.js"
+import { SessionTitle } from "../session/title.js"
 import { toSessionError } from "../session/to-session-error.js"
 import { ToolOutput } from "../tool-output.js"
 
@@ -176,6 +178,8 @@ export class StepIO extends Context.Service<
     readonly begin: (input: {
       readonly sessionID: SessionSchema.ID
       readonly assistantMessageID: SessionMessage.ID
+      /** The step's number since input was last delivered, from 1. */
+      readonly step: number
     }) => Effect.Effect<StepPlan | CompactFirst>
     readonly compact: (input: {
       readonly sessionID: SessionSchema.ID
@@ -197,12 +201,15 @@ const stepIOLayer = Layer.effect(
     const llm = yield* LLMClient.Service
     const toolOutput = yield* ToolOutput.Service
     const compaction = yield* SessionCompaction.Service
+    const title = yield* SessionTitle.Service
+    const titles = yield* FiberMap.make<SessionSchema.ID, void, never>()
     const transport = yield* SessionModelTransport.Service
     const store = yield* SessionStore.Service
 
     const begin = Effect.fn("SpecterStepIO.begin")(function* (input: {
       readonly sessionID: SessionSchema.ID
       readonly assistantMessageID: SessionMessage.ID
+      readonly step: number
     }) {
       const { sessionID, assistantMessageID } = input
       const selected = yield* context.select(sessionID)
@@ -212,7 +219,12 @@ const stepIOLayer = Layer.effect(
       // The history no longer fits the model: the runtime compacts before the step.
       if (compaction.required({ messages: loaded.messages, resolved: loaded.model }))
         return { compact: true } satisfies CompactFirst
+      // Title generation starts once input is visible and must not delay the step.
+      if (input.step === 1 && !loaded.session.parentID && SessionTitle.isUntitled(loaded.session))
+        yield* FiberMap.run(titles, sessionID, title.generate(sessionID), { onlyIfMissing: true })
       const snapshot = yield* snapshots.capture()
+      // On the agent's last step the model must answer without tools.
+      const stepLimitReached = loaded.agent.info.steps !== undefined && input.step >= loaded.agent.info.steps
 
       const run = (record: AttemptRecorder) =>
         Effect.gen(function* () {
@@ -225,7 +237,14 @@ const stepIOLayer = Layer.effect(
           })
           const request = yield* context.prepare({
             scope: { session: loaded.session, agentID: loaded.agent.id, model: loaded.model, tools: loaded.tools },
-            transcript: { system: transcript.system, messages: transcript.messages },
+            transcript: {
+              system: transcript.system,
+              messages: stepLimitReached
+                ? [...transcript.messages, Message.assistant(MAX_STEPS_PROMPT)]
+                : transcript.messages,
+            },
+            // Keep tool definitions on the final step to preserve the provider's cached prefix.
+            toolChoice: stepLimitReached ? "none" : undefined,
             webSocket: "session",
           })
           const recording = recordingBus(bus, record)
@@ -338,6 +357,7 @@ export const stepIONode = makeLocationNode({
     SessionCompaction.node,
     SessionModelTransport.node,
     SessionStore.node,
+    SessionTitle.node,
     Snapshot.node,
     ToolOutput.node,
     Database.node,
@@ -374,7 +394,11 @@ export const make = Effect.gen(function* () {
         const sessionID = SessionSchema.ID.make(input.sessionID)
         const location = yield* locationOf(sessionID)
         const plan = yield* StepIO.use((io) =>
-          io.begin({ sessionID, assistantMessageID: SessionMessage.ID.make(input.assistantMessageID) }),
+          io.begin({
+            sessionID,
+            assistantMessageID: SessionMessage.ID.make(input.assistantMessageID),
+            step: input.step,
+          }),
         ).pipe(Effect.provide(location))
         if ("compact" in plan) return plan
         // The attempt runs in the Session's Location too.

@@ -492,6 +492,26 @@ describe("Sessions on the Specter runtime", () => {
     }),
   )
 
+  it.live("answers without tools on the agent's last step", () =>
+    Effect.gen(function* () {
+      yield* setup
+      yield* (yield* Agent.Service).transform((draft) =>
+        draft.update(Agent.ID.make("build"), (agent) => {
+          agent.steps = 1
+        }),
+      )
+      const llm = yield* TestLLM.Service
+      yield* llm.push(TestLLM.text("Wrapping up", "text_1"))
+      const session = yield* Session.Service
+
+      yield* session.prompt({ sessionID, text: "Hi" })
+      yield* session.wait(sessionID)
+
+      expect(llm.requests[0]?.toolChoice).toEqual({ type: "none" })
+      expect(JSON.stringify(llm.requests[0]?.messages)).toContain("MAXIMUM STEPS REACHED")
+    }),
+  )
+
   it.live("cancels a queued input while a step runs", () =>
     Effect.gen(function* () {
       yield* setup

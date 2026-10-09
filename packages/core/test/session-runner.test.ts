@@ -94,6 +94,7 @@ import { agentHost, catalogHost, host } from "./plugin/host"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { definition, effectiveName, execute } from "@ocpp/core/tool/runtime"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 type ToolBarrier = {
   readonly count: number
@@ -3661,7 +3662,7 @@ describe("SessionRunnerLLM", () => {
 
   scenario("durably fails local tools left running by a prior process before continuing", function* (s) {
     yield* s.admit("Recover interrupted tool")
-    yield* SessionInbox.promote(s.db, s.bus, sessionID, "steer")
+    yield* InboxPromotion.promote(s.db, s.bus, sessionID, "steer")
     const assistantMessageID = SessionMessage.ID.create()
     yield* s.bus.publish(SessionEvent.Step.Started, {
       sessionID,
@@ -3707,7 +3708,7 @@ describe("SessionRunnerLLM", () => {
 
   scenario("preserves a stale subagent child session in its model-visible failure", function* (s) {
     yield* s.admit("Recover interrupted subagent")
-    yield* SessionInbox.promote(s.db, s.bus, sessionID, "steer")
+    yield* InboxPromotion.promote(s.db, s.bus, sessionID, "steer")
     const assistantMessageID = SessionMessage.ID.create()
     yield* s.bus.publish(SessionEvent.Step.Started, {
       sessionID,
@@ -3772,7 +3773,7 @@ describe("SessionRunnerLLM", () => {
 
   scenario("durably fails hosted tools left running by a prior process before continuing inline", function* (s) {
     yield* s.admit("Recover interrupted hosted tool")
-    yield* SessionInbox.promote(s.db, s.bus, sessionID, "steer")
+    yield* InboxPromotion.promote(s.db, s.bus, sessionID, "steer")
     const assistantMessageID = SessionMessage.ID.create()
     yield* s.bus.publish(SessionEvent.Step.Started, {
       sessionID,
@@ -3819,7 +3820,7 @@ describe("SessionRunnerLLM", () => {
 
   scenario("durably fails pending tool input left by a prior process before continuing", function* (s) {
     yield* s.admit("Recover interrupted tool input")
-    yield* SessionInbox.promote(s.db, s.bus, sessionID, "steer")
+    yield* InboxPromotion.promote(s.db, s.bus, sessionID, "steer")
     const assistantMessageID = SessionMessage.ID.create()
     yield* s.bus.publish(SessionEvent.Step.Started, {
       sessionID,

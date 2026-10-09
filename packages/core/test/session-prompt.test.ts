@@ -43,6 +43,7 @@ import { Global } from "@ocpp/util/global"
 import { EffectFlock } from "@ocpp/util/effect-flock"
 import { KV } from "@ocpp/core/kv"
 import { gitRemote, git, commit, read } from "./fixture/git"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 const executionCalls: Session.ID[] = []
 const interruptCalls: Session.ID[] = []
@@ -414,7 +415,7 @@ describe("Session.prompt", () => {
         text: "boundary",
         resume: false,
       })
-      yield* SessionInbox.promote(db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
       const stale = SessionMessage.ID.make("msg_stale_assistant")
       yield* db.insert(SessionMessageTable).values(assistantRow(stale, 100)).run().pipe(Effect.orDie)
       yield* bus.publish(SessionEvent.RevertEvent.Staged, {
@@ -446,7 +447,7 @@ describe("Session.prompt", () => {
         text: "boundary",
         resume: false,
       })
-      yield* SessionInbox.promote(db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
       yield* bus.publish(SessionEvent.RevertEvent.Staged, {
         sessionID,
         revert: { messageID: boundary.id, files: [] },
@@ -672,7 +673,7 @@ describe("Session.prompt", () => {
 
       yield* session.prompt({ sessionID, text: "First", resume: false })
       yield* session.prompt({ sessionID, text: "Second", resume: false })
-      yield* SessionInbox.promote(db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
       const streamed = Array.from(yield* Fiber.join(fiber))
 
       expect(streamed.map((event): [number | undefined, string] => [event.durable?.seq, event.type])).toEqual([
@@ -753,7 +754,7 @@ describe("Session.prompt", () => {
       const { db } = yield* Database.Service
       const input = { sessionID, id: messageID, text: "Fix the failing tests", resume: false }
       const first = yield* session.prompt(input)
-      yield* SessionInbox.promote(db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
       yield* db.delete(EventTable).where(eq(EventTable.aggregate_id, sessionID)).run().pipe(Effect.orDie)
 
       const retried = yield* session.prompt(input)
@@ -773,7 +774,7 @@ describe("Session.prompt", () => {
       const { db } = yield* Database.Service
       const input = { sessionID, id: messageID, text: "Fix the failing tests", resume: false }
       yield* session.prompt(input)
-      yield* SessionInbox.promote(db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
 
       const retried = yield* session.prompt({ ...input, delivery: "queue" })
 
@@ -885,7 +886,7 @@ describe("Session.prompt", () => {
       })
 
       yield* Effect.all(
-        [SessionInbox.promote(db, bus, sessionID, "steer"), SessionInbox.promote(db, bus, sessionID, "steer")],
+        [InboxPromotion.promote(db, bus, sessionID, "steer"), InboxPromotion.promote(db, bus, sessionID, "steer")],
         { concurrency: "unbounded" },
       )
 
@@ -1114,7 +1115,7 @@ describe("Session.prompt", () => {
         },
       })
 
-      yield* SessionInbox.promote(db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
 
       expect(yield* session.messages({ sessionID })).toMatchObject([
         {
@@ -1139,7 +1140,7 @@ describe("Session.prompt", () => {
       const entries = yield* Effect.all([session.synthetic(input), session.synthetic(input)], {
         concurrency: "unbounded",
       })
-      yield* SessionInbox.promote(database.db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(database.db, bus, sessionID, "steer")
       const promotedRetry = yield* session.synthetic(input)
       const differing = yield* session.synthetic({ ...input, text: "Different completion" })
 
@@ -1167,9 +1168,9 @@ describe("Session.prompt", () => {
 
       expect(input.delivery).toBe("queue")
       expect(yield* SessionInbox.has(db, sessionID, "input")).toBe(true)
-      expect(yield* SessionInbox.promote(db, bus, sessionID, "steer")).toBe(0)
+      expect(yield* InboxPromotion.promote(db, bus, sessionID, "steer")).toBe(0)
       expect(yield* session.messages({ sessionID })).toEqual([])
-      expect(yield* SessionInbox.promote(db, bus, sessionID, "input")).toBe(1)
+      expect(yield* InboxPromotion.promote(db, bus, sessionID, "input")).toBe(1)
       expect(yield* SessionInbox.has(db, sessionID, "input")).toBe(false)
       expect(yield* session.messages({ sessionID })).toMatchObject([
         { id: input.id, type: "synthetic", text: "Queued completion" },
@@ -1196,7 +1197,7 @@ describe("Session.prompt", () => {
         resume: false,
       })
 
-      yield* SessionInbox.promote(db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
 
       expect(
         (yield* session.messages({ sessionID, order: "asc" })).map((message) =>
@@ -1264,10 +1265,10 @@ describe("Session.inbox", () => {
         { id: second.id, type: "user", delivery: "steer" },
       ])
 
-      expect(yield* SessionInbox.promote(db, bus, sessionID, "input")).toBe(2)
+      expect(yield* InboxPromotion.promote(db, bus, sessionID, "input")).toBe(2)
       expect(yield* session.inbox(sessionID)).toMatchObject([{ id: queued.id, type: "synthetic" }])
 
-      expect(yield* SessionInbox.promote(db, bus, sessionID, "input")).toBe(1)
+      expect(yield* InboxPromotion.promote(db, bus, sessionID, "input")).toBe(1)
       expect(yield* session.inbox(sessionID)).toEqual([])
     }),
   )

@@ -22,6 +22,7 @@ import { Global } from "@ocpp/util/global"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 // These tests include real Location and plugin startup, not just hook callbacks.
 setDefaultTimeout(15_000)
@@ -166,7 +167,7 @@ describe("Session prompt hooks", () => {
       expect(yield* SessionInbox.find(database.db, input.id)).toEqual(admitted)
       const log = yield* fixture.sessions.log({ sessionID: input.sessionID }).pipe(Stream.runCollect)
       expect(JSON.stringify(log)).not.toContain("secret")
-      yield* SessionInbox.promote(database.db, bus, input.sessionID, "input")
+      yield* InboxPromotion.promote(database.db, bus, input.sessionID, "input")
       expect(yield* fixture.sessions.messages({ sessionID: input.sessionID })).toMatchObject([
         { id: input.id, type: "user", text: "Redacted with policy", metadata: { source: "plugin" } },
       ])
@@ -189,7 +190,7 @@ describe("Session prompt hooks", () => {
       expect(yield* fixture.sessions.prompt(retry)).toEqual(first)
       const database = yield* Database.Service
       const bus = yield* Bus.Service
-      yield* SessionInbox.promote(database.db, bus, input.sessionID, "steer")
+      yield* InboxPromotion.promote(database.db, bus, input.sessionID, "steer")
       expect((yield* fixture.sessions.prompt(retry)).payload).toEqual(first.payload)
       const other = yield* fixture.sessions.create({ location: fixture.session.location })
       expect((yield* fixture.sessions.prompt({ ...retry, sessionID: other.id }).pipe(Effect.flip))._tag).toBe(
@@ -213,7 +214,7 @@ describe("Session prompt hooks", () => {
       const database = yield* Database.Service
       const bus = yield* Bus.Service
       const first = yield* fixture.sessions.prompt({ sessionID: fixture.session.id, text: "Boundary", resume: false })
-      yield* SessionInbox.promote(database.db, bus, fixture.session.id, "steer")
+      yield* InboxPromotion.promote(database.db, bus, fixture.session.id, "steer")
       yield* bus.publish(SessionEvent.RevertEvent.Staged, {
         sessionID: fixture.session.id,
         revert: { messageID: first.id, files: [] },

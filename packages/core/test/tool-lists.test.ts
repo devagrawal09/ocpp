@@ -29,6 +29,7 @@ import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdirScoped } from "./fixture/tmpdir"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 const execution = Layer.succeed(
   SessionExecution.Service,
@@ -128,7 +129,11 @@ describe("ToolLists", () => {
       )
       const file = path.join(context.session.location.directory, ".ocpp", ToolLists.FILE)
       expect(selected).toEqual({ init: { source: project, agent: build, file } })
-      expect((yield* catalog(context, context.session, build)).paths).toEqual(["grep", "notebook.inspect", "notebook.list"])
+      expect((yield* catalog(context, context.session, build)).paths).toEqual([
+        "grep",
+        "notebook.inspect",
+        "notebook.list",
+      ])
       // The project's init.ts has no plan list, and the global one does not fill it in. The notice names the file.
       expect(yield* catalog(context, context.session, plan)).toEqual({
         paths: [],
@@ -232,7 +237,11 @@ describe("ToolLists", () => {
       expect(yield* lists.select(context.session, build)).toEqual({
         init: { source: "return { build: [tools.grep] }", agent: build, file },
       })
-      expect((yield* catalog(context, context.session, build)).paths).toEqual(["grep", "notebook.inspect", "notebook.list"])
+      expect((yield* catalog(context, context.session, build)).paths).toEqual([
+        "grep",
+        "notebook.inspect",
+        "notebook.list",
+      ])
     }),
   )
 
@@ -246,7 +255,7 @@ describe("ToolLists", () => {
         const fork = (sessionID: Session.ID) =>
           Effect.gen(function* () {
             yield* context.sessions.prompt({ sessionID, text: "Fork here", resume: false })
-            yield* SessionInbox.promote(db, bus, sessionID, "steer")
+            yield* InboxPromotion.promote(db, bus, sessionID, "steer")
             return yield* context.sessions.fork({ sessionID, boundary: { type: "through" } })
           })
 

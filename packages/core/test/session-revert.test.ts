@@ -26,6 +26,7 @@ import { Global } from "@ocpp/util/global"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 const it = testEffect(
   AppNodeBuilder.build(
@@ -60,7 +61,7 @@ describe("Session.revert files", () => {
         const bus = yield* Bus.Service
         const created = yield* session.create({ location: { directory: AbsolutePath.make(directory) } })
         const prompt = yield* session.prompt({ sessionID: created.id, text: "Rename the file", resume: false })
-        yield* SessionInbox.promote(database.db, bus, created.id, "steer")
+        yield* InboxPromotion.promote(database.db, bus, created.id, "steer")
         const services = LocationServiceMap.Service.get(created.location)
         const revert = yield* SessionRevert.Service.pipe(Effect.provide(services))
         expect(yield* SessionRevert.Service.pipe(Effect.provide(services))).toBe(revert)

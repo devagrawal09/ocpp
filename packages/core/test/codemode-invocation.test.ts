@@ -41,6 +41,7 @@ import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { withEnv } from "./fixture/env"
 import { tmpdirScoped } from "./fixture/tmpdir"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 const wakes: Session.ID[] = []
 const execution = Layer.succeed(
@@ -825,7 +826,7 @@ describe("Code Mode events", () => {
       expect(notices[0]?.text.match(/BEGIN_UNTRUSTED_EXECUTION_DATA/g)).toHaveLength(5)
 
       // Once the model has seen them, the next firing starts a fresh count.
-      yield* SessionInbox.promote(database.db, bus, context.session.id, "steer")
+      yield* InboxPromotion.promote(database.db, bus, context.session.id, "steer")
       expect(yield* outcomes(context.session.id)).toEqual([])
       yield* fire(context, "poll", { n: 12 })
       const [fresh] = yield* outcomes(context.session.id)

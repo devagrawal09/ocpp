@@ -41,6 +41,7 @@ import { Skill } from "../src/skill.js"
 import { Snapshot } from "../src/snapshot.js"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 const it = testEffect(
   LayerNode.compile(
@@ -283,7 +284,7 @@ describe("Session-owned handles", () => {
       expect(yield* second.synthetic({ ...retry, id: synthetic.id })).toEqual(synthetic)
       expect(yield* first.inbox()).toEqual([prompt, synthetic])
 
-      yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")
+      yield* InboxPromotion.promote(fixture.db, fixture.bus, sessionID, "steer")
       // Delivered identity must be recoverable from the message, without retained enqueue history.
       yield* fixture.db
         .delete(EventTable)
@@ -430,7 +431,7 @@ describe("Session-owned handles", () => {
         { type: "synthetic", payload: { text: "Admitted by hook" } },
         { id: prompt.id, type: "user", payload: { text: "Original prepared" } },
       ])
-      yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")
+      yield* InboxPromotion.promote(fixture.db, fixture.bus, sessionID, "steer")
       expect(yield* fixture.store.context(sessionID)).toMatchObject([
         { type: "synthetic", text: "Admitted by hook" },
         { type: "user", text: "Original prepared" },
@@ -471,7 +472,7 @@ describe("Session-owned handles", () => {
         inputID: steer.id,
       })
 
-      expect(yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")).toBe(1)
+      expect(yield* InboxPromotion.promote(fixture.db, fixture.bus, sessionID, "steer")).toBe(1)
       expect(yield* second.queueInbox(queued.id).pipe(Effect.flip)).toMatchObject({
         _tag: "Session.InboxConflictError",
         sessionID,
@@ -553,7 +554,7 @@ describe("Session-owned handles", () => {
       })
       const handle = fixture.sessions.forSession(sessionID)
       const boundary = yield* handle.synthetic({ text: "Revert boundary", resume: false })
-      yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")
+      yield* InboxPromotion.promote(fixture.db, fixture.bus, sessionID, "steer")
       yield* handle.revert.stage({ messageID: boundary.id, files: false })
       const entered = yield* Deferred.make<void>()
       const hook = yield* fixture.hooks.register("session", "prompt", () =>
@@ -590,7 +591,7 @@ describe("Session-owned handles", () => {
       })
       const handle = fixture.sessions.forSession(sessionID)
       const boundary = yield* handle.synthetic({ text: "Before results", resume: false })
-      yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")
+      yield* InboxPromotion.promote(fixture.db, fixture.bus, sessionID, "steer")
       const blocks = [
         { type: "markdown", text: "**Done**" },
         {
@@ -689,7 +690,7 @@ describe("Session-owned handles", () => {
       })
       const handle = fixture.sessions.forSession(sessionID)
       const boundary = yield* handle.synthetic({ text: "Revert boundary", resume: false })
-      yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")
+      yield* InboxPromotion.promote(fixture.db, fixture.bus, sessionID, "steer")
       yield* handle.revert.stage({ messageID: boundary.id, files: false })
       const destination = Location.Ref.make({ directory: AbsolutePath.make("/project/moved") })
       yield* fixture.bus.publish(SessionEvent.Moved, {
@@ -764,7 +765,7 @@ describe("SessionRevert construction", () => {
       const fixture = yield* setup()
       const handle = fixture.sessions.forSession(sessionID)
       const boundary = yield* handle.synthetic({ text: "Revert boundary", resume: false })
-      yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")
+      yield* InboxPromotion.promote(fixture.db, fixture.bus, sessionID, "steer")
       const calls: string[] = []
       const revert = yield* SessionRevert.make().pipe(
         Effect.provide(
@@ -897,7 +898,7 @@ describe("SessionInbox command contracts", () => {
 
       yield* Effect.forEach([false, true], (delivered) =>
         Effect.gen(function* () {
-          if (delivered) yield* SessionInbox.promote(fixture.db, fixture.bus, sessionID, "steer")
+          if (delivered) yield* InboxPromotion.promote(fixture.db, fixture.bus, sessionID, "steer")
           const reconciled = yield* admission
             .reconcile({
               id: user.id,

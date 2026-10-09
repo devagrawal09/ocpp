@@ -53,6 +53,7 @@ import {
   toolIdentity,
   waitForCodeMode,
 } from "./lib/tool"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 const childText = "child final response"
 const completedOutput = (sessionID: Session.ID, message = childText) =>
@@ -863,7 +864,7 @@ describe("SubagentTool", () => {
           })
           const childID = outputSessionID(first.metadata)
           // The test runner answers without delivering the prompt, so deliver it here.
-          yield* SessionInbox.promote((yield* Database.Service).db, bus, childID, "input")
+          yield* InboxPromotion.promote((yield* Database.Service).db, bus, childID, "input")
           // A later step that ran a Code Mode execution whose metadata carries private data.
           const assistantMessageID = SessionMessage.ID.create()
           const base = { sessionID: childID, assistantMessageID, id: "call-child-execute" }
@@ -1437,14 +1438,18 @@ describe("SubagentTool", () => {
           const rejoined = yield* recover("call-subagent-rejoin", held.id)
           expect(rejoined.metadata).toMatchObject({ sessionID: held.id, status: "completed" })
           expect(yield* prompts(held.id)).toEqual([prompt])
-          expect(JSON.stringify(yield* sessions.inbox(held.id))).toContain("The server restarted while you were working")
+          expect(JSON.stringify(yield* sessions.inbox(held.id))).toContain(
+            "The server restarted while you were working",
+          )
 
           // Neither recovery created another child.
           expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(2)
 
           // A continued child's history cannot show whether the message arrived, so the call fails and names it.
           const refused = yield* recover("call-subagent-refuse", held.id, { sessionID: held.id }).pipe(Effect.flip)
-          expect(refused.message).toContain(`continuing subagent session ${held.id}, which may or may not have received`)
+          expect(refused.message).toContain(
+            `continuing subagent session ${held.id}, which may or may not have received`,
+          )
           expect(refused.metadata).toEqual({ sessionID: held.id, status: "error", reason: "setup-failed" })
           expect(yield* prompts(held.id)).toEqual([prompt])
         }),
@@ -1477,7 +1482,7 @@ describe("SubagentTool", () => {
             },
           })
           const childID = outputSessionID(first.metadata)
-          yield* SessionInbox.promote((yield* Database.Service).db, bus, childID, "input")
+          yield* InboxPromotion.promote((yield* Database.Service).db, bus, childID, "input")
           // Twelve newer steps with nothing to show.
           for (let step = 0; step < 12; step++) {
             const assistantMessageID = SessionMessage.ID.create()

@@ -41,8 +41,8 @@ export {
 }
 
 /**
- * Which pending input `promote` may consume: "steer" promotes steers only (a step
- * boundary mid-work), while "input" also allows one queued input when no steers are
+ * Which pending input a boundary takes: "steer" takes steers only (a step boundary mid-work, or a turn
+ * that continues after an interrupt), while "input" also allows one queued input when no steers are
  * waiting (the idle boundary, where the Session picks up fresh work).
  */
 export type Promotable = "input" | "steer"
@@ -425,27 +425,6 @@ export const moveIDs = Effect.fn("SessionInbox.moveIDs")(function* (db: Database
     .pipe(Effect.orDie)
 })
 
-export const nextPromotable = Effect.fn("SessionInbox.nextPromotable")(function* (
-  db: DatabaseService,
-  sessionID: SessionSchema.ID,
-  promotable: Promotable,
-) {
-  const next = (delivery: Delivery) =>
-    db
-      .select()
-      .from(SessionInboxTable)
-      .where(and(eq(SessionInboxTable.session_id, sessionID), eq(SessionInboxTable.delivery, delivery)))
-      .orderBy(asc(SessionInboxTable.enqueued_seq))
-      .limit(1)
-      .get()
-      .pipe(Effect.orDie)
-  const steer = yield* next("steer")
-  if (steer) return fromRow(steer)
-  if (promotable !== "input") return undefined
-  const queued = yield* next("queue")
-  return queued ? fromRow(queued) : undefined
-})
-
 /** Which pending rows count: "input" means any item in either delivery mode. */
 export type Scope = "input" | Delivery
 
@@ -477,88 +456,3 @@ const publishMutation = <A, E, R>(input: PendingRef, effect: Effect.Effect<A, E,
     // Bus projectors abort their transaction through the defect channel.
     Effect.catchDefect((defect) => (defect instanceof LifecycleConflict ? Effect.fail(defect) : Effect.die(defect))),
   )
-
-const publish = Effect.fn("SessionInbox.publish")(function* (
-  db: DatabaseService,
-  bus: Bus.Interface,
-  sessionID: SessionSchema.ID,
-  rows: ReadonlyArray<typeof SessionInboxTable.$inferSelect>,
-) {
-  yield* Effect.forEach(
-    rows,
-    (row) => {
-      const entry = fromRow(row)
-      if (entry.type === "compaction") return Effect.die(new LifecycleConflict({ id: entry.id }))
-      return bus
-        .publish(SessionEvent.InboxDelivered, {
-          sessionID,
-          inboxID: entry.id,
-        })
-        .pipe(
-          Effect.catchDefect((defect) =>
-            defect instanceof LifecycleConflict
-              ? promotedFromMessage(db, sessionID, entry.id, entry.delivery).pipe(
-                  Effect.flatMap((stored) => (stored !== undefined ? Effect.void : Effect.die(defect))),
-                  Effect.orDie,
-                )
-              : Effect.die(defect),
-          ),
-        )
-    },
-    { discard: true },
-  )
-  return rows.map(fromRow)
-})
-
-/** Promotes pending input into visible messages and returns the promoted count. */
-export const promote = (db: DatabaseService, bus: Bus.Interface, sessionID: SessionSchema.ID, scope: Promotable) =>
-  promoteItems(db, bus, sessionID, scope).pipe(Effect.map((items) => items.length))
-
-/**
- * Promotes pending input into visible messages and returns the promoted items in delivery order.
- * Steers always go first; only the "input" scope may fall through to one queued
- * input, and it then collects steers that arrived during promotion.
- */
-export const promoteItems = Effect.fn("SessionInbox.promoteItems")(function* (
-  db: DatabaseService,
-  bus: Bus.Interface,
-  sessionID: SessionSchema.ID,
-  scope: Promotable,
-) {
-  return yield* serialized(
-    sessionID,
-    Effect.gen(function* () {
-      const steers = yield* pendingSteers(db, sessionID)
-      if (steers.length > 0 || scope === "steer") {
-        const control = steers.findIndex((row) => row.type === "compaction" || row.type === "move")
-        return yield* publish(db, bus, sessionID, control === -1 ? steers : steers.slice(0, control))
-      }
-
-      const queued = yield* db
-        .select()
-        .from(SessionInboxTable)
-        .where(and(eq(SessionInboxTable.session_id, sessionID), eq(SessionInboxTable.delivery, "queue")))
-        .orderBy(asc(SessionInboxTable.enqueued_seq))
-        .limit(1)
-        .get()
-        .pipe(Effect.orDie)
-      if (!queued) return []
-      const promoted = yield* publish(db, bus, sessionID, [queued])
-      const arrivedSteers = yield* pendingSteers(db, sessionID)
-      const control = arrivedSteers.findIndex((row) => row.type === "compaction" || row.type === "move")
-      return [
-        ...promoted,
-        ...(yield* publish(db, bus, sessionID, control === -1 ? arrivedSteers : arrivedSteers.slice(0, control))),
-      ]
-    }),
-  )
-})
-
-const pendingSteers = (db: DatabaseService, sessionID: SessionSchema.ID) =>
-  db
-    .select()
-    .from(SessionInboxTable)
-    .where(and(eq(SessionInboxTable.session_id, sessionID), eq(SessionInboxTable.delivery, "steer")))
-    .orderBy(asc(SessionInboxTable.enqueued_seq))
-    .all()
-    .pipe(Effect.orDie)

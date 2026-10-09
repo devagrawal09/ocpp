@@ -26,6 +26,7 @@ import { Skill } from "@ocpp/core/skill"
 import { Reference } from "@ocpp/core/reference"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
 const info = Skill.Info.make({
@@ -96,7 +97,7 @@ describe("Session.skill", () => {
         resume: false,
       })
       expect(yield* sessions.messages({ sessionID: session.id })).toEqual([])
-      yield* SessionInbox.promote(database.db, bus, session.id, "steer")
+      yield* InboxPromotion.promote(database.db, bus, session.id, "steer")
 
       expect(yield* sessions.messages({ sessionID: session.id })).toEqual([
         expect.objectContaining({
@@ -131,7 +132,7 @@ describe("Session.skill", () => {
       const selected = SessionMessage.ID.make("msg_fork_skill_attachment")
 
       yield* sessions.prompt({ id: initial, sessionID: session.id, text: "Before the skill", resume: false })
-      yield* SessionInbox.promote(database.db, bus, session.id, "steer")
+      yield* InboxPromotion.promote(database.db, bus, session.id, "steer")
       yield* sessions.prompt({
         id: selected,
         sessionID: session.id,
@@ -139,7 +140,7 @@ describe("Session.skill", () => {
         skills: [{ id: info.id, mention: { start: 6, end: 13, text: "@effect" } }],
         resume: false,
       })
-      yield* SessionInbox.promote(database.db, bus, session.id, "steer")
+      yield* InboxPromotion.promote(database.db, bus, session.id, "steer")
       const forked = yield* sessions.fork({ sessionID: session.id, boundary: { type: "before", messageID: selected } })
 
       expect(yield* sessions.messages({ sessionID: forked.id })).toEqual([

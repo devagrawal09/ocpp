@@ -28,6 +28,7 @@ import { Cause, Context, Deferred, Effect, Exit, Fiber, Layer, LayerMap, Scope }
 import { eq } from "drizzle-orm"
 import { makeLocalExecution } from "./fixture/local-execution"
 import { testEffect } from "./lib/effect"
+import * as InboxPromotion from "./fixture/inbox-promotion"
 
 const it = testEffect(
   AppNodeBuilder.build(
@@ -127,7 +128,7 @@ describe("SessionRestart background recovery", () => {
         scope,
         ({ sessionID }) =>
           Effect.sync(() => void drained.push(sessionID)).pipe(
-            Effect.andThen(SessionInbox.promote(database.db, bus, sessionID, "steer")),
+            Effect.andThen(InboxPromotion.promote(database.db, bus, sessionID, "steer")),
             Effect.asVoid,
           ),
         restarted,
@@ -306,7 +307,7 @@ describe("SessionRestart background recovery", () => {
         metadata: { source: "codemode", executionID, state: "error" },
         resume: false,
       })
-      yield* SessionInbox.promote(database.db, bus, sessionID, "steer")
+      yield* InboxPromotion.promote(database.db, bus, sessionID, "steer")
 
       const scope = yield* Scope.make()
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
@@ -484,7 +485,7 @@ describe("SessionRestart background recovery", () => {
           metadata: { source: "shell", shellID: "sh_notified", state: "completed" },
           resume: false,
         })
-        if (delivered) yield* SessionInbox.promote(database.db, bus, sessionID, "steer")
+        if (delivered) yield* InboxPromotion.promote(database.db, bus, sessionID, "steer")
 
         const scope = yield* Scope.make()
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
@@ -494,7 +495,7 @@ describe("SessionRestart background recovery", () => {
 
         expect(yield* restarted.pendingBackground).toEqual([])
         expect(yield* SessionInbox.list(database.db, sessionID)).toHaveLength(delivered ? 0 : 1)
-        yield* SessionInbox.promote(database.db, bus, sessionID, "steer")
+        yield* InboxPromotion.promote(database.db, bus, sessionID, "steer")
         expect(yield* sessions.messages({ sessionID })).toMatchObject([
           {
             id: background.notificationID,
@@ -544,7 +545,7 @@ describe("SessionRestart background recovery", () => {
       const context = yield* buildExecution(
         scope,
         ({ sessionID }) =>
-          SessionInbox.promote(database.db, bus, sessionID, "steer").pipe(
+          InboxPromotion.promote(database.db, bus, sessionID, "steer").pipe(
             Effect.andThen(store.context(sessionID)),
             Effect.orDie,
             Effect.flatMap((messages) =>

@@ -8,6 +8,9 @@ import { SessionMessage } from "../session/message.js"
 import { SessionSchema } from "../session/schema.js"
 import { KVTable } from "../kv/sql.js"
 import { EventSequenceTable } from "../event/sql.js"
+import { Adoption } from "../adoption.js"
+import { Bus } from "../bus.js"
+import { AdoptionFact } from "@ocpp/schema/adoption-fact"
 import { eq, sql } from "drizzle-orm"
 import { Global } from "@ocpp/util/global"
 import { existsSync } from "node:fs"
@@ -213,7 +216,6 @@ type NextMessage = {
 
 const lock = Semaphore.makeUnsafe(1)
 const MIGRATION_STATE_KEY = "migration.v1-v2"
-const EVENT_DELETE_BATCH_SIZE = 1_000
 const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 const decodeMessage = Schema.decodeUnknownOption(SessionV1.Info)
 const decodePart = Schema.decodeUnknownOption(SessionV1.Part)
@@ -486,7 +488,7 @@ export function status(): Effect.Effect<Status, never, Database.Service> {
 
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
-    runtimeState = { status: "running", progress: { label: "Clearing old events" } }
+    runtimeState = { status: "running", progress: { label: "Migrating sessions" } }
     yield* run().pipe(
       Effect.matchCauseEffect({
         onFailure: (cause) =>
@@ -513,11 +515,47 @@ function updateProgress(progress: Progress) {
   if (runtimeState.status === "running") runtimeState = { status: "running", progress }
 }
 
-export function run(options: Options = {}): Effect.Effect<RunResult, never, Database.Service | Global.Service> {
+/**
+ * Rows the importer converted, recorded in Specter's log as they are stored (`rows.adopted`), once the
+ * transaction that wrote them commits. Progress is recorded after them, so a stopped import converts the
+ * Session again and adopts it then.
+ */
+const adopter = (db: Database.Interface["db"], bus: Bus.Interface) => ({
+  rows: (table: Adoption.Table, aggregate: string) =>
+    db
+      .all<
+        Record<string, Schema.Json>
+      >(sql`SELECT * FROM ${sql.identifier(table)} WHERE ${sql.identifier(Adoption.Tables[table])} = ${aggregate}`)
+      .pipe(
+        Effect.orDie,
+        Effect.flatMap((rows) => bus.publish(AdoptionFact.Adopted, { aggregate, table, rows }, { global: true })),
+        Effect.asVoid,
+      ),
+  state: (value: MigrationState) => {
+    const now = Date.now()
+    return bus
+      .publish(
+        AdoptionFact.Adopted,
+        {
+          aggregate: MIGRATION_STATE_KEY,
+          table: "kv",
+          rows: [{ key: MIGRATION_STATE_KEY, value: JSON.stringify(value), time_created: now, time_updated: now }],
+        },
+        { global: true },
+      )
+      .pipe(Effect.asVoid)
+  },
+})
+type Adopter = ReturnType<typeof adopter>
+
+export function run(
+  options: Options = {},
+): Effect.Effect<RunResult, never, Database.Service | Global.Service | Bus.Service> {
   return lock.withPermit(
     Effect.gen(function* () {
       const db = (yield* Database.Service).db
       const global = yield* Global.Service
+      const adopt = adopter(db, yield* Bus.Service)
       const state = yield* readState(db)
       if (state?.phase === "completed") return { status: "completed" as const }
       if (!(yield* hasLegacySessions(db))) return { status: "completed" as const }
@@ -526,31 +564,8 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
           INSERT OR IGNORE INTO project (id, worktree, time_created, time_updated, sandboxes)
           VALUES (${Project.ID.global}, ${path.parse(global.data).root}, ${now}, ${now}, '[]')
         `)
-      if (state === undefined)
-        yield* db
-          .transaction((tx) =>
-            Effect.gen(function* () {
-              while (true) {
-                yield* tx.run(sql`
-                    DELETE FROM event
-                    WHERE rowid IN (SELECT rowid FROM event LIMIT ${EVENT_DELETE_BATCH_SIZE})
-                  `)
-                const deleted = (yield* tx.get<{ value: number }>(sql`SELECT changes() AS value`))?.value ?? 0
-                if (deleted < EVENT_DELETE_BATCH_SIZE) break
-                yield* Effect.yieldNow
-              }
-              yield* tx
-                .insert(KVTable)
-                .values({
-                  key: MIGRATION_STATE_KEY,
-                  value: { phase: "sessions" },
-                  time_created: Date.now(),
-                  time_updated: Date.now(),
-                })
-                .run()
-            }),
-          )
-          .pipe(Effect.orDie)
+      yield* adopt.rows("project", Project.ID.global)
+      if (state === undefined) yield* adopt.state({ phase: "sessions" })
       const sourceTotal = yield* countNextSessions(nextPath(options, global.data))
       const legacyTotal = (yield* db.get<{ value: number }>(sql`SELECT COUNT(*) AS value FROM session`))?.value ?? 0
       const cursor = state?.phase === "sessions" ? state.cursor : undefined
@@ -561,7 +576,7 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
           : 0
       const denominator = sourceTotal + legacyTotal
       updateProgress({ label: "Migrating sessions", numerator: migrated, denominator })
-      yield* importNextDatabase(db, nextPath(options, global.data), (completed) => {
+      yield* importNextDatabase(db, adopt, nextPath(options, global.data), (completed) => {
         updateProgress({ label: "Migrating sessions", numerator: migrated + completed, denominator })
       })
       updateProgress({ label: "Migrating sessions", numerator: migrated + sourceTotal, denominator })
@@ -580,19 +595,6 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
         yield* db
           .transaction((tx) =>
             Effect.gen(function* () {
-              yield* tx
-                .insert(KVTable)
-                .values({
-                  key: MIGRATION_STATE_KEY,
-                  value: { phase: "sessions", cursor: nextID.id },
-                  time_created: Date.now(),
-                  time_updated: Date.now(),
-                })
-                .onConflictDoUpdate({
-                  target: KVTable.key,
-                  set: { value: { phase: "sessions", cursor: nextID.id }, time_updated: Date.now() },
-                })
-                .run()
               const projectID = projects.has(nextID.project_id) ? nextID.project_id : Project.ID.global
               if (projectID !== nextID.project_id)
                 yield* Effect.logWarning("Reassigned V1 session with missing project", {
@@ -650,17 +652,21 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
                 .set({ ...transformed.session, time_updated: next.time_updated })
                 .where(eq(SessionTable.id, next.id))
                 .run()
+              // The Session's next event follows its imported messages, and any event it already has.
               yield* tx
                 .insert(EventSequenceTable)
                 .values({ aggregate_id: next.id, seq: transformed.watermark })
                 .onConflictDoUpdate({
                   target: EventSequenceTable.aggregate_id,
-                  set: { seq: transformed.watermark },
+                  set: { seq: sql`max(${EventSequenceTable.seq}, ${transformed.watermark})` },
                 })
                 .run()
             }),
           )
           .pipe(Effect.orDie)
+        yield* adopt.rows("session_v2", nextID.id)
+        yield* adopt.rows("session_message", nextID.id)
+        yield* adopt.state({ phase: "sessions", cursor: nextID.id })
         if (runtimeState.status === "running")
           runtimeState = {
             status: "running",
@@ -672,25 +678,7 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
           }
         yield* Effect.yieldNow
       }
-      yield* db
-        .transaction((tx) =>
-          Effect.gen(function* () {
-            yield* tx
-              .insert(KVTable)
-              .values({
-                key: MIGRATION_STATE_KEY,
-                value: { phase: "completed" },
-                time_created: Date.now(),
-                time_updated: Date.now(),
-              })
-              .onConflictDoUpdate({
-                target: KVTable.key,
-                set: { value: { phase: "completed" }, time_updated: Date.now() },
-              })
-              .run()
-          }),
-        )
-        .pipe(Effect.orDie)
+      yield* adopt.state({ phase: "completed" })
       return { status: "completed" as const }
     }).pipe(Effect.orDie),
   )
@@ -725,6 +713,7 @@ function countNextSessions(sourcePath: string | undefined) {
 
 function importNextDatabase(
   db: Database.Interface["db"],
+  adopt: Adopter,
   sourcePath: string | undefined,
   onProgress: (completed: number) => void,
 ): Effect.Effect<void, unknown> {
@@ -746,6 +735,7 @@ function importNextDatabase(
         selectNextRows<NextProject>(source, "project", NEXT_PROJECT_COLUMNS).map((project) => [project.id, project]),
       )
       const sessions = selectNextRows<NextSession>(source, "session", NEXT_SESSION_COLUMNS)
+      const adopted = new Set<string>()
       for (const [index, session] of sessions.entries()) {
         const project = projects.get(session.project_id)
         const projectID = project ? session.project_id : Project.ID.global
@@ -761,7 +751,7 @@ function importNextDatabase(
             [string]
           >("SELECT id, session_id, type, seq, time_created, time_updated, data FROM session_message WHERE session_id = ? ORDER BY seq")
           .all(session.id)
-        yield* db
+        const imported = yield* db
           .transaction((tx) =>
             Effect.gen(function* () {
               if (project)
@@ -780,7 +770,7 @@ function importNextDatabase(
                 .from(SessionTable)
                 .where(eq(SessionTable.id, SessionSchema.ID.make(session.id)))
                 .get()
-              if (existing) return
+              if (existing) return false
               yield* tx.run(sql`
                 INSERT INTO session_v2 (
                   id, project_id, workspace_id, parent_id, fork_session_id, fork_boundary, slug, directory,
@@ -819,12 +809,21 @@ function importNextDatabase(
                 .values({ aggregate_id: session.id, seq: messages.at(-1)?.seq ?? -1 })
                 .onConflictDoUpdate({
                   target: EventSequenceTable.aggregate_id,
-                  set: { seq: messages.at(-1)?.seq ?? -1 },
+                  set: { seq: sql`max(${EventSequenceTable.seq}, ${messages.at(-1)?.seq ?? -1})` },
                 })
                 .run()
+              return true
             }),
           )
           .pipe(Effect.orDie)
+        if (project && !adopted.has(project.id)) {
+          yield* adopt.rows("project", project.id)
+          adopted.add(project.id)
+        }
+        if (imported) {
+          yield* adopt.rows("session_v2", session.id)
+          yield* adopt.rows("session_message", session.id)
+        }
         onProgress(index + 1)
         yield* Effect.yieldNow
       }

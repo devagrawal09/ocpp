@@ -4,6 +4,9 @@ import { EffectDrizzleSqlite } from "@ocpp/core/database/drizzle"
 import { Database } from "@ocpp/core/database/database"
 import { DatabaseMigration } from "@ocpp/core/database/migration"
 import { V1Migration } from "@ocpp/core/database/v1-migration"
+import { Bus } from "@ocpp/core/bus"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionSchema } from "@ocpp/core/session/schema"
 import { SessionTable } from "@ocpp/core/session/sql"
@@ -784,13 +787,24 @@ describe("V1Migration database workflow", () => {
     `)
   })
 
-  const database = <A, E>(effect: Effect.Effect<A, E, Database.Service | Global.Service | Scope.Scope>) =>
+  // The importer records what it converts through the Bus, into Specter's log in the same database.
+  const database = <A, E>(effect: Effect.Effect<A, E, Database.Service | Bus.Service | Global.Service | Scope.Scope>) =>
     run(
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db)
         yield* createLegacyTables(db)
-        return yield* effect.pipe(Effect.provideService(Database.Service, { db }))
+        // The Bus closes before the database it saves its state to.
+        return yield* Effect.scoped(
+          Effect.gen(function* () {
+            const services = yield* Layer.build(
+              AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node]), [
+                [Database.node, Layer.succeed(Database.Service, Database.Service.of({ db }))],
+              ]),
+            )
+            return yield* effect.pipe(Effect.provideContext(services))
+          }),
+        )
       }),
     )
 
@@ -801,39 +815,6 @@ describe("V1Migration database workflow", () => {
         expect(yield* V1Migration.run()).toEqual({ status: "completed" })
         expect(yield* V1Migration.status()).toEqual({ status: "completed" })
         expect(yield* V1Migration.run()).toEqual({ status: "completed" })
-      }),
-    )
-  })
-
-  test("yields while clearing stale events in batches", async () => {
-    await database(
-      Effect.gen(function* () {
-        const { db } = yield* Database.Service
-        yield* db.run(sql`INSERT INTO event_sequence (aggregate_id, seq) VALUES ('stale', 2500)`)
-        yield* db.run(sql`
-          WITH RECURSIVE rows(value) AS (
-            VALUES(1)
-            UNION ALL
-            SELECT value + 1 FROM rows WHERE value < 2500
-          )
-          INSERT INTO specter_event (id, type, payload, recorded_at)
-          SELECT printf('event_%04d', value), 'session.renamed.1', '{}', '1970-01-01T00:00:00.000Z'
-          FROM rows
-        `)
-        yield* db.run(sql`
-          INSERT INTO event (id, aggregate_id, seq, created, type, log_order)
-          SELECT id, 'stale', "order", 1, type, "order" FROM specter_event
-        `)
-        let yielded = false
-        const heartbeat = yield* Effect.yieldNow.pipe(
-          Effect.andThen(Effect.sync(() => (yielded = true))),
-          Effect.forkChild({ startImmediately: true }),
-        )
-
-        expect(yield* V1Migration.run()).toEqual({ status: "completed" })
-        expect(yielded).toBe(true)
-        yield* Fiber.join(heartbeat)
-        expect(yield* db.get<{ value: number }>(sql`SELECT COUNT(*) AS value FROM event`)).toEqual({ value: 0 })
       }),
     )
   })
@@ -922,8 +903,9 @@ describe("V1Migration database workflow", () => {
             data: '{"text":"from next\'s history","time":{"created":12}}',
           },
         ])
+        // Its imported messages' sequence, then the facts adopting its rows.
         expect(yield* db.get(sql`SELECT seq FROM event_sequence WHERE aggregate_id = 'ses_next'`)).toEqual({
-          seq: 4,
+          seq: 6,
         })
         expect(yield* db.get(sql`SELECT title FROM session_v2 WHERE id = 'ses_existing'`)).toEqual({
           title: "Current existing",
@@ -1102,8 +1084,13 @@ describe("V1Migration database workflow", () => {
         )
         expect(yield* db.all(sql`SELECT id, data FROM message`)).toEqual([{ id: source.id, data: source.data }])
         expect(yield* db.all(sql`SELECT id, data FROM part`)).toEqual([{ id: "prt_1", data: sourcePart.data }])
-        expect(yield* db.get(sql`SELECT seq FROM event_sequence WHERE aggregate_id = 'ses_test'`)).toEqual({ seq: 0 })
-        expect(yield* db.all(sql`SELECT id FROM event`)).toEqual([])
+        // The log keeps the events it holds; the converted rows follow them as adoption facts.
+        expect(yield* db.get(sql`SELECT seq FROM event_sequence WHERE aggregate_id = 'ses_test'`)).toEqual({ seq: 11 })
+        expect(yield* db.all(sql`SELECT type, seq FROM event WHERE aggregate_id = 'ses_test' ORDER BY seq`)).toEqual([
+          { type: "session.renamed.1", seq: 9 },
+          { type: "rows.adopted.1", seq: 10 },
+          { type: "rows.adopted.1", seq: 11 },
+        ])
         expect(
           yield* db.get(
             sql`SELECT agent, model, metadata, cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, revert, time_created, time_updated, time_compacting, time_archived FROM session_v2 WHERE id = 'ses_test'`,
@@ -1190,7 +1177,9 @@ describe("V1Migration database workflow", () => {
         expect(yield* db.get(sql`SELECT seq FROM event_sequence WHERE aggregate_id = 'ses_b'`)).toEqual({
           seq: 7,
         })
-        expect(yield* db.all(sql`SELECT id FROM event WHERE aggregate_id = 'ses_b'`)).toEqual([])
+        expect(yield* db.all(sql`SELECT type FROM event WHERE aggregate_id = 'ses_b'`)).toEqual([
+          { type: "session.renamed.1" },
+        ])
         expect(yield* db.get(sql`SELECT value FROM kv WHERE key = 'migration.v1-v2'`)).toEqual({
           value: '{"phase":"sessions","cursor":"ses_c"}',
         })
@@ -1198,8 +1187,9 @@ describe("V1Migration database workflow", () => {
           sql`INSERT INTO specter_event (id, type, payload, recorded_at) VALUES ('event_after_clear', 'session.renamed.1', '{}', '1970-01-01T00:00:00.000Z')`,
         )
         yield* db.run(
-          sql`INSERT INTO event (id, aggregate_id, seq, created, type, log_order) SELECT 'event_after_clear', 'ses_c', 0, 2, 'session.renamed.1', "order" FROM specter_event WHERE id = 'event_after_clear'`,
+          sql`INSERT INTO event (id, aggregate_id, seq, created, type, log_order) SELECT 'event_after_clear', 'ses_c', (SELECT seq + 1 FROM event_sequence WHERE aggregate_id = 'ses_c'), 2, 'session.renamed.1', "order" FROM specter_event WHERE id = 'event_after_clear'`,
         )
+        yield* db.run(sql`UPDATE event_sequence SET seq = seq + 1 WHERE aggregate_id = 'ses_c'`)
         yield* db.run(sql`DROP TRIGGER fail_b`)
         yield* Layer.launch(V1Migration.layer).pipe(Effect.forkScoped)
         yield* V1Migration.status().pipe(
@@ -1209,9 +1199,12 @@ describe("V1Migration database workflow", () => {
         expect(yield* db.get(sql`SELECT cost FROM session_v2 WHERE id = 'ses_b'`)).toEqual({ cost: 0 })
         expect(yield* db.all(sql`SELECT id FROM session_message WHERE session_id = 'ses_b'`)).toEqual([])
         expect(yield* db.get(sql`SELECT seq FROM event_sequence WHERE aggregate_id = 'ses_b'`)).toEqual({
-          seq: -1,
+          seq: 9,
         })
-        expect(yield* db.all(sql`SELECT id FROM event`)).toEqual([{ id: "event_after_clear" }])
+        expect(yield* db.all(sql`SELECT id FROM event WHERE type != 'rows.adopted.1' ORDER BY id`)).toEqual([
+          { id: "event_after_clear" },
+          { id: "event_stale_b" },
+        ])
       }),
     )
   })
@@ -1257,14 +1250,18 @@ describe("V1Migration database workflow", () => {
         )
 
         expect(yield* V1Migration.run()).toEqual({ status: "completed" })
+        // No messages, then the two facts adopting each Session's rows. The importer's progress and the
+        // global project it created are adopted too.
         expect(yield* db.all(sql`SELECT aggregate_id, seq FROM event_sequence ORDER BY aggregate_id`)).toEqual([
-          { aggregate_id: "ses_archived", seq: -1 },
-          { aggregate_id: "ses_child", seq: -1 },
-          { aggregate_id: "ses_compaction", seq: -1 },
-          { aggregate_id: "ses_empty", seq: -1 },
-          { aggregate_id: "ses_malformed", seq: -1 },
-          { aggregate_id: "ses_root", seq: -1 },
-          { aggregate_id: "ses_subtask", seq: -1 },
+          { aggregate_id: "global", seq: 0 },
+          { aggregate_id: "migration.v1-v2", seq: 8 },
+          { aggregate_id: "ses_archived", seq: 1 },
+          { aggregate_id: "ses_child", seq: 1 },
+          { aggregate_id: "ses_compaction", seq: 1 },
+          { aggregate_id: "ses_empty", seq: 1 },
+          { aggregate_id: "ses_malformed", seq: 1 },
+          { aggregate_id: "ses_root", seq: 1 },
+          { aggregate_id: "ses_subtask", seq: 1 },
         ])
         expect(yield* db.all(sql`SELECT id FROM session_message`)).toEqual([])
         expect(yield* V1Migration.status()).toEqual({ status: "completed" })
@@ -1307,7 +1304,8 @@ describe("V1Migration database workflow", () => {
           { status: "completed" },
           { status: "completed" },
         ])
-        expect(yield* db.get(sql`SELECT count FROM audit`)).toEqual({ count: 1 })
+        // The conversion's update, then the adoption writing the same row: once per Session either way.
+        expect(yield* db.get(sql`SELECT count FROM audit`)).toEqual({ count: 2 })
       }),
     )
   })

@@ -11,12 +11,13 @@ import { EventSequenceTable, EventTable } from "@ocpp/core/event/sql"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { CredentialFact } from "@ocpp/schema/credential-fact"
 import { KeyValueFact } from "@ocpp/schema/key-value-fact"
+import { AdoptionFact } from "@ocpp/schema/adoption-fact"
 import { Credential } from "@ocpp/schema/credential"
 import { Integration } from "@ocpp/schema/integration"
 import { Location } from "@ocpp/core/location"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Workspace } from "@ocpp/core/workspace"
-import { eq } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { location } from "./fixture/location"
 import { testEffect } from "./lib/effect"
 
@@ -315,6 +316,37 @@ describe("Bus", () => {
       expect((yield* bus.publish(DurableMessage, durableData(aggregateID, "recorded"))).durable?.seq).toBe(
         Event.Seq.make(1),
       )
+    }),
+  )
+
+  it.effect("adopts an aggregate's rows: the table holds exactly the adopted ones, and rebuilds them", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const { db } = yield* Database.Service
+      const pair = (key: string, value: string) => ({
+        key,
+        value: JSON.stringify(value),
+        time_created: 1,
+        time_updated: 2,
+      })
+      const kv = () => db.all(sql`SELECT key, value, time_created, time_updated FROM kv ORDER BY key`)
+      yield* bus.publish(AdoptionFact.Adopted, { aggregate: "a", table: "kv", rows: [pair("a", "first")] })
+      yield* bus.publish(AdoptionFact.Adopted, { aggregate: "b", table: "kv", rows: [pair("b", "other")] })
+      expect(yield* kv()).toEqual([pair("a", "first"), pair("b", "other")])
+
+      // Adopting again replaces the aggregate's rows, and an empty adoption removes them.
+      yield* bus.publish(AdoptionFact.Adopted, { aggregate: "a", table: "kv", rows: [pair("a", "second")] })
+      yield* bus.publish(AdoptionFact.Adopted, { aggregate: "b", table: "kv", rows: [] })
+      expect(yield* kv()).toEqual([pair("a", "second")])
+
+      yield* db.run(sql`DELETE FROM kv`)
+      yield* bus.rebuild()
+      expect(yield* kv()).toEqual([pair("a", "second")])
+
+      const exit = yield* bus
+        .publish(AdoptionFact.Adopted, { aggregate: "x", table: "specter_event", rows: [] })
+        .pipe(Effect.exit)
+      expect(String(exit)).toContain("Cannot adopt rows of specter_event")
     }),
   )
 

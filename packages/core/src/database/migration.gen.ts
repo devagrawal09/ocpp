@@ -63,6 +63,7 @@ import m60 from "./migration/20261009220615_drop_legacy_tables.js"
 import m61 from "./migration/20261009220914_cache.js"
 import m62 from "./migration/20261009221545_credential_key.js"
 import m63 from "./migration/20261009222738_event_index.js"
+import m64 from "./migration/20261009230400_adopt_rows.js"
 
 export const migrations = [
   m00,
@@ -129,4 +130,5 @@ export const migrations = [
   m61,
   m62,
   m63,
+  m64,
 ] satisfies DatabaseMigration.Migration[]

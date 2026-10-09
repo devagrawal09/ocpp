@@ -10,6 +10,50 @@ import { SessionMessage } from "./session-message.js"
 
 const bySession = { aggregate: "sessionID", version: 1 } as const
 
+/**
+ * A Session created from another server's export, recorded with its creation: its settled messages and
+ * what the Session had used and when, as the export gave them.
+ */
+export const Imported = Event.durable({
+  type: "session.imported",
+  durable: bySession,
+  schema: {
+    sessionID: SessionID,
+    messages: Schema.Array(
+      Schema.Struct({
+        id: SessionMessage.ID,
+        type: Schema.String,
+        seq: NonNegativeInt,
+        created: NonNegativeInt,
+        data: Schema.Json,
+      }),
+    ),
+    cost: Schema.Number,
+    tokens: Schema.Struct({
+      input: NonNegativeInt,
+      output: NonNegativeInt,
+      reasoning: NonNegativeInt,
+      cacheRead: NonNegativeInt,
+      cacheWrite: NonNegativeInt,
+    }),
+    time: Schema.Struct({
+      created: NonNegativeInt,
+      updated: NonNegativeInt,
+      idle: optional(NonNegativeInt),
+      viewed: optional(NonNegativeInt),
+      archived: optional(NonNegativeInt),
+    }),
+    outcome: optional(Schema.Literals(["succeeded", "failed", "interrupted"])),
+  },
+})
+
+/** Instruction values the Session's instructions refer to by hash, stored with the update that uses them. */
+export const InstructionBlobsStored = Event.durable({
+  type: "session.instruction.blobs.stored",
+  durable: bySession,
+  schema: { sessionID: SessionID, blobs: Schema.Record(Schema.String, Schema.Json) },
+})
+
 /** An API client attached a value to the Session's instructions, or changed it. */
 export const InstructionEntrySet = Event.durable({
   type: "session.instruction.entry.set",
@@ -226,6 +270,8 @@ export const BackgroundCompleted = Event.durable({
  * the ordinary Session and Code Mode notifications.
  */
 export const Definitions = Event.inventory(
+  Imported,
+  InstructionBlobsStored,
   InstructionEntrySet,
   InstructionEntryRemoved,
   ExecutionAdmitted,

@@ -7,7 +7,7 @@ import { Money } from "@ocpp/schema/money"
 import { Shell } from "@ocpp/schema/shell"
 import { Skill } from "@ocpp/schema/skill"
 import { Agent } from "@ocpp/core/agent"
-import { asc, eq } from "drizzle-orm"
+import { and, asc, eq } from "drizzle-orm"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -191,7 +191,7 @@ describe("Session.create", () => {
           yield* db
             .select({ data: EventTable.data })
             .from(EventTable)
-            .where(eq(EventTable.aggregate_id, Project.ID.global))
+            .where(and(eq(EventTable.aggregate_id, Project.ID.global), eq(EventTable.type, "worktree.resolved.1")))
             .get()
             .pipe(Effect.orDie),
         ).toMatchObject({ data: { adopted: expect.arrayContaining([created.projectID, child.projectID]) } })
@@ -233,14 +233,18 @@ describe("Session.create", () => {
           time_suspended: before.time_suspended,
           resume_attempts: before.resume_attempts,
         })
-        // Repeated resolution announces the directory's identity exactly once.
+        // Repeated resolution records the project and its directory's identity exactly once.
         const announced = yield* db
           .select({ type: EventTable.type })
           .from(EventTable)
           .where(eq(EventTable.aggregate_id, project.id))
           .all()
           .pipe(Effect.orDie)
-        expect(announced.map((event) => event.type)).toEqual(["worktree.resolved.1"])
+        expect(announced.map((event) => event.type).toSorted()).toEqual([
+          "project.created.1",
+          "worktree.recorded.1",
+          "worktree.resolved.1",
+        ])
         // Specter's log records it, as it does every durable fact.
         const recorded = yield* db
           .select({ payload: SpecterEventTable.payload })

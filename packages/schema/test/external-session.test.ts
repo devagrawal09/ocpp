@@ -5,9 +5,16 @@ import { Delegation } from "../src/delegation.js"
 import { DurableEventManifest } from "../src/durable-event-manifest.js"
 import { EventManifest } from "../src/event-manifest.js"
 import { ExternalSession } from "../src/external-session.js"
+import { ProjectFact } from "../src/project-fact.js"
 
 test("external persistence facts are durable and internal; children use ordinary public Session events", () => {
   for (const event of ExternalSession.Definitions) {
+    expect(DurableEventManifest.Durable.get(event.type + ".1")).toBe(event)
+    expect(EventManifest.Server.has(event.type)).toBe(false)
+  }
+})
+test("project, worktree and workspace persistence facts are durable and internal", () => {
+  for (const event of ProjectFact.Definitions) {
     expect(DurableEventManifest.Durable.get(event.type + ".1")).toBe(event)
     expect(EventManifest.Server.has(event.type)).toBe(false)
   }

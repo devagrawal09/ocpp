@@ -7,7 +7,10 @@ import { Clock, Context, Deferred, Duration, Effect, Exit, FiberSet, Layer, Ref,
 import { systemError } from "effect/PlatformError"
 import { make } from "effect/process/ChildProcessSpawner"
 import type { EnvironmentDriver } from "./environment/driver.js"
+import { ProjectFact } from "@ocpp/schema/project-fact"
+import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
+import { ProjectProjector } from "./project/projector.js"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { WorkspaceDriver } from "./workspace/driver.js"
 import { WorkspaceTable } from "./workspace/sql.js"
@@ -72,7 +75,7 @@ export const configured = (options: Options = {}) =>
   makeGlobalNode({
     service: Service,
     layer: layer(options),
-    deps: [Database.node, WorkspaceDriver.node],
+    deps: [Database.node, Bus.node, ProjectProjector.node, WorkspaceDriver.node],
   })
 
 const layer = (options: Options) =>
@@ -80,6 +83,7 @@ const layer = (options: Options) =>
     Service,
     Effect.gen(function* () {
       const db = (yield* Database.Service).db
+      const bus = yield* Bus.Service
       const registry = yield* WorkspaceDriver.RegistryService
       const lifetime = yield* Scope.Scope
       const connections = new Map<ID, Connection>()
@@ -98,8 +102,11 @@ const layer = (options: Options) =>
         return row
       })
 
+      // A workspace's row is the projection of its facts in Specter's Event Log.
       const saveBinding = (workspaceID: ID, binding: WorkspaceDriver.Binding) =>
-        db.update(WorkspaceTable).set({ binding }).where(eq(WorkspaceTable.id, workspaceID)).run().pipe(Effect.orDie)
+        bus.publish(ProjectFact.WorkspaceBound, { workspaceID, binding }).pipe(Effect.asVoid)
+      const used = (workspaceID: ID, time: number) =>
+        bus.publish(ProjectFact.WorkspaceUsed, { workspaceID, time }).pipe(Effect.asVoid)
 
       const info = (row: typeof WorkspaceTable.$inferSelect, binding: WorkspaceDriver.Binding) =>
         new Info({
@@ -172,12 +179,7 @@ const layer = (options: Options) =>
           scope,
         }
         connections.set(workspaceID, connection)
-        yield* db
-          .update(WorkspaceTable)
-          .set({ last_used_at: now })
-          .where(eq(WorkspaceTable.id, workspaceID))
-          .run()
-          .pipe(Effect.orDie)
+        yield* used(workspaceID, now)
         return connection
       })
 
@@ -200,12 +202,7 @@ const layer = (options: Options) =>
                   binding: row.binding,
                   saveBinding: connection.saveBinding,
                 })
-                yield* db
-                  .update(WorkspaceTable)
-                  .set({ last_used_at: lastActivity })
-                  .where(eq(WorkspaceTable.id, workspaceID))
-                  .run()
-                  .pipe(Effect.orDie)
+                yield* used(workspaceID, lastActivity)
                 connections.delete(workspaceID)
                 yield* Scope.close(connection.scope, Exit.void)
               }).pipe(Effect.catchCause((cause) => Effect.logError("workspace idle suspension failed", cause))),
@@ -217,38 +214,27 @@ const layer = (options: Options) =>
       return Service.of({
         create: Effect.fn("Workspace.create")(function* (input) {
           const workspaceID = input.id ?? ID.create()
-          const existing = yield* db
-            .select({ provider: WorkspaceTable.provider })
-            .from(WorkspaceTable)
-            .where(eq(WorkspaceTable.id, workspaceID))
-            .get()
-            .pipe(Effect.orDie)
-          if (existing) {
-            if (existing.provider === input.provider) return workspaceID
-            return yield* new CreateConflict({
-              workspaceID,
-              provider: input.provider,
-              existingProvider: existing.provider,
-            })
-          }
-          yield* registry.get(input.provider)
-          const now = yield* Clock.currentTimeMillis
-          const inserted = yield* db
-            .insert(WorkspaceTable)
-            .values({ id: workspaceID, provider: input.provider, binding: null, created_at: now, last_used_at: now })
-            .onConflictDoNothing()
-            .returning({ id: WorkspaceTable.id })
-            .get()
-            .pipe(Effect.orDie)
-          if (inserted) return workspaceID
-          const row = yield* load(workspaceID).pipe(Effect.orDie)
-          if (row.provider !== input.provider)
-            return yield* new CreateConflict({
-              workspaceID,
-              provider: input.provider,
-              existingProvider: row.provider,
-            })
-          return workspaceID
+          // Under the workspace's lock, a concurrent create of the same ID sees this one's fact.
+          return yield* locks.withLock(workspaceID)(
+            Effect.gen(function* () {
+              const existing = yield* find(workspaceID)
+              if (existing) {
+                if (existing.provider === input.provider) return workspaceID
+                return yield* new CreateConflict({
+                  workspaceID,
+                  provider: input.provider,
+                  existingProvider: existing.provider,
+                })
+              }
+              yield* registry.get(input.provider)
+              yield* bus.publish(ProjectFact.WorkspaceCreated, {
+                workspaceID,
+                provider: input.provider,
+                time: yield* Clock.currentTimeMillis,
+              })
+              return workspaceID
+            }),
+          )
         }),
         provision,
         connect: Effect.fn("Workspace.connect")(function* (workspaceID) {
@@ -316,7 +302,7 @@ const layer = (options: Options) =>
                   row.binding ? Effect.fail(error) : Effect.void,
                 ),
               )
-              yield* db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, workspaceID)).run().pipe(Effect.orDie)
+              yield* bus.publish(ProjectFact.WorkspaceDestroyed, { workspaceID })
               return { destroyed: true }
             }),
           )

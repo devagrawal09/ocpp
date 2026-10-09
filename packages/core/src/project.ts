@@ -7,6 +7,7 @@ import path from "path"
 import { AbsolutePath } from "./schema.js"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
+import { ProjectFact } from "@ocpp/schema/project-fact"
 import { Worktree } from "@ocpp/schema/worktree"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Git } from "./git.js"
@@ -15,8 +16,10 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Hash } from "@ocpp/util/hash"
 import { ProjectMarkers } from "./project/markers.js"
 import { ProjectSchema } from "./project/schema.js"
-import { ProjectTable, upsertProject } from "./project/sql.js"
+import { ProjectProjector } from "./project/projector.js"
+import { ProjectTable } from "./project/sql.js"
 import { WorktreeTable } from "./worktree/sql.js"
+import { KeyedMutex } from "./effect/keyed-mutex.js"
 
 export const ID = ProjectSchema.ID
 export type ID = ProjectSchema.ID
@@ -104,29 +107,41 @@ const layer = Layer.effect(
     const db = (yield* Database.Service).db
 
     const announcing = new Set<string>()
-    const persist = Effect.fnUntraced(function* (project: Resolved) {
+    // Facts about one project are decided one at a time, so concurrent resolves record each change once.
+    const locks = KeyedMutex.makeUnsafe<ID>()
+    const record = Effect.fnUntraced(function* (project: Resolved) {
       const previous = yield* db
-        .select({ canonical: ProjectTable.worktree })
+        .select({ canonical: ProjectTable.worktree, vcs: ProjectTable.vcs })
         .from(ProjectTable)
         .where(eq(ProjectTable.id, project.id))
         .get()
         .pipe(Effect.orDie)
-      yield* upsertProject(db, project).pipe(Effect.orDie)
+      const vcs = project.vcs?.type
+      if (!previous)
+        return yield* bus.publish(ProjectFact.Created, {
+          projectID: project.id,
+          canonical: project.canonical,
+          ...(vcs === undefined ? {} : { vcs }),
+        })
+      if ((previous.vcs ?? undefined) !== vcs)
+        yield* bus.publish(ProjectFact.VcsChanged, { projectID: project.id, ...(vcs === undefined ? {} : { vcs }) })
       // Clones share a project ID; only replace a canonical directory that is gone.
       if (
-        previous &&
         previous.canonical !== project.canonical &&
         !(yield* fs.exists(previous.canonical).pipe(Effect.orElseSucceed(() => true)))
       ) {
+        yield* bus.publish(ProjectFact.Relocated, { projectID: project.id, canonical: project.canonical })
         const row = yield* db
-          .update(ProjectTable)
-          .set({ worktree: project.canonical })
+          .select()
+          .from(ProjectTable)
           .where(eq(ProjectTable.id, project.id))
-          .returning()
           .get()
           .pipe(Effect.orDie)
         if (row) yield* bus.publish(ProjectSchema.Event.Updated, fromRow(row))
       }
+    })
+    const persist = Effect.fnUntraced(function* (project: Resolved) {
+      yield* locks.withLock(project.id)(record(project))
       if (!project.vcs) return project
       const directories: Array<{ projectID: ID; directory: AbsolutePath; strategy?: string }> = [
         { projectID: project.id, directory: project.canonical },
@@ -178,24 +193,26 @@ const layer = Layer.effect(
               return (yield* fs.resolve(path.dirname(found[0]))) === directory
             }),
           )
-          yield* bus.publish(
-            Worktree.Event.Resolved,
-            {
-              projectID: item.projectID,
-              directory: item.directory,
-              previous: project.previous ?? ID.global,
-              ...(adopted.length ? { adopted: adopted.map((candidate) => candidate.id) } : {}),
-            },
-            {
-              commit: () =>
-                db
-                  .insert(WorktreeTable)
-                  .values({ project_id: item.projectID, directory: item.directory, strategy: item.strategy })
-                  .onConflictDoNothing()
-                  .run()
-                  .pipe(Effect.orDie, Effect.asVoid),
-            },
-          )
+          // The directory's row is stored by the fact recorded with its resolution.
+          yield* bus.publishAll([
+            [
+              Worktree.Event.Resolved,
+              {
+                projectID: item.projectID,
+                directory: item.directory,
+                previous: project.previous ?? ID.global,
+                ...(adopted.length ? { adopted: adopted.map((candidate) => candidate.id) } : {}),
+              },
+            ],
+            [
+              ProjectFact.WorktreeRecorded,
+              {
+                projectID: item.projectID,
+                directory: item.directory,
+                ...(item.strategy === undefined ? {} : { strategy: item.strategy }),
+              },
+            ],
+          ])
         }).pipe(Effect.ensuring(Effect.sync(() => announcing.delete(key))))
       }
       return project
@@ -211,25 +228,13 @@ const layer = Layer.effect(
       return rows.map(fromRow)
     })
 
+    const find = (projectID: ID) =>
+      db.select().from(ProjectTable).where(eq(ProjectTable.id, projectID)).get().pipe(Effect.orDie)
+
     const update = Effect.fn("Project.update")(function* (input: UpdateInput) {
-      const row = yield* db
-        .update(ProjectTable)
-        .set({
-          name: input.name === undefined ? undefined : input.name || null,
-          icon_url_override: input.icon?.override === undefined ? undefined : input.icon.override || null,
-          icon_color: input.icon?.color === undefined ? undefined : input.icon.color || null,
-          commands:
-            input.commands?.start === undefined
-              ? undefined
-              : input.commands.start
-                ? { start: input.commands.start }
-                : null,
-          time_updated: Date.now(),
-        })
-        .where(eq(ProjectTable.id, input.projectID))
-        .returning()
-        .get()
-        .pipe(Effect.orDie)
+      if (!(yield* find(input.projectID))) return yield* new NotFoundError({ projectID: input.projectID })
+      yield* bus.publish(ProjectFact.Edited, input)
+      const row = yield* find(input.projectID)
       if (!row) return yield* new NotFoundError({ projectID: input.projectID })
       const project = fromRow(row)
       yield* bus.publish(ProjectSchema.Event.Updated, project)
@@ -385,5 +390,5 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer: layer,
-  deps: [Bus.node, Database.node, FSUtil.node, Git.node, ProjectMarkers.node, AppProcess.node],
+  deps: [Bus.node, Database.node, ProjectProjector.node, FSUtil.node, Git.node, ProjectMarkers.node, AppProcess.node],
 })

@@ -13,7 +13,6 @@ import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { Location } from "../location.js"
 import { Project } from "../project.js"
-import { upsertProject } from "../project/sql.js"
 import { AbsolutePath, RelativePath } from "../schema.js"
 import { Session } from "../session.js"
 import { Slug } from "../util/slug.js"
@@ -72,7 +71,6 @@ const layer = Layer.effect(
         if (recorded) return yield* new ImportConflictError({ sessionID })
         if (input.data.info.parentID) yield* sessions.get(input.data.info.parentID)
         const project = yield* projects.resolve(input.location.directory)
-        yield* upsertProject(db, project).pipe(Effect.orDie)
         const messages = input.data.messages.filter(isSettled).map((message, index) => {
           const encoded = encodeMessage(message)
           const { id: _, type, ...data } = encoded

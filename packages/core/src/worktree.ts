@@ -1,7 +1,7 @@
 export * as Worktree from "./worktree.js"
 
 import { Context, Effect, Layer, Schema } from "effect"
-import { and, asc, desc, eq, isNotNull, isNull, ne, or } from "drizzle-orm"
+import { and, asc, desc, eq } from "drizzle-orm"
 import path from "path"
 import { AbsolutePath } from "./schema.js"
 import { FSUtil } from "@ocpp/util/fs-util"
@@ -12,11 +12,12 @@ import { Slug } from "./util/slug.js"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { Location } from "./location.js"
+import { ProjectFact } from "@ocpp/schema/project-fact"
 import { Worktree } from "@ocpp/schema/worktree"
 import { WorktreeTable } from "./worktree/sql.js"
 import { canonical, DirectoryUnavailableError } from "./worktree/directory.js"
 import { WorktreeGit } from "./worktree/git.js"
-import type { EffectDrizzleSqlite } from "./database/drizzle.js"
+import { ProjectProjector } from "./project/projector.js"
 import { ProjectTable } from "./project/sql.js"
 import { AppProcess } from "@ocpp/util/process"
 import { ChildProcess } from "effect/process"
@@ -114,9 +115,6 @@ interface StoredInput {
   readonly strategy?: string
 }
 
-type DatabaseClient = EffectDrizzleSqlite.EffectSQLiteDatabase
-type Transaction = Parameters<Parameters<DatabaseClient["transaction"]>[0]>[0]
-
 export interface Interface {
   readonly register: (strategy: Strategy) => Effect.Effect<void, DuplicateStrategyError>
   readonly list: (projectID: ProjectSchema.ID) => Effect.Effect<List>
@@ -157,6 +155,16 @@ const layer = Layer.effect(
       if (update) yield* bus.publish(Event.Updated, { projectID })
     })
 
+    const find = Effect.fnUntraced(function* (projectID: ProjectSchema.ID, directory: AbsolutePath) {
+      const row = yield* db
+        .select({ directory: WorktreeTable.directory, strategy: WorktreeTable.strategy })
+        .from(WorktreeTable)
+        .where(and(eq(WorktreeTable.project_id, projectID), eq(WorktreeTable.directory, directory)))
+        .get()
+        .pipe(Effect.orDie)
+      return row ? { directory: row.directory, strategy: row.strategy ?? undefined } : undefined
+    })
+
     const ops = {
       list: Effect.fn("Worktree.list")(function* (projectID: ProjectSchema.ID) {
         const rows = yield* db
@@ -168,15 +176,7 @@ const layer = Layer.effect(
           .pipe(Effect.orDie)
         return rows.map((row) => ({ directory: row.directory, strategy: row.strategy ?? undefined }))
       }),
-      find: Effect.fnUntraced(function* (projectID: ProjectSchema.ID, directory: AbsolutePath) {
-        const row = yield* db
-          .select({ directory: WorktreeTable.directory, strategy: WorktreeTable.strategy })
-          .from(WorktreeTable)
-          .where(and(eq(WorktreeTable.project_id, projectID), eq(WorktreeTable.directory, directory)))
-          .get()
-          .pipe(Effect.orDie)
-        return row ? { directory: row.directory, strategy: row.strategy ?? undefined } : undefined
-      }),
+      find,
       primary: Effect.fnUntraced(function* (projectID: ProjectSchema.ID) {
         return yield* db
           .select({ directory: ProjectTable.worktree })
@@ -185,33 +185,28 @@ const layer = Layer.effect(
           .get()
           .pipe(Effect.orDie)
       }),
-      create: (input: StoredInput, tx?: Transaction) =>
-        (tx ?? db)
-          .insert(WorktreeTable)
-          .values({ project_id: input.projectID, directory: input.directory, strategy: input.strategy })
-          .onConflictDoUpdate({
-            target: [WorktreeTable.project_id, WorktreeTable.directory],
-            set: { strategy: input.strategy ?? null },
-            setWhere: input.strategy
-              ? or(isNull(WorktreeTable.strategy), ne(WorktreeTable.strategy, input.strategy))
-              : isNotNull(WorktreeTable.strategy),
-          })
-          .returning({ directory: WorktreeTable.directory })
-          .get()
-          .pipe(
-            Effect.orDie,
-            Effect.map((row) => row !== undefined),
-          ),
-      remove: (projectID: ProjectSchema.ID, directory: AbsolutePath, tx?: Transaction) =>
-        (tx ?? db)
-          .delete(WorktreeTable)
-          .where(and(eq(WorktreeTable.project_id, projectID), eq(WorktreeTable.directory, directory)))
-          .returning({ directory: WorktreeTable.directory })
-          .get()
-          .pipe(
-            Effect.orDie,
-            Effect.map((row) => row !== undefined),
-          ),
+      // A directory's fact, when it changes what is stored: a new directory or another strategy.
+      recorded: Effect.fnUntraced(function* (input: StoredInput) {
+        const stored = yield* find(input.projectID, input.directory)
+        if (stored && stored.strategy === input.strategy) return undefined
+        return [
+          ProjectFact.WorktreeRecorded,
+          {
+            projectID: input.projectID,
+            directory: input.directory,
+            ...(input.strategy === undefined ? {} : { strategy: input.strategy }),
+          },
+        ] as const
+      }),
+      removed: Effect.fnUntraced(function* (projectID: ProjectSchema.ID, directory: AbsolutePath) {
+        if (!(yield* find(projectID, directory))) return undefined
+        return [ProjectFact.WorktreeRemoved, { projectID, directory }] as const
+      }),
+    }
+    // Records the facts in one commit, and reports whether there were any.
+    const record = (facts: ReadonlyArray<Bus.PublishInput | undefined>) => {
+      const [first, ...rest] = facts.filter((fact) => fact !== undefined)
+      return first ? bus.publishAll([first, ...rest]).pipe(Effect.as(true)) : Effect.succeed(false)
     }
 
     const registry = new Map<StrategyID, Strategy>()
@@ -260,11 +255,9 @@ const layer = Layer.effect(
       })
       yield* changed(
         input.projectID,
-        yield* ops.create({
-          projectID: input.projectID,
-          directory: result.directory,
-          strategy: input.strategy,
-        }),
+        yield* record([
+          yield* ops.recorded({ projectID: input.projectID, directory: result.directory, strategy: input.strategy }),
+        ]),
       )
       const project = yield* db
         .select({ commands: ProjectTable.commands })
@@ -302,7 +295,7 @@ const layer = Layer.effect(
         directory: worktreeDirectory,
         force: input.force,
       })
-      yield* changed(input.projectID, yield* ops.remove(input.projectID, worktreeDirectory))
+      yield* changed(input.projectID, yield* record([yield* ops.removed(input.projectID, worktreeDirectory)]))
     })
 
     const refresh = Effect.fn("Worktree.refresh")(function* (input: RefreshInput) {
@@ -334,23 +327,15 @@ const layer = Layer.effect(
         Effect.map((sets) => new Map(sets.flat(2).map((item) => [item.directory, item] as const)).values().toArray()),
       )
       const removed = checked.filter((item) => !item.exists).map((item) => item.directory)
-      const changes = yield* db
-        .transaction((tx) =>
-          Effect.all({
-            updated: Effect.filter(discovered, (item) =>
-              ops.create(
-                {
-                  projectID: input.projectID,
-                  directory: item.directory,
-                  strategy: item.strategy,
-                },
-                tx,
-              ),
-            ).pipe(Effect.map((items) => items.map((item) => item.directory))),
-            removed: Effect.filter(removed, (directory) => ops.remove(input.projectID, directory, tx)),
-          }),
-        )
-        .pipe(Effect.orDie)
+      const updated = yield* Effect.forEach(discovered, (item) =>
+        ops.recorded({ projectID: input.projectID, directory: item.directory, strategy: item.strategy }),
+      )
+      const gone = yield* Effect.forEach(removed, (directory) => ops.removed(input.projectID, directory))
+      yield* record([...updated, ...gone])
+      const changes = {
+        updated: discovered.filter((_, index) => updated[index] !== undefined).map((item) => item.directory),
+        removed: removed.filter((_, index) => gone[index] !== undefined),
+      }
       yield* changed(input.projectID, changes.updated.length > 0 || changes.removed.length > 0)
       return changes
     })
@@ -368,7 +353,7 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer: layer,
-  deps: [FSUtil.node, Git.node, Bus.node, Database.node, AppProcess.node],
+  deps: [FSUtil.node, Git.node, Bus.node, Database.node, ProjectProjector.node, AppProcess.node],
 })
 
 export const refreshNode = makeLocationNode({

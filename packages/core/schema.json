@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "2c157cd4-51c6-443f-9ccf-e7a686c32c0c",
-  "prevIds": ["3c046595-5c4e-4df8-b58b-6eac2c5171d9"],
+  "id": "3ca99b07-e2d5-45d0-8d9e-fb5bbba3e10e",
+  "prevIds": ["2c157cd4-51c6-443f-9ccf-e7a686c32c0c"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -94,6 +94,14 @@
     },
     {
       "name": "session_v2",
+      "entityType": "tables"
+    },
+    {
+      "name": "specter_commit",
+      "entityType": "tables"
+    },
+    {
+      "name": "specter_event",
       "entityType": "tables"
     },
     {
@@ -2125,6 +2133,106 @@
       "table": "session_v2"
     },
     {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "specter_commit"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "idempotency_key",
+      "entityType": "columns",
+      "table": "specter_commit"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fingerprint",
+      "entityType": "columns",
+      "table": "specter_commit"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "first_order",
+      "entityType": "columns",
+      "table": "specter_commit"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "committed_at",
+      "entityType": "columns",
+      "table": "specter_commit"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "order",
+      "entityType": "columns",
+      "table": "specter_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "specter_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "type",
+      "entityType": "columns",
+      "table": "specter_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "payload",
+      "entityType": "columns",
+      "table": "specter_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recorded_at",
+      "entityType": "columns",
+      "table": "specter_event"
+    },
+    {
       "type": "text",
       "notNull": false,
       "autoincrement": false,
@@ -2570,6 +2678,20 @@
       "entityType": "pks"
     },
     {
+      "columns": ["version"],
+      "nameExplicit": false,
+      "name": "specter_commit_pk",
+      "table": "specter_commit",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["order"],
+      "nameExplicit": false,
+      "name": "specter_event_pk",
+      "table": "specter_event",
+      "entityType": "pks"
+    },
+    {
       "columns": ["id"],
       "nameExplicit": false,
       "name": "workspace_pk",
@@ -2891,6 +3013,38 @@
       "name": "session_v2_time_suspended_idx",
       "entityType": "indexes",
       "table": "session_v2"
+    },
+    {
+      "columns": [
+        {
+          "value": "type",
+          "isExpression": false
+        },
+        {
+          "value": "order",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "specter_event_type_order_idx",
+      "entityType": "indexes",
+      "table": "specter_event"
+    },
+    {
+      "columns": ["idempotency_key"],
+      "nameExplicit": false,
+      "name": "specter_commit_idempotency_key_unique",
+      "entityType": "uniques",
+      "table": "specter_commit"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "specter_event_id_unique",
+      "entityType": "uniques",
+      "table": "specter_event"
     }
   ],
   "renames": []

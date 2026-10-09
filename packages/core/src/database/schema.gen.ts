@@ -323,6 +323,24 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`specter_commit\` (
+          \`version\` integer PRIMARY KEY,
+          \`idempotency_key\` text UNIQUE,
+          \`fingerprint\` text,
+          \`first_order\` integer NOT NULL,
+          \`committed_at\` text NOT NULL
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`specter_event\` (
+          \`order\` integer PRIMARY KEY AUTOINCREMENT,
+          \`id\` text NOT NULL UNIQUE,
+          \`type\` text NOT NULL,
+          \`payload\` text NOT NULL,
+          \`recorded_at\` text NOT NULL
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`workspace\` (
           \`id\` text PRIMARY KEY,
           \`provider\` text NOT NULL,
@@ -383,6 +401,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
       yield* tx.run(
         `CREATE INDEX \`session_v2_time_suspended_idx\` ON \`session_v2\` (\`time_suspended\`) WHERE "session_v2"."time_suspended" is not null;`,
       )
+      yield* tx.run(`CREATE INDEX \`specter_event_type_order_idx\` ON \`specter_event\` (\`type\`,\`order\`);`)
     })
   },
 }

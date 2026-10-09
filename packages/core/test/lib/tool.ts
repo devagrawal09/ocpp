@@ -79,7 +79,29 @@ export const waitForCodeModeExecution = (executionID: CodeModeExecution.ID) =>
     const jobs = yield* Job.Service
     const info = (yield* jobs.wait({ id: executionID })).info
     if (!info) return yield* Effect.die("Code Mode Job is unavailable")
-    return info
+    // The job settles first. Its report commits afterwards, in a forked fiber: the terminal Code Mode
+    // event marks the job's background entry terminal in the same transaction. Wait for that as well,
+    // so callers see the reported outcome rather than racing it.
+    for (let attempt = 0; ; attempt++) {
+      const pending = (yield* jobs.pendingBackground).find((item) => item.id === executionID)
+      if (!pending || pending.terminal) return info
+      if (attempt === 10_000) return yield* Effect.die("Code Mode execution settled without reporting")
+      yield* Effect.yieldNow
+    }
+  })
+
+/**
+ * Waits until an execution's report has also delivered its completion notification, which removes the
+ * job's background entry. Use it when a test reads the notification itself.
+ */
+export const waitForCodeModeNotification = (executionID: CodeModeExecution.ID) =>
+  Effect.gen(function* () {
+    const jobs = yield* Job.Service
+    for (let attempt = 0; ; attempt++) {
+      if (!(yield* jobs.pendingBackground).some((item) => item.id === executionID)) return
+      if (attempt === 10_000) return yield* Effect.die("Code Mode execution never delivered its notification")
+      yield* Effect.yieldNow
+    }
   })
 
 /** Terminal lifecycle information a model sees after an execution settles. */

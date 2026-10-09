@@ -1,2 +1,2 @@
 [test]
-preload = ["./test/preload.ts"]
+preload = ["../core/src/specter/preload.ts", "./test/preload.ts"]

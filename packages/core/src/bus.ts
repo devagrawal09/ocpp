@@ -14,6 +14,14 @@ import { Durable } from "@ocpp/schema/durable-event-manifest"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionID } from "@ocpp/schema/session-id"
 import { AbsolutePath } from "@ocpp/schema/schema"
+import {
+  EventLog as SpecterEventLogService,
+  EventLogFailure,
+  makeSessionEventStore,
+  SpecterVersionConflictError,
+  toSpecterEventType,
+} from "@specter/agent-runtime"
+import { SpecterEventLog } from "./specter/event-log.js"
 
 export type Subscriber<D extends Event.Definition = Event.Definition> = (event: Event.Payload<D>) => Effect.Effect<void>
 export type Unsubscribe = Effect.Effect<void>
@@ -111,6 +119,14 @@ export type PublishResult<I extends readonly PublishInput[]> = {
 export type LogItem = Event.Payload | EventLog.Synced
 
 export const isSynced = (item: LogItem): item is EventLog.Synced => item.type === "log.synced"
+
+const mapNonEmpty = <A, B>(items: readonly [A, ...A[]], f: (item: A) => B): [B, ...B[]] => [
+  f(items[0]),
+  ...items.slice(1).map(f),
+]
+
+/** Durable Session events: the Specter runtime records every one of them. */
+const sessionFacts = new Set<string>(SessionEvent.DurableDefinitions.map((definition) => definition.type))
 
 export type SubscribePayload<D extends readonly Event.Definition[]> = D[number] extends infer Item
   ? Item extends Event.Definition
@@ -466,6 +482,33 @@ export function configured(options?: Options) {
                 return yield* commitDurableEvent(definition, event as Event.Payload, undefined, commit).pipe(
                   Effect.as(event),
                 )
+              if (sessionFacts.has(definition.type))
+                return yield* durableLocks.withLock(aggregateID)(
+                  Effect.gen(function* () {
+                    // Recording is uninterruptible, as a commit was before; notifying listeners is not.
+                    const recorded = yield* Effect.uninterruptible(
+                      Effect.gen(function* () {
+                        const committed = yield* recordFacts([
+                          {
+                            definition: definition as Event.DurableDefinition,
+                            aggregateID,
+                            commit,
+                            event: event as Event.Payload,
+                          },
+                        ])
+                        committed.route()
+                        yield* Effect.forEach(
+                          pubsub.durable.get(aggregateID) ?? [],
+                          (wake) => PubSub.publish(wake, undefined),
+                          { discard: true },
+                        )
+                        return committed.events[0] as Event.Payload<D>
+                      }),
+                    )
+                    yield* notify(recorded as Event.Payload, true)
+                    return recorded
+                  }),
+                )
               return yield* durableLocks.withLock(aggregateID)(
                 Effect.gen(function* () {
                   const committed = yield* commitDurableEvent(definition, event as Event.Payload, undefined, commit)
@@ -528,6 +571,157 @@ export function configured(options?: Options) {
           })
         }
 
+        type BatchItem = {
+          readonly definition: Event.DurableDefinition
+          readonly aggregateID: string
+          readonly commit?: PublishOptions["commit"]
+          readonly event: Event.Payload
+        }
+
+        /**
+         * Projects one commit of an aggregate's events: Bus sequences, projectors, commit hooks and the
+         * optional event table. Runs inside the caller's transaction (Specter's append).
+         */
+        const projectBatch = (aggregateID: string, payloads: readonly [BatchItem, ...BatchItem[]]) =>
+          Effect.gen(function* () {
+            const row = yield* db
+              .select({ seq: EventSequenceTable.seq })
+              .from(EventSequenceTable)
+              .where(eq(EventSequenceTable.aggregate_id, aggregateID))
+              .get()
+              .pipe(Effect.orDie)
+            const firstSeq = (row?.seq ?? -1) + 1
+            const finalSeq = firstSeq + payloads.length - 1
+            const queued = payloads.map((item, index) => ({
+              ...item.event,
+              durable: envelope(aggregateID, firstSeq + index, item.definition.durable.version),
+            }))
+            const route = yield* prepareRoutes(queued)
+            const rows = new Array<typeof EventTable.$inferInsert>()
+            const ids = new Set<Event.ID>()
+            for (const [index, item] of payloads.entries()) {
+              const seq = firstSeq + index
+              const encoded = Schema.encodeUnknownSync(item.definition.data)(item.event.data) as Record<string, unknown>
+              if (persist) {
+                if (ids.has(item.event.id))
+                  yield* Effect.die(
+                    new InvalidDurableEventError({
+                      type: item.event.type,
+                      message: `Event ${item.event.id} appears more than once in the batch`,
+                    }),
+                  )
+                ids.add(item.event.id)
+                const stored = yield* db
+                  .select({ aggregateID: EventTable.aggregate_id, seq: EventTable.seq })
+                  .from(EventTable)
+                  .where(eq(EventTable.id, item.event.id))
+                  .get()
+                  .pipe(Effect.orDie)
+                if (stored)
+                  yield* Effect.die(
+                    new InvalidDurableEventError({
+                      type: item.event.type,
+                      message: `Event ${item.event.id} already exists at aggregate ${stored.aggregateID} sequence ${stored.seq}`,
+                    }),
+                  )
+              }
+              const event = queued[index]
+              for (const projector of projectors.get(
+                versionedType(item.definition.type, item.definition.durable.version),
+              ) ?? []) {
+                yield* projector(event)
+              }
+              if (item.commit) yield* item.commit(seq)
+              if (persist)
+                rows.push({
+                  id: event.id,
+                  aggregate_id: aggregateID,
+                  seq,
+                  created: event.created,
+                  type: versionedType(item.definition.type, item.definition.durable.version),
+                  data: encoded,
+                })
+            }
+            yield* db
+              .insert(EventSequenceTable)
+              .values([{ aggregate_id: aggregateID, seq: finalSeq }])
+              // max: a projector in this commit may have reserved later sequences (a fork reserves its copied prefix).
+              .onConflictDoUpdate({
+                target: EventSequenceTable.aggregate_id,
+                set: { seq: sql`max(${EventSequenceTable.seq}, ${finalSeq})` },
+              })
+              .run()
+              .pipe(Effect.orDie)
+            if (persist) yield* db.insert(EventTable).values(rows).run().pipe(Effect.orDie)
+            return { events: queued, route }
+          })
+
+        // Session facts are recorded by the Specter runtime into its Event Log, kept in this database. The
+        // log's append runs projectBatch inside its own transaction, so a recorded fact and OC++'s read
+        // models change together or not at all.
+        type Pending = {
+          readonly items: readonly [BatchItem, ...BatchItem[]]
+          committed?: Effect.Success<ReturnType<typeof projectBatch>>
+        }
+        const pending = new Map<string, Pending>()
+        const specterLog = SpecterEventLog.make(db, {
+          eventIDs: (key, count) =>
+            Array.from(
+              { length: count },
+              (_, index) =>
+                (key === undefined ? undefined : pending.get(key)?.items[index]?.event.id) ?? Event.ID.create(),
+            ),
+          appended: (key, _events) =>
+            Effect.gen(function* () {
+              const entry = key === undefined ? undefined : pending.get(key)
+              if (!entry) return yield* Effect.die(new Error("Session facts are recorded through the Bus"))
+              entry.committed = yield* projectBatch(entry.items[0].aggregateID, entry.items)
+            }),
+        })
+        const store = yield* makeSessionEventStore().pipe(
+          Effect.provideService(SpecterEventLogService, specterLog),
+          Effect.orDie,
+        )
+        const isVersionConflict = (error: unknown) =>
+          error instanceof SpecterVersionConflictError ||
+          (error instanceof EventLogFailure && error.cause instanceof SpecterVersionConflictError)
+
+        const recordFacts = (items: readonly [BatchItem, ...BatchItem[]]) => {
+          const key = `bus:${crypto.randomUUID()}`
+          const entry: Pending = { items }
+          return Effect.acquireUseRelease(
+            Effect.sync(() => pending.set(key, entry)),
+            () =>
+              store
+                .command(
+                  {
+                    type: "recordSessionFacts",
+                    payload: {
+                      facts: mapNonEmpty(items, (item) => ({
+                        type: toSpecterEventType(item.definition.type),
+                        payload: Schema.encodeUnknownSync(item.definition.data)(item.event.data),
+                      })),
+                    },
+                  },
+                  { idempotencyKey: key },
+                )
+                .pipe(
+                  // The log's version moved between the Command's read and its append: decide again.
+                  Effect.retry({ while: isVersionConflict }),
+                  Effect.orDie,
+                  Effect.map(() => entry.committed!),
+                ),
+            () => Effect.sync(() => pending.delete(key)),
+          )
+        }
+
+        const commitBatch = (items: readonly [BatchItem, ...BatchItem[]]) =>
+          items.every((item) => sessionFacts.has(item.definition.type))
+            ? recordFacts(items)
+            : db
+                .transaction(() => projectBatch(items[0].aggregateID, items), { behavior: "immediate" })
+                .pipe(Effect.orDie)
+
         function publishAll<const I extends readonly [PublishInput, ...PublishInput[]]>(events: I) {
           return Effect.gen(function* () {
             const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
@@ -575,83 +769,7 @@ export function configured(options?: Options) {
             return yield* durableLocks.withLock(aggregateID)(
               Effect.uninterruptible(
                 Effect.gen(function* () {
-                  const committed = yield* db
-                    .transaction(
-                      () =>
-                        Effect.gen(function* () {
-                          const row = yield* db
-                            .select({ seq: EventSequenceTable.seq })
-                            .from(EventSequenceTable)
-                            .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-                            .get()
-                            .pipe(Effect.orDie)
-                          const firstSeq = (row?.seq ?? -1) + 1
-                          const finalSeq = firstSeq + payloads.length - 1
-                          const queued = payloads.map((item, index) => ({
-                            ...item.event,
-                            durable: envelope(aggregateID, firstSeq + index, item.definition.durable.version),
-                          }))
-                          const route = yield* prepareRoutes(queued)
-                          const rows = new Array<typeof EventTable.$inferInsert>()
-                          const ids = new Set<Event.ID>()
-                          for (const [index, item] of payloads.entries()) {
-                            const seq = firstSeq + index
-                            const encoded = Schema.encodeUnknownSync(item.definition.data)(item.event.data) as Record<
-                              string,
-                              unknown
-                            >
-                            if (persist) {
-                              if (ids.has(item.event.id))
-                                yield* Effect.die(
-                                  new InvalidDurableEventError({
-                                    type: item.event.type,
-                                    message: `Event ${item.event.id} appears more than once in the batch`,
-                                  }),
-                                )
-                              ids.add(item.event.id)
-                              const stored = yield* db
-                                .select({ aggregateID: EventTable.aggregate_id, seq: EventTable.seq })
-                                .from(EventTable)
-                                .where(eq(EventTable.id, item.event.id))
-                                .get()
-                                .pipe(Effect.orDie)
-                              if (stored)
-                                yield* Effect.die(
-                                  new InvalidDurableEventError({
-                                    type: item.event.type,
-                                    message: `Event ${item.event.id} already exists at aggregate ${stored.aggregateID} sequence ${stored.seq}`,
-                                  }),
-                                )
-                            }
-                            const event = queued[index]
-                            for (const projector of projectors.get(
-                              versionedType(item.definition.type, item.definition.durable.version),
-                            ) ?? []) {
-                              yield* projector(event)
-                            }
-                            if (item.commit) yield* item.commit(seq)
-                            if (persist)
-                              rows.push({
-                                id: event.id,
-                                aggregate_id: aggregateID,
-                                seq,
-                                created: event.created,
-                                type: versionedType(item.definition.type, item.definition.durable.version),
-                                data: encoded,
-                              })
-                          }
-                          yield* db
-                            .insert(EventSequenceTable)
-                            .values([{ aggregate_id: aggregateID, seq: finalSeq }])
-                            .onConflictDoUpdate({ target: EventSequenceTable.aggregate_id, set: { seq: finalSeq } })
-                            .run()
-                            .pipe(Effect.orDie)
-                          if (persist) yield* db.insert(EventTable).values(rows).run().pipe(Effect.orDie)
-                          return { events: queued, route }
-                        }),
-                      { behavior: "immediate" },
-                    )
-                    .pipe(Effect.orDie)
+                  const committed = yield* commitBatch(payloads)
                   committed.route()
                   yield* Effect.forEach(
                     pubsub.durable.get(aggregateID) ?? [],

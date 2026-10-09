@@ -55,6 +55,7 @@ import {
   seedToolSession,
   toolIdentity,
   waitForCodeModeExecution,
+  waitForCodeModeNotification,
 } from "./lib/tool"
 
 const childText = "child review done"
@@ -725,6 +726,7 @@ describe("Code Mode crash recovery", () => {
         yield* register(location, testTools(after))
         yield* restart
         const info = yield* waitForCodeModeExecution(started.executionID)
+        yield* waitForCodeModeNotification(started.executionID)
         const store = yield* CodeModeStore.Service
         return {
           info,
@@ -853,6 +855,7 @@ describe("Code Mode crash recovery", () => {
         yield* register(location, testTools(after))
         yield* restart
         const info = yield* waitForCodeModeExecution(started.executionID)
+        yield* waitForCodeModeNotification(started.executionID)
         const store = yield* CodeModeStore.Service
         const sessions = yield* Session.Service
         return {
@@ -1026,7 +1029,11 @@ const childTools = (held?: Deferred.Deferred<void>): ReadonlyArray<Tool.Info> =>
     name: "spawn",
     options: { namespace: "test" },
     description: "Starts a child session.",
-    input: Schema.Struct({ id: Schema.String, fail: Schema.optional(Schema.String), hold: Schema.optional(Schema.Boolean) }),
+    input: Schema.Struct({
+      id: Schema.String,
+      fail: Schema.optional(Schema.String),
+      hold: Schema.optional(Schema.Boolean),
+    }),
     output: Schema.Struct({ ok: Schema.Boolean }),
     execute: (input: { readonly id: string; readonly fail?: string; readonly hold?: boolean }, context) =>
       Effect.gen(function* () {
@@ -1068,7 +1075,12 @@ describe("Code Mode child sessions", () => {
       Effect.gen(function* () {
         yield* register(location, childTools())
         const sessionID = yield* createSession(location)
-        const executionID = yield* start(location, sessionID, "call_child_ok", 'tools.test.spawn({ id: "ses_childok" })')
+        const executionID = yield* start(
+          location,
+          sessionID,
+          "call_child_ok",
+          'tools.test.spawn({ id: "ses_childok" })',
+        )
         const info = yield* waitForCodeModeExecution(CodeModeExecution.ID.make(executionID))
         expect(info.status).toBe("completed")
         const lines = (yield* noticeText(sessionID, executionID)).split("\n")

@@ -1,49 +1,159 @@
 import { describe, expect } from "bun:test"
-import { Effect, Layer, Stream } from "effect"
+import { Context, Effect, Layer, LayerMap, Schema, Stream } from "effect"
 import { asc, eq } from "drizzle-orm"
 import { AIError, LanguageModel, RateLimitError } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols/openai-chat"
 import { TestLLM } from "@ocpp/ai/testing"
-import { hostModel } from "@specter/agent-runtime"
+import { Agent } from "@ocpp/core/agent"
 import { Bus } from "@ocpp/core/bus"
+import { Catalog } from "@ocpp/core/catalog"
+import { Config } from "@ocpp/core/config"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { EventTable } from "@ocpp/core/event/sql"
+import { InstructionDiscovery } from "@ocpp/core/instruction-discovery"
+import { InstructionBuiltIns } from "@ocpp/core/instructions/builtins"
+import { Instructions } from "@ocpp/core/instructions/index"
+import { Location } from "@ocpp/core/location"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
+import type { LocationServices } from "@ocpp/core/location-services"
+import { McpInstructions } from "@ocpp/core/mcp/instructions"
+import { Image } from "@ocpp/core/image"
+import { PluginHooks } from "@ocpp/core/plugin/hooks"
+import { PluginRuntime } from "@ocpp/core/plugin/runtime"
+import { SystemPromptPlugin } from "@ocpp/core/plugin/system-prompt"
+import { Reference } from "@ocpp/core/reference"
+import { Skill } from "@ocpp/core/skill"
+import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { Project } from "@ocpp/core/project"
 import { ProjectTable } from "@ocpp/core/project/sql"
+import { ReferenceInstructions } from "@ocpp/core/reference/instructions"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
+import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { SessionProjector } from "@ocpp/core/session/projector"
+import { SessionPromptNode } from "@ocpp/core/session/prompt-node"
+import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { SessionTable } from "@ocpp/core/session/sql"
 import { SessionStore } from "@ocpp/core/session/store"
+import { SkillInstructions } from "@ocpp/core/skill/instructions"
+import { Snapshot } from "@ocpp/core/snapshot"
+import { Tool } from "@ocpp/core/tool"
 import { SpecterSessions } from "@ocpp/core/specter/index"
-import { SpecterSessionModel } from "@ocpp/core/specter/session-model"
+import { SpecterStepHost } from "@ocpp/core/specter/step-host"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { promptLocationNode } from "./fixture/prompt-location"
 import { testEffect } from "./lib/effect"
+import { agentHost, catalogHost, host } from "./plugin/host"
 
-// OC++'s Session facade with the switch on: the embedded Specter runtime runs the Session, and OC++
-// sees its events on the Bus.
+// OC++'s Session facade with the switch on: the embedded Specter runtime runs the Session, OC++ supplies
+// each step's request, model stream and tools, and OC++ sees the runtime's facts on the Bus.
 const languageModel = LanguageModel.make({ id: "fake-model", provider: "fake", route: OpenAIChat.route })
-const fixedModel = makeGlobalNode({
-  service: SpecterSessionModel.Service,
+
+// The Location services are built once, bound to /project, like the runner's tests. The Session runtime
+// reaches them through a LocationServiceMap that hands that context to every Location.
+const locationContext: { current?: Context.Context<never> } = {}
+const sharedLocation = makeGlobalNode({
+  service: LocationServiceMap.Service,
   layer: Layer.effect(
-    SpecterSessionModel.Service,
-    hostModel(() => Effect.succeed({ model: languageModel, ref: { id: "fake-model", providerID: "fake" } })),
+    LocationServiceMap.Service,
+    LayerMap.make(
+      (_ref: Location.Ref) =>
+        Layer.effectContext(Effect.sync(() => locationContext.current!)) as Layer.Layer<LocationServices>,
+    ),
   ),
-  deps: [LayerNodePlatform.llmClient],
+  deps: [],
 })
 
+const pluginRuntime = PluginRuntime.makeCell()
 const layer = AppNodeBuilder.build(
-  LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
+  LayerNode.group([
+    Database.node,
+    Bus.node,
+    SessionProjector.node,
+    SessionStore.node,
+    Session.node,
+    SessionPromptNode.node,
+    SpecterStepHost.stepIONode,
+    PluginRuntime.node,
+    PluginHooks.node,
+    Agent.node,
+    Catalog.node,
+    Image.node,
+    Skill.node,
+    Reference.node,
+    Tool.node,
+    PluginRuntime.providerNodeWithCell(pluginRuntime),
+  ]),
   [
     [Bus.node, Bus.configured({ persist: true })],
-    [LocationServiceMap.node, promptLocationNode],
-    [SpecterSessionModel.node, fixedModel],
+    [LocationServiceMap.node, sharedLocation],
+    [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
+    [Snapshot.node, Snapshot.noopLayer],
     [LayerNodePlatform.llmClient, TestLLM.clientLayer],
+    [
+      SessionRunnerModel.node,
+      Layer.mock(SessionRunnerModel.Service)({
+        resolve: () =>
+          Effect.succeed(
+            SessionRunnerModel.resolved(languageModel, {
+              capabilities: { tools: true, input: ["text"], output: ["text"] },
+              cost: [],
+              limit: { context: 200_000, output: 32_000 },
+            }),
+          ),
+      }),
+    ],
+    [
+      InstructionBuiltIns.node,
+      Layer.mock(InstructionBuiltIns.Service, { load: () => Effect.succeed(Instructions.empty) }),
+    ],
+    [
+      InstructionDiscovery.node,
+      Layer.mock(InstructionDiscovery.Service, {
+        project: true,
+        global: true,
+        load: () => Effect.succeed(Instructions.empty),
+      }),
+    ],
+    [SkillInstructions.node, Layer.mock(SkillInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })],
+    [
+      ReferenceInstructions.node,
+      Layer.mock(ReferenceInstructions.Service, { load: () => Effect.succeed(Instructions.empty) }),
+    ],
+    [McpInstructions.node, Layer.mock(McpInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })],
+    [Config.node, Config.testLayer([])],
+    [
+      PluginSupervisor.node,
+      Layer.succeed(PluginSupervisor.Service, PluginSupervisor.Service.of({ flush: Effect.void })),
+    ],
+    [
+      SessionModelTransport.node,
+      Layer.succeed(
+        SessionModelTransport.Service,
+        SessionModelTransport.Service.of({
+          bind: () => ({ execute: () => Effect.die("Unexpected WebSocket execution") }),
+          close: () => Effect.void,
+          closeAll: Effect.void,
+        }),
+      ),
+    ],
+    [
+      Catalog.node,
+      Layer.mock(Catalog.Service, {
+        provider: { get: () => Effect.undefined, all: () => Effect.succeed([]), available: () => Effect.succeed([]) },
+        model: {
+          get: () => Effect.undefined,
+          all: () => Effect.succeed([]),
+          available: () => Effect.succeed([]),
+          default: () => Effect.undefined,
+          small: () => Effect.undefined,
+        },
+      }),
+    ],
+    [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntime)],
+    [Reference.node, Layer.mock(Reference.Service, { refresh: () => Effect.void })],
     ...SpecterSessions.replacements,
   ],
 ).pipe(Layer.provideMerge(TestLLM.layer({ fallback: [] })))
@@ -52,6 +162,21 @@ const it = testEffect(layer)
 const sessionID = Session.ID.make("ses_specter_test")
 
 const setup = Effect.gen(function* () {
+  locationContext.current = yield* Effect.context<never>()
+  // OC++'s built-in agents come from its system prompt plugins, as in the runner's tests.
+  const agents = yield* Agent.Service
+  const hooks = yield* PluginHooks.Service
+  const pluginHost = host({
+    agent: agentHost(agents),
+    catalog: catalogHost(yield* Catalog.Service),
+    session: { hook: (name, callback) => hooks.register("session", name, callback) },
+  })
+  yield* Effect.forEach(SystemPromptPlugin.Plugins, (plugin) => plugin.effect(pluginHost), { discard: true })
+  yield* agents.transform((draft) =>
+    draft.update(Agent.ID.make("build"), (agent) => {
+      agent.mode = "primary"
+    }),
+  )
   const { db } = yield* Database.Service
   yield* db
     .insert(ProjectTable)
@@ -112,6 +237,7 @@ describe("Sessions on the Specter runtime", () => {
         "session.inbox.enqueued",
         "session.execution.started",
         "session.inbox.delivered",
+        "session.instructions.updated",
         "session.step.started",
         "session.text.started",
         "session.text.ended",
@@ -146,6 +272,7 @@ describe("Sessions on the Specter runtime", () => {
         "session.inbox.enqueued",
         "session.execution.started",
         "session.inbox.delivered",
+        "session.instructions.updated",
         "session.step.started",
         "session.step.failed",
         "session.retry.scheduled",
@@ -161,6 +288,16 @@ describe("Sessions on the Specter runtime", () => {
   it.live("runs a Code Mode tool call and returns its result to the next step", () =>
     Effect.gen(function* () {
       yield* setup
+      // OC++ offers Code Mode's execute once a tool is registered.
+      yield* (yield* Tool.Service).transform((draft) =>
+        draft.add({
+          name: "echo",
+          description: "Echo text",
+          input: Schema.Struct({ text: Schema.String }),
+          output: Schema.Struct({ text: Schema.String }),
+          execute: ({ text }) => Effect.succeed({ output: { text }, content: text }),
+        }),
+      )
       const llm = yield* TestLLM.Service
       yield* llm.push(
         TestLLM.tool("call_1", "execute", { code: "return 6 * 7" }),
@@ -172,21 +309,29 @@ describe("Sessions on the Specter runtime", () => {
       yield* session.wait(sessionID)
 
       const messages = yield* session.messages({ sessionID, order: "asc" })
-      expect(messages.map((message) => message.type)).toEqual(["user", "assistant", "assistant"])
+      // OC++ runs the program as a job: the call settles at once, and the completion arrives as a
+      // notification the runtime delivers before the next step.
+      expect(messages.map((message) => message.type)).toEqual(["user", "assistant", "synthetic", "assistant"])
       const tool =
         messages[1]?.type === "assistant" ? messages[1].content.find((part) => part.type === "tool") : undefined
       expect(tool?.type === "tool" ? tool.state.status : undefined).toBe("completed")
+      expect(messages[2]?.type === "synthetic" ? messages[2].text : "").toContain("42")
       expect(JSON.stringify(llm.requests[1]?.messages)).toContain("42")
       expect(yield* eventTypes).toEqual([
         "session.inbox.enqueued",
         "session.execution.started",
         "session.inbox.delivered",
+        "session.instructions.updated",
         "session.step.started",
         "session.tool.input.started",
         "session.tool.input.ended",
         "session.tool.called",
+        "session.codemode.started",
         "session.tool.success",
+        "session.codemode.completed",
+        "session.inbox.enqueued",
         "session.step.ended",
+        "session.inbox.delivered",
         "session.step.started",
         "session.text.started",
         "session.text.ended",

@@ -35,6 +35,7 @@ import { Reference } from "./reference.js"
 import { WebSearch } from "./websearch.js"
 import { ReferenceInstructions } from "./reference/instructions.js"
 import { SessionRunnerLLM } from "./session/runner/llm.js"
+import { SpecterStepHost } from "./specter/step-host.js"
 import { SessionRunnerModel } from "./session/runner/model.js"
 import { SessionModelTransport } from "./session/model-transport.js"
 import { SessionCompaction } from "./session/compaction.js"
@@ -111,6 +112,7 @@ const nodes = [
   SessionTitle.node,
   Snapshot.node,
   SessionRunnerLLM.node,
+  SpecterStepHost.stepIONode,
   ExternalAgentDrivers.node,
   ExternalAgentHarnessNode.node,
   Vcs.node,

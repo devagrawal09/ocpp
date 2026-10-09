@@ -1,26 +1,24 @@
 export * as SpecterSessionRuntime from "./session-runtime.js"
 
-import { Context, Effect, Layer, PubSub, Stream, SubscriptionRef } from "effect"
+import { Context, Effect, Layer, Stream, SubscriptionRef } from "effect"
 import { eq } from "drizzle-orm"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import {
-  DeltaChannel,
   EventLog,
   makeEmbeddedSessionRuntime,
-  Model,
-  modelStepHostLayer,
   SpecterCommandRejectedError,
-  type Delta,
+  StepHost,
   type EmbeddedSessionRuntime,
   type EventLogService,
   type PersistedEvent,
 } from "@specter/agent-runtime"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
+import { LocationServiceMap } from "../location-service-map.js"
 import { SessionSchema } from "../session/schema.js"
 import { SessionTable } from "../session/sql.js"
 import { SessionStore } from "../session/store.js"
-import { SpecterSessionModel } from "./session-model.js"
+import { SpecterStepHost } from "./step-host.js"
 
 /**
  * The embedded Specter runtime that runs whole Sessions. It writes to the same Event Log as the Bus,
@@ -54,9 +52,7 @@ const layer = Layer.effect(
     const bus = yield* Bus.Service
     const store = yield* SessionStore.Service
     const db = (yield* Database.Service).db
-    const model = yield* SpecterSessionModel.Service
     const active = yield* SubscriptionRef.make<ReadonlySet<SessionSchema.ID>>(new Set())
-    const deltas = yield* PubSub.unbounded<Delta>()
     const shared = yield* bus.specterLog
 
     const track = (events: readonly PersistedEvent[]) =>
@@ -83,25 +79,42 @@ const layer = Layer.effect(
           .pipe(Effect.tap((result) => (result.duplicate ? Effect.void : track(result.events)))),
     }
 
-    const runtime = yield* makeEmbeddedSessionRuntime().pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          Layer.succeed(EventLog, log),
-          modelStepHostLayer({
-            agent: (sessionID) =>
-              store.get(SessionSchema.ID.make(sessionID)).pipe(Effect.map((session) => session?.agent ?? "build")),
-          }).pipe(
-            Layer.provide(
-              Layer.mergeAll(
-                Layer.succeed(Model, model),
-                Layer.succeed(DeltaChannel, DeltaChannel.of({ pubsub: deltas })),
+    // Resolves once the runtime has no active execution for the Session, from the runtime's own state.
+    let started: EmbeddedSessionRuntime | undefined
+    const awaitIdle = (sessionID: SessionSchema.ID) =>
+      Effect.suspend(() =>
+        started
+          ? started.subscribe({ type: "executionStatus", payload: { sessionID } }).pipe(
+              Stream.filter((status) => status.status !== "active"),
+              Stream.take(1),
+              Stream.runDrain,
+              Effect.orDie,
+            )
+          : Effect.void,
+      )
+
+    // An attempt stops as soon as its execution settles: an interrupt cancels the model stream and the
+    // tools it started, as it does in OC++'s own runner.
+    const host = yield* SpecterStepHost.make
+    const interruptible = StepHost.of({
+      begin: (input) =>
+        host.begin(input).pipe(
+          Effect.map((plan) => ({
+            ...plan,
+            run: (record) =>
+              Effect.raceFirst(
+                plan.run(record),
+                awaitIdle(SessionSchema.ID.make(input.sessionID)).pipe(Effect.as({ outcome: "stopped" as const })),
               ),
-            ),
-          ),
+          })),
         ),
-      ),
+    })
+
+    const runtime = yield* makeEmbeddedSessionRuntime().pipe(
+      Effect.provide(Layer.mergeAll(Layer.succeed(EventLog, log), Layer.succeed(StepHost, interruptible))),
       Effect.orDie,
     )
+    started = runtime
 
     const register = Effect.fn("SpecterSessionRuntime.register")(function* (sessionID: SessionSchema.ID) {
       const session = yield* store.get(sessionID)
@@ -154,12 +167,7 @@ const layer = Layer.effect(
           ? Effect.void
           : register(sessionID).pipe(Effect.tap(() => Effect.sync(() => registered.add(sessionID)))),
       active: SubscriptionRef.get(active),
-      awaitIdle: (sessionID) =>
-        SubscriptionRef.changes(active).pipe(
-          Stream.filter((current) => !current.has(sessionID)),
-          Stream.take(1),
-          Stream.runDrain,
-        ),
+      awaitIdle,
     })
   }),
 )
@@ -167,5 +175,5 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
-  deps: [Bus.node, Database.node, SessionStore.node, SpecterSessionModel.node],
+  deps: [Bus.node, Database.node, SessionStore.node, LocationServiceMap.node],
 })

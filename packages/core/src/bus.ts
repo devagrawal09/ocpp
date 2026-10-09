@@ -719,9 +719,13 @@ export function configured(options?: Options) {
               return Effect.gen(function* () {
                 for (const [index, aggregateID] of aggregates.entries()) {
                   committed[index]!.route()
-                  yield* Effect.forEach(pubsub.durable.get(aggregateID) ?? [], (wake) => PubSub.publish(wake, undefined), {
-                    discard: true,
-                  })
+                  yield* Effect.forEach(
+                    pubsub.durable.get(aggregateID) ?? [],
+                    (wake) => PubSub.publish(wake, undefined),
+                    {
+                      discard: true,
+                    },
+                  )
                 }
                 yield* Effect.interruptible(
                   Effect.forEach(
@@ -747,7 +751,10 @@ export function configured(options?: Options) {
               ),
             ]
               .sort()
-              .reduce((append, sessionID) => durableLocks.withLock(sessionID)(append), specterLog.append(drafts, options)),
+              .reduce(
+                (append, sessionID) => durableLocks.withLock(sessionID)(append),
+                specterLog.append(drafts, options),
+              ),
         }
         const store = yield* makeSessionEventStore().pipe(
           Effect.provideService(SpecterEventLogService, specterLog),

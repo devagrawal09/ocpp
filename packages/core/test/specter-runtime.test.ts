@@ -33,7 +33,9 @@ describe("embedded Specter runtime", () => {
         payload: { sessionID: "ses_1", ...payload },
         recordedAt: new Date(0).toISOString(),
       }).map((wire) => [wire.definition.type, wire.data, wire.id])
-    expect(settled({ outcome: "succeeded" })).toEqual([["session.execution.succeeded", { sessionID: "ses_1" }, "evt_1"]])
+    expect(settled({ outcome: "succeeded" })).toEqual([
+      ["session.execution.succeeded", { sessionID: "ses_1" }, "evt_1"],
+    ])
     expect(settled({ outcome: "failed", error: { type: "provider", message: "boom" } })).toEqual([
       ["session.execution.failed", { sessionID: "ses_1", error: { type: "provider", message: "boom" } }, "evt_1"],
     ])

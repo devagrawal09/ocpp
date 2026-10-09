@@ -847,7 +847,12 @@ const fragmentFixture = (kind: FragmentKind, id: string, chunks: readonly string
       return {
         partialEvents,
         completeEvents: [...partialEvents, LLMEvent.toolInputEnd({ id, name: "echo" })],
-        expectedAssistant: { type: "assistant", content: [expectedContent] },
+        // A stream that ends without finishing its step leaves it unsettled: the runtime records that.
+        expectedAssistant: {
+          type: "assistant",
+          finish: "error",
+          error: { type: "step.unsettled", message: "The step completed without ending" },
+        },
         expectedContent,
       }
     }
@@ -866,7 +871,8 @@ function* verifyEphemeralDeltas(s: Scenario, kind: FragmentKind) {
   yield* Effect.yieldNow
   yield* s.llm.push(fixture.completeEvents)
 
-  yield* s.resume
+  const exit = yield* s.resume.pipe(Effect.exit)
+  expect(exit._tag).toBe(kind === "tool input" ? "Failure" : "Success")
 
   const deltas = fixture.delta
     ? yield* s.db
@@ -3407,7 +3413,9 @@ describe("SessionRunnerLLM", () => {
     expect(userTexts(s.requests[2])).toEqual(["Start working", "Wait until continuation ends"])
   })
 
-  scenario("keeps queued input parked when a steer is cancelled during preparation", function* (s) {
+  // OC++'s runner ran a step on the unchanged history here before the queued input; the runtime looks at the
+  // inbox again once preparing is done, so the queued input is delivered at this boundary.
+  scenario("delivers queued input at once when a steer is cancelled during preparation", function* (s) {
     yield* s.admit("A")
     yield* s.llm.push(TestLLM.stop(), TestLLM.stop(), TestLLM.stop())
     const stream = yield* s.llm.gate
@@ -3423,7 +3431,7 @@ describe("SessionRunnerLLM", () => {
     yield* stream.release
     yield* Fiber.join(run)
 
-    expect(s.requests.map(userTexts)).toEqual([["A"], ["A"], ["A", "B"]])
+    expect(s.requests.map(userTexts)).toEqual([["A"], ["A", "B"]])
     expect((yield* s.messages).some((message) => message.id === steer.id)).toBe(false)
     expect(yield* s.inbox).toEqual([])
   })
@@ -3454,7 +3462,8 @@ describe("SessionRunnerLLM", () => {
 
     yield* Fiber.join(run)
     expect((yield* s.session.get(sessionID)).location).toEqual(location)
-    expect(s.requests.map(userTexts)).toEqual([["A"], ["A"]])
+    // No step runs on the unchanged history before the move (OC++'s runner ran one).
+    expect(s.requests.map(userTexts)).toEqual([["A"]])
     expect(s.closedTransports).toEqual([sessionID])
     expect(yield* recordedEventTypes(sessionID)).toContain(Bus.versionedType(SessionEvent.Moved.type, 1))
     expect(yield* s.inbox).toEqual([])
@@ -3995,7 +4004,10 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(1)
     yield* stream.release
     const [firstExit, secondExit] = yield* Effect.all([Fiber.await(first), Fiber.await(second)])
-    expect(secondExit).toEqual(firstExit)
+    // Both callers see the one execution's failure.
+    expect(Exit.isFailure(firstExit) && Exit.isFailure(secondExit)).toBe(true)
+    if (Exit.isFailure(firstExit) && Exit.isFailure(secondExit))
+      expect(Cause.squash(secondExit.cause)).toEqual(Cause.squash(firstExit.cause))
 
     yield* s.llm.push([])
     yield* s.resume
@@ -5625,10 +5637,10 @@ describe("SessionRunnerLLM", () => {
       LLMEvent.textStart({ id: "text-2" }),
     ])
 
-    const defect = yield* s.runPrompt("Two blocks").pipe(Effect.catchDefect(Effect.succeed))
-    expect(defect).toBeInstanceOf(Error)
-    if (!(defect instanceof Error)) return
-    expect(defect.message).toBe("text start before end: text-2")
+    // A provider that breaks the stream protocol fails its step; the run fails with that step.
+    const failure = yield* s.runPrompt("Two blocks").pipe(Effect.flip)
+    expect(failure).toBeInstanceOf(StepFailedError)
+    expect(failure.message).toBe("text start before end: text-2")
   })
 
   scenario("projects sequential text fragments as separate content parts", function* (s) {
@@ -5671,10 +5683,10 @@ describe("SessionRunnerLLM", () => {
   scenario("rejects duplicate streamed text starts", function* (s) {
     yield* s.llm.push([LLMEvent.textStart({ id: "text-1" }), LLMEvent.textStart({ id: "text-1" })])
 
-    const defect = yield* s.resume.pipe(Effect.catchDefect(Effect.succeed))
-    expect(defect).toBeInstanceOf(Error)
-    if (!(defect instanceof Error)) return
-    expect(defect.message).toBe("Duplicate text start: text-1")
+    // A provider that breaks the stream protocol fails its step; the run fails with that step.
+    const failure = yield* s.resume.pipe(Effect.flip)
+    expect(failure).toBeInstanceOf(StepFailedError)
+    expect(failure.message).toBe("Duplicate text start: text-1")
   })
 
   scenario("transitions streamed raw tool input to parsed called input", function* (s) {
@@ -5698,9 +5710,9 @@ describe("SessionRunnerLLM", () => {
   scenario("rejects malformed streamed tool input ordering", function* (s) {
     yield* s.llm.push([LLMEvent.toolInputDelta({ id: "call-1", name: "read", text: "{}" })])
 
-    const defect = yield* s.resume.pipe(Effect.catchDefect(Effect.succeed))
-    expect(defect).toBeInstanceOf(Error)
-    if (!(defect instanceof Error)) return
-    expect(defect.message).toBe("Tool input delta before start: call-1")
+    // A provider that breaks the stream protocol fails its step; the run fails with that step.
+    const failure = yield* s.resume.pipe(Effect.flip)
+    expect(failure).toBeInstanceOf(StepFailedError)
+    expect(failure.message).toBe("Tool input delta before start: call-1")
   })
 })

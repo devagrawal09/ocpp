@@ -62,7 +62,15 @@ describe("embedded Specter runtime", () => {
     expect(step({ outcome: "failed", error })).toEqual([
       ["session.step.failed", { sessionID: "ses_1", assistantMessageID: "msg_1", error }, "evt_2"],
     ])
+    // A transparent retry is only scheduled; a fresh one follows a failed step.
     expect(step({ outcome: "failed", error, retry: { attempt: 1, at: 5 } })).toEqual([
+      [
+        "session.retry.scheduled",
+        { sessionID: "ses_1", assistantMessageID: "msg_1", attempt: 2, at: 5, error },
+        "evt_2_retry",
+      ],
+    ])
+    expect(step({ outcome: "failed", error, retry: { attempt: 1, at: 5, fresh: true } })).toEqual([
       ["session.step.failed", { sessionID: "ses_1", assistantMessageID: "msg_1", error }, "evt_2"],
       [
         "session.retry.scheduled",

@@ -300,7 +300,6 @@ describe("Sessions on the Specter runtime", () => {
         "session.instructions.updated",
         "session.inbox.delivered",
         "session.step.started",
-        "session.step.failed",
         "session.retry.scheduled",
         "session.step.started",
         "session.text.started",

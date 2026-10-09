@@ -49,7 +49,7 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
       ...data
     } = event.payload as {
       readonly outcome: "succeeded" | "failed"
-      readonly retry?: { readonly attempt: number; readonly at: number }
+      readonly retry?: { readonly attempt: number; readonly at: number; readonly fresh?: true }
       readonly continues?: true
       readonly sessionID: string
       readonly assistantMessageID: string
@@ -59,7 +59,9 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
     const failed: WireEvent = { definition: SessionEvent.Step.Failed, data, id }
     if (!retry) return [failed]
     return [
-      failed,
+      // A transparent retry runs the same step again: OC++ records only that it is scheduled. A fresh one
+      // follows a step whose output stands, so that step failed.
+      ...(retry.fresh ? [failed] : []),
       {
         definition: SessionEvent.RetryScheduled,
         data: {

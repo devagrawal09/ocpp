@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { SessionEvent } from "@ocpp/schema/session-event"
 import path from "path"
 import { Context, Deferred, Effect, Layer, LayerMap, Schedule, Schema, type Scope, Stream } from "effect"
 import { asc, eq } from "drizzle-orm"
@@ -225,6 +226,8 @@ const setup = Effect.gen(function* () {
     .pipe(Effect.orDie)
 })
 
+// The Session's public events, as its log serves them: internal facts share its sequence.
+const publicTypes = new Set<string>(SessionEvent.DurableDefinitions.map((definition) => definition.type))
 const eventTypes = Database.Service.use(({ db }) =>
   db
     .select({ type: EventTable.type })
@@ -234,7 +237,7 @@ const eventTypes = Database.Service.use(({ db }) =>
     .all()
     .pipe(
       Effect.orDie,
-      Effect.map((rows) => rows.map((row) => row.type.replace(/\.\d+$/, ""))),
+      Effect.map((rows) => rows.map((row) => row.type.replace(/\.\d+$/, "")).filter((type) => publicTypes.has(type))),
     ),
 )
 

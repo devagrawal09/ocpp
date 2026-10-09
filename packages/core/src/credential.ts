@@ -68,20 +68,24 @@ const layer = Layer.effect(
     // Credentials are the projection of their facts in Specter's Event Log. A fact carries the secret
     // sealed under the credential's key, which the publish of its creation stores beside the log, in the
     // same transaction (`keyed`).
-    const activate = (integrationID: Integration.ID, credentialID: ID) =>
+    const activate = (integrationID: Integration.ID, credentialID: ID, time: number) =>
       Effect.gen(function* () {
         yield* db
           .update(CredentialTable)
-          .set({ active: false })
+          .set({ active: false, time_updated: time })
           .where(eq(CredentialTable.integration_id, integrationID))
           .run()
-        yield* db.update(CredentialTable).set({ active: true }).where(eq(CredentialTable.id, credentialID)).run()
+        yield* db
+          .update(CredentialTable)
+          .set({ active: true, time_updated: time })
+          .where(eq(CredentialTable.id, credentialID))
+          .run()
       }).pipe(Effect.orDie)
     yield* bus.project(CredentialFact.Created, (event) =>
       Effect.gen(function* () {
         yield* db
           .update(CredentialTable)
-          .set({ active: false })
+          .set({ active: false, time_updated: event.created })
           .where(eq(CredentialTable.integration_id, event.data.integrationID))
           .run()
         yield* db
@@ -101,7 +105,9 @@ const layer = Layer.effect(
           .run()
       }).pipe(Effect.orDie),
     )
-    yield* bus.project(CredentialFact.Activated, (event) => activate(event.data.integrationID, event.data.credentialID))
+    yield* bus.project(CredentialFact.Activated, (event) =>
+      activate(event.data.integrationID, event.data.credentialID, event.created),
+    )
     yield* bus.project(CredentialFact.Relabeled, (event) =>
       db
         .update(CredentialTable)
@@ -133,7 +139,7 @@ const layer = Layer.effect(
           .run()
           .pipe(Effect.orDie)
         if (event.data.integrationID && event.data.replacement)
-          yield* activate(event.data.integrationID, event.data.replacement)
+          yield* activate(event.data.integrationID, event.data.replacement, event.created)
       }),
     )
     const keyed = (credentialID: ID, key: string) => ({

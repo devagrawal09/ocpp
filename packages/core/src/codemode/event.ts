@@ -84,8 +84,13 @@ const layer = Layer.effect(
       and(eq(CodeModeEventTable.session_id, key.sessionID), eq(CodeModeEventTable.name, key.name))
     const get = (key: Key) => db.select().from(CodeModeEventTable).where(where(key)).get().pipe(Effect.orDie)
     const updated = (key: Key) => bus.publish(Updated, key).pipe(Effect.asVoid)
-    const update = (key: Key, set: SQLiteUpdateSetSource<typeof CodeModeEventTable>) =>
-      db.update(CodeModeEventTable).set(set).where(where(key)).run().pipe(Effect.orDie, Effect.asVoid)
+    const update = (key: Key, time: number, set: SQLiteUpdateSetSource<typeof CodeModeEventTable>) =>
+      db
+        .update(CodeModeEventTable)
+        .set({ ...set, time_updated: time })
+        .where(where(key))
+        .run()
+        .pipe(Effect.orDie, Effect.asVoid)
     // Records a fact about an event that exists, then announces the change.
     const record = (key: Key, fact: Effect.Effect<unknown>) =>
       get(key).pipe(
@@ -123,7 +128,7 @@ const layer = Layer.effect(
       }).pipe(Effect.orDie),
     )
     yield* bus.project(SessionFact.EventToggled, (event) =>
-      update(event.data, {
+      update(event.data, event.created, {
         enabled: event.data.enabled,
         // A disabled event has no next firing; the scheduler records one again when it is enabled.
         ...(event.data.enabled ? {} : { time_next: null }),
@@ -132,9 +137,11 @@ const layer = Layer.effect(
     yield* bus.project(SessionFact.EventRemoved, (event) =>
       db.delete(CodeModeEventTable).where(where(event.data)).run().pipe(Effect.orDie, Effect.asVoid),
     )
-    yield* bus.project(SessionFact.EventPlanned, (event) => update(event.data, { time_next: event.data.next ?? null }))
+    yield* bus.project(SessionFact.EventPlanned, (event) =>
+      update(event.data, event.created, { time_next: event.data.next ?? null }),
+    )
     yield* bus.project(SessionFact.EventFired, (event) =>
-      update(event.data, {
+      update(event.data, event.created, {
         time_fired: event.data.at,
         run_count: sql`${CodeModeEventTable.run_count} + 1`,
         ...(event.data.error !== undefined
@@ -147,7 +154,7 @@ const layer = Layer.effect(
       }),
     )
     yield* bus.project(SessionFact.EventSkipped, (event) =>
-      update(event.data, {
+      update(event.data, event.created, {
         time_skipped: event.data.at,
         skip_count: sql`${CodeModeEventTable.skip_count} + 1`,
       }),

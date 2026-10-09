@@ -541,7 +541,12 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
               }
               yield* tx
                 .insert(KVTable)
-                .values({ key: MIGRATION_STATE_KEY, value: { phase: "sessions" } })
+                .values({
+                  key: MIGRATION_STATE_KEY,
+                  value: { phase: "sessions" },
+                  time_created: Date.now(),
+                  time_updated: Date.now(),
+                })
                 .run()
             }),
           )
@@ -577,7 +582,12 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
             Effect.gen(function* () {
               yield* tx
                 .insert(KVTable)
-                .values({ key: MIGRATION_STATE_KEY, value: { phase: "sessions", cursor: nextID.id } })
+                .values({
+                  key: MIGRATION_STATE_KEY,
+                  value: { phase: "sessions", cursor: nextID.id },
+                  time_created: Date.now(),
+                  time_updated: Date.now(),
+                })
                 .onConflictDoUpdate({
                   target: KVTable.key,
                   set: { value: { phase: "sessions", cursor: nextID.id }, time_updated: Date.now() },
@@ -667,7 +677,12 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
           Effect.gen(function* () {
             yield* tx
               .insert(KVTable)
-              .values({ key: MIGRATION_STATE_KEY, value: { phase: "completed" } })
+              .values({
+                key: MIGRATION_STATE_KEY,
+                value: { phase: "completed" },
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
               .onConflictDoUpdate({
                 target: KVTable.key,
                 set: { value: { phase: "completed" }, time_updated: Date.now() },

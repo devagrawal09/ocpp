@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import path from "path"
 import { Context, Deferred, Effect, Layer, LayerMap, Schedule, Schema, type Scope, Stream } from "effect"
-import { asc, eq } from "drizzle-orm"
+import { asc, eq, sql } from "drizzle-orm"
 import { AIError, LanguageModel, RateLimitError } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols/openai-chat"
 import { TestLLM } from "@ocpp/ai/testing"
@@ -18,6 +18,9 @@ import { InstructionDiscovery } from "@ocpp/core/instruction-discovery"
 import { InstructionBuiltIns } from "@ocpp/core/instructions/builtins"
 import { Instructions } from "@ocpp/core/instructions/index"
 import { Location } from "@ocpp/core/location"
+import { Credential } from "@ocpp/core/credential"
+import { Integration } from "@ocpp/core/integration"
+import { KV } from "@ocpp/core/kv"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import type { LocationServices } from "@ocpp/core/location-services"
 import { McpInstructions } from "@ocpp/core/mcp/instructions"
@@ -96,6 +99,8 @@ const app = (database?: LayerNode.Node<Database.Service, never, any>) =>
       Reference.node,
       Tool.node,
       PluginRuntime.providerNodeWithCell(pluginRuntime),
+      Credential.node,
+      KV.node,
     ]),
     [
       [Bus.node, Bus.configured()],
@@ -188,7 +193,7 @@ const boot = <A, E>(file: string, effect: Effect.Effect<A, E, Layer.Success<Retu
 
 const sessionID = Session.ID.make("ses_specter_test")
 
-const setup = Effect.gen(function* () {
+const setupAgents = Effect.gen(function* () {
   yield* Deferred.succeed(locationContext.current, yield* Effect.context<never>())
   // OC++'s built-in agents come from its system prompt plugins, as in the runner's tests.
   const agents = yield* Agent.Service
@@ -204,6 +209,10 @@ const setup = Effect.gen(function* () {
       agent.mode = "primary"
     }),
   )
+})
+
+const setup = Effect.gen(function* () {
+  yield* setupAgents
   const { db } = yield* Database.Service
   yield* db
     .insert(ProjectTable)
@@ -382,6 +391,90 @@ describe("Sessions on the Specter runtime", () => {
       expect(types.indexOf("session.codemode.started")).toBeLessThan(types.indexOf("session.tool.success"))
       expect(types).toContain("session.codemode.completed")
       expect(types.slice(-2)).toEqual(["session.step.ended", "session.execution.succeeded"])
+    }),
+  )
+
+  it.live("rebuilds every read model from Specter's log alone", () =>
+    Effect.gen(function* () {
+      yield* setupAgents
+      yield* (yield* Tool.Service).transform((draft) =>
+        draft.add({
+          name: "echo",
+          description: "Echo text",
+          input: Schema.Struct({ text: Schema.String }),
+          output: Schema.Struct({ text: Schema.String }),
+          execute: ({ text }) => Effect.succeed({ output: { text }, content: text }),
+        }),
+      )
+      const llm = yield* TestLLM.Service
+      yield* llm.push(TestLLM.tool("call_1", "execute", { code: 'return "answer=" + 6 * 7' }))
+      const seen = (request: { readonly messages: unknown }) => JSON.stringify(request.messages).includes("answer=42")
+      yield* (llm.client as TestLLM.TestInterface).serve((request) =>
+        seen(request) ? TestLLM.text("The answer is 42", "text_1") : TestLLM.text("Waiting for it", "text_1"),
+      )
+      // Everything below is recorded through OC++'s services: the project, the Session and its run, a
+      // Code Mode program, a credential and plugin state.
+      const session = yield* Session.Service
+      const created = yield* session.create({
+        location: Location.Ref.make({ directory: AbsolutePath.make("/project") }),
+      })
+      yield* session.prompt({ sessionID: created.id, text: "Compute it" })
+      yield* session.wait(created.id).pipe(
+        Effect.andThen(session.messages({ sessionID: created.id, order: "asc" })),
+        Effect.repeat({
+          until: (messages) => JSON.stringify(messages.at(-1)).includes("The answer is 42"),
+          schedule: Schedule.spaced("20 millis"),
+        }),
+        Effect.timeout("5 seconds"),
+      )
+      yield* session.wait(created.id)
+      const credentials = yield* Credential.Service
+      const credential = yield* credentials.create({
+        integrationID: Integration.ID.make("openai"),
+        value: Credential.Key.make({ type: "key", key: "sk-rebuilt" }),
+      })
+      yield* credentials.update(credential.id, { label: "Work" })
+      yield* (yield* KV.Service).set("plugin:rebuild", { count: 1 })
+
+      // Every table OC++ projects from the log, with its rows. Specter's own tables, the index into the
+      // log, migrations, caches and credential keys are not projections.
+      const { db } = yield* Database.Service
+      const tables = (yield* db
+        .all<{ readonly name: string }>(
+          sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'specter_%'
+            AND name NOT IN ('migration', 'event', 'event_sequence', 'cache', 'credential_key') ORDER BY name`,
+        )
+        .pipe(Effect.orDie)).map((row) => row.name)
+      const dump = Effect.forEach(tables, (table) =>
+        db.all<Record<string, unknown>>(sql.raw(`SELECT * FROM "${table}"`)).pipe(
+          Effect.orDie,
+          Effect.map((rows) => [table, rows.map((row) => JSON.stringify(row)).toSorted()] as const),
+        ),
+      )
+      const before = yield* dump
+      const filled = new Set(before.flatMap(([table, rows]) => (rows.length > 0 ? [table] : [])))
+      for (const table of [
+        "project",
+        "session_v2",
+        "session_message",
+        "codemode_execution",
+        "credential",
+        "credential_secret",
+        "kv",
+      ])
+        expect(filled).toContain(table)
+
+      yield* db.run(sql`PRAGMA foreign_keys = OFF`).pipe(Effect.orDie)
+      yield* Effect.forEach(tables, (table) => db.run(sql.raw(`DELETE FROM "${table}"`)).pipe(Effect.orDie), {
+        discard: true,
+      })
+      yield* db.run(sql`PRAGMA foreign_keys = ON`).pipe(Effect.orDie)
+      expect((yield* dump).every(([, rows]) => rows.length === 0)).toBeTrue()
+
+      yield* (yield* Bus.Service).rebuild()
+
+      expect(yield* dump).toEqual(before)
+      expect((yield* credentials.get(credential.id))?.value).toEqual({ type: "key", key: "sk-rebuilt" })
     }),
   )
 

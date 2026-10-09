@@ -289,7 +289,7 @@ function run(db: DatabaseService, event: MessageEvent) {
       const { id, type, ...data } = encoded
       return db
         .update(SessionMessageTable)
-        .set({ type, time_created: DateTime.toEpochMillis(message.time.created), data })
+        .set({ type, time_created: DateTime.toEpochMillis(message.time.created), time_updated: event.created, data })
         .where(
           and(
             eq(SessionMessageTable.id, SessionMessage.ID.make(id)),
@@ -469,6 +469,7 @@ function insertMessage(db: DatabaseService, event: SessionEvent.DurableEvent, me
       type,
       seq: event.durable.seq,
       time_created: DateTime.toEpochMillis(message.time.created),
+      time_updated: event.created,
       data,
     })
     .run()

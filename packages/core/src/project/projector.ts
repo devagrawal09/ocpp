@@ -40,7 +40,7 @@ const layer = Layer.effectDiscard(
       run(
         db
           .update(ProjectTable)
-          .set({ vcs: event.data.vcs ?? null })
+          .set({ vcs: event.data.vcs ?? null, time_updated: event.created })
           .where(eq(ProjectTable.id, event.data.projectID)),
       ),
     )
@@ -48,7 +48,7 @@ const layer = Layer.effectDiscard(
       run(
         db
           .update(ProjectTable)
-          .set({ worktree: event.data.canonical })
+          .set({ worktree: event.data.canonical, time_updated: event.created })
           .where(eq(ProjectTable.id, event.data.projectID)),
       ),
     )

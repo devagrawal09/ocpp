@@ -3,7 +3,7 @@ export * as Bus from "./bus.js"
 import { Cause, Clock, Context, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
 import { Event } from "@ocpp/schema/event"
 import type { EventLog } from "@ocpp/schema/event-log"
-import { and, asc, eq, gt, lte, sql } from "drizzle-orm"
+import { and, asc, eq, gt, lte, sql, type SQL } from "drizzle-orm"
 import { Database } from "./database/database.js"
 import { EventSequenceTable, EventTable } from "./event/sql.js"
 import { SpecterEventTable } from "./specter/sql.js"
@@ -199,10 +199,11 @@ export interface Interface {
   readonly listen: (listener: Subscriber) => Effect.Effect<Unsubscribe>
   readonly project: <D extends Event.Definition>(definition: D, projector: Subscriber<D>) => Effect.Effect<void>
   /**
-   * Projects an aggregate's events again from Specter's log, in order: its projectors only, not commit
-   * hooks or listeners. Its read models are cleared first by the caller.
+   * Projects events again from Specter's log, in order: their projectors only, not commit hooks or
+   * listeners. One aggregate's, or with none every aggregate's, in the order the log recorded them, while
+   * nothing else records. The caller clears the read models first.
    */
-  readonly rebuild: (aggregateID: string) => Effect.Effect<void>
+  readonly rebuild: (aggregateID?: string) => Effect.Effect<void>
   readonly remove: (aggregateID: string) => Effect.Effect<void>
   /**
    * Specter's Event Log in this database, for the runtime that runs Sessions. Facts its Commands record
@@ -743,11 +744,11 @@ export function configured(options?: Options) {
         const streamLive = (): Stream.Stream<Event.Payload> => local(Stream.fromPubSub(pubsub.live))
 
         // An aggregate's events after a sequence, read from Specter's log through their sequence index.
-        const readIndexed = (
-          aggregateID: string,
-          after: number,
-          input: { readonly through: number; readonly limit: number },
-        ) =>
+        // Indexed events read from Specter's log, each decoded as OC++ recorded it. Types missing from the
+        // durable manifest are skipped instead of failing the read: an aggregate may hold events this process
+        // cannot decode. The raw rows keep cursors advancing across the resulting gaps. A fact projecting as
+        // several events is translated once.
+        const readIndex = (where: SQL, orderBy: readonly SQL[], limit: number) =>
           db
             .select({
               id: EventTable.id,
@@ -765,21 +766,12 @@ export function configured(options?: Options) {
             })
             .from(EventTable)
             .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
-            .where(
-              and(
-                eq(EventTable.aggregate_id, aggregateID),
-                gt(EventTable.seq, after),
-                lte(EventTable.seq, input.through),
-              ),
-            )
-            .orderBy(asc(EventTable.seq))
-            .limit(input.limit)
+            .where(where)
+            .orderBy(...orderBy)
+            .limit(limit)
             .all()
             .pipe(
               Effect.orDie,
-              // Skip types missing from the durable manifest instead of failing the read: the aggregate may
-              // hold events this process cannot decode. The raw tail seq keeps cursors advancing across the
-              // resulting gaps. A fact projecting as several events is translated once.
               Effect.map((rows) => {
                 const translations = new Map<number, readonly SpecterTranslate.WireEvent[]>()
                 const translate = (fact: PersistedEvent) => {
@@ -790,7 +782,7 @@ export function configured(options?: Options) {
                   return wire
                 }
                 return {
-                  seq: rows.at(-1)?.seq,
+                  last: rows.at(-1),
                   events: rows.flatMap((row) => {
                     const event = decodeIndexed(row as Indexed, translate)
                     return event ? [event] : []
@@ -798,6 +790,22 @@ export function configured(options?: Options) {
                 }
               }),
             )
+
+        // An aggregate's events after a sequence, in sequence order.
+        const readIndexed = (
+          aggregateID: string,
+          after: number,
+          input: { readonly through: number; readonly limit: number },
+        ) =>
+          readIndex(
+            and(
+              eq(EventTable.aggregate_id, aggregateID),
+              gt(EventTable.seq, after),
+              lte(EventTable.seq, input.through),
+            )!,
+            [asc(EventTable.seq)],
+            input.limit,
+          ).pipe(Effect.map((page) => ({ seq: page.last?.seq, events: page.events })))
 
         const readAfter = (
           aggregateID: string,
@@ -808,32 +816,63 @@ export function configured(options?: Options) {
             Effect.andThen(Effect.suspend(() => readIndexed(aggregateID, after, input))),
           )
 
-        function rebuild(aggregateID: string) {
-          return durableLocks.withLock(aggregateID)(
-            db
-              .transaction(
-                () =>
-                  Effect.gen(function* () {
-                    let after = -1
-                    while (true) {
-                      const page = yield* readIndexed(aggregateID, after, {
-                        through: Number.MAX_SAFE_INTEGER,
-                        limit: logReadPageSize,
-                      })
-                      if (page.seq === undefined) return
-                      after = page.seq
-                      for (const event of page.events) {
-                        for (const projector of projectors.get(versionedType(event.type, event.durable!.version)) ??
-                          []) {
-                          yield* projector(event)
-                        }
-                      }
-                    }
-                  }),
-                { behavior: "immediate" },
-              )
-              .pipe(Effect.orDie),
+        const reproject = (events: readonly Event.Payload[]) =>
+          Effect.forEach(
+            events,
+            (event) =>
+              Effect.forEach(
+                projectors.get(versionedType(event.type, event.durable!.version)) ?? [],
+                (projector) => projector(event),
+                { discard: true },
+              ),
+            { discard: true },
           )
+
+        function rebuild(aggregateID?: string) {
+          // One aggregate: its events in sequence order, under its lock.
+          if (aggregateID !== undefined)
+            return durableLocks.withLock(aggregateID)(
+              db
+                .transaction(
+                  () =>
+                    Effect.gen(function* () {
+                      let after = -1
+                      while (true) {
+                        const page = yield* readIndexed(aggregateID, after, {
+                          through: Number.MAX_SAFE_INTEGER,
+                          limit: logReadPageSize,
+                        })
+                        if (page.seq === undefined) return
+                        after = page.seq
+                        yield* reproject(page.events)
+                      }
+                    }),
+                  { behavior: "immediate" },
+                )
+                .pipe(Effect.orDie),
+            )
+          // Every aggregate: the whole log in the order it was recorded.
+          return db
+            .transaction(
+              () =>
+                Effect.gen(function* () {
+                  let after: { readonly order: number; readonly seq: number; readonly id: string } | undefined
+                  while (true) {
+                    const page = yield* readIndex(
+                      after === undefined
+                        ? sql`1 = 1`
+                        : sql`(${EventTable.log_order}, ${EventTable.seq}, ${EventTable.id}) > (${after.order}, ${after.seq}, ${after.id})`,
+                      [asc(EventTable.log_order), asc(EventTable.seq), asc(EventTable.id)],
+                      logReadPageSize,
+                    )
+                    if (!page.last) return
+                    after = { order: page.last.fact.order, seq: page.last.seq, id: page.last.id }
+                    yield* reproject(page.events)
+                  }
+                }),
+              { behavior: "immediate" },
+            )
+            .pipe(Effect.orDie)
         }
 
         const subscribeDurable = (aggregateID: string) =>

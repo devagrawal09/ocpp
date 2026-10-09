@@ -32,7 +32,7 @@ const layer = Layer.effect(
       set: Effect.fn("Cache.set")(function* (key, value) {
         yield* db
           .insert(CacheTable)
-          .values({ key, value })
+          .values({ key, value, time_created: Date.now(), time_updated: Date.now() })
           .onConflictDoUpdate({ target: CacheTable.key, set: { value, time_updated: Date.now() } })
           .run()
           .pipe(Effect.orDie)

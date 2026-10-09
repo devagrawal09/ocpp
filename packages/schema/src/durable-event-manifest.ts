@@ -5,8 +5,11 @@ import { Event } from "./event.js"
 import { Worktree } from "./worktree.js"
 import { SessionEvent } from "./session-event.js"
 
-export const Durable = Event.durableMap([
+/** Every durable event OC++ records. Each is a fact in Specter's Event Log. */
+export const Definitions = [
   ...SessionEvent.DurableDefinitions,
   ...ExternalSession.Definitions,
   Worktree.Event.Resolved,
-])
+] as const
+
+export const Durable = Event.durableMap(Definitions)

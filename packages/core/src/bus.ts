@@ -10,9 +10,7 @@ import type { Location } from "@ocpp/schema/location"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { isDeepStrictEqual } from "node:util"
-import { Durable } from "@ocpp/schema/durable-event-manifest"
-import { ExternalSession } from "@ocpp/schema/external-session"
-import { Worktree } from "@ocpp/schema/worktree"
+import { Durable, DurableEventManifest } from "@ocpp/schema/durable-event-manifest"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionID } from "@ocpp/schema/session-id"
 import { AbsolutePath } from "@ocpp/schema/schema"
@@ -131,15 +129,8 @@ const mapNonEmpty = <A, B>(items: readonly [A, ...A[]], f: (item: A) => B): [B, 
   ...items.slice(1).map(f),
 ]
 
-/**
- * Durable facts, which the Specter runtime records: every Session fact, an external agent's included, and
- * a directory's resolution to a project.
- */
-const recordedFacts = new Set<string>(
-  [...SessionEvent.DurableDefinitions, ...ExternalSession.Definitions, Worktree.Event.Resolved].map(
-    (definition) => definition.type,
-  ),
-)
+/** OC++'s durable events, which the Specter runtime records as facts in its Event Log. */
+const recordedFacts = new Set<string>(DurableEventManifest.Definitions.map((definition) => definition.type))
 
 export type SubscribePayload<D extends readonly Event.Definition[]> = D[number] extends infer Item
   ? Item extends Event.Definition

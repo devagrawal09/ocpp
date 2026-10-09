@@ -1,6 +1,6 @@
 export * as SpecterSessionRuntime from "./session-runtime.js"
 
-import { Context, Deferred, Effect, Layer, Stream, SubscriptionRef } from "effect"
+import { Context, Deferred, Duration, Effect, Layer, Stream, SubscriptionRef } from "effect"
 import { eq } from "drizzle-orm"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import {
@@ -10,11 +10,14 @@ import {
   StepHost,
   type AttemptOutcome,
   type CompactionOutcome,
+  type DriveExecutionOutboxStore,
   type DriveOutcome,
   type EmbeddedSessionRuntime,
   type RecordFailure,
   type EventLogService,
   type PersistedEvent,
+  type ReactionOutboxStore,
+  type RunStepOutboxStore,
 } from "@specter/agent-runtime"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
@@ -23,7 +26,11 @@ import { SessionEvent } from "../session/event.js"
 import { SessionSchema } from "../session/schema.js"
 import { SessionTable } from "../session/sql.js"
 import { SessionStore } from "../session/store.js"
+import { SpecterOutbox } from "./outbox.js"
+import { SpecterSnapshots } from "./snapshots.js"
 import { SpecterStepHost } from "./step-host.js"
+
+type Payload<S> = S extends ReactionOutboxStore<infer T> ? T : never
 
 const CONTINUE_AFTER_RESTART =
   "The server restarted while you were working. Continue from where you left off without repeating completed work."
@@ -182,8 +189,19 @@ const layer = Layer.effect(
         : {}),
     })
 
+    // The runtime keeps its state in OC++'s database, so a boot resumes from where the last one stopped:
+    // its Slices from their snapshots, and its jobs from the outboxes, where a replayed delivery finds its
+    // job instead of running again.
+    const slices = yield* SpecterSnapshots.persisted(db)
+    yield* SpecterOutbox.prune(db, Date.now() - Duration.toMillis(Duration.days(1))).pipe(Effect.orDie)
+    const runStep = yield* SpecterOutbox.make<Payload<RunStepOutboxStore>>(db, "runStep").pipe(Effect.orDie)
+    const drive = yield* SpecterOutbox.make<Payload<DriveExecutionOutboxStore>>(db, "driveExecution").pipe(Effect.orDie)
+
     // One step per Session at a time; different Sessions (subagents included) run at once.
-    const runtime = yield* makeEmbeddedSessionRuntime({ outbox: { worker: { concurrency: 64 } } }).pipe(
+    const runtime = yield* makeEmbeddedSessionRuntime({
+      outbox: { worker: { concurrency: 64 } },
+      stores: { slices, runStep, drive },
+    }).pipe(
       Effect.provide(Layer.mergeAll(Layer.succeed(EventLog, log), Layer.succeed(StepHost, interruptible))),
       Effect.orDie,
     )

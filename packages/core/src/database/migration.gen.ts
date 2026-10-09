@@ -56,6 +56,7 @@ import m53 from "./migration/20260928161342_tool_lists.js"
 import m54 from "./migration/20260930223025_notebook_checkpoint.js"
 import m55 from "./migration/20261005220037_session_external_harness.js"
 import m56 from "./migration/20261009133447_specter_event_log.js"
+import m57 from "./migration/20261009195033_specter_runtime_state.js"
 
 export const migrations = [
   m00,
@@ -115,4 +116,5 @@ export const migrations = [
   m54,
   m55,
   m56,
+  m57,
 ] satisfies DatabaseMigration.Migration[]

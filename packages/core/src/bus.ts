@@ -22,6 +22,7 @@ import {
   toSpecterEventType,
 } from "@specter/agent-runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
+import { SpecterSnapshots } from "./specter/snapshots.js"
 import { SpecterTranslate } from "./specter/translate.js"
 
 /** Idempotency keys of the commits that register a Session the log predates with the runtime. */
@@ -759,7 +760,8 @@ export function configured(options?: Options) {
                 specterLog.append(drafts, options),
               ),
         }
-        const store = yield* makeSessionEventStore().pipe(
+        // Its Slice starts from its snapshot, as the session runtime's do.
+        const store = yield* makeSessionEventStore({ slices: yield* SpecterSnapshots.persisted(db) }).pipe(
           Effect.provideService(SpecterEventLogService, specterLog),
           Effect.orDie,
         )

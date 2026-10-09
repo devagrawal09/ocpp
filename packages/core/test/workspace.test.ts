@@ -347,8 +347,9 @@ it.effect("persists the workspace lifecycle and reconnects after idle suspension
     const read = Database.Service.use(({ db }) =>
       db.select().from(WorkspaceTable).where(eq(WorkspaceTable.id, created.id)).get(),
     ).pipe(Effect.orDie)
-    // The suspension records the binding and the last activity in the background; its last fact is the time.
-    while ((yield* read)?.last_used_at !== 4 * 60 * 1000) yield* Effect.promise(() => Bun.sleep(1))
+    // The suspension records the provider's new binding in the background. Opening the connection at the
+    // first spawn already recorded the last activity, so the binding is what shows it ran.
+    while ((yield* read)?.binding?.suspended !== true) yield* Effect.promise(() => Bun.sleep(1))
     const stored = yield* read
     expect(stored?.binding).toEqual({ workspaceID: created.id, generation: 1, suspended: true })
     expect(stored?.last_used_at).toBe(4 * 60 * 1000)

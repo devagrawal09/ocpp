@@ -359,7 +359,7 @@ it.live(
   () =>
     withEmbedded("ocpp-embedded-", (fixture) =>
       Effect.gen(function* () {
-        const ocpp = yield* fixture.sdk.Ocpp.create({ events: { persist: true } })
+        const ocpp = yield* fixture.sdk.Ocpp.create()
         const id = sessionID(fixture)
         const model = fixture.sdk.Model.Ref.make({
           id: fixture.sdk.Model.ID.make("embedded"),
@@ -746,15 +746,16 @@ it.live(
         const createRelease = yield* Deferred.make<void>()
         yield* Effect.addFinalizer(() => Deferred.succeed(createRelease, undefined).pipe(Effect.asVoid))
         const model = LanguageModel.make({ id: "workspace-tool-test", provider: "test", route: OpenAIChat.route })
-        // The first tool-advertising request selects the shell tool; everything else
-        // (including title generation, which carries no tools) answers with text.
+        // The first tool-advertising request runs a program that calls the shell tool (the model reaches
+        // tools through Code Mode's execute); everything else (including title generation, which carries no
+        // tools) answers with text.
         let toolIssued = false
         const llm = yield* TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()))
         yield* llm.serve((request) => {
-          const wantsTool = !toolIssued && request.tools.some((tool) => tool.name === "shell")
+          const wantsTool = !toolIssued && request.tools.some((tool) => tool.name === "execute")
           if (!wantsTool) return TestLLM.text("done", "answer")
           toolIssued = true
-          return TestLLM.tool("call-shell", "shell", { command: "echo hi" })
+          return TestLLM.tool("call-shell", "execute", { code: 'return tools.shell({ command: "echo hi" })' })
         })
         const models = Layer.mock(SessionRunnerModel.Service, {
           resolve: () =>

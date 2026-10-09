@@ -12,7 +12,6 @@ test("Promise host uses the embedded router and releases plugins", async () => {
   let setup = false
   let cleanup = false
   const ocpp = await Ocpp.create({
-    events: { persist: true },
     config: { directory: config, project: false, content: "{}" },
     plugins: [
       {

@@ -364,6 +364,71 @@ describe("Sessions on the Specter runtime", () => {
     }),
   )
 
+  it.live("steers a queued input into the running execution", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const llm = yield* TestLLM.Service
+      const gate = yield* llm.gate
+      yield* llm.push(TestLLM.text("First answer", "text_1"), TestLLM.text("Second answer", "text_2"))
+      const session = yield* Session.Service
+
+      yield* session.prompt({ sessionID, text: "First" })
+      yield* gate.started
+      const queued = yield* session.prompt({ sessionID, text: "Later", delivery: "queue" })
+      yield* session.steerInbox({ sessionID, inboxID: queued.id })
+      yield* gate.release
+      yield* session.wait(sessionID)
+
+      const messages = yield* session.messages({ sessionID, order: "asc" })
+      expect(messages.map((message) => (message.type === "user" ? message.text : message.type))).toEqual([
+        "First",
+        "assistant",
+        "Later",
+        "assistant",
+      ])
+      const types = yield* eventTypes
+      expect(types).toContain("session.inbox.delivery.changed")
+      // Steered input enters the same execution at the next step boundary.
+      expect(types.filter((type) => type === "session.execution.started")).toHaveLength(1)
+    }),
+  )
+
+  it.live("coalesces repeated notices into one input", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const llm = yield* TestLLM.Service
+      const gate = yield* llm.gate
+      yield* llm.push(TestLLM.text("Busy", "text_1"), TestLLM.text("Noted", "text_2"))
+      const session = yield* Session.Service
+      const notice = (text: string) =>
+        session.synthetic({
+          sessionID,
+          text,
+          delivery: "queue",
+          coalesce: {
+            key: "notices",
+            merge: (replaced) => ({ text: [...replaced.map((payload) => payload.text), text].join(" + ") }),
+          },
+        })
+
+      yield* session.prompt({ sessionID, text: "Start" })
+      yield* gate.started
+      yield* notice("one")
+      yield* notice("two")
+      expect(
+        (yield* session.inbox(sessionID)).map((item) => (item.type === "synthetic" ? item.payload.text : item.type)),
+      ).toEqual(["one + two"])
+      yield* gate.release
+      yield* session.wait(sessionID)
+
+      const synthetic = (yield* session.messages({ sessionID, order: "asc" })).filter(
+        (message) => message.type === "synthetic",
+      )
+      expect(synthetic.map((message) => (message.type === "synthetic" ? message.text : ""))).toEqual(["one + two"])
+      expect(yield* eventTypes).toContain("session.inbox.cancelled")
+    }),
+  )
+
   it.live("cancels a queued input while a step runs", () =>
     Effect.gen(function* () {
       yield* setup

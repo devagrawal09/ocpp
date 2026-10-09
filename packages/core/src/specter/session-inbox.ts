@@ -31,12 +31,15 @@ export const layer = Layer.effect(
       readonly id: SessionMessage.ID
       readonly sessionID: SessionSchema.ID
       readonly item: SessionInbox.Item & { readonly type: Type }
+      readonly replaces?: ReadonlyArray<SessionMessage.ID>
     }) {
       const existing = yield* local.reconcile({ ...request, type: request.item.type, delivery: request.item.delivery })
       if (existing !== undefined) return existing
       const item: SessionInbox.Item = request.item
       if (item.type === "compaction" || item.type === "move") return yield* unsupported(`A ${item.type} inbox item`)
       yield* specter.register(request.sessionID)
+      const replaces =
+        request.replaces === undefined || request.replaces.length === 0 ? {} : { replaces: request.replaces }
       const recorded = yield* specter.runtime
         .command({
           type: "enqueueInput",
@@ -48,6 +51,7 @@ export const layer = Layer.effect(
                   type: "user",
                   payload: encodeUser(item.payload),
                   delivery: item.delivery,
+                  ...replaces,
                 }
               : {
                   sessionID: request.sessionID,
@@ -55,6 +59,7 @@ export const layer = Layer.effect(
                   type: "synthetic",
                   payload: encodeSynthetic(item.payload),
                   delivery: item.delivery,
+                  ...replaces,
                 },
         })
         .pipe(
@@ -71,6 +76,27 @@ export const layer = Layer.effect(
         return yield* new SessionInbox.LifecycleConflict({ id: request.id })
       return admitted as Extract<SessionInbox.Info, { readonly type: Type }>
     })
+
+    // Steering a queued item or queueing a steered one; a rejection means it is no longer pending that way.
+    const changeDelivery = (delivery: SessionInbox.Delivery) =>
+      Effect.fn("SpecterSessionInbox.changeDelivery")(function* (input: {
+        readonly id: SessionMessage.ID
+        readonly sessionID: SessionSchema.ID
+      }) {
+        yield* specter.register(input.sessionID)
+        yield* specter.runtime
+          .command({
+            type: "changeDelivery",
+            payload: { sessionID: input.sessionID, inboxID: input.id, delivery },
+          })
+          .pipe(
+            Effect.catch((error) =>
+              rejection(error) === undefined
+                ? Effect.die(error)
+                : Effect.fail(new SessionInbox.LifecycleConflict({ id: input.id })),
+            ),
+          )
+      })
 
     const cancel = Effect.fn("SpecterSessionInbox.cancel")(function* (input: {
       readonly id: SessionMessage.ID
@@ -94,8 +120,8 @@ export const layer = Layer.effect(
       admit: admit as SessionInbox.Interface["admit"],
       cancel,
       admitCompaction: () => unsupported("Compaction"),
-      steer: () => unsupported("Changing an inbox item's delivery"),
-      queue: () => unsupported("Changing an inbox item's delivery"),
+      steer: changeDelivery(SessionInbox.Delivery.make("steer")),
+      queue: changeDelivery(SessionInbox.Delivery.make("queue")),
     })
   }),
 )

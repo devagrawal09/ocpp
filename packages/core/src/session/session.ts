@@ -313,10 +313,14 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
         Effect.gen(function* () {
           yield* get(sessionID)
           const inputID = input.id ?? SessionMessage.ID.create()
-          const admit = (payload: Pick<SessionInbox.SyntheticPayload, "text" | "description" | "metadata">) =>
+          const admit = (
+            payload: Pick<SessionInbox.SyntheticPayload, "text" | "description" | "metadata">,
+            replaces?: ReadonlyArray<SessionMessage.ID>,
+          ) =>
             admission.admit({
               id: inputID,
               sessionID,
+              replaces,
               item: {
                 type: "synthetic",
                 payload: SessionInbox.SyntheticPayload.make({
@@ -347,14 +351,16 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
                       (item): item is SessionInbox.Synthetic =>
                         item.type === "synthetic" && item.payload.metadata?.coalesce === coalesce.key,
                     )
-                    yield* Effect.forEach(
-                      replaced,
-                      (item) => bus.publish(SessionEvent.InboxCancelled, { sessionID, inboxID: item.id }),
-                      { discard: true },
-                    )
                     const merged = replaced.length === 0 ? input : coalesce.merge(replaced.map((item) => item.payload))
-                    return yield* admit({ ...merged, metadata: { ...merged.metadata, coalesce: coalesce.key } })
+                    // The replaced items are cancelled in the admission's own commit.
+                    return yield* admit(
+                      { ...merged, metadata: { ...merged.metadata, coalesce: coalesce.key } },
+                      replaced.map((item) => item.id),
+                    )
                   }),
+                ).pipe(
+                  // A runtime that delivers on its own can take a replaced item first: read the inbox again.
+                  Effect.retry({ times: 3, while: (error) => error._tag === "SessionInbox.LifecycleConflict" }),
                 )
           ).pipe(
             Effect.catchTag("SessionInbox.LifecycleConflict", () => new SyntheticConflictError({ sessionID, inputID })),
@@ -515,7 +521,13 @@ function displayProblem(content: SessionMessage.DisplayInput) {
   if (table) return table
   const bytes = new TextEncoder().encode(JSON.stringify(content)).length
   if (bytes > SessionMessage.DisplayLimits.bytes)
-    return "A displayed result is limited to " + SessionMessage.DisplayLimits.bytes + " bytes of JSON; this one has " + bytes + "."
+    return (
+      "A displayed result is limited to " +
+      SessionMessage.DisplayLimits.bytes +
+      " bytes of JSON; this one has " +
+      bytes +
+      "."
+    )
   return undefined
 }
 

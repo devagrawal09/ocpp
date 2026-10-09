@@ -170,32 +170,48 @@ export const make = Effect.fn("SessionInbox.make")(function* () {
     readonly id: SessionMessage.ID
     readonly sessionID: SessionSchema.ID
     readonly item: Item & { readonly type: Type }
+    /** Pending items this one replaces (coalescing): they are cancelled in the same commit. */
+    readonly replaces?: ReadonlyArray<SessionMessage.ID>
   }) {
     const existing = yield* reconcile({ ...request, type: request.item.type, delivery: request.item.delivery })
     if (existing !== undefined) return existing
-    const admitted = yield* bus
-      .publish(SessionEvent.InboxEnqueued, {
-        inboxID: request.id,
-        sessionID: request.sessionID,
-        item: request.item,
-      })
-      .pipe(
-        Effect.map((event) =>
-          Info.make({
-            id: request.id,
-            sessionID: request.sessionID,
-            timeCreated: DateTime.makeUnsafe(event.created),
-            ...request.item,
-          }),
-        ),
-        Effect.catchDefect((defect) =>
-          defect instanceof LifecycleConflict
-            ? find(db, request.id).pipe(
-                Effect.flatMap((stored) => (stored === undefined ? Effect.fail(defect) : Effect.succeed(stored))),
-              )
-            : Effect.die(defect),
-        ),
-      )
+    const enqueued = [
+      SessionEvent.InboxEnqueued,
+      { inboxID: request.id, sessionID: request.sessionID, item: request.item },
+    ] as const
+    const admitted = yield* (
+      request.replaces === undefined || request.replaces.length === 0
+        ? bus.publish(...enqueued)
+        : bus
+            .publishAll([
+              ...request.replaces.map(
+                (inboxID) => [SessionEvent.InboxCancelled, { sessionID: request.sessionID, inboxID }] as const,
+              ),
+              enqueued,
+            ] as unknown as readonly [Bus.PublishInput, ...Bus.PublishInput[]])
+            .pipe(
+              Effect.map(
+                (events) =>
+                  events.at(-1) as Effect.Success<ReturnType<typeof bus.publish<typeof SessionEvent.InboxEnqueued>>>,
+              ),
+            )
+    ).pipe(
+      Effect.map((event) =>
+        Info.make({
+          id: request.id,
+          sessionID: request.sessionID,
+          timeCreated: DateTime.makeUnsafe(event.created),
+          ...request.item,
+        }),
+      ),
+      Effect.catchDefect((defect) =>
+        defect instanceof LifecycleConflict
+          ? find(db, request.id).pipe(
+              Effect.flatMap((stored) => (stored === undefined ? Effect.fail(defect) : Effect.succeed(stored))),
+            )
+          : Effect.die(defect),
+      ),
+    )
     if (!matches(admitted, { ...request, type: request.item.type }))
       return yield* new LifecycleConflict({ id: request.id })
     return admitted

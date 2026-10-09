@@ -38,9 +38,16 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
     return [{ definition: SessionEvent.Execution.Interrupted, data: { sessionID, reason: payload.reason }, id }]
   }
   if (event.type === "session-step-settled") {
-    const { outcome, retry, ...data } = event.payload as {
+    // Whether another step follows is the runtime's orchestration, not part of OC++'s events.
+    const {
+      outcome,
+      retry,
+      continues: _,
+      ...data
+    } = event.payload as {
       readonly outcome: "succeeded" | "failed"
       readonly retry?: { readonly attempt: number; readonly at: number }
+      readonly continues?: true
       readonly sessionID: string
       readonly assistantMessageID: string
       readonly error?: unknown

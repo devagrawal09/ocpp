@@ -52,8 +52,7 @@ export interface Options {
  */
 export function create(options: Options) {
   // Eviction can kill the isolate between a turn's Started and terminal events with no
-  // teardown. The write-ahead execution claim plus ServerFetch.make's boot-time resume
-  // recovers such orphaned turns by replaying the drain from durable history on the next wake.
+  // teardown. Specter's runtime recovers such orphaned turns from its log on the next wake.
   return ServerFetch.make(serverOptions(options), { overrides: replacements(options) })
 }
 
@@ -61,10 +60,6 @@ export function serverOptions(options: Options): ServerOptions {
   return {
     app: options.app,
     fs: { filewatcher: false, fff: false },
-    // Durable event history is how a turn orphaned by eviction is recovered:
-    // the boot-time resume replays it. A runtime that dies without teardown
-    // cannot opt out of it, so this is not exposed as an option.
-    events: { persist: true },
     config: { content: options.config?.content },
     models: options.models,
   }

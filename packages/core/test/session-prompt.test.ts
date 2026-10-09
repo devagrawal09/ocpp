@@ -132,7 +132,7 @@ const sessionLayer = (references = Layer.mock(Reference.Service, { refresh: () =
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [SessionExecution.node, execution],
       [LocationServiceMap.node, locations(references)],
     ],
@@ -913,32 +913,14 @@ describe("Session.prompt", () => {
       })
       const syntheticID = SessionMessage.ID.create()
       yield* session.synthetic({ id: syntheticID, sessionID, text: "Replay synthetic", resume: false })
-      const recorded = yield* db
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, sessionID))
-        .all()
-        .pipe(Effect.orDie)
 
-      yield* bus.remove(sessionID)
       yield* db.delete(SessionInboxTable).where(eq(SessionInboxTable.session_id, sessionID)).run().pipe(Effect.orDie)
       yield* db
         .delete(SessionMessageTable)
         .where(eq(SessionMessageTable.session_id, sessionID))
         .run()
         .pipe(Effect.orDie)
-      yield* Effect.forEach(
-        recorded.map((event) => ({
-          id: event.id,
-          created: event.created,
-          aggregateID: event.aggregate_id,
-          seq: event.seq,
-          type: event.type,
-          data: event.data,
-        })),
-        (event) => bus.replay(event),
-        { discard: true },
-      )
+      yield* bus.rebuild(sessionID)
 
       expect(yield* admitted(messageID)).toMatchObject({
         id: messageID,

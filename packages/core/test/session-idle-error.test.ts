@@ -21,7 +21,7 @@ const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [Project.node, globalProjectNode],
       [SessionExecution.node, SessionExecution.noopLayer],
     ],

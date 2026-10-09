@@ -17,11 +17,6 @@ export const ServerOptions = Schema.Struct({
   simulation: Schema.optional(Schema.Boolean),
   database: Schema.optional(Database.Options),
   pty: Schema.optional(PersistentPty.Options),
-  events: Schema.optional(
-    Schema.Struct({
-      persist: Schema.optional(Schema.Boolean),
-    }),
-  ),
   models: Schema.optional(ModelsDev.Options),
   config: Schema.optional(
     Schema.Struct({

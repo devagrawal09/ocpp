@@ -1,12 +1,10 @@
 import { describe, expect } from "bun:test"
-import path from "path"
 import { Bus } from "@ocpp/core/bus"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { EventTable } from "@ocpp/core/event/sql"
 import { Location } from "@ocpp/core/location"
 import { Project } from "@ocpp/core/project"
-import { ProjectTable } from "@ocpp/core/project/sql"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
@@ -15,9 +13,8 @@ import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionTable } from "@ocpp/core/session/sql"
 import { SessionStore } from "@ocpp/core/session/store"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { DateTime, Effect, Layer } from "effect"
-import { asc, eq } from "drizzle-orm"
-import { tmpdirScoped } from "./fixture/tmpdir"
+import { DateTime, Effect } from "effect"
+import { eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 
@@ -25,7 +22,7 @@ const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [Project.node, globalProjectNode],
       [SessionExecution.node, SessionExecution.noopLayer],
     ],
@@ -150,11 +147,12 @@ describe("Session.view", () => {
     }),
   )
 
-  it.effect("replays viewed state into a fresh database", () =>
+  it.effect("rebuilds viewed state into a fresh projection", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
       const bus = yield* Bus.Service
-      const sourceDb = (yield* Database.Service).db
+      const store = yield* SessionStore.Service
+      const { db } = yield* Database.Service
       const created = yield* session.create({ id: Session.ID.make("ses_view_replay"), location })
       yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: created.id })
       const idle = (yield* session.get(created.id)).time.idle
@@ -168,46 +166,16 @@ describe("Session.view", () => {
       if (!expected.time.idle || !expected.time.viewed) return yield* Effect.die(new Error("Expected attention times"))
       const expectedIdle = DateTime.toEpochMillis(expected.time.idle)
       const expectedViewed = DateTime.toEpochMillis(expected.time.viewed)
-      const serialized = (yield* sourceDb
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, created.id))
-        .orderBy(asc(EventTable.seq))
-        .all()
-        .pipe(Effect.orDie)).map((event) => ({
-        id: event.id,
-        created: event.created,
-        aggregateID: event.aggregate_id,
-        seq: event.seq,
-        type: event.type,
-        data: event.data,
-      }))
-      const tmp = yield* tmpdirScoped()
-      const targetLayer = AppNodeBuilder.build(
-        LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node]),
-        [
-          [Database.node, Database.configured({ path: path.join(tmp.path, "target.sqlite") })],
-          [Bus.node, Bus.configured({ persist: true })],
-        ],
-      )
 
-      yield* Effect.gen(function* () {
-        const db = (yield* Database.Service).db
-        const targetBus = yield* Bus.Service
-        const store = yield* SessionStore.Service
-        yield* db
-          .insert(ProjectTable)
-          .values({ id: Project.ID.global, worktree: location.directory, sandboxes: [] })
-          .run()
-          .pipe(Effect.orDie)
-        yield* Effect.forEach(serialized, (event) => targetBus.replay(event), { discard: true })
+      yield* db.delete(SessionTable).where(eq(SessionTable.id, created.id)).run().pipe(Effect.orDie)
+      expect(yield* store.get(created.id)).toBeUndefined()
+      yield* bus.rebuild(created.id)
 
-        const replayed = yield* store.get(created.id)
-        expect(replayed?.time).toEqual(expected.time)
-        expect(replayed?.outcome).toBe("failed")
-        expect(expected.time.updated).toEqual(created.time.updated)
-        expect(expectedIdle).toBeGreaterThan(expectedViewed)
-      }).pipe(Effect.provide(Layer.fresh(targetLayer)))
+      const replayed = yield* store.get(created.id)
+      expect(replayed?.time).toEqual(expected.time)
+      expect(replayed?.outcome).toBe("failed")
+      expect(expected.time.updated).toEqual(created.time.updated)
+      expect(expectedIdle).toBeGreaterThan(expectedViewed)
     }),
   )
 })

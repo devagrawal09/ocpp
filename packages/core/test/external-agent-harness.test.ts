@@ -152,7 +152,7 @@ const replacements = [
   [Project.node, globalProjectNode],
   [SessionModelTransport.node, transport],
   [ExternalAgentDrivers.node, drivers],
-  [Bus.node, Bus.configured({ persist: true })],
+  [Bus.node, Bus.configured()],
 ] satisfies LayerNode.Replacements
 const app = AppNodeBuilder.build(nodes, replacements)
 const it = testEffect(app)

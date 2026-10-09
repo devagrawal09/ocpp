@@ -816,9 +816,13 @@ describe("V1Migration database workflow", () => {
             UNION ALL
             SELECT value + 1 FROM rows WHERE value < 2500
           )
-          INSERT INTO event (id, aggregate_id, seq, created, type, data)
-          SELECT printf('event_%04d', value), 'stale', value, 1, 'session.renamed.1', '{}'
+          INSERT INTO specter_event (id, type, payload, recorded_at)
+          SELECT printf('event_%04d', value), 'session.renamed.1', '{}', '1970-01-01T00:00:00.000Z'
           FROM rows
+        `)
+        yield* db.run(sql`
+          INSERT INTO event (id, aggregate_id, seq, created, type, log_order)
+          SELECT id, 'stale', "order", 1, type, "order" FROM specter_event
         `)
         let yielded = false
         const heartbeat = yield* Effect.yieldNow.pipe(
@@ -918,9 +922,8 @@ describe("V1Migration database workflow", () => {
             data: '{"text":"from next\'s history","time":{"created":12}}',
           },
         ])
-        expect(yield* db.get(sql`SELECT seq, owner_id FROM event_sequence WHERE aggregate_id = 'ses_next'`)).toEqual({
+        expect(yield* db.get(sql`SELECT seq FROM event_sequence WHERE aggregate_id = 'ses_next'`)).toEqual({
           seq: 4,
-          owner_id: null,
         })
         expect(yield* db.get(sql`SELECT title FROM session_v2 WHERE id = 'ses_existing'`)).toEqual({
           title: "Current existing",
@@ -1079,7 +1082,10 @@ describe("V1Migration database workflow", () => {
         )
         yield* db.run(sql`INSERT INTO event_sequence (aggregate_id, seq) VALUES ('ses_test', 9)`)
         yield* db.run(
-          sql`INSERT INTO event (id, aggregate_id, seq, created, type, data) VALUES ('event_stale', 'ses_test', 9, 1, 'session.renamed.1', '{}')`,
+          sql`INSERT INTO specter_event (id, type, payload, recorded_at) VALUES ('event_stale', 'session.renamed.1', '{}', '1970-01-01T00:00:00.000Z')`,
+        )
+        yield* db.run(
+          sql`INSERT INTO event (id, aggregate_id, seq, created, type, log_order) SELECT 'event_stale', 'ses_test', 9, 1, 'session.renamed.1', "order" FROM specter_event WHERE id = 'event_stale'`,
         )
         expect(yield* V1Migration.run()).toEqual({ status: "completed" })
         expect(yield* db.all(sql`SELECT id, type, seq, time_created, time_updated, data FROM session_message`)).toEqual(
@@ -1148,9 +1154,12 @@ describe("V1Migration database workflow", () => {
         yield* db.run(
           sql`INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data) VALUES ('msg_stale_b', 'ses_b', 'user', 0, 7, 8, '{"text":"stale","time":{"created":7}}')`,
         )
-        yield* db.run(sql`INSERT INTO event_sequence (aggregate_id, seq, owner_id) VALUES ('ses_b', 7, 'owner')`)
+        yield* db.run(sql`INSERT INTO event_sequence (aggregate_id, seq) VALUES ('ses_b', 7)`)
         yield* db.run(
-          sql`INSERT INTO event (id, aggregate_id, seq, created, type, data) VALUES ('event_stale_b', 'ses_b', 7, 1, 'session.renamed.1', '{}')`,
+          sql`INSERT INTO specter_event (id, type, payload, recorded_at) VALUES ('event_stale_b', 'session.renamed.1', '{}', '1970-01-01T00:00:00.000Z')`,
+        )
+        yield* db.run(
+          sql`INSERT INTO event (id, aggregate_id, seq, created, type, log_order) SELECT 'event_stale_b', 'ses_b', 7, 1, 'session.renamed.1', "order" FROM specter_event WHERE id = 'event_stale_b'`,
         )
         yield* Layer.launch(V1Migration.layer).pipe(Effect.forkScoped)
         const failed = yield* V1Migration.status().pipe(
@@ -1178,16 +1187,18 @@ describe("V1Migration database workflow", () => {
             data: '{"text":"stale","time":{"created":7}}',
           },
         ])
-        expect(yield* db.get(sql`SELECT seq, owner_id FROM event_sequence WHERE aggregate_id = 'ses_b'`)).toEqual({
+        expect(yield* db.get(sql`SELECT seq FROM event_sequence WHERE aggregate_id = 'ses_b'`)).toEqual({
           seq: 7,
-          owner_id: "owner",
         })
         expect(yield* db.all(sql`SELECT id FROM event WHERE aggregate_id = 'ses_b'`)).toEqual([])
         expect(yield* db.get(sql`SELECT value FROM kv WHERE key = 'migration.v1-v2'`)).toEqual({
           value: '{"phase":"sessions","cursor":"ses_c"}',
         })
         yield* db.run(
-          sql`INSERT INTO event (id, aggregate_id, seq, created, type, data) VALUES ('event_after_clear', 'ses_c', 0, 2, 'session.renamed.1', '{}')`,
+          sql`INSERT INTO specter_event (id, type, payload, recorded_at) VALUES ('event_after_clear', 'session.renamed.1', '{}', '1970-01-01T00:00:00.000Z')`,
+        )
+        yield* db.run(
+          sql`INSERT INTO event (id, aggregate_id, seq, created, type, log_order) SELECT 'event_after_clear', 'ses_c', 0, 2, 'session.renamed.1', "order" FROM specter_event WHERE id = 'event_after_clear'`,
         )
         yield* db.run(sql`DROP TRIGGER fail_b`)
         yield* Layer.launch(V1Migration.layer).pipe(Effect.forkScoped)
@@ -1197,9 +1208,8 @@ describe("V1Migration database workflow", () => {
         )
         expect(yield* db.get(sql`SELECT cost FROM session_v2 WHERE id = 'ses_b'`)).toEqual({ cost: 0 })
         expect(yield* db.all(sql`SELECT id FROM session_message WHERE session_id = 'ses_b'`)).toEqual([])
-        expect(yield* db.get(sql`SELECT seq, owner_id FROM event_sequence WHERE aggregate_id = 'ses_b'`)).toEqual({
+        expect(yield* db.get(sql`SELECT seq FROM event_sequence WHERE aggregate_id = 'ses_b'`)).toEqual({
           seq: -1,
-          owner_id: null,
         })
         expect(yield* db.all(sql`SELECT id FROM event`)).toEqual([{ id: "event_after_clear" }])
       }),

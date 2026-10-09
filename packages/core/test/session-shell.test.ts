@@ -54,7 +54,7 @@ const executionLayer = Layer.effect(
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Bus.node, Session.node, SessionExecution.node, LocationServiceMap.node]), [
-    [Bus.node, Bus.configured({ persist: true })],
+    [Bus.node, Bus.configured()],
     [SessionExecution.node, executionLayer],
   ]).pipe(Layer.provideMerge(controlLayer)),
 )

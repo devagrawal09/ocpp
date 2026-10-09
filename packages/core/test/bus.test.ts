@@ -8,6 +8,11 @@ import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { EventSequenceTable, EventTable } from "@ocpp/core/event/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { CredentialFact } from "@ocpp/schema/credential-fact"
+import { KeyValueFact } from "@ocpp/schema/key-value-fact"
+import { Credential } from "@ocpp/schema/credential"
+import { Integration } from "@ocpp/schema/integration"
 import { Location } from "@ocpp/core/location"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Workspace } from "@ocpp/core/workspace"
@@ -28,41 +33,16 @@ const Message = Bus.ephemeral({
   },
 })
 
-const SyncMessage = Bus.durable({
-  type: "test.sync",
-  durable: {
-    version: 1,
-    aggregate: "id",
-  },
-  schema: {
-    id: Schema.String,
-    text: Schema.String,
-  },
-})
+// Durable events are facts OC++ records in Specter's log: the tests publish ones from its inventory.
+const SyncMessage = KeyValueFact.Stored
+const SyncSent = CredentialFact.Relabeled
 
-const SyncSent = Bus.durable({
-  type: "test.sent",
-  durable: {
-    version: 1,
-    aggregate: "messageID",
-  },
-  schema: {
-    messageID: Schema.String,
-    text: Schema.String,
-  },
-})
-
+/** Not in the inventory. */
 const VersionedMessageV1 = Bus.durable({
   type: "test.versioned",
   durable: { version: 1, aggregate: "id" },
   schema: { id: Schema.String },
 })
-const VersionedMessageV2 = Bus.durable({
-  type: "test.versioned",
-  durable: { version: 2, aggregate: "id" },
-  schema: { id: Schema.String },
-})
-
 const GlobalMessage = Bus.ephemeral({
   type: "test.global",
   schema: {
@@ -76,17 +56,7 @@ const CountMessage = Bus.ephemeral({
   },
 })
 
-const VersionedMessage = Bus.durable({
-  type: "test.versioned",
-  durable: {
-    version: 2,
-    aggregate: "id",
-  },
-  schema: {
-    id: Schema.String,
-    text: Schema.String,
-  },
-})
+const VersionedMessage = SessionEvent.Deleted
 
 const DurableMessage = SessionEvent.Renamed
 const durableData = (sessionID: Session.ID, text: string) => ({
@@ -101,13 +71,12 @@ const tail = (bus: Bus.Interface, input: { aggregateID: string; after?: number }
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, Location.node]), [
     [Location.node, locationLayer],
-    [Bus.node, Bus.configured({ persist: true })],
+    [Bus.node, Bus.configured()],
   ]),
 )
 const itWithoutLocation = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node]), [[Bus.node, Bus.configured({ persist: true })]]),
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node]), [[Bus.node, Bus.configured()]]),
 )
-const itWithoutPersistence = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node])))
 
 describe("Bus", () => {
   it.effect("subscribes to multiple event definitions with a discriminated payload union", () =>
@@ -179,9 +148,9 @@ describe("Bus", () => {
   it.effect("publishes definition version", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
-      const event = yield* bus.publish(VersionedMessage, { id: "one", text: "hello" })
+      const event = yield* bus.publish(VersionedMessage, { sessionID: Session.ID.create() })
 
-      expect(event.type).toBe("test.versioned")
+      expect(event.type).toBe("session.deleted")
       expect(event.durable?.version).toBe(Event.Version.make(2))
     }),
   )
@@ -227,11 +196,11 @@ describe("Bus", () => {
         }),
       )
 
-      const event = yield* bus.publish(SyncMessage, { id: "one", text: "hello" })
-      yield* bus.publish(SyncMessage, { id: "one", text: "second event" })
+      const event = yield* bus.publish(SyncMessage, { key: "one", value: "hello" })
+      yield* bus.publish(SyncMessage, { key: "one", value: "second event" })
 
       expect(received[0]).toEqual(event)
-      expect(received[1]?.data).toEqual({ id: "one", text: "second event" })
+      expect(received[1]?.data).toEqual({ key: "one", value: "second event" })
     }),
   )
 
@@ -244,7 +213,7 @@ describe("Bus", () => {
 
       yield* bus.publish(
         SyncMessage,
-        { id: aggregateID, text: "hello" },
+        { key: aggregateID, value: "hello" },
         { commit: (seq) => Effect.sync(() => received.push(`commit:${seq}`)) },
       )
 
@@ -264,7 +233,7 @@ describe("Bus", () => {
       )
 
       const exit = yield* bus
-        .publish(SyncMessage, { id: aggregateID, text: "hello" }, { commit: () => Effect.die("commit failed") })
+        .publish(SyncMessage, { key: aggregateID, value: "hello" }, { commit: () => Effect.die("commit failed") })
         .pipe(Effect.exit)
 
       expect(String(exit)).toContain("commit failed")
@@ -276,24 +245,76 @@ describe("Bus", () => {
     }),
   )
 
-  itWithoutPersistence.effect("projects durable events without retaining their payloads", () =>
+  it.effect("indexes each durable event at its fact in Specter's log, which holds its data", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const aggregateID = Event.ID.create()
-      yield* db.run("CREATE TABLE IF NOT EXISTS event_commit_probe (value text NOT NULL)")
-      yield* bus.project(SyncMessage, () =>
-        db.run("INSERT INTO event_commit_probe (value) VALUES ('projected')").pipe(Effect.orDie, Effect.asVoid),
-      )
 
-      const event = yield* bus.publish(SyncMessage, { id: aggregateID, text: "hello" })
+      const event = yield* bus.publish(SyncMessage, { key: aggregateID, value: "hello" })
 
-      expect(event.durable?.seq).toBe(Event.Seq.make(0))
-      expect(yield* db.all("SELECT value FROM event_commit_probe")).toEqual([{ value: "projected" }])
-      expect(yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).toEqual([])
+      const indexed = yield* db
+        .select({ id: EventTable.id, seq: EventTable.seq, fact: SpecterEventTable })
+        .from(EventTable)
+        .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+        .where(eq(EventTable.aggregate_id, aggregateID))
+        .all()
+        .pipe(Effect.orDie)
+      expect(indexed).toEqual([
+        {
+          id: event.id,
+          seq: 0,
+          fact: expect.objectContaining({
+            id: event.id,
+            type: "kv-stored",
+            payload: { key: aggregateID, value: "hello" },
+          }),
+        },
+      ])
       expect(
         yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
-      ).toEqual([{ aggregate_id: aggregateID, seq: 0, owner_id: null }])
+      ).toEqual([{ aggregate_id: aggregateID, seq: 0 }])
+    }),
+  )
+  it.effect("reads and rebuilds events archived in the log under their OC++ type", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const { db } = yield* Database.Service
+      const aggregateID = Session.ID.create()
+      const id = Event.ID.create()
+      const type = Bus.versionedType(DurableMessage.type, DurableMessage.durable.version)
+      const [fact] = yield* db
+        .insert(SpecterEventTable)
+        .values({ id, type, payload: durableData(aggregateID, "archived"), recorded_at: new Date(5).toISOString() })
+        .returning({ order: SpecterEventTable.order })
+        .all()
+        .pipe(Effect.orDie)
+      yield* db.insert(EventSequenceTable).values({ aggregate_id: aggregateID, seq: 0 }).run().pipe(Effect.orDie)
+      yield* db
+        .insert(EventTable)
+        .values({ id, aggregate_id: aggregateID, seq: 0, created: 5, type, log_order: fact!.order })
+        .run()
+        .pipe(Effect.orDie)
+      const archived = {
+        id,
+        created: 5,
+        type: DurableMessage.type,
+        durable: { aggregateID, seq: Event.Seq.make(0), version: Event.Version.make(DurableMessage.durable.version) },
+        data: durableData(aggregateID, "archived"),
+      }
+
+      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([
+        archived,
+        { type: "log.synced", aggregateID, seq: Event.Seq.make(0) },
+      ])
+      const projected = new Array<Event.Payload>()
+      yield* bus.project(DurableMessage, (event) => Effect.sync(() => projected.push(event)))
+      yield* bus.rebuild(aggregateID)
+      expect(projected).toEqual([archived])
+      // The next event continues the aggregate's sequence.
+      expect((yield* bus.publish(DurableMessage, durableData(aggregateID, "recorded"))).durable?.seq).toBe(
+        Event.Seq.make(1),
+      )
     }),
   )
 
@@ -322,7 +343,7 @@ describe("Bus", () => {
       )
 
       yield* Effect.yieldNow
-      yield* bus.publish(SyncMessage, { id: "one", text: "hello" })
+      yield* bus.publish(SyncMessage, { key: "one", value: "hello" })
       yield* Fiber.join(fiber)
 
       expect(received).toEqual([SyncMessage.type, "stream"])
@@ -344,9 +365,9 @@ describe("Bus", () => {
         }),
       )
 
-      yield* bus.publish(SyncMessage, { id: "one", text: "hello" })
+      yield* bus.publish(SyncMessage, { key: "one", value: "hello" })
       yield* unsubscribe
-      yield* bus.publish(SyncMessage, { id: "one", text: "after unsubscribe" })
+      yield* bus.publish(SyncMessage, { key: "one", value: "after unsubscribe" })
 
       expect(received).toEqual(["projector", "listener", "projector"])
     }),
@@ -365,7 +386,7 @@ describe("Bus", () => {
         }),
       )
 
-      const event = yield* bus.publish(SyncMessage, { id: "one", text: "hello" })
+      const event = yield* bus.publish(SyncMessage, { key: "one", value: "hello" })
 
       expect(received).toEqual([SyncMessage.type])
       expect(event.durable?.seq).toBeNumber()
@@ -397,7 +418,7 @@ describe("Bus", () => {
               ),
       )
 
-      const event = yield* bus.publish(SyncMessage, { id: aggregateID, text: "committed" })
+      const event = yield* bus.publish(SyncMessage, { key: aggregateID, value: "committed" })
       if (!event.durable) throw new Error("Expected durable event metadata")
 
       expect(observed).toEqual([{ id: event.id, seq: event.durable.seq }])
@@ -410,7 +431,7 @@ describe("Bus", () => {
       const { db } = yield* Database.Service
       yield* bus.listen(() => Effect.interrupt)
 
-      const exit = yield* bus.publish(SyncMessage, { id: "interrupted", text: "hello" }).pipe(Effect.exit)
+      const exit = yield* bus.publish(SyncMessage, { key: "interrupted", value: "hello" }).pipe(Effect.exit)
       const committed = yield* db
         .select({ id: EventTable.id })
         .from(EventTable)
@@ -439,7 +460,7 @@ describe("Bus", () => {
       const { db } = yield* Database.Service
       const aggregateID = Event.ID.create()
 
-      const event = yield* bus.publish(SyncMessage, { id: aggregateID, text: "first" })
+      const event = yield* bus.publish(SyncMessage, { key: aggregateID, value: "first" })
       const rows = yield* db
         .select()
         .from(EventTable)
@@ -460,8 +481,8 @@ describe("Bus", () => {
       const { db } = yield* Database.Service
       const aggregateID = Event.ID.create()
 
-      yield* bus.publish(SyncMessage, { id: aggregateID, text: "first" })
-      yield* bus.publish(SyncMessage, { id: aggregateID, text: "second" })
+      yield* bus.publish(SyncMessage, { key: aggregateID, value: "first" })
+      yield* bus.publish(SyncMessage, { key: aggregateID, value: "second" })
       const rows = yield* db
         .select()
         .from(EventTable)
@@ -481,13 +502,13 @@ describe("Bus", () => {
       const observed = new Array<string>()
       yield* bus.project(SyncMessage, (event) =>
         Effect.sync(() => {
-          observed.push(`project:${event.data.text}`)
+          observed.push(`project:${event.data.value}`)
         }),
       )
       yield* bus.listen((event) =>
         event.type === SyncMessage.type
           ? Effect.gen(function* () {
-              const text = (event.data as { readonly text: string }).text
+              const text = (event.data as { readonly value: string }).value
               const row = yield* db
                 .select({ seq: EventSequenceTable.seq })
                 .from(EventSequenceTable)
@@ -500,8 +521,8 @@ describe("Bus", () => {
       )
 
       const events = yield* bus.publishAll([
-        [SyncMessage, { id: aggregateID, text: "first" }],
-        [SyncMessage, { id: aggregateID, text: "second" }],
+        [SyncMessage, { key: aggregateID, value: "first" }],
+        [SyncMessage, { key: aggregateID, value: "second" }],
       ])
 
       expect(events.map((event) => event.durable.seq)).toEqual([Event.Seq.make(0), Event.Seq.make(1)])
@@ -524,10 +545,10 @@ describe("Bus", () => {
       yield* db.run("DELETE FROM event_batch_probe")
       yield* bus.project(SyncMessage, (event) =>
         db
-          .run(`INSERT INTO event_batch_probe (value) VALUES ('${event.data.text}')`)
+          .run(`INSERT INTO event_batch_probe (value) VALUES ('${event.data.value}')`)
           .pipe(
             Effect.orDie,
-            Effect.andThen(event.data.text === "second" ? Effect.die("projector failed") : Effect.void),
+            Effect.andThen(event.data.value === "second" ? Effect.die("projector failed") : Effect.void),
           ),
       )
       yield* bus.listen((event) =>
@@ -538,8 +559,8 @@ describe("Bus", () => {
 
       const exit = yield* bus
         .publishAll([
-          [SyncMessage, { id: aggregateID, text: "first" }],
-          [SyncMessage, { id: aggregateID, text: "second" }],
+          [SyncMessage, { key: aggregateID, value: "first" }],
+          [SyncMessage, { key: aggregateID, value: "second" }],
         ])
         .pipe(Effect.exit)
 
@@ -562,7 +583,7 @@ describe("Bus", () => {
       const observed = new Array<string>()
       yield* bus.listen((event) => {
         if (event.type !== SyncMessage.type) return Effect.void
-        const text = (event.data as { readonly text: string }).text
+        const text = (event.data as { readonly value: string }).value
         return Effect.sync(() => observed.push(text)).pipe(
           Effect.andThen(text === "first" ? Deferred.succeed(firstObserved, undefined) : Effect.void),
           Effect.andThen(text === "first" ? Deferred.await(continueNotifications) : Effect.void),
@@ -571,12 +592,12 @@ describe("Bus", () => {
 
       const batch = yield* bus
         .publishAll([
-          [SyncMessage, { id: aggregateID, text: "first" }],
-          [SyncMessage, { id: aggregateID, text: "second" }],
+          [SyncMessage, { key: aggregateID, value: "first" }],
+          [SyncMessage, { key: aggregateID, value: "second" }],
         ])
         .pipe(Effect.forkScoped)
       yield* Deferred.await(firstObserved)
-      const single = yield* bus.publish(SyncMessage, { id: aggregateID, text: "third" }).pipe(Effect.forkScoped)
+      const single = yield* bus.publish(SyncMessage, { key: aggregateID, value: "third" }).pipe(Effect.forkScoped)
       yield* Effect.yieldNow
 
       expect(observed).toEqual(["first"])
@@ -634,7 +655,6 @@ describe("Bus", () => {
         [
           Bus.node,
           Bus.configured({
-            persist: true,
             beforeAggregateRead: () =>
               pause
                 ? Deferred.succeed(readStarted, undefined).pipe(Effect.andThen(Deferred.await(continueRead)))
@@ -696,59 +716,12 @@ describe("Bus", () => {
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const { db } = yield* Database.Service
-      const aggregateID = Event.ID.create()
+      const aggregateID = Credential.ID.create()
 
-      yield* bus.publish(SyncSent, { messageID: aggregateID, text: "sent" })
-      const rows = yield* db
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, aggregateID))
-        .all()
-        .pipe(Effect.orDie)
-
-      expect(rows).toHaveLength(1)
-      expect(rows[0]?.aggregate_id).toBe(aggregateID)
-    }),
-  )
-
-  it.effect("replays durable events through projectors", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const received = new Array<Event.Payload>()
-      yield* bus.project(DurableMessage, (event) =>
-        Effect.sync(() => {
-          received.push(event)
-        }),
-      )
-      const aggregateID = Session.ID.create()
-
-      yield* bus.replay({
-        id: Event.ID.create(),
-        created: 0,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: 0,
-        aggregateID,
-        data: durableData(aggregateID, "hello"),
-      })
-
-      expect(received[0]?.type).toBe(DurableMessage.type)
-      expect(received[0]?.data).toEqual(durableData(aggregateID, "hello"))
-    }),
-  )
-
-  it.effect("replay inserts external event rows", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
-      const aggregateID = Session.ID.create()
-
-      yield* bus.replay({
-        id: Event.ID.create(),
-        created: 0,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: 0,
-        aggregateID,
-        data: durableData(aggregateID, "replayed"),
+      yield* bus.publish(SyncSent, {
+        credentialID: aggregateID,
+        integrationID: Integration.ID.make("openai"),
+        label: "sent",
       })
       const rows = yield* db
         .select()
@@ -762,505 +735,75 @@ describe("Bus", () => {
     }),
   )
 
-  it.effect(
-    "replay rejects an envelope aggregate that differs from its payload without mutating the payload aggregate",
-    () =>
-      Effect.gen(function* () {
-        const bus = yield* Bus.Service
-        const { db } = yield* Database.Service
-        const envelopeAggregateID = Session.ID.create()
-        const payloadAggregateID = Session.ID.create()
-        const received = new Array<Event.Payload>()
-        yield* bus.publish(DurableMessage, durableData(payloadAggregateID, "seed"))
-        yield* bus.project(DurableMessage, (event) =>
-          Effect.sync(() => {
-            received.push(event)
-          }),
-        )
-
-        const exit = yield* bus
-          .replay({
-            id: Event.ID.create(),
-            created: 0,
-            type: Bus.versionedType(DurableMessage.type, 1),
-            seq: 1,
-            aggregateID: envelopeAggregateID,
-            data: durableData(payloadAggregateID, "replayed"),
-          })
-          .pipe(Effect.exit)
-        const rows = yield* db
-          .select()
-          .from(EventTable)
-          .where(eq(EventTable.aggregate_id, payloadAggregateID))
-          .all()
-          .pipe(Effect.orDie)
-        const sequence = yield* db
-          .select({ seq: EventSequenceTable.seq })
-          .from(EventSequenceTable)
-          .where(eq(EventSequenceTable.aggregate_id, payloadAggregateID))
-          .get()
-          .pipe(Effect.orDie)
-
-        expect(String(exit)).toContain("Aggregate mismatch")
-        expect(received).toHaveLength(0)
-        expect(rows).toHaveLength(1)
-        expect(sequence).toEqual({ seq: 0 })
-      }),
-  )
-
-  it.effect("replay defects on sequence mismatch", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const aggregateID = Session.ID.create()
-
-      yield* bus.replay({
-        id: Event.ID.create(),
-        created: 0,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: 0,
-        aggregateID,
-        data: durableData(aggregateID, "first"),
-      })
-      const exit = yield* bus
-        .replay({
-          id: Event.ID.create(),
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 5,
-          aggregateID,
-          data: durableData(aggregateID, "bad"),
-        })
-        .pipe(Effect.exit)
-
-      expect(String(exit)).toContain("Sequence mismatch")
-    }),
-  )
-
-  it.effect("replay decodes synchronized transformed values before projection", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const aggregateID = Session.ID.create()
-      const received = new Array<typeof SessionEvent.InstructionsUpdated.Type>()
-      yield* bus.project(SessionEvent.InstructionsUpdated, (event) =>
-        Effect.sync(() => {
-          received.push(event)
-        }),
-      )
-
-      yield* bus.replay({
-        id: Event.ID.create(),
-        created: 0,
-        type: Bus.versionedType(SessionEvent.InstructionsUpdated.type, 2),
-        seq: 0,
-        aggregateID,
-        data: { sessionID: aggregateID, delta: { "core/context": "0".repeat(64) } },
-      })
-
-      expect(received[0]?.created).toBe(0)
-    }),
-  )
-
-  it.effect("dispatches durable projectors by exact event version", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const aggregateID = Session.ID.create()
-      const received = new Array<typeof VersionedMessageV2.Type>()
-      yield* bus.project(VersionedMessageV2, (event) =>
-        Effect.sync(() => {
-          received.push(event)
-        }),
-      )
-
-      yield* bus.publish(VersionedMessageV1, { id: aggregateID })
-      yield* bus.publish(VersionedMessageV2, { id: aggregateID })
-
-      expect(received).toHaveLength(1)
-      expect(received[0]?.durable.version).toBe(Event.Version.make(2))
-    }),
-  )
-
-  it.effect("replay defects on unknown event type", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const exit = yield* bus
-        .replay({
-          id: Event.ID.create(),
-          created: 0,
-          type: "unknown.event.1",
-          seq: 0,
-          aggregateID: Event.ID.create(),
-          data: {},
-        })
-        .pipe(Effect.exit)
-
-      expect(String(exit)).toContain("Unknown durable event type")
-    }),
-  )
-
-  it.effect("claim fences replay owners", () =>
+  it.effect("rebuilds an aggregate's projections from Specter's log, without commit hooks or listeners", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const received = new Array<Event.Payload>()
+      const committed = new Array<number>()
       const aggregateID = Session.ID.create()
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "seed"))
-      yield* bus.claim(aggregateID, "owner-a")
+      const first = yield* bus.publish(DurableMessage, durableData(aggregateID, "first"), {
+        commit: (seq) => Effect.sync(() => committed.push(seq)),
+      })
+      const second = yield* bus.publish(DurableMessage, durableData(aggregateID, "second"))
       yield* bus.project(DurableMessage, (event) =>
         Effect.sync(() => {
           received.push(event)
         }),
       )
+      const notified = new Array<string>()
+      yield* bus.listen((event) => Effect.sync(() => notified.push(event.type)))
 
-      yield* bus.replay(
-        {
-          id: Event.ID.create(),
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 1,
-          aggregateID,
-          data: durableData(aggregateID, "ignored"),
-        },
-        { ownerID: "owner-b" },
-      )
+      yield* bus.rebuild(aggregateID)
 
-      expect(received).toHaveLength(0)
+      // The log records events without their routing location.
+      const recorded = ({ location: _, ...event }: Event.Payload) => event
+      expect(received).toEqual([recorded(first), recorded(second)])
+      expect(committed).toEqual([0])
+      expect(notified).toEqual([])
     }),
   )
+  it.effect("refuses durable events outside OC++'s inventory of recorded facts", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const aggregateID = Session.ID.create()
 
-  it.effect("strict owner fences exact replay", () =>
+      const exit = yield* bus.publish(VersionedMessageV1, { id: aggregateID }).pipe(Effect.exit)
+
+      expect(String(exit)).toContain("not in OC++'s inventory of recorded facts")
+      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([{ type: "log.synced", aggregateID }])
+    }),
+  )
+  it.effect("rejects an event ID already recorded", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const aggregateID = Session.ID.create()
       const id = Event.ID.create()
-      const replayed = {
-        id,
-        created: 0,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: 0,
-        aggregateID,
-        data: durableData(aggregateID, "owned"),
-      }
-      yield* bus.replay(replayed, { ownerID: "owner-a" })
+      yield* bus.publish(DurableMessage, durableData(aggregateID, "first"), { id })
 
-      const exit = yield* bus.replay(replayed, { ownerID: "owner-b", strictOwner: true }).pipe(Effect.exit)
+      const exit = yield* bus.publish(DurableMessage, durableData(aggregateID, "second"), { id }).pipe(Effect.exit)
 
-      expect(String(exit)).toContain("Replay owner mismatch")
+      expect(Exit.isFailure(exit)).toBeTrue()
+      expect(
+        (yield* Stream.runCollect(bus.log({ aggregateID }))).flatMap((item) => (Bus.isSynced(item) ? [] : [item.data])),
+      ).toEqual([durableData(aggregateID, "first")])
     }),
   )
-
-  it.effect("exact replay claims an unowned aggregate", () =>
+  it.effect("remove clears an aggregate's sequence and index", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const { db } = yield* Database.Service
-      const aggregateID = Session.ID.create()
-      const published = yield* bus.publish(DurableMessage, durableData(aggregateID, "owned"))
-      const replayed = {
-        id: published.id,
-        created: published.created,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: published.durable!.seq,
-        aggregateID,
-        data: published.data,
-      }
-
-      yield* bus.replay(replayed, { ownerID: "owner-a", strictOwner: true })
-      const row = yield* db
-        .select({ ownerID: EventSequenceTable.owner_id })
-        .from(EventSequenceTable)
-        .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-        .get()
-        .pipe(Effect.orDie)
-
-      expect(row?.ownerID).toBe("owner-a")
-      const exit = yield* bus
-        .replay(
-          { ...replayed, id: Event.ID.create(), seq: 1, data: durableData(aggregateID, "conflict") },
-          { ownerID: "owner-b", strictOwner: true },
-        )
-        .pipe(Effect.exit)
-      expect(String(exit)).toContain("Replay owner mismatch")
-    }),
-  )
-
-  it.effect("replay with owner claims an unowned sequence", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
-      const aggregateID = Session.ID.create()
-
-      yield* bus.replay(
-        {
-          id: Event.ID.create(),
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 0,
-          aggregateID,
-          data: durableData(aggregateID, "owned"),
-        },
-        { ownerID: "owner-1" },
-      )
-      const row = yield* db
-        .select({ seq: EventSequenceTable.seq, ownerID: EventSequenceTable.owner_id })
-        .from(EventSequenceTable)
-        .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-        .get()
-        .pipe(Effect.orDie)
-
-      expect(row).toEqual({ seq: 0, ownerID: "owner-1" })
-    }),
-  )
-
-  it.effect("replay claims an existing unowned sequence before fencing a different owner", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
-      const aggregateID = Session.ID.create()
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "local"))
-
-      yield* bus.replay(
-        {
-          id: Event.ID.create(),
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 1,
-          aggregateID,
-          data: durableData(aggregateID, "claimed"),
-        },
-        { ownerID: "owner-1" },
-      )
-      yield* bus.replay(
-        {
-          id: Event.ID.create(),
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 2,
-          aggregateID,
-          data: durableData(aggregateID, "fenced"),
-        },
-        { ownerID: "owner-2" },
-      )
-      const rows = yield* db
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, aggregateID))
-        .all()
-        .pipe(Effect.orDie)
-      const sequence = yield* db
-        .select({ seq: EventSequenceTable.seq, ownerID: EventSequenceTable.owner_id })
-        .from(EventSequenceTable)
-        .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-        .get()
-        .pipe(Effect.orDie)
-
-      expect(rows.map((row) => row.seq)).toEqual([0, 1])
-      expect(sequence).toEqual({ seq: 1, ownerID: "owner-1" })
-    }),
-  )
-
-  it.effect("strict replay rejects an owner conflict instead of silently skipping it", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const aggregateID = Session.ID.create()
-      yield* bus.replay(
-        {
-          id: Event.ID.create(),
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 0,
-          aggregateID,
-          data: durableData(aggregateID, "claimed"),
-        },
-        { ownerID: "owner-1" },
-      )
-
-      const exit = yield* bus
-        .replay(
-          {
-            id: Event.ID.create(),
-            created: 0,
-            type: Bus.versionedType(DurableMessage.type, 1),
-            seq: 1,
-            aggregateID,
-            data: durableData(aggregateID, "conflict"),
-          },
-          { ownerID: "owner-2", strictOwner: true },
-        )
-        .pipe(Effect.exit)
-
-      expect(String(exit)).toContain("Replay owner mismatch")
-    }),
-  )
-
-  it.effect("publishes accepted replay with its durable sequence and suppresses stale replay", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const received = new Array<Event.Payload>()
-      const aggregateID = Session.ID.create()
-      yield* bus.listen((event) => Effect.sync(() => received.push(event)))
-      const replayed = {
-        id: Event.ID.create(),
-        created: 0,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: 0,
-        aggregateID,
-        data: durableData(aggregateID, "replayed"),
-      }
-
-      yield* bus.replay(replayed, { publish: true })
-      yield* bus.replay(replayed, { publish: true })
-
-      expect(received).toMatchObject([{ id: replayed.id, durable: { seq: 0, version: 1 }, data: replayed.data }])
-    }),
-  )
-
-  it.effect("rejects divergent stale replay without publishing it", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const received = new Array<Event.Payload>()
-      const aggregateID = Session.ID.create()
-      const replayed = {
-        id: Event.ID.create(),
-        created: 0,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: 0,
-        aggregateID,
-        data: durableData(aggregateID, "original"),
-      }
-      yield* bus.listen((event) => Effect.sync(() => received.push(event)))
-      yield* bus.replay(replayed, { publish: true })
-
-      const exit = yield* bus
-        .replay({ ...replayed, data: durableData(aggregateID, "divergent") }, { publish: true })
-        .pipe(Effect.exit)
-
-      expect(String(exit)).toContain("Replay diverged")
-      expect(received).toHaveLength(1)
-    }),
-  )
-
-  it.effect("rejects an event ID reused at another aggregate position", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const aggregateID = Session.ID.create()
-      const id = Event.ID.create()
-      yield* bus.replay({
-        id,
-        created: 0,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: 0,
-        aggregateID,
-        data: durableData(aggregateID, "first"),
-      })
-
-      const exit = yield* bus
-        .replay({
-          id,
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 1,
-          aggregateID,
-          data: durableData(aggregateID, "second"),
-        })
-        .pipe(Effect.exit)
-
-      expect(String(exit)).toContain(`Event ${id} already exists`)
-    }),
-  )
-
-  it.effect("replay from a different owner leaves claimed sequence unchanged", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
-      const aggregateID = Session.ID.create()
-      const received = new Array<Event.Payload>()
-      yield* bus.listen((event) => Effect.sync(() => received.push(event)))
-
-      yield* bus.replay(
-        {
-          id: Event.ID.create(),
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 0,
-          aggregateID,
-          data: durableData(aggregateID, "first"),
-        },
-        { ownerID: "owner-1" },
-      )
-      yield* bus.replay(
-        {
-          id: Event.ID.create(),
-          created: 0,
-          type: Bus.versionedType(DurableMessage.type, 1),
-          seq: 1,
-          aggregateID,
-          data: durableData(aggregateID, "ignored"),
-        },
-        { ownerID: "owner-2", publish: true },
-      )
-      const rows = yield* db
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, aggregateID))
-        .all()
-        .pipe(Effect.orDie)
-      const sequence = yield* db
-        .select({ seq: EventSequenceTable.seq, ownerID: EventSequenceTable.owner_id })
-        .from(EventSequenceTable)
-        .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-        .get()
-        .pipe(Effect.orDie)
-
-      expect(rows).toHaveLength(1)
-      expect(sequence).toEqual({ seq: 0, ownerID: "owner-1" })
-      expect(received).toHaveLength(0)
-    }),
-  )
-
-  it.effect("claim updates the event sequence owner", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
-      const aggregateID = Event.ID.create()
-
-      yield* bus.publish(SyncMessage, { id: aggregateID, text: "claimed" })
-      yield* bus.claim(aggregateID, "owner-1")
-      yield* bus.claim(aggregateID, "owner-2")
-      const row = yield* db
-        .select({ seq: EventSequenceTable.seq, ownerID: EventSequenceTable.owner_id })
-        .from(EventSequenceTable)
-        .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-        .get()
-        .pipe(Effect.orDie)
-
-      expect(row).toEqual({ seq: 0, ownerID: "owner-2" })
-    }),
-  )
-
-  it.effect("remove clears durable event sequence", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const received = new Array<Event.Payload>()
       const aggregateID = Session.ID.create()
       yield* bus.publish(DurableMessage, durableData(aggregateID, "seed"))
+
       yield* bus.remove(aggregateID)
-      yield* bus.project(DurableMessage, (event) =>
-        Effect.sync(() => {
-          received.push(event)
-        }),
-      )
 
-      yield* bus.replay({
-        id: Event.ID.create(),
-        created: 0,
-        type: Bus.versionedType(DurableMessage.type, 1),
-        seq: 0,
-        aggregateID,
-        data: durableData(aggregateID, "replayed"),
-      })
-
-      expect(received[0]?.data).toEqual(durableData(aggregateID, "replayed"))
+      expect(
+        yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
+      ).toEqual([])
+      expect(yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).toEqual([])
+      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([{ type: "log.synced", aggregateID }])
     }),
   )
-
   it.effect("log without follow replays events and completes with a synced marker", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
@@ -1318,7 +861,7 @@ describe("Bus", () => {
   it.effect("log replays across configured read pages", () =>
     Effect.gen(function* () {
       const eventLayer = AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node]), [
-        [Bus.node, Bus.configured({ persist: true, logReadPageSize: 2 })],
+        [Bus.node, Bus.configured({ logReadPageSize: 2 })],
       ])
 
       yield* Effect.gen(function* () {
@@ -1354,7 +897,6 @@ describe("Bus", () => {
         [
           Bus.node,
           Bus.configured({
-            persist: true,
             beforeAggregateRead: () =>
               Ref.getAndSet(firstRead, false).pipe(
                 Effect.flatMap((shouldBlock) => {

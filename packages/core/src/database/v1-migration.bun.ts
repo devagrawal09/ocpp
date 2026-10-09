@@ -645,7 +645,7 @@ export function run(options: Options = {}): Effect.Effect<RunResult, never, Data
                 .values({ aggregate_id: next.id, seq: transformed.watermark })
                 .onConflictDoUpdate({
                   target: EventSequenceTable.aggregate_id,
-                  set: { seq: transformed.watermark, owner_id: null },
+                  set: { seq: transformed.watermark },
                 })
                 .run()
             }),
@@ -804,7 +804,7 @@ function importNextDatabase(
                 .values({ aggregate_id: session.id, seq: messages.at(-1)?.seq ?? -1 })
                 .onConflictDoUpdate({
                   target: EventSequenceTable.aggregate_id,
-                  set: { seq: messages.at(-1)?.seq ?? -1, owner_id: null },
+                  set: { seq: messages.at(-1)?.seq ?? -1 },
                 })
                 .run()
             }),

@@ -54,7 +54,7 @@ const it = testEffect(
       FSUtil.node,
     ]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [Global.node, tempGlobalLayer],
     ],
   ),

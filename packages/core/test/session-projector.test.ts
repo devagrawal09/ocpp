@@ -30,7 +30,7 @@ import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionInbox.node]), [
-    [Bus.node, Bus.configured({ persist: true })],
+    [Bus.node, Bus.configured()],
   ]),
 )
 const sessionsLayer = AppNodeBuilder.build(Session.node, [[SessionExecution.node, SessionExecution.noopLayer]])
@@ -496,26 +496,19 @@ describe("SessionProjector", () => {
         text: "synthetic context",
         metadata: { source: "projector-test" },
       })
-      // Serialized events have no transient envelope metadata to supply the background marker.
-      yield* bus.replay({
-        id: Event.ID.create(),
-        created: 0,
-        aggregateID: sessionID,
-        seq: 3,
-        type: Bus.versionedType(SessionEvent.Shell.Started.type, 1),
-        data: {
-          sessionID,
-          shell: Shell.Info.make({
-            id: Shell.ID.make("sh_projector"),
-            status: "running",
-            command: "pwd",
-            cwd: "/project",
-            shell: "/bin/sh",
-            file: "/tmp/sh_projector.out",
-            metadata: { background: true },
-            time: { started: 0 },
-          }),
-        },
+      // No transient envelope metadata supplies the background marker: it comes from the event's data.
+      yield* bus.publish(SessionEvent.Shell.Started, {
+        sessionID,
+        shell: Shell.Info.make({
+          id: Shell.ID.make("sh_projector"),
+          status: "running",
+          command: "pwd",
+          cwd: "/project",
+          shell: "/bin/sh",
+          file: "/tmp/sh_projector.out",
+          metadata: { background: true },
+          time: { started: 0 },
+        }),
       })
       yield* bus.publish(SessionEvent.Shell.Ended, {
         sessionID,

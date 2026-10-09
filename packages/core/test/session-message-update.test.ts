@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test"
-import path from "path"
 import { Effect, Layer, Stream } from "effect"
-import { asc, eq } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { Agent } from "@ocpp/core/agent"
 import { Bus } from "@ocpp/core/bus"
 import { Database } from "@ocpp/core/database/database"
@@ -10,7 +9,6 @@ import { EventTable } from "@ocpp/core/event/sql"
 import { Location } from "@ocpp/core/location"
 import { Model } from "@ocpp/core/model"
 import { Project } from "@ocpp/core/project"
-import { ProjectTable } from "@ocpp/core/project/sql"
 import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
@@ -18,11 +16,12 @@ import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionProjector } from "@ocpp/core/session/projector"
+import { SessionTable } from "@ocpp/core/session/sql"
 import { SessionStore } from "@ocpp/core/session/store"
 import { Money } from "@ocpp/schema/money"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
+import { Recorded } from "./lib/recorded"
 import { globalProjectNode } from "./lib/project"
 
 const active = new Set<Session.ID>()
@@ -30,7 +29,7 @@ const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [Project.node, globalProjectNode],
       [
         SessionExecution.node,
@@ -107,21 +106,20 @@ describe("Session.updateMessage", () => {
         },
       })
       expect(
-        yield* db
-          .select()
-          .from(EventTable)
-          .where(eq(EventTable.type, Bus.versionedType(SessionEvent.MessageContentUpdated.type, 1)))
-          .get(),
+        (yield* Recorded.events(eq(EventTable.type, Bus.versionedType(SessionEvent.MessageContentUpdated.type, 1)))).at(
+          0,
+        ),
       ).toMatchObject({ aggregate_id: created.id, data: { messageID } })
 
       expect((yield* session.updateMessage({ sessionID: created.id, messageID, content: [] })).content).toEqual([])
     }),
   )
 
-  it.effect("replays updated assistant content into a fresh projection", () =>
+  it.effect("rebuilds updated assistant content into a fresh projection", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
       const bus = yield* Bus.Service
+      const store = yield* SessionStore.Service
       const db = (yield* Database.Service).db
       const created = yield* session.create({ location })
       const messageID = SessionMessage.ID.create()
@@ -136,41 +134,10 @@ describe("Session.updateMessage", () => {
       ]
       yield* session.updateMessage({ sessionID: created.id, messageID, content })
 
-      const serialized = (yield* db
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, created.id))
-        .orderBy(asc(EventTable.seq))
-        .all()
-        .pipe(Effect.orDie)).map((event) => ({
-        id: event.id,
-        created: event.created,
-        aggregateID: event.aggregate_id,
-        seq: event.seq,
-        type: event.type,
-        data: event.data,
-      }))
-      const tmp = yield* tmpdirScoped()
-      const target = AppNodeBuilder.build(
-        LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node]),
-        [
-          [Database.node, Database.configured({ path: path.join(tmp.path, "target.sqlite") })],
-          [Bus.node, Bus.configured({ persist: true })],
-        ],
-      )
-
-      yield* Effect.gen(function* () {
-        const database = (yield* Database.Service).db
-        const replay = yield* Bus.Service
-        const store = yield* SessionStore.Service
-        yield* database
-          .insert(ProjectTable)
-          .values({ id: Project.ID.global, worktree: location.directory, sandboxes: [] })
-          .run()
-          .pipe(Effect.orDie)
-        yield* Effect.forEach(serialized, (event) => replay.replay(event), { discard: true })
-        expect((yield* store.message(messageID))?.message).toMatchObject({ content })
-      }).pipe(Effect.provide(Layer.fresh(target)))
+      yield* db.delete(SessionTable).where(eq(SessionTable.id, created.id)).run().pipe(Effect.orDie)
+      expect(yield* store.message(messageID)).toBeUndefined()
+      yield* bus.rebuild(created.id)
+      expect((yield* store.message(messageID))?.message).toMatchObject({ content })
     }),
   )
 

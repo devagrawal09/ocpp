@@ -21,10 +21,6 @@ test("accepts optional app metadata", () => {
   })
 })
 
-test("accepts durable event persistence configuration", () => {
-  expect(Option.getOrThrow(decode({ events: { persist: true } })).events).toEqual({ persist: true })
-})
-
 test("accepts an optional CORS allowlist", () => {
   expect(Option.getOrThrow(decode({})).cors).toBeUndefined()
   expect(Option.getOrThrow(decode({ cors: [] })).cors).toEqual([])

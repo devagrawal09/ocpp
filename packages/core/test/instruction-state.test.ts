@@ -16,10 +16,11 @@ import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionSchema } from "@ocpp/core/session/schema"
 import { InstructionBlobTable, InstructionStateTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
 import { testEffect } from "./lib/effect"
+import { Recorded } from "./lib/recorded"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
-    [Bus.node, Bus.configured({ persist: true })],
+    [Bus.node, Bus.configured()],
   ]),
 )
 
@@ -59,14 +60,8 @@ const setup = (sessionID: SessionSchema.ID) =>
     return { db, events: yield* Bus.Service }
   })
 
-const instructionEvents = (db: Database.Interface["db"], sessionID: SessionSchema.ID) =>
-  db
-    .select()
-    .from(EventTable)
-    .where(and(eq(EventTable.aggregate_id, sessionID), eq(EventTable.type, "session.instructions.updated.2")))
-    .orderBy(asc(EventTable.seq))
-    .all()
-    .pipe(Effect.orDie)
+const instructionEvents = (sessionID: SessionSchema.ID) =>
+  Recorded.events(and(eq(EventTable.aggregate_id, sessionID), eq(EventTable.type, "session.instructions.updated.2")))
 
 const preview = (db: Database.Interface["db"], sessionID: SessionSchema.ID, instructions: Instructions.List) =>
   Instructions.read(instructions).pipe(
@@ -124,7 +119,7 @@ describe("InstructionState", () => {
         },
       })
       expect(published).toEqual([])
-      expect(yield* instructionEvents(db, sessionID)).toEqual([])
+      expect(yield* instructionEvents(sessionID)).toEqual([])
       expect(yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)).toEqual([])
     }),
   )
@@ -189,7 +184,7 @@ describe("InstructionState", () => {
       expect(published).toHaveLength(2)
       expect(published[0]?.metadata).toEqual({ instructions: { initial: true } })
       expect(published[1]?.metadata).toBeUndefined()
-      expect((yield* instructionEvents(db, sessionID)).map((event) => event.data.delta)).toEqual([
+      expect((yield* instructionEvents(sessionID)).map((event) => event.data.delta)).toEqual([
         {
           "test/current": Instructions.hash("initial"),
           "test/retired": Instructions.hash("retired"),
@@ -200,7 +195,7 @@ describe("InstructionState", () => {
         },
       ])
       // The chronological update text is frozen into the event; the baseline has none.
-      expect((yield* instructionEvents(db, sessionID)).map((event) => event.data.text)).toEqual([
+      expect((yield* instructionEvents(sessionID)).map((event) => event.data.text)).toEqual([
         undefined,
         "changed\n\nRemoved retired",
       ])
@@ -229,7 +224,7 @@ describe("InstructionState", () => {
       const { db, events } = yield* setup(sessionID)
       const instructions = source("test/context", Effect.succeed("unchanged"))
       yield* InstructionState.prepare(db, events, instructions, sessionID)
-      const beforeEvents = yield* instructionEvents(db, sessionID)
+      const beforeEvents = yield* instructionEvents(sessionID)
       const beforeBlobs = yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)
 
       const observation = yield* InstructionState.observe(db, instructions, sessionID)
@@ -243,7 +238,7 @@ describe("InstructionState", () => {
       })
       yield* InstructionState.commit(db, events, instructions, observation)
 
-      expect(yield* instructionEvents(db, sessionID)).toEqual(beforeEvents)
+      expect(yield* instructionEvents(sessionID)).toEqual(beforeEvents)
       expect(yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)).toEqual(beforeBlobs)
     }),
   )
@@ -264,13 +259,13 @@ describe("InstructionState", () => {
         .run()
         .pipe(Effect.orDie)
       value = "Changed context"
-      const beforeEvents = yield* instructionEvents(db, sessionID)
+      const beforeEvents = yield* instructionEvents(sessionID)
       const beforeBlobs = yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)
 
       const assembled = yield* preview(db, sessionID, instructions)
 
       expect(assembled).toEqual({ initial: "Changed context", update: "" })
-      expect(yield* instructionEvents(db, sessionID)).toEqual(beforeEvents)
+      expect(yield* instructionEvents(sessionID)).toEqual(beforeEvents)
       expect(yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)).toEqual(beforeBlobs)
       expect(
         yield* db
@@ -303,7 +298,7 @@ describe("InstructionState", () => {
         .run()
         .pipe(Effect.orDie)
       value = "Private update"
-      const beforeEvents = yield* instructionEvents(db, sessionID)
+      const beforeEvents = yield* instructionEvents(sessionID)
       const beforeBlobs = yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)
       const beforeState = yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)
 
@@ -311,7 +306,7 @@ describe("InstructionState", () => {
 
       expect(assembled.initial).toBe("Initial context")
       expect(assembled.update).toBe("Private update")
-      expect(yield* instructionEvents(db, sessionID)).toEqual(beforeEvents)
+      expect(yield* instructionEvents(sessionID)).toEqual(beforeEvents)
       expect(yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)).toEqual(beforeBlobs)
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toEqual(beforeState)
     }),
@@ -373,7 +368,7 @@ describe("InstructionState", () => {
       const rows = yield* messages()
       expect(rows).toHaveLength(1)
       expect(rows[0]?.data).toMatchObject({ text: "Changed context" })
-      expect(rows.map((row) => row.seq)).toEqual([(yield* instructionEvents(db, sessionID)).at(-1)!.seq])
+      expect(rows.map((row) => row.seq)).toEqual([(yield* instructionEvents(sessionID)).at(-1)!.seq])
 
       // A no-op observation adds nothing.
       yield* InstructionState.prepare(db, events, instructions, sessionID)
@@ -391,7 +386,7 @@ describe("InstructionState", () => {
         initial: "Initial context",
         update: "",
       })
-      expect(yield* instructionEvents(db, sessionID)).toEqual([])
+      expect(yield* instructionEvents(sessionID)).toEqual([])
       expect(yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)).toEqual([])
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toBeUndefined()
     }),
@@ -408,7 +403,7 @@ describe("InstructionState", () => {
       )
       yield* InstructionState.prepare(db, events, instructions, sessionID)
       value = Instructions.unavailable
-      const beforeEvents = yield* instructionEvents(db, sessionID)
+      const beforeEvents = yield* instructionEvents(sessionID)
       const beforeBlobs = yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)
       const beforeState = yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)
 
@@ -416,7 +411,7 @@ describe("InstructionState", () => {
         initial: "Committed context",
         update: "",
       })
-      expect(yield* instructionEvents(db, sessionID)).toEqual(beforeEvents)
+      expect(yield* instructionEvents(sessionID)).toEqual(beforeEvents)
       expect(yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)).toEqual(beforeBlobs)
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toEqual(beforeState)
     }),
@@ -432,7 +427,7 @@ describe("InstructionState", () => {
 
       expect(error).toBeInstanceOf(Instructions.InitializationBlocked)
       expect(error.keys).toEqual([Instructions.Key.make("test/context")])
-      expect(yield* instructionEvents(db, sessionID)).toEqual([])
+      expect(yield* instructionEvents(sessionID)).toEqual([])
       expect(yield* db.select().from(InstructionBlobTable).all().pipe(Effect.orDie)).toEqual([])
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toBeUndefined()
     }),
@@ -472,8 +467,8 @@ describe("InstructionState", () => {
 
       expect(observedReads).toBe(4)
       expect(preparedReads).toBe(4)
-      expect((yield* instructionEvents(db, observedSessionID)).map((event) => event.data.delta)).toEqual(
-        (yield* instructionEvents(db, preparedSessionID)).map((event) => event.data.delta),
+      expect((yield* instructionEvents(observedSessionID)).map((event) => event.data.delta)).toEqual(
+        (yield* instructionEvents(preparedSessionID)).map((event) => event.data.delta),
       )
       const states = yield* db.select().from(InstructionStateTable).orderBy(asc(InstructionStateTable.session_id)).all()
       expect(states).toHaveLength(2)

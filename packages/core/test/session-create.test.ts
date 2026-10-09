@@ -2,12 +2,12 @@ import { describe, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
-import { DateTime, Effect, Layer, Schema, Stream } from "effect"
+import { DateTime, Effect, Schema, Stream } from "effect"
 import { Money } from "@ocpp/schema/money"
 import { Shell } from "@ocpp/schema/shell"
 import { Skill } from "@ocpp/schema/skill"
 import { Agent } from "@ocpp/core/agent"
-import { and, asc, eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -18,7 +18,6 @@ import { Instructions } from "@ocpp/core/instructions/index"
 import { Location } from "@ocpp/core/location"
 import { Model } from "@ocpp/core/model"
 import { Project } from "@ocpp/core/project"
-import { ProjectTable } from "@ocpp/core/project/sql"
 import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath, RelativePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
@@ -35,6 +34,7 @@ import { SessionTransfer } from "@ocpp/core/session/transfer"
 import { Workspace } from "@ocpp/core/workspace"
 import { Expected } from "./lib/session-message"
 import { testEffect } from "./lib/effect"
+import { Recorded } from "./lib/recorded"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { promptLocationNode } from "./fixture/prompt-location"
 import { globalProjectNode } from "./lib/project"
@@ -53,7 +53,7 @@ const it = testEffect(
       InstructionEntry.node,
     ]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [Project.node, globalProjectNode],
       [LocationServiceMap.node, promptLocationNode],
       [SessionExecution.node, SessionExecution.noopLayer],
@@ -64,7 +64,7 @@ const liveIt = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, Project.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [SessionExecution.node, SessionExecution.noopLayer],
     ],
   ),
@@ -73,7 +73,7 @@ const projectIt = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, Project.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       // Project adoption needs plain-prompt admission, not live plugin/provider startup.
       [LocationServiceMap.node, promptLocationNode],
       [SessionExecution.node, SessionExecution.noopLayer],
@@ -188,12 +188,9 @@ describe("Session.create", () => {
         expect(unbornNested).toMatchObject({ projectID: Project.ID.global, subpath: "packages/app" })
         expect(unbornAlias).toMatchObject({ projectID: Project.ID.global, subpath: "packages/app" })
         expect(
-          yield* db
-            .select({ data: EventTable.data })
-            .from(EventTable)
-            .where(and(eq(EventTable.aggregate_id, Project.ID.global), eq(EventTable.type, "worktree.resolved.1")))
-            .get()
-            .pipe(Effect.orDie),
+          (yield* Recorded.events(
+            and(eq(EventTable.aggregate_id, Project.ID.global), eq(EventTable.type, "worktree.resolved.1")),
+          )).at(0),
         ).toMatchObject({ data: { adopted: expect.arrayContaining([created.projectID, child.projectID]) } })
         expect(project.id).toBe(Project.ID.make(Hash.fast("git-remote:github.com/owner/adopted")))
         expect(repeat.id).toBe(project.id)
@@ -306,12 +303,7 @@ describe("Session.create", () => {
 
       const created = yield* session.create({ location })
       const row = yield* db.select().from(SessionTable).where(eq(SessionTable.id, created.id)).get().pipe(Effect.orDie)
-      const event = yield* db
-        .select({ data: EventTable.data })
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, created.id))
-        .get()
-        .pipe(Effect.orDie)
+      const event = (yield* Recorded.events(eq(EventTable.aggregate_id, created.id))).at(0)
 
       expect(created.title).toBeUndefined()
       expect(row?.title).toBeNull()
@@ -375,14 +367,9 @@ describe("Session.create", () => {
       const created = yield* session.create({ location, metadata })
       expect(created.metadata).toEqual(metadata)
       // The annotations are a durable creation fact, not just projected state.
-      expect(
-        yield* db
-          .select({ data: EventTable.data })
-          .from(EventTable)
-          .where(eq(EventTable.aggregate_id, created.id))
-          .get()
-          .pipe(Effect.orDie),
-      ).toMatchObject({ data: { metadata } })
+      expect((yield* Recorded.events(eq(EventTable.aggregate_id, created.id))).at(0)).toMatchObject({
+        data: { metadata },
+      })
 
       const inherited = yield* session.create({ parentID: created.id })
       expect(inherited.metadata).toEqual(metadata)
@@ -601,24 +588,9 @@ describe("Session.create", () => {
       yield* InboxPromotion.promote(db, bus, parent.id, "steer")
       const forked = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
       const original = (yield* session.context(forked.id)).map((message) => message.id)
-      const recorded = yield* db
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, forked.id))
-        .get()
-        .pipe(Effect.orDie)
-      if (!recorded) return yield* Effect.die(new Error("Fork event not found"))
 
-      yield* bus.remove(forked.id)
       yield* db.delete(SessionTable).where(eq(SessionTable.id, forked.id)).run().pipe(Effect.orDie)
-      yield* bus.replay({
-        id: recorded.id,
-        created: recorded.created,
-        aggregateID: recorded.aggregate_id,
-        seq: recorded.seq,
-        type: recorded.type,
-        data: recorded.data,
-      })
+      yield* bus.rebuild(forked.id)
 
       expect((yield* session.context(forked.id)).map((message) => message.id)).toEqual(original)
     }),
@@ -653,25 +625,10 @@ describe("Session.create", () => {
         value: Instructions.removed,
       })
 
-      const recorded = yield* db
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, forked.id))
-        .get()
-        .pipe(Effect.orDie)
-      if (!recorded) return yield* Effect.die(new Error("Fork event not found"))
       yield* entries.put({ sessionID: parent.id, key: "deploy-target", value: "staging" })
       yield* entries.put({ sessionID: parent.id, key: "new-parent-entry", value: true })
-      yield* bus.remove(forked.id)
       yield* db.delete(SessionTable).where(eq(SessionTable.id, forked.id)).run().pipe(Effect.orDie)
-      yield* bus.replay({
-        id: recorded.id,
-        created: recorded.created,
-        aggregateID: recorded.aggregate_id,
-        seq: recorded.seq,
-        type: recorded.type,
-        data: recorded.data,
-      })
+      yield* bus.rebuild(forked.id)
 
       expect(yield* entries.list(forked.id)).toEqual(inheritedList)
       expect(yield* entries.load(forked.id).pipe(Effect.flatMap(Instructions.read))).toEqual(inheritedValues)
@@ -910,12 +867,9 @@ describe("Session.create", () => {
   it.effect("persists caller-ID creation through the existing created event", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
-      const { db } = yield* Database.Service
       const created = yield* session.create({ id, location })
 
-      expect(
-        yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, created.id)).get().pipe(Effect.orDie),
-      ).toMatchObject({
+      expect((yield* Recorded.events(eq(EventTable.aggregate_id, created.id))).at(0)).toMatchObject({
         data: { sessionID: id },
       })
     }),
@@ -948,85 +902,6 @@ describe("Session.create", () => {
         },
         { durable: { seq: 2 }, type: "session.inbox.delivered" },
       ])
-    }),
-  )
-
-  it.effect("replays one prompt lifecycle into a fresh target database", () =>
-    Effect.gen(function* () {
-      const session = yield* Session.Service
-      const sourceEvents = yield* Bus.Service
-      const sourceDb = (yield* Database.Service).db
-      const created = yield* session.create({ id: Session.ID.make("ses_fresh_target_replay"), location })
-      const admitted = yield* session.prompt({
-        sessionID: created.id,
-        text: "Replay lifecycle",
-        resume: false,
-      })
-      yield* InboxPromotion.promote(sourceDb, sourceEvents, created.id, "steer")
-      const serialized = (yield* sourceDb
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, created.id))
-        .orderBy(asc(EventTable.seq))
-        .all()
-        .pipe(Effect.orDie)).map((event) => ({
-        id: event.id,
-        created: event.created,
-        aggregateID: event.aggregate_id,
-        seq: event.seq,
-        type: event.type,
-        data: event.data,
-      }))
-
-      const tmp = yield* tmpdirScoped()
-      const targetLayer = AppNodeBuilder.build(
-        LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node]),
-        [
-          [Database.node, Database.configured({ path: path.join(tmp.path, "target.sqlite") })],
-          [Bus.node, Bus.configured({ persist: true })],
-        ],
-      )
-
-      yield* Effect.gen(function* () {
-        const db = (yield* Database.Service).db
-        const bus = yield* Bus.Service
-        const store = yield* SessionStore.Service
-        yield* db
-          .insert(ProjectTable)
-          .values({ id: Project.ID.global, worktree: location.directory, sandboxes: [] })
-          .run()
-          .pipe(Effect.orDie)
-
-        expect(yield* store.get(created.id)).toBeUndefined()
-        yield* Effect.forEach(serialized.slice(0, 2), (event) => bus.replay(event), { discard: true })
-        expect(yield* SessionInbox.find(db, admitted.id)).toMatchObject({
-          id: admitted.id,
-          sessionID: created.id,
-          type: "user",
-          payload: { text: "Replay lifecycle" },
-          delivery: "steer",
-        })
-        expect(yield* store.context(created.id)).toEqual([])
-
-        yield* Effect.forEach(serialized.slice(2), (event) => bus.replay(event), { discard: true })
-        expect(yield* SessionInbox.find(db, admitted.id)).toBeUndefined()
-        expect(yield* store.context(created.id)).toMatchObject([
-          { id: admitted.id, ...Expected.user("Replay lifecycle") },
-        ])
-        expect(
-          (yield* db
-            .select()
-            .from(EventTable)
-            .where(eq(EventTable.aggregate_id, created.id))
-            .orderBy(asc(EventTable.seq))
-            .all()
-            .pipe(Effect.orDie)).map((event) => [event.seq, event.type]),
-        ).toEqual([
-          [0, Bus.versionedType(SessionEvent.Created.type, 1)],
-          [1, Bus.versionedType(SessionEvent.InboxEnqueued.type, 1)],
-          [2, Bus.versionedType(SessionEvent.InboxDelivered.type, 1)],
-        ])
-      }).pipe(Effect.provide(Layer.fresh(targetLayer)))
     }),
   )
 

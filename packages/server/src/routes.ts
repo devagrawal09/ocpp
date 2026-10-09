@@ -88,7 +88,6 @@ export function createRoutes(
   const standard: LayerNode.Replacements = [
     [Database.node, Database.configured(options.database)],
     [PersistentPty.node, PersistentPty.configured(options.pty)],
-    [Bus.node, Bus.configured({ persist: options.events?.persist })],
     [App.node, App.configured(options.app)],
     [ModelsDev.node, ModelsDev.configured(options.models)],
     [Watcher.node, Watcher.configured({ enabled: options.fs?.filewatcher })],

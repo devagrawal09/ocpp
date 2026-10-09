@@ -1,11 +1,13 @@
 import { describe, expect } from "bun:test"
-import { Effect, Fiber, Schema, Stream } from "effect"
+import { Effect, Fiber, Stream } from "effect"
 import { Database } from "@ocpp/core/database/database"
 import { Agent } from "@ocpp/core/agent"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
 import { Event } from "@ocpp/schema/event"
+import { EventTable } from "@ocpp/core/event/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { Location } from "@ocpp/core/location"
 import { Project } from "@ocpp/core/project"
 import { ProjectTable } from "@ocpp/core/project/sql"
@@ -22,7 +24,7 @@ const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [Project.node, globalProjectNode],
       [SessionExecution.node, SessionExecution.noopLayer],
     ],
@@ -70,17 +72,35 @@ describe("Session.log", () => {
 
   it.effect("reads across undecodable gaps in aggregate order and marks the true log position", () =>
     Effect.gen(function* () {
-      const GapEvent = Bus.durable({
-        type: "test.session.log.gap",
-        durable: { aggregate: "sessionID", version: 1 },
-        schema: { sessionID: Session.ID, value: Schema.String },
-      })
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
+      const { db } = yield* Database.Service
       const created = yield* session.create({ location })
       yield* session.switchAgent({ sessionID: created.id, agent: Agent.ID.make("one") })
-      // Not in the durable manifest, so reads must skip it without failing.
-      yield* bus.publish(GapEvent, { sessionID: created.id, value: "filtered" })
+      // An event archived in the log under a type this process does not know: reads must skip it
+      // without failing.
+      const [fact] = yield* db
+        .insert(SpecterEventTable)
+        .values({
+          id: "evt_gap",
+          type: "test.session.log.gap.1",
+          payload: { sessionID: created.id, value: "filtered" },
+          recorded_at: new Date().toISOString(),
+        })
+        .returning({ order: SpecterEventTable.order })
+        .all()
+        .pipe(Effect.orDie)
+      yield* db
+        .insert(EventTable)
+        .values({
+          id: Event.ID.make("evt_gap"),
+          aggregate_id: created.id,
+          seq: 2,
+          type: "test.session.log.gap.1",
+          log_order: fact!.order,
+        })
+        .run()
+        .pipe(Effect.orDie)
+      yield* Bus.reserveSequence(db, created.id, 2)
       yield* session.switchAgent({ sessionID: created.id, agent: Agent.ID.make("two") })
       yield* session.switchAgent({ sessionID: created.id, agent: Agent.ID.make("three") })
 

@@ -2,6 +2,7 @@ export * as SessionStats from "./stats.js"
 
 import { DateTime, Effect, Option, Schema } from "effect"
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm"
+import { Event } from "@ocpp/schema/event"
 import { Model } from "@ocpp/schema/model"
 import { Money } from "@ocpp/schema/money"
 import { Project } from "@ocpp/schema/project"
@@ -10,6 +11,7 @@ import { SessionEvent } from "@ocpp/schema/session-event"
 import { ToolMode } from "@ocpp/schema/session-stats"
 import { Database } from "../database/database.js"
 import { EventTable } from "../event/sql.js"
+import { SpecterEventTable } from "../specter/sql.js"
 import { SessionMessageTable, SessionTable } from "./sql.js"
 
 type Input = {
@@ -73,6 +75,7 @@ type ToolAggregate = {
 }
 
 const decodeUsage = Schema.decodeUnknownOption(SessionEvent.UsageRecorded.data)
+const usageType = Event.versionedType(SessionEvent.UsageRecorded.type, SessionEvent.UsageRecorded.durable.version)
 const Window = 31 * 24 * 60 * 60 * 1_000
 
 export class InvalidRangeError extends Schema.TaggedError<InvalidRangeError>()("SessionStats.InvalidRangeError", {
@@ -286,14 +289,16 @@ export const get = Effect.fn("SessionStats.get")(function* (input: Input = {}) {
   const events = (yield* Effect.forEach(
     batches(ids.map((row) => row.id)),
     (batch) =>
+      // Usage is recorded in Specter's log as OC++ records it, so the fact's payload is the event's data.
       db
-        .select({ data: EventTable.data })
+        .select({ data: SpecterEventTable.payload })
         .from(EventTable)
+        .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
         .where(
           and(
             inArray(EventTable.aggregate_id, batch),
-            eq(EventTable.type, SessionEvent.UsageRecorded.type),
-            sql`json_extract(${EventTable.data}, '$.source') = 'compaction'`,
+            eq(EventTable.type, usageType),
+            sql`json_extract(${SpecterEventTable.payload}, '$.source') = 'compaction'`,
             gte(EventTable.created, from),
             lt(EventTable.created, to),
           ),

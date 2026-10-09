@@ -6,10 +6,10 @@ import type { EventLog } from "@ocpp/schema/event-log"
 import { and, asc, eq, gt, lte, sql } from "drizzle-orm"
 import { Database } from "./database/database.js"
 import { EventSequenceTable, EventTable } from "./event/sql.js"
+import { SpecterEventTable } from "./specter/sql.js"
 import type { Location } from "@ocpp/schema/location"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
-import { isDeepStrictEqual } from "node:util"
 import { Durable, DurableEventManifest } from "@ocpp/schema/durable-event-manifest"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionID } from "@ocpp/schema/session-id"
@@ -18,6 +18,7 @@ import {
   type EventLogService as SpecterEventLogContract,
   EventLog as SpecterEventLogService,
   makeSessionEventStore,
+  type PersistedEvent,
   toSpecterEventType,
 } from "@specter/agent-runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
@@ -59,15 +60,6 @@ export const reserveSequence = Effect.fn("Bus.reserveSequence")(function* (
     .pipe(Effect.orDie)
 })
 
-export type SerializedEvent = {
-  readonly id: Event.ID
-  readonly type: string
-  readonly created?: number
-  readonly seq: number
-  readonly aggregateID: string
-  readonly data: Record<string, unknown>
-}
-
 export class InvalidDurableEventError extends Schema.TaggedError<InvalidDurableEventError>()(
   "Bus.InvalidDurableEvent",
   {
@@ -82,17 +74,42 @@ const envelope = (aggregateID: string, seq: number, version: number) => ({
   version: Event.Version.make(version),
 })
 
-const decodeSerializedEvent = (event: SerializedEvent): Event.Payload => {
-  const definition = Durable.get(event.type)
-  if (!definition?.durable) {
-    throw new InvalidDurableEventError({ type: event.type, message: `Unknown durable event type ${event.type}` })
-  }
+/** An aggregate's event as its sequence index names it, with the fact in Specter's log it is. */
+type Indexed = {
+  readonly id: Event.ID
+  readonly aggregateID: string
+  readonly seq: number
+  readonly created: number
+  readonly type: string
+  readonly fact: PersistedEvent
+}
+
+/**
+ * The OC++ event an index entry names: the fact itself for an event archived in the log under its
+ * versioned OC++ type, else the fact's translation that carries the entry's ID. Undefined for a type
+ * this process cannot decode.
+ */
+const decodeIndexed = (
+  entry: Indexed,
+  translate: (fact: PersistedEvent) => readonly SpecterTranslate.WireEvent[],
+): Event.Payload | undefined => {
+  const definition = Durable.get(entry.type)
+  if (!definition?.durable) return undefined
+  const data =
+    entry.fact.type === entry.type
+      ? entry.fact.payload
+      : translate(entry.fact).find((wire) => wire.id === entry.id)?.data
+  if (data === undefined)
+    throw new InvalidDurableEventError({
+      type: entry.type,
+      message: `Fact ${entry.fact.id} does not project as event ${entry.id}`,
+    })
   return {
-    id: event.id,
-    created: event.created ?? 0,
+    id: entry.id,
+    created: entry.created,
     type: definition.type,
-    durable: envelope(event.aggregateID, event.seq, definition.durable.version),
-    data: Schema.decodeUnknownSync(definition.data)(event.data),
+    durable: envelope(entry.aggregateID, entry.seq, definition.durable.version),
+    data: Schema.decodeUnknownSync(definition.data)(data),
   }
 }
 
@@ -181,12 +198,12 @@ export interface Interface {
   /** @deprecated Use `subscribe()` and consume the returned stream. */
   readonly listen: (listener: Subscriber) => Effect.Effect<Unsubscribe>
   readonly project: <D extends Event.Definition>(definition: D, projector: Subscriber<D>) => Effect.Effect<void>
-  readonly replay: (
-    event: SerializedEvent,
-    options?: { readonly publish?: boolean; readonly ownerID?: string; readonly strictOwner?: boolean },
-  ) => Effect.Effect<void>
+  /**
+   * Projects an aggregate's events again from Specter's log, in order: its projectors only, not commit
+   * hooks or listeners. Its read models are cleared first by the caller.
+   */
+  readonly rebuild: (aggregateID: string) => Effect.Effect<void>
   readonly remove: (aggregateID: string) => Effect.Effect<void>
-  readonly claim: (aggregateID: string, ownerID: string) => Effect.Effect<void>
   /**
    * Specter's Event Log in this database, for the runtime that runs Sessions. Facts its Commands record
    * are projected here as OC++ events, in the same transaction, and notified once it commits. A commit
@@ -201,8 +218,6 @@ interface Options {
   readonly beforeAggregateRead?: (aggregateID: string) => Effect.Effect<void>
   /** Maximum durable rows read per page while replaying or tailing an aggregate log. */
   readonly logReadPageSize?: number
-  /** Retain durable event payloads for historical log reads and replay. */
-  readonly persist?: boolean
 }
 
 export function configured(options?: Options) {
@@ -226,7 +241,6 @@ export function configured(options?: Options) {
         const durableLocks = KeyedMutex.makeUnsafe<string>()
         const { db } = yield* Database.Service
         const logReadPageSize = options?.logReadPageSize ?? 512
-        const persist = options?.persist ?? false
         const sessions = new Map<SessionID, Location.Ref>()
         // Keep routing separate from the public event, and retain its snapshot
         // while a slow subscriber drains events queued before a move or deletion.
@@ -307,170 +321,24 @@ export function configured(options?: Options) {
           }),
         )
 
-        function commitDurableEvent(
-          definition: Event.Definition,
-          event: Event.Payload,
-          input?: {
-            readonly seq: number
-            readonly aggregateID: string
-            readonly ownerID?: string
-            readonly strictOwner?: boolean
-          },
-          commit?: (seq: number) => Effect.Effect<void>,
-        ) {
-          return Effect.gen(function* () {
-            const durable = definition.durable
-            if (!durable) return yield* Effect.void
-            const aggregateID = (event.data as Record<string, unknown>)[durable.aggregate]
-            if (typeof aggregateID !== "string")
-              return yield* Effect.die(
-                new InvalidDurableEventError({
-                  type: event.type,
-                  message: `Expected string aggregate field ${durable.aggregate}`,
-                }),
-              )
-            if (input && input.aggregateID !== aggregateID) {
-              yield* Effect.die(
-                new InvalidDurableEventError({
-                  type: event.type,
-                  message: `Aggregate mismatch: expected ${input.aggregateID}, got ${aggregateID}`,
-                }),
-              )
-            }
-            const list = projectors.get(versionedType(definition.type, durable.version)) ?? []
-            return yield* Effect.uninterruptible(
-              Effect.gen(function* () {
-                const committed = yield* db
-                  .transaction(
-                    () =>
-                      Effect.gen(function* () {
-                        const row = yield* db
-                          .select({ seq: EventSequenceTable.seq, ownerID: EventSequenceTable.owner_id })
-                          .from(EventSequenceTable)
-                          .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-                          .get()
-                          .pipe(Effect.orDie)
-                        const latest = row?.seq ?? -1
-                        const encoded = Schema.encodeUnknownSync(definition.data)(event.data) as Record<string, unknown>
-                        if (input?.strictOwner && row?.ownerID && row.ownerID !== input.ownerID) {
-                          yield* Effect.die(
-                            new InvalidDurableEventError({
-                              type: event.type,
-                              message: `Replay owner mismatch for aggregate ${aggregateID}: expected ${row.ownerID}, got ${input.ownerID ?? "none"}`,
-                            }),
-                          )
-                        }
-                        if (input && input.seq <= latest) {
-                          if (!persist) return
-                          const stored = yield* db
-                            .select()
-                            .from(EventTable)
-                            .where(and(eq(EventTable.aggregate_id, aggregateID), eq(EventTable.seq, input.seq)))
-                            .get()
-                            .pipe(Effect.orDie)
-                          if (
-                            stored?.id === event.id &&
-                            stored.type === versionedType(definition.type, durable.version) &&
-                            stored.created === (event.created ?? 0) &&
-                            isDeepStrictEqual(stored.data, encoded)
-                          ) {
-                            if (input.ownerID && row?.ownerID == null) {
-                              yield* db
-                                .update(EventSequenceTable)
-                                .set({ owner_id: input.ownerID })
-                                .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-                                .run()
-                                .pipe(Effect.orDie)
-                            }
-                            return
-                          }
-                          yield* Effect.die(
-                            new InvalidDurableEventError({
-                              type: event.type,
-                              message: `Replay diverged at aggregate ${aggregateID} sequence ${input.seq}`,
-                            }),
-                          )
-                        }
-                        if (input && row?.ownerID && row.ownerID !== input.ownerID) {
-                          return
-                        }
-                        const seq = input?.seq ?? latest + 1
-                        if (input && seq !== latest + 1) {
-                          yield* Effect.die(
-                            new InvalidDurableEventError({
-                              type: event.type,
-                              message: `Sequence mismatch for aggregate ${aggregateID}: expected ${latest + 1}, got ${seq}`,
-                            }),
-                          )
-                        }
-                        if (persist) {
-                          const stored = yield* db
-                            .select({ aggregateID: EventTable.aggregate_id, seq: EventTable.seq })
-                            .from(EventTable)
-                            .where(eq(EventTable.id, event.id))
-                            .get()
-                            .pipe(Effect.orDie)
-                          if (stored)
-                            yield* Effect.die(
-                              new InvalidDurableEventError({
-                                type: event.type,
-                                message: `Event ${event.id} already exists at aggregate ${stored.aggregateID} sequence ${stored.seq}`,
-                              }),
-                            )
-                        }
-                        const committed = {
-                          ...event,
-                          durable: { aggregateID, seq, version: durable.version },
-                        } as Event.Payload
-                        const route = yield* prepareRoutes([committed])
-                        for (const projector of list) {
-                          yield* projector(committed)
-                        }
-                        if (commit) yield* commit(seq)
-                        yield* db
-                          .insert(EventSequenceTable)
-                          .values([{ aggregate_id: aggregateID, seq, owner_id: input?.ownerID }])
-                          .onConflictDoUpdate({
-                            target: EventSequenceTable.aggregate_id,
-                            set: {
-                              seq: sql`max(${EventSequenceTable.seq}, ${seq})`,
-                              ...(input?.ownerID && row?.ownerID == null ? { owner_id: input.ownerID } : {}),
-                            },
-                          })
-                          .run()
-                          .pipe(Effect.orDie)
-                        if (persist)
-                          yield* db
-                            .insert(EventTable)
-                            .values([
-                              {
-                                id: event.id,
-                                aggregate_id: aggregateID,
-                                seq,
-                                created: event.created ?? 0,
-                                type: versionedType(definition.type, durable.version),
-                                data: encoded,
-                              },
-                            ])
-                            .run()
-                            .pipe(Effect.orDie)
-                        return { aggregateID, seq, event: committed, route }
-                      }),
-                    { behavior: "immediate" },
-                  )
-                  .pipe(Effect.orDie)
-                if (committed) {
-                  committed.route()
-                  yield* Effect.forEach(
-                    pubsub.durable.get(committed.aggregateID) ?? [],
-                    (wake) => PubSub.publish(wake, undefined),
-                    { discard: true },
-                  )
-                }
-                return committed
+        /** The aggregate of a durable event, which must be a fact OC++ records in Specter's log. */
+        const recordable = (definition: Event.DurableDefinition, data: unknown) => {
+          const aggregateID = (data as Record<string, unknown>)[definition.durable.aggregate]
+          if (typeof aggregateID !== "string")
+            return Effect.die(
+              new InvalidDurableEventError({
+                type: definition.type,
+                message: `Expected string aggregate field ${definition.durable.aggregate}`,
               }),
             )
-          })
+          if (!recordedFacts.has(definition.type))
+            return Effect.die(
+              new InvalidDurableEventError({
+                type: definition.type,
+                message: `${definition.type} is not in OC++'s inventory of recorded facts`,
+              }),
+            )
+          return Effect.succeed(aggregateID)
         }
 
         function publishEvent<D extends Event.Definition>(
@@ -487,45 +355,31 @@ export function configured(options?: Options) {
                 }),
               )
             if (definition.durable) {
-              const aggregateID = (event.data as Record<string, unknown>)[definition.durable.aggregate]
-              if (typeof aggregateID !== "string")
-                return yield* commitDurableEvent(definition, event as Event.Payload, undefined, commit).pipe(
-                  Effect.as(event),
-                )
-              if (recordedFacts.has(definition.type))
-                return yield* durableLocks.withLock(aggregateID)(
-                  Effect.gen(function* () {
-                    // Recording is uninterruptible, as a commit was before; notifying listeners is not.
-                    const recorded = yield* Effect.uninterruptible(
-                      Effect.gen(function* () {
-                        const committed = yield* recordFacts([
-                          {
-                            definition: definition as Event.DurableDefinition,
-                            aggregateID,
-                            commit,
-                            event: event as Event.Payload,
-                          },
-                        ])
-                        committed.route()
-                        yield* Effect.forEach(
-                          pubsub.durable.get(aggregateID) ?? [],
-                          (wake) => PubSub.publish(wake, undefined),
-                          { discard: true },
-                        )
-                        return committed.events[0] as Event.Payload<D>
-                      }),
-                    )
-                    yield* notify(recorded as Event.Payload, true)
-                    return recorded
-                  }),
-                )
+              const aggregateID = yield* recordable(definition as Event.DurableDefinition, event.data)
               return yield* durableLocks.withLock(aggregateID)(
                 Effect.gen(function* () {
-                  const committed = yield* commitDurableEvent(definition, event as Event.Payload, undefined, commit)
-                  if (!committed) return event
-                  event = committed.event as Event.Payload<D>
-                  yield* notify(event as Event.Payload, true)
-                  return event
+                  // Recording is uninterruptible, as a commit was before; notifying listeners is not.
+                  const recorded = yield* Effect.uninterruptible(
+                    Effect.gen(function* () {
+                      const committed = yield* recordFacts([
+                        {
+                          definition: definition as Event.DurableDefinition,
+                          aggregateID,
+                          commit,
+                          event: event as Event.Payload,
+                        },
+                      ])
+                      committed.route()
+                      yield* Effect.forEach(
+                        pubsub.durable.get(aggregateID) ?? [],
+                        (wake) => PubSub.publish(wake, undefined),
+                        { discard: true },
+                      )
+                      return committed.events[0] as Event.Payload<D>
+                    }),
+                  )
+                  yield* notify(recorded as Event.Payload, true)
+                  return recorded
                 }),
               )
             }
@@ -589,10 +443,14 @@ export function configured(options?: Options) {
         }
 
         /**
-         * Projects one commit of an aggregate's events: Bus sequences, projectors, commit hooks and the
-         * optional event table. Runs inside the caller's transaction (Specter's append).
+         * Projects one commit of an aggregate's events: their sequence index, projectors and commit hooks.
+         * Runs inside the caller's transaction (Specter's append); `orders` are the events' facts in the log.
          */
-        const projectBatch = (aggregateID: string, payloads: readonly [BatchItem, ...BatchItem[]]) =>
+        const projectBatch = (
+          aggregateID: string,
+          payloads: readonly [BatchItem, ...BatchItem[]],
+          orders: readonly number[],
+        ) =>
           Effect.gen(function* () {
             const row = yield* db
               .select({ seq: EventSequenceTable.seq })
@@ -607,50 +465,14 @@ export function configured(options?: Options) {
               durable: envelope(aggregateID, firstSeq + index, item.definition.durable.version),
             }))
             const route = yield* prepareRoutes(queued)
-            const rows = new Array<typeof EventTable.$inferInsert>()
-            const ids = new Set<Event.ID>()
             for (const [index, item] of payloads.entries()) {
-              const seq = firstSeq + index
-              const encoded = Schema.encodeUnknownSync(item.definition.data)(item.event.data) as Record<string, unknown>
-              if (persist) {
-                if (ids.has(item.event.id))
-                  yield* Effect.die(
-                    new InvalidDurableEventError({
-                      type: item.event.type,
-                      message: `Event ${item.event.id} appears more than once in the batch`,
-                    }),
-                  )
-                ids.add(item.event.id)
-                const stored = yield* db
-                  .select({ aggregateID: EventTable.aggregate_id, seq: EventTable.seq })
-                  .from(EventTable)
-                  .where(eq(EventTable.id, item.event.id))
-                  .get()
-                  .pipe(Effect.orDie)
-                if (stored)
-                  yield* Effect.die(
-                    new InvalidDurableEventError({
-                      type: item.event.type,
-                      message: `Event ${item.event.id} already exists at aggregate ${stored.aggregateID} sequence ${stored.seq}`,
-                    }),
-                  )
-              }
               const event = queued[index]
               for (const projector of projectors.get(
                 versionedType(item.definition.type, item.definition.durable.version),
               ) ?? []) {
                 yield* projector(event)
               }
-              if (item.commit) yield* item.commit(seq)
-              if (persist)
-                rows.push({
-                  id: event.id,
-                  aggregate_id: aggregateID,
-                  seq,
-                  created: event.created,
-                  type: versionedType(item.definition.type, item.definition.durable.version),
-                  data: encoded,
-                })
+              if (item.commit) yield* item.commit(firstSeq + index)
             }
             yield* db
               .insert(EventSequenceTable)
@@ -662,7 +484,20 @@ export function configured(options?: Options) {
               })
               .run()
               .pipe(Effect.orDie)
-            if (persist) yield* db.insert(EventTable).values(rows).run().pipe(Effect.orDie)
+            yield* db
+              .insert(EventTable)
+              .values(
+                queued.map((event, index) => ({
+                  id: event.id,
+                  aggregate_id: aggregateID,
+                  seq: firstSeq + index,
+                  created: event.created,
+                  type: versionedType(payloads[index]!.definition.type, payloads[index]!.definition.durable.version),
+                  log_order: orders[index]!,
+                })),
+              )
+              .run()
+              .pipe(Effect.orDie)
             return { events: queued, route }
           })
 
@@ -686,7 +521,11 @@ export function configured(options?: Options) {
               const entry = key === undefined ? undefined : pending.get(key)
               // A publication through this Bus: publish and publishAll notify once it returns.
               if (entry) {
-                entry.committed = yield* projectBatch(entry.items[0].aggregateID, entry.items)
+                entry.committed = yield* projectBatch(
+                  entry.items[0].aggregateID,
+                  entry.items,
+                  events.map((event) => event.order),
+                )
                 return Effect.void
               }
               // Registering a Session the log predates repeats OC++'s own session.created: nothing to project.
@@ -694,8 +533,9 @@ export function configured(options?: Options) {
               // A fact a runtime Command recorded directly: project its OC++ events here and notify
               // after the transaction commits.
               const created = Date.parse(events[0]?.recordedAt ?? "") || (yield* Clock.currentTimeMillis)
+              type Placed = BatchItem & { readonly order: number }
               const items = events.flatMap((recorded) =>
-                SpecterTranslate.toWire(recorded).map((wire): BatchItem => {
+                SpecterTranslate.toWire(recorded).map((wire): Placed => {
                   const aggregateID = (wire.data as Record<string, unknown>)[wire.definition.durable.aggregate]
                   if (typeof aggregateID !== "string")
                     throw new InvalidDurableEventError({
@@ -706,13 +546,18 @@ export function configured(options?: Options) {
                     definition: wire.definition,
                     aggregateID,
                     event: { id: wire.id, created, type: wire.definition.type, data: wire.data } as Event.Payload,
+                    order: recorded.order,
                   }
                 }),
               )
-              const batches = new Map<string, BatchItem[]>()
+              const batches = new Map<string, Placed[]>()
               for (const item of items) batches.set(item.aggregateID, [...(batches.get(item.aggregateID) ?? []), item])
               const committed = yield* Effect.forEach([...batches.values()], (batch) =>
-                projectBatch(batch[0]!.aggregateID, batch as [BatchItem, ...BatchItem[]]),
+                projectBatch(
+                  batch[0]!.aggregateID,
+                  batch as [Placed, ...Placed[]],
+                  batch.map((item) => item.order),
+                ),
               )
               const aggregates = [...batches.keys()]
               // The log runs this uninterruptibly once the append commits; as for a publish, only
@@ -789,27 +634,12 @@ export function configured(options?: Options) {
           )
         }
 
-        const commitBatch = (items: readonly [BatchItem, ...BatchItem[]]) =>
-          items.every((item) => recordedFacts.has(item.definition.type))
-            ? recordFacts(items)
-            : db
-                .transaction(() => projectBatch(items[0].aggregateID, items), { behavior: "immediate" })
-                .pipe(Effect.orDie)
-
         function publishAll<const I extends readonly [PublishInput, ...PublishInput[]]>(events: I) {
           return Effect.gen(function* () {
             const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
             const payloads = yield* Effect.forEach(events, ([definition, data, options]) =>
               Effect.gen(function* () {
-                const aggregateID = (data as Record<string, unknown>)[definition.durable.aggregate]
-                if (typeof aggregateID !== "string") {
-                  return yield* Effect.die(
-                    new InvalidDurableEventError({
-                      type: definition.type,
-                      message: `Expected string aggregate field ${definition.durable.aggregate}`,
-                    }),
-                  )
-                }
+                const aggregateID = yield* recordable(definition, data)
                 const location = options?.global
                   ? undefined
                   : (options?.location ??
@@ -843,7 +673,7 @@ export function configured(options?: Options) {
             return yield* durableLocks.withLock(aggregateID)(
               Effect.uninterruptible(
                 Effect.gen(function* () {
-                  const committed = yield* commitBatch(payloads)
+                  const committed = yield* recordFacts(payloads)
                   committed.route()
                   yield* Effect.forEach(
                     pubsub.durable.get(aggregateID) ?? [],
@@ -860,38 +690,6 @@ export function configured(options?: Options) {
           })
         }
 
-        function replay(
-          event: SerializedEvent,
-          options?: { readonly publish?: boolean; readonly ownerID?: string; readonly strictOwner?: boolean },
-        ) {
-          return Effect.gen(function* () {
-            const definition = Durable.get(event.type)
-            if (!definition?.durable)
-              return yield* Effect.die(
-                new InvalidDurableEventError({ type: event.type, message: `Unknown durable event type ${event.type}` }),
-              )
-            yield* durableLocks.withLock(event.aggregateID)(
-              Effect.gen(function* () {
-                const payload = {
-                  id: event.id,
-                  created: event.created ?? 0,
-                  type: definition.type,
-                  data: Schema.decodeUnknownSync(definition.data)(event.data),
-                } as Event.Payload
-                const committed = yield* commitDurableEvent(definition, payload, {
-                  seq: event.seq,
-                  aggregateID: event.aggregateID,
-                  ownerID: options?.ownerID,
-                  strictOwner: options?.strictOwner,
-                })
-                if (committed && options?.publish) {
-                  yield* notify(committed.event, true)
-                }
-              }),
-            )
-          })
-        }
-
         function remove(aggregateID: string) {
           return db
             .transaction(() =>
@@ -904,15 +702,6 @@ export function configured(options?: Options) {
               Effect.tap(() => Effect.sync(() => sessions.delete(aggregateID as SessionID))),
               Effect.orDie,
             )
-        }
-
-        function claim(aggregateID: string, ownerID: string) {
-          return db
-            .update(EventSequenceTable)
-            .set({ owner_id: ownerID })
-            .where(eq(EventSequenceTable.aggregate_id, aggregateID))
-            .run()
-            .pipe(Effect.orDie)
         }
 
         const local = <A extends Event.Payload>(stream: Stream.Stream<A>) =>
@@ -953,49 +742,99 @@ export function configured(options?: Options) {
 
         const streamLive = (): Stream.Stream<Event.Payload> => local(Stream.fromPubSub(pubsub.live))
 
+        // An aggregate's events after a sequence, read from Specter's log through their sequence index.
+        const readIndexed = (
+          aggregateID: string,
+          after: number,
+          input: { readonly through: number; readonly limit: number },
+        ) =>
+          db
+            .select({
+              id: EventTable.id,
+              aggregateID: EventTable.aggregate_id,
+              seq: EventTable.seq,
+              created: EventTable.created,
+              type: EventTable.type,
+              fact: {
+                id: SpecterEventTable.id,
+                order: SpecterEventTable.order,
+                type: SpecterEventTable.type,
+                payload: SpecterEventTable.payload,
+                recordedAt: SpecterEventTable.recorded_at,
+              },
+            })
+            .from(EventTable)
+            .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+            .where(
+              and(
+                eq(EventTable.aggregate_id, aggregateID),
+                gt(EventTable.seq, after),
+                lte(EventTable.seq, input.through),
+              ),
+            )
+            .orderBy(asc(EventTable.seq))
+            .limit(input.limit)
+            .all()
+            .pipe(
+              Effect.orDie,
+              // Skip types missing from the durable manifest instead of failing the read: the aggregate may
+              // hold events this process cannot decode. The raw tail seq keeps cursors advancing across the
+              // resulting gaps. A fact projecting as several events is translated once.
+              Effect.map((rows) => {
+                const translations = new Map<number, readonly SpecterTranslate.WireEvent[]>()
+                const translate = (fact: PersistedEvent) => {
+                  const known = translations.get(fact.order)
+                  if (known) return known
+                  const wire = SpecterTranslate.toWire(fact)
+                  translations.set(fact.order, wire)
+                  return wire
+                }
+                return {
+                  seq: rows.at(-1)?.seq,
+                  events: rows.flatMap((row) => {
+                    const event = decodeIndexed(row as Indexed, translate)
+                    return event ? [event] : []
+                  }),
+                }
+              }),
+            )
+
         const readAfter = (
           aggregateID: string,
           after: number,
           input: { readonly through: number; readonly limit: number },
         ) =>
           (options?.beforeAggregateRead?.(aggregateID) ?? Effect.void).pipe(
-            Effect.andThen(
-              Effect.suspend(() => {
-                const query = db
-                  .select()
-                  .from(EventTable)
-                  .where(
-                    and(
-                      eq(EventTable.aggregate_id, aggregateID),
-                      gt(EventTable.seq, after),
-                      lte(EventTable.seq, input.through),
-                    ),
-                  )
-                  .orderBy(asc(EventTable.seq))
-                return query.limit(input.limit).all()
-              }),
-            ),
-            Effect.orDie,
-            // Skip types missing from the durable manifest instead of failing the
-            // read: the aggregate may hold events this process cannot decode. The
-            // raw tail seq keeps cursors advancing across the resulting gaps.
-            Effect.map((rows) => ({
-              seq: rows.at(-1)?.seq,
-              events: rows.flatMap((event) => {
-                if (!Durable.get(event.type)?.durable) return []
-                return [
-                  decodeSerializedEvent({
-                    id: event.id,
-                    created: event.created,
-                    aggregateID: event.aggregate_id,
-                    seq: event.seq,
-                    type: event.type,
-                    data: event.data,
-                  }),
-                ]
-              }),
-            })),
+            Effect.andThen(Effect.suspend(() => readIndexed(aggregateID, after, input))),
           )
+
+        function rebuild(aggregateID: string) {
+          return durableLocks.withLock(aggregateID)(
+            db
+              .transaction(
+                () =>
+                  Effect.gen(function* () {
+                    let after = -1
+                    while (true) {
+                      const page = yield* readIndexed(aggregateID, after, {
+                        through: Number.MAX_SAFE_INTEGER,
+                        limit: logReadPageSize,
+                      })
+                      if (page.seq === undefined) return
+                      after = page.seq
+                      for (const event of page.events) {
+                        for (const projector of projectors.get(versionedType(event.type, event.durable!.version)) ??
+                          []) {
+                          yield* projector(event)
+                        }
+                      }
+                    }
+                  }),
+                { behavior: "immediate" },
+              )
+              .pipe(Effect.orDie),
+          )
+        }
 
         const subscribeDurable = (aggregateID: string) =>
           Effect.gen(function* () {
@@ -1088,9 +927,8 @@ export function configured(options?: Options) {
           log,
           listen,
           project,
-          replay,
+          rebuild,
           remove,
-          claim,
           specterLog: Effect.succeed(runtimeLog),
         })
       }),

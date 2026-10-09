@@ -96,7 +96,7 @@ const it = testEffect(
       SessionModelRequest.node,
     ]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [llmClient, client],
     ],
   ),

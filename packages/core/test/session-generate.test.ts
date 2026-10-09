@@ -136,7 +136,7 @@ const it = testEffect(
       SessionGenerateNode.node,
     ]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [llmClient, client],
       [SessionRunnerModel.node, models],
       [InstructionBuiltIns.node, builtins],

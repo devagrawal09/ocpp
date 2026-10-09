@@ -15,6 +15,7 @@ import type { SqlClient } from "effect/sql/SqlClient"
 import legacyCredentialsMigration from "@ocpp/core/database/migration/20260805200742_import_legacy_credentials"
 import credentialSecretMigration from "@ocpp/core/database/migration/20261009205324_credential_secret"
 import cacheMigration from "@ocpp/core/database/migration/20261009220914_cache"
+import eventIndexMigration from "@ocpp/core/database/migration/20261009222738_event_index"
 import credentialKeyMigration from "@ocpp/core/database/migration/20261009221545_credential_key"
 import { CredentialSeal } from "@ocpp/core/credential/seal"
 import jobBackgroundMigration from "@ocpp/core/database/migration/20261009210354_job_background"
@@ -636,6 +637,83 @@ describe("DatabaseMigration", () => {
           { key: "repository-cache:/repo" },
         ])
         expect(yield* db.all(sql`SELECT key FROM kv`)).toEqual([{ key: "websearch:provider" }])
+      }),
+      Global.make({ data: tmp.path }),
+    )
+  })
+
+  test("archives stored events in Specter's log and keeps only their index by aggregate sequence", async () => {
+    await using tmp = await tmpdir()
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.applyOnly(
+          db,
+          migrations.filter(
+            (migration) => migration.id < eventIndexMigration.id && migration.id !== legacyCredentialsMigration.id,
+          ),
+        )
+        // A fact already in the log: its stored copy keeps pointing at it.
+        yield* db.run(sql`
+          INSERT INTO specter_event (id, type, payload, recorded_at)
+          VALUES ('evt_logged', 'session-renamed', ${JSON.stringify({ sessionID: "ses_b", title: "Logged" })}, '2026-01-01T00:00:00.000Z')
+        `)
+        yield* db.run(sql`
+          INSERT INTO specter_commit (version, idempotency_key, fingerprint, first_order, committed_at)
+          VALUES (1, 'bus:logged', NULL, 1, '2026-01-01T00:00:00.000Z')
+        `)
+        yield* db.run(
+          sql`INSERT INTO event_sequence (aggregate_id, seq, owner_id) VALUES ('ses_a', 1, NULL), ('ses_b', 0, 'owner')`,
+        )
+        yield* db.run(sql`
+          INSERT INTO event (id, aggregate_id, seq, created, type, data) VALUES
+            ('evt_a1', 'ses_a', 1, 2000, 'session.renamed.1', ${JSON.stringify({ sessionID: "ses_a", title: "Second" })}),
+            ('evt_a0', 'ses_a', 0, 1000, 'session.renamed.1', ${JSON.stringify({ sessionID: "ses_a", title: "First" })}),
+            ('evt_logged', 'ses_b', 0, 3000, 'session.renamed.1', ${JSON.stringify({ sessionID: "ses_b", title: "Logged" })})
+        `)
+
+        yield* DatabaseMigration.applyOnly(db, migrations)
+
+        expect(
+          yield* db.all(sql`SELECT "order", id, type, payload, recorded_at FROM specter_event ORDER BY "order"`),
+        ).toEqual([
+          {
+            order: 1,
+            id: "evt_logged",
+            type: "session-renamed",
+            payload: JSON.stringify({ sessionID: "ses_b", title: "Logged" }),
+            recorded_at: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            order: 2,
+            id: "evt_a0",
+            type: "session.renamed.1",
+            payload: JSON.stringify({ sessionID: "ses_a", title: "First" }),
+            recorded_at: "1970-01-01T00:00:01.000Z",
+          },
+          {
+            order: 3,
+            id: "evt_a1",
+            type: "session.renamed.1",
+            payload: JSON.stringify({ sessionID: "ses_a", title: "Second" }),
+            recorded_at: "1970-01-01T00:00:02.000Z",
+          },
+        ])
+        expect(
+          yield* db.all(sql`SELECT version, idempotency_key, first_order FROM specter_commit ORDER BY version`),
+        ).toEqual([
+          { version: 1, idempotency_key: "bus:logged", first_order: 1 },
+          { version: 3, idempotency_key: "archive:ses_a", first_order: 2 },
+        ])
+        expect(yield* db.all(sql`SELECT * FROM event ORDER BY aggregate_id, seq`)).toEqual([
+          { id: "evt_a0", aggregate_id: "ses_a", seq: 0, created: 1000, type: "session.renamed.1", log_order: 2 },
+          { id: "evt_a1", aggregate_id: "ses_a", seq: 1, created: 2000, type: "session.renamed.1", log_order: 3 },
+          { id: "evt_logged", aggregate_id: "ses_b", seq: 0, created: 3000, type: "session.renamed.1", log_order: 1 },
+        ])
+        expect(yield* db.all(sql`SELECT * FROM event_sequence ORDER BY aggregate_id`)).toEqual([
+          { aggregate_id: "ses_a", seq: 1 },
+          { aggregate_id: "ses_b", seq: 0 },
+        ])
       }),
       Global.make({ data: tmp.path }),
     )

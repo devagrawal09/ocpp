@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "efbb62d1-8be0-4d96-bc6b-f03fff7aab8e",
-  "prevIds": ["fabc55d1-c267-4e01-b9cb-f9c008c04c21"],
+  "id": "e23c0b73-b5da-47b4-a8da-686d86aa61ee",
+  "prevIds": ["efbb62d1-8be0-4d96-bc6b-f03fff7aab8e"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -912,16 +912,6 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "owner_id",
-      "entityType": "columns",
-      "table": "event_sequence"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "event"
@@ -967,12 +957,12 @@
       "table": "event"
     },
     {
-      "type": "text",
+      "type": "integer",
       "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "data",
+      "name": "log_order",
       "entityType": "columns",
       "table": "event"
     },
@@ -2422,6 +2412,17 @@
       "onDelete": "CASCADE",
       "nameExplicit": false,
       "name": "fk_event_aggregate_id_event_sequence_aggregate_id_fk",
+      "entityType": "fks",
+      "table": "event"
+    },
+    {
+      "columns": ["log_order"],
+      "tableTo": "specter_event",
+      "columnsTo": ["order"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_event_log_order_specter_event_order_fk",
       "entityType": "fks",
       "table": "event"
     },

@@ -86,6 +86,7 @@ import { HttpClientRequest, HttpClientResponse } from "effect/http"
 import { asc, desc, eq, sql } from "drizzle-orm"
 import { makeSharedLocation } from "./fixture/shared-location"
 import { testEffect } from "./lib/effect"
+import { Recorded } from "./lib/recorded"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Expected } from "./lib/session-message"
 import { registerToolPlugin } from "./lib/tool"
@@ -498,7 +499,7 @@ const layer = Layer.unwrap(
       ]),
       [
         ...replacements,
-        [Bus.node, Bus.configured({ persist: true })],
+        [Bus.node, Bus.configured()],
         [LocationServiceMap.node, sharedLocation.node],
         [Catalog.node, promptCatalog],
         [McpInstructions.node, mcpInstructions],
@@ -704,7 +705,6 @@ const recordedEventTypes = (id: Session.ID) =>
 
 const recordedStepSettlementEvents = (id: Session.ID, assistantMessageID: SessionMessage.ID) =>
   Effect.gen(function* () {
-    const { db } = yield* Database.Service
     const settlementTypes = new Set([
       "session.step.started.1",
       "session.tool.called.1",
@@ -713,15 +713,9 @@ const recordedStepSettlementEvents = (id: Session.ID, assistantMessageID: Sessio
       "session.step.ended.1",
       "session.step.failed.1",
     ])
-    return (yield* db
-      .select({ type: EventTable.type, data: EventTable.data })
-      .from(EventTable)
-      .where(eq(EventTable.aggregate_id, id))
-      .orderBy(asc(EventTable.seq))
-      .all()
-      .pipe(Effect.orDie)).filter(
-      (event) => settlementTypes.has(event.type) && event.data.assistantMessageID === assistantMessageID,
-    )
+    return (yield* Recorded.events(eq(EventTable.aggregate_id, id)))
+      .map((event) => ({ type: event.type, data: event.data }))
+      .filter((event) => settlementTypes.has(event.type) && event.data.assistantMessageID === assistantMessageID)
   })
 
 const recordedStepSettlementTypes = (id: Session.ID, assistantMessageID: SessionMessage.ID) =>
@@ -740,30 +734,10 @@ const replaySessionProjection = (id: Session.ID) =>
   Effect.gen(function* () {
     const { db } = yield* Database.Service
     const bus = yield* Bus.Service
-    const recorded = yield* db
-      .select()
-      .from(EventTable)
-      .where(eq(EventTable.aggregate_id, id))
-      .orderBy(asc(EventTable.seq))
-      .all()
-      .pipe(Effect.orDie)
-
-    yield* bus.remove(id)
     yield* db.delete(InstructionStateTable).where(eq(InstructionStateTable.session_id, id)).run().pipe(Effect.orDie)
     yield* db.delete(SessionInboxTable).where(eq(SessionInboxTable.session_id, id)).run().pipe(Effect.orDie)
     yield* db.delete(SessionMessageTable).where(eq(SessionMessageTable.session_id, id)).run().pipe(Effect.orDie)
-    yield* Effect.forEach(
-      recorded.map((event) => ({
-        id: event.id,
-        created: event.created,
-        aggregateID: event.aggregate_id,
-        seq: event.seq,
-        type: event.type,
-        data: event.data,
-      })),
-      (event) => bus.replay(event),
-      { discard: true },
-    )
+    yield* bus.rebuild(id)
   })
 
 type FragmentKind = "text" | "reasoning" | "tool input"
@@ -1786,26 +1760,8 @@ describe("SessionRunnerLLM", () => {
     expect(systemTexts(s.requests.at(-1)!)).toContain("Changed context")
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Latest context")
 
-    const recorded = yield* s.db
-      .select()
-      .from(EventTable)
-      .where(eq(EventTable.aggregate_id, forked.id))
-      .orderBy(asc(EventTable.seq))
-      .all()
-    yield* s.bus.remove(forked.id)
     yield* s.db.delete(SessionTable).where(eq(SessionTable.id, forked.id)).run()
-    yield* Effect.forEach(
-      recorded.map((event) => ({
-        id: event.id,
-        created: event.created,
-        aggregateID: event.aggregate_id,
-        seq: event.seq,
-        type: event.type,
-        data: event.data,
-      })),
-      (event) => s.bus.replay(event),
-      { discard: true },
-    )
+    yield* s.bus.rebuild(forked.id)
     expect(
       yield* s.db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, forked.id)).get(),
     ).toMatchObject({ current_values: { "test/context": Instructions.hash("Latest context") } })
@@ -1848,13 +1804,7 @@ describe("SessionRunnerLLM", () => {
     expect(messageRoles(s.requests[0])).toEqual(["user", "user"])
     // The projected row is authoritative: a missing row admits a fresh baseline
     // instead of rebuilding from durable events.
-    expect(
-      yield* s.db
-        .select({ data: EventTable.data })
-        .from(EventTable)
-        .where(eq(EventTable.type, "session.instructions.updated.2"))
-        .all(),
-    ).toHaveLength(2)
+    expect(yield* Recorded.events(eq(EventTable.type, "session.instructions.updated.2"))).toHaveLength(2)
     expect(yield* s.db.select().from(InstructionStateTable).get()).toMatchObject({
       initial_values: { "test/context": Instructions.hash("Initial context") },
       current_values: { "test/context": Instructions.hash("Initial context") },
@@ -1890,13 +1840,7 @@ describe("SessionRunnerLLM", () => {
     expect(messages).toHaveLength(3)
     expect(messages[1]).toMatchObject({ type: "system", text: "Changed context" })
 
-    const updates = yield* s.db
-      .select({ data: EventTable.data })
-      .from(EventTable)
-      .where(eq(EventTable.type, "session.instructions.updated.2"))
-      .orderBy(asc(EventTable.seq))
-      .all()
-      .pipe(Effect.orDie)
+    const updates = yield* Recorded.events(eq(EventTable.type, "session.instructions.updated.2"))
     expect(updates).toHaveLength(2)
     expect(updates[0]?.data).toMatchObject({
       sessionID,
@@ -5036,13 +4980,7 @@ describe("SessionRunnerLLM", () => {
     expect(yield* Fiber.join(run).pipe(Effect.flip)).toEqual(stepFailure(failure))
     expect(s.requests).toHaveLength(5)
 
-    const retries = yield* s.db
-      .select({ data: EventTable.data })
-      .from(EventTable)
-      .where(eq(EventTable.type, "session.retry.scheduled.1"))
-      .orderBy(asc(EventTable.seq))
-      .all()
-      .pipe(Effect.orDie)
+    const retries = yield* Recorded.events(eq(EventTable.type, "session.retry.scheduled.1"))
     for (const [index, range] of [
       [1_600, 2_400],
       [4_800, 7_200],
@@ -5225,12 +5163,7 @@ describe("SessionRunnerLLM", () => {
       "session.step.ended.1",
     ])
 
-    const durable = yield* s.db
-      .select({ type: EventTable.type, data: EventTable.data })
-      .from(EventTable)
-      .where(eq(EventTable.aggregate_id, sessionID))
-      .all()
-      .pipe(Effect.orDie)
+    const durable = yield* Recorded.events(eq(EventTable.aggregate_id, sessionID))
     expect(durable.find((event) => event.type === "session.tool.input.ended.1")?.data).toMatchObject({
       id: "call-malformed",
       text: raw,

@@ -21,7 +21,7 @@ import { testEffect } from "./lib/effect"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
-    [Bus.node, Bus.configured({ persist: true })],
+    [Bus.node, Bus.configured()],
   ]),
 )
 const a = Location.Ref.make({ directory: AbsolutePath.make("/a") })
@@ -104,7 +104,7 @@ describe("Bus Session routing", () => {
         .get()
       if (!boundary) return yield* Effect.die("Missing fork boundary")
 
-      yield* Effect.forEach(["publish", "batch", "replay"] as const, (mode) =>
+      yield* Effect.forEach(["publish", "batch"] as const, (mode) =>
         Effect.gen(function* () {
           const child = SessionID.create()
           const first = yield* watch(bus, a)
@@ -117,17 +117,6 @@ describe("Bus Session routing", () => {
           const eventID = Event.ID.create()
           if (mode === "publish") yield* bus.publish(SessionEvent.Forked, payload, { id: eventID })
           if (mode === "batch") yield* bus.publishAll([[SessionEvent.Forked, payload, { id: eventID }]])
-          if (mode === "replay")
-            yield* bus.replay(
-              {
-                id: eventID,
-                type: Bus.versionedType(SessionEvent.Forked.type, 2),
-                seq: 0,
-                aggregateID: child,
-                data: payload,
-              },
-              { publish: true },
-            )
           const after = yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: child })
           const done = yield* bus.publish(Done, {})
           expect((yield* Fiber.join(first)).map((event) => event.id)).toEqual([eventID, after.id, done.id])
@@ -295,40 +284,6 @@ describe("Bus Session routing", () => {
       expect(Exit.isFailure(batch)).toBe(true)
       expect(yield* Fiber.join(first)).toEqual([before, after, done])
       expect(yield* Fiber.join(second)).toEqual([done])
-    }),
-  )
-
-  it.effect("updates cached ownership on silent replay and filters published replay", () =>
-    Effect.gen(function* () {
-      yield* seed()
-      const bus = yield* Bus.Service
-      yield* delta(bus)
-      const first = yield* watch(bus, a)
-      const second = yield* watch(bus, b)
-      yield* bus.replay({
-        id: Event.ID.create(),
-        type: Bus.versionedType(SessionEvent.Moved.type, 1),
-        seq: 0,
-        aggregateID: id,
-        data: { sessionID: id, location: b, projectID: Project.ID.global },
-      })
-      const after = yield* delta(bus)
-      const replayID = Event.ID.create()
-      yield* bus.replay(
-        {
-          id: replayID,
-          type: Bus.versionedType(SessionEvent.Renamed.type, 1),
-          seq: 1,
-          aggregateID: id,
-          data: { sessionID: id, title: "replayed" },
-        },
-        { publish: true },
-      )
-      const done = yield* bus.publish(Done, {})
-      expect(yield* Fiber.join(first)).toEqual([done])
-      const received = yield* Fiber.join(second)
-      expect(received.map((event) => event.id)).toEqual([after.id, replayID, done.id])
-      expect(received[1]).not.toHaveProperty("location")
     }),
   )
 })

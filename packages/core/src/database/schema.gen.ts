@@ -137,8 +137,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
       yield* tx.run(`
         CREATE TABLE \`event_sequence\` (
           \`aggregate_id\` text PRIMARY KEY,
-          \`seq\` integer NOT NULL,
-          \`owner_id\` text
+          \`seq\` integer NOT NULL
         );
       `)
       yield* tx.run(`
@@ -148,8 +147,9 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`seq\` integer NOT NULL,
           \`created\` integer DEFAULT 0 NOT NULL,
           \`type\` text NOT NULL,
-          \`data\` text NOT NULL,
-          CONSTRAINT \`fk_event_aggregate_id_event_sequence_aggregate_id_fk\` FOREIGN KEY (\`aggregate_id\`) REFERENCES \`event_sequence\`(\`aggregate_id\`) ON DELETE CASCADE
+          \`log_order\` integer NOT NULL,
+          CONSTRAINT \`fk_event_aggregate_id_event_sequence_aggregate_id_fk\` FOREIGN KEY (\`aggregate_id\`) REFERENCES \`event_sequence\`(\`aggregate_id\`) ON DELETE CASCADE,
+          CONSTRAINT \`fk_event_log_order_specter_event_order_fk\` FOREIGN KEY (\`log_order\`) REFERENCES \`specter_event\`(\`order\`)
         );
       `)
       yield* tx.run(`

@@ -14,6 +14,7 @@ import { EventSequenceTable, EventTable } from "@ocpp/core/event/sql"
 import { ProjectTable } from "@ocpp/core/project/sql"
 import { SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
 import { SessionStats } from "@ocpp/core/session/stats"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { DateTime, Effect, Schema } from "effect"
 import { testEffect } from "./lib/effect"
@@ -28,6 +29,7 @@ const usageOnlyID = Session.ID.make("ses_stats_usage_only")
 const otherSessionID = Session.ID.make("ses_stats_other")
 const encodeMessage = Schema.encodeSync(SessionMessage.Info)
 const encodeUsage = Schema.encodeSync(SessionEvent.UsageRecorded.data)
+const usageType = Event.versionedType(SessionEvent.UsageRecorded.type, SessionEvent.UsageRecorded.durable.version)
 
 describe("SessionStats", () => {
   it.effect("aggregates activity and tool reliability without reading message payloads outside the range", () =>
@@ -169,15 +171,13 @@ describe("SessionStats", () => {
         ])
         .run()
         .pipe(Effect.orDie)
-      yield* db
-        .insert(EventTable)
-        .values([
+      yield* Effect.forEach(
+        [
           {
             id: Event.ID.make("evt_stats_usage"),
             aggregate_id: sessionID,
             seq: 0,
             created: Date.UTC(2026, 0, 2, 10, 0, 3),
-            type: SessionEvent.UsageRecorded.type,
             data: encodeUsage({
               sessionID,
               source: "title",
@@ -190,7 +190,6 @@ describe("SessionStats", () => {
             aggregate_id: usageOnlyID,
             seq: 0,
             created: Date.UTC(2026, 0, 2, 10, 0, 3),
-            type: SessionEvent.UsageRecorded.type,
             data: encodeUsage({
               sessionID: usageOnlyID,
               source: "compaction",
@@ -198,9 +197,29 @@ describe("SessionStats", () => {
               tokens: { input: 2, output: 2, reasoning: 2, cache: { read: 2, write: 2 } },
             }),
           },
-        ])
-        .run()
-        .pipe(Effect.orDie)
+        ],
+        ({ data, ...event }) =>
+          Effect.gen(function* () {
+            // Archived OC++ events sit in Specter's log under their versioned type, with their data as payload.
+            const fact = yield* db
+              .insert(SpecterEventTable)
+              .values({
+                id: event.id,
+                type: usageType,
+                payload: data,
+                recorded_at: new Date(event.created).toISOString(),
+              })
+              .returning({ order: SpecterEventTable.order })
+              .get()
+              .pipe(Effect.orDie)
+            yield* db
+              .insert(EventTable)
+              .values({ ...event, type: usageType, log_order: fact.order })
+              .run()
+              .pipe(Effect.orDie)
+          }),
+        { discard: true },
+      )
 
       const stats = yield* SessionStats.get({
         from: Date.UTC(2026, 0, 1),

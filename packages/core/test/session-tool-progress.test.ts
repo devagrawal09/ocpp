@@ -22,7 +22,7 @@ import { testEffect } from "./lib/effect"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
-    [Bus.node, Bus.configured({ persist: true })],
+    [Bus.node, Bus.configured()],
   ]),
 )
 const model = { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }

@@ -39,7 +39,7 @@ const it = testEffect(
       PluginRuntime.providerNodeWithCell(runtime),
     ]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [Global.node, tempGlobalLayer],
       [Watcher.node, Watcher.configured({ enabled: false })],
       [SessionExecution.node, SessionExecution.noopLayer],

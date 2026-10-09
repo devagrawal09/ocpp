@@ -98,7 +98,7 @@ const app = (database?: LayerNode.Node<Database.Service, never, any>) =>
       PluginRuntime.providerNodeWithCell(pluginRuntime),
     ]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
+      [Bus.node, Bus.configured()],
       [LocationServiceMap.node, sharedLocation],
       [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
       [Snapshot.node, Snapshot.noopLayer],

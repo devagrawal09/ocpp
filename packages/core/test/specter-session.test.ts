@@ -359,7 +359,7 @@ describe("Sessions on the Specter runtime", () => {
       })
       expect(messages.slice(notice + 1).map((message) => message.type)).toEqual(["assistant"])
       const types = yield* eventTypes
-      expect(types.slice(0, 9)).toEqual([
+      expect(types.slice(0, 8)).toEqual([
         "session.inbox.enqueued",
         "session.execution.started",
         "session.instructions.updated",
@@ -368,10 +368,15 @@ describe("Sessions on the Specter runtime", () => {
         "session.tool.input.started",
         "session.tool.input.ended",
         "session.tool.called",
-        "session.codemode.started",
       ])
-      // The program's result and the end of the provider stream race.
-      expect(types.slice(9, 11).toSorted()).toEqual(["session.step.streamed", "session.tool.success"])
+      // The end of the provider stream races the program, which starts and returns its result on the
+      // tool call's own fiber.
+      expect(types.slice(8, 11).toSorted()).toEqual([
+        "session.codemode.started",
+        "session.step.streamed",
+        "session.tool.success",
+      ])
+      expect(types.indexOf("session.codemode.started")).toBeLessThan(types.indexOf("session.tool.success"))
       expect(types).toContain("session.codemode.completed")
       expect(types.slice(-2)).toEqual(["session.step.ended", "session.execution.succeeded"])
     }),

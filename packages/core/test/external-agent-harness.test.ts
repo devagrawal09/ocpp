@@ -592,6 +592,53 @@ describe("vendor-driven sessions", () => {
     }),
   )
 
+  it.live("a later boot without the runtime's saved state rebuilds it from the log", () =>
+    Effect.gen(function* () {
+      const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
+      const directory = yield* tmpdirScoped()
+      let sessionID: Session.ID | undefined
+      vendor.turn = say("Answer one")
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          const env = yield* setup(ref("claude", "sonnet"), directory)
+          sessionID = env.session.id
+          yield* env.sessions.prompt({ sessionID, text: "One" })
+          yield* env.sessions.wait(sessionID)
+        }),
+      )
+      // The runtime's jobs and Slice snapshots are derived from the log: losing them costs time only.
+      const saved = new SqliteDatabase(file)
+      saved.query("DELETE FROM specter_outbox_job").run()
+      saved.query("DELETE FROM specter_slice_snapshot").run()
+      saved.close()
+      vendor.turn = say("Answer two")
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          const { runtime } = yield* SpecterSessionRuntime.Service
+          expect(yield* runtime.query({ type: "sessionStatus", payload: { sessionID: sessionID! } })).toMatchObject({
+            status: "settled",
+            executions: 1,
+            lastOutcome: "succeeded",
+          })
+          const sessions = yield* Session.Service
+          yield* sessions.prompt({ sessionID: sessionID!, text: "Two" })
+          yield* sessions.wait(sessionID!)
+          expect(texts(yield* messages(sessionID!)).at(-1)).toBe("Answer two")
+          expect(yield* runtime.query({ type: "sessionStatus", payload: { sessionID: sessionID! } })).toMatchObject({
+            executions: 2,
+          })
+        }),
+      )
+      // The first turn's replayed job found its execution settled and ran nothing.
+      expect(vendor.runs.map((run) => run.message)).toEqual([
+        expect.stringContaining("One"),
+        expect.stringContaining("Two"),
+      ])
+    }),
+  )
+
   it.live("a later boot starts from the runtime state the last one saved", () =>
     Effect.gen(function* () {
       const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")

@@ -8,6 +8,7 @@ import {
   EventLog,
   makeEmbeddedSessionRuntime,
   Model,
+  modelStepHostLayer,
   SpecterCommandRejectedError,
   type Delta,
   type EmbeddedSessionRuntime,
@@ -82,17 +83,21 @@ const layer = Layer.effect(
           .pipe(Effect.tap((result) => (result.duplicate ? Effect.void : track(result.events)))),
     }
 
-    const runtime = yield* makeEmbeddedSessionRuntime({
-      step: {
-        agent: (sessionID) =>
-          store.get(SessionSchema.ID.make(sessionID)).pipe(Effect.map((session) => session?.agent ?? "build")),
-      },
-    }).pipe(
+    const runtime = yield* makeEmbeddedSessionRuntime().pipe(
       Effect.provide(
         Layer.mergeAll(
           Layer.succeed(EventLog, log),
-          Layer.succeed(Model, model),
-          Layer.succeed(DeltaChannel, DeltaChannel.of({ pubsub: deltas })),
+          modelStepHostLayer({
+            agent: (sessionID) =>
+              store.get(SessionSchema.ID.make(sessionID)).pipe(Effect.map((session) => session?.agent ?? "build")),
+          }).pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                Layer.succeed(Model, model),
+                Layer.succeed(DeltaChannel, DeltaChannel.of({ pubsub: deltas })),
+              ),
+            ),
+          ),
         ),
       ),
       Effect.orDie,

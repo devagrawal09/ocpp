@@ -10,6 +10,7 @@ import {
   StepHost,
   type AttemptOutcome,
   type CompactionOutcome,
+  type DriveOutcome,
   type EmbeddedSessionRuntime,
   type RecordFailure,
   type EventLogService,
@@ -156,6 +157,12 @@ const layer = Layer.effect(
       ...(host.prepare ? { prepare: host.prepare } : {}),
       ...(host.moving ? { moving: host.moving } : {}),
       ...(host.recover ? { recover: host.recover } : {}),
+      ...(host.drive
+        ? {
+            drive: (input: Parameters<NonNullable<typeof host.drive>>[0]) =>
+              untilIdle<DriveOutcome, never>(input.sessionID, host.drive!(input), { outcome: "stopped" }),
+          }
+        : {}),
     })
 
     // One step per Session at a time; different Sessions (subagents included) run at once.

@@ -11,18 +11,20 @@ import {
   type AttemptRecorder,
   type CompactFirst,
   type CompactionOutcome,
+  type DriveOutcome,
   type PrepareOutcome,
   type RecordFailure,
   type StepPlan,
 } from "@specter/agent-runtime"
 import { Bus } from "../bus.js"
+import { ExternalAgentHarness } from "../external-agent/harness.js"
 import { Database } from "../database/database.js"
 import { llmClient } from "../effect/app-node-platform.js"
 import { LocationServiceMap } from "../location-service-map.js"
 import { Snapshot } from "../snapshot.js"
 import { SessionCompaction } from "../session/compaction.js"
 import { SessionContext } from "../session/context.js"
-import { StepFailedError } from "../session/error.js"
+import { StepFailedError, UserInterruptedError } from "../session/error.js"
 import { SessionEvent } from "../session/event.js"
 import { SessionMessage } from "../session/message.js"
 import { SessionModelTransport } from "../session/model-transport.js"
@@ -547,6 +549,29 @@ export const make = Effect.gen(function* () {
             ? Effect.interrupt
             : Effect.succeed<PrepareOutcome>({ outcome: "failed", error: toSessionError(Cause.squash(cause)) }),
         ),
+      ),
+    // An external agent's execution, whole: the harness delivers its input and records what the agent does. A
+    // move continues it in the Session's new Location.
+    drive: (input) =>
+      Effect.gen(function* () {
+        const sessionID = SessionSchema.ID.make(input.sessionID)
+        let force = true
+        while (true) {
+          const location = yield* locationOf(sessionID)
+          const result = yield* ExternalAgentHarness.Service.use((harness) =>
+            harness.drain({ sessionID, force, promotable: input.continues ? "steer" : "input" }),
+          ).pipe(Effect.provide(location))
+          if (result._tag === "Complete") return { outcome: "succeeded" } satisfies DriveOutcome
+          force = false
+        }
+      }).pipe(
+        Effect.catchCause((cause): Effect.Effect<DriveOutcome> => {
+          if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt
+          const failure = Cause.squash(cause)
+          // A dismissed question interrupts the turn on the user's behalf.
+          if (failure instanceof UserInterruptedError) return Effect.succeed({ outcome: "interrupted" })
+          return Effect.succeed({ outcome: "failed", error: toSessionError(failure) })
+        }),
       ),
     // A dead attempt's tool calls fail as OC++'s runner failed them, naming the child Session a delegation ran.
     recover: (sessionID) => settleStaleToolCalls(store, bus, SessionSchema.ID.make(sessionID)).pipe(Effect.orDie),

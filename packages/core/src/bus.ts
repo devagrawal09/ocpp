@@ -11,6 +11,7 @@ import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { isDeepStrictEqual } from "node:util"
 import { Durable } from "@ocpp/schema/durable-event-manifest"
+import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionID } from "@ocpp/schema/session-id"
 import { AbsolutePath } from "@ocpp/schema/schema"
@@ -128,8 +129,10 @@ const mapNonEmpty = <A, B>(items: readonly [A, ...A[]], f: (item: A) => B): [B, 
   ...items.slice(1).map(f),
 ]
 
-/** Durable Session events: the Specter runtime records every one of them. */
-const sessionFacts = new Set<string>(SessionEvent.DurableDefinitions.map((definition) => definition.type))
+/** Durable Session facts, an external agent's included: the Specter runtime records every one of them. */
+const sessionFacts = new Set<string>(
+  [...SessionEvent.DurableDefinitions, ...ExternalSession.Definitions].map((definition) => definition.type),
+)
 
 export type SubscribePayload<D extends readonly Event.Definition[]> = D[number] extends infer Item
   ? Item extends Event.Definition

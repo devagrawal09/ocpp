@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
+import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import { Model, sessionEvent, sessionEventDefinitions, toOcppEventType } from "@specter/agent-runtime"
 import { SpecterTranslate } from "../src/specter/translate"
@@ -18,10 +19,24 @@ describe("embedded Specter runtime", () => {
     expect(await Effect.runPromise(read.pipe(Effect.provide(Layer.succeed(Model, model))))).toBe(model)
   })
 
-  test("defines OC++'s durable Session events under kebab-case names", () => {
+  test("defines OC++'s durable Session facts under kebab-case names", () => {
     expect(sessionEventDefinitions.map((definition) => toOcppEventType(definition.type))).toEqual(
-      expect.arrayContaining(SessionEvent.DurableDefinitions.map((definition) => definition.type)),
+      expect.arrayContaining(
+        [...SessionEvent.DurableDefinitions, ...ExternalSession.Definitions].map((definition) => definition.type),
+      ),
     )
+  })
+
+  test("projects an external agent's Session facts as OC++'s own", () => {
+    expect(
+      SpecterTranslate.toWire({
+        id: "evt_1",
+        type: "session-external-linked",
+        payload: { sessionID: "ses_1", vendorSessionID: "vendor_1" },
+        order: 1,
+        recordedAt: new Date(0).toISOString(),
+      }).map((wire) => [wire.definition.type, wire.data]),
+    ).toEqual([[ExternalSession.Linked.type, { sessionID: "ses_1", vendorSessionID: "vendor_1" }]])
   })
 
   test("projects its consolidated facts as OC++'s events", () => {

@@ -659,6 +659,54 @@ describe("Sessions on the Specter runtime", () => {
     }),
   )
 
+  it.live("saves only runtime state the log determines: a boot from the log alone holds the same", () =>
+    Effect.gen(function* () {
+      const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
+      const saved = Database.Service.use(({ db }) =>
+        Effect.all({
+          slices: db.all<{ readonly slice: string; readonly cursor: number; readonly state: string }>(
+            sql`SELECT slice, cursor, state FROM specter_slice_snapshot ORDER BY slice`,
+          ),
+          jobs: db.all<{ readonly status: string }>(sql`SELECT status FROM specter_outbox_job`),
+          facts: db.get<{ readonly count: number }>(sql`SELECT count(*) AS count FROM specter_event`),
+        }).pipe(Effect.orDie),
+      )
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          yield* setup
+          yield* (yield* TestLLM.Service).push(TestLLM.text("First", "text_1"))
+          const session = yield* Session.Service
+          yield* session.prompt({ sessionID, text: "One" })
+          yield* session.wait(sessionID)
+        }),
+      )
+      // A boot catches every Slice up from its snapshot and saves them when it stops: the log's state.
+      // Snapshots are saved when a boot stops, so each is read at the next boot.
+      yield* boot(file, Effect.void)
+      const resumed = yield* boot(file, saved)
+      // Without the runtime's saved state, a boot folds the log alone.
+      yield* boot(
+        file,
+        Database.Service.use(({ db }) =>
+          Effect.all([
+            db.run(sql`DELETE FROM specter_slice_snapshot`),
+            db.run(sql`DELETE FROM specter_outbox_job`),
+          ]).pipe(Effect.orDie),
+        ),
+      )
+      expect((yield* boot(file, saved)).slices).toEqual([])
+      yield* boot(file, Effect.void)
+      const rebuilt = yield* boot(file, saved)
+
+      expect(resumed.slices.length).toBeGreaterThan(20)
+      expect(rebuilt.slices).toEqual(resumed.slices)
+      // Neither boot recorded a fact, and no work is left to do: the jobs ran or the log shows them done.
+      expect(rebuilt.facts).toEqual(resumed.facts)
+      expect(rebuilt.jobs.filter((job) => job.status !== "completed")).toEqual([])
+    }),
+  )
+
   it.live("starts nothing at the next boot for a Session that settled", () =>
     Effect.gen(function* () {
       const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")

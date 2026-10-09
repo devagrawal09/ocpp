@@ -201,6 +201,9 @@ const layer = Layer.effect(
     const runtime = yield* makeEmbeddedSessionRuntime({
       outbox: { worker: { concurrency: 64 } },
       stores: { slices, runStep, drive },
+      // Every Slice holds the log's state once the runtime is up; from saved snapshots that is only the
+      // log's tail.
+      catchUp: true,
     }).pipe(
       Effect.provide(Layer.mergeAll(Layer.succeed(EventLog, log), Layer.succeed(StepHost, interruptible))),
       Effect.orDie,

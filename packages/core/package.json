@@ -126,6 +126,7 @@
     "@standard-schema/spec": "catalog:",
     "@parcel/watcher": "2.5.1",
     "@silvia-odwyer/photon-node": "0.3.4",
+    "@specter/agent-runtime": "link:@specter/agent-runtime",
     "ai-gateway-provider": "3.1.2",
     "bun-pty": "0.4.8",
     "diff": "catalog:",

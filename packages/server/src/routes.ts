@@ -23,6 +23,7 @@ import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { LocationActivity } from "@ocpp/core/location-activity"
 import { ModelsDev } from "@ocpp/core/models-dev"
 import { SessionRestart } from "@ocpp/core/session/execution/restart"
+import { SpecterSessions } from "@ocpp/core/specter/index"
 import { CodeModeCommand } from "@ocpp/core/codemode/command"
 import { CodeModeEvent } from "@ocpp/core/codemode/event"
 import { CodeModeScheduler } from "@ocpp/core/codemode/scheduler"
@@ -115,6 +116,8 @@ export function createRoutes(
     ],
     [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntimeCell)],
     [PluginRuntime.providerNode, PluginRuntime.providerNodeWithCell(pluginRuntimeCell)],
+    // The embedded Specter runtime runs every Session.
+    ...SpecterSessions.replacements,
   ]
   const replacements: LayerNode.Replacements = [...standard, ...overrides]
   const serviceLayer = options.simulation

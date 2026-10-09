@@ -130,12 +130,12 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
           toolCalls: tools.calls,
         } satisfies Result
       })
-    const operation =
-      timeoutMs === undefined
-        ? base
-        : Effect.flatMap(raceDeadline(Effect.sleep(Duration.millis(timeoutMs)), base), (outcome) =>
-            outcome.kind === "expired" ? expired() : Effect.succeed(outcome.value),
-          )
+    const operation: Effect.Effect<Result, unknown, Services<Provided>> = timeoutMs === undefined
+      ? base
+      : Effect.flatMap(
+          raceDeadline(Effect.sleep(Duration.millis(timeoutMs)), base),
+          (outcome): Effect.Effect<Result> => (outcome.kind === "expired" ? expired() : Effect.succeed(outcome.value)),
+        )
 
     return operation.pipe(
       Effect.catchCause((cause) =>

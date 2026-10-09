@@ -166,10 +166,64 @@ export const EventSkipped = Event.durable({
   schema: { ...named, at: NonNegativeInt },
 })
 
+// A background job's marker is its own aggregate, keyed by the notification its result arrives in: it
+// is recorded from the job registry, which Session listeners call while holding their Session.
+const byNotification = { aggregate: "notificationID", version: 1 } as const
+
+/** How restart recovery resumes a background job: a shell, a subagent's Session or a Code Mode run. */
+export const BackgroundRecovery = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("shell"),
+    sessionID: SessionID,
+    shellID: Schema.String,
+    command: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("subagent"),
+    parentSessionID: SessionID,
+    childSessionID: SessionID,
+    agent: Schema.String,
+    description: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("codemode"),
+    parentSessionID: SessionID,
+    assistantMessageID: SessionMessage.ID,
+    toolCallID: Schema.String,
+  }),
+])
+export type BackgroundRecovery = typeof BackgroundRecovery.Type
+
+/** A recoverable background job, as it stands: until its notification is delivered, a restart resumes it. */
+export const BackgroundRecorded = Event.durable({
+  type: "session.background.recorded",
+  durable: byNotification,
+  schema: {
+    notificationID: SessionMessage.ID,
+    jobID: Schema.String,
+    recovery: BackgroundRecovery,
+    status: Schema.Literals(["running", "completed", "error", "cancelled"]),
+    output: optional(Schema.String),
+    error: optional(Schema.String),
+  },
+})
+/** The job's outcome reached its Session; only its notification is left to deliver. */
+export const BackgroundTerminal = Event.durable({
+  type: "session.background.terminal",
+  durable: byNotification,
+  schema: { notificationID: SessionMessage.ID },
+})
+/** The job's notification was delivered, or the job discarded: nothing is left to recover. */
+export const BackgroundCompleted = Event.durable({
+  type: "session.background.completed",
+  durable: byNotification,
+  schema: { notificationID: SessionMessage.ID },
+})
+
 /**
- * Internal persistence facts of a Session's API instruction entries and Code Mode state. OC++'s
- * instruction entry and Code Mode rows are their projections; clients see the ordinary Session and
- * Code Mode notifications.
+ * Internal persistence facts of a Session's API instruction entries, Code Mode state and background
+ * jobs. OC++'s instruction entry, Code Mode and background job rows are their projections; clients see
+ * the ordinary Session and Code Mode notifications.
  */
 export const Definitions = Event.inventory(
   InstructionEntrySet,
@@ -190,4 +244,7 @@ export const Definitions = Event.inventory(
   EventPlanned,
   EventFired,
   EventSkipped,
+  BackgroundRecorded,
+  BackgroundTerminal,
+  BackgroundCompleted,
 )

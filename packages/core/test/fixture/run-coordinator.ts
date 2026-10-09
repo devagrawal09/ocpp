@@ -1,7 +1,10 @@
-export * as SessionRunCoordinator from "./run-coordinator.js"
+export * as SessionRunCoordinator from "./run-coordinator"
+
+// OC++'s former run coordinator, kept as a test double for SessionExecution: per-key serialization,
+// coalesced wakes and joining resumes, without the Specter runtime.
 
 import { Deferred, Effect, Exit, Fiber, FiberSet, Scope } from "effect"
-import type { Promotable } from "./inbox.js"
+import type { Promotable } from "@ocpp/core/session/inbox"
 
 /** Serializes execution for each key while allowing different keys to run concurrently. */
 export interface Coordinator<Key, E, Reason = never> {

@@ -29,7 +29,7 @@ import { SessionMessage } from "../src/session/message.js"
 import { SessionPrompt } from "../src/session/prompt.js"
 import { SessionProjector } from "../src/session/projector.js"
 import { SessionRevert } from "../src/session/revert.js"
-import { SessionRunCoordinator } from "../src/session/run-coordinator.js"
+import { SessionRunCoordinator } from "./fixture/run-coordinator"
 import { toLLMMessages } from "../src/session/runner/to-llm-message.js"
 import { CodeModeLimits } from "../src/codemode/limits.js"
 import { SessionSchema } from "../src/session/schema.js"
@@ -616,7 +616,9 @@ describe("Session-owned handles", () => {
       expect(toLLMMessages(context, model).map((message) => message.id)).toEqual([boundary.id])
       expect(fixture.wakes).toEqual([])
 
-      const conflict = yield* handle.display({ id: boundary.id, blocks: [{ type: "markdown", text: "x" }] }).pipe(Effect.flip)
+      const conflict = yield* handle
+        .display({ id: boundary.id, blocks: [{ type: "markdown", text: "x" }] })
+        .pipe(Effect.flip)
       expect(conflict).toMatchObject({ _tag: "Session.DisplayConflictError", messageID: boundary.id })
       const unknownKey = yield* handle
         .display({ blocks: [{ type: "table", columns: [{ key: "a", label: "A" }], rows: [{ b: 1 }] }] })

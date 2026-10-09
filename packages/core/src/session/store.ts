@@ -1,6 +1,6 @@
 export * as SessionStore from "./store.js"
 
-import { and, eq, isNotNull, isNull, notInArray, sql } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database } from "../database/database.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
@@ -17,30 +17,6 @@ export interface Interface {
   readonly message: (
     messageID: SessionMessage.ID,
   ) => Effect.Effect<{ readonly sessionID: Session.ID; readonly message: SessionMessage.Info } | undefined>
-  /**
-   * Top-level Sessions holding an execution claim. Recoverable background
-   * children are resumed separately through their durable Job records.
-   */
-  readonly listSuspended: () => Effect.Effect<ReadonlyArray<Session.ID>>
-  /**
-   * Records the execution claim: the durable write-ahead intent that a turn is
-   * (or was) in flight. Set when execution starts; a claim that survives to the
-   * next boot marks a turn that never completed — its process crashed or shut
-   * down mid-turn.
-   */
-  readonly claim: (sessionID: Session.ID) => Effect.Effect<void>
-  /** Releases the claim and resets resume accounting. Terminal events call this on commit. */
-  readonly release: (sessionID: Session.ID) => Effect.Effect<void>
-  /**
-   * Clears orphaned child claims except children owned by recoverable
-   * background subagent jobs.
-   */
-  readonly releaseChildClaims: (recoverable: ReadonlyArray<Session.ID>) => Effect.Effect<void>
-  /**
-   * Durably counts one more resume of an orphaned claim, returning the new
-   * total — or undefined when the Session no longer exists.
-   */
-  readonly countResume: (sessionID: Session.ID) => Effect.Effect<number | undefined>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionStore") {}
@@ -69,64 +45,6 @@ const layer = Layer.effect(
               message: yield* SessionHistory.decodeMessageRow(row).pipe(Effect.orDie),
             }
           : undefined
-      }),
-      listSuspended: Effect.fn("SessionStore.listSuspended")(function* () {
-        return yield* db
-          .select({ sessionID: SessionTable.id })
-          .from(SessionTable)
-          .where(and(isNotNull(SessionTable.time_suspended), isNull(SessionTable.parent_id)))
-          .all()
-          .pipe(
-            Effect.orDie,
-            Effect.map((rows) => rows.map((row) => row.sessionID)),
-          )
-      }),
-      claim: Effect.fn("SessionStore.claim")(function* (sessionID) {
-        // The null guard makes re-claiming a still-claimed Session a zero-row
-        // no-op (a resumed turn re-claims through the same started hook).
-        // Claim bookkeeping never counts as user activity: time_updated is
-        // pinned so session ordering only moves on real changes.
-        yield* db
-          .update(SessionTable)
-          .set({ time_suspended: Date.now(), time_updated: sql`${SessionTable.time_updated}` })
-          .where(and(eq(SessionTable.id, sessionID), isNull(SessionTable.time_suspended)))
-          .run()
-          .pipe(Effect.orDie)
-      }),
-      release: Effect.fn("SessionStore.release")(function* (sessionID) {
-        yield* db
-          .update(SessionTable)
-          .set({ time_suspended: null, resume_attempts: 0, time_updated: sql`${SessionTable.time_updated}` })
-          .where(eq(SessionTable.id, sessionID))
-          .run()
-          .pipe(Effect.orDie)
-      }),
-      releaseChildClaims: Effect.fn("SessionStore.releaseChildClaims")((recoverable) =>
-        db
-          .update(SessionTable)
-          .set({ time_suspended: null, resume_attempts: 0, time_updated: sql`${SessionTable.time_updated}` })
-          .where(
-            and(
-              isNotNull(SessionTable.time_suspended),
-              isNotNull(SessionTable.parent_id),
-              recoverable.length > 0 ? notInArray(SessionTable.id, Array.from(recoverable)) : undefined,
-            ),
-          )
-          .run()
-          .pipe(Effect.orDie, Effect.asVoid),
-      ),
-      countResume: Effect.fn("SessionStore.countResume")(function* (sessionID) {
-        const row = yield* db
-          .update(SessionTable)
-          .set({
-            resume_attempts: sql`${SessionTable.resume_attempts} + 1`,
-            time_updated: sql`${SessionTable.time_updated}`,
-          })
-          .where(eq(SessionTable.id, sessionID))
-          .returning({ attempts: SessionTable.resume_attempts })
-          .get()
-          .pipe(Effect.orDie)
-        return row?.attempts
       }),
     })
   }),

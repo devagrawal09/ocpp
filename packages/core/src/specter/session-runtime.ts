@@ -19,10 +19,14 @@ import {
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { LocationServiceMap } from "../location-service-map.js"
+import { SessionEvent } from "../session/event.js"
 import { SessionSchema } from "../session/schema.js"
 import { SessionTable } from "../session/sql.js"
 import { SessionStore } from "../session/store.js"
 import { SpecterStepHost } from "./step-host.js"
+
+const CONTINUE_AFTER_RESTART =
+  "The server restarted while you were working. Continue from where you left off without repeating completed work."
 
 /**
  * The embedded Specter runtime that runs whole Sessions. It writes to the same Event Log as the Bus,
@@ -160,7 +164,20 @@ const layer = Layer.effect(
       ...(host.drive
         ? {
             drive: (input: Parameters<NonNullable<typeof host.drive>>[0]) =>
-              untilIdle<DriveOutcome, never>(input.sessionID, host.drive!(input), { outcome: "stopped" }),
+              Effect.gen(function* () {
+                const sessionID = SessionSchema.ID.make(input.sessionID)
+                // This process did not start the execution: a process that stopped left it running, and the
+                // agent hears why its turn goes on before it continues.
+                if (!(yield* SubscriptionRef.get(active)).has(sessionID))
+                  yield* bus.publish(SessionEvent.Synthetic, {
+                    sessionID,
+                    text: CONTINUE_AFTER_RESTART,
+                    description: "Continuing after restart",
+                  })
+                return yield* untilIdle<DriveOutcome, never>(input.sessionID, host.drive!(input), {
+                  outcome: "stopped",
+                })
+              }),
           }
         : {}),
     })

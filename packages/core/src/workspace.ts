@@ -330,7 +330,7 @@ export const node = configured()
 // TODO(workspace-plan): add the boot janitor and ~23h safety snapshot rotation in a later PR.
 // TODO(workspace-plan): make cold wake interruptible with a re-pin loop against janitor races.
 // TODO(workspace-plan): consider extracting a keyed shared-attempt helper (join/cancel, drop-on-settle) beside
-// KeyedMutex at end-of-series consolidation; filesystem/search.ts and session/run-coordinator.ts hand-roll the same
+// KeyedMutex at end-of-series consolidation; filesystem/search.ts hand-rolls the same
 // shape. Audited stdlib alternatives (rc.111): RcMap fails twice (refcount release cancels in-flight work when the
 // last waiter leaves, and one finalizer path cannot express idle-suspend vs destroy); Cache interrupts the shared
 // lookup when its last awaiter is interrupted and cannot fail waiters with NotFound on invalidation.

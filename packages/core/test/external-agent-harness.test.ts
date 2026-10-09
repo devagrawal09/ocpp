@@ -8,7 +8,7 @@ import { OpenAIChat } from "@ocpp/ai/protocols"
 import { TestLLM } from "@ocpp/ai/testing"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
-import { Cause, Deferred, Effect, Fiber, Layer, Queue, Schema, Stream, type Types } from "effect"
+import { Cause, Deferred, Effect, Fiber, Layer, Queue, Schema, type Scope, Stream, type Types } from "effect"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionDriver } from "@ocpp/schema/session-driver"
@@ -150,7 +150,19 @@ const replacements = [
   [ExternalAgentDrivers.node, drivers],
   [Bus.node, Bus.configured({ persist: true })],
 ] satisfies LayerNode.Replacements
-const it = testEffect(AppNodeBuilder.build(nodes, replacements))
+const app = AppNodeBuilder.build(nodes, replacements)
+const it = testEffect(app)
+// One boot of the app over a database file: its scope closing is the server stopping. Each boot builds
+// its own services, sharing none with another (Layers memoize by identity).
+const boot = <A, E>(file: string, effect: Effect.Effect<A, E, Layer.Success<typeof app> | Scope.Scope>) =>
+  Effect.gen(function* () {
+    const services = yield* Layer.buildWithMemoMap(
+      AppNodeBuilder.build(nodes, [...replacements, [Database.node, Database.configured({ path: file })]]),
+      yield* Layer.makeMemoMap,
+      yield* Effect.scope,
+    )
+    return yield* effect.pipe(Effect.provideContext(services))
+  }).pipe(Effect.scoped)
 // Projects resolved from the filesystem as a host resolves them, git worktrees included.
 const projectIt = testEffect(
   AppNodeBuilder.build(
@@ -212,9 +224,9 @@ const ref = (provider: string, id: string, variant?: string) =>
     ...(variant === undefined ? {} : { variant: Model.VariantID.make(variant) }),
   })
 
-const setup = (model?: Model.Ref) =>
+const setup = (model?: Model.Ref, at?: { readonly path: string }) =>
   Effect.gen(function* () {
-    const directory = yield* tmpdirScoped()
+    const directory = at ?? (yield* tmpdirScoped())
     const sessions = yield* Session.Service
     const session = yield* sessions.create({
       location: Location.Ref.make({ directory: AbsolutePath.make(directory.path) }),
@@ -536,27 +548,43 @@ describe("vendor-driven sessions", () => {
     }),
   )
 
-  it.live("startup recovery resumes the vendor session a claimed Session left behind", () =>
+  it.live("startup recovery resumes the vendor session a stopped process left mid-turn", () =>
     Effect.gen(function* () {
-      const env = yield* setup(ref("claude", "sonnet"))
-      vendor.turn = say("First answer")
-      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
-      yield* env.sessions.wait(env.session.id)
-      const external = yield* ExternalAgentSession.Service
-      const store = yield* SessionStore.Service
-      const restart = yield* SessionRestart.Service
-      const vendorSessionID = (yield* external.get(env.session.id))?.vendorSessionID
-      // A process that died mid-turn leaves its execution claim behind.
-      yield* store.claim(env.session.id)
+      // The database and the Session's directory outlive both boots.
+      const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
+      const directory = yield* tmpdirScoped()
+      const left = { sessionID: undefined as Session.ID | undefined, vendorSessionID: undefined as string | undefined }
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          const env = yield* setup(ref("claude", "sonnet"), directory)
+          left.sessionID = env.session.id
+          const running = Promise.withResolvers<void>()
+          // The process stops while the vendor is mid-turn: the run ends when it is aborted.
+          vendor.turn = async (options) => {
+            running.resolve()
+            await new Promise((_, reject) =>
+              options.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true }),
+            )
+          }
+          yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
+          yield* Effect.promise(() => running.promise)
+          left.vendorSessionID = (yield* (yield* ExternalAgentSession.Service).get(env.session.id))?.vendorSessionID
+        }),
+      )
       vendor.turn = say("Continuing")
-      yield* restart.resumeSuspendedSessions
-      while (vendor.runs.length < 2) yield* Effect.promise(() => Bun.sleep(5))
-      yield* env.sessions.wait(env.session.id)
-      expect(vendor.runs).toHaveLength(2)
-      expect(vendor.runs[1].vendorSessionID).toBe(vendorSessionID)
-      expect(vendor.runs[1].history).toEqual([])
-      expect(vendor.runs[1].message).toContain("The server restarted while you were working")
-      expect(texts(yield* messages(env.session.id)).at(-1)).toBe("Continuing")
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          const sessionID = left.sessionID!
+          // The runtime resumes the execution it finds running in its log.
+          while (vendor.runs.length < 2) yield* Effect.promise(() => Bun.sleep(5))
+          yield* (yield* Session.Service).wait(sessionID)
+          expect(vendor.runs[1].vendorSessionID).toBe(left.vendorSessionID)
+          expect(vendor.runs[1].message).toContain("The server restarted while you were working")
+          expect(texts(yield* messages(sessionID)).at(-1)).toBe("Continuing")
+        }),
+      )
     }),
   )
 

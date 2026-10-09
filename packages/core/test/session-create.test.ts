@@ -142,11 +142,9 @@ describe("Session.create", () => {
         const child = yield* session.create({ location: nested, title: "Nested before git" })
         const alias = yield* session.create({ location: aliased, title: "Aliased before git" })
         const bus = yield* Bus.Service
-        const store = yield* SessionStore.Service
         yield* session.prompt({ sessionID: created.id, text: "Preserved history", resume: false })
         yield* SessionInbox.promote(db, bus, created.id, "steer")
         const pending = yield* session.prompt({ sessionID: created.id, text: "Preserved inbox", resume: false })
-        yield* store.claim(created.id)
         const before = yield* db
           .select()
           .from(SessionTable)

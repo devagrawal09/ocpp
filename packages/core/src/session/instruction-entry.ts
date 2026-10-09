@@ -1,12 +1,15 @@
 export * as InstructionEntry from "./instruction-entry.js"
 
-import { and, asc, eq, isNotNull, isNull, ne, or } from "drizzle-orm"
+import { and, asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { InstructionEntry } from "@ocpp/schema/instruction-entry"
+import { SessionFact } from "@ocpp/schema/session-fact"
+import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Instructions } from "../instructions/index.js"
 import { SessionSchema } from "./schema.js"
+import { SessionProjector } from "./projector.js"
 import { InstructionEntryTable } from "./sql.js"
 
 export const Key = InstructionEntry.Key
@@ -19,7 +22,6 @@ export const MaxValueBytes = InstructionEntry.MaxValueBytes
 export const ValueTooLargeError = InstructionEntry.ValueTooLargeError
 
 type DatabaseService = Database.Interface["db"]
-const InsertBatchSize = 10
 
 export const snapshot = Effect.fn("InstructionEntry.snapshot")(function* (
   db: DatabaseService,
@@ -36,34 +38,6 @@ export const snapshot = Effect.fn("InstructionEntry.snapshot")(function* (
     .orderBy(asc(InstructionEntryTable.key))
     .all()
     .pipe(Effect.orDie)
-})
-
-export const initialize = Effect.fn("InstructionEntry.initialize")(function* (
-  db: DatabaseService,
-  sessionID: SessionSchema.ID,
-  entries: Snapshot,
-  created: number,
-) {
-  const batches = Array.from({ length: Math.ceil(entries.length / InsertBatchSize) }, (_, index) =>
-    entries.slice(index * InsertBatchSize, (index + 1) * InsertBatchSize),
-  )
-  yield* Effect.forEach(
-    batches,
-    (batch) =>
-      db
-        .insert(InstructionEntryTable)
-        .values(
-          batch.map((entry) => ({
-            ...entry,
-            session_id: sessionID,
-            time_created: created,
-            time_updated: created,
-          })),
-        )
-        .run()
-        .pipe(Effect.orDie),
-    { discard: true },
-  )
 })
 
 export interface Interface {
@@ -107,6 +81,7 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const { db } = yield* Database.Service
+    const bus = yield* Bus.Service
 
     const rows = Effect.fnUntraced(function* (sessionID: SessionSchema.ID, includeRemoved: boolean) {
       return yield* db
@@ -139,35 +114,26 @@ const layer = Layer.effect(
           maxBytes: MaxValueBytes,
           message: `Instruction entry value is ${actualBytes} bytes; the limit is ${MaxValueBytes} bytes`,
         })
-      const changed =
-        input.value === null
-          ? isNotNull(InstructionEntryTable.value)
-          : or(isNull(InstructionEntryTable.value), ne(InstructionEntryTable.value, input.value))
-      yield* db
-        .insert(InstructionEntryTable)
-        .values({ session_id: input.sessionID, key: input.key, value: input.value, removed: false })
-        .onConflictDoUpdate({
-          target: [InstructionEntryTable.session_id, InstructionEntryTable.key],
-          set: { value: input.value, removed: false, time_updated: Date.now() },
-          setWhere: or(eq(InstructionEntryTable.removed, true), changed),
-        })
-        .run()
+      // The entry's row is the projection of its facts in Specter's Event Log.
+      const stored = yield* db
+        .select({ value: InstructionEntryTable.value, removed: InstructionEntryTable.removed })
+        .from(InstructionEntryTable)
+        .where(and(eq(InstructionEntryTable.session_id, input.sessionID), eq(InstructionEntryTable.key, input.key)))
+        .get()
         .pipe(Effect.orDie)
+      if (stored && !stored.removed && JSON.stringify(stored.value) === JSON.stringify(input.value)) return
+      yield* bus.publish(SessionFact.InstructionEntrySet, input)
     })
 
     const remove = Effect.fn("InstructionEntry.remove")(function* (input: Parameters<Interface["remove"]>[0]) {
-      yield* db
-        .update(InstructionEntryTable)
-        .set({ value: null, removed: true, time_updated: Date.now() })
-        .where(
-          and(
-            eq(InstructionEntryTable.session_id, input.sessionID),
-            eq(InstructionEntryTable.key, input.key),
-            eq(InstructionEntryTable.removed, false),
-          ),
-        )
-        .run()
+      const stored = yield* db
+        .select({ removed: InstructionEntryTable.removed })
+        .from(InstructionEntryTable)
+        .where(and(eq(InstructionEntryTable.session_id, input.sessionID), eq(InstructionEntryTable.key, input.key)))
+        .get()
         .pipe(Effect.orDie)
+      if (!stored || stored.removed) return
+      yield* bus.publish(SessionFact.InstructionEntryRemoved, input)
     })
 
     const load = Effect.fn("InstructionEntry.load")(function* (sessionID: SessionSchema.ID) {
@@ -178,4 +144,8 @@ const layer = Layer.effect(
   }),
 )
 
-export const node = makeLocationNode({ service: Service, layer, deps: [Database.node] })
+export const node = makeLocationNode({
+  service: Service,
+  layer,
+  deps: [Database.node, Bus.node, SessionProjector.node],
+})

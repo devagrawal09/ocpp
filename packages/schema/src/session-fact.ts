@@ -1,0 +1,194 @@
+export * as SessionFact from "./session-fact.js"
+
+import { Schema } from "effect"
+import { CodeModeEvent } from "./codemode-event.js"
+import { Event } from "./event.js"
+import { InstructionEntry } from "./instruction-entry.js"
+import { NonNegativeInt, optional } from "./schema.js"
+import { SessionID } from "./session-id.js"
+import { SessionMessage } from "./session-message.js"
+
+const bySession = { aggregate: "sessionID", version: 1 } as const
+
+/** An API client attached a value to the Session's instructions, or changed it. */
+export const InstructionEntrySet = Event.durable({
+  type: "session.instruction.entry.set",
+  durable: bySession,
+  schema: { sessionID: SessionID, key: InstructionEntry.Key, value: Schema.Json },
+})
+export const InstructionEntryRemoved = Event.durable({
+  type: "session.instruction.entry.removed",
+  durable: bySession,
+  schema: { sessionID: SessionID, key: InstructionEntry.Key },
+})
+
+// An execution's facts are its own aggregate: journaling its calls does not advance the Session's
+// sequence. Each carries its Session, which its rows belong to.
+const byExecution = { aggregate: "executionID", version: 1 } as const
+const execution = { sessionID: SessionID, executionID: Schema.String }
+
+/** A Code Mode program received its execution: the notebook names it sees and the names it reserves. */
+export const ExecutionAdmitted = Event.durable({
+  type: "session.codemode.execution.admitted",
+  durable: byExecution,
+  schema: {
+    ...execution,
+    assistantMessageID: SessionMessage.ID,
+    toolCallID: Schema.String,
+    program: Schema.Json,
+    input: optional(Schema.Json),
+    tools: optional(Schema.Json),
+    snapshot: Schema.Array(Schema.String),
+    reserved: Schema.Array(Schema.String),
+  },
+})
+export const ExecutionStarted = Event.durable({
+  type: "session.codemode.execution.started",
+  durable: byExecution,
+  schema: execution,
+})
+/** A running execution resumed after its host restarted. */
+export const ExecutionResumed = Event.durable({
+  type: "session.codemode.execution.resumed",
+  durable: byExecution,
+  schema: execution,
+})
+/**
+ * An execution ended. `saved` committed its declarations as notebook values; `refused` finished but
+ * could not save them; `failed` and `indeterminate` ended before finishing, which settles its calls
+ * still scheduled.
+ */
+export const ExecutionSettled = Event.durable({
+  type: "session.codemode.execution.settled",
+  durable: byExecution,
+  schema: {
+    ...execution,
+    outcome: Schema.Literals(["saved", "refused", "failed", "indeterminate"]),
+    values: optional(Schema.Record(Schema.String, Schema.Json)),
+    messageSeq: optional(NonNegativeInt),
+    error: optional(Schema.String),
+  },
+})
+/** An execution admitted but never started was withdrawn. */
+export const ExecutionDiscarded = Event.durable({
+  type: "session.codemode.execution.discarded",
+  durable: byExecution,
+  schema: execution,
+})
+
+const call = { ...execution, index: NonNegativeInt }
+
+export const CallScheduled = Event.durable({
+  type: "session.codemode.call.scheduled",
+  durable: byExecution,
+  schema: {
+    ...call,
+    tool: Schema.String,
+    input: Schema.Json,
+    omitted: Schema.Boolean,
+    impure: optional(Schema.Array(Schema.Number)),
+  },
+})
+export const CallProgressed = Event.durable({
+  type: "session.codemode.call.progressed",
+  durable: byExecution,
+  schema: { ...call, progress: Schema.Record(Schema.String, Schema.Json) },
+})
+export const CallSettled = Event.durable({
+  type: "session.codemode.call.settled",
+  durable: byExecution,
+  schema: {
+    ...call,
+    outcome: Schema.Literals(["completed", "failed", "indeterminate"]),
+    output: optional(Schema.Json),
+    error: optional(Schema.String),
+    omitted: Schema.Boolean,
+  },
+})
+
+const named = { sessionID: SessionID, name: Schema.String }
+
+/** A slash command of the Session, calling a notebook function; defining an existing one replaces it. */
+export const CommandDefined = Event.durable({
+  type: "session.codemode.command.defined",
+  durable: bySession,
+  schema: { ...named, description: Schema.String, handler: Schema.String },
+})
+export const CommandRemoved = Event.durable({
+  type: "session.codemode.command.removed",
+  durable: bySession,
+  schema: named,
+})
+/** A scheduled event of the Session; defining an existing one replaces it and starts it over. */
+export const EventDefined = Event.durable({
+  type: "session.codemode.event.defined",
+  durable: bySession,
+  schema: {
+    ...named,
+    description: Schema.String,
+    schedule: CodeModeEvent.Schedule,
+    handler: Schema.String,
+    input: optional(Schema.Json),
+    time: NonNegativeInt,
+    next: optional(NonNegativeInt),
+  },
+})
+export const EventToggled = Event.durable({
+  type: "session.codemode.event.toggled",
+  durable: bySession,
+  schema: { ...named, enabled: Schema.Boolean },
+})
+export const EventRemoved = Event.durable({
+  type: "session.codemode.event.removed",
+  durable: bySession,
+  schema: named,
+})
+/** When the scheduler will fire the event next, or that it will not. */
+export const EventPlanned = Event.durable({
+  type: "session.codemode.event.planned",
+  durable: bySession,
+  schema: { ...named, next: optional(NonNegativeInt) },
+})
+/** A firing: the execution it started and its invocation message, or why it could not start. */
+export const EventFired = Event.durable({
+  type: "session.codemode.event.fired",
+  durable: bySession,
+  schema: {
+    ...named,
+    at: NonNegativeInt,
+    executionID: optional(Schema.String),
+    messageID: optional(SessionMessage.ID),
+    error: optional(Schema.String),
+  },
+})
+export const EventSkipped = Event.durable({
+  type: "session.codemode.event.skipped",
+  durable: bySession,
+  schema: { ...named, at: NonNegativeInt },
+})
+
+/**
+ * Internal persistence facts of a Session's API instruction entries and Code Mode state. OC++'s
+ * instruction entry and Code Mode rows are their projections; clients see the ordinary Session and
+ * Code Mode notifications.
+ */
+export const Definitions = Event.inventory(
+  InstructionEntrySet,
+  InstructionEntryRemoved,
+  ExecutionAdmitted,
+  ExecutionStarted,
+  ExecutionResumed,
+  ExecutionSettled,
+  ExecutionDiscarded,
+  CallScheduled,
+  CallProgressed,
+  CallSettled,
+  CommandDefined,
+  CommandRemoved,
+  EventDefined,
+  EventToggled,
+  EventRemoved,
+  EventPlanned,
+  EventFired,
+  EventSkipped,
+)

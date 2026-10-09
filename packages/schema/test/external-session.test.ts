@@ -6,6 +6,7 @@ import { DurableEventManifest } from "../src/durable-event-manifest.js"
 import { EventManifest } from "../src/event-manifest.js"
 import { ExternalSession } from "../src/external-session.js"
 import { ProjectFact } from "../src/project-fact.js"
+import { SessionFact } from "../src/session-fact.js"
 
 test("external persistence facts are durable and internal; children use ordinary public Session events", () => {
   for (const event of ExternalSession.Definitions) {
@@ -13,8 +14,8 @@ test("external persistence facts are durable and internal; children use ordinary
     expect(EventManifest.Server.has(event.type)).toBe(false)
   }
 })
-test("project, worktree and workspace persistence facts are durable and internal", () => {
-  for (const event of ProjectFact.Definitions) {
+test("project, instruction entry and Code Mode persistence facts are durable and internal", () => {
+  for (const event of [...ProjectFact.Definitions, ...SessionFact.Definitions]) {
     expect(DurableEventManifest.Durable.get(event.type + ".1")).toBe(event)
     expect(EventManifest.Server.has(event.type)).toBe(false)
   }

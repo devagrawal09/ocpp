@@ -14,8 +14,9 @@ import { SessionMessageUpdater } from "./message-updater.js"
 import { SessionInbox } from "./inbox.js"
 import { Workspace } from "@ocpp/schema/workspace"
 import { InstructionState } from "./instruction-state.js"
-import { SessionInboxTable, SessionMessageTable, SessionTable } from "./sql.js"
-import { InstructionEntry } from "./instruction-entry.js"
+import { InstructionEntryTable, SessionInboxTable, SessionMessageTable, SessionTable } from "./sql.js"
+import type { InstructionEntry } from "@ocpp/schema/instruction-entry"
+import { SessionFact } from "@ocpp/schema/session-fact"
 import { Slug } from "../util/slug.js"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Money } from "@ocpp/schema/money"
@@ -182,7 +183,7 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
   if (!stored) return yield* Effect.die(new SessionAlreadyProjected())
 
   if (event.data.instructionEntries)
-    yield* InstructionEntry.initialize(db, event.data.sessionID, event.data.instructionEntries, event.created)
+    yield* initializeInstructionEntries(db, event.data.sessionID, event.data.instructionEntries, event.created)
 
   let cursor = -1
   while (copiedSeq !== undefined) {
@@ -509,11 +510,73 @@ function projectIdle(
   })
 }
 
+const InsertBatchSize = 10
+
+// A fork starts with its parent's instruction entries, removed ones included.
+const initializeInstructionEntries = Effect.fnUntraced(function* (
+  db: Database.Interface["db"],
+  sessionID: SessionSchema.ID,
+  entries: InstructionEntry.Snapshot,
+  created: number,
+) {
+  const batches = Array.from({ length: Math.ceil(entries.length / InsertBatchSize) }, (_, index) =>
+    entries.slice(index * InsertBatchSize, (index + 1) * InsertBatchSize),
+  )
+  yield* Effect.forEach(
+    batches,
+    (batch) =>
+      db
+        .insert(InstructionEntryTable)
+        .values(
+          batch.map((entry) => ({
+            ...entry,
+            session_id: sessionID,
+            time_created: created,
+            time_updated: created,
+          })),
+        )
+        .run()
+        .pipe(Effect.orDie),
+    { discard: true },
+  )
+})
+
 const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
     const codemode = yield* CodeModeStore.Service
+    yield* bus.project(SessionFact.InstructionEntrySet, (event) =>
+      db
+        .insert(InstructionEntryTable)
+        .values({
+          session_id: event.data.sessionID,
+          key: event.data.key,
+          value: event.data.value,
+          removed: false,
+          time_created: event.created,
+          time_updated: event.created,
+        })
+        .onConflictDoUpdate({
+          target: [InstructionEntryTable.session_id, InstructionEntryTable.key],
+          set: { value: event.data.value, removed: false, time_updated: event.created },
+        })
+        .run()
+        .pipe(Effect.orDie, Effect.asVoid),
+    )
+    yield* bus.project(SessionFact.InstructionEntryRemoved, (event) =>
+      db
+        .update(InstructionEntryTable)
+        .set({ value: null, removed: true, time_updated: event.created })
+        .where(
+          and(
+            eq(InstructionEntryTable.session_id, event.data.sessionID),
+            eq(InstructionEntryTable.key, event.data.key),
+          ),
+        )
+        .run()
+        .pipe(Effect.orDie, Effect.asVoid),
+    )
     yield* bus.project(SessionEvent.Created, (event) =>
       Effect.gen(function* () {
         const stored = yield* db

@@ -5,6 +5,7 @@ import { Flock } from "@ocpp/util/flock"
 import { Hash } from "@ocpp/util/hash"
 import { runLockWorker, spawnLockWorker, stopLockWorker, waitForFile } from "../fixture/lock-worker"
 import { tmpdir } from "../fixture/tmpdir"
+import { makeUnwritable } from "../fixture/unwritable"
 
 type Msg = {
   key: string
@@ -335,7 +336,7 @@ describe("util.flock", () => {
     const key = "flock:perm"
 
     await fs.mkdir(dir, { recursive: true })
-    await fs.chmod(dir, 0o500)
+    const restore = await makeUnwritable(dir)
 
     try {
       const err = await Flock.withLock(key, async () => {}, {
@@ -349,7 +350,7 @@ describe("util.flock", () => {
       const text = err.message
       expect(text.includes("EACCES") || text.includes("EPERM")).toBe(true)
     } finally {
-      await fs.chmod(dir, 0o700)
+      await restore()
     }
   })
 })

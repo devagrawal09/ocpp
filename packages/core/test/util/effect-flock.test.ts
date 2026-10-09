@@ -10,6 +10,7 @@ import { Global } from "@ocpp/util/global"
 import { Hash } from "@ocpp/util/hash"
 import { runLockWorker, spawnLockWorker, stopLockWorker, waitForFile } from "../fixture/lock-worker"
 import { tmpdir } from "../fixture/tmpdir"
+import { makeUnwritable } from "../fixture/unwritable"
 
 function lock(dir: string, key: string) {
   return path.join(dir, Hash.fast(key) + ".lock")
@@ -298,12 +299,14 @@ describe("util.effect-flock", () => {
       yield* Effect.promise(async () => {
         await fs.mkdir(dir, { recursive: true })
       })
-      yield* Effect.addFinalizer(() => Effect.promise(() => fs.chmod(dir, 0o700)))
-      yield* Effect.promise(() => fs.chmod(dir, 0o500))
+      const restore = yield* Effect.promise(() => makeUnwritable(dir))
+      yield* Effect.addFinalizer(() => Effect.promise(restore))
 
       const result = yield* flock.withLock(Effect.void, "eflock:perm", dir).pipe(Effect.exit)
+      // EACCES is a PermissionDenied; EPERM (an immutable directory, which binds root too) keeps its code.
       // oxlint-disable-next-line no-base-to-string -- Exit has a useful toString for test assertions
-      expect(String(result)).toContain("PermissionDenied")
+      const text = String(result)
+      expect(text.includes("PermissionDenied") || text.includes("EPERM")).toBe(true)
     }),
   )
 

@@ -108,6 +108,8 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
       { definition: SessionEvent.Tool.Called, data: called, id },
     ]
   }
+  // Whether an input wakes the Session is the runtime's scheduling; OC++ wakes from its callers.
+  if (event.type === "session-inbox-held") return []
   if (event.type === "session-tool-settled") {
     const { outcome, ...data } = event.payload as { readonly outcome: "succeeded" | "failed" }
     return [{ definition: outcome === "succeeded" ? SessionEvent.Tool.Success : SessionEvent.Tool.Failed, data, id }]

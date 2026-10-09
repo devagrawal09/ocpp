@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
-import { Context, Effect, Layer, LayerMap, Schema, Stream } from "effect"
+import path from "path"
+import { Context, Deferred, Effect, Layer, LayerMap, Schedule, Schema, type Scope, Stream } from "effect"
 import { asc, eq } from "drizzle-orm"
 import { AIError, LanguageModel, RateLimitError } from "@ocpp/ai"
 import { OpenAIChat } from "@ocpp/ai/protocols/openai-chat"
@@ -46,6 +47,7 @@ import { SpecterSessions } from "@ocpp/core/specter/index"
 import { SpecterStepHost } from "@ocpp/core/specter/step-host"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 import { agentHost, catalogHost, host } from "./plugin/host"
 
@@ -54,118 +56,139 @@ import { agentHost, catalogHost, host } from "./plugin/host"
 const languageModel = LanguageModel.make({ id: "fake-model", provider: "fake", route: OpenAIChat.route })
 
 // The Location services are built once, bound to /project, like the runner's tests. The Session runtime
-// reaches them through a LocationServiceMap that hands that context to every Location.
-const locationContext: { current?: Context.Context<never> } = {}
+// reaches them through a LocationServiceMap that hands that context to every Location. Each app's Location services are its own context, handed over by setup; a step the runtime starts
+// before then waits for it.
+const locationContext = { current: Deferred.makeUnsafe<Context.Context<never>>() }
 const sharedLocation = makeGlobalNode({
   service: LocationServiceMap.Service,
   layer: Layer.effect(
     LocationServiceMap.Service,
-    LayerMap.make(
-      (_ref: Location.Ref) =>
-        Layer.effectContext(Effect.sync(() => locationContext.current!)) as Layer.Layer<LocationServices>,
-    ),
+    Effect.suspend(() => {
+      const context = Deferred.makeUnsafe<Context.Context<never>>()
+      locationContext.current = context
+      return LayerMap.make(
+        (_ref: Location.Ref) => Layer.effectContext(Deferred.await(context)) as Layer.Layer<LocationServices>,
+      )
+    }),
   ),
   deps: [],
 })
 
 const pluginRuntime = PluginRuntime.makeCell()
-const layer = AppNodeBuilder.build(
-  LayerNode.group([
-    Database.node,
-    Bus.node,
-    SessionProjector.node,
-    SessionStore.node,
-    SessionInbox.node,
-    Session.node,
-    SessionPromptNode.node,
-    SpecterStepHost.stepIONode,
-    PluginRuntime.node,
-    PluginHooks.node,
-    Agent.node,
-    Catalog.node,
-    Image.node,
-    Skill.node,
-    Reference.node,
-    Tool.node,
-    PluginRuntime.providerNodeWithCell(pluginRuntime),
-  ]),
-  [
-    [Bus.node, Bus.configured({ persist: true })],
-    [LocationServiceMap.node, sharedLocation],
-    [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
-    [Snapshot.node, Snapshot.noopLayer],
-    [LayerNodePlatform.llmClient, TestLLM.clientLayer],
-    [
-      SessionRunnerModel.node,
-      Layer.mock(SessionRunnerModel.Service)({
-        resolve: () =>
-          Effect.succeed(
-            SessionRunnerModel.resolved(languageModel, {
-              capabilities: { tools: true, input: ["text"], output: ["text"] },
-              cost: [],
-              limit: { context: 200_000, output: 32_000 },
-            }),
-          ),
-      }),
-    ],
-    [
-      InstructionBuiltIns.node,
-      Layer.mock(InstructionBuiltIns.Service, { load: () => Effect.succeed(Instructions.empty) }),
-    ],
-    [
-      InstructionDiscovery.node,
-      Layer.mock(InstructionDiscovery.Service, {
-        project: true,
-        global: true,
-        load: () => Effect.succeed(Instructions.empty),
-      }),
-    ],
-    [SkillInstructions.node, Layer.mock(SkillInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })],
-    [
-      ReferenceInstructions.node,
-      Layer.mock(ReferenceInstructions.Service, { load: () => Effect.succeed(Instructions.empty) }),
-    ],
-    [McpInstructions.node, Layer.mock(McpInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })],
-    [Config.node, Config.testLayer([])],
-    [
-      PluginSupervisor.node,
-      Layer.succeed(PluginSupervisor.Service, PluginSupervisor.Service.of({ flush: Effect.void })),
-    ],
-    [
-      SessionModelTransport.node,
-      Layer.succeed(
-        SessionModelTransport.Service,
-        SessionModelTransport.Service.of({
-          bind: () => ({ execute: () => Effect.die("Unexpected WebSocket execution") }),
-          close: () => Effect.void,
-          closeAll: Effect.void,
-        }),
-      ),
-    ],
-    [
+const app = (database?: LayerNode.Node<Database.Service, never, any>) =>
+  AppNodeBuilder.build(
+    LayerNode.group([
+      Database.node,
+      Bus.node,
+      SessionProjector.node,
+      SessionStore.node,
+      SessionInbox.node,
+      Session.node,
+      SessionPromptNode.node,
+      SpecterStepHost.stepIONode,
+      PluginRuntime.node,
+      PluginHooks.node,
+      Agent.node,
       Catalog.node,
-      Layer.mock(Catalog.Service, {
-        provider: { get: () => Effect.undefined, all: () => Effect.succeed([]), available: () => Effect.succeed([]) },
-        model: {
-          get: () => Effect.undefined,
-          all: () => Effect.succeed([]),
-          available: () => Effect.succeed([]),
-          default: () => Effect.undefined,
-          small: () => Effect.undefined,
-        },
-      }),
+      Image.node,
+      Skill.node,
+      Reference.node,
+      Tool.node,
+      PluginRuntime.providerNodeWithCell(pluginRuntime),
+    ]),
+    [
+      [Bus.node, Bus.configured({ persist: true })],
+      [LocationServiceMap.node, sharedLocation],
+      [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
+      [Snapshot.node, Snapshot.noopLayer],
+      [LayerNodePlatform.llmClient, TestLLM.clientLayer],
+      [
+        SessionRunnerModel.node,
+        Layer.mock(SessionRunnerModel.Service)({
+          resolve: () =>
+            Effect.succeed(
+              SessionRunnerModel.resolved(languageModel, {
+                capabilities: { tools: true, input: ["text"], output: ["text"] },
+                cost: [],
+                limit: { context: 200_000, output: 32_000 },
+              }),
+            ),
+        }),
+      ],
+      [
+        InstructionBuiltIns.node,
+        Layer.mock(InstructionBuiltIns.Service, { load: () => Effect.succeed(Instructions.empty) }),
+      ],
+      [
+        InstructionDiscovery.node,
+        Layer.mock(InstructionDiscovery.Service, {
+          project: true,
+          global: true,
+          load: () => Effect.succeed(Instructions.empty),
+        }),
+      ],
+      [
+        SkillInstructions.node,
+        Layer.mock(SkillInstructions.Service, { load: () => Effect.succeed(Instructions.empty) }),
+      ],
+      [
+        ReferenceInstructions.node,
+        Layer.mock(ReferenceInstructions.Service, { load: () => Effect.succeed(Instructions.empty) }),
+      ],
+      [McpInstructions.node, Layer.mock(McpInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })],
+      [Config.node, Config.testLayer([])],
+      [
+        PluginSupervisor.node,
+        Layer.succeed(PluginSupervisor.Service, PluginSupervisor.Service.of({ flush: Effect.void })),
+      ],
+      [
+        SessionModelTransport.node,
+        Layer.succeed(
+          SessionModelTransport.Service,
+          SessionModelTransport.Service.of({
+            bind: () => ({ execute: () => Effect.die("Unexpected WebSocket execution") }),
+            close: () => Effect.void,
+            closeAll: Effect.void,
+          }),
+        ),
+      ],
+      [
+        Catalog.node,
+        Layer.mock(Catalog.Service, {
+          provider: { get: () => Effect.undefined, all: () => Effect.succeed([]), available: () => Effect.succeed([]) },
+          model: {
+            get: () => Effect.undefined,
+            all: () => Effect.succeed([]),
+            available: () => Effect.succeed([]),
+            default: () => Effect.undefined,
+            small: () => Effect.undefined,
+          },
+        }),
+      ],
+      [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntime)],
+      [Reference.node, Layer.mock(Reference.Service, { refresh: () => Effect.void })],
+      ...SpecterSessions.replacements,
+      ...(database ? ([[Database.node, database]] as const) : []),
     ],
-    [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntime)],
-    [Reference.node, Layer.mock(Reference.Service, { refresh: () => Effect.void })],
-    ...SpecterSessions.replacements,
-  ],
-).pipe(Layer.provideMerge(TestLLM.layer({ fallback: [] })))
-const it = testEffect(layer)
+  ).pipe(Layer.provideMerge(TestLLM.layer({ fallback: [] })))
+const it = testEffect(app())
+
+// One boot of an app over a database file: its scope closing is the server shutting down. Each boot
+// builds its own services, sharing none with another app (Layers memoize by identity).
+const boot = <A, E>(file: string, effect: Effect.Effect<A, E, Layer.Success<ReturnType<typeof app>> | Scope.Scope>) =>
+  Effect.gen(function* () {
+    const services = yield* Layer.buildWithMemoMap(
+      app(Database.configured({ path: file })),
+      yield* Layer.makeMemoMap,
+      yield* Effect.scope,
+    )
+    return yield* effect.pipe(Effect.provideContext(services))
+  }).pipe(Effect.scoped)
 
 const sessionID = Session.ID.make("ses_specter_test")
 
 const setup = Effect.gen(function* () {
-  locationContext.current = yield* Effect.context<never>()
+  yield* Deferred.succeed(locationContext.current, yield* Effect.context<never>())
   // OC++'s built-in agents come from its system prompt plugins, as in the runner's tests.
   const agents = yield* Agent.Service
   const hooks = yield* PluginHooks.Service
@@ -302,25 +325,40 @@ describe("Sessions on the Specter runtime", () => {
         }),
       )
       const llm = yield* TestLLM.Service
-      yield* llm.push(
-        TestLLM.tool("call_1", "execute", { code: "return 6 * 7" }),
-        TestLLM.text("The answer is 42", "text_1"),
+      yield* llm.push(TestLLM.tool("call_1", "execute", { code: 'return "answer=" + 6 * 7' }))
+      // OC++ runs the program as a job: the call settles at once, and the completion arrives as a
+      // notification. Whether it lands before the next step or after it is timing, so the model
+      // answers once it has seen the result.
+      const seen = (request: { readonly messages: unknown }) => JSON.stringify(request.messages).includes("answer=42")
+      yield* (llm.client as TestLLM.TestInterface).serve((request) =>
+        seen(request) ? TestLLM.text("The answer is 42", "text_1") : TestLLM.text("Waiting for it", "text_1"),
       )
       const session = yield* Session.Service
 
       yield* session.prompt({ sessionID, text: "Compute it" })
+      // A notification that lands after the execution settled wakes another one.
+      const messages = yield* session.wait(sessionID).pipe(
+        Effect.andThen(session.messages({ sessionID, order: "asc" })),
+        Effect.repeat({
+          until: (messages) => JSON.stringify(messages.at(-1)).includes("The answer is 42"),
+          schedule: Schedule.spaced("20 millis"),
+        }),
+        Effect.timeout("5 seconds"),
+      )
       yield* session.wait(sessionID)
-
-      const messages = yield* session.messages({ sessionID, order: "asc" })
-      // OC++ runs the program as a job: the call settles at once, and the completion arrives as a
-      // notification the runtime delivers before the next step.
-      expect(messages.map((message) => message.type)).toEqual(["user", "assistant", "synthetic", "assistant"])
       const tool =
         messages[1]?.type === "assistant" ? messages[1].content.find((part) => part.type === "tool") : undefined
       expect(tool?.type === "tool" ? tool.state.status : undefined).toBe("completed")
-      expect(messages[2]?.type === "synthetic" ? messages[2].text : "").toContain("42")
-      expect(JSON.stringify(llm.requests[1]?.messages)).toContain("42")
-      expect(yield* eventTypes).toEqual([
+      const notice = messages.findIndex((message) => message.type === "synthetic")
+      expect(messages[notice]?.type === "synthetic" ? messages[notice].text : "").toContain("answer=42")
+      // The runtime delivered the notification before a step, and that step answered.
+      expect(messages.at(-1)).toMatchObject({
+        type: "assistant",
+        content: [{ type: "text", text: "The answer is 42" }],
+      })
+      expect(messages.slice(notice + 1).map((message) => message.type)).toEqual(["assistant"])
+      const types = yield* eventTypes
+      expect(types.slice(0, 10)).toEqual([
         "session.inbox.enqueued",
         "session.execution.started",
         "session.inbox.delivered",
@@ -331,16 +369,9 @@ describe("Sessions on the Specter runtime", () => {
         "session.tool.called",
         "session.codemode.started",
         "session.tool.success",
-        "session.codemode.completed",
-        "session.inbox.enqueued",
-        "session.step.ended",
-        "session.inbox.delivered",
-        "session.step.started",
-        "session.text.started",
-        "session.text.ended",
-        "session.step.ended",
-        "session.execution.succeeded",
       ])
+      expect(types).toContain("session.codemode.completed")
+      expect(types.slice(-2)).toEqual(["session.step.ended", "session.execution.succeeded"])
     }),
   )
 
@@ -429,6 +460,92 @@ describe("Sessions on the Specter runtime", () => {
       )
       expect(synthetic.map((message) => (message.type === "synthetic" ? message.text : ""))).toEqual(["one + two"])
       expect(yield* eventTypes).toContain("session.inbox.cancelled")
+    }),
+  )
+
+  it.live("holds a notice admitted without resume until the next prompt", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const llm = yield* TestLLM.Service
+      yield* llm.push(TestLLM.text("Seen both", "text_1"))
+      const session = yield* Session.Service
+
+      yield* session.synthetic({ sessionID, text: "Shell finished", resume: false })
+      yield* session.wait(sessionID)
+      expect(yield* eventTypes).not.toContain("session.execution.started")
+      expect((yield* session.inbox(sessionID)).map((item) => item.type)).toEqual(["synthetic"])
+
+      // The next prompt wakes the Session, and its execution delivers the held notice with it.
+      yield* session.prompt({ sessionID, text: "Continue" })
+      yield* session.wait(sessionID)
+      expect(yield* session.inbox(sessionID)).toEqual([])
+      const messages = yield* session.messages({ sessionID, order: "asc" })
+      expect(messages.map((message) => message.type)).toEqual(["synthetic", "user", "assistant"])
+    }),
+  )
+
+  it.live("starts nothing at the next boot for a Session that settled", () =>
+    Effect.gen(function* () {
+      const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          yield* setup
+          yield* (yield* TestLLM.Service).push(TestLLM.text("First", "text_1"))
+          const session = yield* Session.Service
+          yield* session.prompt({ sessionID, text: "One" })
+          yield* session.wait(sessionID)
+        }),
+      )
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          yield* setup
+          const before = yield* eventTypes
+          yield* (yield* TestLLM.Service).push(TestLLM.text("Second", "text_2"))
+          const session = yield* Session.Service
+          yield* session.prompt({ sessionID, text: "Two" })
+          yield* session.wait(sessionID)
+          // Replaying the log's Reactions at boot woke nothing: the prompt's execution is the only one.
+          const after = (yield* eventTypes).slice(before.length)
+          expect(after.filter((type) => type === "session.execution.started")).toHaveLength(1)
+          const messages = yield* session.messages({ sessionID, order: "asc" })
+          expect(messages.map((message) => message.type)).toEqual(["user", "assistant", "user", "assistant"])
+        }),
+      )
+    }),
+  )
+
+  it.live("finishes a step the server stopped in at the next boot", () =>
+    Effect.gen(function* () {
+      const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          yield* setup
+          const llm = yield* TestLLM.Service
+          const gate = yield* llm.gate
+          yield* llm.push(TestLLM.text("Never seen", "text_1"))
+          yield* (yield* Session.Service).prompt({ sessionID, text: "Start" })
+          yield* gate.started
+        }),
+      )
+      yield* boot(
+        file,
+        Effect.gen(function* () {
+          yield* setup
+          yield* (yield* TestLLM.Service).push(TestLLM.text("Answered after the restart", "text_1"))
+          const session = yield* Session.Service
+          yield* session.wait(sessionID)
+          const assistant = (yield* session.messages({ sessionID, order: "asc" })).filter(
+            (message) => message.type === "assistant",
+          )
+          expect(assistant.at(-1)).toMatchObject({
+            content: [{ type: "text", text: "Answered after the restart" }],
+          })
+          expect((yield* eventTypes).at(-1)).toBe("session.execution.succeeded")
+        }),
+      )
     }),
   )
 

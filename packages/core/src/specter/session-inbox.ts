@@ -30,13 +30,17 @@ export const layer = Layer.effect(
       readonly sessionID: SessionSchema.ID
       readonly item: SessionInbox.Item & { readonly type: Type }
       readonly replaces?: ReadonlyArray<SessionMessage.ID>
+      readonly resume?: boolean
     }) {
       const existing = yield* local.reconcile({ ...request, type: request.item.type, delivery: request.item.delivery })
       if (existing !== undefined) return existing
       const item: SessionInbox.Item = request.item
       yield* specter.register(request.sessionID)
-      const replaces =
-        request.replaces === undefined || request.replaces.length === 0 ? {} : { replaces: request.replaces }
+      const options = {
+        ...(request.replaces === undefined || request.replaces.length === 0 ? {} : { replaces: request.replaces }),
+        // The runtime wakes on admission unless told the input waits.
+        ...(request.resume === false ? { resume: false } : {}),
+      }
       const recorded = yield* specter.runtime
         .command({
           type: "enqueueInput",
@@ -48,7 +52,7 @@ export const layer = Layer.effect(
                   type: "user",
                   payload: encodeUser(item.payload),
                   delivery: item.delivery,
-                  ...replaces,
+                  ...options,
                 }
               : item.type === "synthetic"
                 ? {
@@ -57,7 +61,7 @@ export const layer = Layer.effect(
                     type: "synthetic",
                     payload: encodeSynthetic(item.payload),
                     delivery: item.delivery,
-                    ...replaces,
+                    ...options,
                   }
                 : item.type === "compaction"
                   ? {
@@ -66,6 +70,7 @@ export const layer = Layer.effect(
                       type: "compaction",
                       payload: {},
                       delivery: item.delivery,
+                      ...options,
                     }
                   : {
                       sessionID: request.sessionID,
@@ -73,6 +78,7 @@ export const layer = Layer.effect(
                       type: "move",
                       payload: encodeMove(item.payload),
                       delivery: item.delivery,
+                      ...options,
                     },
         })
         .pipe(

@@ -172,6 +172,11 @@ export const make = Effect.fn("SessionInbox.make")(function* () {
     readonly item: Item & { readonly type: Type }
     /** Pending items this one replaces (coalescing): they are cancelled in the same commit. */
     readonly replaces?: ReadonlyArray<SessionMessage.ID>
+    /**
+     * false: the caller will not wake the Session for this input, so it waits for the next wake. This
+     * inbox records it the same either way; a runtime that wakes on admission reads it.
+     */
+    readonly resume?: boolean
   }) {
     const existing = yield* reconcile({ ...request, type: request.item.type, delivery: request.item.delivery })
     if (existing !== undefined) return existing

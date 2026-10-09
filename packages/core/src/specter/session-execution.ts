@@ -1,21 +1,37 @@
 export * as SpecterSessionExecution from "./session-execution.js"
 
 import { Effect, Layer } from "effect"
+import { SessionDriver } from "@ocpp/schema/session-driver"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { Bus } from "../bus.js"
+import { Database } from "../database/database.js"
+import { ExternalAgentSession } from "../external-agent/session.js"
+import { Job } from "../job.js"
+import { LocationServiceMap } from "../location-service-map.js"
 import { SessionExecution } from "../session/execution.js"
 import { SessionSchema } from "../session/schema.js"
+import { SessionStore } from "../session/store.js"
 import { rejection, SpecterSessionRuntime } from "./session-runtime.js"
 
 /**
- * `SessionExecution.Service` when the embedded Specter runtime runs Sessions. The runtime decides when
- * to execute: a recorded input wakes it through its own Reaction, so `wake` has nothing to do. The
- * runtime runs every Session, whatever its driver; external agent harnesses are not routed here yet.
+ * `SessionExecution.Service` when the embedded Specter runtime runs Sessions. A recorded input wakes
+ * the runtime through its own Reaction unless it was admitted held (`resume: false`); `wake` starts an
+ * execution for held input too. A Session whose model selects an external agent is that agent's to
+ * run: its executions go through OC++'s external agent harness, as before.
  */
 export const layer = Layer.effect(
   SessionExecution.Service,
   Effect.gen(function* () {
     const specter = yield* SpecterSessionRuntime.Service
-    const isActive = (sessionID: SessionSchema.ID) => specter.active.pipe(Effect.map((active) => active.has(sessionID)))
+    const external = yield* SessionExecution.make
+    const store = yield* SessionStore.Service
+    const jobs = yield* Job.Service
+
+    // Read at each call: a Session can change models, and with them its driver, between executions.
+    const driven = (sessionID: SessionSchema.ID) =>
+      store
+        .get(sessionID)
+        .pipe(Effect.map((session) => session !== undefined && SessionDriver.of(session.model) !== "ocpp"))
 
     // Starts an execution unless one is active. A rejection means it is already running.
     const start = (sessionID: SessionSchema.ID) =>
@@ -24,10 +40,17 @@ export const layer = Layer.effect(
         Effect.catch((error) => (rejection(error) === undefined ? Effect.die(error) : Effect.void)),
       )
 
-    return SessionExecution.Service.of({
+    const runtime = SessionExecution.Service.of({
       active: specter.active,
-      isActive,
-      wake: () => Effect.void,
+      isActive: (sessionID) => specter.active.pipe(Effect.map((active) => active.has(sessionID))),
+      wake: Effect.fn("SpecterSessionExecution.wake")(function* (sessionID: SessionSchema.ID) {
+        yield* specter.register(sessionID)
+        // Nothing to deliver: no execution, as in OC++'s runner.
+        const next = yield* specter.runtime
+          .query({ type: "nextDeliverable", payload: { sessionID, boundary: "idle" } })
+          .pipe(Effect.orDie)
+        if (next.item !== null) yield* start(sessionID)
+      }),
       resume: Effect.fn("SpecterSessionExecution.resume")(function* (sessionID: SessionSchema.ID) {
         yield* specter.register(sessionID)
         yield* start(sessionID)
@@ -43,6 +66,11 @@ export const layer = Layer.effect(
           // Interrupting an idle Session is a no-op.
           Effect.catch((error) => (rejection(error) === undefined ? Effect.die(error) : Effect.succeed(false))),
         )
+        // A user's interrupt also stops the Session's background work, as in OC++'s runner.
+        if (interrupted) {
+          yield* jobs.cancel(sessionID)
+          yield* jobs.cancelAll({ ownerSessionID: sessionID, type: "codemode" })
+        }
         if (!options?.continue) return interrupted
         // Continue with steering input only; queued prompts stay parked until the next idle boundary.
         const next = yield* specter.runtime
@@ -53,7 +81,44 @@ export const layer = Layer.effect(
       }),
       awaitIdle: specter.awaitIdle,
     })
+
+    // Each call goes to whichever runs the Session now.
+    const route =
+      <Args extends ReadonlyArray<unknown>, A, E>(
+        select: (
+          service: SessionExecution.Interface,
+        ) => (sessionID: SessionSchema.ID, ...args: Args) => Effect.Effect<A, E>,
+      ) =>
+      (sessionID: SessionSchema.ID, ...args: Args) =>
+        driven(sessionID).pipe(Effect.flatMap((isDriven) => select(isDriven ? external : runtime)(sessionID, ...args)))
+
+    return SessionExecution.Service.of({
+      active: Effect.all([runtime.active, external.active]).pipe(
+        Effect.map(([own, theirs]) => new Set([...own, ...theirs])),
+      ),
+      isActive: (sessionID) =>
+        Effect.all([runtime.isActive(sessionID), external.isActive(sessionID)]).pipe(
+          Effect.map(([own, theirs]) => own || theirs),
+        ),
+      wake: route((service) => service.wake),
+      resume: route((service) => service.resume),
+      interrupt: route((service) => service.interrupt),
+      awaitIdle: route((service) => service.awaitIdle),
+    })
   }),
 )
 
-export const node = makeGlobalNode({ service: SessionExecution.Service, layer, deps: [SpecterSessionRuntime.node] })
+export const node = makeGlobalNode({
+  service: SessionExecution.Service,
+  layer,
+  // The external agent execution's own dependencies, beside the runtime's.
+  deps: [
+    SpecterSessionRuntime.node,
+    ExternalAgentSession.node,
+    SessionStore.node,
+    LocationServiceMap.node,
+    Bus.node,
+    Database.node,
+    Job.node,
+  ],
+})

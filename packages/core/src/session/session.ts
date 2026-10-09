@@ -189,6 +189,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
             id: messageID,
             sessionID: session.id,
             item: prepared.item,
+            ...(input.resume === false ? { resume: false } : {}),
           })
           yield* prepared.references.refresh()
           return admitted
@@ -311,7 +312,9 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     ) =>
       Effect.uninterruptible(
         Effect.gen(function* () {
-          yield* get(sessionID)
+          const session = yield* get(sessionID)
+          // A staged revert holds new notices until the user's next prompt commits or clears it.
+          const resume = input.resume !== false && !session.revert
           const inputID = input.id ?? SessionMessage.ID.create()
           const admit = (
             payload: Pick<SessionInbox.SyntheticPayload, "text" | "description" | "metadata">,
@@ -321,6 +324,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
               id: inputID,
               sessionID,
               replaces,
+              ...(resume ? {} : { resume: false }),
               item: {
                 type: "synthetic",
                 payload: SessionInbox.SyntheticPayload.make({
@@ -365,7 +369,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
           ).pipe(
             Effect.catchTag("SessionInbox.LifecycleConflict", () => new SyntheticConflictError({ sessionID, inputID })),
           )
-          if (input.resume !== false && !(yield* get(sessionID)).revert) yield* execution.wake(sessionID)
+          if (resume) yield* execution.wake(sessionID)
           return admitted
         }),
       ),

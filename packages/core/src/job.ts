@@ -16,34 +16,19 @@ import {
 } from "effect"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Identifier } from "./id/id.js"
-import { KV } from "./kv.js"
+import { SessionFact } from "@ocpp/schema/session-fact"
+import { eq } from "drizzle-orm"
+import { Bus } from "./bus.js"
+import { Database } from "./database/database.js"
+import { JobBackgroundTable } from "./job/sql.js"
+import { JobProjector } from "./job/projector.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionSchema } from "./session/schema.js"
 
 const Background = Schema.Struct({
   id: Schema.String,
   notificationID: SessionMessage.ID,
-  recovery: Schema.Union([
-    Schema.Struct({
-      kind: Schema.Literal("shell"),
-      sessionID: SessionSchema.ID,
-      shellID: Schema.String,
-      command: Schema.String,
-    }),
-    Schema.Struct({
-      kind: Schema.Literal("subagent"),
-      parentSessionID: SessionSchema.ID,
-      childSessionID: SessionSchema.ID,
-      agent: Schema.String,
-      description: Schema.String,
-    }),
-    Schema.Struct({
-      kind: Schema.Literal("codemode"),
-      parentSessionID: SessionSchema.ID,
-      assistantMessageID: SessionMessage.ID,
-      toolCallID: Schema.String,
-    }),
-  ]),
+  recovery: SessionFact.BackgroundRecovery,
   status: Schema.Literals(["running", "completed", "error", "cancelled"]),
   terminal: Schema.optionalKey(Schema.Boolean),
   output: Schema.optionalKey(Schema.String),
@@ -53,9 +38,6 @@ const Background = Schema.Struct({
 export type Background = typeof Background.Type
 export type Recovery = Background["recovery"]
 export type Status = Background["status"]
-
-const decodeBackground = Schema.decodeUnknownResult(Background)
-const backgroundPrefix = "job.background/"
 
 export type Info = {
   id: string
@@ -208,23 +190,38 @@ function decrementSession(input: Map<SessionSchema.ID, number>, sessionID: Sessi
  * work also owns a durable notification marker until its notification is admitted.
  */
 export const make = Effect.gen(function* () {
-  const kv = yield* KV.Service
+  const { db } = yield* Database.Service
+  const bus = yield* Bus.Service
   const state: State = {
     jobs: yield* SynchronizedRef.make(new Map()),
     scope: yield* Scope.Scope,
   }
 
+  // A recoverable job's marker is the projection of its facts in Specter's Event Log (JobProjector).
   const persistBackground = Effect.fnUntraced(function* (job: Active) {
     if (!job.recovery || !job.info.notificationID) return
-    yield* kv.set(`${backgroundPrefix}${job.info.notificationID}`, {
-      id: job.info.id,
+    yield* bus.publish(SessionFact.BackgroundRecorded, {
       notificationID: job.info.notificationID,
+      jobID: job.info.id,
       recovery: job.recovery,
       status: job.info.status,
       ...(job.info.output !== undefined ? { output: job.info.output } : {}),
       ...(job.info.error !== undefined ? { error: job.info.error } : {}),
     })
   })
+  const findBackground = (notificationID: SessionMessage.ID) =>
+    db
+      .select()
+      .from(JobBackgroundTable)
+      .where(eq(JobBackgroundTable.notification_id, notificationID))
+      .get()
+      .pipe(Effect.orDie)
+  const completeBackground: Interface["completeBackground"] = Effect.fn("Job.completeBackground")(
+    function* (notificationID) {
+      if (!(yield* findBackground(notificationID))) return
+      yield* bus.publish(SessionFact.BackgroundCompleted, { notificationID })
+    },
+  )
 
   const settle = Effect.fnUntraced(function* (id: string, token: object, exit: Exit.Exit<string, unknown>) {
     const completed_at = yield* Clock.currentTimeMillis
@@ -501,8 +498,7 @@ export const make = Effect.gen(function* () {
     if (input.discardBackground)
       yield* Effect.forEach(
         results,
-        (result) =>
-          result.info?.notificationID ? kv.remove(`${backgroundPrefix}${result.info.notificationID}`) : Effect.void,
+        (result) => (result.info?.notificationID ? completeBackground(result.info.notificationID) : Effect.void),
         { discard: true },
       )
     yield* Effect.forEach(
@@ -517,32 +513,38 @@ export const make = Effect.gen(function* () {
     return results.flatMap((result) => (result.info ? [result.info] : []))
   })
 
-  const pendingBackground: Interface["pendingBackground"] = Effect.gen(function* () {
-    const recovered: Background[] = []
-    let after: string | undefined
-    do {
-      const page = yield* kv.scan({ prefix: backgroundPrefix, after })
-      recovered.push(...Array.filterMap(page.entries, (entry) => decodeBackground(entry.value)))
-      after = page.next
-    } while (after)
-    return recovered
-  }).pipe(Effect.withSpan("Job.pendingBackground"))
+  const pendingBackground: Interface["pendingBackground"] = db
+    .select()
+    .from(JobBackgroundTable)
+    .all()
+    .pipe(
+      Effect.orDie,
+      Effect.map((rows) =>
+        rows.map(
+          (row): Background => ({
+            id: row.job_id,
+            notificationID: row.notification_id,
+            recovery: row.recovery,
+            status: row.status,
+            ...(row.terminal ? { terminal: true } : {}),
+            ...(row.output === null ? {} : { output: row.output }),
+            ...(row.error === null ? {} : { error: row.error }),
+          }),
+        ),
+      ),
+      Effect.withSpan("Job.pendingBackground"),
+    )
 
   const markBackgroundTerminal: Interface["markBackgroundTerminal"] = Effect.fn("Job.markBackgroundTerminal")(
     function* (notificationID) {
-      const key = `${backgroundPrefix}${notificationID}`
-      const background = Option.getOrUndefined(Schema.decodeUnknownOption(Background)(yield* kv.get(key)))
+      const background = yield* findBackground(notificationID)
       if (!background) {
         yield* Effect.die(new Error(`Background notification ${notificationID} is unavailable`))
         return
       }
       if (background.terminal) return
-      yield* kv.set(key, { ...background, terminal: true })
+      yield* bus.publish(SessionFact.BackgroundTerminal, { notificationID })
     },
-  )
-
-  const completeBackground: Interface["completeBackground"] = Effect.fn("Job.completeBackground")((notificationID) =>
-    kv.remove(`${backgroundPrefix}${notificationID}`),
   )
 
   return Service.of({
@@ -564,4 +566,4 @@ export const make = Effect.gen(function* () {
 
 const layer = Layer.effect(Service, make)
 
-export const node = makeGlobalNode({ service: Service, layer, deps: [KV.node] })
+export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node, Bus.node, JobProjector.node] })

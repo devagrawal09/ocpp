@@ -50,7 +50,7 @@ type ExecutionServices = {
   readonly bus: Pick<Bus.Interface, "publish" | "listen">
   readonly jobs: Pick<
     Job.Interface,
-    "startLimited" | "active" | "wait" | "background" | "cancel" | "markBackgroundTerminal" | "completeBackground"
+    "startLimited" | "active" | "wait" | "background" | "cancel" | "completeBackground"
   >
   readonly sessions: Pick<Session.Interface, "message" | "synthetic">
   readonly image: Pick<Image.Interface, "normalize">
@@ -595,16 +595,14 @@ const launch = (
             events: trace,
             ...resumed,
           }
-          if (info.status === "completed")
-            yield* services.bus.publish(SessionEvent.CodeMode.Completed, base, {
-              commit: () => services.jobs.markBackgroundTerminal(options.notificationID),
-            })
+          // Recording the outcome makes the background job terminal (JobProjector).
+          if (info.status === "completed") yield* services.bus.publish(SessionEvent.CodeMode.Completed, base)
           if (info.status === "error" || info.status === "cancelled")
-            yield* services.bus.publish(
-              SessionEvent.CodeMode.Failed,
-              { ...base, status: info.status, error: info.error ?? "Execution failed" },
-              { commit: () => services.jobs.markBackgroundTerminal(options.notificationID) },
-            )
+            yield* services.bus.publish(SessionEvent.CodeMode.Failed, {
+              ...base,
+              status: info.status,
+              error: info.error ?? "Execution failed",
+            })
           const kind =
             info.status === "cancelled"
               ? "Cancelled"
@@ -620,8 +618,9 @@ const launch = (
               ...(options.journal === undefined ? [] : CodeModeChildren.fromJournal(options.journal)).map(
                 (child) => [child.sessionID, child.status] as const,
               ),
-              ...Array.from(yield* Ref.get(children), ([sessionID, status]) =>
-                [sessionID, status === "running" ? ("interrupted" as const) : status] as const,
+              ...Array.from(
+                yield* Ref.get(children),
+                ([sessionID, status]) => [sessionID, status === "running" ? ("interrupted" as const) : status] as const,
               ),
             ]),
             ([sessionID, status]) => ({ sessionID, status }),

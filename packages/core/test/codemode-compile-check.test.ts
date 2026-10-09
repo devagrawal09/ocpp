@@ -42,7 +42,6 @@ const setup = (tools: ReadonlyArray<Info>) => {
         wait: () => Effect.never,
         background: () => Effect.succeed(undefined),
         cancel: () => Effect.succeed(undefined),
-        markBackgroundTerminal: () => Effect.void,
         completeBackground: () => Effect.void,
       },
       sessions: {

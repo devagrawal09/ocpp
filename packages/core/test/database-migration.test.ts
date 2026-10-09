@@ -14,6 +14,7 @@ import { tmpdir } from "./fixture/tmpdir"
 import type { SqlClient } from "effect/sql/SqlClient"
 import legacyCredentialsMigration from "@ocpp/core/database/migration/20260805200742_import_legacy_credentials"
 import credentialSecretMigration from "@ocpp/core/database/migration/20261009205324_credential_secret"
+import jobBackgroundMigration from "@ocpp/core/database/migration/20261009210354_job_background"
 import worktreeMigration from "@ocpp/core/database/migration/20260812213948_worktree"
 import previousV2Migration from "@ocpp/core/database/migration/20260804233008_loose_psylocke"
 import workspaceMigration from "@ocpp/core/database/migration/20260808023530_workspace_domain"
@@ -544,6 +545,45 @@ describe("DatabaseMigration", () => {
     )
 
     expect(await Bun.file(source).text()).toBe(content)
+  })
+
+  test("moves background job markers out of the key-value store", async () => {
+    await using tmp = await tmpdir()
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.applyOnly(
+          db,
+          migrations.filter(
+            (migration) => migration.id < jobBackgroundMigration.id && migration.id !== legacyCredentialsMigration.id,
+          ),
+        )
+        const now = Date.now()
+        const recovery = { kind: "shell", sessionID: "ses_1", shellID: "sh_1", command: "sleep 1" }
+        const marker = { id: "job_1", notificationID: "msg_1", recovery, status: "running", terminal: true }
+        yield* db.run(sql`
+          INSERT INTO kv (key, value, time_created, time_updated)
+          VALUES ('job.background/msg_1', ${JSON.stringify(marker)}, ${now}, ${now}),
+            ('models.dev', ${JSON.stringify({ body: "{}" })}, ${now}, ${now})
+        `)
+        yield* DatabaseMigration.applyOnly(db, migrations)
+
+        const rows = yield* db.all<Record<string, unknown>>(sql`SELECT * FROM job_background`)
+        expect(rows.map((row) => ({ ...row, recovery: JSON.parse(String(row.recovery)) }))).toEqual([
+          {
+            notification_id: "msg_1",
+            job_id: "job_1",
+            recovery,
+            status: "running",
+            terminal: 1,
+            output: null,
+            error: null,
+          },
+        ])
+        expect(yield* db.all(sql`SELECT key FROM kv`)).toEqual([{ key: "models.dev" }])
+      }),
+      Global.make({ data: tmp.path }),
+    )
   })
 
   test("skips legacy credential import when the source file is absent", async () => {

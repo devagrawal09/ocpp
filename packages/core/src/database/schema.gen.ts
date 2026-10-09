@@ -185,6 +185,17 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`job_background\` (
+          \`notification_id\` text PRIMARY KEY,
+          \`job_id\` text NOT NULL,
+          \`recovery\` text NOT NULL,
+          \`status\` text NOT NULL,
+          \`terminal\` integer DEFAULT false NOT NULL,
+          \`output\` text,
+          \`error\` text
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`kv\` (
           \`key\` text PRIMARY KEY,
           \`value\` text NOT NULL,
@@ -401,6 +412,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
       )
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)
       yield* tx.run(`CREATE INDEX \`event_aggregate_type_seq_idx\` ON \`event\` (\`aggregate_id\`,\`type\`,\`seq\`);`)
+      yield* tx.run(`CREATE INDEX \`job_background_job_idx\` ON \`job_background\` (\`job_id\`);`)
       yield* tx.run(
         `CREATE INDEX \`session_inbox_session_delivery_seq_idx\` ON \`session_inbox\` (\`session_id\`,\`delivery\`,\`enqueued_seq\`);`,
       )

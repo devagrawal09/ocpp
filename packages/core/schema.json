@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "c8f83085-237f-4b1c-8c13-aa8d644f7967",
-  "prevIds": ["f79da364-87b8-4ebe-99ee-8a9c9ea59e7e"],
+  "id": "5951fba9-c220-4e80-bb6f-84b2e066a474",
+  "prevIds": ["c8f83085-237f-4b1c-8c13-aa8d644f7967"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -58,6 +58,10 @@
     },
     {
       "name": "session_external",
+      "entityType": "tables"
+    },
+    {
+      "name": "job_background",
       "entityType": "tables"
     },
     {
@@ -1203,6 +1207,76 @@
       "name": "harness",
       "entityType": "columns",
       "table": "session_external"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "notification_id",
+      "entityType": "columns",
+      "table": "job_background"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "job_id",
+      "entityType": "columns",
+      "table": "job_background"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recovery",
+      "entityType": "columns",
+      "table": "job_background"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "job_background"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "terminal",
+      "entityType": "columns",
+      "table": "job_background"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "output",
+      "entityType": "columns",
+      "table": "job_background"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "error",
+      "entityType": "columns",
+      "table": "job_background"
     },
     {
       "type": "text",
@@ -2832,6 +2906,13 @@
       "entityType": "pks"
     },
     {
+      "columns": ["notification_id"],
+      "nameExplicit": false,
+      "name": "job_background_pk",
+      "table": "job_background",
+      "entityType": "pks"
+    },
+    {
       "columns": ["key"],
       "nameExplicit": false,
       "name": "kv_pk",
@@ -3011,6 +3092,20 @@
       "name": "event_aggregate_type_seq_idx",
       "entityType": "indexes",
       "table": "event"
+    },
+    {
+      "columns": [
+        {
+          "value": "job_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "job_background_job_idx",
+      "entityType": "indexes",
+      "table": "job_background"
     },
     {
       "columns": [

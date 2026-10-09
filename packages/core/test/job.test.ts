@@ -1,13 +1,14 @@
 import { describe, expect } from "bun:test"
 import { Job } from "@ocpp/core/job"
-import { KV } from "@ocpp/core/kv"
+import { Bus } from "@ocpp/core/bus"
+import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Deferred, Effect, Exit, Fiber, Scope } from "effect"
 import { SessionSchema } from "@ocpp/core/session/schema"
 import { testEffect } from "./lib/effect"
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([Job.node, KV.node])))
+const it = testEffect(AppNodeBuilder.build(LayerNode.group([Job.node, Database.node, Bus.node])))
 
 describe("Job", () => {
   it.live("atomically limits and cancels work owned by a Session", () =>

@@ -32,7 +32,6 @@ const createCodeMode = (tools: ReadonlyMap<string, Info>) =>
         wait: () => Effect.die("Unavailable in catalog-only tests"),
         background: () => Effect.die("Unavailable in catalog-only tests"),
         cancel: () => Effect.die("Unavailable in catalog-only tests"),
-        markBackgroundTerminal: () => Effect.die("Unavailable in catalog-only tests"),
         completeBackground: () => Effect.die("Unavailable in catalog-only tests"),
       },
       sessions: {
@@ -117,7 +116,6 @@ test("a refused execution names the running executions instead of only the cap",
         wait: () => Effect.die("Unreached: the execution was refused"),
         background: () => Effect.die("Unreached: the execution was refused"),
         cancel: () => Effect.succeed(undefined),
-        markBackgroundTerminal: () => Effect.void,
         completeBackground: () => Effect.void,
       },
       sessions: {
@@ -188,7 +186,6 @@ test("a failed execution's completion carries a stable failure kind in its metad
           }),
         background: () => Effect.succeed(undefined),
         cancel: () => Effect.succeed(undefined),
-        markBackgroundTerminal: () => Effect.void,
         completeBackground: () => Effect.sync(finish),
       },
       sessions: {
@@ -316,7 +313,6 @@ test("a Session deleted mid-execution still finishes the background notification
           }),
         background: () => Effect.succeed(undefined),
         cancel: () => Effect.succeed(undefined),
-        markBackgroundTerminal: () => Effect.void,
         completeBackground: (id) =>
           Effect.sync(() => {
             completed.push(id)

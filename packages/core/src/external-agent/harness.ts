@@ -1,6 +1,7 @@
 export * as ExternalAgentHarness from "./harness.js"
 
 import { Context, type Effect } from "effect"
+import type { DriveInbox } from "@specter/agent-runtime"
 import type { AgentNotFoundError, MessageDecodeError, StepFailedError } from "../session/error.js"
 import type { SessionInbox } from "../session/inbox.js"
 import type { DrainResult } from "../session/runner/index.js"
@@ -16,6 +17,8 @@ export interface Interface {
     readonly sessionID: SessionSchema.ID
     readonly force: boolean
     readonly promotable?: SessionInbox.Promotable
+    /** The Specter runtime's inbox for this execution: what delivers next, and delivering it. */
+    readonly inbox: DriveInbox
   }) => Effect.Effect<DrainResult, StepFailedError | AgentNotFoundError | MessageDecodeError>
 }
 

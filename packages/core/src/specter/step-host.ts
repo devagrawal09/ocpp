@@ -559,7 +559,7 @@ export const make = Effect.gen(function* () {
         while (true) {
           const location = yield* locationOf(sessionID)
           const result = yield* ExternalAgentHarness.Service.use((harness) =>
-            harness.drain({ sessionID, force, promotable: input.continues ? "steer" : "input" }),
+            harness.drain({ sessionID, force, promotable: input.continues ? "steer" : "input", inbox: input.inbox }),
           ).pipe(Effect.provide(location))
           if (result._tag === "Complete") return { outcome: "succeeded" } satisfies DriveOutcome
           force = false

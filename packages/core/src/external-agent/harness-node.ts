@@ -58,11 +58,27 @@ const layer = Layer.effect(
       input: Parameters<ExternalAgentHarness.Interface["drain"]>[0],
     ) {
       const sessionID = input.sessionID
-      const pending = yield* SessionInbox.nextPromotable(db, sessionID, "input")
+      // The runtime's inbox: its delivery law orders what goes in, and it records each delivery.
+      const peek = (at: "idle" | "step" | "entry") => input.inbox.next(at).pipe(Effect.orDie)
+      // A continued turn takes steers and the control items at the queue's head; any other takes queued input too.
+      const restAt = (scope: SessionInbox.Promotable) => (scope === "steer" ? ("entry" as const) : ("idle" as const))
+      // Delivers input up to the next control item and returns what it delivered, in delivery order.
+      const promote = Effect.fnUntraced(function* (from: "idle" | "step" | "entry") {
+        const delivered: SessionMessage.ID[] = []
+        let at = from
+        while (true) {
+          const item = yield* peek(at)
+          if (item === null || item.type === "compaction" || item.type === "move") return delivered
+          if (!(yield* input.inbox.deliver(item.inboxID).pipe(Effect.orDie))) return delivered
+          delivered.push(SessionMessage.ID.make(item.inboxID))
+          at = "step"
+        }
+      })
+      const pending = yield* peek("idle")
       const control = pending?.type === "compaction" || pending?.type === "move"
       if (
         !input.force &&
-        (pending === undefined || (input.promotable === "steer" && pending.delivery === "queue" && !control))
+        (pending === null || (input.promotable === "steer" && pending.delivery === "queue" && !control))
       )
         return DrainResult.Complete()
       const session = yield* store.get(sessionID)
@@ -108,10 +124,7 @@ const layer = Layer.effect(
             const failure = new StepFailedError({ error: { type: "driver.unavailable", message: error.message } })
             // As a provider error answers a prompt for the OC++ runner, the failure answers the prompt in the timeline
             // instead of leaving it pending. The vendor never answered it, so it still receives it once it is ready.
-            if (
-              !control &&
-              (yield* SessionInbox.promoteItems(db, bus, sessionID, input.promotable ?? "input")).length > 0
-            )
+            if (!control && (yield* promote(restAt(input.promotable ?? "input"))).length > 0)
               yield* stream.finish(failure)
             return yield* failure
           }),
@@ -200,8 +213,8 @@ const layer = Layer.effect(
         state.vendor = undefined
       })
 
-      const deliver = Effect.fnUntraced(function* (items: ReadonlyArray<SessionInbox.Info>) {
-        const messages = yield* Effect.forEach(items, (item) => store.message(item.id))
+      const deliver = Effect.fnUntraced(function* (items: ReadonlyArray<SessionMessage.ID>) {
+        const messages = yield* Effect.forEach(items, (item) => store.message(item))
         return ExternalAgentDriver.join(
           messages.flatMap((stored) => (stored === undefined ? [] : toLLMMessages([stored.message], model))).map(lower),
         )
@@ -212,17 +225,17 @@ const layer = Layer.effect(
           while (true) {
             const rung = bell.current
             if (state.idle) {
-              const next = yield* SessionInbox.nextPromotable(db, sessionID, scope)
-              if (next?.type === "move") {
+              const head = yield* peek(restAt(scope))
+              if (head?.type === "move") {
                 state.moved = true
                 return undefined
               }
-              if (next?.type === "compaction") {
+              if (head?.type === "compaction") {
                 state.compacting = true
                 return undefined
               }
             }
-            const items = yield* SessionInbox.promoteItems(db, bus, sessionID, state.idle ? scope : "steer")
+            const items = yield* promote(state.idle ? restAt(scope) : "step")
             if (items.length > 0) {
               state.idle = false
               return yield* deliver(items)
@@ -320,35 +333,26 @@ const layer = Layer.effect(
         )
         return checkpoint !== undefined && checkpoint === record.checkpoint ? vendorSessionID : undefined
       })
-      const move = SessionInbox.serialized(
-        sessionID,
-        Effect.gen(function* () {
-          const next = yield* SessionInbox.nextPromotable(db, sessionID, "input")
-          if (next?.type !== "move") return DrainResult.Complete()
-          yield* bus.publishAll([
-            [SessionEvent.InboxDelivered, { sessionID, inboxID: next.id }],
-            [SessionEvent.Moved, { sessionID, ...next.payload }],
-          ])
-          return DrainResult.Moved({})
-        }),
-      )
+      // Delivering a move moves the Session: the runtime records both.
+      const move = Effect.gen(function* () {
+        const head = yield* peek("idle")
+        if (head?.type !== "move" || !(yield* input.inbox.deliver(head.inboxID).pipe(Effect.orDie)))
+          return DrainResult.Complete()
+        return DrainResult.Moved({})
+      })
 
       const scope = { next: input.promotable ?? "input" }
       while (true) {
         yield* Effect.uninterruptibleMask((restore) =>
           Effect.gen(function* () {
-            const requested = yield* SessionInbox.serialized(
-              sessionID,
-              Effect.gen(function* () {
-                const next = yield* SessionInbox.nextPromotable(db, sessionID, scope.next)
-                if (next?.type !== "compaction") return
-                yield* bus.publishAll([
-                  [SessionEvent.InboxDelivered, { sessionID, inboxID: next.id }],
-                  [SessionEvent.Compaction.Started, { sessionID, reason: "manual", recent: "", inputID: next.id }],
-                ])
-                return next.id
-              }),
-            )
+            const requested = yield* Effect.gen(function* () {
+              const head = yield* peek(restAt(scope.next))
+              if (head?.type !== "compaction") return
+              if (!(yield* input.inbox.deliver(head.inboxID).pipe(Effect.orDie))) return
+              const inputID = SessionMessage.ID.make(head.inboxID)
+              yield* bus.publish(SessionEvent.Compaction.Started, { sessionID, reason: "manual", recent: "", inputID })
+              return inputID
+            })
             if (requested === undefined) return
             yield* restore(compact("manual", requested)).pipe(
               Effect.onInterrupt(() =>
@@ -396,7 +400,7 @@ const layer = Layer.effect(
         ])
         state.continuation = false
         if (message.length === 0) {
-          const pending = yield* SessionInbox.nextPromotable(db, sessionID, "input")
+          const pending = yield* peek("idle")
           if (pending?.type === "compaction" || pending?.type === "move") continue
           return DrainResult.Complete()
         }

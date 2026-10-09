@@ -1,5 +1,6 @@
 export * as InstructionState from "./instruction-state.js"
 
+import { SessionFact } from "@ocpp/schema/session-fact"
 import { eq, inArray, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import type { Database } from "../database/database.js"
@@ -46,19 +47,23 @@ export const commit = Effect.fn("InstructionState.commit")(function* (
   // The rendered text is frozen into the durable event because re-rendering it
   // later would require the original Location-scoped instruction sources.
   const text = observation.initial ? "" : yield* renderUpdateText(db, instructions, observation)
-  yield* bus.publish(
+  const update = [
     SessionEvent.InstructionsUpdated,
     {
       sessionID: observation.sessionID,
       delta: observation.delta,
       ...(text.length > 0 ? { text } : {}),
     },
-    {
-      // Initial sync establishes the baseline; unlike later deltas it is not chronological history.
-      ...(observation.initial ? { metadata: { instructions: { initial: true } } } : {}),
-      commit: () => insertBlobs(db, observation.blobs),
-    },
-  )
+    // Initial sync establishes the baseline; unlike later deltas it is not chronological history.
+    observation.initial ? { metadata: { instructions: { initial: true } } } : {},
+  ] as const
+  // The values the update refers to by hash are recorded in the same commit, before it.
+  if (Object.keys(observation.blobs).length === 0) yield* bus.publish(...update)
+  else
+    yield* bus.publishAll([
+      [SessionFact.InstructionBlobsStored, { sessionID: observation.sessionID, blobs: observation.blobs }],
+      update,
+    ])
 })
 
 const renderUpdateText = Effect.fnUntraced(function* (
@@ -237,7 +242,11 @@ const find = Effect.fnUntraced(function* (db: DatabaseService, sessionID: Sessio
     .pipe(Effect.orDie)
 })
 
-const insertBlobs = Effect.fnUntraced(function* (db: DatabaseService, blobs: Readonly<Record<string, Schema.Json>>) {
+/** Stores instruction values by hash: the projection of their facts. */
+export const storeBlobs = Effect.fnUntraced(function* (
+  db: DatabaseService,
+  blobs: Readonly<Record<string, Schema.Json>>,
+) {
   const rows = Object.entries(blobs).map(([hash, value]) => ({ hash: Instructions.Hash.make(hash), value }))
   if (rows.length === 0) return
   yield* db.insert(InstructionBlobTable).values(rows).onConflictDoNothing().run().pipe(Effect.orDie)

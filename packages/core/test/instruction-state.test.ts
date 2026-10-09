@@ -485,15 +485,16 @@ describe("InstructionState", () => {
           current_values: state.current_values,
         })),
       ).toEqual([
+        // Each update that stores new values records them first, which takes a sequence number.
         {
-          epoch_start: 0,
-          through_seq: 2,
+          epoch_start: 1,
+          through_seq: 4,
           initial_values: { "test/context": Instructions.hash("initial") },
           current_values: {},
         },
         {
-          epoch_start: 0,
-          through_seq: 2,
+          epoch_start: 1,
+          through_seq: 4,
           initial_values: { "test/context": Instructions.hash("initial") },
           current_values: {},
         },

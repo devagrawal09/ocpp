@@ -16,10 +16,11 @@ import { Project } from "../project.js"
 import { AbsolutePath, RelativePath } from "../schema.js"
 import { Session } from "../session.js"
 import { Slug } from "../util/slug.js"
+import { SessionFact } from "@ocpp/schema/session-fact"
 import { SessionEvent } from "./event.js"
 import { SessionMessage } from "./message.js"
 import { SessionProjector } from "./projector.js"
-import { SessionMessageTable, SessionTable } from "./sql.js"
+import { SessionTable } from "./sql.js"
 
 export const Data = SessionTransfer.Data
 export type Data = SessionTransfer.Data
@@ -76,69 +77,63 @@ const layer = Layer.effect(
           const { id: _, type, ...data } = encoded
           return {
             id: message.id,
-            session_id: sessionID,
             type,
             seq: index + 1,
-            time_created: DateTime.toEpochMillis(message.time.created),
-            data,
+            created: DateTime.toEpochMillis(message.time.created),
+            data: data as Schema.Json,
           }
         })
+        const time = input.data.info.time
+        const idle = time.idle ? DateTime.toEpochMillis(time.idle) : undefined
+        // The imported history and accounting are recorded with the Session's creation, in one commit.
         yield* bus
-          .publish(
-            SessionEvent.Created,
-            {
-              sessionID,
-              parentID: input.data.info.parentID,
-              slug: Slug.create(),
-              version: app.version,
-              projectID: project.id,
-              location: input.location,
-              subpath: RelativePath.make(
-                path.relative(project.directory, input.location.directory).replaceAll("\\", "/"),
-              ),
-              title: input.data.info.title,
-              agent: input.data.info.agent,
-              model: input.data.info.model,
-              metadata: input.data.info.metadata,
-            },
-            {
-              location: input.location,
-              commit: (seq) =>
-                Effect.gen(function* () {
-                  if (messages.length > 0) {
-                    yield* db.insert(SessionMessageTable).values(messages).run().pipe(Effect.orDie)
-                    yield* Bus.reserveSequence(db, sessionID, seq + messages.length)
-                  }
-                  yield* db
-                    .update(SessionTable)
-                    .set({
-                      cost: input.data.info.cost,
-                      tokens_input: input.data.info.tokens.input,
-                      tokens_output: input.data.info.tokens.output,
-                      tokens_reasoning: input.data.info.tokens.reasoning,
-                      tokens_cache_read: input.data.info.tokens.cache.read,
-                      tokens_cache_write: input.data.info.tokens.cache.write,
-                      time_created: DateTime.toEpochMillis(input.data.info.time.created),
-                      time_updated: DateTime.toEpochMillis(input.data.info.time.updated),
-                      time_idle: input.data.info.time.idle ? DateTime.toEpochMillis(input.data.info.time.idle) : null,
-                      time_viewed:
-                        input.data.info.time.idle && input.data.info.time.viewed
-                          ? Math.min(
-                              DateTime.toEpochMillis(input.data.info.time.idle),
-                              DateTime.toEpochMillis(input.data.info.time.viewed),
-                            )
-                          : null,
-                      idle_outcome: input.data.info.time.idle ? (input.data.info.outcome ?? null) : null,
-                      time_archived: input.data.info.time.archived
-                        ? DateTime.toEpochMillis(input.data.info.time.archived)
-                        : null,
-                    })
-                    .where(eq(SessionTable.id, sessionID))
-                    .run()
-                    .pipe(Effect.orDie)
-                }),
-            },
-          )
+          .publishAll([
+            [
+              SessionEvent.Created,
+              {
+                sessionID,
+                parentID: input.data.info.parentID,
+                slug: Slug.create(),
+                version: app.version,
+                projectID: project.id,
+                location: input.location,
+                subpath: RelativePath.make(
+                  path.relative(project.directory, input.location.directory).replaceAll("\\", "/"),
+                ),
+                title: input.data.info.title,
+                agent: input.data.info.agent,
+                model: input.data.info.model,
+                metadata: input.data.info.metadata,
+              },
+              { location: input.location },
+            ],
+            [
+              SessionFact.Imported,
+              {
+                sessionID,
+                messages,
+                cost: input.data.info.cost,
+                tokens: {
+                  input: input.data.info.tokens.input,
+                  output: input.data.info.tokens.output,
+                  reasoning: input.data.info.tokens.reasoning,
+                  cacheRead: input.data.info.tokens.cache.read,
+                  cacheWrite: input.data.info.tokens.cache.write,
+                },
+                time: {
+                  created: DateTime.toEpochMillis(time.created),
+                  updated: DateTime.toEpochMillis(time.updated),
+                  ...(idle === undefined ? {} : { idle }),
+                  ...(idle !== undefined && time.viewed
+                    ? { viewed: Math.min(idle, DateTime.toEpochMillis(time.viewed)) }
+                    : {}),
+                  ...(time.archived ? { archived: DateTime.toEpochMillis(time.archived) } : {}),
+                },
+                ...(idle !== undefined && input.data.info.outcome ? { outcome: input.data.info.outcome } : {}),
+              },
+              { location: input.location },
+            ],
+          ])
           .pipe(
             Effect.catchDefect((defect) =>
               defect instanceof SessionProjector.SessionAlreadyProjected

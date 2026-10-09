@@ -546,6 +546,49 @@ const layer = Layer.effectDiscard(
     const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
     const codemode = yield* CodeModeStore.Service
+    yield* bus.project(SessionFact.InstructionBlobsStored, (event) => InstructionState.storeBlobs(db, event.data.blobs))
+    yield* bus.project(SessionFact.Imported, (event) =>
+      Effect.gen(function* () {
+        const data = event.data
+        if (data.messages.length > 0) {
+          yield* db
+            .insert(SessionMessageTable)
+            .values(
+              data.messages.map((message) => ({
+                id: message.id,
+                session_id: data.sessionID,
+                type: message.type,
+                seq: message.seq,
+                time_created: message.created,
+                data: message.data,
+              })) as never,
+            )
+            .run()
+            .pipe(Effect.orDie)
+          // The imported messages hold the Session's first sequence numbers, after its creation's.
+          yield* Bus.reserveSequence(db, data.sessionID, event.durable.seq - 1 + data.messages.length)
+        }
+        yield* db
+          .update(SessionTable)
+          .set({
+            cost: data.cost,
+            tokens_input: data.tokens.input,
+            tokens_output: data.tokens.output,
+            tokens_reasoning: data.tokens.reasoning,
+            tokens_cache_read: data.tokens.cacheRead,
+            tokens_cache_write: data.tokens.cacheWrite,
+            time_created: data.time.created,
+            time_updated: data.time.updated,
+            time_idle: data.time.idle ?? null,
+            time_viewed: data.time.viewed ?? null,
+            idle_outcome: data.outcome ?? null,
+            time_archived: data.time.archived ?? null,
+          })
+          .where(eq(SessionTable.id, data.sessionID))
+          .run()
+          .pipe(Effect.orDie)
+      }),
+    )
     yield* bus.project(SessionFact.InstructionEntrySet, (event) =>
       db
         .insert(InstructionEntryTable)

@@ -569,7 +569,8 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.applyOnly(db, migrations)
 
         const rows = yield* db.all<Record<string, unknown>>(sql`SELECT * FROM job_background`)
-        expect(rows.map((row) => ({ ...row, recovery: JSON.parse(String(row.recovery)) }))).toEqual([
+        const markers: unknown = rows.map((row) => ({ ...row, recovery: JSON.parse(String(row.recovery)) }))
+        expect(markers).toEqual([
           {
             notification_id: "msg_1",
             job_id: "job_1",

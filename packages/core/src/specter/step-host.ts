@@ -419,14 +419,16 @@ const stepIOLayer = Layer.effect(
                 ),
               )
       const outcome = yield* run.pipe(
-        Effect.onInterrupt(() =>
-          // OC++'s runner records a cancelled manual compaction; an automatic one records its own.
+        Effect.onError((cause) =>
+          // OC++'s runner records a manual compaction that was cancelled or broke; an automatic one records its own.
           input.reason === "manual"
             ? bus
                 .publish(SessionEvent.Compaction.Failed, {
                   sessionID: input.sessionID,
                   reason: "manual",
-                  error: { type: "aborted", message: "Compaction cancelled" },
+                  error: Cause.hasInterruptsOnly(cause)
+                    ? { type: "aborted", message: "Compaction cancelled" }
+                    : { type: "compaction.failed", message: Cause.pretty(cause) },
                   inputID: input.inputID,
                 })
                 .pipe(Effect.asVoid)
@@ -455,7 +457,11 @@ const stepIOLayer = Layer.effect(
           Effect.catchCause((cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.interrupt
-              : Effect.succeed({ outcome: "failed", error: toSessionError(Cause.squash(cause)) } as const),
+              : Effect.succeed({
+                  outcome: "failed",
+                  error: toSessionError(Cause.squash(cause)),
+                  fatal: true,
+                } as const),
           ),
         ),
     })
@@ -493,6 +499,7 @@ const unprepared = (cause: Cause.Cause<unknown>): StepPlan => ({
  */
 export const make = Effect.gen(function* () {
   const store = yield* SessionStore.Service
+  const bus = yield* Bus.Service
   const locations = yield* LocationServiceMap.Service
   const locationOf = (sessionID: SessionSchema.ID) =>
     store
@@ -532,6 +539,8 @@ export const make = Effect.gen(function* () {
             : Effect.succeed<PrepareOutcome>({ outcome: "failed", error: toSessionError(Cause.squash(cause)) }),
         ),
       ),
+    // A dead attempt's tool calls fail as OC++'s runner failed them, naming the child Session a delegation ran.
+    recover: (sessionID) => settleStaleToolCalls(store, bus, SessionSchema.ID.make(sessionID)).pipe(Effect.orDie),
     moving: (sessionID) =>
       locationOf(SessionSchema.ID.make(sessionID)).pipe(
         Effect.flatMap((location) =>

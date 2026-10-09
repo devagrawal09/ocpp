@@ -70,6 +70,8 @@ export const layer = Layer.effect(
         options?: { readonly continue?: boolean },
       ) {
         yield* specter.register(sessionID)
+        // The running attempt records what it produced before the interruption settles its step.
+        yield* specter.stop(sessionID)
         const interrupted = yield* specter.runtime.command({ type: "interruptExecution", payload: { sessionID } }).pipe(
           Effect.as(true),
           // Interrupting an idle Session is a no-op.

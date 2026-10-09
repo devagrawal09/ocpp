@@ -30,6 +30,7 @@ import { InstructionState } from "../session/instruction-state.js"
 import { SessionModelRequest } from "../session/model-request.js"
 import { MAX_STEPS_PROMPT } from "../session/runner/max-steps.js"
 import { SessionRunnerRetry } from "../session/runner/retry.js"
+import { settleStaleToolCalls } from "../session/runner/stale.js"
 import { SessionStep } from "../session/runner/step.js"
 import { SessionSchema } from "../session/schema.js"
 import { SessionStore } from "../session/store.js"
@@ -73,6 +74,9 @@ const defined = <T extends Record<string, unknown>>(value: T) =>
 
 const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
   const names = new Map<string, string>()
+  // A call's raw input, and the calls the model completed: a failure of any other is its input's.
+  const texts = new Map<string, string>()
+  const called = new Set<string>()
   const reasoningStates = new Map<number, Record<string, unknown> | undefined>()
   const settled: { started: boolean; ended?: StepEnded; failed?: StepFailed } = { started: false }
   // Once the runtime rejects a record, the execution moved on: nothing more is recorded.
@@ -94,6 +98,9 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
       case SessionEvent.Tool.Input.Started.type:
         names.set(data.id, data.name)
         return Effect.void
+      case SessionEvent.Tool.Input.Ended.type:
+        texts.set(data.id, data.text)
+        return Effect.void
       case SessionEvent.Reasoning.Started.type:
         reasoningStates.set(data.ordinal, data.state)
         return Effect.void
@@ -114,6 +121,7 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
         )
       }
       case SessionEvent.Tool.Called.type:
+        called.add(data.id)
         return recorded(
           record.toolRequested(
             defined({
@@ -125,8 +133,18 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
             }),
           ),
         )
-      case SessionEvent.Tool.Success.type:
       case SessionEvent.Tool.Failed.type: {
+        const { sessionID: _, assistantMessageID: __, ...result } = data
+        if (called.has(data.id)) return recorded(record.toolSettled(defined(result)))
+        // Its input never became a call.
+        const { resultState: ___, ...failure } = result
+        return recorded(
+          record.toolInputFailed(
+            defined({ ...failure, name: names.get(data.id) ?? "unknown", text: texts.get(data.id) }),
+          ),
+        )
+      }
+      case SessionEvent.Tool.Success.type: {
         const { sessionID: _, assistantMessageID: __, ...result } = data
         return recorded(record.toolSettled(defined(result)))
       }
@@ -232,11 +250,16 @@ const stepIOLayer = Layer.effect(
     >()
     // What prepare sampled is the next step's: its agent and model stay those the input was delivered to.
     const sampled = new Map<SessionSchema.ID, Effect.Success<ReturnType<typeof context.select>>>()
-    const prepare = Effect.fn("SpecterStepIO.prepare")(function* (sessionID: SessionSchema.ID) {
-      yield* plugins.flush
+    // Samples the Session's agent and model and records its instruction changes. A blocked initial
+    // instruction baseline must leave admitted input pending.
+    const select = Effect.fn("SpecterStepIO.select")(function* (sessionID: SessionSchema.ID) {
       const selected = yield* context.select(sessionID)
       yield* InstructionState.prepare(db, bus, selected.instructions, sessionID)
-      sampled.set(sessionID, selected)
+      return selected
+    })
+    const prepare = Effect.fn("SpecterStepIO.prepare")(function* (sessionID: SessionSchema.ID) {
+      yield* plugins.flush
+      sampled.set(sessionID, yield* select(sessionID))
     })
 
     const begin = Effect.fn("SpecterStepIO.begin")(function* (input: {
@@ -249,9 +272,10 @@ const stepIOLayer = Layer.effect(
       const prepared = sampled.get(sessionID)
       sampled.delete(sessionID)
       yield* plugins.flush
-      const selected = prepared ?? (yield* context.select(sessionID))
-      // A blocked initial instruction baseline must leave admitted input pending.
-      yield* InstructionState.prepare(db, bus, selected.instructions, sessionID)
+      // Tool calls a previous process left streaming or running fail before the Session continues.
+      yield* settleStaleToolCalls(store, bus, sessionID)
+      // A step without delivered input (a continuation, a retry) prepares here.
+      const selected = prepared ?? (yield* select(sessionID))
       const loaded = yield* context.load(selected)
       // The history no longer fits the model: the runtime compacts before the step.
       if (compaction.required({ messages: loaded.messages, resolved: loaded.model }))
@@ -347,7 +371,8 @@ const stepIOLayer = Layer.effect(
               !recording.settled.started &&
               !recording.stopped()
             ) {
-              current = yield* context.load(selected)
+              // As a retry does: the selection and instructions may have changed meanwhile.
+              current = yield* select(sessionID).pipe(Effect.flatMap(context.load))
               continue
             }
             // The partial output stands: the step continues in a new step, told what happened.
@@ -585,7 +610,11 @@ const outcomeOf = (
         }
     }
   }
-  if (Exit.hasInterrupts(exit) && !stepFailed) return { outcome: "stopped" }
+  // Interrupted, and only that. Having recorded its step's interruption, the attempt stopped for the
+  // user (a dismissed question); otherwise the execution moved on. A defect beside interrupted fibers is a
+  // failure.
+  if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause))
+    return stepFailed?.error.type === "aborted" ? { outcome: "interrupted" } : { outcome: "stopped" }
   if (stepFailed)
     return {
       outcome: "failed",

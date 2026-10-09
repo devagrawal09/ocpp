@@ -1,6 +1,6 @@
 export * as SpecterSessionRuntime from "./session-runtime.js"
 
-import { Context, Effect, Layer, Stream, SubscriptionRef } from "effect"
+import { Context, Deferred, Effect, Layer, Stream, SubscriptionRef } from "effect"
 import { eq } from "drizzle-orm"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import {
@@ -37,6 +37,11 @@ export interface Interface {
   readonly active: Effect.Effect<ReadonlySet<SessionSchema.ID>>
   /** Resolves once the runtime has no active execution for the Session. */
   readonly awaitIdle: (sessionID: SessionSchema.ID) => Effect.Effect<void>
+  /**
+   * Stops the attempt or compaction this process runs for the Session, once it has recorded what it
+   * produced (partial output, interrupted tools). Answers whether one was running.
+   */
+  readonly stop: (sessionID: SessionSchema.ID) => Effect.Effect<boolean>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SpecterSessionRuntime") {}
@@ -96,11 +101,37 @@ const layer = Layer.effect(
           : Effect.void,
       )
 
-    // An attempt stops as soon as its execution settles: an interrupt cancels the model stream and the
-    // tools it started, as it does in OC++'s own runner.
+    // An attempt stops when it is told to, before an interrupt is recorded, or once its execution
+    // settles: either cancels the model stream and the tools it started, as in OC++'s own runner, and
+    // the attempt records what it produced on the way out.
     const host = yield* SpecterStepHost.make
+    const running = new Map<
+      SessionSchema.ID,
+      { readonly stop: Deferred.Deferred<void>; readonly done: Deferred.Deferred<void> }
+    >()
     const untilIdle = <A, E>(sessionID: string, work: Effect.Effect<A, E>, stopped: A) =>
-      Effect.raceFirst(work, awaitIdle(SessionSchema.ID.make(sessionID)).pipe(Effect.as(stopped)))
+      Effect.gen(function* () {
+        const id = SessionSchema.ID.make(sessionID)
+        const entry = { stop: yield* Deferred.make<void>(), done: yield* Deferred.make<void>() }
+        running.set(id, entry)
+        return yield* Effect.raceFirst(
+          work,
+          Effect.raceFirst(Deferred.await(entry.stop), awaitIdle(id)).pipe(Effect.as(stopped)),
+        ).pipe(
+          Effect.ensuring(
+            Effect.suspend(() => {
+              if (running.get(id) === entry) running.delete(id)
+              return Deferred.succeed(entry.done, undefined)
+            }),
+          ),
+        )
+      })
+    const stop = (sessionID: SessionSchema.ID) =>
+      Effect.suspend(() => {
+        const entry = running.get(sessionID)
+        if (!entry) return Effect.succeed(false)
+        return Deferred.succeed(entry.stop, undefined).pipe(Effect.andThen(Deferred.await(entry.done)), Effect.as(true))
+      })
     const interruptible = StepHost.of({
       begin: (input) =>
         host.begin(input).pipe(
@@ -181,6 +212,7 @@ const layer = Layer.effect(
           : register(sessionID).pipe(Effect.tap(() => Effect.sync(() => registered.add(sessionID)))),
       active: SubscriptionRef.get(active),
       awaitIdle,
+      stop,
     })
   }),
 )

@@ -340,7 +340,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
           const admitted = yield* (
             coalesce === undefined
               ? admit(input)
-              : // Serialized with delivery, so an item is either replaced here or delivered, never both.
+              : // Serialized among coalescing admissions; the runtime refuses to replace an item it delivered meanwhile.
                 SessionInbox.serialized(
                   sessionID,
                   Effect.gen(function* () {

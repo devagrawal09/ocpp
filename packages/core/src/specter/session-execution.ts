@@ -56,7 +56,8 @@ export const layer = Layer.effect(
       resume: Effect.fn("SpecterSessionExecution.resume")(function* (sessionID: SessionSchema.ID) {
         yield* specter.register(sessionID)
         yield* start(sessionID)
-        yield* specter.awaitIdle(sessionID)
+        // The execution this call started or joined; a follow-up its input wakes is a busy period of its own.
+        yield* specter.awaitSettled(sessionID)
         const settled = yield* specter.runtime
           .query({ type: "executionStatus", payload: { sessionID } })
           .pipe(Effect.orDie)
@@ -83,11 +84,16 @@ export const layer = Layer.effect(
           yield* jobs.cancelAll({ ownerSessionID: sessionID, type: "codemode" })
         }
         if (!options?.continue) return interrupted
-        // Continue with steering input only; queued prompts stay parked until the next idle boundary.
+        // Continue with steering input and the control items at the queue's head only; queued prompts stay
+        // parked until the next idle boundary.
         const next = yield* specter.runtime
-          .query({ type: "nextDeliverable", payload: { sessionID, boundary: "step" } })
+          .query({ type: "nextDeliverable", payload: { sessionID, boundary: "entry" } })
           .pipe(Effect.orDie)
-        if (next.item !== null) yield* start(sessionID)
+        if (next.item !== null)
+          yield* specter.runtime.command({ type: "startExecution", payload: { sessionID, continues: true } }).pipe(
+            Effect.flatMap((execution) => execution.reactions),
+            Effect.catch((error) => (rejection(error) === undefined ? Effect.die(error) : Effect.void)),
+          )
         return interrupted
       }),
       awaitIdle: specter.awaitIdle,

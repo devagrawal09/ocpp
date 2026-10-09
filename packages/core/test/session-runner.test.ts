@@ -1675,15 +1675,10 @@ describe("SessionRunnerLLM", () => {
     expect(yield* s.inbox).toEqual([])
     expect(s.requests).toEqual([])
     expect(s.closedTransports).toEqual([sessionID])
+    // The delivery and the move are one commit; only the execution's own terminal follows them.
     expect(
-      (yield* s.db
-        .select({ type: EventTable.type })
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, sessionID))
-        .orderBy(desc(EventTable.seq))
-        .limit(2)
-        .all()).map((event) => event.type),
-    ).toEqual([Bus.versionedType(SessionEvent.Moved.type, 1), Bus.versionedType(SessionEvent.InboxDelivered.type, 1)])
+      (yield* recordedEventTypes(sessionID)).filter((type) => !type.startsWith("session.execution.")).slice(-2),
+    ).toEqual([Bus.versionedType(SessionEvent.InboxDelivered.type, 1), Bus.versionedType(SessionEvent.Moved.type, 1)])
   })
 
   scenario("preserves a tool continuation across a steered move", function* (s) {

@@ -35,8 +35,10 @@ export interface Interface {
   readonly register: (sessionID: SessionSchema.ID) => Effect.Effect<void>
   /** Sessions with an execution the runtime has started and not yet settled. */
   readonly active: Effect.Effect<ReadonlySet<SessionSchema.ID>>
-  /** Resolves once the runtime has no active execution for the Session. */
+  /** Resolves once the runtime has no active execution for the Session, nor input about to start one. */
   readonly awaitIdle: (sessionID: SessionSchema.ID) => Effect.Effect<void>
+  /** Resolves once the runtime has no active execution for the Session. */
+  readonly awaitSettled: (sessionID: SessionSchema.ID) => Effect.Effect<void>
   /**
    * Stops the attempt or compaction this process runs for the Session, once it has recorded what it
    * produced (partial output, interrupted tools). Answers whether one was running.
@@ -87,19 +89,21 @@ const layer = Layer.effect(
           .pipe(Effect.tap((result) => (result.duplicate ? Effect.void : track(result.events)))),
     }
 
-    // Resolves once the runtime has no active execution for the Session, from the runtime's own state.
+    // Resolves once the runtime's state says so: no execution is active (settled), and also none is about
+    // to start from input that wakes the Session (idle; OC++'s runner coalesced that into the busy period).
     let started: EmbeddedSessionRuntime | undefined
-    const awaitIdle = (sessionID: SessionSchema.ID) =>
+    const awaitStatus = (sessionID: SessionSchema.ID, idle: boolean) =>
       Effect.suspend(() =>
         started
           ? started.subscribe({ type: "executionStatus", payload: { sessionID } }).pipe(
-              Stream.filter((status) => status.status !== "active"),
+              Stream.filter((status) => status.status !== "active" && (!idle || status.wakes !== true)),
               Stream.take(1),
               Stream.runDrain,
               Effect.orDie,
             )
           : Effect.void,
       )
+    const awaitIdle = (sessionID: SessionSchema.ID) => awaitStatus(sessionID, true)
 
     // An attempt stops when it is told to, before an interrupt is recorded, or once its execution
     // settles: either cancels the model stream and the tools it started, as in OC++'s own runner, and
@@ -116,7 +120,7 @@ const layer = Layer.effect(
         running.set(id, entry)
         return yield* Effect.raceFirst(
           work,
-          Effect.raceFirst(Deferred.await(entry.stop), awaitIdle(id)).pipe(Effect.as(stopped)),
+          Effect.raceFirst(Deferred.await(entry.stop), awaitStatus(id, false)).pipe(Effect.as(stopped)),
         ).pipe(
           Effect.ensuring(
             Effect.suspend(() => {
@@ -212,6 +216,7 @@ const layer = Layer.effect(
           : register(sessionID).pipe(Effect.tap(() => Effect.sync(() => registered.add(sessionID)))),
       active: SubscriptionRef.get(active),
       awaitIdle,
+      awaitSettled: (sessionID) => awaitStatus(sessionID, false),
       stop,
     })
   }),

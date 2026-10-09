@@ -112,8 +112,8 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
       { definition: SessionEvent.Tool.Called, data: called, id },
     ]
   }
-  // Whether an input wakes the Session is the runtime's scheduling; OC++ wakes from its callers.
-  if (event.type === "session-inbox-held") return []
+  // Whether an input wakes the Session, or an execution takes queued input, is the runtime's scheduling.
+  if (event.type === "session-inbox-held" || event.type === "session-execution-continued") return []
   if (event.type === "session-tool-input-failed") {
     const { name, text, ...failed } = event.payload as {
       readonly sessionID: string

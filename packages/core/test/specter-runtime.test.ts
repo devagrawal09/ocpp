@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import { Model, sessionEvent, sessionEventDefinitions, toOcppEventType } from "@specter/agent-runtime"
+import { SpecterTranslate } from "../src/specter/translate"
 
 // The Specter runtime is linked from a sibling checkout with its own node_modules. These checks
 // fail when it loads a second Effect or diverges from OC++'s event catalog.
@@ -19,8 +20,26 @@ describe("embedded Specter runtime", () => {
 
   test("defines OC++'s durable Session events under kebab-case names", () => {
     expect(sessionEventDefinitions.map((definition) => toOcppEventType(definition.type))).toEqual(
-      SessionEvent.DurableDefinitions.map((definition) => definition.type),
+      expect.arrayContaining(SessionEvent.DurableDefinitions.map((definition) => definition.type)),
     )
+  })
+
+  test("projects its consolidated facts as OC++'s events", () => {
+    const settled = (payload: Record<string, unknown>) =>
+      SpecterTranslate.toWire({
+        id: "evt_1",
+        order: 1,
+        type: "session-execution-settled",
+        payload: { sessionID: "ses_1", ...payload },
+        recordedAt: new Date(0).toISOString(),
+      }).map((wire) => [wire.definition.type, wire.data, wire.id])
+    expect(settled({ outcome: "succeeded" })).toEqual([["session.execution.succeeded", { sessionID: "ses_1" }, "evt_1"]])
+    expect(settled({ outcome: "failed", error: { type: "provider", message: "boom" } })).toEqual([
+      ["session.execution.failed", { sessionID: "ses_1", error: { type: "provider", message: "boom" } }, "evt_1"],
+    ])
+    expect(settled({ outcome: "interrupted", reason: "user" })).toEqual([
+      ["session.execution.interrupted", { sessionID: "ses_1", reason: "user" }, "evt_1"],
+    ])
   })
 
   test("validates payloads with OC++'s schemas", async () => {

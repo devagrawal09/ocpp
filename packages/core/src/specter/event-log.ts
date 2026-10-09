@@ -21,9 +21,13 @@ export interface Hooks {
   /**
    * Runs inside the append transaction, after the events are stored: OC++ projects the commit there
    * (projectors, commit hooks, Bus sequences). A failure, defects included, rolls the append back, so
-   * Specter's log and OC++'s read models never disagree.
+   * Specter's log and OC++'s read models never disagree. Returns what to do once the transaction has
+   * committed (notify listeners); it runs uninterruptibly, so it marks what may be interrupted.
    */
-  readonly appended: (idempotencyKey: string | undefined, events: readonly PersistedEvent[]) => Effect.Effect<void>
+  readonly appended: (
+    idempotencyKey: string | undefined,
+    events: readonly PersistedEvent[],
+  ) => Effect.Effect<Effect.Effect<void>>
 }
 
 /** Specter's Event Log on OC++'s database. */
@@ -84,7 +88,7 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
           Effect.gen(function* () {
             if (options.idempotencyKey) {
               const existing = yield* findCommit(options.idempotencyKey)
-              if (existing) return { ...existing, duplicate: true }
+              if (existing) return { ...existing, duplicate: true, committed: Effect.void }
             }
             const version = yield* currentVersion
             if (options.expectedVersion !== undefined && options.expectedVersion !== version)
@@ -117,8 +121,9 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
                 committed_at: recordedAt,
               })
               .run()
-            yield* hooks.appended(options.idempotencyKey, events)
+            const committed = yield* hooks.appended(options.idempotencyKey, events)
             return {
+              committed,
               events,
               version: committedVersion,
               committedAt: recordedAt,
@@ -129,7 +134,13 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
           }),
         { behavior: "immediate" },
       )
-      .pipe(Effect.catch((cause) => (cause instanceof EventLogFailure ? Effect.fail(cause) : fail("append")(cause))))
+      .pipe(
+        Effect.catch((cause) => (cause instanceof EventLogFailure ? Effect.fail(cause) : fail("append")(cause))),
+        Effect.tap((result) => result.committed),
+        // A committed append always runs its after-commit work.
+        Effect.uninterruptible,
+        Effect.map(({ committed: _, ...result }) => result),
+      )
 
   return {
     query: (afterOrder, eventTypes) =>

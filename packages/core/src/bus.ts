@@ -15,13 +15,16 @@ import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionID } from "@ocpp/schema/session-id"
 import { AbsolutePath } from "@ocpp/schema/schema"
 import {
+  type EventLogService as SpecterEventLogContract,
   EventLog as SpecterEventLogService,
-  EventLogFailure,
   makeSessionEventStore,
-  SpecterVersionConflictError,
   toSpecterEventType,
 } from "@specter/agent-runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
+import { SpecterTranslate } from "./specter/translate.js"
+
+/** Idempotency keys of the commits that register a Session the log predates with the runtime. */
+export const registrationKeyPrefix = "register:"
 
 export type Subscriber<D extends Event.Definition = Event.Definition> = (event: Event.Payload<D>) => Effect.Effect<void>
 export type Unsubscribe = Effect.Effect<void>
@@ -183,6 +186,12 @@ export interface Interface {
   ) => Effect.Effect<void>
   readonly remove: (aggregateID: string) => Effect.Effect<void>
   readonly claim: (aggregateID: string, ownerID: string) => Effect.Effect<void>
+  /**
+   * Specter's Event Log in this database, for the runtime that runs Sessions. Facts its Commands record
+   * are projected here as OC++ events, in the same transaction, and notified once it commits. A commit
+   * whose idempotency key starts with `registrationKeyPrefix` is not projected.
+   */
+  readonly specterLog: Effect.Effect<SpecterEventLogContract>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/Bus") {}
@@ -671,21 +680,79 @@ export function configured(options?: Options) {
               (_, index) =>
                 (key === undefined ? undefined : pending.get(key)?.items[index]?.event.id) ?? Event.ID.create(),
             ),
-          appended: (key, _events) =>
+          appended: (key, events) =>
             Effect.gen(function* () {
               const entry = key === undefined ? undefined : pending.get(key)
-              if (!entry) return yield* Effect.die(new Error("Session facts are recorded through the Bus"))
-              entry.committed = yield* projectBatch(entry.items[0].aggregateID, entry.items)
+              // A publication through this Bus: publish and publishAll notify once it returns.
+              if (entry) {
+                entry.committed = yield* projectBatch(entry.items[0].aggregateID, entry.items)
+                return Effect.void
+              }
+              // Registering a Session the log predates repeats OC++'s own session.created: nothing to project.
+              if (key?.startsWith(registrationKeyPrefix)) return Effect.void
+              // A fact a runtime Command recorded directly: project its OC++ events here and notify
+              // after the transaction commits.
+              const created = Date.parse(events[0]?.recordedAt ?? "") || (yield* Clock.currentTimeMillis)
+              const items = events.flatMap((recorded) =>
+                SpecterTranslate.toWire(recorded).map((wire): BatchItem => {
+                  const aggregateID = (wire.data as Record<string, unknown>)[wire.definition.durable.aggregate]
+                  if (typeof aggregateID !== "string")
+                    throw new InvalidDurableEventError({
+                      type: wire.definition.type,
+                      message: `Expected string aggregate field ${wire.definition.durable.aggregate}`,
+                    })
+                  return {
+                    definition: wire.definition,
+                    aggregateID,
+                    event: { id: wire.id, created, type: wire.definition.type, data: wire.data } as Event.Payload,
+                  }
+                }),
+              )
+              const batches = new Map<string, BatchItem[]>()
+              for (const item of items) batches.set(item.aggregateID, [...(batches.get(item.aggregateID) ?? []), item])
+              const committed = yield* Effect.forEach([...batches.values()], (batch) =>
+                projectBatch(batch[0]!.aggregateID, batch as [BatchItem, ...BatchItem[]]),
+              )
+              const aggregates = [...batches.keys()]
+              // The log runs this uninterruptibly once the append commits; as for a publish, only
+              // notifying listeners can be interrupted.
+              return Effect.gen(function* () {
+                for (const [index, aggregateID] of aggregates.entries()) {
+                  committed[index]!.route()
+                  yield* Effect.forEach(pubsub.durable.get(aggregateID) ?? [], (wake) => PubSub.publish(wake, undefined), {
+                    discard: true,
+                  })
+                }
+                yield* Effect.interruptible(
+                  Effect.forEach(
+                    committed.flatMap((batch) => batch.events),
+                    (event) => notify(event, true),
+                    { discard: true },
+                  ),
+                )
+              })
             }),
         })
+        // The log the session runtime writes through. An append holds the locks of the Sessions it
+        // records for, as a publish does, so listeners see each Session's events in order.
+        const runtimeLog: SpecterEventLogContract = {
+          ...specterLog,
+          append: (drafts, options) =>
+            [
+              ...new Set(
+                drafts.flatMap((draft) => {
+                  const sessionID = (draft.payload as { readonly sessionID?: unknown } | undefined)?.sessionID
+                  return typeof sessionID === "string" ? [sessionID] : []
+                }),
+              ),
+            ]
+              .sort()
+              .reduce((append, sessionID) => durableLocks.withLock(sessionID)(append), specterLog.append(drafts, options)),
+        }
         const store = yield* makeSessionEventStore().pipe(
           Effect.provideService(SpecterEventLogService, specterLog),
           Effect.orDie,
         )
-        const isVersionConflict = (error: unknown) =>
-          error instanceof SpecterVersionConflictError ||
-          (error instanceof EventLogFailure && error.cause instanceof SpecterVersionConflictError)
-
         const recordFacts = (items: readonly [BatchItem, ...BatchItem[]]) => {
           const key = `bus:${crypto.randomUUID()}`
           const entry: Pending = { items }
@@ -706,8 +773,6 @@ export function configured(options?: Options) {
                   { idempotencyKey: key },
                 )
                 .pipe(
-                  // The log's version moved between the Command's read and its append: decide again.
-                  Effect.retry({ while: isVersionConflict }),
                   Effect.orDie,
                   Effect.map(() => entry.committed!),
                 ),
@@ -1017,6 +1082,7 @@ export function configured(options?: Options) {
           replay,
           remove,
           claim,
+          specterLog: Effect.succeed(runtimeLog),
         })
       }),
     ),

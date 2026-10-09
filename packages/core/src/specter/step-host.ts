@@ -9,6 +9,8 @@ import {
   StepHost,
   type AttemptOutcome,
   type AttemptRecorder,
+  type CompactFirst,
+  type CompactionOutcome,
   type RecordFailure,
   type StepPlan,
 } from "@specter/agent-runtime"
@@ -17,6 +19,7 @@ import { Database } from "../database/database.js"
 import { llmClient } from "../effect/app-node-platform.js"
 import { LocationServiceMap } from "../location-service-map.js"
 import { Snapshot } from "../snapshot.js"
+import { SessionCompaction } from "../session/compaction.js"
 import { SessionContext } from "../session/context.js"
 import { StepFailedError } from "../session/error.js"
 import { SessionEvent } from "../session/event.js"
@@ -172,7 +175,12 @@ export class StepIO extends Context.Service<
     readonly begin: (input: {
       readonly sessionID: SessionSchema.ID
       readonly assistantMessageID: SessionMessage.ID
-    }) => Effect.Effect<StepPlan>
+    }) => Effect.Effect<StepPlan | CompactFirst>
+    readonly compact: (input: {
+      readonly sessionID: SessionSchema.ID
+      readonly reason: "auto" | "manual"
+      readonly inputID?: SessionMessage.ID
+    }) => Effect.Effect<CompactionOutcome>
   }
 >()("@ocpp/SpecterStepIO") {}
 
@@ -185,6 +193,8 @@ const stepIOLayer = Layer.effect(
     const db = (yield* Database.Service).db
     const llm = yield* LLMClient.Service
     const toolOutput = yield* ToolOutput.Service
+    const compaction = yield* SessionCompaction.Service
+    const store = yield* SessionStore.Service
 
     const begin = Effect.fn("SpecterStepIO.begin")(function* (input: {
       readonly sessionID: SessionSchema.ID
@@ -195,6 +205,9 @@ const stepIOLayer = Layer.effect(
       // A blocked initial instruction baseline must leave admitted input pending.
       yield* InstructionState.prepare(db, bus, selected.instructions, sessionID)
       const loaded = yield* context.load(selected)
+      // The history no longer fits the model: the runtime compacts before the step.
+      if (compaction.required({ messages: loaded.messages, resolved: loaded.model }))
+        return { compact: true } satisfies CompactFirst
       const snapshot = yield* snapshots.capture()
 
       const run = (record: AttemptRecorder) =>
@@ -251,8 +264,61 @@ const stepIOLayer = Layer.effect(
       } satisfies StepPlan
     })
 
+    // OC++'s own compaction, publishing its facts (started, ended or failed, usage) as it always has.
+    const compact = Effect.fn("SpecterStepIO.compact")(function* (input: {
+      readonly sessionID: SessionSchema.ID
+      readonly reason: "auto" | "manual"
+      readonly inputID?: SessionMessage.ID
+    }) {
+      const session = yield* store.get(input.sessionID)
+      if (!session) return yield* Effect.die(new Error(`Session not found: ${input.sessionID}`))
+      const messages = yield* store.context(input.sessionID)
+      const run =
+        input.reason === "manual" && input.inputID !== undefined
+          ? compaction.compactManual({
+              session,
+              messages,
+              inputID: input.inputID,
+              resolveModel: context.resolveModel,
+              prepare: context.prepare,
+            })
+          : context
+              .resolveModel(session)
+              .pipe(
+                Effect.flatMap((resolved) =>
+                  compaction.compact({ session, messages, resolved, prepare: context.prepare }),
+                ),
+              )
+      const outcome = yield* run.pipe(
+        Effect.onInterrupt(() =>
+          // OC++'s runner records a cancelled manual compaction; an automatic one records its own.
+          input.reason === "manual"
+            ? bus
+                .publish(SessionEvent.Compaction.Failed, {
+                  sessionID: input.sessionID,
+                  reason: "manual",
+                  error: { type: "aborted", message: "Compaction cancelled" },
+                  inputID: input.inputID,
+                })
+                .pipe(Effect.asVoid)
+            : Effect.void,
+        ),
+      )
+      return outcome.status === "completed"
+        ? ({ outcome: "completed" } as const)
+        : ({ outcome: "failed", error: outcome.error } as const)
+    })
+
     return StepIO.of({
       begin: (input) => begin(input).pipe(Effect.catchCause((cause) => Effect.succeed(unprepared(cause)))),
+      compact: (input) =>
+        compact(input).pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.interrupt
+              : Effect.succeed({ outcome: "failed", error: toSessionError(Cause.squash(cause)) } as const),
+          ),
+        ),
     })
   }),
 )
@@ -260,7 +326,16 @@ const stepIOLayer = Layer.effect(
 export const stepIONode = makeLocationNode({
   service: StepIO,
   layer: stepIOLayer,
-  deps: [Bus.node, llmClient, SessionContext.node, Snapshot.node, ToolOutput.node, Database.node],
+  deps: [
+    Bus.node,
+    llmClient,
+    SessionContext.node,
+    SessionCompaction.node,
+    SessionStore.node,
+    Snapshot.node,
+    ToolOutput.node,
+    Database.node,
+  ],
 })
 
 // A step whose request cannot be prepared fails at once; what is recorded is all OC++ knows.
@@ -277,19 +352,49 @@ const unprepared = (cause: Cause.Cause<unknown>): StepPlan => ({
 export const make = Effect.gen(function* () {
   const store = yield* SessionStore.Service
   const locations = yield* LocationServiceMap.Service
+  const locationOf = (sessionID: SessionSchema.ID) =>
+    store
+      .get(sessionID)
+      .pipe(
+        Effect.flatMap((session) =>
+          session
+            ? Effect.succeed(locations.get(session.location))
+            : Effect.die(new Error(`Session not found: ${sessionID}`)),
+        ),
+      )
   return StepHost.of({
     begin: (input) =>
       Effect.gen(function* () {
         const sessionID = SessionSchema.ID.make(input.sessionID)
-        const session = yield* store.get(sessionID)
-        if (!session) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
-        const location = locations.get(session.location)
+        const location = yield* locationOf(sessionID)
         const plan = yield* StepIO.use((io) =>
           io.begin({ sessionID, assistantMessageID: SessionMessage.ID.make(input.assistantMessageID) }),
         ).pipe(Effect.provide(location))
+        if ("compact" in plan) return plan
         // The attempt runs in the Session's Location too.
         return { ...plan, run: (record: AttemptRecorder) => plan.run(record).pipe(Effect.provide(location)) }
       }).pipe(Effect.catchCause((cause) => Effect.succeed(unprepared(cause)))),
+    compact: (input) =>
+      Effect.gen(function* () {
+        const sessionID = SessionSchema.ID.make(input.sessionID)
+        const location = yield* locationOf(sessionID)
+        return yield* StepIO.use(
+          (io): Effect.Effect<CompactionOutcome> =>
+            io.compact({
+              sessionID,
+              reason: input.reason,
+              ...(input.inputID === undefined ? {} : { inputID: SessionMessage.ID.make(input.inputID) }),
+            }),
+        ).pipe(Effect.provide(location))
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.succeed<CompactionOutcome>(
+            Cause.hasInterruptsOnly(cause)
+              ? { outcome: "stopped" }
+              : { outcome: "failed", error: toSessionError(Cause.squash(cause)) },
+          ),
+        ),
+      ),
   })
 })
 

@@ -36,7 +36,7 @@ export const layer = Layer.effect(
       const existing = yield* local.reconcile({ ...request, type: request.item.type, delivery: request.item.delivery })
       if (existing !== undefined) return existing
       const item: SessionInbox.Item = request.item
-      if (item.type === "compaction" || item.type === "move") return yield* unsupported(`A ${item.type} inbox item`)
+      if (item.type === "move") return yield* unsupported("A move inbox item")
       yield* specter.register(request.sessionID)
       const replaces =
         request.replaces === undefined || request.replaces.length === 0 ? {} : { replaces: request.replaces }
@@ -53,14 +53,22 @@ export const layer = Layer.effect(
                   delivery: item.delivery,
                   ...replaces,
                 }
-              : {
-                  sessionID: request.sessionID,
-                  inboxID: request.id,
-                  type: "synthetic",
-                  payload: encodeSynthetic(item.payload),
-                  delivery: item.delivery,
-                  ...replaces,
-                },
+              : item.type === "synthetic"
+                ? {
+                    sessionID: request.sessionID,
+                    inboxID: request.id,
+                    type: "synthetic",
+                    payload: encodeSynthetic(item.payload),
+                    delivery: item.delivery,
+                    ...replaces,
+                  }
+                : {
+                    sessionID: request.sessionID,
+                    inboxID: request.id,
+                    type: "compaction",
+                    payload: {},
+                    delivery: item.delivery,
+                  },
         })
         .pipe(
           Effect.map((execution) => execution.reactions),
@@ -119,7 +127,25 @@ export const layer = Layer.effect(
       // Same contract as OC++'s admit; its generic signature does not unify with this one.
       admit: admit as SessionInbox.Interface["admit"],
       cancel,
-      admitCompaction: () => unsupported("Compaction"),
+      // As OC++'s inbox: a pending compaction absorbs a second request.
+      admitCompaction: Effect.fn("SpecterSessionInbox.admitCompaction")(function* (input: {
+        readonly id: SessionMessage.ID
+        readonly sessionID: SessionSchema.ID
+        readonly delivery: SessionInbox.Delivery
+      }) {
+        const exact = yield* SessionInbox.find(db, input.id)
+        if (exact) {
+          if (exact.type === "compaction" && exact.sessionID === input.sessionID) return exact
+          return yield* new SessionInbox.LifecycleConflict({ id: input.id })
+        }
+        const pending = (yield* local.list(input.sessionID)).find((item) => item.type === "compaction")
+        if (pending) return pending
+        return yield* admit({
+          id: input.id,
+          sessionID: input.sessionID,
+          item: { type: "compaction", payload: {}, delivery: input.delivery },
+        })
+      }),
       steer: changeDelivery(SessionInbox.Delivery.make("steer")),
       queue: changeDelivery(SessionInbox.Delivery.make("queue")),
     })

@@ -8,7 +8,10 @@ import {
   makeEmbeddedSessionRuntime,
   SpecterCommandRejectedError,
   StepHost,
+  type AttemptOutcome,
+  type CompactionOutcome,
   type EmbeddedSessionRuntime,
+  type RecordFailure,
   type EventLogService,
   type PersistedEvent,
 } from "@specter/agent-runtime"
@@ -96,18 +99,25 @@ const layer = Layer.effect(
     // An attempt stops as soon as its execution settles: an interrupt cancels the model stream and the
     // tools it started, as it does in OC++'s own runner.
     const host = yield* SpecterStepHost.make
+    const untilIdle = <A, E>(sessionID: string, work: Effect.Effect<A, E>, stopped: A) =>
+      Effect.raceFirst(work, awaitIdle(SessionSchema.ID.make(sessionID)).pipe(Effect.as(stopped)))
     const interruptible = StepHost.of({
       begin: (input) =>
         host.begin(input).pipe(
-          Effect.map((plan) => ({
-            ...plan,
-            run: (record) =>
-              Effect.raceFirst(
-                plan.run(record),
-                awaitIdle(SessionSchema.ID.make(input.sessionID)).pipe(Effect.as({ outcome: "stopped" as const })),
-              ),
-          })),
+          Effect.map((plan) =>
+            "compact" in plan
+              ? plan
+              : {
+                  ...plan,
+                  run: (record) =>
+                    untilIdle<AttemptOutcome, RecordFailure>(input.sessionID, plan.run(record), {
+                      outcome: "stopped",
+                    }),
+                },
+          ),
         ),
+      compact: (input) =>
+        untilIdle<CompactionOutcome, never>(input.sessionID, host.compact(input), { outcome: "stopped" }),
     })
 
     // One step per Session at a time; different Sessions (subagents included) run at once.

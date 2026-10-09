@@ -429,6 +429,35 @@ describe("Sessions on the Specter runtime", () => {
     }),
   )
 
+  it.live("compacts the history on request", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const llm = yield* TestLLM.Service
+      yield* llm.push(TestLLM.text("Hello there", "text_1"), TestLLM.text("We said hello.", "text_2"))
+      const session = yield* Session.Service
+
+      yield* session.prompt({ sessionID, text: "Hi" })
+      yield* session.wait(sessionID)
+      yield* session.compact({ sessionID })
+      yield* session.wait(sessionID)
+
+      // The runtime delivers the compaction item; OC++ compacts and records its own facts.
+      expect((yield* eventTypes).slice(9)).toEqual([
+        "session.inbox.enqueued",
+        "session.execution.started",
+        "session.inbox.delivered",
+        "session.compaction.started",
+        "session.usage.recorded",
+        "session.compaction.ended",
+        "session.execution.succeeded",
+      ])
+      const last = (yield* session.messages({ sessionID, order: "asc" })).at(-1)
+      expect(last?.type).toBe("compaction")
+      expect(last?.type === "compaction" ? last.status : undefined).toBe("completed")
+      expect(JSON.stringify(llm.requests[1]?.messages)).toContain("Hello there")
+    }),
+  )
+
   it.live("cancels a queued input while a step runs", () =>
     Effect.gen(function* () {
       yield* setup

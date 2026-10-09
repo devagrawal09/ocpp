@@ -8,7 +8,7 @@ import { Global } from "@ocpp/util/global"
 import { Repository } from "@ocpp/core/repository"
 import { RepositoryCache } from "@ocpp/core/repository-cache"
 import { Database } from "@ocpp/core/database/database"
-import { KV } from "@ocpp/core/kv"
+import { Cache } from "@ocpp/core/cache"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { branch, commit, git, read, withRemote } from "./fixture/git"
 import { testEffect } from "./lib/effect"
@@ -31,7 +31,7 @@ describe("RepositoryCache", () => {
 
         yield* Effect.gen(function* () {
           const cache = yield* RepositoryCache.Service
-          const kv = yield* KV.Service
+          const kv = yield* Cache.Service
           expect((yield* cache.ensure({ reference: fixture.reference, refresh: "daily" })).status).toBe("cached")
           expect(yield* read(path.join(initial.localPath, "README.md"))).toBe("one\n")
           const yesterday = (yield* Clock.currentTimeMillis) - Duration.toMillis(Duration.days(1))
@@ -65,7 +65,7 @@ describe("RepositoryCache", () => {
     withRemote((fixture) =>
       Effect.gen(function* () {
         const cache = yield* RepositoryCache.Service
-        const kv = yield* KV.Service
+        const kv = yield* Cache.Service
         const initial = yield* cache.ensure({ reference: fixture.reference, refresh: "daily" })
         const key = `repository-cache:${initial.localPath}`
         const yesterday = (yield* Clock.currentTimeMillis) - Duration.toMillis(Duration.days(1))
@@ -102,7 +102,7 @@ describe("RepositoryCache", () => {
     withRemote((fixture) =>
       Effect.gen(function* () {
         const cache = yield* RepositoryCache.Service
-        const kv = yield* KV.Service
+        const kv = yield* Cache.Service
         yield* Effect.promise(() => branch(fixture.source, "feature", "feature\n"))
         const main = yield* cache.ensure({ reference: fixture.reference, refresh: "daily" })
         const feature = yield* cache.ensure({ reference: fixture.reference, branch: "feature", refresh: "daily" })
@@ -226,7 +226,7 @@ describe("RepositoryCache", () => {
 })
 
 function cacheLayer(root: string) {
-  return AppNodeBuilder.build(LayerNode.group([RepositoryCache.node, KV.node]), [
+  return AppNodeBuilder.build(LayerNode.group([RepositoryCache.node, Cache.node]), [
     [Global.node, Global.layerWith({ state: path.join(root, "state"), repos: path.join(root, "repos") })],
     [Database.node, Database.configured({ path: path.join(root, "cache.sqlite") })],
   ])

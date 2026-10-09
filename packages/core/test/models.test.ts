@@ -6,7 +6,8 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/util/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
-import { KV } from "@ocpp/core/kv"
+import { Cache } from "@ocpp/core/cache"
+import type { KV } from "@ocpp/core/kv"
 import { Model } from "@ocpp/core/model"
 import { bodyDigest, ModelsDev } from "@ocpp/core/models-dev"
 import { Provider } from "@ocpp/core/provider"
@@ -170,7 +171,7 @@ interface MockCache {
 }
 
 const makeMockKV = (cache: MockCache) =>
-  Layer.mock(KV.Service, {
+  Layer.mock(Cache.Service, {
     get: (key) => Effect.sync(() => cache.values.get(key)),
     set: (key, value) => Effect.sync(() => cache.values.set(key, value)).pipe(Effect.asVoid),
     remove: (key) => Effect.sync(() => cache.values.delete(key)).pipe(Effect.asVoid),
@@ -184,14 +185,14 @@ const buildLayer = (state: Ref.Ref<MockState>, cache: MockCache, options: Models
     AppNodeBuilder.build(LayerNode.group([ModelsDev.node, Bus.node]), [
       [ModelsDev.node, ModelsDev.configured(options)],
       [LayerNodePlatform.httpClient, Layer.succeed(HttpClient.HttpClient, makeMockClient(state))],
-      [KV.node, makeMockKV(cache)],
+      [Cache.node, makeMockKV(cache)],
     ]),
   )
 
 // Mirrors production KV backends whose writes die as defects (e.g. Durable
 // Object SQLite rejecting values over its 2 MB cap with EffectDrizzleQueryError).
 const makeFailingWriteKV = (cache: MockCache) =>
-  Layer.mock(KV.Service, {
+  Layer.mock(Cache.Service, {
     get: (key) => Effect.sync(() => cache.values.get(key)),
     set: () => Effect.die(new Error('Failed query: insert into "kv"')),
     remove: (key) => Effect.sync(() => cache.values.delete(key)).pipe(Effect.asVoid),
@@ -311,7 +312,7 @@ describe("ModelsDev Service", () => {
         AppNodeBuilder.build(ModelsDev.node, [
           [ModelsDev.node, ModelsDev.configured({ fetch: true, snapshot: false })],
           [LayerNodePlatform.httpClient, Layer.succeed(HttpClient.HttpClient, makeMockClient(state))],
-          [KV.node, makeFailingWriteKV(cache)],
+          [Cache.node, makeFailingWriteKV(cache)],
         ]),
       )
       const result = yield* ModelsDev.Service.use((s) => s.get()).pipe(Effect.provide(layer))

@@ -3,6 +3,7 @@ export * as DurableEventManifest from "./durable-event-manifest.js"
 import { CredentialFact } from "./credential-fact.js"
 import { ExternalSession } from "./external-session.js"
 import { Event } from "./event.js"
+import { KeyValueFact } from "./key-value-fact.js"
 import { ProjectFact } from "./project-fact.js"
 import { SessionFact } from "./session-fact.js"
 import { Worktree } from "./worktree.js"
@@ -16,6 +17,7 @@ export const Definitions = [
   ...ProjectFact.Definitions,
   ...SessionFact.Definitions,
   ...CredentialFact.Definitions,
+  ...KeyValueFact.Definitions,
 ] as const
 
 export const Durable = Event.durableMap(Definitions)

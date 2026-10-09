@@ -10,7 +10,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { httpClient } from "@ocpp/util/effect/app-node-platform"
 import { Model } from "./model.js"
 import { Provider } from "./provider.js"
-import { KV } from "./kv.js"
+import { Cache as CacheStore } from "./cache.js"
 import snapshotText from "./models-dev/snapshot.txt" with { type: "text" }
 
 export const CatalogModelStatus = Schema.Literals(["alpha", "beta", "deprecated"])
@@ -582,7 +582,7 @@ export const layer = (options?: Options) =>
       const fs = yield* FSUtil.Service
       const bus = yield* Bus.Service
       const app = yield* App.Metadata
-      const kv = yield* KV.Service
+      const kv = yield* CacheStore.Service
       const http = HttpClient.filterStatusOk(
         (yield* HttpClient.HttpClient).pipe(
           HttpClient.retryTransient({
@@ -710,7 +710,7 @@ export function configured(options?: Options) {
   return makeGlobalNode({
     service: Service,
     layer: layer(options),
-    deps: [FSUtil.node, Bus.node, App.node, KV.node, httpClient],
+    deps: [FSUtil.node, Bus.node, App.node, CacheStore.node, httpClient],
   })
 }
 

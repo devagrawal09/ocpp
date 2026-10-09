@@ -14,7 +14,7 @@ import { Repository } from "./repository.js"
 import { AbsolutePath } from "./schema.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { EffectFlock } from "@ocpp/util/effect-flock"
-import { KV } from "./kv.js"
+import { Cache } from "./cache.js"
 
 const Refresh = Schema.Struct({
   attemptedAt: Schema.Number,
@@ -120,7 +120,7 @@ const layer = Layer.effect(
     const git = yield* Git.Service
     const flock = yield* EffectFlock.Service
     const global = yield* Global.Service
-    const kv = yield* KV.Service
+    const kv = yield* Cache.Service
 
     return Service.of({
       ensure: Effect.fn("RepositoryCache.ensure")(function* (input) {
@@ -236,7 +236,7 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
-  deps: [EffectFlock.node, FSUtil.node, Git.node, Global.node, KV.node],
+  deps: [EffectFlock.node, FSUtil.node, Git.node, Global.node, Cache.node],
 })
 
 function errorMessage(error: unknown) {

@@ -6,6 +6,7 @@ import { Delegation } from "../src/delegation.js"
 import { DurableEventManifest } from "../src/durable-event-manifest.js"
 import { EventManifest } from "../src/event-manifest.js"
 import { ExternalSession } from "../src/external-session.js"
+import { KeyValueFact } from "../src/key-value-fact.js"
 import { ProjectFact } from "../src/project-fact.js"
 import { SessionFact } from "../src/session-fact.js"
 
@@ -16,7 +17,12 @@ test("external persistence facts are durable and internal; children use ordinary
   }
 })
 test("project, Session and credential persistence facts are durable and internal", () => {
-  for (const event of [...ProjectFact.Definitions, ...SessionFact.Definitions, ...CredentialFact.Definitions]) {
+  for (const event of [
+    ...ProjectFact.Definitions,
+    ...SessionFact.Definitions,
+    ...CredentialFact.Definitions,
+    ...KeyValueFact.Definitions,
+  ]) {
     expect(DurableEventManifest.Durable.get(event.type + ".1")).toBe(event)
     expect(EventManifest.Server.has(event.type)).toBe(false)
   }

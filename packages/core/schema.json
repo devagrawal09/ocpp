@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "9c21d0e9-d9d0-47a7-9573-f8fc68f1e320",
-  "prevIds": ["5951fba9-c220-4e80-bb6f-84b2e066a474"],
+  "id": "fabc55d1-c267-4e01-b9cb-f9c008c04c21",
+  "prevIds": ["9c21d0e9-d9d0-47a7-9573-f8fc68f1e320"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -10,6 +10,10 @@
     },
     {
       "name": "codemode_event",
+      "entityType": "tables"
+    },
+    {
+      "name": "cache",
       "entityType": "tables"
     },
     {
@@ -337,6 +341,46 @@
       "name": "time_updated",
       "entityType": "columns",
       "table": "codemode_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "key",
+      "entityType": "columns",
+      "table": "cache"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "value",
+      "entityType": "columns",
+      "table": "cache"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "cache"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "cache"
     },
     {
       "type": "text",
@@ -2471,6 +2515,13 @@
       "name": "worktree_pk",
       "entityType": "pks",
       "table": "worktree"
+    },
+    {
+      "columns": ["key"],
+      "nameExplicit": false,
+      "name": "cache_pk",
+      "table": "cache",
+      "entityType": "pks"
     },
     {
       "columns": ["id"],

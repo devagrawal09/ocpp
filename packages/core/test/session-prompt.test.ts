@@ -41,7 +41,7 @@ import { Reference } from "@ocpp/core/reference"
 import { RepositoryCache } from "@ocpp/core/repository-cache"
 import { Global } from "@ocpp/util/global"
 import { EffectFlock } from "@ocpp/util/effect-flock"
-import { KV } from "@ocpp/core/kv"
+import { Cache } from "@ocpp/core/cache"
 import { gitRemote, git, commit, read } from "./fixture/git"
 import * as InboxPromotion from "./fixture/inbox-promotion"
 
@@ -226,7 +226,7 @@ describe("Session.prompt", () => {
       )
       yield* Effect.gen(function* () {
         const cache = yield* RepositoryCache.Service
-        const kv = yield* KV.Service
+        const kv = yield* Cache.Service
         const flock = yield* EffectFlock.Service
         const completed = yield* Queue.unbounded<void>()
         yield* Effect.gen(function* () {
@@ -312,7 +312,7 @@ describe("Session.prompt", () => {
       }).pipe(
         Effect.scoped,
         Effect.provide(
-          AppNodeBuilder.build(LayerNode.group([RepositoryCache.node, KV.node, EffectFlock.node]), [
+          AppNodeBuilder.build(LayerNode.group([RepositoryCache.node, Cache.node, EffectFlock.node]), [
             [Global.node, Global.layerWith({ state: path.join(root, "state"), repos: path.join(root, "repos") })],
           ]),
         ),

@@ -14,6 +14,7 @@ import { tmpdir } from "./fixture/tmpdir"
 import type { SqlClient } from "effect/sql/SqlClient"
 import legacyCredentialsMigration from "@ocpp/core/database/migration/20260805200742_import_legacy_credentials"
 import credentialSecretMigration from "@ocpp/core/database/migration/20261009205324_credential_secret"
+import cacheMigration from "@ocpp/core/database/migration/20261009220914_cache"
 import jobBackgroundMigration from "@ocpp/core/database/migration/20261009210354_job_background"
 import worktreeMigration from "@ocpp/core/database/migration/20260812213948_worktree"
 import previousV2Migration from "@ocpp/core/database/migration/20260804233008_loose_psylocke"
@@ -583,6 +584,36 @@ describe("DatabaseMigration", () => {
           },
         ])
         expect(yield* db.all(sql`SELECT key FROM kv`)).toEqual([{ key: "models.dev" }])
+      }),
+      Global.make({ data: tmp.path }),
+    )
+  })
+
+  test("moves cached external resources out of the key-value store", async () => {
+    await using tmp = await tmpdir()
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.applyOnly(
+          db,
+          migrations.filter(
+            (migration) => migration.id < cacheMigration.id && migration.id !== legacyCredentialsMigration.id,
+          ),
+        )
+        const now = Date.now()
+        yield* db.run(sql`
+          INSERT INTO kv (key, value, time_created, time_updated)
+          VALUES ('models-dev:catalog', ${JSON.stringify({ updatedAt: 1, body: "{}" })}, ${now}, ${now}),
+            ('repository-cache:/repo', ${JSON.stringify({ attemptedAt: 1 })}, ${now}, ${now}),
+            ('websearch:provider', ${JSON.stringify("exa")}, ${now}, ${now})
+        `)
+        yield* DatabaseMigration.applyOnly(db, migrations)
+
+        expect(yield* db.all(sql`SELECT key FROM cache ORDER BY key`)).toEqual([
+          { key: "models-dev:catalog" },
+          { key: "repository-cache:/repo" },
+        ])
+        expect(yield* db.all(sql`SELECT key FROM kv`)).toEqual([{ key: "websearch:provider" }])
       }),
       Global.make({ data: tmp.path }),
     )

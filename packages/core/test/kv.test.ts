@@ -1,10 +1,13 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
 import { KV } from "@ocpp/core/kv"
+import { Database } from "@ocpp/core/database/database"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { asc, like } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 
-const it = testEffect(LayerNode.compile(KV.node))
+const it = testEffect(LayerNode.compile(LayerNode.group([KV.node, Database.node])))
 
 describe("KV", () => {
   it.effect("stores, replaces, and removes JSON values", () =>
@@ -21,6 +24,30 @@ describe("KV", () => {
       yield* kv.remove("wellknown:sources")
       yield* kv.remove("wellknown:sources")
       expect(yield* kv.get("wellknown:sources")).toBeUndefined()
+    }),
+  )
+
+  it.effect("records each change in Specter's log, and nothing when a value does not change", () =>
+    Effect.gen(function* () {
+      const kv = yield* KV.Service
+      const { db } = yield* Database.Service
+      yield* kv.set("websearch:provider", "exa")
+      yield* kv.set("websearch:provider", "exa")
+      yield* kv.set("websearch:provider", "parallel")
+      yield* kv.remove("websearch:provider")
+      yield* kv.remove("websearch:provider")
+      const facts = yield* db
+        .select({ type: SpecterEventTable.type, payload: SpecterEventTable.payload })
+        .from(SpecterEventTable)
+        .where(like(SpecterEventTable.type, "kv-%"))
+        .orderBy(asc(SpecterEventTable.order))
+        .all()
+        .pipe(Effect.orDie)
+      expect(facts).toEqual([
+        { type: "kv-stored", payload: { key: "websearch:provider", value: "exa" } },
+        { type: "kv-stored", payload: { key: "websearch:provider", value: "parallel" } },
+        { type: "kv-removed", payload: { key: "websearch:provider" } },
+      ])
     }),
   )
 

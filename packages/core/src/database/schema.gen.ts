@@ -40,39 +40,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
-        CREATE TABLE \`account_state\` (
-          \`id\` integer PRIMARY KEY,
-          \`active_account_id\` text,
-          \`active_org_id\` text,
-          CONSTRAINT \`fk_account_state_active_account_id_account_id_fk\` FOREIGN KEY (\`active_account_id\`) REFERENCES \`account\`(\`id\`) ON DELETE SET NULL
-        );
-      `)
-      yield* tx.run(`
-        CREATE TABLE \`account\` (
-          \`id\` text PRIMARY KEY,
-          \`email\` text NOT NULL,
-          \`url\` text NOT NULL,
-          \`access_token\` text NOT NULL,
-          \`refresh_token\` text NOT NULL,
-          \`token_expiry\` integer,
-          \`time_created\` integer NOT NULL,
-          \`time_updated\` integer NOT NULL
-        );
-      `)
-      yield* tx.run(`
-        CREATE TABLE \`control_account\` (
-          \`email\` text NOT NULL,
-          \`url\` text NOT NULL,
-          \`access_token\` text NOT NULL,
-          \`refresh_token\` text NOT NULL,
-          \`token_expiry\` integer,
-          \`active\` integer NOT NULL,
-          \`time_created\` integer NOT NULL,
-          \`time_updated\` integer NOT NULL,
-          CONSTRAINT \`control_account_pk\` PRIMARY KEY(\`email\`, \`url\`)
-        );
-      `)
-      yield* tx.run(`
         CREATE TABLE \`codemode_binding\` (
           \`session_id\` text NOT NULL,
           \`name\` text NOT NULL,
@@ -204,17 +171,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
-        CREATE TABLE \`project_directory\` (
-          \`project_id\` text NOT NULL,
-          \`directory\` text NOT NULL,
-          \`type\` text,
-          \`strategy\` text,
-          \`time_created\` integer NOT NULL,
-          CONSTRAINT \`project_directory_pk\` PRIMARY KEY(\`project_id\`, \`directory\`),
-          CONSTRAINT \`fk_project_directory_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
-        );
-      `)
-      yield* tx.run(`
         CREATE TABLE \`project\` (
           \`id\` text PRIMARY KEY,
           \`worktree\` text NOT NULL,
@@ -281,18 +237,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`time_updated\` integer NOT NULL,
           \`data\` text NOT NULL,
           CONSTRAINT \`fk_session_message_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
-        );
-      `)
-      yield* tx.run(`
-        CREATE TABLE \`session_pending\` (
-          \`id\` text PRIMARY KEY,
-          \`session_id\` text NOT NULL,
-          \`type\` text NOT NULL,
-          \`data\` text NOT NULL,
-          \`delivery\` text,
-          \`admitted_seq\` integer NOT NULL,
-          \`time_created\` integer NOT NULL,
-          CONSTRAINT \`fk_session_pending_session_id_session_v2_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session_v2\`(\`id\`) ON DELETE CASCADE
         );
       `)
       yield* tx.run(`
@@ -429,15 +373,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         `CREATE INDEX \`session_message_session_time_created_id_idx\` ON \`session_message\` (\`session_id\`,\`time_created\`,\`id\`);`,
       )
       yield* tx.run(`CREATE INDEX \`session_message_time_created_idx\` ON \`session_message\` (\`time_created\`);`)
-      yield* tx.run(
-        `CREATE INDEX \`session_pending_session_delivery_seq_idx\` ON \`session_pending\` (\`session_id\`,\`delivery\`,\`admitted_seq\`);`,
-      )
-      yield* tx.run(
-        `CREATE UNIQUE INDEX \`session_pending_session_compaction_idx\` ON \`session_pending\` (\`session_id\`) WHERE "session_pending"."type" = 'compaction';`,
-      )
-      yield* tx.run(
-        `CREATE UNIQUE INDEX \`session_pending_session_admitted_seq_idx\` ON \`session_pending\` (\`session_id\`,\`admitted_seq\`);`,
-      )
       yield* tx.run(`CREATE INDEX \`session_v2_project_idx\` ON \`session_v2\` (\`project_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_v2_workspace_idx\` ON \`session_v2\` (\`workspace_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_v2_parent_idx\` ON \`session_v2\` (\`parent_id\`);`)

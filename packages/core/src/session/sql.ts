@@ -102,31 +102,6 @@ export const SessionMessageTable = sqliteTable(
   ],
 )
 
-export const SessionPendingTable = sqliteTable(
-  "session_pending",
-  {
-    id: text().$type<SessionMessage.ID>().primaryKey(),
-    session_id: text()
-      .$type<SessionSchema.ID>()
-      .notNull()
-      .references(() => SessionTable.id, { onDelete: "cascade" }),
-    type: text().$type<SessionInbox.Info["type"]>().notNull(),
-    data: text({ mode: "json" }).$type<UserPayload | SyntheticPayload | Record<string, never>>().notNull(),
-    delivery: text().$type<SessionInbox.Delivery>(),
-    admitted_seq: integer().notNull(),
-    time_created: integer()
-      .notNull()
-      .$default(() => Date.now()),
-  },
-  (table) => [
-    index("session_pending_session_delivery_seq_idx").on(table.session_id, table.delivery, table.admitted_seq),
-    uniqueIndex("session_pending_session_compaction_idx")
-      .on(table.session_id)
-      .where(sql`${table.type} = 'compaction'`),
-    uniqueIndex("session_pending_session_admitted_seq_idx").on(table.session_id, table.admitted_seq),
-  ],
-)
-
 export const SessionInboxTable = sqliteTable(
   "session_inbox",
   {

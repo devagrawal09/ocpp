@@ -137,9 +137,10 @@ describe("DatabaseMigration", () => {
             name: "session_v2",
           },
         )
+        // Legacy tables are gone from the current schema.
         expect(
           yield* db.get(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_pending'`),
-        ).toEqual({ name: "session_pending" })
+        ).toBeUndefined()
         expect(yield* db.get(sql`SELECT count(*) AS count FROM migration`)).toEqual({ count: migrations.length })
       }),
     )

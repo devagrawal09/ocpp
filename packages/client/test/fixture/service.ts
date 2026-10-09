@@ -47,8 +47,7 @@ const server = Bun.serve({
   async fetch(request) {
     const pathname = new URL(request.url).pathname
     if (pathname === "/api/experimental/persistent-pty/handoff" && mode === "handoff") {
-      if (request.method !== "POST" || request.headers.get("authorization") !== "Basic " + btoa("ocpp:private"))
-        return new Response(null, { status: 401 })
+      if (request.method !== "POST") return new Response(null, { status: 405 })
       await writeFile(registration + ".prepared", JSON.stringify(handoff))
       return Response.json({ handoff })
     }

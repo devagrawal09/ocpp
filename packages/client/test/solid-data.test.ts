@@ -477,7 +477,6 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
         id: "call_codemode",
         executionID: "exe_codemode",
         events: [{ type: "trace", kind: "return", value: "1" }],
-        output: "1",
       },
     })
     publish({
@@ -506,7 +505,6 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
           executionID: "exe_codemode",
           executionStatus: "completed",
           events: [{ type: "trace", kind: "return", value: "1" }],
-          output: "1",
         },
       },
     })

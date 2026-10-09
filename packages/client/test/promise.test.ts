@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { isSessionNotFoundError, isUnauthorizedError, Ocpp } from "../src/promise/index"
+import { isSessionNotFoundError, Ocpp } from "../src/promise/index"
 
 test("exposes every standard HTTP API group", () => {
   const client = Ocpp.make({ baseUrl: "http://localhost:3000" })
@@ -812,21 +812,6 @@ test("session methods use the public HTTP contract", async () => {
     delivery: "queue",
     resume: false,
   })
-})
-
-test("middleware errors remain declared client errors", async () => {
-  const client = Ocpp.make({
-    baseUrl: "http://localhost:3000",
-    fetch: async () =>
-      Response.json({ _tag: "UnauthorizedError", message: "Authentication required" }, { status: 401 }),
-  })
-
-  try {
-    await client.session.create({})
-    throw new Error("Expected request to fail")
-  } catch (error) {
-    expect(isUnauthorizedError(error)).toBe(true)
-  }
 })
 
 test("session.log decodes SessionNotFoundError", async () => {

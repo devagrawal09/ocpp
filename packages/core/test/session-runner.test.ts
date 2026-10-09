@@ -19,7 +19,7 @@ import { OpenAIChat } from "@ocpp/ai/protocols/openai-chat"
 import { TestLLM } from "@ocpp/ai/testing"
 import { Catalog } from "@ocpp/core/catalog"
 import { Database } from "@ocpp/core/database/database"
-import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -80,12 +80,12 @@ import { SessionSystemPrompt } from "@ocpp/core/session/system-prompt"
 import { ID } from "@ocpp/core/model"
 import { Location } from "@ocpp/core/location"
 import { Provider } from "@ocpp/core/provider"
-import { Cause, Context, Deferred, Effect, Exit, Fiber, Layer, LayerMap, Queue, Schema, Scope, Stream } from "effect"
+import { Cause, Context, Deferred, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { HttpClientRequest, HttpClientResponse } from "effect/http"
 import { asc, desc, eq, sql } from "drizzle-orm"
+import { makeSharedLocation } from "./fixture/shared-location"
 import { testEffect } from "./lib/effect"
-import type { LocationServices } from "@ocpp/core/location-services"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Expected } from "./lib/session-message"
 import { registerToolPlugin } from "./lib/tool"
@@ -238,23 +238,8 @@ const makeRunnerState = () => {
   }
 }
 
-// The Location services are the app's own, bound to /project: the Specter runtime reaches each step's I/O
-// through a LocationServiceMap that hands that context to every Location, once setup has it.
-const locationContext = { current: Deferred.makeUnsafe<Context.Context<never>>() }
-const sharedLocation = makeGlobalNode({
-  service: LocationServiceMap.Service,
-  layer: Layer.effect(
-    LocationServiceMap.Service,
-    Effect.suspend(() => {
-      const context = Deferred.makeUnsafe<Context.Context<never>>()
-      locationContext.current = context
-      return LayerMap.make(
-        (_ref: Location.Ref) => Layer.effectContext(Deferred.await(context)) as Layer.Layer<LocationServices>,
-      )
-    }),
-  ),
-  deps: [],
-})
+// The Location services are the app's own, bound to /project.
+const sharedLocation = makeSharedLocation()
 
 class RunnerState extends Context.Service<RunnerState, ReturnType<typeof makeRunnerState>>()("test/SessionRunner") {}
 
@@ -513,7 +498,7 @@ const layer = Layer.unwrap(
       [
         ...replacements,
         [Bus.node, Bus.configured({ persist: true })],
-        [LocationServiceMap.node, sharedLocation],
+        [LocationServiceMap.node, sharedLocation.node],
         [Catalog.node, promptCatalog],
         [McpInstructions.node, mcpInstructions],
         // Plain-prompt scenarios use a virtual directory without configured references.
@@ -545,7 +530,7 @@ const insertSession = (id: Session.ID) =>
   })
 
 const setup = Effect.gen(function* () {
-  yield* Deferred.succeed(locationContext.current, yield* Effect.context<never>())
+  yield* sharedLocation.bind
   const { db } = yield* Database.Service
   const bus = yield* Bus.Service
   const sessionInbox = yield* SessionInbox.Service

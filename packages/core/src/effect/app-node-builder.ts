@@ -10,7 +10,10 @@ export function build<A, E>(root: LayerNode.Node<A, E, any>, input: LayerNode.Re
     ? input
     : [...input, ...SpecterSessions.replacements]
   // Only build the location service map if it's actually needed
-  if (!LayerNode.hasUnbound(root, LocationServiceMap.node) || hasReplacement(replacements, LocationServiceMap.node))
+  if (
+    !LayerNode.hasUnbound(root, LocationServiceMap.node, replacements) ||
+    hasReplacement(replacements, LocationServiceMap.node)
+  )
     return LayerNode.compile(root, replacements)
 
   const locationMap = buildLocationServiceMap(replacements)

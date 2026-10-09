@@ -110,7 +110,8 @@ const layer = Layer.effect(
         ),
     })
 
-    const runtime = yield* makeEmbeddedSessionRuntime().pipe(
+    // One step per Session at a time; different Sessions (subagents included) run at once.
+    const runtime = yield* makeEmbeddedSessionRuntime({ outbox: { worker: { concurrency: 64 } } }).pipe(
       Effect.provide(Layer.mergeAll(Layer.succeed(EventLog, log), Layer.succeed(StepHost, interruptible))),
       Effect.orDie,
     )

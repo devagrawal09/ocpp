@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "f79da364-87b8-4ebe-99ee-8a9c9ea59e7e",
-  "prevIds": ["3ca99b07-e2d5-45d0-8d9e-fb5bbba3e10e"],
+  "id": "c8f83085-237f-4b1c-8c13-aa8d644f7967",
+  "prevIds": ["f79da364-87b8-4ebe-99ee-8a9c9ea59e7e"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -38,6 +38,10 @@
     },
     {
       "name": "codemode_reservation",
+      "entityType": "tables"
+    },
+    {
+      "name": "credential_secret",
       "entityType": "tables"
     },
     {
@@ -926,6 +930,26 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "credential_id",
+      "entityType": "columns",
+      "table": "credential_secret"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "value",
+      "entityType": "columns",
+      "table": "credential_secret"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "credential"
@@ -947,16 +971,6 @@
       "default": null,
       "generated": null,
       "name": "label",
-      "entityType": "columns",
-      "table": "credential"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "value",
       "entityType": "columns",
       "table": "credential"
     },
@@ -2578,6 +2592,17 @@
       "table": "codemode_reservation"
     },
     {
+      "columns": ["credential_id"],
+      "tableTo": "credential",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_credential_secret_credential_id_credential_id_fk",
+      "entityType": "fks",
+      "table": "credential_secret"
+    },
+    {
       "columns": ["aggregate_id"],
       "tableTo": "event_sequence",
       "columnsTo": ["aggregate_id"],
@@ -2769,6 +2794,13 @@
       "nameExplicit": false,
       "name": "codemode_execution_pk",
       "table": "codemode_execution",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["credential_id"],
+      "nameExplicit": false,
+      "name": "credential_secret_pk",
+      "table": "credential_secret",
       "entityType": "pks"
     },
     {

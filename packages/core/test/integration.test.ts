@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { EventManifest } from "@ocpp/schema/event-manifest"
 import { Cause, Clock, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { Credential } from "@ocpp/core/credential"
@@ -379,7 +380,9 @@ describe("Integration", () => {
       )
 
       const attempt = yield* integrations.oauth.connect({ integrationID, methodID })
-      yield* Effect.yieldNow
+      // The attempt completes in the background once its credential is recorded.
+      while ((yield* integrations.oauth.status({ integrationID, attemptID: attempt.attemptID })).status === "pending")
+        yield* Effect.promise(() => Bun.sleep(1))
       expect(yield* integrations.oauth.status({ integrationID, attemptID: attempt.attemptID })).toEqual({
         status: "complete",
         time: attempt.time,
@@ -565,7 +568,9 @@ describe("Integration", () => {
 
           const bus = yield* Bus.Service
           const events = new Array<{ type: string; data: unknown }>()
-          yield* bus.listen((event) => Effect.sync(() => events.push({ type: event.type, data: event.data })))
+          yield* bus.listen((event) =>
+            Effect.sync(() => EventManifest.isServer(event) && events.push({ type: event.type, data: event.data })),
+          )
           yield* integrations.connection.activate(work.id)
 
           expect(yield* integrations.connection.active(integrationID)).toEqual({

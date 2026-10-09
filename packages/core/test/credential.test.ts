@@ -1,9 +1,11 @@
 import { describe, expect } from "bun:test"
-import { eq } from "drizzle-orm"
+import { EventManifest } from "@ocpp/schema/event-manifest"
+import { eq, like } from "drizzle-orm"
 import { Effect } from "effect"
 import { Bus } from "@ocpp/core/bus"
 import { Credential } from "@ocpp/core/credential"
-import { CredentialTable } from "@ocpp/core/credential/sql"
+import { CredentialSecretTable, CredentialTable } from "@ocpp/core/credential/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { Database } from "@ocpp/core/database/database"
 import { Location } from "@ocpp/core/location"
 import { AbsolutePath } from "@ocpp/core/schema"
@@ -17,6 +19,33 @@ import { testEffect } from "./lib/effect"
 const it = testEffect(LayerNode.compile(LayerNode.group([Credential.node, Bus.node, Database.node])))
 
 describe("Credential", () => {
+  it.effect("records what happens to a credential in Specter's log, and keeps its secret out of it", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Credential.Service
+      const { db } = yield* Database.Service
+      const integrationID = Integration.ID.make("openai")
+      const created = yield* credentials.create({
+        integrationID,
+        value: Credential.Key.make({ type: "key", key: "sk-never-logged" }),
+      })
+      yield* credentials.update(created.id, { value: Credential.Key.make({ type: "key", key: "sk-rotated" }) })
+      expect((yield* credentials.get(created.id))?.value).toEqual({ type: "key", key: "sk-rotated" })
+
+      const facts = yield* db
+        .select({ type: SpecterEventTable.type, payload: SpecterEventTable.payload })
+        .from(SpecterEventTable)
+        .where(like(SpecterEventTable.type, "credential-%"))
+        .all()
+        .pipe(Effect.orDie)
+      expect(facts.map((fact) => fact.type)).toEqual(["credential-created", "credential-rotated"])
+      expect(JSON.stringify(facts)).not.toContain("sk-")
+
+      // The secret goes with its credential.
+      yield* credentials.remove(created.id)
+      expect(yield* db.select().from(CredentialSecretTable).all().pipe(Effect.orDie)).toEqual([])
+    }),
+  )
+
   it.effect("stores, updates, lists, and removes credentials", () =>
     Effect.gen(function* () {
       const credentials = yield* Credential.Service
@@ -54,7 +83,8 @@ describe("Credential", () => {
       const bus = yield* Bus.Service
       const integrationID = Integration.ID.make("openai")
       const events = new Array<Event.Payload>()
-      yield* bus.listen((event) => Effect.sync(() => events.push(event)))
+      // What clients see: credentials' own facts stay internal.
+      yield* bus.listen((event) => Effect.sync(() => EventManifest.isServer(event) && events.push(event)))
 
       const older = yield* credentials
         .create({ integrationID, value: Credential.Key.make({ type: "key", key: "older" }) })
@@ -139,7 +169,8 @@ describe("Credential", () => {
         .pipe(Effect.orDie)
 
       const events = new Array<Event.Payload>()
-      yield* bus.listen((event) => Effect.sync(() => events.push(event)))
+      // What clients see: credentials' own facts stay internal.
+      yield* bus.listen((event) => Effect.sync(() => EventManifest.isServer(event) && events.push(event)))
       yield* credentials.activate(newest.id)
       yield* credentials.remove(oldest.id)
       yield* credentials.remove(newest.id)

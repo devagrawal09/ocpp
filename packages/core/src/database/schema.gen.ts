@@ -134,11 +134,17 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`credential_secret\` (
+          \`credential_id\` text PRIMARY KEY,
+          \`value\` text NOT NULL,
+          CONSTRAINT \`fk_credential_secret_credential_id_credential_id_fk\` FOREIGN KEY (\`credential_id\`) REFERENCES \`credential\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`credential\` (
           \`id\` text PRIMARY KEY,
           \`integration_id\` text,
           \`label\` text NOT NULL,
-          \`value\` text NOT NULL,
           \`connector_id\` text,
           \`method_id\` text,
           \`active\` integer,

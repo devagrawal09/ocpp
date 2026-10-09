@@ -5,6 +5,8 @@ import { Command } from "@ocpp/schema/command"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { and, asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
+import { SessionFact } from "@ocpp/schema/session-fact"
+import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import type { SessionSchema } from "../session/schema.js"
 import { CodeModeCommandTable } from "./command.sql.js"
@@ -31,6 +33,38 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const { db } = yield* Database.Service
+    const bus = yield* Bus.Service
+    // A Session's commands are the projection of their facts in Specter's Event Log.
+    yield* bus.project(SessionFact.CommandDefined, (event) =>
+      db
+        .insert(CodeModeCommandTable)
+        .values({
+          session_id: event.data.sessionID,
+          name: event.data.name,
+          description: event.data.description,
+          handler: event.data.handler,
+          time_created: event.created,
+          time_updated: event.created,
+        })
+        .onConflictDoUpdate({
+          target: [CodeModeCommandTable.session_id, CodeModeCommandTable.name],
+          set: { description: event.data.description, handler: event.data.handler, time_updated: event.created },
+        })
+        .run()
+        .pipe(Effect.orDie, Effect.asVoid),
+    )
+    yield* bus.project(SessionFact.CommandRemoved, (event) =>
+      db
+        .delete(CodeModeCommandTable)
+        .where(
+          and(
+            eq(CodeModeCommandTable.session_id, event.data.sessionID),
+            eq(CodeModeCommandTable.name, event.data.name),
+          ),
+        )
+        .run()
+        .pipe(Effect.orDie, Effect.asVoid),
+    )
     const columns = {
       name: CodeModeCommandTable.name,
       description: CodeModeCommandTable.description,
@@ -46,15 +80,12 @@ const layer = Layer.effect(
             : undefined) ??
           (yield* CodeModeHandler.problem(db, sessionID, input.handler, true))
         if (problem) return yield* new DefinitionError({ message: problem })
-        yield* db
-          .insert(CodeModeCommandTable)
-          .values({ session_id: sessionID, name: input.name, description: input.description, handler: input.handler })
-          .onConflictDoUpdate({
-            target: [CodeModeCommandTable.session_id, CodeModeCommandTable.name],
-            set: { description: input.description, handler: input.handler, time_updated: Date.now() },
-          })
-          .run()
-          .pipe(Effect.orDie)
+        yield* bus.publish(SessionFact.CommandDefined, {
+          sessionID,
+          name: input.name,
+          description: input.description,
+          handler: input.handler,
+        })
         return Info.make(input)
       }),
       list: Effect.fn("CodeModeCommand.list")((sessionID) =>
@@ -75,16 +106,18 @@ const layer = Layer.effect(
           .pipe(Effect.orDie),
       ),
       remove: Effect.fn("CodeModeCommand.remove")(function* (sessionID, name) {
-        const removed = yield* db
-          .delete(CodeModeCommandTable)
+        const stored = yield* db
+          .select({ name: CodeModeCommandTable.name })
+          .from(CodeModeCommandTable)
           .where(and(eq(CodeModeCommandTable.session_id, sessionID), eq(CodeModeCommandTable.name, name)))
-          .returning({ name: CodeModeCommandTable.name })
           .get()
           .pipe(Effect.orDie)
-        return removed !== undefined
+        if (!stored) return false
+        yield* bus.publish(SessionFact.CommandRemoved, { sessionID, name })
+        return true
       }),
     })
   }),
 )
 
-export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node] })
+export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node, Bus.node] })

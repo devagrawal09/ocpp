@@ -54,18 +54,17 @@ export const ExecutionResumed = Event.durable({
   schema: execution,
 })
 /**
- * An execution ended. `saved` committed its declarations as notebook values; `refused` finished but
- * could not save them; `failed` and `indeterminate` ended before finishing, which settles its calls
- * still scheduled.
+ * An execution ended. A `finished` program offers the values of its declarations, which the notebook
+ * saves when the execution still holds their names, its message was not reverted and they fit; a
+ * `failed` or `indeterminate` one ended without finishing, which settles its calls still scheduled.
  */
 export const ExecutionSettled = Event.durable({
   type: "session.codemode.execution.settled",
   durable: byExecution,
   schema: {
     ...execution,
-    outcome: Schema.Literals(["saved", "refused", "failed", "indeterminate"]),
+    outcome: Schema.Literals(["finished", "failed", "indeterminate"]),
     values: optional(Schema.Record(Schema.String, Schema.Json)),
-    messageSeq: optional(NonNegativeInt),
     error: optional(Schema.String),
   },
 })

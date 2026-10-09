@@ -6,6 +6,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { and, asc, eq, sql } from "drizzle-orm"
 import type { SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core"
 import { Clock, Context, Cron, Effect, Layer, PubSub, Result, Schema, Scope } from "effect"
+import { SessionFact } from "@ocpp/schema/session-fact"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import type { SessionMessage } from "../session/message.js"
@@ -84,12 +85,73 @@ const layer = Layer.effect(
     const get = (key: Key) => db.select().from(CodeModeEventTable).where(where(key)).get().pipe(Effect.orDie)
     const updated = (key: Key) => bus.publish(Updated, key).pipe(Effect.asVoid)
     const update = (key: Key, set: SQLiteUpdateSetSource<typeof CodeModeEventTable>) =>
-      db
-        .update(CodeModeEventTable)
-        .set(set)
-        .where(where(key))
-        .run()
-        .pipe(Effect.orDie, Effect.andThen(updated(key)))
+      db.update(CodeModeEventTable).set(set).where(where(key)).run().pipe(Effect.orDie, Effect.asVoid)
+    // Records a fact about an event that exists, then announces the change.
+    const record = (key: Key, fact: Effect.Effect<unknown>) =>
+      get(key).pipe(
+        Effect.flatMap((row) => (row ? fact : Effect.void)),
+        Effect.andThen(updated(key)),
+      )
+
+    // A Session's events are the projection of their facts in Specter's Event Log.
+    yield* bus.project(SessionFact.EventDefined, (event) =>
+      Effect.gen(function* () {
+        const data = event.data
+        const key = { sessionID: data.sessionID, name: data.name }
+        // A replaced event keeps its running firing, so its new handler cannot overlap the old one.
+        const replaced = yield* db
+          .delete(CodeModeEventTable)
+          .where(where(key))
+          .returning({ execution_id: CodeModeEventTable.execution_id })
+          .get()
+        yield* db
+          .insert(CodeModeEventTable)
+          .values({
+            session_id: data.sessionID,
+            name: data.name,
+            description: data.description,
+            schedule: data.schedule,
+            handler: data.handler,
+            input: (data.input as Schema.Json | undefined) ?? null,
+            enabled: true,
+            execution_id: replaced?.execution_id ?? null,
+            time_next: data.next ?? null,
+            time_created: data.time,
+            time_updated: data.time,
+          })
+          .run()
+      }).pipe(Effect.orDie),
+    )
+    yield* bus.project(SessionFact.EventToggled, (event) =>
+      update(event.data, {
+        enabled: event.data.enabled,
+        // A disabled event has no next firing; the scheduler records one again when it is enabled.
+        ...(event.data.enabled ? {} : { time_next: null }),
+      }),
+    )
+    yield* bus.project(SessionFact.EventRemoved, (event) =>
+      db.delete(CodeModeEventTable).where(where(event.data)).run().pipe(Effect.orDie, Effect.asVoid),
+    )
+    yield* bus.project(SessionFact.EventPlanned, (event) => update(event.data, { time_next: event.data.next ?? null }))
+    yield* bus.project(SessionFact.EventFired, (event) =>
+      update(event.data, {
+        time_fired: event.data.at,
+        run_count: sql`${CodeModeEventTable.run_count} + 1`,
+        ...(event.data.error !== undefined
+          ? { execution_id: null, message_id: null, error: event.data.error }
+          : {
+              execution_id: event.data.executionID ?? null,
+              message_id: (event.data.messageID as SessionMessage.ID | undefined) ?? null,
+              error: null,
+            }),
+      }),
+    )
+    yield* bus.project(SessionFact.EventSkipped, (event) =>
+      update(event.data, {
+        time_skipped: event.data.at,
+        skip_count: sql`${CodeModeEventTable.skip_count} + 1`,
+      }),
+    )
 
     // The latest run's outcome is read from its invocation message, which restart recovery also settles.
     const info = Effect.fnUntraced(function* (row: Definition) {
@@ -132,35 +194,19 @@ const layer = Layer.effect(
         if (problem) return yield* new DefinitionError({ message: problem })
         const now = yield* Clock.currentTimeMillis
         const key = { sessionID, name: input.name }
-        const row = yield* db
-          .transaction((tx) =>
-            Effect.gen(function* () {
-              // A replaced event keeps its running firing, so its new handler cannot overlap the old one.
-              const replaced = yield* tx
-                .delete(CodeModeEventTable)
-                .where(where(key))
-                .returning({ execution_id: CodeModeEventTable.execution_id })
-                .get()
-              return yield* tx
-                .insert(CodeModeEventTable)
-                .values({
-                  session_id: sessionID,
-                  name: input.name,
-                  description: input.description,
-                  schedule: input.schedule,
-                  handler: input.handler,
-                  input: input.input ?? null,
-                  enabled: true,
-                  execution_id: replaced?.execution_id ?? null,
-                  time_next: next(input.schedule, { now, anchor: now }) ?? null,
-                  time_created: now,
-                  time_updated: now,
-                })
-                .returning()
-                .get()
-            }),
-          )
-          .pipe(Effect.orDie)
+        const firstFire = next(input.schedule, { now, anchor: now })
+        yield* bus.publish(SessionFact.EventDefined, {
+          sessionID,
+          name: input.name,
+          description: input.description,
+          schedule: input.schedule,
+          handler: input.handler,
+          ...(input.input === undefined ? {} : { input: input.input }),
+          time: now,
+          ...(firstFire === undefined ? {} : { next: firstFire }),
+        })
+        const row = yield* get(key)
+        if (!row) return yield* Effect.die(new Error(`Event ${input.name} was not recorded`))
         yield* PubSub.publish(pubsub, key)
         yield* updated(key)
         return yield* info(row)
@@ -180,17 +226,13 @@ const layer = Layer.effect(
         const row = yield* get(key)
         if (!row) return undefined
         // A disabled event has no next firing; the scheduler records one again when it is enabled.
-        yield* update(key, { enabled, ...(enabled ? {} : { time_next: null }) })
+        yield* record(key, bus.publish(SessionFact.EventToggled, { ...key, enabled }))
         yield* PubSub.publish(pubsub, key)
         return yield* info({ ...row, enabled, time_next: enabled ? row.time_next : null })
       }),
       remove: Effect.fn("CodeModeEvent.remove")(function* (key) {
-        const removed = yield* db
-          .delete(CodeModeEventTable)
-          .where(where(key))
-          .returning({ name: CodeModeEventTable.name })
-          .get()
-          .pipe(Effect.orDie)
+        const removed = yield* get(key)
+        if (removed) yield* bus.publish(SessionFact.EventRemoved, key)
         yield* PubSub.publish(pubsub, key)
         if (removed) yield* updated(key)
         return removed !== undefined
@@ -198,21 +240,23 @@ const layer = Layer.effect(
       enabled: Effect.fn("CodeModeEvent.enabled")(() =>
         db.select().from(CodeModeEventTable).where(eq(CodeModeEventTable.enabled, true)).all().pipe(Effect.orDie),
       ),
-      scheduled: Effect.fn("CodeModeEvent.scheduled")((key, time) => update(key, { time_next: time ?? null })),
+      scheduled: Effect.fn("CodeModeEvent.scheduled")((key, time) =>
+        record(key, bus.publish(SessionFact.EventPlanned, { ...key, ...(time === undefined ? {} : { next: time }) })),
+      ),
       fired: Effect.fn("CodeModeEvent.fired")((key, firing) =>
-        update(key, {
-          time_fired: firing.at,
-          run_count: sql`${CodeModeEventTable.run_count} + 1`,
-          ...("error" in firing
-            ? { execution_id: null, message_id: null, error: firing.error }
-            : { execution_id: firing.executionID, message_id: firing.messageID, error: null }),
-        }),
+        record(
+          key,
+          bus.publish(SessionFact.EventFired, {
+            ...key,
+            at: firing.at,
+            ...("error" in firing
+              ? { error: firing.error }
+              : { executionID: firing.executionID, messageID: firing.messageID }),
+          }),
+        ),
       ),
       skipped: Effect.fn("CodeModeEvent.skipped")((key, at) =>
-        update(key, {
-          time_skipped: at,
-          skip_count: sql`${CodeModeEventTable.skip_count} + 1`,
-        }),
+        record(key, bus.publish(SessionFact.EventSkipped, { ...key, at })),
       ),
       changes: PubSub.subscribe(pubsub),
     })

@@ -68,6 +68,27 @@ describe("embedded Specter runtime", () => {
         "evt_2_retry",
       ],
     ])
+    const tool = (type: string, payload: Record<string, unknown>) =>
+      SpecterTranslate.toWire({
+        id: "evt_3",
+        order: 3,
+        type,
+        payload: { sessionID: "ses_1", assistantMessageID: "msg_1", id: "call_1", ...payload },
+        recordedAt: new Date(0).toISOString(),
+      }).map((wire) => [wire.definition.type, wire.data, wire.id])
+    const call = { sessionID: "ses_1", assistantMessageID: "msg_1", id: "call_1" }
+    expect(tool("session-tool-requested", { name: "execute", input: { code: "1" }, executed: false })).toEqual([
+      ["session.tool.input.started", { ...call, name: "execute" }, "evt_3_input"],
+      ["session.tool.input.ended", { ...call, text: '{"code":"1"}' }, "evt_3_text"],
+      ["session.tool.called", { ...call, input: { code: "1" }, executed: false }, "evt_3"],
+    ])
+    const content = [{ type: "text", text: "2" }]
+    expect(tool("session-tool-settled", { outcome: "succeeded", content, executed: true })).toEqual([
+      ["session.tool.success", { ...call, content, executed: true }, "evt_3"],
+    ])
+    expect(tool("session-tool-settled", { outcome: "failed", error, executed: false })).toEqual([
+      ["session.tool.failed", { ...call, error, executed: false }, "evt_3"],
+    ])
   })
 
   test("validates payloads with OC++'s schemas", async () => {

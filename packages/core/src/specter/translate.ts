@@ -64,6 +64,30 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
       },
     ]
   }
+  if (event.type === "session-tool-requested") {
+    const { name, ...called } = event.payload as {
+      readonly sessionID: string
+      readonly assistantMessageID: string
+      readonly id: string
+      readonly name: string
+      readonly input: Record<string, unknown>
+    }
+    const call = { sessionID: called.sessionID, assistantMessageID: called.assistantMessageID, id: called.id }
+    return [
+      { definition: SessionEvent.Tool.Input.Started, data: { ...call, name }, id: Event.ID.make(`${event.id}_input`) },
+      {
+        definition: SessionEvent.Tool.Input.Ended,
+        // The raw input text is not recorded: it is the input as JSON.
+        data: { ...call, text: JSON.stringify(called.input) },
+        id: Event.ID.make(`${event.id}_text`),
+      },
+      { definition: SessionEvent.Tool.Called, data: called, id },
+    ]
+  }
+  if (event.type === "session-tool-settled") {
+    const { outcome, ...data } = event.payload as { readonly outcome: "succeeded" | "failed" }
+    return [{ definition: outcome === "succeeded" ? SessionEvent.Tool.Success : SessionEvent.Tool.Failed, data, id }]
+  }
   const definition = durable.get(toOcppEventType(event.type))
   if (!definition) throw new Error(`Specter recorded ${event.type}, which OC++ cannot project`)
   return [{ definition, data: event.payload, id }]

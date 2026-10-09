@@ -136,6 +136,45 @@ describe("HttpApiCodegen.generate", () => {
     expect(source).not.toContain("@example/api")
   })
 
+  test("emits brands from the schema wrapper and named brand references by name", () => {
+    const Cursor = Schema.String.pipe(Schema.brand("Cursor"))
+    const ID = Schema.String.check(Schema.isMinLength(1)).pipe(Schema.brand("Thing.ID"))
+    const output = emitEffectShape(
+      compileContract(
+        api(
+          HttpApiEndpoint.get("get", "/session/:id", {
+            params: { id: ID },
+            query: { cursor: Schema.optional(Cursor) },
+            success: Schema.Struct({
+              data: Schema.Struct({
+                cursor: Cursor,
+                ids: Schema.Array(ID),
+                byID: Schema.Record(ID, Cursor),
+                plain: Schema.String,
+              }),
+            }),
+          }),
+        ),
+      ),
+      {
+        typeReferences: [
+          { schema: ID, name: "Thing.ID", import: 'import type { Thing } from "@example/schema/thing"' },
+        ],
+      },
+    )
+    const source = output.files[0]?.content
+
+    expect(source).toContain('import type { Brand } from "effect"')
+    expect(source).toContain('import type { Thing } from "@example/schema/thing"')
+    expect(source).toContain(
+      'export type SessionGetInput = { readonly "id": Thing.ID; readonly "cursor"?: string & Brand.Brand<"Cursor"> | undefined }',
+    )
+    expect(source).toContain('readonly "cursor": string & Brand.Brand<"Cursor">')
+    expect(source).toContain('readonly "ids": ReadonlyArray<Thing.ID>')
+    expect(source).toContain('readonly "byID": { readonly [x: Thing.ID]: string & Brand.Brand<"Cursor"> }')
+    expect(source).toContain('readonly "plain": string')
+  })
+
   test("allows composed Effect outputs to use an authoritative named type", () => {
     const output = emitEffectShape(
       compileContract(api(HttpApiEndpoint.get("events", "/event", { success: Schema.Unknown }))),

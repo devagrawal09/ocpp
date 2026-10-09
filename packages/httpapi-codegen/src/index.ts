@@ -453,7 +453,7 @@ function effectTypeReferences(input: ReadonlyArray<EffectTypeReference>) {
   for (const reference of input) {
     const value = { name: reference.name, import: reference.import, ast: reference.schema.ast }
     const document = SchemaRepresentation.toCodeDocument(
-      SchemaRepresentation.toRepresentations([codegenAst(Schema.toType(reference.schema).ast)]),
+      SchemaRepresentation.toRepresentations([codegenAst(SchemaAST.toType(brandedAst(reference.schema)))]),
     )
     const name = document.codes[0]?.Type
     const type =
@@ -461,7 +461,8 @@ function effectTypeReferences(input: ReadonlyArray<EffectTypeReference>) {
         ? undefined
         : (document.references.nonRecursives.find((item) => item.$ref === name)?.code.Type ?? name)
     if (type?.includes("Brand.Brand<") && !brands.has(type)) brands.set(type, value)
-    if (SchemaAST.resolveIdentifier(reference.schema.ast) !== undefined || type?.includes("Brand.Brand<")) {
+    // A branded schema shares its AST with the unbranded one, so brands are matched by rendered type instead.
+    if (SchemaAST.resolveIdentifier(reference.schema.ast) !== undefined && !type?.includes("Brand.Brand<")) {
       asts.set(reference.schema.ast, value)
       asts.set(Schema.toType(reference.schema).ast, value)
     }
@@ -478,15 +479,100 @@ function effectTypeReferences(input: ReadonlyArray<EffectTypeReference>) {
   return { names, asts, brands }
 }
 
+// Effect 4.0.1 keeps `Schema.brand` identifiers on the schema wrapper rather than the AST, so a branded schema shares
+// its AST with the unbranded one. Rebuild the AST by walking the wrapper graph alongside it, replacing each brand with a
+// Declaration that renders as `T & Brand.Brand<"X">`.
+function brandedAst(schema: { readonly ast: SchemaAST.AST }, ast: SchemaAST.AST = schema.ast): SchemaAST.AST {
+  // `schema` wraps decorators (`optional`, `toType`, `brand`); `to` is the decoded side of `decodeTo`.
+  const inner =
+    "schema" in schema && Schema.isSchema(schema.schema)
+      ? schema.schema
+      : "to" in schema && Schema.isSchema(schema.to)
+        ? schema.to
+        : undefined
+  if (inner !== undefined && "identifier" in schema && typeof schema.identifier === "string") {
+    const identifier = schema.identifier
+    return new SchemaAST.Declaration(
+      [brandedAst(inner)],
+      () => (input) => Effect.succeed(input),
+      {
+        representation: { id: "opencode/codegen/Brand", payload: identifier },
+        toCode: ({ typeParameters }: SchemaRepresentation.Generation.DeclarationInput) => ({
+          runtime: "Schema.Unknown",
+          Type: `${typeParameters[0].Type} & Brand.Brand<${JSON.stringify(identifier)}>`,
+          importDeclarations: ['import type * as Brand from "effect/Brand"'],
+        }),
+      },
+      undefined,
+      undefined,
+      ast.context,
+    )
+  }
+  const delegate = () => (inner === undefined ? ast : brandedAst(inner, ast))
+  if (!("recur" in ast) || typeof ast.recur !== "function") return delegate()
+  const candidates = Object.values(schema).flatMap((value) =>
+    Schema.isSchema(value)
+      ? [value]
+      : Array.isArray(value)
+        ? value.filter(Schema.isSchema)
+        : typeof value === "object" && value !== null
+          ? Object.values(value).filter(Schema.isSchema)
+          : [],
+  )
+  // Track candidates by position: `Schema.Record(B, B)` holds the same wrapper twice.
+  const used = new Set<number>()
+  const match = (child: SchemaAST.AST) => {
+    const index = candidates.findIndex((item, position) => !used.has(position) && sameType(item.ast, child))
+    if (index === -1) return undefined
+    used.add(index)
+    return candidates[index]
+  }
+  const visit = (child: SchemaAST.AST) => {
+    const candidate = match(child)
+    return candidate === undefined ? child : brandedAst(candidate)
+  }
+  // An index signature parameter cannot be a Declaration, so a branded record key becomes a marker template literal
+  // that `restoreKeyBrands` turns back into `string & Brand.Brand<"X">` in the rendered type.
+  const rebuilt = SchemaAST.isObjects(ast)
+    ? ast.recur(visit, (child: SchemaAST.AST) => {
+        const candidate = match(child)
+        const identifier = candidate !== undefined && "identifier" in candidate ? candidate.identifier : undefined
+        return typeof identifier === "string"
+          ? new SchemaAST.TemplateLiteral([
+              new SchemaAST.Literal(`${keyBrandMarker}${identifier}${keyBrandMarker}`),
+              new SchemaAST.String(),
+            ])
+          : child
+      })
+    : ast.recur(visit)
+  if (rebuilt !== ast) return rebuilt
+  // Wrappers such as `optional`/`optionalKey` hold the schema they decorate under `schema`.
+  return delegate()
+}
+
+// Codec wrappers (HttpApi payloads, `toType`) rebuild child nodes, so wrapper and AST children are paired by their type
+// shape, in order, rather than by node identity.
+function sameType(left: SchemaAST.AST, right: SchemaAST.AST) {
+  return left === right || sameRuntimeEncoding(SchemaAST.toType(left), SchemaAST.toType(right))
+}
+
+const keyBrandMarker = "@@brand@@"
+
+function restoreKeyBrands(type: string) {
+  return type.replaceAll(
+    new RegExp(`\`\\$\\{(["'])${keyBrandMarker}(.*?)${keyBrandMarker}\\1\\}\\$\\{string\\}\``, "g"),
+    (_, __, identifier: string) => `string & Brand.Brand<${JSON.stringify(identifier)}>`,
+  )
+}
+
 function effectType(schema: Schema.Top, references: ReturnType<typeof effectTypeReferences>, imports: Set<string>) {
-  const projected = Schema.toType(schema)
-  const direct = references.asts.get(schema.ast) ?? references.asts.get(projected.ast)
+  const direct = references.asts.get(schema.ast) ?? references.asts.get(Schema.toType(schema).ast)
   if (direct !== undefined) {
     imports.add(direct.import)
     return direct.name
   }
   const document = SchemaRepresentation.toCodeDocument(
-    SchemaRepresentation.toRepresentations([codegenAst(projected.ast)]),
+    SchemaRepresentation.toRepresentations([codegenAst(SchemaAST.toType(brandedAst(schema)))]),
   )
   const source = new Map(document.references.nonRecursives.map((reference) => [reference.$ref, reference.code.Type]))
   const expand = (type: string, seen = new Set<string>()): string => {
@@ -507,7 +593,7 @@ function effectType(schema: Schema.Top, references: ReturnType<typeof effectType
     }
     return type
   }
-  let type = expand(document.codes[0].Type)
+  let type = restoreKeyBrands(expand(document.codes[0].Type))
   for (const [brand, reference] of references.brands) {
     if (!type.includes(brand)) continue
     imports.add(reference.import)
@@ -530,7 +616,7 @@ function effectInputSchema(endpoint: Endpoint, field: InputField): Schema.Top | 
           : endpoint.payloads[0]
   if (schema === undefined) return undefined
   if (isOpaquePayload(endpoint) && field.source === "payload") return schema
-  const ast = Schema.toType(schema).ast
+  const ast = SchemaAST.toType(brandedAst(schema))
   if (!SchemaAST.isObjects(ast)) return undefined
   const property = ast.propertySignatures.find((property) => property.name === field.name)
   return property === undefined ? undefined : Schema.make<Schema.Top>(property.type)
@@ -541,10 +627,12 @@ function effectOutputSchema(endpoint: Endpoint): Schema.Top | undefined {
   if (HttpApiSchema.isNoContent(schema.ast)) return undefined
   if (isStreamSchema(schema)) {
     if (schema._tag === "StreamUint8Array") return Schema.Uint8Array
-    return schema.sseMode === "data" ? streamDataSchema(schema) : Schema.make<Schema.Top>(schema.events.ast)
+    return schema.sseMode === "data"
+      ? Schema.make<Schema.Top>(streamDataAst(SchemaAST.toType(brandedAst(schema.events))))
+      : Schema.make<Schema.Top>(SchemaAST.toType(brandedAst(schema.events)))
   }
   if (!endpoint.unwrapData) return schema
-  const ast = Schema.toType(schema).ast
+  const ast = SchemaAST.toType(brandedAst(schema))
   if (!SchemaAST.isObjects(ast)) return undefined
   const data = ast.propertySignatures.find((property) => property.name === "data")
   return data === undefined ? undefined : Schema.make<Schema.Top>(data.type)

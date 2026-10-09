@@ -118,6 +118,7 @@ const layer = Layer.effect(
         ),
       compact: (input) =>
         untilIdle<CompactionOutcome, never>(input.sessionID, host.compact(input), { outcome: "stopped" }),
+      ...(host.moving ? { moving: host.moving } : {}),
     })
 
     // One step per Session at a time; different Sessions (subagents included) run at once.

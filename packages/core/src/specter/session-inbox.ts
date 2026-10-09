@@ -11,9 +11,7 @@ import { rejection, SpecterSessionRuntime } from "./session-runtime.js"
 
 const encodeUser = Schema.encodeSync(SessionInbox.UserPayload)
 const encodeSynthetic = Schema.encodeSync(SessionInbox.SyntheticPayload)
-
-const unsupported = (what: string) =>
-  Effect.die(new Error(`${what} is not supported when the Specter runtime runs Sessions yet`))
+const encodeMove = Schema.encodeSync(SessionInbox.MovePayload)
 
 /**
  * `SessionInbox.Service` when the embedded Specter runtime runs Sessions. Admission and cancellation
@@ -36,7 +34,6 @@ export const layer = Layer.effect(
       const existing = yield* local.reconcile({ ...request, type: request.item.type, delivery: request.item.delivery })
       if (existing !== undefined) return existing
       const item: SessionInbox.Item = request.item
-      if (item.type === "move") return yield* unsupported("A move inbox item")
       yield* specter.register(request.sessionID)
       const replaces =
         request.replaces === undefined || request.replaces.length === 0 ? {} : { replaces: request.replaces }
@@ -62,13 +59,21 @@ export const layer = Layer.effect(
                     delivery: item.delivery,
                     ...replaces,
                   }
-                : {
-                    sessionID: request.sessionID,
-                    inboxID: request.id,
-                    type: "compaction",
-                    payload: {},
-                    delivery: item.delivery,
-                  },
+                : item.type === "compaction"
+                  ? {
+                      sessionID: request.sessionID,
+                      inboxID: request.id,
+                      type: "compaction",
+                      payload: {},
+                      delivery: item.delivery,
+                    }
+                  : {
+                      sessionID: request.sessionID,
+                      inboxID: request.id,
+                      type: "move",
+                      payload: encodeMove(item.payload),
+                      delivery: item.delivery,
+                    },
         })
         .pipe(
           Effect.map((execution) => execution.reactions),

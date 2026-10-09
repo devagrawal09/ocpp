@@ -24,6 +24,7 @@ import { SessionContext } from "../session/context.js"
 import { StepFailedError } from "../session/error.js"
 import { SessionEvent } from "../session/event.js"
 import { SessionMessage } from "../session/message.js"
+import { SessionModelTransport } from "../session/model-transport.js"
 import { InstructionState } from "../session/instruction-state.js"
 import { SessionModelRequest } from "../session/model-request.js"
 import { SessionRunnerRetry } from "../session/runner/retry.js"
@@ -181,6 +182,8 @@ export class StepIO extends Context.Service<
       readonly reason: "auto" | "manual"
       readonly inputID?: SessionMessage.ID
     }) => Effect.Effect<CompactionOutcome>
+    /** Releases the Session's model transport here before it moves to another Location. */
+    readonly moving: (sessionID: SessionSchema.ID) => Effect.Effect<void>
   }
 >()("@ocpp/SpecterStepIO") {}
 
@@ -194,6 +197,7 @@ const stepIOLayer = Layer.effect(
     const llm = yield* LLMClient.Service
     const toolOutput = yield* ToolOutput.Service
     const compaction = yield* SessionCompaction.Service
+    const transport = yield* SessionModelTransport.Service
     const store = yield* SessionStore.Service
 
     const begin = Effect.fn("SpecterStepIO.begin")(function* (input: {
@@ -311,6 +315,7 @@ const stepIOLayer = Layer.effect(
 
     return StepIO.of({
       begin: (input) => begin(input).pipe(Effect.catchCause((cause) => Effect.succeed(unprepared(cause)))),
+      moving: (sessionID) => transport.close(sessionID),
       compact: (input) =>
         compact(input).pipe(
           Effect.catchCause((cause) =>
@@ -331,6 +336,7 @@ export const stepIONode = makeLocationNode({
     llmClient,
     SessionContext.node,
     SessionCompaction.node,
+    SessionModelTransport.node,
     SessionStore.node,
     Snapshot.node,
     ToolOutput.node,
@@ -374,6 +380,14 @@ export const make = Effect.gen(function* () {
         // The attempt runs in the Session's Location too.
         return { ...plan, run: (record: AttemptRecorder) => plan.run(record).pipe(Effect.provide(location)) }
       }).pipe(Effect.catchCause((cause) => Effect.succeed(unprepared(cause)))),
+    moving: (sessionID) =>
+      locationOf(SessionSchema.ID.make(sessionID)).pipe(
+        Effect.flatMap((location) =>
+          StepIO.use((io) => io.moving(SessionSchema.ID.make(sessionID))).pipe(Effect.provide(location)),
+        ),
+        // Releasing a transport is best effort: the move goes ahead.
+        Effect.catchCause((cause) => Effect.logWarning("Could not release the model transport", { cause })),
+      ),
     compact: (input) =>
       Effect.gen(function* () {
         const sessionID = SessionSchema.ID.make(input.sessionID)

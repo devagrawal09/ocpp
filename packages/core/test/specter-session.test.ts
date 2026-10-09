@@ -35,6 +35,8 @@ import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionPromptNode } from "@ocpp/core/session/prompt-node"
 import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
+import { SessionInbox } from "@ocpp/core/session/inbox"
+import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionTable } from "@ocpp/core/session/sql"
 import { SessionStore } from "@ocpp/core/session/store"
 import { SkillInstructions } from "@ocpp/core/skill/instructions"
@@ -73,6 +75,7 @@ const layer = AppNodeBuilder.build(
     Bus.node,
     SessionProjector.node,
     SessionStore.node,
+    SessionInbox.node,
     Session.node,
     SessionPromptNode.node,
     SpecterStepHost.stepIONode,
@@ -455,6 +458,37 @@ describe("Sessions on the Specter runtime", () => {
       expect(last?.type).toBe("compaction")
       expect(last?.type === "compaction" ? last.status : undefined).toBe("completed")
       expect(JSON.stringify(llm.requests[1]?.messages)).toContain("Hello there")
+    }),
+  )
+
+  it.live("moves the Session when a move item is delivered", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const inbox = yield* SessionInbox.Service
+      const session = yield* Session.Service
+
+      yield* inbox.admit({
+        id: SessionMessage.ID.create(),
+        sessionID,
+        item: SessionInbox.Item.make({
+          type: "move",
+          payload: {
+            location: Location.Ref.make({ directory: AbsolutePath.make("/elsewhere") }),
+            projectID: Project.ID.global,
+          },
+          delivery: "steer",
+        }),
+      })
+      yield* session.wait(sessionID)
+
+      expect((yield* eventTypes).slice(-4)).toEqual([
+        "session.execution.started",
+        "session.inbox.delivered",
+        "session.moved",
+        "session.execution.succeeded",
+      ])
+      const moved = yield* (yield* SessionStore.Service).get(sessionID)
+      expect(String(moved?.location.directory)).toBe("/elsewhere")
     }),
   )
 

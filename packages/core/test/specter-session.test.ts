@@ -262,8 +262,8 @@ describe("Sessions on the Specter runtime", () => {
       expect(yield* eventTypes).toEqual([
         "session.inbox.enqueued",
         "session.execution.started",
-        "session.inbox.delivered",
         "session.instructions.updated",
+        "session.inbox.delivered",
         "session.step.started",
         "session.text.started",
         "session.text.ended",
@@ -297,8 +297,8 @@ describe("Sessions on the Specter runtime", () => {
       expect(yield* eventTypes).toEqual([
         "session.inbox.enqueued",
         "session.execution.started",
-        "session.inbox.delivered",
         "session.instructions.updated",
+        "session.inbox.delivered",
         "session.step.started",
         "session.step.failed",
         "session.retry.scheduled",
@@ -361,8 +361,8 @@ describe("Sessions on the Specter runtime", () => {
       expect(types.slice(0, 10)).toEqual([
         "session.inbox.enqueued",
         "session.execution.started",
-        "session.inbox.delivered",
         "session.instructions.updated",
+        "session.inbox.delivered",
         "session.step.started",
         "session.tool.input.started",
         "session.tool.input.ended",

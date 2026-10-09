@@ -2,8 +2,13 @@ import { buildLocationServiceMap } from "../location-services.js"
 import { LocationServiceMap } from "../location-service-map.js"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { SpecterSessions } from "../specter/index.js"
 
-export function build<A, E>(root: LayerNode.Node<A, E, any>, replacements: LayerNode.Replacements = []) {
+export function build<A, E>(root: LayerNode.Node<A, E, any>, input: LayerNode.Replacements = []) {
+  // The embedded Specter runtime runs Sessions, unless the caller composes their inbox or execution itself.
+  const replacements = SpecterSessions.replacements.some(([node]) => hasReplacement(input, node))
+    ? input
+    : [...input, ...SpecterSessions.replacements]
   // Only build the location service map if it's actually needed
   if (!LayerNode.hasUnbound(root, LocationServiceMap.node) || hasReplacement(replacements, LocationServiceMap.node))
     return LayerNode.compile(root, replacements)

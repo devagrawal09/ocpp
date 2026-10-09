@@ -52,7 +52,13 @@ export function terminal(exit: Exit.Exit<void, SessionRunner.RunError>, reason?:
 }
 
 /** Process-local execution: drains run in this process, routed through the Session's Location graph. */
-export const make = Effect.gen(function* () {
+export const make = Effect.fnUntraced(function* (options?: {
+  /**
+   * Drains a Session OC++ runs itself. Without it, this execution runs only Sessions an external agent
+   * drives: the embedded Specter runtime runs the rest.
+   */
+  readonly local?: SessionRunner.Interface["drain"]
+}) {
   const store = yield* SessionStore.Service
   const locations = yield* LocationServiceMap.Service
   const bus = yield* Bus.Service
@@ -89,17 +95,16 @@ export const make = Effect.gen(function* () {
     const session = yield* store.get(sessionID)
     if (!session) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
     const driven = SessionDriver.of(session.model) !== "ocpp"
-    const result = yield* Effect.suspend(
-      (): Effect.Effect<
-        SessionRunner.DrainResult,
-        SessionRunner.RunError,
-        ExternalAgentHarness.Service | SessionRunner.Service
-      > =>
-        driven
-          ? ExternalAgentHarness.Service.use((harness) => harness.drain({ sessionID, force, promotable }))
-          : SessionRunner.Service.use((runner) => runner.drain({ sessionID, force, continuation, promotable })),
+    const local = options?.local
+    const result = yield* (
+      driven
+        ? ExternalAgentHarness.Service.use((harness) => harness.drain({ sessionID, force, promotable })).pipe(
+            Effect.provide(locations.get(session.location)),
+          )
+        : local
+          ? local({ sessionID, force, continuation, promotable })
+          : Effect.die(new Error(`Session ${sessionID} runs on the Specter runtime, not OC++'s own execution`))
     ).pipe(
-      Effect.provide(locations.get(session.location)),
       Effect.tapCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.void
@@ -178,7 +183,7 @@ export const make = Effect.gen(function* () {
   })
 })
 
-export const layer = Layer.effect(Service, make)
+export const layer = Layer.effect(Service, make())
 
 export const node = makeGlobalNode({
   service: Service,

@@ -23,7 +23,10 @@ const durable = new Map<string, Event.DurableDefinition>(
  */
 export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
   const id = Event.ID.make(event.id)
-  if (event.type === "session-execution-settled") {
+  // An execution the host ran itself is OC++'s own execution lifecycle.
+  if (event.type === "session-external-execution-started")
+    return [{ definition: SessionEvent.Execution.Started, data: event.payload, id }]
+  if (event.type === "session-execution-settled" || event.type === "session-external-execution-settled") {
     const payload = event.payload as {
       readonly sessionID: string
       readonly outcome: "succeeded" | "failed" | "interrupted"
@@ -62,7 +65,8 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
         data: {
           sessionID: data.sessionID,
           assistantMessageID: data.assistantMessageID,
-          attempt: retry.attempt,
+          // OC++ numbers the attempt about to run; the runtime counts retries.
+          attempt: retry.attempt + 1,
           at: retry.at,
           error: data.error,
         },

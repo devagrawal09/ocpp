@@ -1589,25 +1589,25 @@ function buildExecution(
         })
       }),
     )
-    const runner = Layer.succeed(
-      SessionRunner.Service,
-      SessionRunner.Service.of({
-        drain: (input) => drain(input).pipe(Effect.as(SessionRunner.DrainResult.Complete())),
+    // The local execution test drives OC++'s own execution with a scripted drain; no Location service runs.
+    const execution = Layer.effect(
+      SessionExecution.Service,
+      SessionExecution.make({
+        local: (input) => drain(input).pipe(Effect.as(SessionRunner.DrainResult.Complete())),
       }),
     )
     const locations = Layer.effect(
       LocationServiceMap.Service,
       LayerMap.make(
         () =>
-          // The local execution test only needs the Session runner from the Location graph.
           // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-          runner as unknown as Layer.Layer<LocationServices>,
+          Layer.empty as unknown as Layer.Layer<LocationServices>,
       ),
     )
     return yield* Layer.buildWithScope(
       SessionRestart.layer(options).pipe(
         Layer.provideMerge(sessionLayer),
-        Layer.provideMerge(Layer.fresh(SessionExecution.layer)),
+        Layer.provideMerge(execution),
         Layer.provide(ExternalAgentSession.layer),
         Layer.provide(CodeModeResume.layer),
         Layer.provide(Layer.succeed(CodeModeStore.Service, codemode)),

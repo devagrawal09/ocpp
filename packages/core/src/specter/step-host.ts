@@ -11,6 +11,7 @@ import {
   type AttemptRecorder,
   type CompactFirst,
   type CompactionOutcome,
+  type PrepareOutcome,
   type RecordFailure,
   type StepPlan,
 } from "@specter/agent-runtime"
@@ -35,6 +36,7 @@ import { SessionStore } from "../session/store.js"
 import { SessionTitle } from "../session/title.js"
 import { toSessionError } from "../session/to-session-error.js"
 import { ToolOutput } from "../tool-output.js"
+import { PluginSupervisor } from "../plugin/supervisor.js"
 
 type StepEnded = typeof SessionEvent.Step.Ended.data.Type
 type StepFailed = typeof SessionEvent.Step.Failed.data.Type
@@ -60,10 +62,10 @@ const stepFacts = new Set<string>(
 )
 
 /**
- * The Bus an attempt publishes through. Step facts go to the runtime's recorder: a finished block, a
- * requested call, a settled call. The step's own start and end are the runtime's (it recorded the start
- * and settles the step from the attempt's outcome), so the end is kept for the outcome. Everything else,
- * ephemeral deltas and progress included, reaches the real Bus.
+ * The Bus an attempt publishes through. Step facts go to the runtime's recorder: the step's start (OC++
+ * starts it at the provider's first event), a finished block, a requested call, a settled call. The step's
+ * end is the runtime's to settle from the attempt's outcome, so it is kept for the outcome. Everything
+ * else, ephemeral deltas and progress included, reaches the real Bus.
  */
 // Command payloads carry no undefined values; an absent field stays absent.
 const defined = <T extends Record<string, unknown>>(value: T) =>
@@ -72,7 +74,7 @@ const defined = <T extends Record<string, unknown>>(value: T) =>
 const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
   const names = new Map<string, string>()
   const reasoningStates = new Map<number, Record<string, unknown> | undefined>()
-  const settled: { ended?: StepEnded; failed?: StepFailed } = {}
+  const settled: { started: boolean; ended?: StepEnded; failed?: StepFailed } = { started: false }
   // Once the runtime rejects a record, the execution moved on: nothing more is recorded.
   let stopped = false
   const recorded = (effect: Effect.Effect<boolean, RecordFailure>) =>
@@ -86,6 +88,9 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
 
   const recordFact = (type: string, data: any): Effect.Effect<void, RecordFailure> => {
     switch (type) {
+      case SessionEvent.Step.Started.type:
+        settled.started = true
+        return recorded(record.started())
       case SessionEvent.Tool.Input.Started.type:
         names.set(data.id, data.name)
         return Effect.void
@@ -152,6 +157,9 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
   return { bus: { ...bus, publish }, settled, stopped: () => stopped }
 }
 
+const CONTINUE_AFTER_INCOMPLETE_STREAM =
+  "The previous response was interrupted. Continue from where you left off without repeating completed content."
+
 const observed = (step: StepEnded | StepFailed) => ({
   ...(step.rawFinish === undefined ? {} : { rawFinish: step.rawFinish }),
   ...(step.providerState === undefined ? {} : { providerState: step.providerState }),
@@ -161,12 +169,17 @@ const observed = (step: StepEnded | StepFailed) => ({
   ...(step.files === undefined ? {} : { files: step.files }),
 })
 
-const failed = (error: SessionError.Error, retryable = false, retryDelay?: number): AttemptOutcome => ({
-  outcome: "failed",
-  error,
-  retryable,
-  ...(retryDelay === undefined ? {} : { retryDelay }),
-})
+// OC++'s retry policy bounds a step's retries itself (SessionRunnerRetry), so the runtime's does not.
+const RETRY_LIMIT = 1_000
+
+const failed = (error: SessionError.Error, retryable = false, retryDelay?: number) =>
+  ({
+    outcome: "failed",
+    error,
+    retryable,
+    ...(retryDelay === undefined ? {} : { retryDelay }),
+    ...(retryable ? { limit: RETRY_LIMIT } : {}),
+  }) as const
 
 /**
  * OC++'s step I/O in one Location: the request OC++ builds for a Session (system prompt, instructions,
@@ -180,12 +193,16 @@ export class StepIO extends Context.Service<
       readonly assistantMessageID: SessionMessage.ID
       /** The step's number since input was last delivered, from 1. */
       readonly step: number
+      /** Which attempt of that step this is, from 1. */
+      readonly attempt: number
     }) => Effect.Effect<StepPlan | CompactFirst>
     readonly compact: (input: {
       readonly sessionID: SessionSchema.ID
       readonly reason: "auto" | "manual"
       readonly inputID?: SessionMessage.ID
     }) => Effect.Effect<CompactionOutcome>
+    /** Brings the Session's context up to date before input is delivered. */
+    readonly prepare: (sessionID: SessionSchema.ID) => Effect.Effect<PrepareOutcome>
     /** Releases the Session's model transport here before it moves to another Location. */
     readonly moving: (sessionID: SessionSchema.ID) => Effect.Effect<void>
   }
@@ -205,14 +222,34 @@ const stepIOLayer = Layer.effect(
     const titles = yield* FiberMap.make<SessionSchema.ID, void, never>()
     const transport = yield* SessionModelTransport.Service
     const store = yield* SessionStore.Service
+    const plugins = yield* PluginSupervisor.Service
+
+    // Before input is delivered: plugins are ready and instruction changes are recorded, so they precede
+    // the input in history. A blocked initial instruction baseline leaves the input pending.
+    const recoveries = new Map<
+      SessionSchema.ID,
+      { readonly retry: Effect.Success<ReturnType<typeof SessionRunnerRetry.make>>; overflow: boolean; full: boolean }
+    >()
+    // What prepare sampled is the next step's: its agent and model stay those the input was delivered to.
+    const sampled = new Map<SessionSchema.ID, Effect.Success<ReturnType<typeof context.select>>>()
+    const prepare = Effect.fn("SpecterStepIO.prepare")(function* (sessionID: SessionSchema.ID) {
+      yield* plugins.flush
+      const selected = yield* context.select(sessionID)
+      yield* InstructionState.prepare(db, bus, selected.instructions, sessionID)
+      sampled.set(sessionID, selected)
+    })
 
     const begin = Effect.fn("SpecterStepIO.begin")(function* (input: {
       readonly sessionID: SessionSchema.ID
       readonly assistantMessageID: SessionMessage.ID
       readonly step: number
+      readonly attempt: number
     }) {
       const { sessionID, assistantMessageID } = input
-      const selected = yield* context.select(sessionID)
+      const prepared = sampled.get(sessionID)
+      sampled.delete(sessionID)
+      yield* plugins.flush
+      const selected = prepared ?? (yield* context.select(sessionID))
       // A blocked initial instruction baseline must leave admitted input pending.
       yield* InstructionState.prepare(db, bus, selected.instructions, sessionID)
       const loaded = yield* context.load(selected)
@@ -226,17 +263,23 @@ const stepIOLayer = Layer.effect(
       // On the agent's last step the model must answer without tools.
       const stepLimitReached = loaded.agent.info.steps !== undefined && input.step >= loaded.agent.info.steps
 
-      const run = (record: AttemptRecorder) =>
+      // The logical step's retry schedule and one-time recoveries span its attempts; its first attempt
+      // starts them afresh.
+      const recovery = input.attempt === 1 ? undefined : recoveries.get(sessionID)
+      const state = recovery ?? { retry: yield* SessionRunnerRetry.make(bus, sessionID), overflow: true, full: true }
+      recoveries.set(sessionID, state)
+
+      const attempt = (current: SessionContext.Loaded, record: AttemptRecorder) =>
         Effect.gen(function* () {
           const transcript = SessionModelRequest.baseTranscript({
-            agent: loaded.agent.info,
-            model: loaded.model,
-            tools: loaded.tools,
-            initial: loaded.initial,
-            messages: loaded.messages,
+            agent: current.agent.info,
+            model: current.model,
+            tools: current.tools,
+            initial: current.initial,
+            messages: current.messages,
           })
           const request = yield* context.prepare({
-            scope: { session: loaded.session, agentID: loaded.agent.id, model: loaded.model, tools: loaded.tools },
+            scope: { session: current.session, agentID: current.agent.id, model: current.model, tools: current.tools },
             transcript: {
               system: transcript.system,
               messages: stepLimitReached
@@ -254,30 +297,68 @@ const stepIOLayer = Layer.effect(
             Effect.provideService(LLMClient.Service, llm),
             Effect.provideService(ToolOutput.Service, toolOutput),
           )
-          const retry = yield* SessionRunnerRetry.make(bus, sessionID)
           const exit = yield* steps
             .attempt({
               sessionID,
               assistantMessageID,
-              agent: loaded.agent.id,
-              model: loaded.model,
+              agent: current.agent.id,
+              model: current.model,
               prepared: request,
               retry: (cause, error, retryable) =>
-                retry.decide({
+                state.retry.decide({
                   cause,
                   error,
-                  agent: loaded.agent.id,
-                  model: loaded.model.ref,
+                  agent: current.agent.id,
+                  model: current.model.ref,
                   hook: request.retry,
                   retry: retryable,
                 }),
-              // Transparent recovery and overflow compaction are the runtime's to decide (later).
-              recoverContinuation: false,
-              recoverOverflow: Effect.succeed(false),
+              // Once per logical step each: reading the response again in full, and compacting the history
+              // after the provider's context overflowed.
+              recoverContinuation: state.full,
+              recoverOverflow: Effect.suspend(() => {
+                if (!state.overflow || !compaction.enabled()) return Effect.succeed(false)
+                state.overflow = false
+                return compaction
+                  .compact({
+                    session: current.session,
+                    messages: current.messages,
+                    resolved: current.model,
+                    prepare: context.prepare,
+                  })
+                  .pipe(Effect.map((result) => result.status === "completed"))
+              }),
             })
             .pipe(Effect.exit)
-          return outcomeOf(exit, recording)
+          return { exit, recording }
         })
+
+      const run = (record: AttemptRecorder) =>
+        Effect.gen(function* () {
+          let current = loaded
+          while (true) {
+            const { exit, recording } = yield* attempt(current, record)
+            const outcome = Exit.isSuccess(exit) ? exit.value : undefined
+            if (outcome?._tag === "RecoverFull") state.full = false
+            // Recovered before the attempt started its step: nothing of it stands, so the step runs again
+            // here, on the history as it is now.
+            if (
+              (outcome?._tag === "RecoverFull" || outcome?._tag === "Compacted") &&
+              !recording.settled.started &&
+              !recording.stopped()
+            ) {
+              current = yield* context.load(selected)
+              continue
+            }
+            // The partial output stands: the step continues in a new step, told what happened.
+            if (outcome?._tag === "Continue" && !recording.stopped())
+              yield* bus.publish(SessionEvent.Synthetic, { sessionID, text: CONTINUE_AFTER_INCOMPLETE_STREAM })
+            return outcomeOf(exit, recording)
+          }
+        }).pipe(
+          // Reloading the history or recording the notice failed: so did the attempt.
+          Effect.catch((error) => Effect.succeed<AttemptOutcome>(failed(toSessionError(error)))),
+        )
 
       return {
         agent: loaded.agent.id,
@@ -333,6 +414,15 @@ const stepIOLayer = Layer.effect(
     })
 
     return StepIO.of({
+      prepare: (sessionID) =>
+        prepare(sessionID).pipe(
+          Effect.as<PrepareOutcome>({ outcome: "ready" }),
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.interrupt
+              : Effect.succeed<PrepareOutcome>({ outcome: "failed", error: toSessionError(Cause.squash(cause)) }),
+          ),
+        ),
       begin: (input) => begin(input).pipe(Effect.catchCause((cause) => Effect.succeed(unprepared(cause)))),
       moving: (sessionID) => transport.close(sessionID),
       compact: (input) =>
@@ -361,6 +451,7 @@ export const stepIONode = makeLocationNode({
     Snapshot.node,
     ToolOutput.node,
     Database.node,
+    PluginSupervisor.node,
   ],
 })
 
@@ -398,12 +489,24 @@ export const make = Effect.gen(function* () {
             sessionID,
             assistantMessageID: SessionMessage.ID.make(input.assistantMessageID),
             step: input.step,
+            attempt: input.attempt,
           }),
         ).pipe(Effect.provide(location))
         if ("compact" in plan) return plan
         // The attempt runs in the Session's Location too.
         return { ...plan, run: (record: AttemptRecorder) => plan.run(record).pipe(Effect.provide(location)) }
       }).pipe(Effect.catchCause((cause) => Effect.succeed(unprepared(cause)))),
+    prepare: (sessionID) =>
+      locationOf(SessionSchema.ID.make(sessionID)).pipe(
+        Effect.flatMap((location) =>
+          StepIO.use((io) => io.prepare(SessionSchema.ID.make(sessionID))).pipe(Effect.provide(location)),
+        ),
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.succeed<PrepareOutcome>({ outcome: "failed", error: toSessionError(Cause.squash(cause)) }),
+        ),
+      ),
     moving: (sessionID) =>
       locationOf(SessionSchema.ID.make(sessionID)).pipe(
         Effect.flatMap((location) =>
@@ -449,6 +552,8 @@ const outcomeOf = (
     const outcome = exit.value
     switch (outcome._tag) {
       case "Completed":
+        // The provider sent nothing: no step started, and the runtime records none.
+        if (!recording.settled.started) return { outcome: "succeeded", finish: "unknown", continue: false }
         if (!ended) return failed({ type: "step.unsettled", message: "The step completed without ending" })
         return {
           outcome: "succeeded",
@@ -458,15 +563,26 @@ const outcomeOf = (
         }
       case "Retry":
         return failed(outcome.error, true, outcome.decision.delay)
+      // The partial output stands: the retry runs as a new step.
       case "Continue":
         return {
           ...failed(outcome.error, true, outcome.decision.delay),
+          fresh: true,
           ...(stepFailed ? observed(stepFailed) : {}),
         }
+      // After the step started: it runs again at once, in full.
       case "RecoverFull":
-        return failed({ type: "provider.transport", message: "The response stream must be read again" }, true)
+        return failed({ type: "provider.transport", message: "The response stream must be read again" }, true, 0)
+      // The history was compacted under the started step: the step runs again as a new one, after it.
       case "Compacted":
-        return failed({ type: "compaction.unexpected", message: "The attempt compacted unexpectedly" })
+        return {
+          ...failed(
+            { type: "context.overflow", message: "The history was compacted after the context overflowed" },
+            true,
+            0,
+          ),
+          fresh: true,
+        }
     }
   }
   if (Exit.hasInterrupts(exit) && !stepFailed) return { outcome: "stopped" }

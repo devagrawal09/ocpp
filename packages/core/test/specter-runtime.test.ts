@@ -66,7 +66,7 @@ describe("embedded Specter runtime", () => {
       ["session.step.failed", { sessionID: "ses_1", assistantMessageID: "msg_1", error }, "evt_2"],
       [
         "session.retry.scheduled",
-        { sessionID: "ses_1", assistantMessageID: "msg_1", attempt: 1, at: 5, error },
+        { sessionID: "ses_1", assistantMessageID: "msg_1", attempt: 2, at: 5, error },
         "evt_2_retry",
       ],
     ])

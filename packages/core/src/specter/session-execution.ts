@@ -8,6 +8,7 @@ import { Database } from "../database/database.js"
 import { ExternalAgentSession } from "../external-agent/session.js"
 import { Job } from "../job.js"
 import { LocationServiceMap } from "../location-service-map.js"
+import { StepFailedError } from "../session/error.js"
 import { SessionExecution } from "../session/execution.js"
 import { SessionSchema } from "../session/schema.js"
 import { SessionStore } from "../session/store.js"
@@ -23,7 +24,7 @@ export const layer = Layer.effect(
   SessionExecution.Service,
   Effect.gen(function* () {
     const specter = yield* SpecterSessionRuntime.Service
-    const external = yield* SessionExecution.make
+    const external = yield* SessionExecution.make()
     const store = yield* SessionStore.Service
     const jobs = yield* Job.Service
 
@@ -51,10 +52,18 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         if (next.item !== null) yield* start(sessionID)
       }),
+      // Runs the Session until it is idle and fails as its execution did, as OC++'s runner's resume does.
       resume: Effect.fn("SpecterSessionExecution.resume")(function* (sessionID: SessionSchema.ID) {
         yield* specter.register(sessionID)
         yield* start(sessionID)
         yield* specter.awaitIdle(sessionID)
+        const settled = yield* specter.runtime
+          .query({ type: "executionStatus", payload: { sessionID } })
+          .pipe(Effect.orDie)
+        if (settled.lastOutcome === "failed" && settled.error)
+          return yield* new StepFailedError({ error: settled.error })
+        // As OC++'s runner's: an interrupted run interrupts its caller.
+        if (settled.lastOutcome === "interrupted") return yield* Effect.interrupt
       }),
       interrupt: Effect.fn("SpecterSessionExecution.interrupt")(function* (
         sessionID: SessionSchema.ID,

@@ -1,7 +1,7 @@
 export * as SessionRunner from "./index.js"
 
 import type { AIError } from "@ocpp/ai"
-import { Context, Data, Effect } from "effect"
+import { Data, type Effect } from "effect"
 import { SessionSchema } from "../schema.js"
 import type { Promotable } from "../inbox.js"
 import type { AgentNotFoundError, MessageDecodeError, StepFailedError, UserInterruptedError } from "../error.js"
@@ -25,7 +25,7 @@ export type DrainResult = Data.TaggedEnum<{
 }>
 export const DrainResult = Data.taggedEnum<DrainResult>()
 
-/** Runs one local continuation from already-recorded Session history. */
+/** Runs one local continuation from already-recorded Session history: an external agent's harness. */
 export interface Interface {
   /** Drains eligible durable work, returning transient state when execution must continue at a new Location. */
   readonly drain: (input: {
@@ -36,5 +36,3 @@ export interface Interface {
     readonly promotable?: Promotable
   }) => Effect.Effect<DrainResult, RunError>
 }
-
-export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionRunner") {}

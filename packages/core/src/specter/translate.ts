@@ -3,6 +3,7 @@ export * as SpecterTranslate from "./translate.js"
 import { Event } from "@ocpp/schema/event"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionEvent } from "@ocpp/schema/session-event"
+import { Worktree } from "@ocpp/schema/worktree"
 import { toOcppEventType, type PersistedEvent } from "@specter/agent-runtime"
 
 /** One OC++ wire event a Specter fact projects as. */
@@ -13,7 +14,7 @@ export interface WireEvent {
 }
 
 const durable = new Map<string, Event.DurableDefinition>(
-  [...SessionEvent.DurableDefinitions, ...ExternalSession.Definitions].map((definition) => [
+  [...SessionEvent.DurableDefinitions, ...ExternalSession.Definitions, Worktree.Event.Resolved].map((definition) => [
     definition.type,
     definition,
   ]),

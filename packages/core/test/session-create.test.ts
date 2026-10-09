@@ -29,6 +29,7 @@ import { SessionInbox } from "@ocpp/core/session/inbox"
 import { InstructionEntry } from "@ocpp/core/session/instruction-entry"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionTable } from "@ocpp/core/session/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { SessionStore } from "@ocpp/core/session/store"
 import { SessionTransfer } from "@ocpp/core/session/transfer"
 import { Workspace } from "@ocpp/core/workspace"
@@ -240,6 +241,16 @@ describe("Session.create", () => {
           .all()
           .pipe(Effect.orDie)
         expect(announced.map((event) => event.type)).toEqual(["worktree.resolved.1"])
+        // Specter's log records it, as it does every durable fact.
+        const recorded = yield* db
+          .select({ payload: SpecterEventTable.payload })
+          .from(SpecterEventTable)
+          .where(eq(SpecterEventTable.type, "worktree-resolved"))
+          .all()
+          .pipe(Effect.orDie)
+        expect(
+          recorded.filter((row) => (row.payload as { readonly projectID: string }).projectID === project.id),
+        ).toHaveLength(1)
       }),
     ),
   )

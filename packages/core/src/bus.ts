@@ -12,6 +12,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { isDeepStrictEqual } from "node:util"
 import { Durable } from "@ocpp/schema/durable-event-manifest"
 import { ExternalSession } from "@ocpp/schema/external-session"
+import { Worktree } from "@ocpp/schema/worktree"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionID } from "@ocpp/schema/session-id"
 import { AbsolutePath } from "@ocpp/schema/schema"
@@ -130,9 +131,14 @@ const mapNonEmpty = <A, B>(items: readonly [A, ...A[]], f: (item: A) => B): [B, 
   ...items.slice(1).map(f),
 ]
 
-/** Durable Session facts, an external agent's included: the Specter runtime records every one of them. */
-const sessionFacts = new Set<string>(
-  [...SessionEvent.DurableDefinitions, ...ExternalSession.Definitions].map((definition) => definition.type),
+/**
+ * Durable facts, which the Specter runtime records: every Session fact, an external agent's included, and
+ * a directory's resolution to a project.
+ */
+const recordedFacts = new Set<string>(
+  [...SessionEvent.DurableDefinitions, ...ExternalSession.Definitions, Worktree.Event.Resolved].map(
+    (definition) => definition.type,
+  ),
 )
 
 export type SubscribePayload<D extends readonly Event.Definition[]> = D[number] extends infer Item
@@ -495,7 +501,7 @@ export function configured(options?: Options) {
                 return yield* commitDurableEvent(definition, event as Event.Payload, undefined, commit).pipe(
                   Effect.as(event),
                 )
-              if (sessionFacts.has(definition.type))
+              if (recordedFacts.has(definition.type))
                 return yield* durableLocks.withLock(aggregateID)(
                   Effect.gen(function* () {
                     // Recording is uninterruptible, as a commit was before; notifying listeners is not.
@@ -793,7 +799,7 @@ export function configured(options?: Options) {
         }
 
         const commitBatch = (items: readonly [BatchItem, ...BatchItem[]]) =>
-          items.every((item) => sessionFacts.has(item.definition.type))
+          items.every((item) => recordedFacts.has(item.definition.type))
             ? recordFacts(items)
             : db
                 .transaction(() => projectBatch(items[0].aggregateID, items), { behavior: "immediate" })

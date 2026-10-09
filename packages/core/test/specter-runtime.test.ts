@@ -68,6 +68,23 @@ describe("embedded Specter runtime", () => {
         "evt_2_retry",
       ],
     ])
+    const block = (kind: string) =>
+      SpecterTranslate.toWire({
+        id: "evt_4",
+        order: 4,
+        type: "session-block-recorded",
+        payload: { sessionID: "ses_1", assistantMessageID: "msg_1", kind, ordinal: 0, text: "hi" },
+        recordedAt: new Date(0).toISOString(),
+      }).map((wire) => [wire.definition.type, wire.data, wire.id])
+    const position = { sessionID: "ses_1", assistantMessageID: "msg_1", ordinal: 0 }
+    expect(block("text")).toEqual([
+      ["session.text.started", position, "evt_4_start"],
+      ["session.text.ended", { ...position, text: "hi" }, "evt_4"],
+    ])
+    expect(block("reasoning")).toEqual([
+      ["session.reasoning.started", position, "evt_4_start"],
+      ["session.reasoning.ended", { ...position, text: "hi" }, "evt_4"],
+    ])
     const tool = (type: string, payload: Record<string, unknown>) =>
       SpecterTranslate.toWire({
         id: "evt_3",

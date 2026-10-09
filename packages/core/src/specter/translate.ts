@@ -64,6 +64,23 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
       },
     ]
   }
+  if (event.type === "session-block-recorded") {
+    const { kind, ...ended } = event.payload as {
+      readonly kind: "text" | "reasoning"
+      readonly sessionID: string
+      readonly assistantMessageID: string
+      readonly ordinal: number
+    }
+    const block = kind === "text" ? SessionEvent.Text : SessionEvent.Reasoning
+    return [
+      {
+        definition: block.Started,
+        data: { sessionID: ended.sessionID, assistantMessageID: ended.assistantMessageID, ordinal: ended.ordinal },
+        id: Event.ID.make(`${event.id}_start`),
+      },
+      { definition: block.Ended, data: ended, id },
+    ]
+  }
   if (event.type === "session-tool-requested") {
     const { name, ...called } = event.payload as {
       readonly sessionID: string

@@ -100,7 +100,7 @@ const layer = Layer.effect(
     const awaitStatus = (sessionID: SessionSchema.ID, idle: boolean) =>
       Effect.suspend(() =>
         started
-          ? started.subscribe({ type: "executionStatus", payload: { sessionID } }).pipe(
+          ? started.subscribe({ type: "sessionStatus", payload: { sessionID } }).pipe(
               Stream.filter((status) => status.status !== "active" && (!idle || status.wakes !== true)),
               Stream.take(1),
               Stream.runDrain,

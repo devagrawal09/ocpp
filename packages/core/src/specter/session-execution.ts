@@ -47,7 +47,7 @@ export const layer = Layer.effect(
         // The execution this call started or joined; a follow-up its input wakes is a busy period of its own.
         yield* specter.awaitSettled(sessionID)
         const settled = yield* specter.runtime
-          .query({ type: "executionStatus", payload: { sessionID } })
+          .query({ type: "sessionStatus", payload: { sessionID } })
           .pipe(Effect.orDie)
         if (settled.lastOutcome === "failed" && settled.error)
           return yield* new StepFailedError({ error: settled.error })

@@ -20,29 +20,24 @@ it.live("recovers durable background work for a foreground server", () =>
 
     const database = new Database(filename)
     yield* Effect.addFinalizer(() => Effect.sync(() => database.close()))
-    const key = "job.background/msg_process_restart"
-    const now = Date.now()
-    database.query("insert into kv (key, value, time_created, time_updated) values (?, ?, ?, ?)").run(
-      key,
+    // A background job a stopped process left running.
+    const notificationID = "msg_process_restart"
+    database.query("insert into job_background (notification_id, job_id, recovery, status) values (?, ?, ?, ?)").run(
+      notificationID,
+      "exe_process_restart",
       JSON.stringify({
-        id: "exe_process_restart",
-        notificationID: "msg_process_restart",
-        recovery: {
-          kind: "codemode",
-          parentSessionID: "ses_process_restart_missing",
-          assistantMessageID: "msg_process_restart_assistant",
-          toolCallID: "call_process_restart",
-          code: "return 1",
-          timeoutMs: 1_000,
-        },
-        status: "running",
+        kind: "codemode",
+        parentSessionID: "ses_process_restart_missing",
+        assistantMessageID: "msg_process_restart_assistant",
+        toolCallID: "call_process_restart",
+        code: "return 1",
+        timeoutMs: 1_000,
       }),
-      now,
-      now,
+      "running",
     )
 
     yield* ServerProcess.start<never, never>(options)
-    yield* waitForMarkerRemoval(database, key)
+    yield* waitForMarkerRemoval(database, notificationID)
   }),
 )
 
@@ -142,8 +137,15 @@ it.live("allows browser preflight requests without credentials", () =>
   }),
 )
 
-function waitForMarkerRemoval(database: Database, key: string, remaining = 1_000): Effect.Effect<void, Error> {
-  if (!database.query("select value from kv where key = ?").get(key)) return Effect.void
+function waitForMarkerRemoval(
+  database: Database,
+  notificationID: string,
+  remaining = 1_000,
+): Effect.Effect<void, Error> {
+  if (!database.query("select job_id from job_background where notification_id = ?").get(notificationID))
+    return Effect.void
   if (remaining === 0) return Effect.fail(new Error("Timed out waiting for restart recovery"))
-  return Effect.promise(() => Bun.sleep(1)).pipe(Effect.andThen(waitForMarkerRemoval(database, key, remaining - 1)))
+  return Effect.promise(() => Bun.sleep(1)).pipe(
+    Effect.andThen(waitForMarkerRemoval(database, notificationID, remaining - 1)),
+  )
 }

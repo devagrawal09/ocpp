@@ -3,6 +3,7 @@ export * as ExternalAgentSession from "./session.js"
 import { AbsolutePath } from "@ocpp/schema/schema"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import type { SessionDriver } from "@ocpp/schema/session-driver"
+import type { SessionID } from "@ocpp/schema/session-id"
 import type { Tool } from "@ocpp/schema/tool"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { eq } from "drizzle-orm"
@@ -81,21 +82,17 @@ export const layer = Layer.effectContext(
         .run()
         .pipe(Effect.orDie),
     )
-    for (const [definition, status] of [
-      [SessionEvent.Execution.Started, "running"],
-      [SessionEvent.Execution.Succeeded, "completed"],
-      [SessionEvent.Execution.Failed, "failed"],
-      [SessionEvent.Execution.Interrupted, "interrupted"],
-    ] as const) {
-      yield* bus.project(definition, (event) =>
-        db
-          .update(ExternalSessionTable)
-          .set({ status })
-          .where(eq(ExternalSessionTable.session_id, event.data.sessionID))
-          .run()
-          .pipe(Effect.orDie),
-      )
-    }
+    const status = (sessionID: SessionID, status: "running" | "completed" | "failed" | "interrupted") =>
+      db
+        .update(ExternalSessionTable)
+        .set({ status })
+        .where(eq(ExternalSessionTable.session_id, sessionID))
+        .run()
+        .pipe(Effect.orDie)
+    yield* bus.project(SessionEvent.Execution.Started, (event) => status(event.data.sessionID, "running"))
+    yield* bus.project(SessionEvent.Execution.Settled, (event) =>
+      status(event.data.sessionID, event.data.outcome === "succeeded" ? "completed" : event.data.outcome),
+    )
     return Context.make(Service, {
       get: (sessionID) =>
         db

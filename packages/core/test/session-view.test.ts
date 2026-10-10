@@ -3,6 +3,7 @@ import { Bus } from "@ocpp/core/bus"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { EventTable } from "@ocpp/core/event/sql"
+import { Recorded } from "./lib/recorded"
 import { Location } from "@ocpp/core/location"
 import { Project } from "@ocpp/core/project"
 import { AbsolutePath } from "@ocpp/core/schema"
@@ -42,7 +43,7 @@ describe("Session.view", () => {
       yield* session.view({ sessionID: created.id, idle: 0 })
       expect((yield* session.get(created.id)).time.viewed).toBeUndefined()
 
-      yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: created.id })
+      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: created.id, outcome: "succeeded" })
       const idle = yield* session.get(created.id)
       expect(idle.time.idle).toBeDefined()
       expect(idle.time.viewed).toBeUndefined()
@@ -70,9 +71,10 @@ describe("Session.view", () => {
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(viewed.time.idle) })
       expect((yield* session.get(created.id)).time).toEqual(viewed.time)
 
-      yield* bus.publish(SessionEvent.Execution.Failed, {
+      yield* bus.publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "unknown", message: "failed" },
+        outcome: "failed",
       })
       const unread = yield* session.get(created.id)
       if (!unread.time.idle || !unread.time.viewed) return yield* Effect.die(new Error("Expected attention times"))
@@ -82,11 +84,19 @@ describe("Session.view", () => {
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(unread.time.idle) })
       expect((yield* session.get(created.id)).time.viewed).toEqual(unread.time.idle)
 
-      yield* bus.publish(SessionEvent.Execution.Interrupted, { sessionID: created.id, reason: "shutdown" })
+      yield* bus.publish(SessionEvent.Execution.Settled, {
+        sessionID: created.id,
+        reason: "shutdown",
+        outcome: "interrupted",
+      })
       expect((yield* session.get(created.id)).time.idle).toEqual(unread.time.idle)
       expect((yield* session.get(created.id)).outcome).toBe("failed")
 
-      yield* bus.publish(SessionEvent.Execution.Interrupted, { sessionID: created.id, reason: "user" })
+      yield* bus.publish(SessionEvent.Execution.Settled, {
+        sessionID: created.id,
+        reason: "user",
+        outcome: "interrupted",
+      })
       const interrupted = yield* session.get(created.id)
       if (!interrupted.time.idle || !interrupted.time.viewed)
         return yield* Effect.die(new Error("Expected attention times"))
@@ -94,13 +104,7 @@ describe("Session.view", () => {
         DateTime.toEpochMillis(interrupted.time.viewed),
       )
       expect(interrupted.outcome).toBe("interrupted")
-      expect(
-        (yield* db
-          .select({ type: EventTable.type })
-          .from(EventTable)
-          .where(eq(EventTable.aggregate_id, created.id))
-          .all()).filter((event) => event.type === Bus.versionedType(SessionEvent.Viewed.type, 1)),
-      ).toHaveLength(2)
+      expect((yield* Recorded.types(created.id)).filter((type) => type === SessionEvent.Viewed.type)).toHaveLength(2)
     }),
   )
 
@@ -109,14 +113,15 @@ describe("Session.view", () => {
       const session = yield* Session.Service
       const bus = yield* Bus.Service
       const created = yield* session.create({ location })
-      yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: created.id })
+      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: created.id, outcome: "succeeded" })
       const observed = (yield* session.get(created.id)).time.idle
       if (!observed) return yield* Effect.die(new Error("Expected idle time"))
 
       // A failure commits between the viewer's observation and the viewed event.
-      yield* bus.publish(SessionEvent.Execution.Failed, {
+      yield* bus.publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "unknown", message: "failed" },
+        outcome: "failed",
       })
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(observed) })
       const stale = yield* session.get(created.id)
@@ -151,13 +156,14 @@ describe("Session.view", () => {
       const store = yield* SessionStore.Service
       const { db } = yield* Database.Service
       const created = yield* session.create({ id: Session.ID.make("ses_view_replay"), location })
-      yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: created.id })
+      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: created.id, outcome: "succeeded" })
       const idle = (yield* session.get(created.id)).time.idle
       if (!idle) return yield* Effect.die(new Error("Expected idle time"))
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(idle) })
-      yield* bus.publish(SessionEvent.Execution.Failed, {
+      yield* bus.publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "unknown", message: "failed" },
+        outcome: "failed",
       })
       const expected = yield* session.get(created.id)
       if (!expected.time.idle || !expected.time.viewed) return yield* Effect.die(new Error("Expected attention times"))

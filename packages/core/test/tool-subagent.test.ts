@@ -837,21 +837,26 @@ describe("SubagentTool", () => {
             agent: Agent.ID.make("reviewer"),
             model: childModel,
           })
-          yield* bus.publish(SessionEvent.Tool.Input.Started, { ...base, name: "execute" })
-          yield* bus.publish(SessionEvent.Tool.Input.Ended, { ...base, text: JSON.stringify({ code: "return 1" }) })
-          yield* bus.publish(SessionEvent.Tool.Called, { ...base, input: { code: "return 1" }, executed: true })
-          yield* bus.publish(SessionEvent.Tool.Success, {
+          yield* bus.publish(SessionEvent.Tool.Requested, {
+            ...base,
+            name: "execute",
+            input: { code: "return 1" },
+            executed: true,
+          })
+          yield* bus.publish(SessionEvent.Tool.Settled, {
             ...base,
             content: [{ type: "text", text: "Preview: 1" }],
             metadata: { executionID: "exe_secret", events: [{ input: secret }] },
             executed: true,
+            outcome: "succeeded",
           })
-          yield* bus.publish(SessionEvent.Step.Ended, {
+          yield* bus.publish(SessionEvent.Step.Settled, {
             sessionID: childID,
             assistantMessageID,
             finish: "stop",
             cost: Money.USD.zero,
             tokens,
+            outcome: "succeeded",
           })
 
           const transcript = (id: string, input: Record<string, unknown>) =>
@@ -1447,12 +1452,13 @@ describe("SubagentTool", () => {
               agent: Agent.ID.make("reviewer"),
               model: childModel,
             })
-            yield* bus.publish(SessionEvent.Step.Ended, {
+            yield* bus.publish(SessionEvent.Step.Settled, {
               sessionID: childID,
               assistantMessageID,
               finish: "stop",
               cost: Money.USD.zero,
               tokens,
+              outcome: "succeeded",
             })
           }
           const transcript = (id: string, input: Record<string, unknown>) =>

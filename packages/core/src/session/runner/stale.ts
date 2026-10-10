@@ -18,7 +18,7 @@ export const settleStaleToolCalls = Effect.fn("SessionRunner.settleStaleToolCall
       const metadata = tool.state.status === "running" ? tool.state.metadata : undefined
       const childID =
         Delegation.isTool(tool.name) && typeof metadata?.sessionID === "string" ? metadata.sessionID : undefined
-      yield* bus.publish(SessionEvent.Tool.Failed, {
+      const failure = {
         sessionID,
         assistantMessageID: message.id,
         id: tool.id,
@@ -28,7 +28,11 @@ export const settleStaleToolCalls = Effect.fn("SessionRunner.settleStaleToolCall
         },
         ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
         executed: tool.executed === true,
-      })
+      }
+      // A call still streaming its input was never requested: its input fails.
+      if (tool.state.status === "streaming")
+        yield* bus.publish(SessionEvent.Tool.Input.Failed, { ...failure, name: tool.name })
+      else yield* bus.publish(SessionEvent.Tool.Settled, { ...failure, outcome: "failed" })
     }
   }
 })

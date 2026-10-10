@@ -385,8 +385,8 @@ test("separates blocking and already-backgrounded work into two rows", async ({ 
   await timeline.transport.send({
     id: "evt_background_succeeded",
     created: Date.now(),
-    type: "session-execution-succeeded",
-    data: { sessionID: backgroundID },
+    type: "session-execution-settled",
+    data: { sessionID: backgroundID, outcome: "succeeded" },
   } as never)
   await expect(backgroundCard.locator('[data-component="session-progress-indicator-v2"]')).toHaveCount(0)
   await expect(backgroundCard).toContainText("Background task (background)")

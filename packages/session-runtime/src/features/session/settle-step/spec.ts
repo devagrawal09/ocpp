@@ -174,7 +174,7 @@ export const settleStepSpec = createCommandSlice("settleStep")
     },
     {
       description:
-        'A retryable failure within budget carries its retry (session.md, Retry Is Narrow And Observable: "session.retry.scheduled records generic backoff"): attempt 1, due at the given time.',
+        'A retryable failure within budget carries its retry (session.md, Retry Is Narrow And Observable: "a failed step settlement carries its scheduled retry"): attempt 1, due at the given time.',
       given: [started(), stepStarted("msg_1")],
       when: failure(),
       expect: [stepFailed("msg_1", { attempt: 1, at: 2000 })],

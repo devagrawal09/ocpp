@@ -64,12 +64,13 @@ export const activateCodeMode = (output: unknown, context: CodeModeContext) =>
   Effect.gen(function* () {
     const value = Schema.decodeUnknownSync(CodeModeOutput)(output)
     const bus = yield* Bus.Service
-    yield* bus.publish(SessionEvent.Tool.Success, {
+    yield* bus.publish(SessionEvent.Tool.Settled, {
       sessionID: context.sessionID,
       assistantMessageID: context.assistantMessageID,
       id: context.id,
       content: [{ type: "text", text: "Execution started" }],
       executed: false,
+      outcome: "succeeded",
     })
     return value.executionID
   })

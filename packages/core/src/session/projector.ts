@@ -51,6 +51,13 @@ type Usage = {
 
 const ForkBatchSize = 500
 
+/** What a step's attempt used, once it stands: a transparently retried attempt is the same step again. */
+const stepUsage = (step: typeof SessionEvent.Step.Settled.Type.data): Usage | undefined => {
+  if (step.outcome === "failed" && step.retry && !step.retry.fresh) return
+  if (step.cost === undefined || step.tokens === undefined) return
+  return { cost: step.cost, tokens: step.tokens }
+}
+
 const forkTitle = (value?: string) => {
   if (value === undefined) return
   const match = value.match(/^(.+) \(fork #(\d+)\)$/)
@@ -476,33 +483,22 @@ function insertMessage(db: DatabaseService, event: SessionEvent.DurableEvent, me
     .pipe(Effect.orDie)
 }
 
-function projectIdle(
-  db: DatabaseService,
-  event:
-    | typeof SessionEvent.Execution.Succeeded.Type
-    | typeof SessionEvent.Execution.Failed.Type
-    | typeof SessionEvent.Execution.Interrupted.Type,
-) {
+function projectIdle(db: DatabaseService, event: typeof SessionEvent.Execution.Settled.Type) {
   return Effect.gen(function* () {
     yield* run(db, event)
-    if (event.type === SessionEvent.Execution.Interrupted.type && event.data.reason === "shutdown") return
+    if (event.data.outcome === "interrupted" && event.data.reason === "shutdown") return
     const time = event.created
-    const outcome =
-      event.type === SessionEvent.Execution.Succeeded.type
-        ? "succeeded"
-        : event.type === SessionEvent.Execution.Failed.type
-          ? "failed"
-          : "interrupted"
+    const failure = event.data.outcome === "failed" ? event.data.error : undefined
     yield* db
       .update(SessionTable)
       .set({
         // Unread uses a strict timestamp comparison, so every terminal must advance even within one millisecond.
         time_idle: sql`max(${time}, coalesce(${SessionTable.time_idle} + 1, ${time}))`,
-        idle_outcome: outcome,
+        idle_outcome: event.data.outcome,
         // Only a failure carries an error; the other terminals clear the previous one so the row
         // always describes the outcome recorded at time_idle.
-        idle_error_type: event.type === SessionEvent.Execution.Failed.type ? event.data.error.type : null,
-        idle_error_message: event.type === SessionEvent.Execution.Failed.type ? event.data.error.message : null,
+        idle_error_type: failure?.type ?? null,
+        idle_error_message: failure?.message ?? null,
         time_updated: sql`${SessionTable.time_updated}`,
       })
       .where(eq(SessionTable.id, event.data.sessionID))
@@ -846,9 +842,7 @@ const layer = Layer.effectDiscard(
         delivery: event.data.delivery,
       }),
     )
-    yield* bus.project(SessionEvent.Execution.Succeeded, (event) => projectIdle(db, event))
-    yield* bus.project(SessionEvent.Execution.Failed, (event) => projectIdle(db, event))
-    yield* bus.project(SessionEvent.Execution.Interrupted, (event) => projectIdle(db, event))
+    yield* bus.project(SessionEvent.Execution.Settled, (event) => projectIdle(db, event))
     yield* bus.project(SessionEvent.InstructionsUpdated, (event) =>
       Effect.gen(function* () {
         yield* run(db, event)
@@ -862,33 +856,21 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.Shell.Ended, (event) => run(db, event))
     yield* bus.project(SessionEvent.Step.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Step.Streamed, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Step.Ended, (event) =>
+    yield* bus.project(SessionEvent.Step.Settled, (event) =>
       Effect.gen(function* () {
         yield* run(db, event)
-        yield* applyUsage(db, event.data.sessionID, event.data)
+        const usage = stepUsage(event.data)
+        if (usage) yield* applyUsage(db, event.data.sessionID, usage)
       }),
     )
-    yield* bus.project(SessionEvent.Step.Failed, (event) =>
-      Effect.gen(function* () {
-        yield* run(db, event)
-        if (event.data.cost !== undefined && event.data.tokens !== undefined)
-          yield* applyUsage(db, event.data.sessionID, { cost: event.data.cost, tokens: event.data.tokens })
-      }),
-    )
-    yield* bus.project(SessionEvent.Text.Started, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Text.Ended, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Tool.Input.Started, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Tool.Input.Ended, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Tool.Called, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Tool.Success, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Tool.Failed, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Block.Recorded, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Tool.Requested, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Tool.Input.Failed, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Tool.Settled, (event) => run(db, event))
     yield* bus.project(SessionEvent.CodeMode.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.CodeMode.Completed, (event) => run(db, event))
     yield* bus.project(SessionEvent.CodeMode.Failed, (event) => run(db, event))
     yield* bus.project(SessionEvent.Invocation.Started, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Reasoning.Started, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Reasoning.Ended, (event) => run(db, event))
-    yield* bus.project(SessionEvent.RetryScheduled, (event) => run(db, event))
     yield* bus.project(SessionEvent.Compaction.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Compaction.Ended, (event) =>
       Effect.gen(function* () {
@@ -958,13 +940,9 @@ const layer = Layer.effectDiscard(
         yield* InstructionState.reset(db, event.data.sessionID)
       }),
     )
-    yield* bus.subscribe([SessionEvent.Step.Ended, SessionEvent.Step.Failed, SessionEvent.UsageRecorded]).pipe(
+    yield* bus.subscribe([SessionEvent.Step.Settled, SessionEvent.UsageRecorded]).pipe(
       Stream.runForEach((event) => {
-        if (
-          event.type === SessionEvent.Step.Failed.type &&
-          (event.data.cost === undefined || event.data.tokens === undefined)
-        )
-          return Effect.void
+        if (event.type === SessionEvent.Step.Settled.type && !stepUsage(event.data)) return Effect.void
         return publishSessionUsage(db, bus, event.data.sessionID)
       }),
       Effect.forkScoped({ startImmediately: true }),

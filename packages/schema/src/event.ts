@@ -70,7 +70,9 @@ export type Payload<D extends Definition = Definition> = D extends DurableDefini
   ? PayloadBase<D> & { readonly durable: DurableEnvelope }
   : PayloadBase<D> & { readonly durable?: never }
 
-type Input<Type extends string, Fields extends Readonly<Record<PropertyKey, Schema.Codec<unknown, unknown>>>> = {
+type Fields = Readonly<Record<PropertyKey, Schema.Codec<unknown, unknown>>>
+
+type Input<Type extends string, Fields> = {
   readonly type: Type
   readonly identifier?: string
   readonly durable?: {
@@ -80,11 +82,16 @@ type Input<Type extends string, Fields extends Readonly<Record<PropertyKey, Sche
   readonly schema: Fields
 }
 
-export function durable<
-  const Type extends string,
-  const Fields extends Readonly<Record<PropertyKey, Schema.Codec<unknown, unknown>>>,
->(input: Input<Type, Fields> & { readonly durable: NonNullable<Input<Type, Fields>["durable"]> }) {
-  const data = Schema.Struct(input.schema)
+/** A payload's schema: a struct of the given fields, or the given schema itself (a union of outcomes). */
+type DataOf<Data> = Data extends Schema.Top ? Data : Data extends Fields ? Schema.Struct<Data> : never
+
+const dataOf = <Data extends Fields | Schema.Codec<unknown, unknown>>(schema: Data) =>
+  (Schema.isSchema(schema) ? schema : Schema.Struct(schema as Fields)) as DataOf<Data>
+
+export function durable<const Type extends string, const Data extends Fields | Schema.Codec<unknown, unknown>>(
+  input: Input<Type, Data> & { readonly durable: NonNullable<Input<Type, Data>["durable"]> },
+) {
+  const data = dataOf(input.schema)
   const durable = Schema.Struct({
     aggregateID: DurableEnvelope.fields.aggregateID,
     seq: DurableEnvelope.fields.seq,
@@ -118,10 +125,9 @@ export function durable<
     ) satisfies DurableDefinition<Type, typeof data>
 }
 
-export function ephemeral<
-  const Type extends string,
-  const Fields extends Readonly<Record<PropertyKey, Schema.Codec<unknown, unknown>>>,
->(input: Omit<Input<Type, Fields>, "durable">) {
+export function ephemeral<const Type extends string, const Data extends Fields>(
+  input: Omit<Input<Type, Data>, "durable">,
+) {
   const data = Schema.Struct(input.schema)
   return Schema.Struct({
     id: ID,

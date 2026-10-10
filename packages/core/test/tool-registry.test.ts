@@ -143,12 +143,13 @@ const waitCodeMode = (output: unknown, id: string) =>
     expect(value.executionID).toStartWith("exe_")
     expect((yield* jobs.get(value.executionID))?.status).toBe("running")
     const bus = yield* Bus.Service
-    yield* bus.publish(SessionEvent.Tool.Success, {
+    yield* bus.publish(SessionEvent.Tool.Settled, {
       sessionID,
       assistantMessageID: identity.messageID,
       id,
       content: [{ type: "text", text: "Execution started" }],
       executed: false,
+      outcome: "succeeded",
     })
     const info = (yield* jobs.wait({ id: value.executionID })).info
     return { ...(yield* readCodeModeOutcome(value.executionID)), summary: info?.output ?? info?.error ?? "" }
@@ -1735,12 +1736,13 @@ describe("Tool", () => {
         .pipe(Effect.forkIn(scope, { startImmediately: true }))
       const executionID = yield* Deferred.await(started)
       // Release the outer tool result so the execution starts, then cancel it while a tool blocks.
-      yield* bus.publish(SessionEvent.Tool.Success, {
+      yield* bus.publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID: identity.messageID,
         id: "call-interrupted",
         content: [{ type: "text", text: "Execution started" }],
         executed: false,
+        outcome: "succeeded",
       })
       const store = yield* CodeModeStore.Service
       while ((yield* store.get(executionID))?.status !== "running") yield* Effect.promise(() => Bun.sleep(1))

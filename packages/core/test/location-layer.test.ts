@@ -98,7 +98,7 @@ describe("LocationServiceMap", () => {
         version: "test",
       })
       yield* TestClock.adjust("59 minutes")
-      const event = yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID })
+      const event = yield* bus.publish(SessionEvent.Execution.Settled, { sessionID, outcome: "succeeded" })
       expect(event).not.toHaveProperty("location")
       yield* TestClock.adjust("2 minutes")
       expect(Array.from(yield* RcMap.keys(locations.rcMap))).toEqual([])
@@ -122,7 +122,7 @@ describe("LocationServiceMap", () => {
       yield* read
       yield* bus.publish(SessionEvent.Execution.Started, { sessionID }, { location: ref })
       yield* TestClock.adjust("59 minutes")
-      yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID }, { location: ref })
+      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID, outcome: "succeeded" }, { location: ref })
       yield* TestClock.adjust("1 minute")
       expect(Array.from(yield* RcMap.keys(locations.rcMap))).toEqual([ref])
       yield* TestClock.adjust("59 minutes")

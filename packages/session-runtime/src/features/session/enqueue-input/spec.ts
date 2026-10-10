@@ -36,7 +36,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
   .scenarios(
     {
       description:
-        "Session.prompt publishes one durable session.inbox.enqueued fact; the input stays pending outside Session History until delivery.",
+        "Session.prompt publishes one durable session-inbox-enqueued fact; the input stays pending outside Session History until delivery.",
       given: [created("ses_1")],
       when: {
         sessionID: "ses_1",

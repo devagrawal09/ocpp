@@ -43,16 +43,16 @@ function settled(outcome: "success" | "interrupted" = "success"): V2Event {
     return {
       id: "evt_interrupted",
       created: 0,
-      type: "session-execution-interrupted",
+      type: "session-execution-settled",
       durable: { aggregateID: "ses_1", seq: 1, version: 1 },
-      data: { sessionID: "ses_1", reason: "user" },
+      data: { sessionID: "ses_1", outcome: "interrupted", reason: "user" },
     }
   return {
     id: "evt_succeeded",
     created: 0,
-    type: "session-execution-succeeded",
+    type: "session-execution-settled",
     durable: { aggregateID: "ses_1", seq: 1, version: 1 },
-    data: { sessionID: "ses_1" },
+    data: { sessionID: "ses_1", outcome: "succeeded" },
   }
 }
 
@@ -75,11 +75,12 @@ function stepFailed(message: string): V2Event {
   return {
     id: "evt_step_failed",
     created: 2,
-    type: "session-step-failed",
+    type: "session-step-settled",
     durable: { aggregateID: "ses_1", seq: 2, version: 1 },
     data: {
       sessionID: "ses_1",
       assistantMessageID: "msg_assistant",
+      outcome: "failed",
       error: { type: "provider.transport", message },
     },
   }
@@ -89,10 +90,11 @@ function executionFailed(message: string): V2Event {
   return {
     id: "evt_execution_failed",
     created: 3,
-    type: "session-execution-failed",
+    type: "session-execution-settled",
     durable: { aggregateID: "ses_1", seq: 3, version: 1 },
     data: {
       sessionID: "ses_1",
+      outcome: "failed",
       error: { type: "provider.transport", message },
     },
   }
@@ -105,7 +107,6 @@ function failedTool(inboxID: string): V2Event[] {
       id: "evt_failed_tool_input",
       created: 1,
       type: "session-tool-input-started",
-      durable: { aggregateID: "ses_1", seq: 1, version: 1 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_failed_tool",
@@ -116,12 +117,13 @@ function failedTool(inboxID: string): V2Event[] {
     {
       id: "evt_failed_tool_called",
       created: 2,
-      type: "session-tool-called",
+      type: "session-tool-requested",
       durable: { aggregateID: "ses_1", seq: 2, version: 1 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_failed_tool",
         id: "call_failed_tool",
+        name: "shell",
         input: { command: "printf partial && false" },
         executed: true,
       },
@@ -140,12 +142,13 @@ function failedTool(inboxID: string): V2Event[] {
     {
       id: "evt_failed_tool_terminal",
       created: 4,
-      type: "session-tool-failed",
-      durable: { aggregateID: "ses_1", seq: 4, version: 2 },
+      type: "session-tool-settled",
+      durable: { aggregateID: "ses_1", seq: 4, version: 1 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_failed_tool",
         id: "call_failed_tool",
+        outcome: "failed",
         error: { type: "unknown", message: "tool failed" },
         metadata: { checkpoint: 1 },
         content: [{ type: "text", text: "partial output" }],
@@ -164,7 +167,6 @@ function successfulGrep(inboxID: string): V2Event[] {
       id: "evt_grep_input",
       created: 1,
       type: "session-tool-input-started",
-      durable: { aggregateID: "ses_1", seq: 1, version: 1 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_grep",
@@ -175,12 +177,13 @@ function successfulGrep(inboxID: string): V2Event[] {
     {
       id: "evt_grep_called",
       created: 2,
-      type: "session-tool-called",
+      type: "session-tool-requested",
       durable: { aggregateID: "ses_1", seq: 2, version: 1 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_grep",
         id: "call_grep",
+        name: "grep",
         input: { pattern: "needle" },
         executed: true,
       },
@@ -188,12 +191,13 @@ function successfulGrep(inboxID: string): V2Event[] {
     {
       id: "evt_grep_success",
       created: 3,
-      type: "session-tool-success",
-      durable: { aggregateID: "ses_1", seq: 3, version: 2 },
+      type: "session-tool-settled",
+      durable: { aggregateID: "ses_1", seq: 3, version: 1 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_grep",
         id: "call_grep",
+        outcome: "succeeded",
         metadata: { matches: 2 },
         content: [{ type: "text", text }],
         executed: false,

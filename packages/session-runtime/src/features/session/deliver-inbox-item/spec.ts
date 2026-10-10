@@ -23,7 +23,7 @@ export const deliverInboxItemSpec = createCommandSlice("deliverInboxItem")
   .description("Delivers a pending inbox item into Session History (session.md: Prompt Admission Precedes Execution).")
   .scenarios(
     {
-      description: "The session.inbox.delivered projection consumes the pending row: a pending item is delivered.",
+      description: "The session-inbox-delivered projection consumes the pending row: a pending item is delivered.",
       given: [created, started(), enqueued("msg_1")],
       when: ref("msg_1"),
       expect: [event("session-inbox-delivered", ref("msg_1"))],

@@ -14,6 +14,7 @@ import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { EventTable } from "@ocpp/core/event/sql"
+import { Recorded } from "./lib/recorded"
 import { InstructionDiscovery } from "@ocpp/core/instruction-discovery"
 import { InstructionBuiltIns } from "@ocpp/core/instructions/builtins"
 import { Instructions } from "@ocpp/core/instructions/index"
@@ -235,18 +236,7 @@ const setup = Effect.gen(function* () {
 
 // The Session's public events, as its log serves them: internal facts share its sequence.
 const publicTypes = new Set<string>(SessionEvent.DurableDefinitions.map((definition) => definition.type))
-const eventTypes = Database.Service.use(({ db }) =>
-  db
-    .select({ type: EventTable.type })
-    .from(EventTable)
-    .where(eq(EventTable.aggregate_id, sessionID))
-    .orderBy(asc(EventTable.seq))
-    .all()
-    .pipe(
-      Effect.orDie,
-      Effect.map((rows) => rows.map((row) => row.type.replace(/\.\d+$/, "")).filter((type) => publicTypes.has(type))),
-    ),
-)
+const eventTypes = Recorded.types(sessionID).pipe(Effect.map((types) => types.filter((type) => publicTypes.has(type))))
 
 // Every table OC++ projects from the log, with its rows. Specter's own tables, the index into the log,
 // migrations, caches and credential keys are not projections.
@@ -306,11 +296,10 @@ describe("Sessions on the Specter runtime", () => {
         "session-instructions-updated",
         "session-inbox-delivered",
         "session-step-started",
-        "session-text-started",
-        "session-text-ended",
+        "session-block-recorded",
         "session-step-streamed",
-        "session-step-ended",
-        "session-execution-succeeded",
+        "session-step-settled",
+        "session-execution-settled",
       ])
     }),
   )
@@ -342,13 +331,12 @@ describe("Sessions on the Specter runtime", () => {
         "session-instructions-updated",
         "session-inbox-delivered",
         "session-step-started",
-        "session-retry-scheduled",
+        "session-step-settled",
         "session-step-started",
-        "session-text-started",
-        "session-text-ended",
+        "session-block-recorded",
         "session-step-streamed",
-        "session-step-ended",
-        "session-execution-succeeded",
+        "session-step-settled",
+        "session-execution-settled",
       ])
     }),
   )
@@ -400,26 +388,24 @@ describe("Sessions on the Specter runtime", () => {
       })
       expect(messages.slice(notice + 1).map((message) => message.type)).toEqual(["assistant"])
       const types = yield* eventTypes
-      expect(types.slice(0, 8)).toEqual([
+      expect(types.slice(0, 6)).toEqual([
         "session-inbox-enqueued",
         "session-execution-started",
         "session-instructions-updated",
         "session-inbox-delivered",
         "session-step-started",
-        "session-tool-input-started",
-        "session-tool-input-ended",
-        "session-tool-called",
+        "session-tool-requested",
       ])
       // The end of the provider stream races the program, which starts and returns its result on the
       // tool call's own fiber.
-      expect(types.slice(8, 11).toSorted()).toEqual([
+      expect(types.slice(6, 9).toSorted()).toEqual([
         "session-codemode-started",
         "session-step-streamed",
-        "session-tool-success",
+        "session-tool-settled",
       ])
-      expect(types.indexOf("session-codemode-started")).toBeLessThan(types.indexOf("session-tool-success"))
+      expect(types.indexOf("session-codemode-started")).toBeLessThan(types.indexOf("session-tool-settled"))
       expect(types).toContain("session-codemode-completed")
-      expect(types.slice(-2)).toEqual(["session-step-ended", "session-execution-succeeded"])
+      expect(types.slice(-2)).toEqual(["session-step-settled", "session-execution-settled"])
     }),
   )
 
@@ -503,8 +489,8 @@ describe("Sessions on the Specter runtime", () => {
       expect(yield* session.active).toEqual(new Set())
       expect(yield* session.interrupt(sessionID)).toBe(false)
       const types = yield* eventTypes
-      expect(types.at(-1)).toBe("session-execution-interrupted")
-      expect(types).not.toContain("session-text-started")
+      expect(types.at(-1)).toBe("session-execution-settled")
+      expect(types).not.toContain("session-block-recorded")
     }),
   )
 
@@ -701,7 +687,7 @@ describe("Sessions on the Specter runtime", () => {
           expect(assistant.at(-1)).toMatchObject({
             content: [{ type: "text", text: "Answered after the restart" }],
           })
-          expect((yield* eventTypes).at(-1)).toBe("session-execution-succeeded")
+          expect((yield* eventTypes).at(-1)).toBe("session-execution-settled")
         }),
       )
     }),
@@ -720,14 +706,14 @@ describe("Sessions on the Specter runtime", () => {
       yield* session.wait(sessionID)
 
       // The runtime delivers the compaction item; OC++ compacts and records its own facts.
-      expect((yield* eventTypes).slice(10)).toEqual([
+      expect((yield* eventTypes).slice(9)).toEqual([
         "session-inbox-enqueued",
         "session-execution-started",
         "session-inbox-delivered",
         "session-compaction-started",
         "session-usage-recorded",
         "session-compaction-ended",
-        "session-execution-succeeded",
+        "session-execution-settled",
       ])
       const last = (yield* session.messages({ sessionID, order: "asc" })).at(-1)
       expect(last?.type).toBe("compaction")
@@ -760,7 +746,7 @@ describe("Sessions on the Specter runtime", () => {
         "session-execution-started",
         "session-inbox-delivered",
         "session-moved",
-        "session-execution-succeeded",
+        "session-execution-settled",
       ])
       const moved = yield* (yield* SessionStore.Service).get(sessionID)
       expect(String(moved?.location.directory)).toBe("/elsewhere")

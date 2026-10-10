@@ -31,7 +31,7 @@ type TurnCompleteNotification = NotificationBase & {
 
 type ErrorNotification = NotificationBase & {
   type: "error"
-  error: Extract<OcppEvent, { type: "session-execution-failed" }>["data"]["error"]
+  error: Extract<Extract<OcppEvent, { type: "session-execution-settled" }>["data"], { outcome: "failed" }>["error"]
 }
 
 export type Notification = TurnCompleteNotification | ErrorNotification
@@ -275,10 +275,10 @@ export function createServerNotificationState(input: { sdk: ServerSDK; data: Dat
   }
 
   const unsub = input.sdk.event.listen((event) => {
-    if (event.type !== "session-execution-succeeded" && event.type !== "session-execution-failed") return
+    if (event.type !== "session-execution-settled" || event.data.outcome === "interrupted") return
 
     const time = Date.now()
-    if (event.type === "session-execution-failed") {
+    if (event.data.outcome === "failed") {
       handleSessionError(event.data.sessionID, event.data.error, event.id, time)
       return
     }

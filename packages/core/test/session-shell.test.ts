@@ -208,6 +208,8 @@ describe("Session.shell", () => {
           "session-shell-started",
           "session-shell-ended",
           "session-inbox-enqueued",
+          // The completion waits for the next wake instead of waking the model.
+          "session-inbox-held",
         ])
         expect(events[1]).toMatchObject({ data: { shell: { metadata: { background: true } } } })
         const messages = yield* fixture.session.messages({ sessionID: fixture.created.id })

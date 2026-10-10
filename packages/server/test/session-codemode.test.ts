@@ -126,8 +126,14 @@ const define = Effect.fnUntraced(function* (sessionID: Session.ID, location: Loc
     agent: Agent.ID.make("build"),
     model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
   })
-  yield* bus.publish(SessionEvent.Tool.Input.Started, { sessionID, assistantMessageID, id, name: "execute" })
-  yield* bus.publish(SessionEvent.Tool.Called, { sessionID, assistantMessageID, id, input: { code }, executed: false })
+  yield* bus.publish(SessionEvent.Tool.Requested, {
+    sessionID,
+    assistantMessageID,
+    id,
+    name: "execute",
+    input: { code },
+    executed: false,
+  })
   const result = yield* Effect.gen(function* () {
     const plugins = yield* PluginSupervisor.Service
     yield* plugins.flush
@@ -142,20 +148,22 @@ const define = Effect.fnUntraced(function* (sessionID: Session.ID, location: Loc
       call: { type: "tool-call", id, name: "execute", input: { code } },
     })
   }).pipe(Effect.provide(locations.get(location)))
-  yield* bus.publish(SessionEvent.Tool.Success, {
+  yield* bus.publish(SessionEvent.Tool.Settled, {
     sessionID,
     assistantMessageID,
     id,
     content: [{ type: "text", text: "started" }],
     executed: false,
+    outcome: "succeeded",
   })
   // As the runner's step ends once its tools settle.
-  yield* bus.publish(SessionEvent.Step.Ended, {
+  yield* bus.publish(SessionEvent.Step.Settled, {
     sessionID,
     assistantMessageID,
     finish: "tool-calls",
     cost: Money.USD.zero,
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    outcome: "succeeded",
   })
   const settled = yield* jobs.wait({ id: decodeStarted(result.output).executionID })
   expect(settled.info?.status).toBe("completed")

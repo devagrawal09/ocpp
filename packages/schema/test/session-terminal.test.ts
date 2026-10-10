@@ -34,10 +34,11 @@ test("assistant terminal diagnostics remain optional and round trip", () => {
 })
 
 test("failed steps only override the assistant finish for content filters", () => {
-  const decode = Schema.decodeUnknownSync(SessionEvent.Step.Failed.data)
+  const decode = Schema.decodeUnknownSync(SessionEvent.Step.Settled.data)
   const input = {
     sessionID: "ses_terminal",
     assistantMessageID: "msg_terminal",
+    outcome: "failed",
     error: { type: "provider.content-filter", message: "Blocked" },
   }
 

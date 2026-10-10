@@ -93,8 +93,9 @@ describe("acp service prompt routing and usage", () => {
           })
           context.send({
             id: "evt_step",
-            type: "session-step-ended",
+            type: "session-step-settled",
             data: {
+              outcome: "succeeded",
               sessionID: "ses_usage",
               assistantMessageID: "msg_assistant",
               finish: "stop",
@@ -104,8 +105,8 @@ describe("acp service prompt routing and usage", () => {
           })
           context.send({
             id: "evt_done",
-            type: "session-execution-succeeded",
-            data: { sessionID: "ses_usage" },
+            type: "session-execution-settled",
+            data: { sessionID: "ses_usage", outcome: "succeeded" },
           })
           return Response.json({ data: {} })
         }
@@ -187,8 +188,9 @@ describe("acp service prompt routing and usage", () => {
           })
           context.send({
             id: "evt_step_failure",
-            type: "session-step-ended",
+            type: "session-step-settled",
             data: {
+              outcome: "succeeded",
               sessionID: "ses_usage_failure",
               assistantMessageID: "msg_usage_failure",
               finish: "stop",
@@ -198,8 +200,8 @@ describe("acp service prompt routing and usage", () => {
           })
           context.send({
             id: "evt_done_failure",
-            type: "session-execution-succeeded",
-            data: { sessionID: "ses_usage_failure" },
+            type: "session-execution-settled",
+            data: { sessionID: "ses_usage_failure", outcome: "succeeded" },
           })
           return Response.json({ data: {} })
         }
@@ -246,7 +248,7 @@ function completeTurn(context: FixtureContext, sessionID: string, start: unknown
   context.send(start)
   context.send({
     id: `evt_done_${sessionID}`,
-    type: "session-execution-succeeded",
-    data: { sessionID },
+    type: "session-execution-settled",
+    data: { sessionID, outcome: "succeeded" },
   })
 }

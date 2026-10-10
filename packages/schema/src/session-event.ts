@@ -231,26 +231,44 @@ export const InboxDeliveryChanged = Event.durable({
 })
 export type InboxDeliveryChanged = typeof InboxDeliveryChanged.Type
 
+/**
+ * An admitted input that waits for the next wake instead of waking the Session (`resume: false`), recorded in its
+ * admission's commit.
+ */
+export const InboxHeld = Event.durable({
+  type: "session-inbox-held",
+  ...options,
+  schema: InboxRef,
+})
+export type InboxHeld = typeof InboxHeld.Type
+
 export namespace Execution {
+  /** A busy period starts: the runtime delivers the Session's input and runs its steps until it settles. */
   export const Started = Event.durable({ type: "session-execution-started", ...options, schema: Base })
   export type Started = typeof Started.Type
 
-  export const Succeeded = Event.durable({ type: "session-execution-succeeded", ...options, schema: Base })
-  export type Succeeded = typeof Succeeded.Type
+  /**
+   * The execution continues a turn the user interrupted, recorded in its start's commit: it takes steering input and
+   * control items, never queued input.
+   */
+  export const Continued = Event.durable({ type: "session-execution-continued", ...options, schema: Base })
+  export type Continued = typeof Continued.Type
 
-  export const Failed = Event.durable({
-    type: "session-execution-failed",
+  /** The one terminal of a busy period, with its outcome. */
+  export const Settled = Event.durable({
+    type: "session-execution-settled",
     ...options,
-    schema: { ...Base, error: SessionError.Error },
+    schema: Schema.Union([
+      Schema.Struct({ ...Base, outcome: Schema.Literal("succeeded") }),
+      Schema.Struct({ ...Base, outcome: Schema.Literal("failed"), error: SessionError.Error }),
+      Schema.Struct({
+        ...Base,
+        outcome: Schema.Literal("interrupted"),
+        reason: Schema.Literals(["user", "shutdown", "superseded"]),
+      }),
+    ]),
   })
-  export type Failed = typeof Failed.Type
-
-  export const Interrupted = Event.durable({
-    type: "session-execution-interrupted",
-    ...options,
-    schema: { ...Base, reason: Schema.Literals(["user", "shutdown", "superseded"]) },
-  })
-  export type Interrupted = typeof Interrupted.Type
+  export type Settled = typeof Settled.Type
 }
 
 export const InstructionsUpdated = Event.durable({
@@ -356,117 +374,89 @@ export namespace Step {
   })
   export type Streamed = typeof Streamed.Type
 
-  export const Ended = Event.durable({
-    type: "session-step-ended",
+  /**
+   * The one terminal of a step's physical attempt. A success says whether another step must follow (tool results to
+   * answer). A failure that is retried carries the retry: the next attempt of the same step, due at `at`, numbered by
+   * the retries so far. A fresh retry runs as a new step, because this attempt's output stands; it keeps the step's
+   * retry budget.
+   */
+  export const Settled = Event.durable({
+    type: "session-step-settled",
     ...options,
-    schema: {
-      ...Base,
-      assistantMessageID: SessionMessage.ID,
-      finish: FinishReason,
-      rawFinish: Schema.String.pipe(optional),
-      providerState: SessionMessage.ProviderState.pipe(optional),
-      cost: Money.USD,
-      tokens: TokenUsage.Info,
-      snapshot: Snapshot.ID.pipe(optional),
-      files: Schema.Array(RelativePath).pipe(optional),
-    },
+    schema: Schema.Union([
+      Schema.Struct({
+        ...Base,
+        assistantMessageID: SessionMessage.ID,
+        finish: FinishReason,
+        rawFinish: Schema.String.pipe(optional),
+        providerState: SessionMessage.ProviderState.pipe(optional),
+        cost: Money.USD,
+        tokens: TokenUsage.Info,
+        snapshot: Snapshot.ID.pipe(optional),
+        files: Schema.Array(RelativePath).pipe(optional),
+        outcome: Schema.Literal("succeeded"),
+        continues: Schema.Literal(true).pipe(optional),
+      }),
+      Schema.Struct({
+        ...Base,
+        assistantMessageID: SessionMessage.ID,
+        error: SessionError.Error,
+        finish: Schema.Literals(["content-filter"]).pipe(optional),
+        rawFinish: Schema.String.pipe(optional),
+        providerState: SessionMessage.ProviderState.pipe(optional),
+        cost: Money.USD.pipe(optional),
+        tokens: TokenUsage.Info.pipe(optional),
+        snapshot: Snapshot.ID.pipe(optional),
+        files: Schema.Array(RelativePath).pipe(optional),
+        outcome: Schema.Literal("failed"),
+        retry: Schema.Struct({
+          attempt: PositiveInt,
+          at: NonNegativeInt,
+          fresh: Schema.Literal(true).pipe(optional),
+        }).pipe(optional),
+      }),
+    ]),
   })
-  export type Ended = typeof Ended.Type
-
-  export const Failed = Event.durable({
-    type: "session-step-failed",
-    ...options,
-    schema: {
-      ...Base,
-      assistantMessageID: SessionMessage.ID,
-      error: SessionError.Error,
-      finish: Schema.Literals(["content-filter"]).pipe(optional),
-      rawFinish: Schema.String.pipe(optional),
-      providerState: SessionMessage.ProviderState.pipe(optional),
-      cost: Money.USD.pipe(optional),
-      tokens: TokenUsage.Info.pipe(optional),
-      snapshot: Snapshot.ID.pipe(optional),
-      files: Schema.Array(RelativePath).pipe(optional),
-    },
-  })
-  export type Failed = typeof Failed.Type
+  export type Settled = typeof Settled.Type
 }
 
-export namespace Text {
-  export const Started = Event.durable({
-    type: "session-text-started",
-    ...options,
-    schema: {
-      ...Base,
-      assistantMessageID: SessionMessage.ID,
-      ordinal: NonNegativeInt,
-    },
+export namespace Block {
+  /** A text or reasoning block. Ordinals count per kind within one attempt of a step. */
+  const BlockBase = {
+    ...Base,
+    assistantMessageID: SessionMessage.ID,
+    kind: Schema.Literals(["text", "reasoning"]),
+    ordinal: NonNegativeInt,
+  }
+
+  /** A block starts streaming. Live only: the recorded block is the replayable value. */
+  export const Started = Event.ephemeral({
+    type: "session-block-started",
+    schema: BlockBase,
   })
   export type Started = typeof Started.Type
 
-  // Stream fragments are live-only; Text.Ended is the replayable full-value boundary.
+  /** A fragment of a streaming block. Live only. */
   export const Delta = Event.ephemeral({
-    type: "session-text-delta",
+    type: "session-block-delta",
     schema: {
-      ...Base,
-      assistantMessageID: SessionMessage.ID,
-      ordinal: NonNegativeInt,
+      ...BlockBase,
       delta: Schema.String,
     },
   })
   export type Delta = typeof Delta.Type
 
-  export const Ended = Event.durable({
-    type: "session-text-ended",
+  /** A finished block of an attempt, with its whole text. */
+  export const Recorded = Event.durable({
+    type: "session-block-recorded",
     ...options,
     schema: {
-      ...Base,
-      assistantMessageID: SessionMessage.ID,
-      ordinal: NonNegativeInt,
+      ...BlockBase,
       text: Schema.String,
       state: SessionMessage.ProviderState.pipe(optional),
     },
   })
-  export type Ended = typeof Ended.Type
-}
-
-export namespace Reasoning {
-  export const Started = Event.durable({
-    type: "session-reasoning-started",
-    ...options,
-    schema: {
-      ...Base,
-      assistantMessageID: SessionMessage.ID,
-      ordinal: NonNegativeInt,
-      state: SessionMessage.ProviderState.pipe(optional),
-    },
-  })
-  export type Started = typeof Started.Type
-
-  // Stream fragments are live-only; Reasoning.Ended is the replayable full-value boundary.
-  export const Delta = Event.ephemeral({
-    type: "session-reasoning-delta",
-    schema: {
-      ...Base,
-      assistantMessageID: SessionMessage.ID,
-      ordinal: NonNegativeInt,
-      delta: Schema.String,
-    },
-  })
-  export type Delta = typeof Delta.Type
-
-  export const Ended = Event.durable({
-    type: "session-reasoning-ended",
-    ...options,
-    schema: {
-      ...Base,
-      assistantMessageID: SessionMessage.ID,
-      ordinal: NonNegativeInt,
-      text: Schema.String,
-      state: SessionMessage.ProviderState.pipe(optional),
-    },
-  })
-  export type Ended = typeof Ended.Type
+  export type Recorded = typeof Recorded.Type
 }
 
 export namespace Tool {
@@ -477,9 +467,9 @@ export namespace Tool {
   }
 
   export namespace Input {
-    export const Started = Event.durable({
+    /** The model starts streaming a call's input. Live only: the requested call is the replayable value. */
+    export const Started = Event.ephemeral({
       type: "session-tool-input-started",
-      ...options,
       schema: {
         ...ToolBase,
         name: Schema.String,
@@ -487,7 +477,7 @@ export namespace Tool {
     })
     export type Started = typeof Started.Type
 
-    // Stream fragments are live-only; Input.Ended is the replayable raw-input boundary.
+    /** A fragment of a call's raw input. Live only. */
     export const Delta = Event.ephemeral({
       type: "session-tool-input-delta",
       schema: {
@@ -497,28 +487,40 @@ export namespace Tool {
     })
     export type Delta = typeof Delta.Type
 
-    export const Ended = Event.durable({
-      type: "session-tool-input-ended",
+    /**
+     * A call whose input never became a call (it stopped streaming, or never parsed): it fails with the raw input it
+     * had.
+     */
+    export const Failed = Event.durable({
+      type: "session-tool-input-failed",
       ...options,
       schema: {
         ...ToolBase,
-        text: Schema.String,
+        name: Schema.String,
+        error: SessionError.Error,
+        content: Schema.NonEmptyArray(Content).pipe(optional),
+        metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
+        executed: Schema.Boolean,
+        resultState: SessionMessage.ProviderState.pipe(optional),
+        text: Schema.String.pipe(optional),
       },
     })
-    export type Ended = typeof Ended.Type
+    export type Failed = typeof Failed.Type
   }
 
-  export const Called = Event.durable({
-    type: "session-tool-called",
+  /** A complete call the model requested, durable before any side effect. */
+  export const Requested = Event.durable({
+    type: "session-tool-requested",
     ...options,
     schema: {
       ...ToolBase,
+      name: Schema.String,
       input: Schema.Record(Schema.String, Schema.Unknown),
       executed: Schema.Boolean,
       state: SessionMessage.ProviderState.pipe(optional),
     },
   })
-  export type Called = typeof Called.Type
+  export type Requested = typeof Requested.Type
 
   /** Live replacement metadata for a running tool. */
   export const Progress = Event.ephemeral({
@@ -530,44 +532,35 @@ export namespace Tool {
   })
   export type Progress = typeof Progress.Type
 
-  /** Canonical terminal success: one non-empty model representation plus optional UI metadata. */
-  export const Success = Event.durable({
-    type: "session-tool-success",
-    durable: {
-      aggregate: "sessionID",
-      version: 2,
-    },
-    schema: {
-      ...ToolBase,
-      content: Schema.NonEmptyArray(Content),
-      metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
-      executed: Schema.Boolean,
-      resultState: SessionMessage.ProviderState.pipe(optional),
-    },
-  })
-  export type Success = typeof Success.Type
-
   /**
-   * Canonical terminal failure: one error plus the final bounded snapshot of
-   * partial progress. The event is self-contained; projection never reaches
-   * into ephemeral progress history.
+   * The one terminal of a requested call. A success has one non-empty model representation plus optional UI metadata;
+   * a failure has one error plus the final bounded snapshot of partial progress. The event is self-contained:
+   * projection never reaches into ephemeral progress history.
    */
-  export const Failed = Event.durable({
-    type: "session-tool-failed",
-    durable: {
-      aggregate: "sessionID",
-      version: 2,
-    },
-    schema: {
-      ...ToolBase,
-      error: SessionError.Error,
-      content: Schema.NonEmptyArray(Content).pipe(optional),
-      metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
-      executed: Schema.Boolean,
-      resultState: SessionMessage.ProviderState.pipe(optional),
-    },
+  export const Settled = Event.durable({
+    type: "session-tool-settled",
+    ...options,
+    schema: Schema.Union([
+      Schema.Struct({
+        ...ToolBase,
+        content: Schema.NonEmptyArray(Content),
+        metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
+        executed: Schema.Boolean,
+        resultState: SessionMessage.ProviderState.pipe(optional),
+        outcome: Schema.Literal("succeeded"),
+      }),
+      Schema.Struct({
+        ...ToolBase,
+        error: SessionError.Error,
+        content: Schema.NonEmptyArray(Content).pipe(optional),
+        metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
+        executed: Schema.Boolean,
+        resultState: SessionMessage.ProviderState.pipe(optional),
+        outcome: Schema.Literal("failed"),
+      }),
+    ]),
   })
-  export type Failed = typeof Failed.Type
+  export type Settled = typeof Settled.Type
 }
 
 export namespace CodeMode {
@@ -643,19 +636,6 @@ export namespace Invocation {
   })
   export type Started = typeof Started.Type
 }
-
-export const RetryScheduled = Event.durable({
-  type: "session-retry-scheduled",
-  ...options,
-  schema: {
-    ...Base,
-    assistantMessageID: SessionMessage.ID,
-    attempt: PositiveInt,
-    at: NonNegativeInt,
-    error: SessionError.Error,
-  },
-})
-export type RetryScheduled = typeof RetryScheduled.Type
 
 export namespace Compaction {
   export const Started = Event.durable({
@@ -733,10 +713,10 @@ export const Definitions = Event.inventory(
   InboxEnqueued,
   InboxCancelled,
   InboxDeliveryChanged,
+  InboxHeld,
   Execution.Started,
-  Execution.Succeeded,
-  Execution.Failed,
-  Execution.Interrupted,
+  Execution.Continued,
+  Execution.Settled,
   InstructionsUpdated,
   Synthetic,
   Displayed,
@@ -745,27 +725,21 @@ export const Definitions = Event.inventory(
   Shell.Ended,
   Step.Started,
   Step.Streamed,
-  Step.Ended,
-  Step.Failed,
-  Text.Started,
-  Text.Delta,
-  Text.Ended,
-  Reasoning.Started,
-  Reasoning.Delta,
-  Reasoning.Ended,
+  Step.Settled,
+  Block.Started,
+  Block.Delta,
+  Block.Recorded,
   Tool.Input.Started,
   Tool.Input.Delta,
-  Tool.Input.Ended,
-  Tool.Called,
+  Tool.Input.Failed,
+  Tool.Requested,
   Tool.Progress,
-  Tool.Success,
-  Tool.Failed,
+  Tool.Settled,
   CodeMode.Started,
   CodeMode.Progress,
   CodeMode.Completed,
   CodeMode.Failed,
   Invocation.Started,
-  RetryScheduled,
   Compaction.Started,
   Compaction.Delta,
   Compaction.Ended,

@@ -44,25 +44,35 @@ describe("session idle error projection", () => {
           .where(eq(SessionTable.id, created.id))
           .get()
 
-      yield* bus.publish(SessionEvent.Execution.Failed, {
+      yield* bus.publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "provider.transport", message: "socket closed" },
+        outcome: "failed",
       })
       expect(yield* row()).toEqual({ outcome: "failed", type: "provider.transport", message: "socket closed" })
 
       // A later success describes the outcome recorded at time_idle, so the stale error goes away.
-      yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: created.id })
+      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: created.id, outcome: "succeeded" })
       expect(yield* row()).toEqual({ outcome: "succeeded", type: null, message: null })
 
-      yield* bus.publish(SessionEvent.Execution.Failed, {
+      yield* bus.publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "unknown", message: "again" },
+        outcome: "failed",
       })
       // Shutdown interruption is not a terminal outcome, so it leaves the recorded failure alone.
-      yield* bus.publish(SessionEvent.Execution.Interrupted, { sessionID: created.id, reason: "shutdown" })
+      yield* bus.publish(SessionEvent.Execution.Settled, {
+        sessionID: created.id,
+        reason: "shutdown",
+        outcome: "interrupted",
+      })
       expect(yield* row()).toEqual({ outcome: "failed", type: "unknown", message: "again" })
 
-      yield* bus.publish(SessionEvent.Execution.Interrupted, { sessionID: created.id, reason: "user" })
+      yield* bus.publish(SessionEvent.Execution.Settled, {
+        sessionID: created.id,
+        reason: "user",
+        outcome: "interrupted",
+      })
       expect(yield* row()).toEqual({ outcome: "interrupted", type: null, message: null })
     }),
   )

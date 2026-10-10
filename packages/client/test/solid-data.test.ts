@@ -482,8 +482,8 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
     publish({
       id: "evt_tool_success",
       created: 3,
-      type: "session-tool-success",
-      durable: { aggregateID: "ses_codemode", seq: 2, version: 2 },
+      type: "session-tool-settled",
+      durable: { aggregateID: "ses_codemode", seq: 2, version: 1 },
       data: {
         sessionID: "ses_codemode",
         assistantMessageID: assistant.id,
@@ -491,6 +491,7 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
         content: [{ type: "text", text: "Code Mode execution started." }],
         metadata: { executionID: "exe_codemode", executionStatus: "running", events: [] },
         executed: false,
+        outcome: "succeeded",
       },
     })
 
@@ -834,12 +835,12 @@ test("preserves assistant content replacement events across an active message re
 })
 
 test.each([
-  "session-execution-succeeded",
-  "session-execution-failed",
-  "session-execution-interrupted",
-  "session-execution-started",
-  "session-deleted",
-] as const)("preserves %s activity when an older snapshot arrives", async (type) => {
+  ["session-execution-settled", "succeeded"],
+  ["session-execution-settled", "failed"],
+  ["session-execution-settled", "interrupted"],
+  ["session-execution-started", undefined],
+  ["session-deleted", undefined],
+] as const)("preserves %s %s activity when an older snapshot arrives", async (type, outcome) => {
   const release = Promise.withResolvers<void>()
   const requested = Promise.withResolvers<void>()
   const setup = activityFixture(async () => {
@@ -862,8 +863,12 @@ test.each([
       created: 2,
       type,
       durable: { aggregateID: "ses_refresh", seq: 2, version: 1 },
-      data: { sessionID: "ses_refresh", reason: "user" },
-    })
+      data: {
+        sessionID: "ses_refresh",
+        ...(outcome === undefined ? {} : { outcome }),
+        ...(outcome === "failed" ? { error: { type: "unknown", message: "failed" } } : { reason: "user" }),
+      },
+    } as OcppEvent)
     expect(setup.data.session.status("ses_refresh")).toBe(type === "session-execution-started" ? "running" : "idle")
     release.resolve()
     await wait(() => setup.data.session.status("ses_hydrated") === "running")
@@ -923,6 +928,117 @@ test("projects background user shell metadata from durable shell data", () => {
     })
     expect(setup.data.session.message.list("ses_refresh")).toMatchObject([
       { type: "shell", shellID: "sh_user", status: "running", metadata: { background: true } },
+    ])
+  } finally {
+    setup.dispose()
+  }
+})
+
+test("renders blocks and tool input while they stream, then the recorded facts", () => {
+  const setup = activityFixture(() => Response.json({ data: {} }))
+  const sessionID = "ses_stream"
+  const assistantMessageID = "msg_stream"
+  let seq = 0
+  let created = 0
+  const durable = () => ({ aggregateID: sessionID, seq: seq++, version: 1 as const })
+  const live = () => ({ id: `evt_live_${created}`, created: ++created })
+  const message = () => {
+    const found = setup.data.session.message.get(sessionID, assistantMessageID)
+    if (found?.type !== "assistant") throw new Error("Assistant message is unavailable")
+    return found
+  }
+  const block = { sessionID, assistantMessageID, ordinal: 0 }
+  try {
+    setup.emit({
+      ...live(),
+      type: "session-step-started",
+      durable: durable(),
+      data: { sessionID, assistantMessageID, agent: "build", model: { id: "model", providerID: "provider" } },
+    })
+    setup.emit({ ...live(), type: "session-block-started", data: { ...block, kind: "reasoning" } })
+    setup.emit({ ...live(), type: "session-block-delta", data: { ...block, kind: "reasoning", delta: "Think" } })
+    expect(message().content).toMatchObject([{ type: "reasoning", text: "Think" }])
+    expect(message().content[0]).not.toHaveProperty("time.completed")
+    setup.emit({ ...live(), type: "session-block-started", data: { ...block, kind: "text" } })
+    setup.emit({ ...live(), type: "session-block-delta", data: { ...block, kind: "text", delta: "Hel" } })
+    setup.emit({ ...live(), type: "session-block-delta", data: { ...block, kind: "text", delta: "lo" } })
+    // Streaming text shows while the reasoning block is still open.
+    expect(message().content).toMatchObject([
+      { type: "reasoning", text: "Think" },
+      { type: "text", text: "Hello" },
+    ])
+    setup.emit({
+      ...live(),
+      type: "session-block-recorded",
+      durable: durable(),
+      data: { ...block, kind: "reasoning", text: "Thinking", state: { signature: "signed" } },
+    })
+    setup.emit({
+      ...live(),
+      type: "session-block-recorded",
+      durable: durable(),
+      data: { ...block, kind: "text", text: "Hello!" },
+    })
+    expect(message().content).toMatchObject([
+      { type: "reasoning", text: "Thinking", state: { signature: "signed" }, time: { completed: expect.any(Number) } },
+      { type: "text", text: "Hello!" },
+    ])
+
+    setup.emit({
+      ...live(),
+      type: "session-tool-input-started",
+      data: { sessionID, assistantMessageID, id: "call_read", name: "read" },
+    })
+    setup.emit({
+      ...live(),
+      type: "session-tool-input-delta",
+      data: { sessionID, assistantMessageID, id: "call_read", delta: '{"path":' },
+    })
+    expect(message().content[2]).toMatchObject({
+      type: "tool",
+      name: "read",
+      state: { status: "streaming", input: '{"path":' },
+    })
+    setup.emit({
+      ...live(),
+      type: "session-tool-requested",
+      durable: durable(),
+      data: { sessionID, assistantMessageID, id: "call_read", name: "read", input: { path: "a.txt" }, executed: false },
+    })
+    expect(message().content).toHaveLength(3)
+    expect(message().content[2]).toMatchObject({ state: { status: "running", input: { path: "a.txt" } } })
+    setup.emit({
+      ...live(),
+      type: "session-tool-settled",
+      durable: durable(),
+      data: {
+        sessionID,
+        assistantMessageID,
+        id: "call_read",
+        outcome: "succeeded",
+        content: [{ type: "text", text: "contents" }],
+        executed: false,
+      },
+    })
+    expect(message().content[2]).toMatchObject({ state: { status: "completed" } })
+
+    // A block whose start was missed starts with its first delta; one that never streamed here is added whole.
+    setup.emit({ ...live(), type: "session-block-delta", data: { ...block, ordinal: 1, kind: "text", delta: "Late" } })
+    setup.emit({
+      ...live(),
+      type: "session-block-recorded",
+      durable: durable(),
+      data: { ...block, ordinal: 1, kind: "text", text: "Later" },
+    })
+    setup.emit({
+      ...live(),
+      type: "session-block-recorded",
+      durable: durable(),
+      data: { ...block, ordinal: 2, kind: "text", text: "Whole" },
+    })
+    expect(message().content.slice(3)).toMatchObject([
+      { type: "text", text: "Later" },
+      { type: "text", text: "Whole" },
     ])
   } finally {
     setup.dispose()

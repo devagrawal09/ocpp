@@ -283,6 +283,12 @@ const texts = (list: ReadonlyArray<SessionMessage.Info>) =>
         : [],
   )
 
+/** A step that failed for good, or before a fresh retry. */
+const failedStep = (event: Bus.LogItem) =>
+  Schema.is(SessionEvent.Step.Settled)(event) &&
+  event.data.outcome === "failed" &&
+  (!event.data.retry || event.data.retry.fresh === true)
+
 describe("vendor-driven sessions", () => {
   it.live("keeps a vendor session's notebook checkpoint until the vendor session is rebuilt", () =>
     Effect.gen(function* () {
@@ -743,7 +749,9 @@ describe("vendor-driven sessions", () => {
       expect(vendor.runs).toHaveLength(0)
       expect((yield* env.sessions.get(env.session.id)).outcome).toBe("failed")
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      const failed = log.find((event) => event.type === SessionEvent.Execution.Failed.type)
+      const failed = log.find(
+        (event) => event.type === SessionEvent.Execution.Settled.type && event.data.outcome === "failed",
+      )
       expect(JSON.stringify(failed)).toContain("Codex is not available on this machine")
       expect(JSON.stringify(failed)).toContain("codex login")
       // The failure answers the prompt in the timeline, as a provider error does, instead of leaving it pending.
@@ -902,7 +910,7 @@ describe("vendor-driven session control", () => {
       expect(vendor.runs).toHaveLength(3)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
       expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
-      expect(log.filter((event) => event.type === SessionEvent.Step.Failed.type)).toHaveLength(2)
+      expect(log.filter(failedStep)).toHaveLength(2)
     }),
   )
 
@@ -1018,7 +1026,7 @@ describe("vendor-driven session control", () => {
       expect(vendor.runs[2].history.map((item) => item.text).join("\n")).toContain("Codex summary")
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
       expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
-      expect(log.filter((event) => event.type === SessionEvent.Step.Failed.type)).toHaveLength(0)
+      expect(log.filter(failedStep)).toHaveLength(0)
     }),
   )
 
@@ -1033,10 +1041,12 @@ describe("vendor-driven session control", () => {
       expect(vendor.runs).toHaveLength(1)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
       expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(0)
-      const failure = log.find((event) => event.type === SessionEvent.Step.Failed.type)
-      expect(failure?.type === SessionEvent.Step.Failed.type && failure.data.error.message).toContain(
-        "OC++ owns session compaction",
-      )
+      const failure = log.find(failedStep)
+      expect(
+        failure?.type === SessionEvent.Step.Settled.type &&
+          failure.data.outcome === "failed" &&
+          failure.data.error.message,
+      ).toContain("OC++ owns session compaction")
       const external = yield* ExternalAgentSession.Service
       expect((yield* external.get(env.session.id))?.checkpoint).toBeUndefined()
       vendor.turn = say("Safe answer")

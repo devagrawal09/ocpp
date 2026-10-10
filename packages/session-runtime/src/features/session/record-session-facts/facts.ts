@@ -1,6 +1,6 @@
-// One payload per durable OC++ event, as OC++ publishes it (captured from OC++'s
-// own test suite, identifiers normalized). Each is valid for OC++'s schema and
-// decodes unchanged, which Specter requires of every stored payload.
+// One payload per durable fact OC++ records, as OC++ publishes it (captured
+// from OC++'s own test suite, identifiers normalized). Each is valid for its
+// schema and decodes unchanged, which Specter requires of every stored payload.
 export const sessionFacts = {
   "session-created": {
     sessionID: "ses_1",
@@ -76,22 +76,23 @@ export const sessionFacts = {
     inboxID: "msg_120d4f1eb0014acSbWw4y75Onf",
     delivery: "steer",
   },
+  "session-inbox-held": {
+    sessionID: "ses_1",
+    inboxID: "msg_held",
+  },
   "session-execution-started": {
     sessionID: "ses_1",
   },
-  "session-execution-succeeded": {
+  "session-execution-continued": {
     sessionID: "ses_1",
   },
-  "session-execution-failed": {
+  "session-execution-settled": {
     sessionID: "ses_1",
+    outcome: "failed",
     error: {
       type: "unknown",
       message: "failed",
     },
-  },
-  "session-execution-interrupted": {
-    sessionID: "ses_1",
-    reason: "user",
   },
   "session-instructions-updated": {
     sessionID: "ses_1",
@@ -169,7 +170,7 @@ export const sessionFacts = {
     sessionID: "ses_1",
     assistantMessageID: "msg_ended",
   },
-  "session-step-ended": {
+  "session-step-settled": {
     sessionID: "ses_1",
     assistantMessageID: "msg_assistant_2",
     finish: "stop",
@@ -183,57 +184,33 @@ export const sessionFacts = {
         write: 1,
       },
     },
+    outcome: "succeeded",
   },
-  "session-step-failed": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_120d46f31001cQVYQHHlOP5V11",
-    error: {
-      type: "aborted",
-      message: "Step interrupted",
-    },
-  },
-  "session-text-started": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_assistant_completed",
-    ordinal: 0,
-  },
-  "session-text-ended": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_120d494790015kgpzR2ebVz1Vv",
-    ordinal: 0,
-    text: "",
-  },
-  "session-reasoning-started": {
+  "session-block-recorded": {
     sessionID: "ses_1",
     assistantMessageID: "msg_120d4673b001gb4MwJTgG2BW7R",
-    ordinal: 0,
-  },
-  "session-reasoning-ended": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_120d4673b001gb4MwJTgG2BW7R",
+    kind: "reasoning",
     ordinal: 0,
     text: "Think",
   },
-  "session-tool-input-started": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_120d46bcb0018vBBYLGAvLOWQT",
-    id: "tool_0",
-    name: "echo",
-  },
-  "session-tool-input-ended": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_120d46bcb0018vBBYLGAvLOWQT",
-    id: "tool_0",
-    text: "",
-  },
-  "session-tool-called": {
+  "session-tool-requested": {
     sessionID: "ses_1",
     assistantMessageID: "msg_120d47b2b001BrE1aLIUaQE9Iu",
     id: "call-defect",
+    name: "echo",
     input: {},
     executed: false,
   },
-  "session-tool-success": {
+  "session-tool-input-failed": {
+    sessionID: "ses_1",
+    assistantMessageID: "msg_assistant_1",
+    id: "call_1",
+    name: "echo",
+    error: { type: "tool.input-json", message: "malformed" },
+    executed: false,
+    text: '{"text":',
+  },
+  "session-tool-settled": {
     sessionID: "ses_1",
     assistantMessageID: "msg_hooks",
     id: "call-hooks",
@@ -244,16 +221,7 @@ export const sessionFacts = {
       },
     ],
     executed: false,
-  },
-  "session-tool-failed": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_120d4673b001gb4MwJTgG2BW7R",
-    id: "call-error",
-    error: {
-      type: "tool.execution",
-      message: "Denied",
-    },
-    executed: true,
+    outcome: "succeeded",
   },
   "session-codemode-started": {
     sessionID: "ses_1",
@@ -289,16 +257,6 @@ export const sessionFacts = {
     input: {
       text: "",
       command: "look",
-    },
-  },
-  "session-retry-scheduled": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_retry_second",
-    attempt: 3,
-    at: 6000,
-    error: {
-      type: "provider.internal",
-      message: "Unavailable",
     },
   },
   "session-compaction-started": {

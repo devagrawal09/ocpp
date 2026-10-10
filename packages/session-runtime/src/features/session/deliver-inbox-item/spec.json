@@ -6,7 +6,7 @@
   "name": "deliverInboxItem",
   "scenarios": [
     {
-      "description": "The session.inbox.delivered projection consumes the pending row: a pending item is delivered.",
+      "description": "The session-inbox-delivered projection consumes the pending row: a pending item is delivered.",
       "expect": [
         {
           "eventType": "session-inbox-delivered",

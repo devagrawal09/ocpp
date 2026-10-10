@@ -59,9 +59,10 @@ const watch = (bus: Bus.Interface, ref?: Location.Ref, gate?: Deferred.Deferred<
 }
 
 const delta = (bus: Bus.Interface) =>
-  bus.publish(SessionEvent.Text.Delta, {
+  bus.publish(SessionEvent.Block.Delta, {
     sessionID: id,
     assistantMessageID: SessionMessage.ID.make("msg_routing"),
+    kind: "text",
     ordinal: 0,
     delta: "text",
   })
@@ -117,7 +118,7 @@ describe("Bus Session routing", () => {
           const eventID = Event.ID.create()
           if (mode === "publish") yield* bus.publish(SessionEvent.Forked, payload, { id: eventID })
           if (mode === "batch") yield* bus.publishAll([[SessionEvent.Forked, payload, { id: eventID }]])
-          const after = yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: child })
+          const after = yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: child, outcome: "succeeded" })
           const done = yield* bus.publish(Done, {})
           expect((yield* Fiber.join(first)).map((event) => event.id)).toEqual([eventID, after.id, done.id])
           expect(yield* Fiber.join(second)).toEqual([done])
@@ -144,7 +145,11 @@ describe("Bus Session routing", () => {
       const renamed = yield* bus.publish(SessionEvent.Renamed, { sessionID: id, title: "first" })
       const text = yield* delta(bus)
       const broadcast = yield* bus.publish(Global, { sessionID: id })
-      const explicit = yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: id }, { location: b })
+      const explicit = yield* bus.publish(
+        SessionEvent.Execution.Settled,
+        { sessionID: id, outcome: "succeeded" },
+        { location: b },
+      )
       const done = yield* bus.publish(Done, {})
 
       expect(yield* Fiber.join(first)).toEqual([renamed, text, broadcast, done])

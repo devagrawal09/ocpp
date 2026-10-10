@@ -1,6 +1,6 @@
 {
   "$schema": "https://specter.dev/specification/v1/slice.schema.json",
-  "description": "Records the Session facts an embedding host published, in order: its own executions as external ones, and its steps' facts in the runtime's consolidated form.",
+  "description": "Records the facts an embedding host published, in order and as given.",
   "formatVersion": 1,
   "kind": "command",
   "name": "recordSessionFacts",
@@ -375,10 +375,35 @@
       }
     },
     {
-      "description": "Records session-execution-started as session-external-execution-started, the runtime's form of that fact.",
+      "description": "Records session-inbox-held as the host published it.",
       "expect": [
         {
-          "eventType": "session-external-execution-started",
+          "eventType": "session-inbox-held",
+          "examplePayload": {
+            "inboxID": "msg_held",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "inboxID": "msg_held",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-held"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-execution-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-execution-started",
           "examplePayload": {
             "sessionID": "ses_1"
           },
@@ -398,12 +423,11 @@
       }
     },
     {
-      "description": "Records session-execution-succeeded as session-external-execution-settled, the runtime's form of that fact.",
+      "description": "Records session-execution-continued as the host published it.",
       "expect": [
         {
-          "eventType": "session-external-execution-settled",
+          "eventType": "session-execution-continued",
           "examplePayload": {
-            "outcome": "succeeded",
             "sessionID": "ses_1"
           },
           "kind": "scenario-event"
@@ -416,16 +440,16 @@
             "payload": {
               "sessionID": "ses_1"
             },
-            "type": "session-execution-succeeded"
+            "type": "session-execution-continued"
           }
         ]
       }
     },
     {
-      "description": "Records session-execution-failed as session-external-execution-settled, the runtime's form of that fact.",
+      "description": "Records session-execution-settled as the host published it.",
       "expect": [
         {
-          "eventType": "session-external-execution-settled",
+          "eventType": "session-execution-settled",
           "examplePayload": {
             "error": {
               "message": "failed",
@@ -446,35 +470,10 @@
                 "message": "failed",
                 "type": "unknown"
               },
+              "outcome": "failed",
               "sessionID": "ses_1"
             },
-            "type": "session-execution-failed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-execution-interrupted as session-external-execution-settled, the runtime's form of that fact.",
-      "expect": [
-        {
-          "eventType": "session-external-execution-settled",
-          "examplePayload": {
-            "outcome": "interrupted",
-            "reason": "user",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "reason": "user",
-              "sessionID": "ses_1"
-            },
-            "type": "session-execution-interrupted"
+            "type": "session-execution-settled"
           }
         ]
       }
@@ -768,7 +767,7 @@
       }
     },
     {
-      "description": "Records session-step-ended as session-step-settled, the runtime's form of that fact.",
+      "description": "Records session-step-settled as the host published it.",
       "expect": [
         {
           "eventType": "session-step-settled",
@@ -799,6 +798,7 @@
               "assistantMessageID": "msg_assistant_2",
               "cost": 1.25,
               "finish": "stop",
+              "outcome": "succeeded",
               "sessionID": "ses_1",
               "tokens": {
                 "cache": {
@@ -810,131 +810,13 @@
                 "reasoning": 2
               }
             },
-            "type": "session-step-ended"
+            "type": "session-step-settled"
           }
         ]
       }
     },
     {
-      "description": "Records session-step-failed as session-step-settled, the runtime's form of that fact.",
-      "expect": [
-        {
-          "eventType": "session-step-settled",
-          "examplePayload": {
-            "assistantMessageID": "msg_120d46f31001cQVYQHHlOP5V11",
-            "error": {
-              "message": "Step interrupted",
-              "type": "aborted"
-            },
-            "outcome": "failed",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_120d46f31001cQVYQHHlOP5V11",
-              "error": {
-                "message": "Step interrupted",
-                "type": "aborted"
-              },
-              "sessionID": "ses_1"
-            },
-            "type": "session-step-failed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-text-started as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-text-started",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_completed",
-            "ordinal": 0,
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_assistant_completed",
-              "ordinal": 0,
-              "sessionID": "ses_1"
-            },
-            "type": "session-text-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-text-ended as session-block-recorded, the runtime's form of that fact.",
-      "expect": [
-        {
-          "eventType": "session-block-recorded",
-          "examplePayload": {
-            "assistantMessageID": "msg_120d494790015kgpzR2ebVz1Vv",
-            "kind": "text",
-            "ordinal": 0,
-            "sessionID": "ses_1",
-            "text": ""
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_120d494790015kgpzR2ebVz1Vv",
-              "ordinal": 0,
-              "sessionID": "ses_1",
-              "text": ""
-            },
-            "type": "session-text-ended"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-reasoning-started as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-reasoning-started",
-          "examplePayload": {
-            "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
-            "ordinal": 0,
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
-              "ordinal": 0,
-              "sessionID": "ses_1"
-            },
-            "type": "session-reasoning-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-reasoning-ended as session-block-recorded, the runtime's form of that fact.",
+      "description": "Records session-block-recorded as the host published it.",
       "expect": [
         {
           "eventType": "session-block-recorded",
@@ -954,75 +836,18 @@
           {
             "payload": {
               "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
+              "kind": "reasoning",
               "ordinal": 0,
               "sessionID": "ses_1",
               "text": "Think"
             },
-            "type": "session-reasoning-ended"
+            "type": "session-block-recorded"
           }
         ]
       }
     },
     {
-      "description": "Records session-tool-input-started as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-tool-input-started",
-          "examplePayload": {
-            "assistantMessageID": "msg_120d46bcb0018vBBYLGAvLOWQT",
-            "id": "tool_0",
-            "name": "echo",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_120d46bcb0018vBBYLGAvLOWQT",
-              "id": "tool_0",
-              "name": "echo",
-              "sessionID": "ses_1"
-            },
-            "type": "session-tool-input-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-tool-input-ended as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-tool-input-ended",
-          "examplePayload": {
-            "assistantMessageID": "msg_120d46bcb0018vBBYLGAvLOWQT",
-            "id": "tool_0",
-            "sessionID": "ses_1",
-            "text": ""
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_120d46bcb0018vBBYLGAvLOWQT",
-              "id": "tool_0",
-              "sessionID": "ses_1",
-              "text": ""
-            },
-            "type": "session-tool-input-ended"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-tool-called as session-tool-requested, the runtime's form of that fact.",
+      "description": "Records session-tool-requested as the host published it.",
       "expect": [
         {
           "eventType": "session-tool-requested",
@@ -1031,7 +856,7 @@
             "executed": false,
             "id": "call-defect",
             "input": {},
-            "name": "unknown",
+            "name": "echo",
             "sessionID": "ses_1"
           },
           "kind": "scenario-event"
@@ -1046,15 +871,57 @@
               "executed": false,
               "id": "call-defect",
               "input": {},
+              "name": "echo",
               "sessionID": "ses_1"
             },
-            "type": "session-tool-called"
+            "type": "session-tool-requested"
           }
         ]
       }
     },
     {
-      "description": "Records session-tool-success as session-tool-settled, the runtime's form of that fact.",
+      "description": "Records session-tool-input-failed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-tool-input-failed",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_1",
+            "error": {
+              "message": "malformed",
+              "type": "tool.input-json"
+            },
+            "executed": false,
+            "id": "call_1",
+            "name": "echo",
+            "sessionID": "ses_1",
+            "text": "{\"text\":"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_assistant_1",
+              "error": {
+                "message": "malformed",
+                "type": "tool.input-json"
+              },
+              "executed": false,
+              "id": "call_1",
+              "name": "echo",
+              "sessionID": "ses_1",
+              "text": "{\"text\":"
+            },
+            "type": "session-tool-input-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-tool-settled as the host published it.",
       "expect": [
         {
           "eventType": "session-tool-settled",
@@ -1088,47 +955,10 @@
               ],
               "executed": false,
               "id": "call-hooks",
+              "outcome": "succeeded",
               "sessionID": "ses_1"
             },
-            "type": "session-tool-success"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-tool-failed as session-tool-input-failed, the runtime's form of that fact.",
-      "expect": [
-        {
-          "eventType": "session-tool-input-failed",
-          "examplePayload": {
-            "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
-            "error": {
-              "message": "Denied",
-              "type": "tool.execution"
-            },
-            "executed": true,
-            "id": "call-error",
-            "name": "unknown",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
-              "error": {
-                "message": "Denied",
-                "type": "tool.execution"
-              },
-              "executed": true,
-              "id": "call-error",
-              "sessionID": "ses_1"
-            },
-            "type": "session-tool-failed"
+            "type": "session-tool-settled"
           }
         ]
       }
@@ -1269,43 +1099,6 @@
               }
             },
             "type": "session-invocation-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-retry-scheduled as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-retry-scheduled",
-          "examplePayload": {
-            "assistantMessageID": "msg_retry_second",
-            "at": 6000,
-            "attempt": 3,
-            "error": {
-              "message": "Unavailable",
-              "type": "provider.internal"
-            },
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_retry_second",
-              "at": 6000,
-              "attempt": 3,
-              "error": {
-                "message": "Unavailable",
-                "type": "provider.internal"
-              },
-              "sessionID": "ses_1"
-            },
-            "type": "session-retry-scheduled"
           }
         ]
       }
@@ -2848,164 +2641,6 @@
               "replacement": "cred_2"
             },
             "type": "credential-removed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "A requested call that fails is settled; one never requested failed as input, with the raw input it had.",
-      "expect": [
-        {
-          "eventType": "session-tool-input-failed",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_1",
-            "error": {
-              "message": "malformed",
-              "type": "tool.input-json"
-            },
-            "executed": false,
-            "id": "call_1",
-            "name": "echo",
-            "sessionID": "ses_1",
-            "text": "{\"text\":"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [
-        {
-          "eventType": "session-tool-input-started",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_1",
-            "id": "call_1",
-            "name": "echo",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        },
-        {
-          "eventType": "session-tool-input-ended",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_1",
-            "id": "call_1",
-            "sessionID": "ses_1",
-            "text": "{\"text\":"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_assistant_1",
-              "error": {
-                "message": "malformed",
-                "type": "tool.input-json"
-              },
-              "executed": false,
-              "id": "call_1",
-              "sessionID": "ses_1"
-            },
-            "type": "session-tool-failed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "A requested call that fails is settled.",
-      "expect": [
-        {
-          "eventType": "session-tool-settled",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_1",
-            "error": {
-              "message": "Tool execution interrupted",
-              "type": "aborted"
-            },
-            "executed": false,
-            "id": "call_1",
-            "outcome": "failed",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [
-        {
-          "eventType": "session-tool-requested",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_1",
-            "executed": false,
-            "id": "call_1",
-            "input": {},
-            "name": "echo",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_assistant_1",
-              "error": {
-                "message": "Tool execution interrupted",
-                "type": "aborted"
-              },
-              "executed": false,
-              "id": "call_1",
-              "sessionID": "ses_1"
-            },
-            "type": "session-tool-failed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "A requested call takes its name from the start of the call's input.",
-      "expect": [
-        {
-          "eventType": "session-tool-requested",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_1",
-            "executed": false,
-            "id": "call_1",
-            "input": {
-              "text": "hi"
-            },
-            "name": "echo",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [
-        {
-          "eventType": "session-tool-input-started",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_1",
-            "id": "call_1",
-            "name": "echo",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_assistant_1",
-              "executed": false,
-              "id": "call_1",
-              "input": {
-                "text": "hi"
-              },
-              "sessionID": "ses_1"
-            },
-            "type": "session-tool-called"
           }
         ]
       }

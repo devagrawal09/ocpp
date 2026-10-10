@@ -6,7 +6,7 @@
   "name": "enqueueInput",
   "scenarios": [
     {
-      "description": "Session.prompt publishes one durable session.inbox.enqueued fact; the input stays pending outside Session History until delivery.",
+      "description": "Session.prompt publishes one durable session-inbox-enqueued fact; the input stays pending outside Session History until delivery.",
       "expect": [
         {
           "eventType": "session-inbox-enqueued",

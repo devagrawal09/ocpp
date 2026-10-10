@@ -1,39 +1,51 @@
 export * as Recorded from "./recorded.js"
 
-import { asc, eq, getTableColumns, type SQL } from "drizzle-orm"
+import { asc, eq, type SQL } from "drizzle-orm"
 import { Effect } from "effect"
 import { Database } from "@ocpp/core/database/database"
 import { EventTable } from "@ocpp/core/event/sql"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
-import { SpecterTranslate } from "@ocpp/core/specter/translate"
 
 /**
- * Recorded events in the order they were recorded, each with its data as recorded (encoded): read from
- * Specter's log through the event index. `where` filters the index (`EventTable` columns).
+ * Recorded events in the order they were recorded, each with its data as recorded (encoded): the facts in
+ * Specter's log, with their aggregate sequence from the event index. `where` filters the index (`EventTable`
+ * columns) or the log (`SpecterEventTable` columns).
  */
 export const events = (where?: SQL) =>
   Effect.gen(function* () {
     const { db } = yield* Database.Service
-    const rows = yield* db
+    return yield* db
       .select({
-        ...getTableColumns(EventTable),
-        fact: {
-          id: SpecterEventTable.id,
-          order: SpecterEventTable.order,
-          type: SpecterEventTable.type,
-          payload: SpecterEventTable.payload,
-          recordedAt: SpecterEventTable.recorded_at,
-        },
+        id: SpecterEventTable.id,
+        aggregate_id: EventTable.aggregate_id,
+        seq: EventTable.seq,
+        type: SpecterEventTable.type,
+        data: SpecterEventTable.payload,
       })
       .from(EventTable)
       .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
       .where(where)
-      .orderBy(asc(EventTable.log_order), asc(EventTable.seq))
+      .orderBy(asc(EventTable.log_order))
       .all()
-      .pipe(Effect.orDie)
-    return rows.map(({ fact, log_order: _, ...row }) => ({
-      ...row,
-      // One of the fact's translations: the one that carries the event's ID.
-      data: SpecterTranslate.toWire(fact).find((wire) => wire.id === row.id)?.data as Record<string, unknown>,
-    }))
+      .pipe(
+        Effect.orDie,
+        Effect.map((rows) => rows.map((row) => ({ ...row, data: row.data as Record<string, unknown> }))),
+      )
+  })
+
+/** The types of an aggregate's recorded events, in sequence order. */
+export const types = (aggregateID: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database.Service
+    return yield* db
+      .select({ type: SpecterEventTable.type })
+      .from(EventTable)
+      .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+      .where(eq(EventTable.aggregate_id, aggregateID))
+      .orderBy(asc(EventTable.seq))
+      .all()
+      .pipe(
+        Effect.orDie,
+        Effect.map((rows) => rows.map((row) => row.type)),
+      )
   })

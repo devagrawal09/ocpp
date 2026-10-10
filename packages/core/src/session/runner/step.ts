@@ -95,7 +95,7 @@ export const make = Effect.gen(function* () {
     }
 
     // Provider and tool fibers retain per-source order without a shared writer queue.
-    // A local execution starts only after its Tool.Called publication completes.
+    // A local execution starts only after its Tool.Requested publication completes.
     let overflowFailure: ProviderErrorEvent | undefined
     // Read to the end, not just the finish event, so the next request can reuse this response.
     const providerStream = llm.stream(input.prepared.request, input.prepared.options).pipe(
@@ -221,9 +221,10 @@ export const make = Effect.gen(function* () {
             : undefined
           if (record.failure) yield* publisher.publishStepFailure({ ...usage, snapshot, files })
           if (record.finish && usage && !record.failure)
-            yield* bus.publish(SessionEvent.Step.Ended, {
+            yield* bus.publish(SessionEvent.Step.Settled, {
               sessionID: input.sessionID,
               assistantMessageID: yield* publisher.startAssistant(),
+              outcome: "succeeded",
               finish: record.finish.finish,
               rawFinish: record.finish.rawFinish,
               providerState: record.finish.providerState,

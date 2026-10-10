@@ -6,6 +6,7 @@ import { Bus } from "@ocpp/core/bus"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { EventTable } from "@ocpp/core/event/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { Location } from "@ocpp/core/location"
 import { Model } from "@ocpp/core/model"
 import { Project } from "@ocpp/core/project"
@@ -43,12 +44,13 @@ const start = (bus: Bus.Interface, sessionID: Session.ID, messageID: SessionMess
   })
 
 const complete = (bus: Bus.Interface, sessionID: Session.ID, messageID: SessionMessage.ID) =>
-  bus.publish(SessionEvent.Step.Ended, {
+  bus.publish(SessionEvent.Step.Settled, {
     sessionID,
     assistantMessageID: messageID,
     finish: "stop",
     cost: Money.USD.make(0),
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    outcome: "succeeded",
   })
 
 describe("Session.updateMessage", () => {
@@ -89,9 +91,7 @@ describe("Session.updateMessage", () => {
         },
       })
       expect(
-        (yield* Recorded.events(eq(EventTable.type, Bus.versionedType(SessionEvent.MessageContentUpdated.type, 1)))).at(
-          0,
-        ),
+        (yield* Recorded.events(eq(SpecterEventTable.type, SessionEvent.MessageContentUpdated.type))).at(0),
       ).toMatchObject({ aggregate_id: created.id, data: { messageID } })
 
       expect((yield* session.updateMessage({ sessionID: created.id, messageID, content: [] })).content).toEqual([])

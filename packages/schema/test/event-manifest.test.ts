@@ -59,7 +59,7 @@ describe("public event manifest", () => {
     expect(Session.Event.Definitions).toBe(SessionEvent.Definitions)
     expect(Workspace.Event).toBe(WorkspaceEvent)
     expect(Workspace.Event.Definitions).toBe(WorkspaceEvent.Definitions)
-    expect(EventManifest.Latest.get("session-step-ended")).toBe(SessionEvent.Step.Ended)
+    expect(EventManifest.Latest.get("session-step-settled")).toBe(SessionEvent.Step.Settled)
     expect(EventManifest.Latest.get("agent-updated")).toBe(Agent.Event.Updated)
     expect(EventManifest.Latest.get("project-updated")).toBe(Project.Event.Updated)
     expect(Agent.Event.Definitions).toEqual([Agent.Event.Updated])
@@ -77,8 +77,8 @@ describe("public event manifest", () => {
     expect(EventManifest.Latest.has("mcp-browser-open-failed")).toBe(false)
     expect(EventManifest.Latest.has("ide-installed")).toBe(false)
     expect(IdeEvent.Definitions).toEqual([IdeEvent.Installed])
-    expect(EventManifest.Durable.get("session-step-ended.1")).toBe(SessionEvent.Step.Ended)
-    expect(EventManifest.Durable.has("session-step-ended.2")).toBe(false)
+    expect(EventManifest.Durable.get("session-step-settled.1")).toBe(SessionEvent.Step.Settled)
+    expect(EventManifest.Durable.has("session-step-settled.2")).toBe(false)
   })
 
   test("keeps credential events public, canonical, and ephemeral", () => {
@@ -105,9 +105,9 @@ describe("public event manifest", () => {
     })
     expect(EventManifest.Server.has("credential-created")).toBe(false)
     expect(EventManifest.Server.has("credential-activated")).toBe(false)
-    expect(EventManifest.Server.has("credential.deleted")).toBe(false)
-    expect(EventManifest.Server.has("integration.connection.updated")).toBe(false)
-    expect(EventManifest.Latest.has("integration.connection.updated")).toBe(false)
+    expect(EventManifest.Server.has("credential-deleted")).toBe(false)
+    expect(EventManifest.Server.has("integration-connection-updated")).toBe(false)
+    expect(EventManifest.Latest.has("integration-connection-updated")).toBe(false)
   })
 
   test("derives durable definitions from explicit definition durability", () => {
@@ -131,10 +131,10 @@ describe("public event manifest", () => {
         "session-inbox-enqueued.1",
         "session-inbox-cancelled.1",
         "session-inbox-delivery-changed.1",
+        "session-inbox-held.1",
         "session-execution-started.1",
-        "session-execution-succeeded.1",
-        "session-execution-failed.1",
-        "session-execution-interrupted.1",
+        "session-execution-continued.1",
+        "session-execution-settled.1",
         "session-instructions-updated.2",
         "session-invocation-started.1",
         "session-synthetic.1",
@@ -144,21 +144,14 @@ describe("public event manifest", () => {
         "session-shell-ended.1",
         "session-step-started.1",
         "session-step-streamed.1",
-        "session-step-ended.1",
-        "session-step-failed.1",
-        "session-text-started.1",
-        "session-text-ended.1",
-        "session-tool-input-started.1",
-        "session-tool-input-ended.1",
-        "session-tool-called.1",
-        "session-tool-success.2",
-        "session-tool-failed.2",
+        "session-step-settled.1",
+        "session-block-recorded.1",
+        "session-tool-input-failed.1",
+        "session-tool-requested.1",
+        "session-tool-settled.1",
         "session-codemode-started.1",
         "session-codemode-completed.1",
         "session-codemode-failed.1",
-        "session-reasoning-started.1",
-        "session-reasoning-ended.1",
-        "session-retry-scheduled.1",
         "session-compaction-started.1",
         "session-compaction-ended.1",
         "session-compaction-failed.1",
@@ -242,33 +235,45 @@ describe("public event manifest", () => {
     expect(EventManifest.Latest.get("session-skill-activated")).toBe(SessionEvent.Skill.Activated)
   })
 
-  test("keeps simplified session fragment and tool payloads on durable version 1", () => {
+  test("keeps simplified session block and tool payloads on durable version 1", () => {
     const sessionID = SessionID.make("ses_test")
     const assistantMessageID = SessionMessage.ID.make("msg_test")
-    const text = SessionEvent.Text.Started.data.make({ sessionID, assistantMessageID, ordinal: 0 })
-    const reasoning = SessionEvent.Reasoning.Ended.data.make({
+    const block = SessionEvent.Block.Recorded.data.make({
       sessionID,
       assistantMessageID,
+      kind: "reasoning",
       ordinal: 0,
       text: "thought",
       state: { signature: "sig" },
     })
-    const tool = SessionEvent.Tool.Called.data.make({
+    const tool = SessionEvent.Tool.Requested.data.make({
       sessionID,
       assistantMessageID,
       id: "call_test",
+      name: "read",
       input: {},
       executed: true,
       state: { itemId: "item_test" },
     })
 
-    expect(text).not.toHaveProperty("textID")
-    expect(reasoning).not.toHaveProperty("reasoningID")
-    expect(reasoning).not.toHaveProperty("providerMetadata")
+    expect(block).not.toHaveProperty("reasoningID")
+    expect(block).not.toHaveProperty("providerMetadata")
     expect(tool).not.toHaveProperty("tool")
     expect(tool).not.toHaveProperty("provider")
-    expect(SessionEvent.Text.Started.durable?.version).toBe(1)
-    expect(SessionEvent.Tool.Called.durable?.version).toBe(1)
+    expect(SessionEvent.Block.Recorded.durable?.version).toBe(1)
+    expect(SessionEvent.Tool.Requested.durable?.version).toBe(1)
+  })
+
+  test("streams blocks and tool input live only", () => {
+    for (const definition of [
+      SessionEvent.Block.Started,
+      SessionEvent.Block.Delta,
+      SessionEvent.Tool.Input.Started,
+      SessionEvent.Tool.Input.Delta,
+    ]) {
+      expect(definition.durability).toBe("ephemeral")
+      expect(EventManifest.Server.get(definition.type)).toBe(definition)
+    }
   })
 
   test("keeps current session deletion minimal", () => {

@@ -7,6 +7,7 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
 import { Event } from "@ocpp/schema/event"
 import { EventTable } from "@ocpp/core/event/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { Instructions } from "@ocpp/core/instructions/index"
 import { Project } from "@ocpp/core/project"
 import { ProjectTable } from "@ocpp/core/project/sql"
@@ -61,7 +62,9 @@ const setup = (sessionID: SessionSchema.ID) =>
   })
 
 const instructionEvents = (sessionID: SessionSchema.ID) =>
-  Recorded.events(and(eq(EventTable.aggregate_id, sessionID), eq(EventTable.type, "session-instructions-updated.2")))
+  Recorded.events(
+    and(eq(EventTable.aggregate_id, sessionID), eq(SpecterEventTable.type, "session-instructions-updated")),
+  )
 
 const preview = (db: Database.Interface["db"], sessionID: SessionSchema.ID, instructions: Instructions.List) =>
   Instructions.read(instructions).pipe(

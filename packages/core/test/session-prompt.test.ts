@@ -12,6 +12,8 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Bus } from "@ocpp/core/bus"
 import { EventTable } from "@ocpp/core/event/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { Recorded } from "./lib/recorded"
 import { Location } from "@ocpp/schema/location"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { Model } from "@ocpp/core/model"
@@ -146,19 +148,9 @@ const admittedCount = Database.Service.use(({ db }) =>
     ),
 )
 const eventCount = (type: string) =>
-  Database.Service.use(({ db }) =>
-    db
-      .select()
-      .from(EventTable)
-      .where(eq(EventTable.type, type))
-      .all()
-      .pipe(
-        Effect.orDie,
-        Effect.map((rows) => rows.length),
-      ),
-  )
+  Recorded.events(eq(SpecterEventTable.type, type)).pipe(Effect.map((rows) => rows.length))
 
-const executionsStarted = eventCount(Bus.versionedType(SessionEvent.Execution.Started.type, 1))
+const executionsStarted = eventCount(SessionEvent.Execution.Started.type)
 
 const encodeMessage = Schema.encodeSync(SessionMessage.Info)
 const assistantRow = (id: SessionMessage.ID, seq: number) => {
@@ -637,7 +629,7 @@ describe("Session.prompt", () => {
         session
           .log({ ...input, follow: true })
           .pipe(Stream.filter((item): item is SessionEvent.DurableEvent => !Bus.isSynced(item)))
-      const fiber = yield* publicEvents({ sessionID }).pipe(Stream.take(6), Stream.runCollect, Effect.forkScoped)
+      const fiber = yield* publicEvents({ sessionID }).pipe(Stream.take(8), Stream.runCollect, Effect.forkScoped)
       yield* Effect.yieldNow
 
       yield* session.prompt({ sessionID, text: "First", resume: false })
@@ -647,17 +639,19 @@ describe("Session.prompt", () => {
 
       expect(streamed.map((event): [number | undefined, string] => [event.durable?.seq, event.type])).toEqual([
         [0, "session-inbox-enqueued"],
-        [1, "session-inbox-enqueued"],
-        [2, "session-execution-started"],
-        [3, "session-inbox-delivered"],
-        [4, "session-inbox-delivered"],
-        [5, "session-execution-succeeded"],
+        [1, "session-inbox-held"],
+        [2, "session-inbox-enqueued"],
+        [3, "session-inbox-held"],
+        [4, "session-execution-started"],
+        [5, "session-inbox-delivered"],
+        [6, "session-inbox-delivered"],
+        [7, "session-execution-settled"],
       ])
       expect(
         Array.from(
           yield* publicEvents({ sessionID, after: streamed[0].durable?.seq }).pipe(Stream.take(1), Stream.runCollect),
         ).map((event): [number | undefined, string] => [event.durable?.seq, event.type]),
-      ).toEqual([[1, "session-inbox-enqueued"]])
+      ).toEqual([[1, "session-inbox-held"]])
     }),
   )
 
@@ -835,7 +829,7 @@ describe("Session.prompt", () => {
       expect(messages[1]).toEqual(messages[0])
       expect(yield* session.messages({ sessionID })).toEqual([])
       expect(yield* admittedCount).toBe(1)
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxEnqueued.type, 1))).toBe(1)
+      expect(yield* eventCount(SessionEvent.InboxEnqueued.type)).toBe(1)
     }),
   )
 
@@ -852,7 +846,7 @@ describe("Session.prompt", () => {
 
       yield* Effect.all([session.resume(sessionID), session.resume(sessionID)], { concurrency: "unbounded" })
 
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxDelivered.type, 1))).toBe(1)
+      expect(yield* eventCount(SessionEvent.InboxDelivered.type)).toBe(1)
       expect(yield* admitted(messageID)).toBeUndefined()
       expect(yield* session.messages({ sessionID })).toMatchObject([
         { id: messageID, type: "user", text: "Promote once" },
@@ -1082,7 +1076,7 @@ describe("Session.prompt", () => {
       expect(promotedRetry).toMatchObject({ id: messageID, type: "synthetic", payload: { text: "Completed" } })
       expect(differing).toMatchObject({ id: messageID, type: "synthetic", payload: { text: "Completed" } })
       expect(yield* admittedCount).toBe(0)
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxEnqueued.type, 1))).toBe(1)
+      expect(yield* eventCount(SessionEvent.InboxEnqueued.type)).toBe(1)
     }),
   )
 
@@ -1239,13 +1233,13 @@ describe("Session.inbox", () => {
       yield* session.cancelInbox({ sessionID, inboxID: inputID })
 
       expect(yield* session.inbox(sessionID)).toEqual([])
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxCancelled.type, 1))).toBe(1)
+      expect(yield* eventCount(SessionEvent.InboxCancelled.type)).toBe(1)
       expect(yield* session.cancelInbox({ sessionID, inboxID: inputID }).pipe(Effect.flip)).toMatchObject({
         _tag: "Session.InboxConflictError",
         sessionID,
         inboxID: inputID,
       })
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxCancelled.type, 1))).toBe(1)
+      expect(yield* eventCount(SessionEvent.InboxCancelled.type)).toBe(1)
 
       // The runtime admits an ID once: a cancelled one is not admitted again.
       expect(
@@ -1276,14 +1270,14 @@ describe("Session.inbox", () => {
         { id: queued.id, delivery: "steer" },
         { id: alreadySteered.id, delivery: "steer" },
       ])
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxDeliveryChanged.type, 1))).toBe(1)
+      expect(yield* eventCount(SessionEvent.InboxDeliveryChanged.type)).toBe(1)
 
       yield* session.queueInbox({ sessionID, inboxID: queued.id })
       expect(yield* session.inbox(sessionID)).toMatchObject([
         { id: queued.id, delivery: "queue" },
         { id: alreadySteered.id, delivery: "steer" },
       ])
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxDeliveryChanged.type, 1))).toBe(2)
+      expect(yield* eventCount(SessionEvent.InboxDeliveryChanged.type)).toBe(2)
 
       expect(yield* session.steerInbox({ sessionID, inboxID: alreadySteered.id }).pipe(Effect.flip)).toMatchObject({
         _tag: "Session.InboxConflictError",
@@ -1291,8 +1285,8 @@ describe("Session.inbox", () => {
         inboxID: alreadySteered.id,
       })
       yield* session.cancelInbox({ sessionID, inboxID: alreadySteered.id })
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxDeliveryChanged.type, 1))).toBe(2)
-      expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxCancelled.type, 1))).toBe(1)
+      expect(yield* eventCount(SessionEvent.InboxDeliveryChanged.type)).toBe(2)
+      expect(yield* eventCount(SessionEvent.InboxCancelled.type)).toBe(1)
 
       // Steering the queued input again wakes the Session: the input enters at the next boundary.
       yield* session.steerInbox({ sessionID, inboxID: queued.id })

@@ -246,14 +246,10 @@ it.effect(
         agent: Agent.ID.make("build"),
         model: { id: ID.make("generate-model"), providerID: Provider.ID.make("test") },
       })
-      yield* bus.publish(SessionEvent.Text.Started, {
+      yield* bus.publish(SessionEvent.Block.Recorded, {
         sessionID,
         assistantMessageID: settledAssistant,
-        ordinal: 0,
-      })
-      yield* bus.publish(SessionEvent.Text.Ended, {
-        sessionID,
-        assistantMessageID: settledAssistant,
+        kind: "text",
         ordinal: 0,
         text: "Settled partial answer",
       })
@@ -264,22 +260,11 @@ it.effect(
         agent: Agent.ID.make("build"),
         model: { id: ID.make("generate-model"), providerID: Provider.ID.make("test") },
       })
-      yield* bus.publish(SessionEvent.Tool.Input.Started, {
+      yield* bus.publish(SessionEvent.Tool.Requested, {
         sessionID,
         assistantMessageID: activeAssistant,
         id: "active-call",
         name: "echo",
-      })
-      yield* bus.publish(SessionEvent.Tool.Input.Ended, {
-        sessionID,
-        assistantMessageID: activeAssistant,
-        id: "active-call",
-        text: "{}",
-      })
-      yield* bus.publish(SessionEvent.Tool.Called, {
-        sessionID,
-        assistantMessageID: activeAssistant,
-        id: "active-call",
         input: {},
         executed: false,
       })

@@ -140,8 +140,14 @@ const execute = Effect.fnUntraced(function* (context: Setup, code: string) {
     agent: Agent.ID.make("build"),
     model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
   })
-  yield* bus.publish(SessionEvent.Tool.Input.Started, { sessionID, assistantMessageID, id, name: "execute" })
-  yield* bus.publish(SessionEvent.Tool.Called, { sessionID, assistantMessageID, id, input: { code }, executed: false })
+  yield* bus.publish(SessionEvent.Tool.Requested, {
+    sessionID,
+    assistantMessageID,
+    id,
+    name: "execute",
+    input: { code },
+    executed: false,
+  })
   const result = yield* context.within(
     Effect.gen(function* () {
       const agents = yield* Agent.Service
@@ -158,21 +164,23 @@ const execute = Effect.fnUntraced(function* (context: Setup, code: string) {
     }),
   )
   // Like the runner, the tool result keeps the execution ID in its metadata.
-  yield* bus.publish(SessionEvent.Tool.Success, {
+  yield* bus.publish(SessionEvent.Tool.Settled, {
     sessionID,
     assistantMessageID,
     id,
     content: [{ type: "text", text: "started" }],
     ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
     executed: false,
+    outcome: "succeeded",
   })
   // As the runner's step ends once its tools settle.
-  yield* bus.publish(SessionEvent.Step.Ended, {
+  yield* bus.publish(SessionEvent.Step.Settled, {
     sessionID,
     assistantMessageID,
     finish: "tool-calls",
     cost: Money.USD.zero,
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    outcome: "succeeded",
   })
   const executionID = decodeStarted(result.output).executionID
   const settled = yield* jobs.wait({ id: executionID })

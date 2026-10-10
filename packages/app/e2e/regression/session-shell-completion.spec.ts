@@ -173,9 +173,10 @@ test("shows the authoritative foreground result after streaming shell output", a
   await timeline.transport.send({
     id: "evt_foreground_complete",
     created: 3,
-    type: "session-tool-success",
-    durable: { aggregateID: sessionID, seq: 0, version: 2 },
+    type: "session-tool-settled",
+    durable: { aggregateID: sessionID, seq: 0, version: 1 },
     data: {
+      outcome: "succeeded",
       sessionID,
       assistantMessageID: "msg_foreground",
       id: "call_foreground",

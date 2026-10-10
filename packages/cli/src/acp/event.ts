@@ -173,19 +173,10 @@ export async function streamTurn(input: {
         if (!child) assistantMessageID = event.data.assistantMessageID
         continue
       }
-      if (event.type === "session-text-delta") {
+      if (event.type === "session-block-delta") {
         if (!child) assistantMessageID = event.data.assistantMessageID
         await send({
-          sessionUpdate: "agent_message_chunk",
-          messageId: event.data.assistantMessageID,
-          content: { type: "text", text: event.data.delta },
-        })
-        continue
-      }
-      if (event.type === "session-reasoning-delta") {
-        if (!child) assistantMessageID = event.data.assistantMessageID
-        await send({
-          sessionUpdate: "agent_thought_chunk",
+          sessionUpdate: event.data.kind === "text" ? "agent_message_chunk" : "agent_thought_chunk",
           messageId: event.data.assistantMessageID,
           content: { type: "text", text: event.data.delta },
         })
@@ -210,10 +201,22 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session-tool-called") {
+      if (event.type === "session-tool-requested") {
         if (!child) assistantMessageID = event.data.assistantMessageID
         const key = toolKey(event.data.sessionID, event.data.id)
-        const current = tools.get(key) ?? emptyToolState()
+        const announced = tools.get(key)
+        // A call whose input did not stream here is announced with its request.
+        if (!announced)
+          await send({
+            sessionUpdate: "tool_call",
+            ...pendingToolCall({
+              toolCallId: event.data.id,
+              toolName: event.data.name,
+              state: { input: {} },
+              cwd: input.cwd,
+            }),
+          })
+        const current = announced ?? { ...emptyToolState(), name: event.data.name }
         current.input = event.data.input
         tools.set(key, current)
         await send({
@@ -242,7 +245,7 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session-tool-success") {
+      if (event.type === "session-tool-settled" && event.data.outcome === "succeeded") {
         const key = toolKey(event.data.sessionID, event.data.id)
         const current = tools.get(key) ?? emptyToolState()
         tools.delete(key)
@@ -267,53 +270,62 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session-tool-failed") {
-        const key = toolKey(event.data.sessionID, event.data.id)
-        const current = tools.get(key) ?? emptyToolState()
+      // A requested call that failed, or one whose input never became a call.
+      const failure =
+        event.type === "session-tool-input-failed"
+          ? event.data
+          : event.type === "session-tool-settled" && event.data.outcome === "failed"
+            ? event.data
+            : undefined
+      if (failure) {
+        const key = toolKey(failure.sessionID, failure.id)
+        const current =
+          tools.get(key) ?? ("name" in failure ? { ...emptyToolState(), name: failure.name } : emptyToolState())
         tools.delete(key)
         await send({
           sessionUpdate: "tool_call_update",
           ...errorToolUpdate({
-            toolCallId: event.data.id,
+            toolCallId: failure.id,
             toolName: current.name,
             input: current.input,
-            metadata: event.data.metadata ?? current.metadata,
-            content: event.data.content ?? current.content,
-            error: event.data.error.message,
+            metadata: failure.metadata ?? current.metadata,
+            content: failure.content ?? current.content,
+            error: failure.error.message,
             cwd: input.cwd,
           }),
         })
         continue
       }
-      if (event.type === "session-step-ended") {
+      if (event.type === "session-step-settled" && event.data.outcome === "succeeded") {
         if (!child) {
           assistantMessageID = event.data.assistantMessageID
           finish = event.data.finish
         }
         continue
       }
-      if (event.type === "session-execution-succeeded") {
+      const settled = event.type === "session-execution-settled" ? event.data : undefined
+      if (settled?.outcome === "succeeded") {
         if (!child) return "succeeded" as const
         openChildren.delete(child.id)
         await notifyChild(child, { type: "status", status: "completed" })
         if (mode === "background" && openChildren.size === 0) return "succeeded" as const
         continue
       }
-      if (event.type === "session-execution-interrupted") {
+      if (settled?.outcome === "interrupted") {
         if (!child) return "interrupted" as const
         openChildren.delete(child.id)
         await notifyChild(child, { type: "status", status: "interrupted" })
         if (mode === "background" && openChildren.size === 0) return "interrupted" as const
         continue
       }
-      if (event.type === "session-execution-failed") {
+      if (settled?.outcome === "failed") {
         if (child) {
           openChildren.delete(child.id)
-          await notifyChild(child, { type: "status", status: "failed", error: event.data.error })
+          await notifyChild(child, { type: "status", status: "failed", error: settled.error })
           if (mode === "background" && openChildren.size === 0) return "failed" as const
           continue
         }
-        executionError = event.data.error
+        executionError = settled.error
         return "failed" as const
       }
     }

@@ -435,6 +435,38 @@ export function createData(config: CreateDataInput) {
     },
   }
 
+  // The blocks streaming in each Session, by assistant message, kind and ordinal. A block stays the latest of its
+  // kind while it streams: an attempt streams one block of a kind at a time.
+  const streamingBlocks = new Map<string, Set<string>>()
+  type BlockRef = {
+    readonly sessionID: string
+    readonly assistantMessageID: string
+    readonly kind: "text" | "reasoning"
+    readonly ordinal: number
+  }
+  const streaming = {
+    key: (block: BlockRef) => `${block.assistantMessageID}\u0000${block.kind}\u0000${block.ordinal}`,
+    latest(block: BlockRef, assistant: SessionMessageAssistant) {
+      return block.kind === "text" ? message.latestText(assistant) : message.latestReasoning(assistant)
+    },
+    start(block: BlockRef, assistant: SessionMessageAssistant, created: number) {
+      const keys = streamingBlocks.get(block.sessionID) ?? new Set<string>()
+      streamingBlocks.set(block.sessionID, keys.add(streaming.key(block)))
+      assistant.content.push(
+        block.kind === "text" ? { type: "text", text: "" } : { type: "reasoning", text: "", time: { created } },
+      )
+      return assistant.content.at(-1) as SessionMessageAssistantText | SessionMessageAssistantReasoning
+    },
+    block(block: BlockRef, assistant: SessionMessageAssistant) {
+      if (!streamingBlocks.get(block.sessionID)?.has(streaming.key(block))) return
+      return streaming.latest(block, assistant)
+    },
+    end(block: BlockRef, assistant: SessionMessageAssistant) {
+      if (!streamingBlocks.get(block.sessionID)?.delete(streaming.key(block))) return
+      return streaming.latest(block, assistant)
+    },
+  }
+
   function index(sessionID: string) {
     const existing = messageIndex.get(sessionID)
     if (existing) return existing
@@ -489,6 +521,7 @@ export function createData(config: CreateDataInput) {
 
   function removeSession(sessionID: string) {
     activeUpdates?.set(sessionID, undefined)
+    streamingBlocks.delete(sessionID)
     store.session.pending[sessionID]?.forEach((item) => outbox.delete(item.id))
     messageIndex.delete(sessionID)
     sync.invalidate(`session:${sessionID}`)
@@ -830,57 +863,81 @@ export function createData(config: CreateDataInput) {
           if (currentAssistant) currentAssistant.time.streamed = event.created
         })
         return
-      case "session-step-ended": {
+      case "session-step-settled":
         message.update(event.data.sessionID, (draft, index) => {
           const currentAssistant = message.assistant(draft, index, event.data.assistantMessageID)
           if (!currentAssistant) return
-          currentAssistant.time.completed = event.created
-          currentAssistant.finish = event.data.finish
-          currentAssistant.rawFinish = event.data.rawFinish
-          currentAssistant.providerState = event.data.providerState
-          currentAssistant.cost = event.data.cost
-          currentAssistant.tokens = event.data.tokens
-          if (event.data.snapshot)
-            currentAssistant.snapshot = { ...currentAssistant.snapshot, end: event.data.snapshot }
-        })
-        return
-      }
-      case "session-step-failed":
-        message.update(event.data.sessionID, (draft, index) => {
-          const currentAssistant = message.assistant(draft, index, event.data.assistantMessageID)
-          if (!currentAssistant) return
-          currentAssistant.time.completed = event.created
-          currentAssistant.finish = event.data.finish ?? "error"
-          currentAssistant.rawFinish = event.data.rawFinish
-          currentAssistant.providerState = event.data.providerState
-          currentAssistant.error = event.data.error
-          currentAssistant.retry = undefined
-          if (event.data.cost !== undefined && event.data.tokens !== undefined) {
-            currentAssistant.cost = event.data.cost
-            currentAssistant.tokens = event.data.tokens
+          const data = event.data
+          if (data.outcome === "succeeded") {
+            currentAssistant.time.completed = event.created
+            currentAssistant.finish = data.finish
+            currentAssistant.rawFinish = data.rawFinish
+            currentAssistant.providerState = data.providerState
+            currentAssistant.cost = data.cost
+            currentAssistant.tokens = data.tokens
+            if (data.snapshot) currentAssistant.snapshot = { ...currentAssistant.snapshot, end: data.snapshot }
+            return
           }
+          // A transparent retry runs the same step again: only the retry shows. A fresh one follows a step whose
+          // output stands, so that step failed.
+          if (!data.retry || data.retry.fresh) {
+            currentAssistant.time.completed = event.created
+            currentAssistant.finish = data.finish ?? "error"
+            currentAssistant.rawFinish = data.rawFinish
+            currentAssistant.providerState = data.providerState
+            currentAssistant.error = data.error
+            currentAssistant.retry = undefined
+            if (data.cost !== undefined && data.tokens !== undefined) {
+              currentAssistant.cost = data.cost
+              currentAssistant.tokens = data.tokens
+            }
+          }
+          // The assistant shows the attempt about to run; the fact counts the retries so far.
+          if (data.retry)
+            currentAssistant.retry = { attempt: data.retry.attempt + 1, at: data.retry.at, error: data.error }
         })
         return
-      case "session-text-started":
+      // A block streams live: its start (or, when that was missed, its first delta) adds it, deltas extend it, and
+      // the recorded block replaces it. A block recorded without streaming here is added whole.
+      case "session-block-started":
         message.update(event.data.sessionID, (draft, index) => {
-          message.assistant(draft, index, event.data.assistantMessageID)?.content.push({
-            type: "text",
-            text: "",
-          })
+          const assistant = message.assistant(draft, index, event.data.assistantMessageID)
+          if (assistant) streaming.start(event.data, assistant, event.created)
         })
         return
-      case "session-text-delta":
+      case "session-block-delta":
         message.update(event.data.sessionID, (draft, index) => {
-          const match = message.latestText(message.assistant(draft, index, event.data.assistantMessageID))
-          if (match) match.text += event.data.delta
+          const assistant = message.assistant(draft, index, event.data.assistantMessageID)
+          if (!assistant) return
+          const block = streaming.block(event.data, assistant) ?? streaming.start(event.data, assistant, event.created)
+          block.text += event.data.delta
         })
         return
-      case "session-text-ended":
+      case "session-block-recorded":
         message.update(event.data.sessionID, (draft, index) => {
-          const match = message.latestText(message.assistant(draft, index, event.data.assistantMessageID))
-          if (match) match.text = event.data.text
+          const assistant = message.assistant(draft, index, event.data.assistantMessageID)
+          if (!assistant) return
+          const block = streaming.end(event.data, assistant)
+          if (!block) {
+            assistant.content.push(
+              event.data.kind === "text"
+                ? { type: "text", text: event.data.text, state: event.data.state }
+                : {
+                    type: "reasoning",
+                    text: event.data.text,
+                    state: event.data.state,
+                    time: { created: event.created, completed: event.created },
+                  },
+            )
+            return
+          }
+          block.text = event.data.text
+          if (event.data.state !== undefined) block.state = event.data.state
+          if (block.type === "reasoning")
+            block.time = { created: block.time?.created ?? event.created, completed: event.created }
         })
         return
+      // A call's input streams live until the call is requested, or fails.
       case "session-tool-input-started":
         message.update(event.data.sessionID, (draft, index) => {
           message.assistant(draft, index, event.data.assistantMessageID)?.content.push({
@@ -901,26 +958,48 @@ export function createData(config: CreateDataInput) {
           if (match?.state.status === "streaming") match.state.input += event.data.delta
         })
         return
-      case "session-tool-input-ended":
+      case "session-tool-requested":
         message.update(event.data.sessionID, (draft, index) => {
-          const match = message.latestTool(
-            message.assistant(draft, index, event.data.assistantMessageID),
-            event.data.id,
-          )
-          if (match?.state.status === "streaming") match.state.input = event.data.text
+          const assistant = message.assistant(draft, index, event.data.assistantMessageID)
+          if (!assistant) return
+          const streamed = message.latestTool(assistant, event.data.id)
+          const match = streamed?.state.status === "streaming" ? streamed : undefined
+          const tool = match ?? {
+            type: "tool" as const,
+            id: event.data.id,
+            name: event.data.name,
+            time: { created: event.created },
+            state: { status: "streaming" as const, input: "" },
+          }
+          if (!match) assistant.content.push(tool)
+          tool.time.ran = event.created
+          tool.executed = event.data.executed
+          tool.providerState = event.data.state
+          tool.state = { status: "running", input: event.data.input, metadata: {} }
         })
         return
-      case "session-tool-called":
+      case "session-tool-input-failed":
         message.update(event.data.sessionID, (draft, index) => {
-          const match = message.latestTool(
-            message.assistant(draft, index, event.data.assistantMessageID),
-            event.data.id,
-          )
-          if (!match) return
-          match.time.ran = event.created
-          match.executed = event.data.executed
-          match.providerState = event.data.state
-          match.state = { status: "running", input: event.data.input, metadata: {} }
+          const assistant = message.assistant(draft, index, event.data.assistantMessageID)
+          if (!assistant) return
+          const streamed = message.latestTool(assistant, event.data.id)
+          const failed = {
+            type: "tool" as const,
+            id: event.data.id,
+            name: event.data.name,
+            executed: event.data.executed,
+            providerResultState: event.data.resultState,
+            time: { created: streamed?.time.created ?? event.created, completed: event.created },
+            state: {
+              status: "error" as const,
+              error: event.data.error,
+              input: {},
+              metadata: event.data.metadata,
+              content: event.data.content,
+            },
+          }
+          if (streamed?.state.status === "streaming") Object.assign(streamed, failed)
+          else assistant.content.push(failed)
         })
         return
       case "session-tool-progress":
@@ -995,13 +1074,27 @@ export function createData(config: CreateDataInput) {
           void result.session.event.sync(event.data.sessionID)
         }
         return
-      case "session-tool-success":
+      case "session-tool-settled":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
             event.data.id,
           )
           if (match?.state.status !== "running") return
+          const data = event.data
+          match.executed = data.executed || match.executed === true
+          match.providerResultState = data.resultState
+          match.time.completed = event.created
+          if (data.outcome === "failed") {
+            match.state = {
+              status: "error",
+              error: data.error,
+              input: match.state.input,
+              metadata: data.metadata,
+              content: data.content,
+            }
+            return
+          }
           const terminal =
             match.state.metadata.executionStatus !== undefined && match.state.metadata.executionStatus !== "running"
               ? match.state.metadata
@@ -1009,67 +1102,8 @@ export function createData(config: CreateDataInput) {
           match.state = {
             status: "completed",
             input: match.state.input,
-            metadata: terminal ? { ...event.data.metadata, ...terminal } : event.data.metadata,
-            content: [...event.data.content],
-          }
-          match.executed = event.data.executed || match.executed === true
-          match.providerResultState = event.data.resultState
-          match.time.completed = event.created
-        })
-        return
-      case "session-tool-failed":
-        message.update(event.data.sessionID, (draft, index) => {
-          const match = message.latestTool(
-            message.assistant(draft, index, event.data.assistantMessageID),
-            event.data.id,
-          )
-          if (!match || (match.state.status !== "streaming" && match.state.status !== "running")) return
-          match.state = {
-            status: "error",
-            error: event.data.error,
-            input: typeof match.state.input === "string" ? {} : match.state.input,
-            metadata: event.data.metadata,
-            content: event.data.content,
-          }
-          match.executed = event.data.executed || match.executed === true
-          match.providerResultState = event.data.resultState
-          match.time.completed = event.created
-        })
-        return
-      case "session-reasoning-started":
-        message.update(event.data.sessionID, (draft, index) => {
-          message.assistant(draft, index, event.data.assistantMessageID)?.content.push({
-            type: "reasoning",
-            text: "",
-            state: event.data.state,
-            time: { created: event.created },
-          })
-        })
-        return
-      case "session-reasoning-delta":
-        message.update(event.data.sessionID, (draft, index) => {
-          const match = message.latestReasoning(message.assistant(draft, index, event.data.assistantMessageID))
-          if (match) match.text += event.data.delta
-        })
-        return
-      case "session-reasoning-ended":
-        message.update(event.data.sessionID, (draft, index) => {
-          const match = message.latestReasoning(message.assistant(draft, index, event.data.assistantMessageID))
-          if (match) {
-            match.text = event.data.text
-            match.time = { created: match.time?.created ?? event.created, completed: event.created }
-            if (event.data.state !== undefined) match.state = event.data.state
-          }
-        })
-        return
-      case "session-retry-scheduled":
-        message.update(event.data.sessionID, (draft, index) => {
-          const currentAssistant = message.assistant(draft, index, event.data.assistantMessageID)
-          if (!currentAssistant) return
-          currentAssistant.retry = {
-            attempt: event.data.attempt,
-            at: event.data.at,
-            error: event.data.error,
+            metadata: terminal ? { ...data.metadata, ...terminal } : data.metadata,
+            content: [...data.content],
           }
         })
         return
@@ -1091,15 +1125,13 @@ export function createData(config: CreateDataInput) {
         })
         if (event.data.inputID) compacting.get(event.data.sessionID)?.observed.add(event.data.inputID)
         return
-      case "session-execution-succeeded":
-      case "session-execution-failed":
-      case "session-execution-interrupted":
+      case "session-execution-settled":
         setSessionActive(event.data.sessionID, "idle")
         message.update(event.data.sessionID, (draft) => {
           const currentAssistant = message.activeAssistant(draft)
           if (currentAssistant) currentAssistant.retry = undefined
         })
-        if (event.type === "session-execution-interrupted" && event.data.reason === "shutdown") return
+        if (event.data.outcome === "interrupted" && event.data.reason === "shutdown") return
         // An event can overtake the first read; queue a revalidation when that read is still active.
         if (!store.session.info[event.data.sessionID] && !sync.has(`session:${event.data.sessionID}`)) return
         result.session.invalidate(event.data.sessionID)
@@ -1649,6 +1681,8 @@ export function createData(config: CreateDataInput) {
             )
             const messages = local.length === 0 ? fetched : [...fetched, ...local]
             messageIndex.set(sessionID, new Map(messages.map((message, index) => [message.id, index])))
+            // The server has no streaming blocks: one still streaming starts again with its next delta.
+            streamingBlocks.delete(sessionID)
             setStore("session", "message", sessionID, reconcile(messages))
             setStore("session", "messageCursor", sessionID, response.cursor.next ?? undefined)
           })

@@ -367,12 +367,13 @@ let eventSequence = -1
 
 function textEvents(): OcppEvent[] {
   return [
-    eventValue("session-text-started", { sessionID, assistantMessageID, ordinal: 0 }, 1),
+    eventValue("session-block-started", { sessionID, assistantMessageID, ordinal: 0, kind: "text" }, 1),
     eventValue(
-      "session-text-ended",
+      "session-block-recorded",
       {
         sessionID,
         assistantMessageID,
+        kind: "text",
         ordinal: 0,
         text: streamedTextPart.text,
       },
@@ -394,37 +395,29 @@ function toolEvents(part: typeof editPart): OcppEvent[] {
       1,
     ),
     eventValue(
-      "session-tool-input-ended",
+      "session-tool-requested",
       {
         sessionID,
         assistantMessageID,
         id: part.callID,
-        text: JSON.stringify(part.state.input),
-      },
-      1,
-    ),
-    eventValue(
-      "session-tool-called",
-      {
-        sessionID,
-        assistantMessageID,
-        id: part.callID,
+        name: part.tool,
         input: part.state.input,
         executed: true,
       },
       1,
     ),
     eventValue(
-      "session-tool-success",
+      "session-tool-settled",
       {
         sessionID,
         assistantMessageID,
         id: part.callID,
+        outcome: "succeeded",
         content: [{ type: "text", text: part.state.output }],
         metadata: part.state.metadata as Record<string, JsonValue>,
         executed: true,
       },
-      2,
+      1,
     ),
   ]
 }

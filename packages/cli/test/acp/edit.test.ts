@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { syncEditedFiles } from "../../src/acp/edit"
 import { streamTurn } from "../../src/acp/event"
-import { createSseFixture, durableEvent } from "./sse-fixture"
+import { createSseFixture, durableEvent, ephemeralEvent } from "./sse-fixture"
 
 type Connection = Pick<AgentSideConnection, "sessionUpdate"> & Partial<Pick<AgentSideConnection, "writeTextFile">>
 type Fixture = ReturnType<typeof createSseFixture>
@@ -46,16 +46,17 @@ describe("acp edit sync", () => {
           newString: "after",
         })
         send(
-          durableEvent("session-tool-success", {
+          durableEvent("session-tool-settled", {
             sessionID: "ses_edit",
             assistantMessageID: "msg_edit",
             id: "call_edit",
             metadata: { files: [{ file: "file.ts" }], replacements: 1 },
             content: [{ type: "text", text: "edited" }],
             executed: true,
+            outcome: "succeeded",
           }),
         )
-        send(durableEvent("session-execution-succeeded", { sessionID: "ses_edit" }))
+        send(durableEvent("session-execution-settled", { sessionID: "ses_edit", outcome: "succeeded" }))
       },
     })
     const connection = {
@@ -87,16 +88,17 @@ describe("acp edit sync", () => {
         send(durableEvent("session-inbox-delivered", { sessionID: "ses_patch", inboxID: id }))
         called(send, "ses_patch", "msg_patch", "call_patch", "patch", { patchText: "*** Begin Patch" })
         send(
-          durableEvent("session-tool-success", {
+          durableEvent("session-tool-settled", {
             sessionID: "ses_patch",
             assistantMessageID: "msg_patch",
             id: "call_patch",
             metadata: { files: [{ file: "first.ts" }, { file: "second.ts" }] },
             content: [{ type: "text", text: "patched" }],
             executed: true,
+            outcome: "succeeded",
           }),
         )
-        send(durableEvent("session-execution-succeeded", { sessionID: "ses_patch" }))
+        send(durableEvent("session-execution-settled", { sessionID: "ses_patch", outcome: "succeeded" }))
       },
     })
     const connection = {
@@ -128,8 +130,8 @@ function called(
   name: string,
   input: Record<string, unknown>,
 ) {
-  send(durableEvent("session-tool-input-started", { sessionID, assistantMessageID, id, name }))
-  send(durableEvent("session-tool-called", { sessionID, assistantMessageID, id, input, executed: false }))
+  send(ephemeralEvent("session-tool-input-started", { sessionID, assistantMessageID, id, name }))
+  send(durableEvent("session-tool-requested", { sessionID, assistantMessageID, id, name, input, executed: false }))
 }
 
 function startTurn(fixture: Fixture, connection: Connection, sessionID: string, inboxID: string, cwd: string) {

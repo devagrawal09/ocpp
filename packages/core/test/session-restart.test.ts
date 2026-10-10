@@ -27,6 +27,8 @@ import { SessionStore } from "@ocpp/core/session/store"
 import { Cause, Context, Deferred, Effect, Exit, Fiber, Layer, LayerMap, Scope } from "effect"
 import { and, eq } from "drizzle-orm"
 import { EventTable } from "@ocpp/core/event/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { Recorded } from "./lib/recorded"
 import { TestStepHost } from "./fixture/step-host"
 import { testEffect } from "./lib/effect"
 
@@ -711,22 +713,9 @@ function seedSessions(
 
 /** Executions the runtime started for a Session, counted from its log. */
 function executions(sessionID: Session.ID) {
-  return Database.Service.use(({ db }) =>
-    db
-      .select({ id: EventTable.id })
-      .from(EventTable)
-      .where(
-        and(
-          eq(EventTable.aggregate_id, sessionID),
-          eq(EventTable.type, Bus.versionedType(SessionEvent.Execution.Started.type, 1)),
-        ),
-      )
-      .all()
-      .pipe(
-        Effect.orDie,
-        Effect.map((rows) => rows.length),
-      ),
-  )
+  return Recorded.events(
+    and(eq(EventTable.aggregate_id, sessionID), eq(SpecterEventTable.type, SessionEvent.Execution.Started.type)),
+  ).pipe(Effect.map((rows) => rows.length))
 }
 
 /** The synthetic input a Session's history holds. */

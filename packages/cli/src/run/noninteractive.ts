@@ -175,24 +175,14 @@ export async function runNonInteractivePrompt(input: Input) {
           continue
         }
       }
-      if (
-        event.type === "session-execution-interrupted" &&
-        event.data.reason === "user" &&
-        (interrupted || formCancelled)
-      ) {
-        return
-      }
-      if (!promoted && event.type === "session-execution-failed") {
-        prePromotionError = event.data.error
+      const settled = event.type === "session-execution-settled" ? event.data : undefined
+      if (settled?.outcome === "interrupted" && settled.reason === "user" && (interrupted || formCancelled)) return
+      if (!promoted && settled?.outcome === "failed") {
+        prePromotionError = settled.error
         if (finalizing) return
         continue
       }
-      if (
-        !promoted &&
-        finalizing &&
-        (event.type === "session-execution-succeeded" || event.type === "session-execution-interrupted")
-      )
-        return
+      if (!promoted && finalizing && settled && settled.outcome !== "failed") return
       if (!promoted) continue
       if (finalizing && !event.type.startsWith("session-execution-")) continue
 
@@ -220,15 +210,15 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
 
-      if (event.type === "session-text-started") {
+      if (event.type === "session-block-started") {
         flushStep()
-        starts.set(`text\u0000${contentKey(event.data.assistantMessageID, event.data.ordinal)}`, {
+        starts.set(`${event.data.kind}\u0000${contentKey(event.data.assistantMessageID, event.data.ordinal)}`, {
           id: partID(event.id),
           timestamp: time,
         })
         continue
       }
-      if (event.type === "session-text-ended") {
+      if (event.type === "session-block-recorded" && event.data.kind === "text") {
         const key = contentKey(event.data.assistantMessageID, event.data.ordinal)
         const started = starts.get(`text\u0000${key}`)
         starts.delete(`text\u0000${key}`)
@@ -245,15 +235,7 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
 
-      if (event.type === "session-reasoning-started") {
-        flushStep()
-        starts.set(`reasoning\u0000${contentKey(event.data.assistantMessageID, event.data.ordinal)}`, {
-          id: partID(event.id),
-          timestamp: time,
-        })
-        continue
-      }
-      if (event.type === "session-reasoning-ended" && input.thinking) {
+      if (event.type === "session-block-recorded" && event.data.kind === "reasoning" && input.thinking) {
         const key = contentKey(event.data.assistantMessageID, event.data.ordinal)
         const started = starts.get(`reasoning\u0000${key}`)
         starts.delete(`reasoning\u0000${key}`)
@@ -284,17 +266,12 @@ export async function runNonInteractivePrompt(input: Input) {
         })
         continue
       }
-      if (event.type === "session-tool-input-ended") {
-        const current = tools.get(toolKey(event.data.assistantMessageID, event.data.id))
-        if (current) current.raw = event.data.text
-        continue
-      }
       if (event.type === "session-tool-input-delta") {
         const current = tools.get(toolKey(event.data.assistantMessageID, event.data.id))
         if (current) current.raw = (current.raw ?? "") + event.data.delta
         continue
       }
-      if (event.type === "session-tool-called") {
+      if (event.type === "session-tool-requested") {
         flushStep()
         const key = toolKey(event.data.assistantMessageID, event.data.id)
         const current = tools.get(key)
@@ -302,7 +279,7 @@ export async function runNonInteractivePrompt(input: Input) {
           id: current?.id ?? partID(event.id),
           timestamp: current?.timestamp ?? time,
           assistantMessageID: event.data.assistantMessageID,
-          tool: current?.tool ?? "tool",
+          tool: event.data.name,
           input: event.data.input,
           raw: current?.raw,
           provider: { executed: event.data.executed, state: event.data.state },
@@ -319,7 +296,7 @@ export async function runNonInteractivePrompt(input: Input) {
         }
         continue
       }
-      if (event.type === "session-tool-success") {
+      if (event.type === "session-tool-settled" && event.data.outcome === "succeeded") {
         const key = toolKey(event.data.assistantMessageID, event.data.id)
         const current = tools.get(key) ?? fallbackTool(event)
         const tool: SessionMessageAssistantTool = {
@@ -364,34 +341,44 @@ export async function runNonInteractivePrompt(input: Input) {
         if (!emit("tool_use", time, { part })) await input.renderTool(tool)
         continue
       }
-      if (event.type === "session-tool-failed") {
-        const key = toolKey(event.data.assistantMessageID, event.data.id)
-        const current = tools.get(key) ?? fallbackTool(event)
-        const error = event.data.error.message
-        const metadata = event.data.metadata ?? current.metadata
-        const content = event.data.content ?? nonEmptyToolContent(current.content)
+      // A requested call that failed, or one whose input never became a call.
+      const failure =
+        event.type === "session-tool-input-failed"
+          ? event.data
+          : event.type === "session-tool-settled" && event.data.outcome === "failed"
+            ? event.data
+            : undefined
+      if (failure) {
+        const key = toolKey(failure.assistantMessageID, failure.id)
+        const current = tools.get(key) ?? {
+          ...fallbackTool({ id: event.id, created: time, data: failure }),
+          ...("name" in failure ? { tool: failure.name, raw: failure.text } : {}),
+        }
+        const error = failure.error.message
+        const metadata = failure.metadata ?? current.metadata
+        const content = failure.content ?? nonEmptyToolContent(current.content)
         const tool: SessionMessageAssistantTool = {
           type: "tool",
-          id: event.data.id,
+          id: failure.id,
           name: current.tool,
-          executed: event.data.executed,
+          executed: failure.executed,
           providerState: current.providerState,
-          providerResultState: event.data.resultState,
+          providerResultState: failure.resultState,
           state: {
             status: "error",
             input: current.input,
             metadata,
             content,
-            error: event.data.error,
+            error: failure.error,
           },
           time: { created: current.timestamp, ran: current.timestamp, completed: time },
         }
         const part: ToolPart = {
           partID: current.id,
           sessionID: input.sessionID,
-          messageID: event.data.assistantMessageID,
+          messageID: failure.assistantMessageID,
           type: "tool",
-          id: event.data.id,
+          id: failure.id,
           tool: current.tool,
           state: {
             status: "error",
@@ -399,7 +386,7 @@ export async function runNonInteractivePrompt(input: Input) {
             error,
             metadata: {
               providerCall: current.provider,
-              providerResult: { executed: event.data.executed, state: event.data.resultState },
+              providerResult: { executed: failure.executed, state: failure.resultState },
               rawInput: current.raw,
             },
             time: { start: current.timestamp, end: time },
@@ -425,7 +412,7 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
 
-      if (event.type === "session-step-ended") {
+      if (event.type === "session-step-settled" && event.data.outcome === "succeeded") {
         flushStep()
         const part = {
           id: partID(event.id),
@@ -440,7 +427,12 @@ export async function runNonInteractivePrompt(input: Input) {
         emit("step_finish", time, { part })
         continue
       }
-      if (event.type === "session-step-failed") {
+      // A transparent retry runs the same step again; a step fails for good, or before a fresh retry.
+      if (
+        event.type === "session-step-settled" &&
+        event.data.outcome === "failed" &&
+        (!event.data.retry || event.data.retry.fresh)
+      ) {
         if (input.compatibility === "v1" && event.data.error.message === "The provider response ended unexpectedly.") {
           pendingStep = undefined
           v1InvalidOutput = true
@@ -453,28 +445,28 @@ export async function runNonInteractivePrompt(input: Input) {
         if (!emit("error", time, { error: event.data.error })) UI.error(event.data.error.message)
         continue
       }
-      if (event.type === "session-execution-failed") {
+      if (settled?.outcome === "failed") {
         if (input.compatibility === "v1" && (v1InvalidOutput || formCancelled)) return
         flushStep()
         if (!emittedError && !formCancelled) {
           emittedError = true
           process.exitCode = 1
-          if (!emit("error", time, { error: event.data.error })) UI.error(event.data.error.message)
+          if (!emit("error", time, { error: settled.error })) UI.error(settled.error.message)
         }
         return
       }
-      if (event.type === "session-execution-interrupted") {
+      if (settled?.outcome === "interrupted") {
         if (input.compatibility === "v1" && formCancelled) return
-        if (event.data.reason === "user" && interrupted) process.exitCode = 130
-        if (event.data.reason !== "user" && !emittedError) {
+        if (settled.reason === "user" && interrupted) process.exitCode = 130
+        if (settled.reason !== "user" && !emittedError) {
           emittedError = true
           process.exitCode = 1
-          const error = { type: "aborted" as const, message: `Session interrupted: ${event.data.reason}` }
+          const error = { type: "aborted" as const, message: `Session interrupted: ${settled.reason}` }
           if (!emit("error", time, { error })) UI.error(error.message)
         }
         return
       }
-      if (event.type === "session-execution-succeeded") return
+      if (settled) return
     }
   }
 

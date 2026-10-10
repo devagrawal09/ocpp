@@ -40,14 +40,21 @@ test("acp prompt resolves after ordered turn updates", async () => {
           send(events, {
             id: "evt_text",
             created: 2,
-            type: "session-text-delta",
-            data: { sessionID: "ses_test", assistantMessageID: "msg_assistant", ordinal: 0, delta: "hello" },
+            type: "session-block-delta",
+            data: {
+              sessionID: "ses_test",
+              assistantMessageID: "msg_assistant",
+              kind: "text",
+              ordinal: 0,
+              delta: "hello",
+            },
           })
           send(events, {
             id: "evt_step",
             created: 3,
-            type: "session-step-ended",
+            type: "session-step-settled",
             data: {
+              outcome: "succeeded",
               sessionID: "ses_test",
               assistantMessageID: "msg_assistant",
               finish: "stop",
@@ -58,8 +65,8 @@ test("acp prompt resolves after ordered turn updates", async () => {
           send(events, {
             id: "evt_done",
             created: 4,
-            type: "session-execution-succeeded",
-            data: { sessionID: "ses_test" },
+            type: "session-execution-settled",
+            data: { sessionID: "ses_test", outcome: "succeeded" },
           })
         })
         return Response.json({ data: {} })

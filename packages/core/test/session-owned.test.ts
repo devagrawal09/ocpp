@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { and, eq } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 import { Cause, Context, DateTime, Deferred, Effect, Exit, Fiber, Layer, Scope } from "effect"
 import { Agent } from "@ocpp/schema/agent"
 import { Event } from "@ocpp/schema/event"
@@ -15,6 +15,8 @@ import { Global } from "@ocpp/util/global"
 import { Bus } from "../src/bus.js"
 import { Database } from "../src/database/database.js"
 import { EventTable } from "../src/event/sql.js"
+import { SpecterEventTable } from "../src/specter/sql.js"
+import { Recorded } from "./lib/recorded.js"
 import { Image } from "../src/image.js"
 import { PluginHooks } from "../src/plugin/hooks.js"
 import { PluginSupervisor } from "../src/plugin/supervisor-service.js"
@@ -104,17 +106,9 @@ const setup = Effect.fnUntraced(function* (options?: {
     wake: (id) =>
       Effect.gen(function* () {
         const pending = yield* SessionInbox.list(database.db, id)
-        const events = yield* database.db
-          .select({ id: EventTable.id })
-          .from(EventTable)
-          .where(
-            and(
-              eq(EventTable.aggregate_id, id),
-              eq(EventTable.type, Bus.versionedType(SessionEvent.InboxEnqueued.type, 1)),
-            ),
-          )
-          .all()
-          .pipe(Effect.orDie)
+        const events = yield* Recorded.events(
+          and(eq(EventTable.aggregate_id, id), eq(SpecterEventTable.type, SessionEvent.InboxEnqueued.type)),
+        ).pipe(Effect.provideService(Database.Service, database))
         wakes.push({ sessionID: id, pending: pending.map((item) => item.id), enqueued: events.length })
         yield* runtime.wake(id)
       }),
@@ -172,12 +166,13 @@ describe("Session-owned handles", () => {
         agent: Agent.ID.make("build"),
         model: { ...model, id: Model.ID.make("initial-model") },
       })
-      yield* fixture.bus.publish(SessionEvent.Step.Ended, {
+      yield* fixture.bus.publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: messageID,
         finish: "stop",
         cost: Money.USD.zero,
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        outcome: "succeeded",
       })
       yield* fixture.db
         .update(SessionTable)
@@ -206,16 +201,9 @@ describe("Session-owned handles", () => {
       expect((yield* fixture.sessions.forSession(otherID).get()).title).toBe("Owned session")
       expect(fixture.locations).toEqual([])
       expect(fixture.wakes).toEqual([])
-      const events = yield* fixture.db
-        .select()
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, sessionID))
-        .all()
-        .pipe(Effect.orDie)
-      expect(events.filter((event) => event.type === Bus.versionedType(SessionEvent.Viewed.type, 1))).toHaveLength(1)
-      expect(
-        events.filter((event) => event.type === Bus.versionedType(SessionEvent.ModelSelected.type, 1)),
-      ).toHaveLength(1)
+      const events = yield* Recorded.types(sessionID)
+      expect(events.filter((type) => type === SessionEvent.Viewed.type)).toHaveLength(1)
+      expect(events.filter((type) => type === SessionEvent.ModelSelected.type)).toHaveLength(1)
     }),
   )
 
@@ -300,7 +288,13 @@ describe("Session-owned handles", () => {
         .where(
           and(
             eq(EventTable.aggregate_id, sessionID),
-            eq(EventTable.type, Bus.versionedType(SessionEvent.InboxEnqueued.type, 1)),
+            inArray(
+              EventTable.log_order,
+              fixture.db
+                .select({ order: SpecterEventTable.order })
+                .from(SpecterEventTable)
+                .where(eq(SpecterEventTable.type, SessionEvent.InboxEnqueued.type)),
+            ),
           ),
         )
         .run()
@@ -1027,21 +1021,12 @@ describe("SessionInbox command contracts", () => {
       yield* admission.cancel(input)
       expect(yield* admission.cancel(input).pipe(Effect.flip)).toBeInstanceOf(SessionInbox.LifecycleConflict)
       expect(yield* SessionInbox.list(fixture.db, sessionID)).toEqual([])
-      expect(
-        (yield* fixture.db
-          .select({ type: EventTable.type })
-          .from(EventTable)
-          .where(eq(EventTable.aggregate_id, sessionID))
-          .orderBy(EventTable.seq)
-          .all()
-          .pipe(Effect.orDie))
-          .filter((event) => event.type.startsWith("session-inbox-"))
-          .map((event) => event.type),
-      ).toEqual([
-        Bus.versionedType(SessionEvent.InboxEnqueued.type, 1),
-        Bus.versionedType(SessionEvent.InboxDeliveryChanged.type, 1),
-        Bus.versionedType(SessionEvent.InboxDeliveryChanged.type, 1),
-        Bus.versionedType(SessionEvent.InboxCancelled.type, 1),
+      expect((yield* Recorded.types(sessionID)).filter((type) => type.startsWith("session-inbox-"))).toEqual([
+        SessionEvent.InboxEnqueued.type,
+        SessionEvent.InboxHeld.type,
+        SessionEvent.InboxDeliveryChanged.type,
+        SessionEvent.InboxDeliveryChanged.type,
+        SessionEvent.InboxCancelled.type,
       ])
     }),
   )

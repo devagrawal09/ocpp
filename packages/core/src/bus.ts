@@ -10,7 +10,7 @@ import { SpecterEventTable } from "./specter/sql.js"
 import type { Location } from "@ocpp/schema/location"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
-import { Durable, DurableEventManifest } from "@ocpp/schema/durable-event-manifest"
+import { DurableEventManifest } from "@ocpp/schema/durable-event-manifest"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionID } from "@ocpp/schema/session-id"
 import { AbsolutePath } from "@ocpp/schema/schema"
@@ -22,9 +22,8 @@ import {
 } from "@ocpp/session-runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
 import { SpecterSnapshots } from "./specter/snapshots.js"
-import { SpecterTranslate } from "./specter/translate.js"
 
-/** Idempotency keys of the commits that register with the runtime a Session with no session.created fact: a fork. */
+/** Idempotency keys of the commits that register with the runtime a Session with no session-created fact: a fork. */
 export const registrationKeyPrefix = "register:"
 
 export type Subscriber<D extends Event.Definition = Event.Definition> = (event: Event.Payload<D>) => Effect.Effect<void>
@@ -73,34 +72,40 @@ const envelope = (aggregateID: string, seq: number, version: number) => ({
   version: Event.Version.make(version),
 })
 
+/** OC++'s durable events, each a fact in Specter's log under the same name. */
+const durableDefinitions = new Map<string, Event.DurableDefinition>(
+  DurableEventManifest.Definitions.map((definition) => [definition.type, definition]),
+)
+
+/** The definition of a fact in Specter's log: every fact is an OC++ event of the same name. */
+const definitionOf = (fact: PersistedEvent) => {
+  const definition = durableDefinitions.get(fact.type)
+  if (!definition)
+    throw new InvalidDurableEventError({
+      type: fact.type,
+      message: `Fact ${fact.id} is not in OC++'s inventory of recorded facts`,
+    })
+  return definition
+}
+
 /** An aggregate's event as its sequence index names it, with the fact in Specter's log it is. */
 type Indexed = {
   readonly id: Event.ID
   readonly aggregateID: string
   readonly seq: number
   readonly created: number
-  readonly type: string
   readonly fact: PersistedEvent
 }
 
-/** The OC++ event an index entry names: the translation of its fact that carries the entry's ID. */
-const decodeIndexed = (
-  entry: Indexed,
-  translate: (fact: PersistedEvent) => readonly SpecterTranslate.WireEvent[],
-): Event.Payload => {
-  const definition = Durable.get(entry.type)
-  const data = translate(entry.fact).find((wire) => wire.id === entry.id)?.data
-  if (!definition?.durable || data === undefined)
-    throw new InvalidDurableEventError({
-      type: entry.type,
-      message: `Fact ${entry.fact.id} does not project as event ${entry.id}`,
-    })
+/** The event an index entry names: its fact, decoded. */
+const decodeIndexed = (entry: Indexed): Event.Payload => {
+  const definition = definitionOf(entry.fact)
   return {
     id: entry.id,
     created: entry.created,
     type: definition.type,
     durable: envelope(entry.aggregateID, entry.seq, definition.durable.version),
-    data: Schema.decodeUnknownSync(definition.data)(data),
+    data: Schema.decodeUnknownSync(definition.data)(entry.fact.payload),
   }
 }
 
@@ -136,9 +141,6 @@ const mapNonEmpty = <A, B>(items: readonly [A, ...A[]], f: (item: A) => B): [B, 
   f(items[0]),
   ...items.slice(1).map(f),
 ]
-
-/** OC++'s durable events, which the Specter runtime records as facts in its Event Log. */
-const recordedFacts = new Set<string>(DurableEventManifest.Definitions.map((definition) => definition.type))
 
 export type SubscribePayload<D extends readonly Event.Definition[]> = D[number] extends infer Item
   ? Item extends Event.Definition
@@ -323,7 +325,7 @@ export function configured(options?: Options) {
                 message: `Expected string aggregate field ${definition.durable.aggregate}`,
               }),
             )
-          if (!recordedFacts.has(definition.type))
+          if (!durableDefinitions.has(definition.type))
             return Effect.die(
               new InvalidDurableEventError({
                 type: definition.type,
@@ -520,28 +522,32 @@ export function configured(options?: Options) {
                 )
                 return Effect.void
               }
-              // Registering a fork records a session.created for the runtime only: OC++ projected session.forked.
+              // Registering a fork records a session-created for the runtime only: OC++ projected session-forked.
               if (key?.startsWith(registrationKeyPrefix)) return Effect.void
-              // A fact a runtime Command recorded directly: project its OC++ events here and notify
+              // Facts a runtime Command recorded directly: project each as the event it is here, and notify
               // after the transaction commits.
               const created = Date.parse(events[0]?.recordedAt ?? "") || (yield* Clock.currentTimeMillis)
               type Placed = BatchItem & { readonly order: number }
-              const items = events.flatMap((recorded) =>
-                SpecterTranslate.toWire(recorded).map((wire): Placed => {
-                  const aggregateID = (wire.data as Record<string, unknown>)[wire.definition.durable.aggregate]
-                  if (typeof aggregateID !== "string")
-                    throw new InvalidDurableEventError({
-                      type: wire.definition.type,
-                      message: `Expected string aggregate field ${wire.definition.durable.aggregate}`,
-                    })
-                  return {
-                    definition: wire.definition,
-                    aggregateID,
-                    event: { id: wire.id, created, type: wire.definition.type, data: wire.data } as Event.Payload,
-                    order: recorded.order,
-                  }
-                }),
-              )
+              const items = events.map((recorded): Placed => {
+                const definition = definitionOf(recorded)
+                const aggregateID = (recorded.payload as Record<string, unknown>)[definition.durable.aggregate]
+                if (typeof aggregateID !== "string")
+                  throw new InvalidDurableEventError({
+                    type: definition.type,
+                    message: `Expected string aggregate field ${definition.durable.aggregate}`,
+                  })
+                return {
+                  definition,
+                  aggregateID,
+                  event: {
+                    id: Event.ID.make(recorded.id),
+                    created,
+                    type: definition.type,
+                    data: Schema.decodeUnknownSync(definition.data)(recorded.payload),
+                  } as Event.Payload,
+                  order: recorded.order,
+                }
+              })
               const batches = new Map<string, Placed[]>()
               for (const item of items) batches.set(item.aggregateID, [...(batches.get(item.aggregateID) ?? []), item])
               const committed = yield* Effect.forEach([...batches.values()], (batch) =>
@@ -734,8 +740,7 @@ export function configured(options?: Options) {
 
         const streamLive = (): Stream.Stream<Event.Payload> => local(Stream.fromPubSub(pubsub.live))
 
-        // Indexed events read from Specter's log through their sequence index, each the translation of
-        // its fact. A fact projecting as several events is translated once.
+        // Indexed events read from Specter's log through their sequence index, each its fact.
         const readIndex = (where: SQL, orderBy: readonly SQL[], limit: number) =>
           db
             .select({
@@ -743,7 +748,6 @@ export function configured(options?: Options) {
               aggregateID: EventTable.aggregate_id,
               seq: EventTable.seq,
               created: EventTable.created,
-              type: EventTable.type,
               fact: {
                 id: SpecterEventTable.id,
                 order: SpecterEventTable.order,
@@ -760,20 +764,10 @@ export function configured(options?: Options) {
             .all()
             .pipe(
               Effect.orDie,
-              Effect.map((rows) => {
-                const translations = new Map<number, readonly SpecterTranslate.WireEvent[]>()
-                const translate = (fact: PersistedEvent) => {
-                  const known = translations.get(fact.order)
-                  if (known) return known
-                  const wire = SpecterTranslate.toWire(fact)
-                  translations.set(fact.order, wire)
-                  return wire
-                }
-                return {
-                  last: rows.at(-1),
-                  events: rows.map((row) => decodeIndexed(row as Indexed, translate)),
-                }
-              }),
+              Effect.map((rows) => ({
+                last: rows.at(-1),
+                events: rows.map((row) => decodeIndexed(row as Indexed)),
+              })),
             )
 
         // An aggregate's events after a sequence, in sequence order.

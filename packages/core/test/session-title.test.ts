@@ -420,18 +420,18 @@ it.effect("regenerates an existing title using the title agent", () =>
       agent: Agent.ID.make("build"),
       model: Model.Ref.make({ id: Model.ID.make("title-model"), providerID: Provider.ID.make("test") }),
     })
-    yield* events.publish(SessionEvent.Reasoning.Started, { sessionID, assistantMessageID, ordinal: 0 })
-    yield* events.publish(SessionEvent.Reasoning.Ended, {
+    yield* events.publish(SessionEvent.Block.Recorded, {
       sessionID,
       assistantMessageID,
+      kind: "reasoning",
       ordinal: 0,
       text: "Private reasoning that should not appear",
     })
-    yield* events.publish(SessionEvent.Text.Started, { sessionID, assistantMessageID, ordinal: 1 })
-    yield* events.publish(SessionEvent.Text.Ended, {
+    yield* events.publish(SessionEvent.Block.Recorded, {
       sessionID,
       assistantMessageID,
-      ordinal: 1,
+      kind: "text",
+      ordinal: 0,
       text: "The actual issue is expired OAuth credentials.",
     })
     yield* prompt(sessionID, "Switch to fixing OAuth token refresh")

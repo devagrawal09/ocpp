@@ -78,7 +78,7 @@ describe("Session.revert files", () => {
           yield* Effect.promise(() => fs.rename(original, renamed))
           const after = yield* snapshot.capture()
           if (!after) throw new Error("Renamed snapshot missing")
-          yield* bus.publish(SessionEvent.Step.Ended, {
+          yield* bus.publish(SessionEvent.Step.Settled, {
             sessionID: created.id,
             assistantMessageID,
             finish: "stop",
@@ -86,6 +86,7 @@ describe("Session.revert files", () => {
             tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
             snapshot: after,
             files: yield* snapshot.files({ from: before, to: after }),
+            outcome: "succeeded",
           })
 
           yield* Effect.promise(() => Bun.write(path.join(directory, "unrelated.txt"), "Keep this later edit.\n"))

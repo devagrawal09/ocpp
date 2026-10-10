@@ -19,6 +19,7 @@ import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionTable, SessionMessageTable } from "@ocpp/core/session/sql"
 import { testEffect } from "./lib/effect"
+import { Recorded } from "./lib/recorded"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
@@ -72,16 +73,11 @@ describe("Session tool progress", () => {
       })
       const start = (id: string, name = "bash") =>
         Effect.gen(function* () {
-          yield* service.publish(SessionEvent.Tool.Input.Started, {
+          yield* service.publish(SessionEvent.Tool.Requested, {
             sessionID,
             assistantMessageID,
             id,
             name,
-          })
-          yield* service.publish(SessionEvent.Tool.Called, {
-            sessionID,
-            assistantMessageID,
-            id,
             input: { command: "pwd" },
             executed: false,
           })
@@ -102,13 +98,14 @@ describe("Session tool progress", () => {
         state: { status: "running", metadata: {} },
       })
 
-      const success = yield* service.publish(SessionEvent.Tool.Success, {
+      const success = yield* service.publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID,
         id: "call-success",
         metadata: { phase: "done" },
         content: content("complete"),
         executed: false,
+        outcome: "succeeded",
       })
       expect((yield* readAssistant).content[0]).toMatchObject({
         state: { status: "completed", metadata: { phase: "done" }, content: content("complete") },
@@ -136,13 +133,14 @@ describe("Session tool progress", () => {
         executionID,
         events: [{ type: "trace", kind: "return", value: "1" }],
       })
-      yield* service.publish(SessionEvent.Tool.Success, {
+      yield* service.publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID,
         id: "call-codemode",
         metadata: { executionStatus: "running", events: [] },
         content: content("Execution started"),
         executed: false,
+        outcome: "succeeded",
       })
       expect((yield* readAssistant).content[1]).toMatchObject({
         state: {
@@ -164,7 +162,7 @@ describe("Session tool progress", () => {
         id: "call-failed",
         metadata: { phase: "checkpoint" },
       })
-      const failed = yield* service.publish(SessionEvent.Tool.Failed, {
+      const failed = yield* service.publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID,
         id: "call-failed",
@@ -172,6 +170,7 @@ describe("Session tool progress", () => {
         metadata: { phase: "checkpoint" },
         content: content("before failure"),
         executed: false,
+        outcome: "failed",
       })
       expect((yield* readAssistant).content[2]).toMatchObject({
         state: {
@@ -185,16 +184,13 @@ describe("Session tool progress", () => {
       expect(Schema.is(SessionEvent.Durable)(success)).toBe(true)
       expect(Schema.is(SessionEvent.Durable)(failed)).toBe(true)
 
-      const rows = yield* db
-        .select({ type: EventTable.type })
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, sessionID))
-        .orderBy(asc(EventTable.seq))
-        .all()
-        .pipe(Effect.orDie)
-      expect(rows.map((row) => row.type)).not.toContain(Bus.versionedType(SessionEvent.Tool.Progress.type, 1))
-      expect(rows.map((row) => row.type)).toContain(Bus.versionedType(SessionEvent.Tool.Success.type, 2))
-      expect(rows.map((row) => row.type)).toContain(Bus.versionedType(SessionEvent.Tool.Failed.type, 2))
+      const rows = yield* Recorded.events(eq(EventTable.aggregate_id, sessionID))
+      expect(rows.map((row) => row.type)).not.toContain(SessionEvent.Tool.Progress.type)
+      expect(rows.filter((row) => row.type === SessionEvent.Tool.Settled.type).map((row) => row.data.outcome)).toEqual([
+        "succeeded",
+        "succeeded",
+        "failed",
+      ])
     }),
   )
 })

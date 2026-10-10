@@ -21,7 +21,7 @@ export interface Adapter {
 
 type DraftAssistant = WritableDraft<SessionMessage.Assistant>
 
-const projectTerminalSnapshot = (draft: DraftAssistant, event: SessionEvent.Step.Ended | SessionEvent.Step.Failed) => {
+const projectTerminalSnapshot = (draft: DraftAssistant, event: SessionEvent.Step.Settled) => {
   if (event.data.snapshot || event.data.files)
     draft.snapshot = {
       ...draft.snapshot,
@@ -32,18 +32,10 @@ const projectTerminalSnapshot = (draft: DraftAssistant, event: SessionEvent.Step
 
 export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
   type DraftTool = WritableDraft<SessionMessage.AssistantTool>
-  type DraftText = WritableDraft<SessionMessage.AssistantText>
-  type DraftReasoning = WritableDraft<SessionMessage.AssistantReasoning>
   const created = DateTime.makeUnsafe(event.created)
 
   const latestTool = (assistant: DraftAssistant, id: string) =>
     assistant.content.findLast((item): item is DraftTool => item.type === "tool" && item.id === id)
-
-  const latestText = (assistant: DraftAssistant) =>
-    assistant.content.findLast((item): item is DraftText => item.type === "text")
-
-  const latestReasoning = (assistant: DraftAssistant) =>
-    assistant.content.findLast((item): item is DraftReasoning => item.type === "reasoning" && !item.time?.completed)
 
   const updateOwnedAssistant = (messageID: SessionMessage.ID, recipe: (draft: DraftAssistant) => void) =>
     Effect.gen(function* () {
@@ -141,10 +133,10 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
       "session-inbox-enqueued": () => Effect.void,
       "session-inbox-cancelled": () => Effect.void,
       "session-inbox-delivery-changed": () => Effect.void,
+      "session-inbox-held": () => Effect.void,
       "session-execution-started": () => Effect.void,
-      "session-execution-succeeded": () => clearCurrentRetry,
-      "session-execution-failed": () => clearCurrentRetry,
-      "session-execution-interrupted": () => clearCurrentRetry,
+      "session-execution-continued": () => Effect.void,
+      "session-execution-settled": () => clearCurrentRetry,
       "session-instructions-updated": (event) => {
         if (event.data.text === undefined) return Effect.void
         return adapter.appendMessage(
@@ -269,47 +261,60 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
           draft.time.streamed = created
         })
       },
-      "session-step-ended": (event) => {
+      "session-step-settled": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          draft.time.completed = created
-          draft.finish = event.data.finish
-          draft.rawFinish = event.data.rawFinish
-          draft.providerState = castDraft(event.data.providerState)
-          draft.cost = event.data.cost
-          draft.tokens = event.data.tokens
-          projectTerminalSnapshot(draft, event)
-        })
-      },
-      "session-step-failed": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          draft.time.completed = created
-          draft.finish = event.data.finish ?? "error"
-          draft.rawFinish = event.data.rawFinish
-          draft.providerState = castDraft(event.data.providerState)
-          draft.error = castDraft(event.data.error)
-          draft.retry = undefined
-          if (event.data.cost !== undefined && event.data.tokens !== undefined) {
-            draft.cost = event.data.cost
-            draft.tokens = castDraft(event.data.tokens)
+          const data = event.data
+          if (data.outcome === "succeeded") {
+            draft.time.completed = created
+            draft.finish = data.finish
+            draft.rawFinish = data.rawFinish
+            draft.providerState = castDraft(data.providerState)
+            draft.cost = data.cost
+            draft.tokens = data.tokens
+            projectTerminalSnapshot(draft, event)
+            return
           }
-          projectTerminalSnapshot(draft, event)
-        })
-      },
-      "session-text-started": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          draft.content.push(castDraft(SessionMessage.AssistantText.make({ type: "text", text: "" })))
-        })
-      },
-      "session-text-ended": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestText(draft)
-          if (match) {
-            match.text = event.data.text
-            match.state = castDraft(event.data.state)
+          // A transparent retry runs the same step again: only the retry shows. A fresh one follows a step whose
+          // output stands, so that step failed.
+          if (!data.retry || data.retry.fresh) {
+            draft.time.completed = created
+            draft.finish = data.finish ?? "error"
+            draft.rawFinish = data.rawFinish
+            draft.providerState = castDraft(data.providerState)
+            draft.error = castDraft(data.error)
+            draft.retry = undefined
+            if (data.cost !== undefined && data.tokens !== undefined) {
+              draft.cost = data.cost
+              draft.tokens = castDraft(data.tokens)
+            }
+            projectTerminalSnapshot(draft, event)
           }
+          // The assistant shows the attempt about to run; the fact counts the retries so far.
+          if (data.retry)
+            draft.retry = {
+              attempt: data.retry.attempt + 1,
+              at: DateTime.makeUnsafe(data.retry.at),
+              error: castDraft(data.error),
+            }
         })
       },
-      "session-tool-input-started": (event) => {
+      "session-block-recorded": (event) => {
+        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
+          draft.content.push(
+            castDraft(
+              event.data.kind === "text"
+                ? SessionMessage.AssistantText.make({ type: "text", text: event.data.text, state: event.data.state })
+                : SessionMessage.AssistantReasoning.make({
+                    type: "reasoning",
+                    text: event.data.text,
+                    state: event.data.state,
+                    time: { created, completed: created },
+                  }),
+            ),
+          )
+        })
+      },
+      "session-tool-requested": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
           draft.content.push(
             castDraft(
@@ -317,34 +322,40 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
                 type: "tool",
                 id: event.data.id,
                 name: event.data.name,
-                time: { created },
-                state: SessionMessage.ToolStateStreaming.make({ status: "streaming", input: "" }),
+                executed: event.data.executed,
+                providerState: event.data.state,
+                time: { created, ran: created },
+                state: SessionMessage.ToolStateRunning.make({
+                  status: "running",
+                  input: event.data.input,
+                  metadata: {},
+                }),
               }),
             ),
           )
         })
       },
-      "session-tool-input-ended": (event) => {
+      "session-tool-input-failed": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestTool(draft, event.data.id)
-          if (match && match.state.status === "streaming") match.state.input = event.data.text
-        })
-      },
-      "session-tool-called": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestTool(draft, event.data.id)
-          if (match) {
-            match.executed = event.data.executed
-            match.providerState = event.data.state
-            match.time.ran = created
-            match.state = castDraft(
-              SessionMessage.ToolStateRunning.make({
-                status: "running",
-                input: event.data.input,
-                metadata: {},
+          draft.content.push(
+            castDraft(
+              SessionMessage.AssistantTool.make({
+                type: "tool",
+                id: event.data.id,
+                name: event.data.name,
+                executed: event.data.executed,
+                providerResultState: event.data.resultState,
+                time: { created, completed: created },
+                state: SessionMessage.ToolStateError.make({
+                  status: "error",
+                  error: event.data.error,
+                  input: {},
+                  ...(event.data.content === undefined ? {} : { content: event.data.content }),
+                  ...(event.data.metadata === undefined ? {} : { metadata: event.data.metadata }),
+                }),
               }),
-            )
-          }
+            ),
+          )
         })
       },
       "session-codemode-started": () => Effect.void,
@@ -390,80 +401,40 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
       },
       // Terminal tool events are self-contained. The only preserved state is a
       // durable Code Mode terminal that raced ahead of this outer tool success.
-      "session-tool-success": (event) => {
+      "session-tool-settled": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestTool(draft, event.data.id)
-          if (match && match.state.status === "running") {
-            match.executed = event.data.executed || match.executed === true
-            match.providerResultState = event.data.resultState
-            match.time.completed = created
-            const terminal =
-              match.state.metadata.executionStatus !== undefined && match.state.metadata.executionStatus !== "running"
-                ? match.state.metadata
-                : undefined
-            match.state = castDraft(
-              SessionMessage.ToolStateCompleted.make({
-                status: "completed",
-                input: match.state.input,
-                content: event.data.content,
-                ...(event.data.metadata === undefined && terminal === undefined
-                  ? {}
-                  : { metadata: { ...event.data.metadata, ...terminal } }),
-              }),
-            )
-          }
-        })
-      },
-      "session-tool-failed": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestTool(draft, event.data.id)
-          if (match && (match.state.status === "streaming" || match.state.status === "running")) {
-            match.executed = event.data.executed || match.executed === true
-            match.providerResultState = event.data.resultState
-            match.time.completed = created
+          const data = event.data
+          const match = latestTool(draft, data.id)
+          if (match?.state.status !== "running") return
+          match.executed = data.executed || match.executed === true
+          match.providerResultState = data.resultState
+          match.time.completed = created
+          if (data.outcome === "failed") {
             match.state = castDraft(
               SessionMessage.ToolStateError.make({
                 status: "error",
-                error: event.data.error,
-                input: typeof match.state.input === "string" ? {} : match.state.input,
-                ...(event.data.content === undefined ? {} : { content: event.data.content }),
-                ...(event.data.metadata === undefined ? {} : { metadata: event.data.metadata }),
+                error: data.error,
+                input: match.state.input,
+                ...(data.content === undefined ? {} : { content: data.content }),
+                ...(data.metadata === undefined ? {} : { metadata: data.metadata }),
               }),
             )
+            return
           }
-        })
-      },
-      "session-reasoning-started": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          draft.content.push(
-            castDraft(
-              SessionMessage.AssistantReasoning.make({
-                type: "reasoning",
-                text: "",
-                state: event.data.state,
-                time: { created },
-              }),
-            ),
+          const terminal =
+            match.state.metadata.executionStatus !== undefined && match.state.metadata.executionStatus !== "running"
+              ? match.state.metadata
+              : undefined
+          match.state = castDraft(
+            SessionMessage.ToolStateCompleted.make({
+              status: "completed",
+              input: match.state.input,
+              content: data.content,
+              ...(data.metadata === undefined && terminal === undefined
+                ? {}
+                : { metadata: { ...data.metadata, ...terminal } }),
+            }),
           )
-        })
-      },
-      "session-reasoning-ended": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestReasoning(draft)
-          if (match) {
-            match.text = event.data.text
-            match.time = { created: match.time?.created ?? created, completed: created }
-            if (event.data.state !== undefined) match.state = event.data.state
-          }
-        })
-      },
-      "session-retry-scheduled": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          draft.retry = {
-            attempt: event.data.attempt,
-            at: DateTime.makeUnsafe(event.data.at),
-            error: castDraft(event.data.error),
-          }
         })
       },
       "session-compaction-started": (event) =>

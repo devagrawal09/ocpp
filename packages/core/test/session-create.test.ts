@@ -185,7 +185,7 @@ describe("Session.create", () => {
         expect(unbornAlias).toMatchObject({ projectID: Project.ID.global, subpath: "packages/app" })
         expect(
           (yield* Recorded.events(
-            and(eq(EventTable.aggregate_id, Project.ID.global), eq(EventTable.type, "worktree-resolved.1")),
+            and(eq(EventTable.aggregate_id, Project.ID.global), eq(SpecterEventTable.type, "worktree-resolved")),
           )).at(0),
         ).toMatchObject({ data: { adopted: expect.arrayContaining([created.projectID, child.projectID]) } })
         expect(project.id).toBe(Project.ID.make(Hash.fast("git-remote:github.com/owner/adopted")))
@@ -212,10 +212,12 @@ describe("Session.create", () => {
         expect(log.map((event) => event.type)).toEqual([
           "session-created",
           "session-inbox-enqueued",
+          "session-inbox-held",
           "session-execution-started",
           "session-inbox-delivered",
-          "session-execution-succeeded",
+          "session-execution-settled",
           "session-inbox-enqueued",
+          "session-inbox-held",
         ])
         expect(yield* session.messages({ sessionID: created.id })).toMatchObject([
           { id: expect.any(String), ...Expected.user("Preserved history") },
@@ -228,17 +230,8 @@ describe("Session.create", () => {
           time_updated: before.time_updated,
         })
         // Repeated resolution records the project and its directory's identity exactly once.
-        const announced = yield* db
-          .select({ type: EventTable.type })
-          .from(EventTable)
-          .where(eq(EventTable.aggregate_id, project.id))
-          .all()
-          .pipe(Effect.orDie)
-        expect(announced.map((event) => event.type).toSorted()).toEqual([
-          "project-created.1",
-          "worktree-recorded.1",
-          "worktree-resolved.1",
-        ])
+        const announced = yield* Recorded.types(project.id)
+        expect(announced.toSorted()).toEqual(["project-created", "worktree-recorded", "worktree-resolved"])
         // Specter's log records it, as it does every durable fact.
         const recorded = yield* db
           .select({ payload: SpecterEventTable.payload })
@@ -545,12 +538,12 @@ describe("Session.create", () => {
       expect((yield* session.context(forked.id)).map((message) => message.type)).toEqual(["user", "synthetic", "user"])
       expect((yield* session.context(forked.id)).at(-1)).toMatchObject({ text: "Child continues" })
       // The fork reserves the parent's sequence through its boundary; the child's own events follow: its
-      // prompt, and the execution that delivered it.
+      // prompt, held until the resume, and the execution that delivered it.
       expect(
         Array.from(yield* Stream.runCollect(logEvents(session, forked.id))).map(
           (event): number | undefined => event.durable?.seq,
         ),
-      ).toEqual([0, 8, 9, 10, 11])
+      ).toEqual([0, 10, 11, 12, 13, 14])
       expect(yield* SessionInbox.find(db, admitted.id)).toBeUndefined()
     }),
   )
@@ -646,22 +639,11 @@ describe("Session.create", () => {
         agent: Agent.ID.make("build"),
         model,
       })
-      yield* bus.publish(SessionEvent.Tool.Input.Started, {
+      yield* bus.publish(SessionEvent.Tool.Requested, {
         sessionID: parent.id,
         assistantMessageID,
         id: "call_running",
         name: "shell",
-      })
-      yield* bus.publish(SessionEvent.Tool.Input.Ended, {
-        sessionID: parent.id,
-        assistantMessageID,
-        id: "call_running",
-        text: '{"command":"sleep 10"}',
-      })
-      yield* bus.publish(SessionEvent.Tool.Called, {
-        sessionID: parent.id,
-        assistantMessageID,
-        id: "call_running",
         input: { command: "sleep 10" },
         executed: true,
       })
@@ -754,12 +736,13 @@ describe("Session.create", () => {
         agent: Agent.ID.make("build"),
         model,
       })
-      yield* bus.publish(SessionEvent.Step.Ended, {
+      yield* bus.publish(SessionEvent.Step.Settled, {
         sessionID: parent.id,
         assistantMessageID,
         finish: "stop",
         cost: Money.USD.make(0.75),
         tokens: { input: 6, output: 3, reasoning: 1, cache: { read: 2, write: 1 } },
+        outcome: "succeeded",
       })
 
       const forked = yield* session.fork({
@@ -850,9 +833,7 @@ describe("Session.create", () => {
       const { db } = yield* Database.Service
       const created = yield* session.create({ location })
 
-      expect(
-        yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, created.id)).all().pipe(Effect.orDie),
-      ).toMatchObject([{ type: Bus.versionedType(SessionEvent.Created.type, 1) }])
+      expect(yield* Recorded.types(created.id)).toEqual([SessionEvent.Created.type])
     }),
   )
 
@@ -879,7 +860,7 @@ describe("Session.create", () => {
       yield* session.resume(created.id)
 
       expect(
-        Array.from(yield* logEvents(session, created.id, true).pipe(Stream.take(4), Stream.runCollect)),
+        Array.from(yield* logEvents(session, created.id, true).pipe(Stream.take(5), Stream.runCollect)),
       ).toMatchObject([
         { durable: { seq: 0 }, type: "session-created" },
         {
@@ -890,8 +871,9 @@ describe("Session.create", () => {
             item: { type: "user", payload: { text: "Hello" }, delivery: "steer" },
           },
         },
-        { durable: { seq: 2 }, type: "session-execution-started" },
-        { durable: { seq: 3 }, type: "session-inbox-delivered" },
+        { durable: { seq: 2 }, type: "session-inbox-held" },
+        { durable: { seq: 3 }, type: "session-execution-started" },
+        { durable: { seq: 4 }, type: "session-inbox-delivered" },
       ])
     }),
   )
@@ -1021,9 +1003,7 @@ describe("Session.create", () => {
       yield* session.switchModel({ sessionID: created.id, model })
 
       const { db } = yield* Database.Service
-      expect(
-        yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, created.id)).all().pipe(Effect.orDie),
-      ).toHaveLength(2)
+      expect(yield* Recorded.types(created.id)).toHaveLength(2)
       expect(yield* session.get(created.id)).toMatchObject({ model })
     }),
   )
@@ -1040,9 +1020,7 @@ describe("Session.create", () => {
       })
 
       const { db } = yield* Database.Service
-      expect(
-        yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, created.id)).all().pipe(Effect.orDie),
-      ).toHaveLength(1)
+      expect(yield* Recorded.types(created.id)).toHaveLength(1)
     }),
   )
 
@@ -1332,8 +1310,8 @@ describe("SessionTransfer", () => {
         "compaction",
         "user",
       ])
-      // The prompt, and the execution that delivered it.
-      expect(yield* Bus.latestSequence(db, sessionID)).toBe(6)
+      // The prompt, its hold until the resume, and the execution that delivered it.
+      expect(yield* Bus.latestSequence(db, sessionID)).toBe(7)
     }),
   )
 

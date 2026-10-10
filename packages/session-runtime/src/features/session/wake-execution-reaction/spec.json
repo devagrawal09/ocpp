@@ -1,6 +1,6 @@
 {
   "$schema": "https://specter.dev/specification/v1/slice.schema.json",
-  "description": "Schedules execution after input is recorded: requests startExecution on session.inbox.enqueued unless the input is held or the Session is already active (session.md: Execution Is Process-Local).",
+  "description": "Schedules execution after input is recorded: requests startExecution on session-inbox-enqueued unless the input is held or the Session is already active (session.md: Execution Is Process-Local).",
   "formatVersion": 1,
   "kind": "reaction",
   "name": "wakeExecution",

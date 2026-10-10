@@ -563,6 +563,15 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session-inbox-held"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: { readonly sessionID: Session.ID; readonly inboxID: SessionMessage.ID }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-execution-started"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined
@@ -572,7 +581,7 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-execution-succeeded"
+          readonly type: "session-execution-continued"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID }
@@ -581,22 +590,25 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-execution-failed"
+          readonly type: "session-execution-settled"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly error: { readonly type: string; readonly message: string; readonly status?: number | undefined }
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-execution-interrupted"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: { readonly sessionID: Session.ID; readonly reason: "user" | "shutdown" | "superseded" }
+          readonly data:
+            | { readonly sessionID: Session.ID; readonly outcome: "succeeded" }
+            | {
+                readonly sessionID: Session.ID
+                readonly outcome: "failed"
+                readonly error: {
+                  readonly type: string
+                  readonly message: string
+                  readonly status?: number | undefined
+                }
+              }
+            | {
+                readonly sessionID: Session.ID
+                readonly outcome: "interrupted"
+                readonly reason: "user" | "shutdown" | "superseded"
+              }
         }
       | {
           readonly id: Event.ID
@@ -707,105 +719,67 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-step-ended"
+          readonly type: "session-step-settled"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly finish: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
-            readonly rawFinish?: string | undefined
-            readonly providerState?: SessionMessage.ProviderState | undefined
-            readonly cost: number & Brand.Brand<"Money.USD">
-            readonly tokens: {
-              readonly input: number
-              readonly output: number
-              readonly reasoning: number
-              readonly cache: { readonly read: number; readonly write: number }
-            }
-            readonly snapshot?: (string & Brand.Brand<"Snapshot.ID">) | undefined
-            readonly files?: ReadonlyArray<RelativePath> | undefined
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-step-failed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly error: { readonly type: string; readonly message: string; readonly status?: number | undefined }
-            readonly finish?: "content-filter" | undefined
-            readonly rawFinish?: string | undefined
-            readonly providerState?: SessionMessage.ProviderState | undefined
-            readonly cost?: (number & Brand.Brand<"Money.USD">) | undefined
-            readonly tokens?:
-              | {
+          readonly data:
+            | {
+                readonly sessionID: Session.ID
+                readonly assistantMessageID: SessionMessage.ID
+                readonly finish: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
+                readonly rawFinish?: string | undefined
+                readonly providerState?: SessionMessage.ProviderState | undefined
+                readonly cost: number & Brand.Brand<"Money.USD">
+                readonly tokens: {
                   readonly input: number
                   readonly output: number
                   readonly reasoning: number
                   readonly cache: { readonly read: number; readonly write: number }
                 }
-              | undefined
-            readonly snapshot?: (string & Brand.Brand<"Snapshot.ID">) | undefined
-            readonly files?: ReadonlyArray<RelativePath> | undefined
-          }
+                readonly snapshot?: (string & Brand.Brand<"Snapshot.ID">) | undefined
+                readonly files?: ReadonlyArray<RelativePath> | undefined
+                readonly outcome: "succeeded"
+                readonly continues?: true | undefined
+              }
+            | {
+                readonly sessionID: Session.ID
+                readonly assistantMessageID: SessionMessage.ID
+                readonly error: {
+                  readonly type: string
+                  readonly message: string
+                  readonly status?: number | undefined
+                }
+                readonly finish?: "content-filter" | undefined
+                readonly rawFinish?: string | undefined
+                readonly providerState?: SessionMessage.ProviderState | undefined
+                readonly cost?: (number & Brand.Brand<"Money.USD">) | undefined
+                readonly tokens?:
+                  | {
+                      readonly input: number
+                      readonly output: number
+                      readonly reasoning: number
+                      readonly cache: { readonly read: number; readonly write: number }
+                    }
+                  | undefined
+                readonly snapshot?: (string & Brand.Brand<"Snapshot.ID">) | undefined
+                readonly files?: ReadonlyArray<RelativePath> | undefined
+                readonly outcome: "failed"
+                readonly retry?:
+                  | { readonly attempt: number; readonly at: number; readonly fresh?: true | undefined }
+                  | undefined
+              }
         }
       | {
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-text-started"
+          readonly type: "session-block-recorded"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
             readonly assistantMessageID: SessionMessage.ID
-            readonly ordinal: number
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-text-ended"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly ordinal: number
-            readonly text: string
-            readonly state?: SessionMessage.ProviderState | undefined
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-reasoning-started"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly ordinal: number
-            readonly state?: SessionMessage.ProviderState | undefined
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-reasoning-ended"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
+            readonly kind: "text" | "reasoning"
             readonly ordinal: number
             readonly text: string
             readonly state?: SessionMessage.ProviderState | undefined
@@ -815,7 +789,7 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-tool-input-started"
+          readonly type: "session-tool-input-failed"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined
           readonly data: {
@@ -823,85 +797,6 @@ export type SessionLogOutput =
             readonly assistantMessageID: SessionMessage.ID
             readonly id: string
             readonly name: string
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-tool-input-ended"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly id: string
-            readonly text: string
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-tool-called"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly id: string
-            readonly input: { readonly [x: string]: unknown }
-            readonly executed: boolean
-            readonly state?: SessionMessage.ProviderState | undefined
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-tool-success"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly id: string
-            readonly content: readonly [
-              (
-                | { readonly type: "text"; readonly text: string }
-                | {
-                    readonly type: "file"
-                    readonly uri: string
-                    readonly mime: string
-                    readonly name?: string | undefined
-                  }
-              ),
-              ...Array<
-                | { readonly type: "text"; readonly text: string }
-                | {
-                    readonly type: "file"
-                    readonly uri: string
-                    readonly mime: string
-                    readonly name?: string | undefined
-                  }
-              >,
-            ]
-            readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
-            readonly executed: boolean
-            readonly resultState?: SessionMessage.ProviderState | undefined
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-tool-failed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly id: string
             readonly error: { readonly type: string; readonly message: string; readonly status?: number | undefined }
             readonly content?:
               | readonly [
@@ -928,7 +823,99 @@ export type SessionLogOutput =
             readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
             readonly executed: boolean
             readonly resultState?: SessionMessage.ProviderState | undefined
+            readonly text?: string | undefined
           }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session-tool-requested"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: {
+            readonly sessionID: Session.ID
+            readonly assistantMessageID: SessionMessage.ID
+            readonly id: string
+            readonly name: string
+            readonly input: { readonly [x: string]: unknown }
+            readonly executed: boolean
+            readonly state?: SessionMessage.ProviderState | undefined
+          }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session-tool-settled"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data:
+            | {
+                readonly sessionID: Session.ID
+                readonly assistantMessageID: SessionMessage.ID
+                readonly id: string
+                readonly content: readonly [
+                  (
+                    | { readonly type: "text"; readonly text: string }
+                    | {
+                        readonly type: "file"
+                        readonly uri: string
+                        readonly mime: string
+                        readonly name?: string | undefined
+                      }
+                  ),
+                  ...Array<
+                    | { readonly type: "text"; readonly text: string }
+                    | {
+                        readonly type: "file"
+                        readonly uri: string
+                        readonly mime: string
+                        readonly name?: string | undefined
+                      }
+                  >,
+                ]
+                readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
+                readonly executed: boolean
+                readonly resultState?: SessionMessage.ProviderState | undefined
+                readonly outcome: "succeeded"
+              }
+            | {
+                readonly sessionID: Session.ID
+                readonly assistantMessageID: SessionMessage.ID
+                readonly id: string
+                readonly error: {
+                  readonly type: string
+                  readonly message: string
+                  readonly status?: number | undefined
+                }
+                readonly content?:
+                  | readonly [
+                      (
+                        | { readonly type: "text"; readonly text: string }
+                        | {
+                            readonly type: "file"
+                            readonly uri: string
+                            readonly mime: string
+                            readonly name?: string | undefined
+                          }
+                      ),
+                      ...Array<
+                        | { readonly type: "text"; readonly text: string }
+                        | {
+                            readonly type: "file"
+                            readonly uri: string
+                            readonly mime: string
+                            readonly name?: string | undefined
+                          }
+                      >,
+                    ]
+                  | undefined
+                readonly metadata?: { readonly [x: string]: Schema.Json } | undefined
+                readonly executed: boolean
+                readonly resultState?: SessionMessage.ProviderState | undefined
+                readonly outcome: "failed"
+              }
         }
       | {
           readonly id: Event.ID
@@ -1059,21 +1046,6 @@ export type SessionLogOutput =
             readonly trigger: SessionMessage.InvocationTrigger
             readonly handler: string
             readonly input: Schema.Json
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-retry-scheduled"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly attempt: number
-            readonly at: number
-            readonly error: { readonly type: string; readonly message: string; readonly status?: number | undefined }
           }
         }
       | {

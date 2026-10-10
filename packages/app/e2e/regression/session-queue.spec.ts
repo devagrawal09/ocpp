@@ -38,7 +38,7 @@ function createQueueMock(seed: string[], messages: SessionMessageInfo[] = []) {
       id: `evt_queue_${sequence}`,
       type,
       created: Date.now(),
-      durable: { aggregateID: sessionID, seq: sequence, version: type === "session-tool-success" ? 2 : 1 },
+      durable: { aggregateID: sessionID, seq: sequence, version: 1 },
       data,
     } as OcppEvent)
   }
@@ -288,20 +288,22 @@ for (const delivery of ["steer", "queue"] as const) {
     ]) {
       const ref = { sessionID, assistantMessageID: assistantID, id: tool.id }
       mock.emit("session-tool-input-started", { ...ref, name: tool.name })
-      mock.emit("session-tool-input-ended", { ...ref, text: JSON.stringify(tool.input) })
-      mock.emit("session-tool-called", { ...ref, input: tool.input, executed: true })
-      mock.emit("session-tool-success", {
+      mock.emit("session-tool-input-delta", { ...ref, delta: JSON.stringify(tool.input) })
+      mock.emit("session-tool-requested", { ...ref, input: tool.input, executed: true, name: tool.name })
+      mock.emit("session-tool-settled", {
         ...ref,
         content: [{ type: "text", text: "Inspection complete." }],
         executed: true,
+        outcome: "succeeded",
       })
     }
-    mock.emit("session-step-ended", {
+    mock.emit("session-step-settled", {
       sessionID,
       assistantMessageID: assistantID,
       finish: "tool-calls",
       cost: 0,
       tokens: { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
+      outcome: "succeeded",
     })
     const tools = page.locator('[data-timeline-part-ids="tool_queue_read,tool_queue_grep"]')
     await expect(tools).toBeVisible()
@@ -339,8 +341,13 @@ for (const delivery of ["steer", "queue"] as const) {
 
     const later = { sessionID, assistantMessageID: "msg_queue_follow_up_assistant" }
     mock.emit("session-step-started", { ...later, agent: "build", model })
-    mock.emit("session-text-started", { ...later, ordinal: 0 })
-    mock.emit("session-text-ended", { ...later, ordinal: 0, text: "A3: Now checking the retry path for U2." })
+    mock.emit("session-block-started", { ...later, ordinal: 0, kind: "text" })
+    mock.emit("session-block-recorded", {
+      ...later,
+      ordinal: 0,
+      text: "A3: Now checking the retry path for U2.",
+      kind: "text",
+    })
     const response = transcript
       .locator('[data-timeline-row="AssistantPart"]')
       .filter({ hasText: "A3: Now checking the retry path for U2." })

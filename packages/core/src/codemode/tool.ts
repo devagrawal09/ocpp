@@ -206,7 +206,7 @@ export const create = (
               if (!isToolSettlement(event)) return Effect.void
               if (event.data.assistantMessageID !== context.messageID || event.data.id !== context.id)
                 return Effect.void
-              return event.type === SessionEvent.Tool.Success.type
+              return event.data.outcome === "succeeded"
                 ? Deferred.succeed(gate, undefined)
                 : services.jobs.cancel(executionID).pipe(Effect.asVoid)
             })
@@ -719,8 +719,8 @@ function runtime(
   })
 }
 
-function isToolSettlement(event: Bus.LogItem): event is SessionEvent.Tool.Success | SessionEvent.Tool.Failed {
-  return event.type === SessionEvent.Tool.Success.type || event.type === SessionEvent.Tool.Failed.type
+function isToolSettlement(event: Bus.LogItem): event is SessionEvent.Tool.Settled {
+  return event.type === SessionEvent.Tool.Settled.type
 }
 
 function isInvocationStart(event: Bus.LogItem): event is SessionEvent.Invocation.Started {

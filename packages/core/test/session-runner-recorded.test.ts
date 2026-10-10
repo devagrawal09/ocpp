@@ -8,6 +8,7 @@ import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
 import { EventTable } from "@ocpp/core/event/sql"
+import { Recorded } from "./lib/recorded"
 import { Agent } from "@ocpp/core/agent"
 import { Config } from "@ocpp/core/config"
 import { Project } from "@ocpp/core/project"
@@ -216,24 +217,17 @@ describe("Sessions on the Specter runtime, recorded", () => {
       expect(messages[1]?.type === "assistant" ? messages[1].content : []).toMatchObject([
         { type: "text", text: "Hello!" },
       ])
-      expect(
-        (yield* db
-          .select({ type: EventTable.type })
-          .from(EventTable)
-          .where(eq(EventTable.aggregate_id, sessionID))
-          .orderBy(EventTable.seq)
-          .all()).map((event) => event.type),
-      ).toEqual([
-        "session-inbox-enqueued.1",
-        "session-execution-started.1",
-        "session-instructions-updated.2",
-        "session-inbox-delivered.1",
-        "session-step-started.1",
-        "session-text-started.1",
-        "session-text-ended.1",
-        "session-step-streamed.1",
-        "session-step-ended.1",
-        "session-execution-succeeded.1",
+      expect(yield* Recorded.types(sessionID)).toEqual([
+        "session-inbox-enqueued",
+        "session-inbox-held",
+        "session-execution-started",
+        "session-instructions-updated",
+        "session-inbox-delivered",
+        "session-step-started",
+        "session-block-recorded",
+        "session-step-streamed",
+        "session-step-settled",
+        "session-execution-settled",
       ])
     }),
   )

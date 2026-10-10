@@ -29,7 +29,7 @@ const start = (sessionID: string) => ({
 
 export const wakeExecutionSpec = createReactionSlice("wakeExecution")
   .description(
-    "Schedules execution after input is recorded: requests startExecution on session.inbox.enqueued unless the input is held or the Session is already active (session.md: Execution Is Process-Local).",
+    "Schedules execution after input is recorded: requests startExecution on session-inbox-enqueued unless the input is held or the Session is already active (session.md: Execution Is Process-Local).",
   )
   .scenarios(
     {

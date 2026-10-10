@@ -5,10 +5,7 @@ import { Agent } from "@ocpp/schema/agent"
 import { Model } from "@ocpp/schema/model"
 import { SessionError } from "@ocpp/schema/session-error"
 import { Clock, Duration, Effect, Pull, Schedule } from "effect"
-import { Bus } from "../../bus.js"
 import type { PluginHooks } from "../../plugin/hooks.js"
-import { SessionEvent } from "../event.js"
-import { SessionMessage } from "../message.js"
 import { SessionSchema } from "../schema.js"
 
 interface Input {
@@ -77,7 +74,8 @@ const schedule = Schedule.max([Schedule.exponential("2 seconds"), Schedule.recur
   }),
 )
 
-export const make = (bus: Bus.Interface, sessionID: SessionSchema.ID) =>
+/** A logical step's retry policy. The runtime waits out a retry's delay and records it with the step's attempt. */
+export const make = (sessionID: SessionSchema.ID) =>
   Effect.gen(function* () {
     const step = yield* Schedule.toStep(schedule)
     let attempt = 1
@@ -103,22 +101,5 @@ export const make = (bus: Bus.Interface, sessionID: SessionSchema.ID) =>
           Number.isFinite(event.decision.delay) && event.decision.delay >= 0 ? Math.ceil(event.decision.delay) : delay
         return { retry: true as const, attempt, delay: normalized }
       })
-    const wait = (input: {
-      readonly decision: Decision
-      readonly assistantMessageID: SessionMessage.ID
-      readonly error: SessionError.Error
-    }) =>
-      Effect.gen(function* () {
-        const scheduled = yield* Clock.currentTimeMillis
-        yield* bus.publish(SessionEvent.RetryScheduled, {
-          sessionID,
-          assistantMessageID: input.assistantMessageID,
-          attempt: input.decision.attempt,
-          at: scheduled + input.decision.delay,
-          error: input.error,
-        })
-        const remaining = Math.max(0, scheduled + input.decision.delay - (yield* Clock.currentTimeMillis))
-        yield* Effect.sleep(Duration.millis(remaining))
-      })
-    return { decide, wait }
+    return { decide }
   })

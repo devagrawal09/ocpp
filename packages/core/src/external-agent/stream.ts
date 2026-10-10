@@ -65,18 +65,20 @@ export function make(
     if (state.messageID === undefined && (error === undefined || toSessionError(error).type === "aborted")) return
     const base = { sessionID, assistantMessageID: yield* begin() }
     for (const block of state.blocks.values()) {
-      yield* bus.publish(block.type === "text" ? SessionEvent.Text.Ended : SessionEvent.Reasoning.Ended, {
+      yield* bus.publish(SessionEvent.Block.Recorded, {
         ...base,
+        kind: block.type,
         ordinal: block.ordinal,
         text: block.text,
       })
     }
     for (const [id, tool] of state.tools) {
       state.settled.add(id)
-      yield* bus.publish(SessionEvent.Tool.Failed, {
+      yield* bus.publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID: tool.messageID,
         id,
+        outcome: "failed",
         executed: !tool.claimed,
         error: toSessionError(error ?? new Error("External tool ended without a result")),
       })
@@ -84,15 +86,17 @@ export function make(
     state.blocks.clear()
     state.tools.clear()
     if (error !== undefined)
-      yield* bus.publish(SessionEvent.Step.Failed, {
+      yield* bus.publish(SessionEvent.Step.Settled, {
         ...base,
+        outcome: "failed",
         error: toSessionError(error),
         tokens: state.tokens,
         cost: Money.USD.make(state.cost),
       })
     if (error === undefined)
-      yield* bus.publish(SessionEvent.Step.Ended, {
+      yield* bus.publish(SessionEvent.Step.Settled, {
         ...base,
+        outcome: "succeeded",
         finish: "stop",
         tokens: state.tokens,
         cost: Money.USD.make(state.cost),
@@ -110,11 +114,15 @@ export function make(
     state.tools.set(id, { messageID, execute, input: text, claimed: false })
     // A structured submission's output is deliberately absent from the canonical transcript.
     const recorded = ["submit_result", "mcp__ocpp__submit_result"].includes(name) ? { message: input.message } : input
-    const base = { sessionID, assistantMessageID: messageID, id }
-    yield* bus.publish(SessionEvent.Tool.Input.Started, { ...base, name: execute ? "execute" : name })
-    yield* bus.publish(SessionEvent.Tool.Input.Ended, { ...base, text: JSON.stringify(recorded) })
     // OC++ runs `execute` itself, so it is recorded like a runner-owned call rather than a vendor-hosted one.
-    yield* bus.publish(SessionEvent.Tool.Called, { ...base, input: recorded, executed: !execute })
+    yield* bus.publish(SessionEvent.Tool.Requested, {
+      sessionID,
+      assistantMessageID: messageID,
+      id,
+      name: execute ? "execute" : name,
+      input: recorded,
+      executed: !execute,
+    })
     if (!execute) return
     const waiter = state.waiting.findIndex((item) => item.input === text)
     if (waiter === -1) return
@@ -162,15 +170,13 @@ export function make(
       const block = previous ?? { type: event.type, ordinal: state.ordinal++, text: "" }
       if (previous === undefined) {
         state.blocks.set(key, block)
-        yield* bus.publish(event.type === "text" ? SessionEvent.Text.Started : SessionEvent.Reasoning.Started, {
-          ...base,
-          ordinal: block.ordinal,
-        })
+        yield* bus.publish(SessionEvent.Block.Started, { ...base, kind: block.type, ordinal: block.ordinal })
       }
       block.text += event.delta
       if (event.type === "text") state.message += event.delta
-      yield* bus.publish(event.type === "text" ? SessionEvent.Text.Delta : SessionEvent.Reasoning.Delta, {
+      yield* bus.publish(SessionEvent.Block.Delta, {
         ...base,
+        kind: block.type,
         ordinal: block.ordinal,
         delta: event.delta,
       })
@@ -184,13 +190,15 @@ export function make(
     state.tools.delete(event.id)
     state.settled.add(event.id)
     if (event.error)
-      return yield* bus.publish(SessionEvent.Tool.Failed, {
+      return yield* bus.publish(SessionEvent.Tool.Settled, {
         ...call,
+        outcome: "failed",
         executed: true,
         error: { type: "tool.execution", message: event.output },
       })
-    yield* bus.publish(SessionEvent.Tool.Success, {
+    yield* bus.publish(SessionEvent.Tool.Settled, {
       ...call,
+      outcome: "succeeded",
       executed: true,
       content: [{ type: "text", text: event.output || "Completed." }],
     })
@@ -235,8 +243,9 @@ export function make(
     state.settled.add(call.id)
     const base = { sessionID, assistantMessageID: call.messageID, id: call.id, executed: false }
     if (outcome._tag === "Failure")
-      return yield* bus.publish(SessionEvent.Tool.Failed, {
+      return yield* bus.publish(SessionEvent.Tool.Settled, {
         ...base,
+        outcome: "failed",
         error: outcome.error,
         ...(outcome.metadata === undefined ? {} : { metadata: outcome.metadata }),
       })
@@ -244,8 +253,9 @@ export function make(
       typeof outcome.result.content === "string"
         ? [{ type: "text" as const, text: outcome.result.content }]
         : [...(outcome.result.content ?? [])]
-    yield* bus.publish(SessionEvent.Tool.Success, {
+    yield* bus.publish(SessionEvent.Tool.Settled, {
       ...base,
+      outcome: "succeeded",
       content: content.length === 0 ? [{ type: "text", text: "Completed." }] : [content[0], ...content.slice(1)],
       ...(outcome.result.metadata === undefined ? {} : { metadata: outcome.result.metadata }),
     })

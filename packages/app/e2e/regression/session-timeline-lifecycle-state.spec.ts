@@ -13,8 +13,8 @@ import {
   status,
   stepStarted,
   textPart,
-  toolCalled,
-  toolInputEnded,
+  toolInputDelta,
+  toolRequested,
   toolInputStarted,
   userMessage,
 } from "../performance/timeline-stability/fixture"
@@ -72,16 +72,17 @@ test("transitions a streaming shell from writing through command execution", asy
   await expect(subtitle).toHaveCSS("color", "rgb(92, 92, 92)")
 
   const input = JSON.stringify({ command })
-  await timeline.send(toolInputEnded({ sessionID, assistantMessageID: assistantID, id, text: input }))
+  await timeline.send(toolInputDelta({ sessionID, assistantMessageID: assistantID, id, delta: input }))
   await expect(titleShimmer).toHaveAttribute("data-active", "true")
   await expect(subtitle).toHaveText(command)
   await expect(tool).not.toContainText("Writing command...")
 
   await timeline.send(
-    toolCalled({
+    toolRequested({
       sessionID,
       assistantMessageID: assistantID,
       id,
+      name: "shell",
       input: { command },
       executed: true,
     }),

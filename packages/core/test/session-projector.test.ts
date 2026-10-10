@@ -8,6 +8,8 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { Bus } from "@ocpp/core/bus"
 import { Event } from "@ocpp/schema/event"
 import { EventTable } from "@ocpp/core/event/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { Recorded } from "./lib/recorded"
 import { Model } from "@ocpp/core/model"
 import { Project } from "@ocpp/core/project"
 import { ProjectTable } from "@ocpp/core/project/sql"
@@ -527,14 +529,7 @@ describe("SessionProjector", () => {
         sessionID,
         text: "partial",
       })
-      expect(
-        yield* db
-          .select({ id: EventTable.id })
-          .from(EventTable)
-          .where(sql`${EventTable.type} like 'session.compaction.delta.%'`)
-          .all()
-          .pipe(Effect.orDie),
-      ).toHaveLength(0)
+      expect(yield* Recorded.events(eq(SpecterEventTable.type, SessionEvent.Compaction.Delta.type))).toHaveLength(0)
       expect(
         yield* db
           .select({ data: SessionMessageTable.data })
@@ -633,12 +628,13 @@ describe("SessionProjector", () => {
       const first = SessionMessage.ID.make("msg_retry_first")
       const second = SessionMessage.ID.make("msg_retry_second")
       yield* bus.publish(SessionEvent.Step.Started, { sessionID, assistantMessageID: first, agent: build, model })
-      yield* bus.publish(SessionEvent.RetryScheduled, {
+      // The fact counts the retries so far; the assistant shows the attempt about to run.
+      yield* bus.publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: first,
-        attempt: 2,
-        at: 2_000,
+        outcome: "failed",
         error: { type: "provider.transport", message: "Disconnected" },
+        retry: { attempt: 1, at: 2_000 },
       })
 
       const decode = (row: typeof SessionMessageTable.$inferSelect) =>
@@ -655,14 +651,14 @@ describe("SessionProjector", () => {
       })
 
       yield* bus.publish(SessionEvent.Step.Started, { sessionID, assistantMessageID: second, agent: build, model })
-      yield* bus.publish(SessionEvent.RetryScheduled, {
+      yield* bus.publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: second,
-        attempt: 3,
-        at: 6_000,
+        outcome: "failed",
         error: { type: "provider.internal", message: "Unavailable" },
+        retry: { attempt: 2, at: 6_000 },
       })
-      yield* bus.publish(SessionEvent.Execution.Interrupted, { sessionID, reason: "shutdown" })
+      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID, reason: "shutdown", outcome: "interrupted" })
 
       const rows = yield* db
         .select()
@@ -692,12 +688,13 @@ describe("SessionProjector", () => {
       const usageUpdated = yield* service
         .subscribe(SessionEvent.UsageUpdated)
         .pipe(Stream.runHead, Effect.forkScoped({ startImmediately: true }))
-      yield* service.publish(SessionEvent.Step.Ended, {
+      yield* service.publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: SessionMessage.ID.make("msg_assistant_2"),
         finish: "stop",
         cost: Money.USD.make(1.25),
         tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 1 } },
+        outcome: "succeeded",
       })
 
       const rows = yield* db
@@ -752,7 +749,7 @@ describe("SessionProjector", () => {
         sessionID,
         assistantMessageID: endedID,
       })
-      yield* service.publish(SessionEvent.Step.Ended, {
+      yield* service.publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: endedID,
         finish: "stop",
@@ -762,8 +759,9 @@ describe("SessionProjector", () => {
         tokens: { input: 2, output: 3, reasoning: 4, cache: { read: 5, write: 6 } },
         snapshot: Snapshot.ID.make("snap_ended"),
         files: [RelativePath.make("src/ended.ts")],
+        outcome: "succeeded",
       })
-      yield* service.publish(SessionEvent.Step.Failed, {
+      yield* service.publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: failedID,
         finish: "content-filter",
@@ -772,6 +770,7 @@ describe("SessionProjector", () => {
         error: { type: "provider.invalid-request", message: "Failed" },
         snapshot: Snapshot.ID.make("snap_failed"),
         files: [RelativePath.make("src/failed.ts")],
+        outcome: "failed",
       })
 
       const rows = yield* db
@@ -822,10 +821,12 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
 
       const service = yield* Bus.Service
-      yield* service.publish(SessionEvent.Text.Started, {
+      yield* service.publish(SessionEvent.Block.Recorded, {
         sessionID,
         assistantMessageID: SessionMessage.ID.make("msg_assistant_completed"),
+        kind: "text",
         ordinal: 0,
+        text: "",
       })
 
       const rows = yield* db

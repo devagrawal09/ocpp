@@ -23,6 +23,7 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { asc, eq } from "drizzle-orm"
 import { Effect, Exit, Layer } from "effect"
 import { testEffect } from "./lib/effect"
+import { Recorded } from "./lib/recorded"
 
 const it = testEffect(
   Layer.merge(
@@ -140,18 +141,12 @@ for (const fixture of [
         content: [{ type: "tool", state: { status: fixture.toolChoice === "none" ? "error" : "completed" } }],
       })
       expect(message?.data).toHaveProperty("cost", expect.closeTo(0.0000233, 10))
-      const events = yield* db
-        .select({ type: EventTable.type })
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, sessionID))
-        .orderBy(asc(EventTable.seq))
-        .all()
-      const types = events.map((event) => event.type)
-      const terminal = fixture.finish === "stop" ? "session-step-ended.1" : "session-step-failed.1"
-      expect(types.filter((type) => type === terminal)).toHaveLength(1)
-      expect(
-        types.indexOf(fixture.toolChoice === "none" ? "session-tool-failed.2" : "session-tool-success.2"),
-      ).toBeLessThan(types.indexOf(terminal))
+      const events = yield* Recorded.events(eq(EventTable.aggregate_id, sessionID))
+      const settled = events.filter((event) => event.type === "session-step-settled")
+      expect(settled.map((event) => event.data.outcome)).toEqual([fixture.finish === "stop" ? "succeeded" : "failed"])
+      const tool = events.findIndex((event) => event.type === "session-tool-settled")
+      expect(events[tool]?.data.outcome).toBe(fixture.toolChoice === "none" ? "failed" : "succeeded")
+      expect(tool).toBeLessThan(events.indexOf(settled[0]!))
     }),
   )
 }

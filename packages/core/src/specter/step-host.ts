@@ -41,46 +41,33 @@ import { toSessionError } from "../session/to-session-error.js"
 import { ToolOutput } from "../tool-output.js"
 import { PluginSupervisor } from "../plugin/supervisor.js"
 
-type StepEnded = typeof SessionEvent.Step.Ended.data.Type
-type StepFailed = typeof SessionEvent.Step.Failed.data.Type
+type StepSettled = typeof SessionEvent.Step.Settled.data.Type
 
-// The step facts OC++'s attempt publishes. In a runtime-run Session they are the runtime's to record.
+// The durable step facts OC++'s attempt publishes. In a runtime-run Session they are the runtime's to record.
 const stepFacts = new Set<string>(
   [
     SessionEvent.Step.Started,
     SessionEvent.Step.Streamed,
-    SessionEvent.Step.Ended,
-    SessionEvent.Step.Failed,
-    SessionEvent.Text.Started,
-    SessionEvent.Text.Ended,
-    SessionEvent.Reasoning.Started,
-    SessionEvent.Reasoning.Ended,
-    SessionEvent.Tool.Input.Started,
-    SessionEvent.Tool.Input.Ended,
-    SessionEvent.Tool.Called,
-    SessionEvent.Tool.Success,
-    SessionEvent.Tool.Failed,
-    SessionEvent.RetryScheduled,
+    SessionEvent.Step.Settled,
+    SessionEvent.Block.Recorded,
+    SessionEvent.Tool.Requested,
+    SessionEvent.Tool.Input.Failed,
+    SessionEvent.Tool.Settled,
   ].map((definition) => definition.type),
 )
 
 /**
- * The Bus an attempt publishes through. Step facts go to the runtime's recorder: the step's start (OC++
- * starts it at the provider's first event), a finished block, a requested call, a settled call. The step's
- * end is the runtime's to settle from the attempt's outcome, so it is kept for the outcome. Everything
- * else, ephemeral deltas and progress included, reaches the real Bus.
+ * The Bus an attempt publishes through. Its step facts go to the runtime's recorder: the step's start (OC++
+ * starts it at the provider's first event), a finished block, a requested call, a call whose input failed, a
+ * settled call. The step's settlement is the runtime's to record from the attempt's outcome, so it is kept for
+ * the outcome. Everything else, the live markers, deltas and progress included, reaches the real Bus.
  */
 // Command payloads carry no undefined values; an absent field stays absent.
 const defined = <T extends Record<string, unknown>>(value: T) =>
   Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined)) as T
 
 const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
-  const names = new Map<string, string>()
-  // A call's raw input, and the calls the model completed: a failure of any other is its input's.
-  const texts = new Map<string, string>()
-  const called = new Set<string>()
-  const reasoningStates = new Map<number, Record<string, unknown> | undefined>()
-  const settled: { started: boolean; ended?: StepEnded; failed?: StepFailed } = { started: false }
+  const settled: { started: boolean; step?: StepSettled } = { started: false }
   // Once the runtime rejects a record, the execution moved on: nothing more is recorded.
   let stopped = false
   const recorded = (effect: Effect.Effect<boolean, RecordFailure>) =>
@@ -99,64 +86,24 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
         return recorded(record.started())
       case SessionEvent.Step.Streamed.type:
         return recorded(record.streamed())
-      case SessionEvent.Tool.Input.Started.type:
-        names.set(data.id, data.name)
-        return Effect.void
-      case SessionEvent.Tool.Input.Ended.type:
-        texts.set(data.id, data.text)
-        return Effect.void
-      case SessionEvent.Reasoning.Started.type:
-        reasoningStates.set(data.ordinal, data.state)
-        return Effect.void
-      case SessionEvent.Text.Ended.type:
+      case SessionEvent.Block.Recorded.type:
         return recorded(
-          record.block(defined({ kind: "text", ordinal: data.ordinal, text: data.text, state: data.state })),
+          record.block(defined({ kind: data.kind, ordinal: data.ordinal, text: data.text, state: data.state })),
         )
-      case SessionEvent.Reasoning.Ended.type: {
-        return recorded(
-          record.block(
-            defined({
-              kind: "reasoning",
-              ordinal: data.ordinal,
-              text: data.text,
-              state: data.state ?? reasoningStates.get(data.ordinal),
-            }),
-          ),
-        )
+      case SessionEvent.Tool.Requested.type: {
+        const { sessionID: _, assistantMessageID: __, ...call } = data
+        return recorded(record.toolRequested(defined(call)))
       }
-      case SessionEvent.Tool.Called.type:
-        called.add(data.id)
-        return recorded(
-          record.toolRequested(
-            defined({
-              id: data.id,
-              name: names.get(data.id) ?? "unknown",
-              input: data.input,
-              executed: data.executed,
-              state: data.state,
-            }),
-          ),
-        )
-      case SessionEvent.Tool.Failed.type: {
-        const { sessionID: _, assistantMessageID: __, ...result } = data
-        if (called.has(data.id)) return recorded(record.toolSettled(defined(result)))
-        // Its input never became a call.
-        const { resultState: ___, ...failure } = result
-        return recorded(
-          record.toolInputFailed(
-            defined({ ...failure, name: names.get(data.id) ?? "unknown", text: texts.get(data.id) }),
-          ),
-        )
+      case SessionEvent.Tool.Input.Failed.type: {
+        const { sessionID: _, assistantMessageID: __, resultState: ___, ...failure } = data
+        return recorded(record.toolInputFailed(defined(failure)))
       }
-      case SessionEvent.Tool.Success.type: {
-        const { sessionID: _, assistantMessageID: __, ...result } = data
+      case SessionEvent.Tool.Settled.type: {
+        const { sessionID: _, assistantMessageID: __, outcome: ___, ...result } = data
         return recorded(record.toolSettled(defined(result)))
       }
-      case SessionEvent.Step.Ended.type:
-        settled.ended = data
-        return Effect.void
-      case SessionEvent.Step.Failed.type:
-        settled.failed = data
+      case SessionEvent.Step.Settled.type:
+        settled.step = data
         return Effect.void
       default:
         return Effect.void
@@ -189,7 +136,7 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
 const CONTINUE_AFTER_INCOMPLETE_STREAM =
   "The previous response was interrupted. Continue from where you left off without repeating completed content."
 
-const observed = (step: StepEnded | StepFailed) => ({
+const observed = (step: StepSettled) => ({
   ...(step.rawFinish === undefined ? {} : { rawFinish: step.rawFinish }),
   ...(step.providerState === undefined ? {} : { providerState: step.providerState }),
   ...(step.cost === undefined ? {} : { cost: step.cost }),
@@ -301,7 +248,7 @@ const stepIOLayer = Layer.effect(
       // The logical step's retry schedule and one-time recoveries span its attempts; its first attempt
       // starts them afresh.
       const recovery = input.attempt === 1 ? undefined : recoveries.get(sessionID)
-      const state = recovery ?? { retry: yield* SessionRunnerRetry.make(bus, sessionID), overflow: true, full: true }
+      const state = recovery ?? { retry: yield* SessionRunnerRetry.make(sessionID), overflow: true, full: true }
       recoveries.set(sessionID, state)
 
       const attempt = (current: SessionContext.Loaded, record: AttemptRecorder) =>
@@ -622,7 +569,9 @@ const outcomeOf = (
   recording: ReturnType<typeof recordingBus>,
 ): AttemptOutcome => {
   if (recording.stopped()) return { outcome: "stopped" }
-  const { ended, failed: stepFailed } = recording.settled
+  const step = recording.settled.step
+  const ended = step?.outcome === "succeeded" ? step : undefined
+  const stepFailed = step?.outcome === "failed" ? step : undefined
   if (Exit.isSuccess(exit)) {
     const outcome = exit.value
     switch (outcome._tag) {

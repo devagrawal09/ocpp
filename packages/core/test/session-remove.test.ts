@@ -11,6 +11,8 @@ import { Project } from "@ocpp/core/project"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { EventTable } from "@ocpp/core/event/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { Recorded } from "./lib/recorded"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionModelTransport } from "@ocpp/core/session/model-transport"
@@ -121,16 +123,9 @@ describe("Session.remove", () => {
       // A Session being removed is not woken for it.
       const { db } = yield* Database.Service
       expect(
-        yield* db
-          .select({ id: EventTable.id })
-          .from(EventTable)
-          .where(
-            and(
-              eq(EventTable.aggregate_id, parent.id),
-              eq(EventTable.type, Bus.versionedType(SessionEvent.Execution.Started.type, 1)),
-            ),
-          )
-          .all(),
+        yield* Recorded.events(
+          and(eq(EventTable.aggregate_id, parent.id), eq(SpecterEventTable.type, SessionEvent.Execution.Started.type)),
+        ),
       ).toEqual([])
       yield* Deferred.succeed(closeGate, undefined)
       yield* Fiber.join(removing)

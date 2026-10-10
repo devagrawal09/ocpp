@@ -112,6 +112,7 @@ type PartRef = { messageID: string; type: "text" | "reasoning" | "tool"; ordinal
 const partRefs = new Map<string, PartRef>()
 const nextOrdinals = new Map<string, { text: number; reasoning: number }>()
 const startedParts = new Set<string>()
+const streamedText = new Map<string, string>()
 const toolStates = new Map<string, ToolStatus>()
 let eventSequence = 0
 let durableSequence = -1
@@ -276,12 +277,12 @@ export function toolInputStarted(data: Extract<OcppEvent, { type: "session-tool-
   return makeEvent("session-tool-input-started", data)
 }
 
-export function toolInputEnded(data: Extract<OcppEvent, { type: "session-tool-input-ended" }>["data"]) {
-  return makeEvent("session-tool-input-ended", data)
+export function toolInputDelta(data: Extract<OcppEvent, { type: "session-tool-input-delta" }>["data"]) {
+  return makeEvent("session-tool-input-delta", data)
 }
 
-export function toolCalled(data: Extract<OcppEvent, { type: "session-tool-called" }>["data"]) {
-  return makeEvent("session-tool-called", data)
+export function toolRequested(data: Extract<OcppEvent, { type: "session-tool-requested" }>["data"]) {
+  return makeEvent("session-tool-requested", data)
 }
 
 export function validateTimelineEvent(input: unknown): OcppEvent {
@@ -381,48 +382,25 @@ export function partUpdated(part: PartSeed<"assistant">): readonly OcppEvent[] {
   const started = startedParts.has(part.id)
   const ref = partRef(part.id, messageID, part.type)
   if (part.type === "text") {
+    // A text part streams: its start, then its text as it grows. A part whose text was replaced is recorded whole.
     startedParts.add(part.id)
+    const block = { sessionID, assistantMessageID: messageID, kind: "text" as const, ordinal: ref.ordinal! }
+    const previous = streamedText.get(part.id) ?? ""
+    streamedText.set(part.id, part.text)
+    if (started && !part.text.startsWith(previous))
+      return [makeEvent("session-block-recorded", { ...block, text: part.text })]
     return [
-      ...(started
-        ? []
-        : [makeEvent("session-text-started", { sessionID, assistantMessageID: messageID, ordinal: ref.ordinal! })]),
-      makeEvent("session-text-ended", {
-        sessionID,
-        assistantMessageID: messageID,
-        ordinal: ref.ordinal!,
-        text: part.text,
-      }),
+      ...(started ? [] : [makeEvent("session-block-started", block)]),
+      makeEvent("session-block-delta", { ...block, delta: part.text.slice(previous.length) }),
     ]
   }
   if (part.type === "reasoning") {
     startedParts.add(part.id)
-    if (!started && !part.text)
-      return [
-        makeEvent("session-reasoning-started", {
-          sessionID,
-          assistantMessageID: messageID,
-          ordinal: ref.ordinal!,
-          state: jsonRecord(part.metadata),
-        }),
-      ]
+    const block = { sessionID, assistantMessageID: messageID, kind: "reasoning" as const, ordinal: ref.ordinal! }
+    if (!started && !part.text) return [makeEvent("session-block-started", block)]
     return [
-      ...(started
-        ? []
-        : [
-            makeEvent("session-reasoning-started", {
-              sessionID,
-              assistantMessageID: messageID,
-              ordinal: ref.ordinal!,
-              state: jsonRecord(part.metadata),
-            }),
-          ]),
-      makeEvent("session-reasoning-ended", {
-        sessionID,
-        assistantMessageID: messageID,
-        ordinal: ref.ordinal!,
-        text: part.text,
-        state: jsonRecord(part.metadata),
-      }),
+      ...(started ? [] : [makeEvent("session-block-started", block)]),
+      makeEvent("session-block-recorded", { ...block, text: part.text, state: jsonRecord(part.metadata) }),
     ]
   }
   return toolEvents(part, messageID)
@@ -437,9 +415,11 @@ export function renderedPartID(partID: string) {
 export function partDelta(partID: string, delta: string, messageID = assistantID) {
   const ref = partRefs.get(partID)
   if (!ref || ref.type !== "text" || ref.ordinal === undefined) throw new Error(`Unknown text part: ${partID}`)
-  return makeEvent("session-text-delta", {
+  streamedText.set(partID, (streamedText.get(partID) ?? "") + delta)
+  return makeEvent("session-block-delta", {
     sessionID,
     assistantMessageID: messageID,
+    kind: "text",
     ordinal: ref.ordinal,
     delta,
   })
@@ -447,16 +427,18 @@ export function partDelta(partID: string, delta: string, messageID = assistantID
 
 export function messageUpdated(info: SessionMessageAssistant) {
   if (info.error)
-    return makeEvent("session-step-failed", {
+    return makeEvent("session-step-settled", {
       sessionID,
       assistantMessageID: info.id,
+      outcome: "failed",
       error: info.error,
       cost: info.cost,
       tokens: info.tokens,
     })
-  return makeEvent("session-step-ended", {
+  return makeEvent("session-step-settled", {
     sessionID,
     assistantMessageID: info.id,
+    outcome: "succeeded",
     finish: info.finish ?? "stop",
     cost: info.cost ?? 0,
     tokens: info.tokens ?? tokens,
@@ -465,13 +447,14 @@ export function messageUpdated(info: SessionMessageAssistant) {
 
 export function status(type: SessionStatus["type"], attempt = 1) {
   if (type === "busy") return makeEvent("session-execution-started", { sessionID })
-  if (type === "idle") return makeEvent("session-execution-succeeded", { sessionID })
-  return makeEvent("session-retry-scheduled", {
+  if (type === "idle") return makeEvent("session-execution-settled", { sessionID, outcome: "succeeded" })
+  // The step's attempt failed and its retry is scheduled; the assistant shows the attempt about to run.
+  return makeEvent("session-step-settled", {
     sessionID,
     assistantMessageID: assistantID,
-    attempt,
-    at: 1700000010000,
+    outcome: "failed",
     error: { type: "provider.error", message: "Rate limited" },
+    retry: { attempt: Math.max(1, attempt - 1), at: 1700000010000 },
   })
 }
 
@@ -774,16 +757,11 @@ function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
   }
   if (!previous || previous === "streaming") {
     events.push(
-      makeEvent("session-tool-input-ended", {
+      makeEvent("session-tool-requested", {
         sessionID,
         assistantMessageID: messageID,
         id: part.id,
-        text: JSON.stringify(part.state.input),
-      }),
-      makeEvent("session-tool-called", {
-        sessionID,
-        assistantMessageID: messageID,
-        id: part.id,
+        name: part.name,
         input: part.state.input,
         executed: part.executed ?? true,
         state: jsonRecord(part.providerState),
@@ -809,10 +787,11 @@ function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
   }
   if (part.state.status === "error") {
     events.push(
-      makeEvent("session-tool-failed", {
+      makeEvent("session-tool-settled", {
         sessionID,
         assistantMessageID: messageID,
         id: part.id,
+        outcome: "failed",
         error: { type: "ToolError", message: part.state.error },
         metadata: jsonRecord(part.state.metadata),
         executed: part.executed ?? true,
@@ -823,10 +802,11 @@ function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
     return events
   }
   events.push(
-    makeEvent("session-tool-success", {
+    makeEvent("session-tool-settled", {
       sessionID,
       assistantMessageID: messageID,
       id: part.id,
+      outcome: "succeeded",
       content: [{ type: "text", text: part.state.output }],
       metadata: jsonRecord(part.state.metadata),
       executed: part.executed ?? true,

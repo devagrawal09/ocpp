@@ -10,7 +10,7 @@ import specification from "./spec.json" with { type: "json" }
 // Rebuildable projection: known Sessions, active executions, and each inbox item's status.
 // Duplicated from cancel-inbox-item on purpose.
 export type DeliverInboxItemState = {
-  sessions: Record<string, true>
+  sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
   items: Record<
     string,
@@ -34,6 +34,7 @@ export const createDeliverInboxItemState = (): DeliverInboxItemState => ({
 })
 
 const sessionCreated = sessionEvent("session-created")
+const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const executionStarted = sessionEvent("session-execution-started")
 const executionSettled = sessionEvent("session-execution-settled")
@@ -48,7 +49,10 @@ export const deliverInboxItem = implementCommand(specification)
   .store(deliverInboxItemStore)
   .apply(sessionCreated, async (event, state) => {
     const { sessionID } = event.payload
-    state.sessions[sessionID] = true
+    state.sessions[sessionID] = "live"
+  })
+  .apply(sessionDeleted, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "deleted"
   })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
@@ -74,6 +78,7 @@ export const deliverInboxItem = implementCommand(specification)
   })
   .handle(async (command, state) => {
     if (!state.sessions[command.sessionID]) throw new Error("Session not found")
+    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
     // Delivery is runner-owned: it cannot happen without an active execution.
     if (!state.active[command.sessionID]) throw new Error("Execution not active")
 

@@ -1,0 +1,246 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Stages a revert of an idle Session to a message: its history is cut there when the revert is committed, and a clear restores it. The host checks the message and restores the files first.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "stageRevert",
+  "scenarios": [
+    {
+      "description": "An idle Session stages a revert to a message.",
+      "expect": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "files": [],
+              "messageID": "msg_2",
+              "snapshot": "tree_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "revert": {
+          "files": [],
+          "messageID": "msg_2",
+          "snapshot": "tree_1"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A new stage replaces the staged revert; staging never fails because one is staged.",
+      "expect": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "files": [],
+              "messageID": "msg_1",
+              "snapshot": "tree_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "files": [],
+              "messageID": "msg_2",
+              "snapshot": "tree_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "revert": {
+          "files": [],
+          "messageID": "msg_1",
+          "snapshot": "tree_1"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Session whose execution has settled is idle again.",
+      "expect": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "files": [],
+              "messageID": "msg_2",
+              "snapshot": "tree_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "revert": {
+          "files": [],
+          "messageID": "msg_2",
+          "snapshot": "tree_1"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A running Session cannot stage a revert.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session is busy"
+      },
+      "when": {
+        "revert": {
+          "files": [],
+          "messageID": "msg_2",
+          "snapshot": "tree_1"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "revert": {
+          "files": [],
+          "messageID": "msg_2",
+          "snapshot": "tree_1"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "revert": {
+          "files": [],
+          "messageID": "msg_2",
+          "snapshot": "tree_1"
+        },
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

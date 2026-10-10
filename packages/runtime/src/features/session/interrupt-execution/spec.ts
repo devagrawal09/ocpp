@@ -212,6 +212,18 @@ export const interruptExecutionSpec = createCommandSlice("interruptExecution")
       reject: { reason: "Session not found" },
     },
     {
+      description: "A deleted Session has nothing to interrupt: deleting it settled its execution.",
+      given: [
+        created(),
+        started(),
+        event("session-execution-settled", { sessionID: "ses_1", outcome: "interrupted", reason: "user" }),
+        event("session-deleted", { sessionID: "ses_1" }),
+      ],
+      when: { sessionID: "ses_1" },
+      expect: [],
+      reject: { reason: "Session deleted" },
+    },
+    {
       description: "Different Sessions run concurrently: interrupting one does not require the other to be active.",
       given: [created(), created("ses_2"), started("ses_1")],
       when: { sessionID: "ses_2" },

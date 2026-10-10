@@ -1213,6 +1213,43 @@
         "sessionID": "ses_missing",
         "type": "user"
       }
+    },
+    {
+      "description": "A deleted Session admits nothing.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "hello"
+        },
+        "sessionID": "ses_1",
+        "type": "user"
+      }
     }
   ]
 }

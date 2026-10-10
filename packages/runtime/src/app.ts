@@ -10,6 +10,13 @@ import type { SliceStoreService, SliceStoreTag } from "@specter-ts/core"
 import { Layer } from "effect"
 
 import { sessionEventDefinitions } from "./events.ts"
+import { clearRevert, clearRevertStore, createClearRevertState } from "./features/session/clear-revert/impl.ts"
+import { commitRevert, commitRevertStore, createCommitRevertState } from "./features/session/commit-revert/impl.ts"
+import { createCreateSessionState, createSession, createSessionStore } from "./features/session/create-session/impl.ts"
+import { createDeleteSessionState, deleteSession, deleteSessionStore } from "./features/session/delete-session/impl.ts"
+import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
+import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
+import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
 import { makeDriveExecutionPlugin } from "./plugins/drive-execution.ts"
 import { runStepPlugin } from "./plugins/run-step.ts"
 import {
@@ -132,6 +139,13 @@ export const createSessionAppConfig = (
     slices: {
       recordSessionFacts,
       registerSession,
+      createSession,
+      forkSession,
+      moveSession,
+      deleteSession,
+      stageRevert,
+      clearRevert,
+      commitRevert,
       enqueueInput,
       cancelInboxItem,
       changeDelivery,
@@ -192,6 +206,13 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
   Layer.mergeAll(
     provide(recordSessionFactsStore, createRecordSessionFactsState),
     provide(registerSessionStore, createRegisterSessionState),
+    provide(createSessionStore, createCreateSessionState),
+    provide(forkSessionStore, createForkSessionState),
+    provide(moveSessionStore, createMoveSessionState),
+    provide(deleteSessionStore, createDeleteSessionState),
+    provide(stageRevertStore, createStageRevertState),
+    provide(clearRevertStore, createClearRevertState),
+    provide(commitRevertStore, createCommitRevertState),
     provide(enqueueInputStore, createEnqueueInputState),
     provide(cancelInboxItemStore, createCancelInboxItemState),
     provide(changeDeliveryStore, createChangeDeliveryState),

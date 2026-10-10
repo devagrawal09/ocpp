@@ -1,0 +1,313 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Creates a Session with the identity the host chose. An ID names one Session for good: a live or deleted Session's ID is refused, and a child's parent must be live. A Session imported from another server records its history in the same commit.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "createSession",
+  "scenarios": [
+    {
+      "description": "A new Session is recorded with the identity it was given.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_1",
+          "slug": "brave-otter",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "A child Session names its live parent, and keeps the host's optional fields.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "agent": "explore",
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "parentID": "ses_parent",
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "title": "Child",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_parent",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "session": {
+          "agent": "explore",
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "parentID": "ses_parent",
+          "projectID": "prj_1",
+          "sessionID": "ses_1",
+          "slug": "brave-otter",
+          "title": "Child",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "An imported Session records its history with its creation, in one commit.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-imported",
+          "examplePayload": {
+            "cost": 0.25,
+            "messages": [
+              {
+                "created": 1,
+                "data": {
+                  "text": "Hello"
+                },
+                "id": "msg_1",
+                "seq": 1,
+                "type": "user"
+              }
+            ],
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "time": {
+              "created": 1,
+              "idle": 2,
+              "updated": 2
+            },
+            "tokens": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 10,
+              "output": 5,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "imported": {
+          "cost": 0.25,
+          "messages": [
+            {
+              "created": 1,
+              "data": {
+                "text": "Hello"
+              },
+              "id": "msg_1",
+              "seq": 1,
+              "type": "user"
+            }
+          ],
+          "outcome": "succeeded",
+          "time": {
+            "created": 1,
+            "idle": 2,
+            "updated": 2
+          },
+          "tokens": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 10,
+            "output": 5,
+            "reasoning": 0
+          }
+        },
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_1",
+          "slug": "brave-otter",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "Reusing a live Session's ID is refused; the host adopts the existing Session.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session already exists"
+      },
+      "when": {
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_1",
+          "slug": "brave-otter",
+          "title": "Again",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "A deleted Session's ID is not given to a new Session.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_1",
+          "slug": "brave-otter",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "A child of an unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Parent session not found"
+      },
+      "when": {
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "parentID": "ses_missing",
+          "projectID": "prj_1",
+          "sessionID": "ses_1",
+          "slug": "brave-otter",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "A child of a deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_parent",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_parent"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Parent session deleted"
+      },
+      "when": {
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "parentID": "ses_parent",
+          "projectID": "prj_1",
+          "sessionID": "ses_1",
+          "slug": "brave-otter",
+          "version": "2"
+        }
+      }
+    }
+  ]
+}

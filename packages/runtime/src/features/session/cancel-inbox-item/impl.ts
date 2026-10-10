@@ -9,7 +9,7 @@ import specification from "./spec.json" with { type: "json" }
 // Rebuildable projection: known Sessions and each inbox item's status.
 // Duplicated from enqueue-input on purpose.
 export type CancelInboxItemState = {
-  sessions: Record<string, true>
+  sessions: Record<string, "live" | "deleted">
   items: Record<string, { sessionID: string; status: "pending" | "delivered" | "cancelled" }>
 }
 
@@ -23,6 +23,7 @@ export const createCancelInboxItemState = (): CancelInboxItemState => ({
 })
 
 const sessionCreated = sessionEvent("session-created")
+const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
 const inboxCancelled = sessionEvent("session-inbox-cancelled")
@@ -34,7 +35,10 @@ export const cancelInboxItem = implementCommand(specification)
   .store(cancelInboxItemStore)
   .apply(sessionCreated, async (event, state) => {
     const { sessionID } = event.payload
-    state.sessions[sessionID] = true
+    state.sessions[sessionID] = "live"
+  })
+  .apply(sessionDeleted, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "deleted"
   })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID } = event.payload
@@ -52,6 +56,7 @@ export const cancelInboxItem = implementCommand(specification)
   })
   .handle(async (command, state) => {
     if (!state.sessions[command.sessionID]) throw new Error("Session not found")
+    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
 
     const item = state.items[command.inboxID]
     if (!item || item.sessionID !== command.sessionID) throw new Error("Inbox item not found")

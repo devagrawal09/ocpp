@@ -12,7 +12,7 @@ import specification from "./spec.json" with { type: "json" }
 // still pending, and the coalescing key a synthetic item was admitted under.
 // It is a duplicate of the projection in cancel-inbox-item on purpose.
 export type EnqueueInputState = {
-  sessions: Record<string, true>
+  sessions: Record<string, "live" | "deleted">
   items: Record<string, { sessionID: string; type: string; pending: boolean; coalesce?: string }>
 }
 
@@ -26,6 +26,7 @@ export const createEnqueueInputState = (): EnqueueInputState => ({
 })
 
 const sessionCreated = sessionEvent("session-created")
+const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
 const inboxCancelled = sessionEvent("session-inbox-cancelled")
@@ -114,7 +115,10 @@ export const enqueueInput = implementCommand(specification)
   .store(enqueueInputStore)
   .apply(sessionCreated, async (event, state) => {
     const { sessionID } = event.payload
-    state.sessions[sessionID] = true
+    state.sessions[sessionID] = "live"
+  })
+  .apply(sessionDeleted, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "deleted"
   })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
@@ -139,6 +143,7 @@ export const enqueueInput = implementCommand(specification)
   .apply(revertCommitted, async () => {})
   .handle(async (command, state) => {
     if (!state.sessions[command.sessionID]) throw new Error("Session not found")
+    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
 
     const existing = state.items[command.inboxID]
     if (existing) {

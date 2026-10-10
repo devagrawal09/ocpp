@@ -169,6 +169,13 @@ export const deliverInboxItemSpec = createCommandSlice("deliverInboxItem")
       expect: [],
       reject: { reason: "Session not found" },
     },
+    {
+      description: "Delivery to a deleted Session fails.",
+      given: [created, event("session-deleted", { sessionID: "ses_1" })],
+      when: ref("msg_1"),
+      expect: [],
+      reject: { reason: "Session deleted" },
+    },
   )
 
 export default deliverInboxItemSpec

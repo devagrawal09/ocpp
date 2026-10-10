@@ -9,7 +9,7 @@ import specification from "./spec.json" with { type: "json" }
 // execution (started, not yet succeeded/failed/interrupted). Duplicated from
 // the other execution slices on purpose.
 export type StartExecutionState = {
-  sessions: Record<string, true>
+  sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
 }
 
@@ -23,6 +23,7 @@ export const createStartExecutionState = (): StartExecutionState => ({
 })
 
 const sessionCreated = sessionEvent("session-created")
+const sessionDeleted = sessionEvent("session-deleted")
 const executionStarted = sessionEvent("session-execution-started")
 const executionSettled = sessionEvent("session-execution-settled")
 
@@ -41,7 +42,10 @@ export const startExecution = implementCommand(specification)
   .inputSchema(input)
   .store(startExecutionStore)
   .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = true
+    state.sessions[event.payload.sessionID] = "live"
+  })
+  .apply(sessionDeleted, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "deleted"
   })
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
@@ -51,6 +55,7 @@ export const startExecution = implementCommand(specification)
   })
   .handle(async (command, state) => {
     if (!state.sessions[command.sessionID]) throw new Error("Session not found")
+    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
     if (state.active[command.sessionID]) throw new Error("Execution already active")
     return [
       executionStarted.create({ sessionID: command.sessionID }),

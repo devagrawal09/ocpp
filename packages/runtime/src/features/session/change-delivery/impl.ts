@@ -7,9 +7,11 @@ import { Context, Schema } from "effect"
 import { sessionEvent } from "../../../events.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: each inbox item's Session, delivery and whether it
-// is still pending. Duplicated from the other inbox Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or
+// deleted, and each inbox item's Session, delivery and whether it is still
+// pending. Duplicated from the other inbox Slices on purpose.
 export type ChangeDeliveryState = {
+  sessions: Record<string, "live" | "deleted">
   items: Record<string, { sessionID: string; delivery: "steer" | "queue"; pending: boolean }>
 }
 
@@ -18,9 +20,12 @@ export const changeDeliveryStore = Context.Service<
 >("@ocpp/runtime/ChangeDeliveryStore")
 
 export const createChangeDeliveryState = (): ChangeDeliveryState => ({
+  sessions: {},
   items: {},
 })
 
+const sessionCreated = sessionEvent("session-created")
+const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
 const inboxCancelled = sessionEvent("session-inbox-cancelled")
@@ -44,6 +49,12 @@ const settle = (state: ChangeDeliveryState, inboxID: string) => {
 export const changeDelivery = implementCommand(specification)
   .inputSchema(input)
   .store(changeDeliveryStore)
+  .apply(sessionCreated, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "live"
+  })
+  .apply(sessionDeleted, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "deleted"
+  })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     state.items[inboxID] ??= {
@@ -63,6 +74,8 @@ export const changeDelivery = implementCommand(specification)
     if (item) item.delivery = event.payload.delivery
   })
   .handle(async (command, state) => {
+    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
+    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
     const item = state.items[command.inboxID]
     if (item?.sessionID !== command.sessionID) throw new Error("Inbox item not found")
     if (!item.pending) throw new Error("Inbox item not pending")

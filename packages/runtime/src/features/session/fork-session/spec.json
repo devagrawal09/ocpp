@@ -1,0 +1,364 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Forks a live Session: the child's creation and the fork are recorded in one commit, so the child exists exactly when its fork does. The host resolves the boundary to a message of the parent's history and chooses the child's identity; the fork's projection copies the history.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "forkSession",
+  "scenarios": [
+    {
+      "description": "The child is created and forked from its parent at the boundary, in one commit.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "calm-heron",
+            "title": "Plan (fork #1)",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_3",
+              "type": "through"
+            },
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "title": "Plan",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "through"
+        },
+        "parentID": "ses_1",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "The child adopts the parent's newest instruction values and entries, recorded with the fork.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "calm-heron",
+            "title": "Plan (fork #1)",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_3",
+              "type": "before"
+            },
+            "instructionEntries": [
+              {
+                "key": "ticket",
+                "removed": false,
+                "value": {
+                  "id": 42
+                }
+              }
+            ],
+            "instructions": {
+              "builtin/agents": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "before"
+        },
+        "instructionEntries": [
+          {
+            "key": "ticket",
+            "removed": false,
+            "value": {
+              "id": 42
+            }
+          }
+        ],
+        "instructions": {
+          "builtin/agents": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "parentID": "ses_1",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "A fork of a fork forks the middle Session like any other.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_3",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_3",
+              "type": "through"
+            },
+            "parentID": "ses_2",
+            "sessionID": "ses_3"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "through"
+        },
+        "parentID": "ses_2",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_3",
+          "slug": "brave-otter",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "Forking an unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "through"
+        },
+        "parentID": "ses_missing",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "Forking a deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "through"
+        },
+        "parentID": "ses_1",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "The child's ID must be new: one a live or deleted Session had is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session already exists"
+      },
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "through"
+        },
+        "parentID": "ses_1",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        }
+      }
+    }
+  ]
+}

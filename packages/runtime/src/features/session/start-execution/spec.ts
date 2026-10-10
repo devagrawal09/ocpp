@@ -80,6 +80,13 @@ export const startExecutionSpec = createCommandSlice("startExecution")
       expect: [],
       reject: { reason: "Session not found" },
     },
+    {
+      description: "A deleted Session never runs again.",
+      given: [created(), event("session-deleted", { sessionID: "ses_1" })],
+      when: { sessionID: "ses_1" },
+      expect: [],
+      reject: { reason: "Session deleted" },
+    },
   )
 
 export default startExecutionSpec

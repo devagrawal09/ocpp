@@ -394,6 +394,18 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
       expect: [],
       reject: { reason: "Session not found" },
     },
+    {
+      description: "A deleted Session admits nothing.",
+      given: [created("ses_1"), event("session-deleted", { sessionID: "ses_1" })],
+      when: {
+        sessionID: "ses_1",
+        inboxID: "msg_1",
+        type: "user",
+        payload: { text: "hello" },
+      },
+      expect: [],
+      reject: { reason: "Session deleted" },
+    },
   )
 
 export default enqueueInputSpec

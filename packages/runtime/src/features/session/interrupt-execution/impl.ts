@@ -10,7 +10,7 @@ import specification from "./spec.json" with { type: "json" }
 // execution (started, not yet succeeded/failed/interrupted). Duplicated from
 // the other execution slices on purpose.
 export type InterruptExecutionState = {
-  sessions: Record<string, true>
+  sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
   // Requested calls of the in-flight attempt that have not settled, in call
   // order, per Session. The interrupt settles these in its own commit.
@@ -37,6 +37,7 @@ export const createInterruptExecutionState = (): InterruptExecutionState => ({
 })
 
 const sessionCreated = sessionEvent("session-created")
+const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const executionStarted = sessionEvent("session-execution-started")
 const executionSettled = sessionEvent("session-execution-settled")
@@ -75,7 +76,10 @@ export const interruptExecution = implementCommand(specification)
   .inputSchema(input)
   .store(interruptExecutionStore)
   .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = true
+    state.sessions[event.payload.sessionID] = "live"
+  })
+  .apply(sessionDeleted, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "deleted"
   })
   // Deliberately a no-op: the pending-input scenario puts an enqueued item in
   // Given, and conformance requires an apply handler for every Given event.
@@ -109,6 +113,7 @@ export const interruptExecution = implementCommand(specification)
   })
   .handle(async (command, state) => {
     if (!state.sessions[command.sessionID]) throw new Error("Session not found")
+    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
     // OC++: idle/settled interrupt is a public no-op; the M4 facade
     // translates this rejection back into success.
     if (!state.active[command.sessionID]) throw new Error("Session is idle")

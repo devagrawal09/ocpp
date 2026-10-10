@@ -72,6 +72,18 @@ export const cancelInboxItemSpec = createCommandSlice("cancelInboxItem")
       expect: [],
       reject: { reason: "Session not found" },
     },
+    {
+      description: "Cancelling in a deleted Session fails: deleting it cancelled its pending input.",
+      given: [
+        created,
+        enqueued,
+        event("session-inbox-cancelled", { sessionID: "ses_1", inboxID: "msg_1" }),
+        event("session-deleted", { sessionID: "ses_1" }),
+      ],
+      when: { sessionID: "ses_1", inboxID: "msg_1" },
+      expect: [],
+      reject: { reason: "Session deleted" },
+    },
   )
 
 export default cancelInboxItemSpec

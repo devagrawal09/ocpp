@@ -1,9 +1,9 @@
 import { EventLog } from "@specter-ts/core"
 import { createMemoryEventLog } from "@specter-ts/memory"
-import { Effect, Layer, type Scope } from "effect"
+import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "bun:test"
 
-import { type EmbeddedSessionRuntimeOptions, makeEmbeddedSessionRuntime } from "../src/embedded.ts"
+import { makeRuntime, type RuntimeOptions } from "../src/runtime.ts"
 import { makeSnapshotSliceStores, type SliceSnapshot } from "../src/snapshots.ts"
 import { makeScriptedStepHost } from "./fixture/scripted-step-host.ts"
 
@@ -16,12 +16,11 @@ const hostLog = () => {
 
 // The runtime as a host embeds it: over the host's Event Log, with the step
 // I/O the host supplies.
-const bootOver = (log: ReturnType<typeof hostLog>, options: EmbeddedSessionRuntimeOptions = {}) =>
+const bootOver = (log: ReturnType<typeof hostLog>, options: RuntimeOptions = {}) =>
   Effect.gen(function* () {
     const host = makeScriptedStepHost({ agent: "plan" })
-    const runtime = yield* makeEmbeddedSessionRuntime(options).pipe(
-      Effect.provide(Layer.mergeAll(Layer.succeed(EventLog, log), host.layer)),
-    )
+    const runtime = yield* makeRuntime(options).pipe(Effect.provideService(EventLog, log))
+    yield* runtime.start(host.host)
     return { runtime, host, recorded: () => log.inspect() }
   })
 const boot = Effect.suspend(() => bootOver(hostLog()))
@@ -34,14 +33,16 @@ const waitFor = (condition: () => boolean) =>
 
 const run = <A>(program: Effect.Effect<A, unknown, Scope.Scope>) => Effect.runPromise(Effect.scoped(program))
 
-const registration = {
-  type: "registerSession" as const,
+const creation = {
+  type: "createSession" as const,
   payload: {
-    sessionID: "ses_1",
-    projectID: "prj_1",
-    location: { directory: "/tmp/ws" },
-    slug: "brave-otter",
-    version: "2",
+    session: {
+      sessionID: "ses_1",
+      projectID: "prj_1",
+      location: { directory: "/tmp/ws" },
+      slug: "brave-otter",
+      version: "2",
+    },
   },
 }
 
@@ -51,7 +52,7 @@ describe("embedded runtime", () => {
       Effect.gen(function* () {
         const { runtime, host, recorded } = yield* boot
         host.script("ses_1", [{ finish: "stop", text: "Hello" }])
-        yield* runtime.command(registration)
+        yield* runtime.command(creation)
         yield* runtime.command({
           type: "enqueueInput",
           payload: {
@@ -107,7 +108,7 @@ describe("embedded runtime", () => {
               stores: { slices: first.provide },
             })
             host.script("ses_1", [{ finish: "stop", text: "Hello" }])
-            yield* runtime.command(registration)
+            yield* runtime.command(creation)
             yield* runtime.command({
               type: "enqueueInput",
               payload: {
@@ -138,13 +139,44 @@ describe("embedded runtime", () => {
       }),
     ))
 
-  it("refuses a second registration of the same Session", () =>
+  it("holds Reactions until the host starts them, then catches them up with the log", () =>
+    run(
+      Effect.gen(function* () {
+        const log = hostLog()
+        const host = makeScriptedStepHost({ agent: "plan" })
+        host.script("ses_1", [{ finish: "stop", text: "Hello" }])
+        const runtime = yield* makeRuntime().pipe(Effect.provideService(EventLog, log))
+        // Commands work before the start; the input they admit wakes nothing yet.
+        yield* runtime.command(creation)
+        const admitted = yield* runtime.command({
+          type: "enqueueInput",
+          payload: { sessionID: "ses_1", inboxID: "msg_in_1", type: "user", payload: { text: "Hi" } },
+        })
+        yield* admitted.reactions
+        expect(log.inspect().map((event) => event.type)).toEqual(["session-created", "session-inbox-enqueued"])
+
+        yield* runtime.start(host.host)
+        yield* waitFor(() => log.inspect().some((event) => event.type === "session-execution-settled"))
+        expect(log.inspect().map((event) => event.type)).toEqual([
+          "session-created",
+          "session-inbox-enqueued",
+          "session-execution-started",
+          "session-inbox-delivered",
+          "session-step-started",
+          "session-block-recorded",
+          "session-step-settled",
+          "session-execution-settled",
+        ])
+      }),
+    ))
+
+  it("refuses a second Session under one ID", () =>
     run(
       Effect.gen(function* () {
         const { runtime } = yield* boot
-        yield* runtime.command(registration)
-        const second = yield* Effect.flip(runtime.command(registration))
-        expect(String(second)).toContain("Session already registered")
+        yield* runtime.command(creation)
+        const second = yield* Effect.flip(runtime.command(creation))
+        expect(String(second)).toContain("Session already exists")
       }),
     ))
 })

@@ -1,6 +1,6 @@
 export * as Bus from "./bus.js"
 
-import { Cause, Clock, Context, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
+import { Cause, Clock, Context, Duration, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
 import { Event } from "@ocpp/schema/event"
 import type { EventLog } from "@ocpp/schema/event-log"
 import { and, asc, eq, gt, lte, sql, type SQL } from "drizzle-orm"
@@ -17,11 +17,18 @@ import { AbsolutePath } from "@ocpp/schema/schema"
 import {
   type EventLogService as SpecterEventLogContract,
   EventLog as SpecterEventLogService,
-  makeSessionEventStore,
+  makeRuntime,
+  type DriveExecutionOutboxStore,
   type PersistedEvent,
+  type ReactionOutboxStore,
+  type RunStepOutboxStore,
+  type Runtime,
 } from "@ocpp/runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
+import { SpecterOutbox } from "./specter/outbox.js"
 import { SpecterSnapshots } from "./specter/snapshots.js"
+
+type OutboxPayload<S> = S extends ReactionOutboxStore<infer T> ? T : never
 
 /** Idempotency keys of the commits that register with the runtime a Session with no session-created fact: a fork. */
 export const registrationKeyPrefix = "register:"
@@ -82,6 +89,17 @@ const definitionOf = (fact: PersistedEvent) => {
       message: `Fact ${fact.id} is not in OC++'s inventory of recorded facts`,
     })
   return definition
+}
+
+/** The aggregate a fact belongs to: its definition names the payload field. */
+const aggregateOf = (definition: Event.DurableDefinition, payload: unknown) => {
+  const aggregateID = (payload as Record<string, unknown>)[definition.durable.aggregate]
+  if (typeof aggregateID !== "string")
+    throw new InvalidDurableEventError({
+      type: definition.type,
+      message: `Expected string aggregate field ${definition.durable.aggregate}`,
+    })
+  return aggregateID
 }
 
 /** A fact in Specter's log with its sequence in its aggregate, from the event index. */
@@ -192,11 +210,12 @@ export interface Interface {
   readonly rebuild: (aggregateID?: string) => Effect.Effect<void>
   readonly remove: (aggregateID: string) => Effect.Effect<void>
   /**
-   * Specter's Event Log in this database, for the runtime that runs Sessions. Facts its Commands record
-   * are projected here as OC++ events, in the same transaction, and notified once it commits. A commit
-   * whose idempotency key starts with `registrationKeyPrefix` is not projected.
+   * OC++'s one Specter runtime, over Specter's Event Log in this database: every Command, Query and
+   * Reaction. `publish` records through its `recordSessionFacts`; Session operations dispatch their own
+   * Commands. Each commit is projected here as OC++ events in the append transaction and notified once it
+   * commits. Its Reactions start when the Session runtime binds the step I/O (`runtime.start`).
    */
-  readonly specterLog: Effect.Effect<SpecterEventLogContract>
+  readonly runtime: Runtime
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/Bus") {}
@@ -483,7 +502,7 @@ export function configured(options?: Options) {
             return { events: queued, route }
           })
 
-        // Session facts are recorded by the Specter runtime into its Event Log, kept in this database. The
+        // Every fact is recorded by the Specter runtime into its Event Log, kept in this database. The
         // log's append runs projectBatch inside its own transaction, so a recorded fact and OC++'s read
         // models change together or not at all.
         type Pending = {
@@ -517,15 +536,9 @@ export function configured(options?: Options) {
               type Placed = BatchItem & { readonly order: number }
               const items = events.map((recorded): Placed => {
                 const definition = definitionOf(recorded)
-                const aggregateID = (recorded.payload as Record<string, unknown>)[definition.durable.aggregate]
-                if (typeof aggregateID !== "string")
-                  throw new InvalidDurableEventError({
-                    type: definition.type,
-                    message: `Expected string aggregate field ${definition.durable.aggregate}`,
-                  })
                 return {
                   definition,
-                  aggregateID,
+                  aggregateID: aggregateOf(definition, recorded.payload),
                   event: {
                     id: Event.ID.make(recorded.id),
                     created,
@@ -568,37 +581,54 @@ export function configured(options?: Options) {
               })
             }),
         })
-        // The log the session runtime writes through. An append holds the locks of the Sessions it
-        // records for, as a publish does, so listeners see each Session's events in order.
+        // An append holds the locks of the aggregates it records for, as a publish does, so listeners see
+        // each aggregate's events in order. A publication through this Bus already holds its aggregate's.
         const runtimeLog: SpecterEventLogContract = {
           ...specterLog,
           append: (drafts, options) =>
-            [
-              ...new Set(
-                drafts.flatMap((draft) => {
-                  const sessionID = (draft.payload as { readonly sessionID?: unknown } | undefined)?.sessionID
-                  return typeof sessionID === "string" ? [sessionID] : []
-                }),
-              ),
-            ]
-              .sort()
-              .reduce(
-                (append, sessionID) => durableLocks.withLock(sessionID)(append),
-                specterLog.append(drafts, options),
-              ),
+            options?.idempotencyKey !== undefined && pending.has(options.idempotencyKey)
+              ? specterLog.append(drafts, options)
+              : [
+                  ...new Set(
+                    drafts.flatMap((draft) => {
+                      const definition = durableDefinitions.get(draft.type)
+                      const aggregateID = definition
+                        ? (draft.payload as Record<string, unknown> | undefined)?.[definition.durable.aggregate]
+                        : undefined
+                      return typeof aggregateID === "string" ? [aggregateID] : []
+                    }),
+                  ),
+                ]
+                  .sort()
+                  .reduce(
+                    (append, aggregateID) => durableLocks.withLock(aggregateID)(append),
+                    specterLog.append(drafts, options),
+                  ),
         }
-        // Its Slice starts from its snapshot, as the session runtime's do.
-        const store = yield* makeSessionEventStore({ slices: yield* SpecterSnapshots.persisted(db) }).pipe(
-          Effect.provideService(SpecterEventLogService, specterLog),
+        // The runtime keeps its state in this database too, so a boot resumes from where the last one
+        // stopped: its Slices from their snapshots, and its Reactions' jobs from the outbox, where a
+        // replayed delivery finds its job instead of running again.
+        const slices = yield* SpecterSnapshots.persisted(db)
+        yield* SpecterOutbox.prune(db, Date.now() - Duration.toMillis(Duration.days(1))).pipe(Effect.orDie)
+        const runStep = yield* SpecterOutbox.make<OutboxPayload<RunStepOutboxStore>>(db, "runStep").pipe(Effect.orDie)
+        const drive = yield* SpecterOutbox.make<OutboxPayload<DriveExecutionOutboxStore>>(db, "driveExecution").pipe(
           Effect.orDie,
         )
+        const runtime = yield* makeRuntime({
+          // One step per Session at a time; different Sessions (subagents included) run at once.
+          outbox: { worker: { concurrency: 64 } },
+          stores: { slices, runStep, drive },
+          // Every Slice holds the log's state once the runtime is up; from saved snapshots that is only the
+          // log's tail.
+          catchUp: true,
+        }).pipe(Effect.provideService(SpecterEventLogService, runtimeLog), Effect.orDie)
         const recordFacts = (items: readonly [BatchItem, ...BatchItem[]]) => {
           const key = `bus:${crypto.randomUUID()}`
           const entry: Pending = { items }
           return Effect.acquireUseRelease(
             Effect.sync(() => pending.set(key, entry)),
             () =>
-              store
+              runtime
                 .command(
                   {
                     type: "recordSessionFacts",
@@ -925,7 +955,7 @@ export function configured(options?: Options) {
           project,
           rebuild,
           remove,
-          specterLog: Effect.succeed(runtimeLog),
+          runtime,
         })
       }),
     ),

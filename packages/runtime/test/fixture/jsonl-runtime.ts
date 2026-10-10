@@ -3,10 +3,10 @@ import { join } from "node:path"
 import { EventLog } from "@specter-ts/core"
 import { createJsonlEventLog, createJsonlReactionOutboxStore, createJsonlSliceStoreLayer } from "@specter-ts/jsonl"
 import type { OutboxedReaction } from "@specter-ts/reaction-outbox"
-import { Effect, Exit, Layer, Scope } from "effect"
+import { Effect, Exit, Scope } from "effect"
 
 import type { RunStepOutboxOptions } from "../../src/app.ts"
-import { makeEmbeddedSessionRuntime } from "../../src/embedded.ts"
+import { makeRuntime } from "../../src/runtime.ts"
 import type { RunStepRequest } from "../../src/features/session/run-step-reaction/impl.ts"
 import type { ScriptedStepHost } from "./scripted-step-host.ts"
 
@@ -28,14 +28,18 @@ export const openJsonlRuntime = async (options: {
   const scope = Effect.runSync(Scope.make())
   try {
     const runtime = await Effect.runPromise(
-      makeEmbeddedSessionRuntime({
+      makeRuntime({
         ...(options.outbox ? { outbox: options.outbox } : {}),
         stores: {
           runStep: outbox,
           slices: (tag, createState) =>
             createJsonlSliceStoreLayer(tag, createState, { directory: join(options.directory, "slices") }),
         },
-      }).pipe(Effect.provide(Layer.mergeAll(Layer.succeed(EventLog, log), options.host.layer)), Scope.provide(scope)),
+      }).pipe(
+        Effect.tap((runtime) => runtime.start(options.host.host)),
+        Effect.provideService(EventLog, log),
+        Scope.provide(scope),
+      ),
     )
     return {
       runtime,

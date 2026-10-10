@@ -14,7 +14,7 @@ import { Effect, Layer } from "effect"
 import { afterEach, describe, expect, it } from "bun:test"
 
 import {
-  createSessionAppConfig,
+  createRuntimeConfig,
   createSliceStoreLayer,
   memorySliceStoreLayer,
   type ProvideSliceStore,
@@ -72,10 +72,27 @@ const boot = async (
   let compactFirst = options.compactFirst ?? 0
   const outbox = options.outbox ?? createMemoryReactionOutboxStore<OutboxedReaction<RunStepRequest>>()
 
-  const full = createSessionAppConfig(outbox, {
-    worker: {
-      ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
-      ...(options.backoffMs === undefined ? {} : { backoffMs: options.backoffMs }),
+  const full = createRuntimeConfig({
+    host: Effect.succeed(
+      StepHost.of({
+        ...(options.moving ? { moving: options.moving } : {}),
+        ...(options.recover ? { recover: options.recover } : {}),
+        ...(options.drive ? { drive: options.drive } : {}),
+        compact: options.compact ?? host.compact,
+        begin: (input) =>
+          compactFirst-- > 0
+            ? Effect.succeed({ compact: true } as const)
+            : options.begin
+              ? options.begin(input, host.begin)
+              : host.begin(input),
+      }),
+    ),
+    runStep: outbox,
+    outbox: {
+      worker: {
+        ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
+        ...(options.backoffMs === undefined ? {} : { backoffMs: options.backoffMs }),
+      },
     },
   })
   // Conformance wants every registered Event covered by a scenario, and the
@@ -114,21 +131,6 @@ const boot = async (
       Layer.succeed(EventLog, log),
       options.slices ? createSliceStoreLayer(options.slices) : memorySliceStoreLayer,
       Layer.succeed(ReactionScheduler, scheduler),
-      Layer.succeed(
-        StepHost,
-        StepHost.of({
-          ...(options.moving ? { moving: options.moving } : {}),
-          ...(options.recover ? { recover: options.recover } : {}),
-          ...(options.drive ? { drive: options.drive } : {}),
-          compact: options.compact ?? host.compact,
-          begin: (input) =>
-            compactFirst-- > 0
-              ? Effect.succeed({ compact: true } as const)
-              : options.begin
-                ? options.begin(input, host.begin)
-                : host.begin(input),
-        }),
-      ),
     ),
   )
 

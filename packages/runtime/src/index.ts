@@ -23,9 +23,8 @@ export {
 } from "@specter-ts/reaction-outbox"
 
 export type { DriveExecutionOutboxStore, ProvideSliceStore, RunStepOutboxStore } from "./app.ts"
-export { makeSessionEventStore } from "./event-store.ts"
 export { makeSnapshotSliceStores, type SliceSnapshot } from "./snapshots.ts"
-export { type EmbeddedSessionRuntime, makeEmbeddedSessionRuntime } from "./embedded.ts"
+export { makeRuntime, type Runtime } from "./runtime.ts"
 export { sessionEvent, sessionEventDefinitions } from "./events.ts"
 export {
   type AttemptOutcome,

@@ -6,7 +6,8 @@ import { Database } from "../database/database.js"
 import { SessionInbox } from "../session/inbox.js"
 import { SessionMessage } from "../session/message.js"
 import { SessionSchema } from "../session/schema.js"
-import { rejection, SpecterSessionRuntime } from "./session-runtime.js"
+import { SpecterRejection } from "./rejection.js"
+import { SpecterSessionRuntime } from "./session-runtime.js"
 
 const encodeUser = Schema.encodeSync(SessionInbox.UserPayload)
 const encodeSynthetic = Schema.encodeSync(SessionInbox.SyntheticPayload)
@@ -82,7 +83,7 @@ export const layer = Layer.effect(
         .pipe(
           Effect.map((execution) => ({ execution })),
           Effect.catch((error) => {
-            const reason = rejection(error)
+            const reason = SpecterRejection.reason(error)
             return reason === undefined ? Effect.die(error) : Effect.succeed({ reason })
           }),
           // The inbox projection refused the item: its ID names a message already.
@@ -136,7 +137,7 @@ export const layer = Layer.effect(
           })
           .pipe(
             Effect.catch((error) =>
-              rejection(error) === undefined
+              SpecterRejection.reason(error) === undefined
                 ? Effect.die(error)
                 : Effect.fail(new SessionInbox.LifecycleConflict({ id: input.id })),
             ),
@@ -152,7 +153,7 @@ export const layer = Layer.effect(
         .command({ type: "cancelInboxItem", payload: { sessionID: input.sessionID, inboxID: input.id } })
         .pipe(
           Effect.catch((error) =>
-            rejection(error) === undefined
+            SpecterRejection.reason(error) === undefined
               ? Effect.die(error)
               : Effect.fail(new SessionInbox.LifecycleConflict({ id: input.id })),
           ),

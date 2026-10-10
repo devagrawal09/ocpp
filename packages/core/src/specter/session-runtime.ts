@@ -1,47 +1,40 @@
 export * as SpecterSessionRuntime from "./session-runtime.js"
 
-import { Context, Deferred, Duration, Effect, Layer, Stream } from "effect"
+import { Context, Deferred, Effect, Layer, Stream } from "effect"
 import { eq } from "drizzle-orm"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import {
-  EventLog,
-  makeEmbeddedSessionRuntime,
-  SpecterCommandRejectedError,
   StepHost,
   type AttemptOutcome,
   type CompactionOutcome,
-  type DriveExecutionOutboxStore,
   type DriveOutcome,
-  type EmbeddedSessionRuntime,
   type RecordFailure,
-  type ReactionOutboxStore,
-  type RunStepOutboxStore,
+  type Runtime,
 } from "@ocpp/runtime"
 import { Bus } from "../bus.js"
-import { Database } from "../database/database.js"
+import { ExternalAgentSession } from "../external-agent/session.js"
 import { SessionEvent } from "../session/event.js"
+import { SessionProjector } from "../session/projector.js"
 import { SessionSchema } from "../session/schema.js"
 import { SessionTable } from "../session/sql.js"
 import { SessionStore } from "../session/store.js"
-import { SpecterOutbox } from "./outbox.js"
-import { SpecterSnapshots } from "./snapshots.js"
+import { Database } from "../database/database.js"
+import { SpecterRejection } from "./rejection.js"
 import { SpecterStepHost } from "./step-host.js"
-
-type Payload<S> = S extends ReactionOutboxStore<infer T> ? T : never
 
 const CONTINUE_AFTER_RESTART =
   "The server restarted while you were working. Continue from where you left off without repeating completed work."
 
 /**
- * The embedded Specter runtime that runs whole Sessions. It writes to the same Event Log as the Bus,
- * which projects every fact it records as OC++ events in the same transaction, so OC++'s read models
- * and listeners stay in step without a forwarding hook. It learns about Sessions from the log too:
- * session.created is a fact the Bus records there.
+ * The Sessions OC++'s one Specter runtime runs. The Bus composes the runtime, since every fact it records
+ * goes through it; this binds OC++'s step I/O to it and starts its Reactions, once the projections that
+ * fold their facts are registered. It learns about Sessions from the log: session-created is a fact the
+ * runtime's own Commands record.
  */
 export interface Interface {
-  readonly runtime: EmbeddedSessionRuntime
+  readonly runtime: Runtime
   /**
-   * Records a Session with no session.created fact (a fork) with the runtime, once, before its first runtime
+   * Records a Session with no session-created fact (a fork) with the runtime, once, before its first runtime
    * Command. Answers whether OC++ knows the Session.
    */
   readonly register: (sessionID: SessionSchema.ID) => Effect.Effect<boolean>
@@ -60,37 +53,24 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SpecterSessionRuntime") {}
 
-/** The rejection reason of a runtime Command, or undefined for any other failure. */
-export const rejection = (error: unknown) =>
-  error instanceof SpecterCommandRejectedError
-    ? error.cause instanceof Error
-      ? error.cause.message
-      : String(error.cause)
-    : undefined
-
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const store = yield* SessionStore.Service
     const db = (yield* Database.Service).db
-    const log = yield* bus.specterLog
+    const runtime = bus.runtime
     // The executions a stopped process left running, as the runtime found them at boot.
     const left = yield* Deferred.make<Set<SessionSchema.ID>>()
 
     // Resolves once the runtime's state says so: no execution is active (settled), and also none is about
     // to start from input that wakes the Session (idle; OC++'s runner coalesced that into the busy period).
-    let started: EmbeddedSessionRuntime | undefined
     const awaitStatus = (sessionID: SessionSchema.ID, idle: boolean) =>
-      Effect.suspend(() =>
-        started
-          ? started.subscribe({ type: "sessionStatus", payload: { sessionID } }).pipe(
-              Stream.filter((status) => status.status !== "active" && (!idle || status.wakes !== true)),
-              Stream.take(1),
-              Stream.runDrain,
-              Effect.orDie,
-            )
-          : Effect.void,
+      runtime.subscribe({ type: "sessionStatus", payload: { sessionID } }).pipe(
+        Stream.filter((status) => status.status !== "active" && (!idle || status.wakes !== true)),
+        Stream.take(1),
+        Stream.runDrain,
+        Effect.orDie,
       )
     const awaitIdle = (sessionID: SessionSchema.ID) => awaitStatus(sessionID, true)
 
@@ -168,26 +148,8 @@ const layer = Layer.effect(
         : {}),
     })
 
-    // The runtime keeps its state in OC++'s database, so a boot resumes from where the last one stopped:
-    // its Slices from their snapshots, and its jobs from the outboxes, where a replayed delivery finds its
-    // job instead of running again.
-    const slices = yield* SpecterSnapshots.persisted(db)
-    yield* SpecterOutbox.prune(db, Date.now() - Duration.toMillis(Duration.days(1))).pipe(Effect.orDie)
-    const runStep = yield* SpecterOutbox.make<Payload<RunStepOutboxStore>>(db, "runStep").pipe(Effect.orDie)
-    const drive = yield* SpecterOutbox.make<Payload<DriveExecutionOutboxStore>>(db, "driveExecution").pipe(Effect.orDie)
-
-    // One step per Session at a time; different Sessions (subagents included) run at once.
-    const runtime = yield* makeEmbeddedSessionRuntime({
-      outbox: { worker: { concurrency: 64 } },
-      stores: { slices, runStep, drive },
-      // Every Slice holds the log's state once the runtime is up; from saved snapshots that is only the
-      // log's tail.
-      catchUp: true,
-    }).pipe(
-      Effect.provide(Layer.mergeAll(Layer.succeed(EventLog, log), Layer.succeed(StepHost, interruptible))),
-      Effect.orDie,
-    )
-    started = runtime
+    // Reactions start now: OC++'s projections are registered, so whatever they record is projected.
+    yield* runtime.start(interruptible).pipe(Effect.orDie)
     const active = runtime.query({ type: "activeSessions", payload: {} }).pipe(
       Effect.orDie,
       Effect.map((result) => new Set(result.sessionIDs.map((id) => SessionSchema.ID.make(id)))),
@@ -230,7 +192,7 @@ const layer = Layer.effect(
         .pipe(
           // A Session OC++ created is already known from its session.created fact.
           Effect.catchIf(
-            (error) => rejection(error) === "Session already registered",
+            (error) => SpecterRejection.reason(error) === "Session already registered",
             () => Effect.void,
           ),
           Effect.orDie,
@@ -262,5 +224,13 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
-  deps: [Bus.node, Database.node, SessionStore.node, SpecterStepHost.node],
+  // The runtime's Reactions record Session facts; their projections are registered before they start.
+  deps: [
+    Bus.node,
+    Database.node,
+    SessionStore.node,
+    SessionProjector.node,
+    ExternalAgentSession.node,
+    SpecterStepHost.node,
+  ],
 })

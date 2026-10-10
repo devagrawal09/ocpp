@@ -7,9 +7,12 @@ import {
   withReactionOutbox,
 } from "@specter-ts/reaction-outbox"
 import type { SliceStoreService, SliceStoreTag } from "@specter-ts/core"
-import { Layer } from "effect"
+import { Effect, Layer } from "effect"
 
 import { sessionEventDefinitions } from "./events.ts"
+import { makeDriveExecutionPlugin } from "./plugins/drive-execution.ts"
+import { makeRunStepPlugin } from "./plugins/run-step.ts"
+import type { StepHost } from "./plugins/step-host.ts"
 import { clearRevert, clearRevertStore, createClearRevertState } from "./features/session/clear-revert/impl.ts"
 import { commitRevert, commitRevertStore, createCommitRevertState } from "./features/session/commit-revert/impl.ts"
 import { createCreateSessionState, createSession, createSessionStore } from "./features/session/create-session/impl.ts"
@@ -17,8 +20,6 @@ import { createDeleteSessionState, deleteSession, deleteSessionStore } from "./f
 import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
-import { makeDriveExecutionPlugin } from "./plugins/drive-execution.ts"
-import { runStepPlugin } from "./plugins/run-step.ts"
 import {
   createDriveExecution,
   createDriveExecutionState,
@@ -126,14 +127,18 @@ export type DriveExecutionOutboxStore = ReactionOutboxStore<OutboxedReaction<Dri
 // above 1, different Sessions run at once.
 export type RunStepOutboxOptions = Omit<ReactionOutboxPluginOptions<RunStepRequest>, "store" | "concurrencyKey">
 
-// The step Reaction's Plugin is outboxed, so the composing app supplies the
-// outbox store (memory in tests; a persistent store when the Event Log is).
-export const createSessionAppConfig = (
-  runStepOutbox: RunStepOutboxStore,
-  outboxOptions: RunStepOutboxOptions = {},
+// Every OC++ Command, Query and Reaction, in one config over one Event Log.
+// The step and drive Reactions' Plugins are outboxed, so the composing app
+// supplies their outbox stores (memory in tests; a persistent store when the
+// Event Log is). `host` is the host's step I/O, which each of their jobs
+// resolves before it starts.
+export const createRuntimeConfig = (options: {
+  readonly host: Effect.Effect<StepHost["Service"]>
+  readonly runStep: RunStepOutboxStore
+  readonly outbox?: RunStepOutboxOptions
   // An external agent's executions, which the host drives whole.
-  driveOutbox: DriveExecutionOutboxStore = createMemoryReactionOutboxStore(),
-) =>
+  readonly drive?: DriveExecutionOutboxStore
+}) =>
   ({
     events: sessionEventDefinitions,
     slices: {
@@ -166,24 +171,24 @@ export const createSessionAppConfig = (
       finishExecution,
       failExecution,
       runStep: createRunStep(
-        withReactionOutbox(runStepPlugin, {
+        withReactionOutbox(makeRunStepPlugin(options.host), {
           // A step can run for minutes: shutdown stops it instead of waiting,
           // and the next run settles the step it left started.
           interruptOnShutdown: true,
-          ...outboxOptions,
-          store: runStepOutbox,
+          ...options.outbox,
+          store: options.runStep,
           concurrencyKey: (request) => request.payload.sessionID,
         }),
       ),
       driveExecution: createDriveExecution(
-        withReactionOutbox(makeDriveExecutionPlugin(), {
+        withReactionOutbox(makeDriveExecutionPlugin(options.host), {
           // An agent's turn can run for minutes too.
           interruptOnShutdown: true,
           // As many Sessions at once as the step outbox runs.
-          ...(outboxOptions.worker?.concurrency === undefined
+          ...(options.outbox?.worker?.concurrency === undefined
             ? {}
-            : { worker: { concurrency: outboxOptions.worker.concurrency } }),
-          store: driveOutbox,
+            : { worker: { concurrency: options.outbox.worker.concurrency } }),
+          store: options.drive ?? createMemoryReactionOutboxStore(),
           concurrencyKey: (request) => request.payload.sessionID,
         }),
       ),
@@ -192,7 +197,10 @@ export const createSessionAppConfig = (
 
 // Used by the per-Slice scenario tests, which never run Plugins; the
 // integration test builds its own config around an outbox store it inspects.
-export const sessionAppConfig = createSessionAppConfig(createMemoryReactionOutboxStore())
+export const runtimeConfig = createRuntimeConfig({
+  host: Effect.die(new Error("Scenario tests run no step")),
+  runStep: createMemoryReactionOutboxStore(),
+})
 
 // Every Slice owns its own projection store; an adapter composition supplies
 // how one store is provided (memory here, snapshots in snapshots.ts, JSONL in

@@ -253,6 +253,8 @@ function resourceMcpLayer(
             ]),
         Layer.succeed(Location.Service, Location.Service.of(location({ directory }))),
         Layer.mock(Bus.Service, {
+          // MCP never dispatches a runtime Command.
+          runtime: undefined as never,
           subscribe: overrides?.subscribe ?? (() => Stream.never),
           publish: (definition, data) => {
             const event = {

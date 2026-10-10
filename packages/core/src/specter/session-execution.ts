@@ -7,7 +7,8 @@ import { Job } from "../job.js"
 import { StepFailedError } from "../session/error.js"
 import { SessionExecution } from "../session/execution.js"
 import { SessionSchema } from "../session/schema.js"
-import { rejection, SpecterSessionRuntime } from "./session-runtime.js"
+import { SpecterRejection } from "./rejection.js"
+import { SpecterSessionRuntime } from "./session-runtime.js"
 
 /**
  * `SessionExecution.Service` when the embedded Specter runtime runs Sessions. A recorded input wakes
@@ -26,7 +27,7 @@ export const layer = Layer.effect(
     const start = (sessionID: SessionSchema.ID) =>
       specter.runtime.command({ type: "startExecution", payload: { sessionID } }).pipe(
         Effect.flatMap((execution) => execution.reactions),
-        Effect.catch((error) => (rejection(error) === undefined ? Effect.die(error) : Effect.void)),
+        Effect.catch((error) => (SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.void)),
       )
 
     return SessionExecution.Service.of({
@@ -65,7 +66,9 @@ export const layer = Layer.effect(
         const interrupted = yield* specter.runtime.command({ type: "interruptExecution", payload: { sessionID } }).pipe(
           Effect.as(true),
           // Interrupting an idle Session is a no-op.
-          Effect.catch((error) => (rejection(error) === undefined ? Effect.die(error) : Effect.succeed(false))),
+          Effect.catch((error) =>
+            SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.succeed(false),
+          ),
         )
         // A user's interrupt also stops the Session's background work, as in OC++'s runner.
         if (interrupted) {
@@ -81,7 +84,7 @@ export const layer = Layer.effect(
         if (next.item !== null)
           yield* specter.runtime.command({ type: "startExecution", payload: { sessionID, continues: true } }).pipe(
             Effect.flatMap((execution) => execution.reactions),
-            Effect.catch((error) => (rejection(error) === undefined ? Effect.die(error) : Effect.void)),
+            Effect.catch((error) => (SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.void)),
           )
         return interrupted
       }),

@@ -114,7 +114,7 @@
     "@ocpp/ai": "workspace:*",
     "@opencode-ai/pty": "0.1.13",
     "@ocpp/schema": "workspace:*",
-    "@ocpp/session-runtime": "workspace:*",
+    "@ocpp/runtime": "workspace:*",
     "@ocpp/plugin": "workspace:*",
     "@ocpp/util": "workspace:*",
     "@standard-schema/spec": "catalog:",

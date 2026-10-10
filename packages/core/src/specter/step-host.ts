@@ -15,7 +15,7 @@ import {
   type PrepareOutcome,
   type RecordFailure,
   type StepPlan,
-} from "@ocpp/session-runtime"
+} from "@ocpp/runtime"
 import { Bus } from "../bus.js"
 import { ExternalAgentHarness } from "../external-agent/harness.js"
 import { Database } from "../database/database.js"

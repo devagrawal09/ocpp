@@ -16,7 +16,7 @@ import {
   type RecordFailure,
   type ReactionOutboxStore,
   type RunStepOutboxStore,
-} from "@ocpp/session-runtime"
+} from "@ocpp/runtime"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { SessionEvent } from "../session/event.js"

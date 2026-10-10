@@ -1,2 +1,2 @@
 [test]
-preload = ["../session-runtime/src/preload.ts", "./test/preload.ts"]
+preload = ["../runtime/src/preload.ts", "./test/preload.ts"]

@@ -1,6 +1,6 @@
 export * as TestStepHost from "./step-host"
 
-import { StepHost, type AttemptOutcome } from "@ocpp/session-runtime"
+import { StepHost, type AttemptOutcome } from "@ocpp/runtime"
 import type { SessionError } from "@ocpp/schema/session-error"
 import { Session } from "@ocpp/core/session"
 import { SessionExecution } from "@ocpp/core/session/execution"

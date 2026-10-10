@@ -8,9 +8,9 @@
     "incremental": true,
     "noEmit": false,
     "noUncheckedIndexedAccess": false,
-    // @ocpp/session-runtime links Specter's packages, whose declarations name the Specter checkout's copy
+    // @ocpp/runtime links Specter's packages, whose declarations name the Specter checkout's copy
     // of effect. Map effect to OC++'s declarations so both sides name the same types. Bun ignores .d.ts
-    // targets at runtime; the runtime side is unified by session-runtime's src/single-effect.ts. Both go
+    // targets at runtime; the runtime side is unified by @ocpp/runtime's src/single-effect.ts. Both go
     // away once Specter is installed from a registry or a packed tarball. The bare `effect` key is
     // spelled `effect*` because drizzle-kit applies exact keys at runtime but skips this wildcard form.
     "paths": {

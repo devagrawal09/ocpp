@@ -19,7 +19,7 @@ import {
   EventLog as SpecterEventLogService,
   makeSessionEventStore,
   type PersistedEvent,
-} from "@ocpp/session-runtime"
+} from "@ocpp/runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
 import { SpecterSnapshots } from "./specter/snapshots.js"
 

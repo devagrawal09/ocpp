@@ -9,7 +9,7 @@ import {
   type EventLogCommit,
   type EventLogService,
   type PersistedEvent,
-} from "@ocpp/session-runtime"
+} from "@ocpp/runtime"
 import type { Database } from "../database/database.js"
 import { SpecterCommitTable, SpecterEventTable } from "./sql.js"
 

@@ -5,7 +5,7 @@ import { Effect } from "effect"
 import { DurableEventManifest } from "@ocpp/schema/durable-event-manifest"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionEvent } from "@ocpp/schema/session-event"
-import { sessionEvent, sessionEventDefinitions } from "@ocpp/session-runtime"
+import { sessionEvent, sessionEventDefinitions } from "@ocpp/runtime"
 
 // The session runtime links Specter's packages from a Specter checkout with its own node_modules.
 // These checks fail when the process loads a second Effect or the runtime diverges from OC++'s
@@ -13,7 +13,7 @@ import { sessionEvent, sessionEventDefinitions } from "@ocpp/session-runtime"
 describe("embedded Specter runtime", () => {
   test("shares OC++'s Effect runtime", async () => {
     // The effect module Specter's core resolves is OC++'s own, through the session runtime's preload.
-    const runtime = path.dirname(Bun.resolveSync("@ocpp/session-runtime", import.meta.dir))
+    const runtime = path.dirname(Bun.resolveSync("@ocpp/runtime", import.meta.dir))
     const specter = path.dirname(fs.realpathSync(Bun.resolveSync("@specter-ts/core", runtime)))
     const loaded = await import(Bun.resolveSync("effect", specter))
     expect(loaded.Effect).toBe(Effect)

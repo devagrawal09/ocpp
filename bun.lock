@@ -354,8 +354,8 @@
         "@ocpp/ai": "workspace:*",
         "@ocpp/codemode": "workspace:*",
         "@ocpp/plugin": "workspace:*",
+        "@ocpp/runtime": "workspace:*",
         "@ocpp/schema": "workspace:*",
-        "@ocpp/session-runtime": "workspace:*",
         "@ocpp/util": "workspace:*",
         "@openai/codex-sdk": "0.153.4",
         "@opencode-ai/pty": "0.1.13",
@@ -537,6 +537,24 @@
         "typescript": "catalog:",
       },
     },
+    "packages/runtime": {
+      "name": "@ocpp/runtime",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ocpp/schema": "workspace:*",
+        "@specter-ts/core": "link:@specter-ts/core",
+        "@specter-ts/memory": "link:@specter-ts/memory",
+        "@specter-ts/reaction-outbox": "link:@specter-ts/reaction-outbox",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@specter-ts/jsonl": "link:@specter-ts/jsonl",
+        "@specter-ts/spec": "link:@specter-ts/spec",
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+      },
+    },
     "packages/schema": {
       "name": "@ocpp/schema",
       "version": "1.17.11",
@@ -597,24 +615,6 @@
         "effect": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
-        "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
-      },
-    },
-    "packages/session-runtime": {
-      "name": "@ocpp/session-runtime",
-      "version": "0.0.0",
-      "dependencies": {
-        "@ocpp/schema": "workspace:*",
-        "@specter-ts/core": "link:@specter-ts/core",
-        "@specter-ts/memory": "link:@specter-ts/memory",
-        "@specter-ts/reaction-outbox": "link:@specter-ts/reaction-outbox",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@specter-ts/jsonl": "link:@specter-ts/jsonl",
-        "@specter-ts/spec": "link:@specter-ts/spec",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
@@ -1981,6 +1981,8 @@
 
     "@ocpp/protocol": ["@ocpp/protocol@workspace:packages/protocol"],
 
+    "@ocpp/runtime": ["@ocpp/runtime@workspace:packages/runtime"],
+
     "@ocpp/schema": ["@ocpp/schema@workspace:packages/schema"],
 
     "@ocpp/script": ["@ocpp/script@workspace:packages/script"],
@@ -1988,8 +1990,6 @@
     "@ocpp/sdk": ["@ocpp/sdk@workspace:packages/sdk"],
 
     "@ocpp/server": ["@ocpp/server@workspace:packages/server"],
-
-    "@ocpp/session-runtime": ["@ocpp/session-runtime@workspace:packages/session-runtime"],
 
     "@ocpp/session-ui": ["@ocpp/session-ui@workspace:packages/session-ui"],
 

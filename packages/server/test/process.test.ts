@@ -50,7 +50,7 @@ it.live("recovers durable background work for a foreground server", () =>
       yield* waitForMarkerRemoval(notificationID)
       // Recovery removed the marker by recording that nothing is left to deliver.
       expect(yield* Recorded.types(notificationID)).toEqual([
-        SessionFact.BackgroundRecorded.type,
+        SessionFact.BackgroundStarted.type,
         SessionFact.BackgroundCompleted.type,
       ])
     }).pipe(Effect.provide(AppNodeBuilder.build(Database.node, [database])))

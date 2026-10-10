@@ -2286,10 +2286,10 @@
       }
     },
     {
-      "description": "Records session-background-recorded as the host published it.",
+      "description": "Records session-background-started as the host published it.",
       "expect": [
         {
-          "eventType": "session-background-recorded",
+          "eventType": "session-background-started",
           "examplePayload": {
             "jobID": "exe_2",
             "notificationID": "msg_3",
@@ -2298,8 +2298,7 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            },
-            "status": "running"
+            }
           },
           "kind": "scenario-event"
         }
@@ -2316,10 +2315,36 @@
                 "kind": "codemode",
                 "parentSessionID": "ses_1",
                 "toolCallID": "call_1"
-              },
-              "status": "running"
+              }
             },
-            "type": "session-background-recorded"
+            "type": "session-background-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-background-settled as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-background-settled",
+          "examplePayload": {
+            "notificationID": "msg_3",
+            "outcome": "completed",
+            "output": "done"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "notificationID": "msg_3",
+              "outcome": "completed",
+              "output": "done"
+            },
+            "type": "session-background-settled"
           }
         ]
       }

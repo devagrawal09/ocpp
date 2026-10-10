@@ -474,7 +474,7 @@ export const sessionFacts = {
     name: "nightly",
     at: 7_200_001,
   },
-  "session-background-recorded": {
+  "session-background-started": {
     notificationID: "msg_3",
     jobID: "exe_2",
     recovery: {
@@ -483,7 +483,11 @@ export const sessionFacts = {
       assistantMessageID: "msg_1",
       toolCallID: "call_1",
     },
-    status: "running",
+  },
+  "session-background-settled": {
+    notificationID: "msg_3",
+    outcome: "completed",
+    output: "done",
   },
   "session-background-terminal": {
     notificationID: "msg_3",

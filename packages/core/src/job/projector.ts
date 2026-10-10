@@ -22,13 +22,14 @@ const layer = Layer.effectDiscard(
         .run()
         .pipe(Effect.orDie, Effect.asVoid)
 
-    yield* bus.project(SessionFact.BackgroundRecorded, (event) => {
+    // A resumed job goes to the background again under the same notification, running again.
+    yield* bus.project(SessionFact.BackgroundStarted, (event) => {
       const row = {
         job_id: event.data.jobID,
         recovery: event.data.recovery,
-        status: event.data.status,
-        output: event.data.output ?? null,
-        error: event.data.error ?? null,
+        status: "running" as const,
+        output: null,
+        error: null,
       }
       return db
         .insert(JobBackgroundTable)
@@ -37,6 +38,14 @@ const layer = Layer.effectDiscard(
         .run()
         .pipe(Effect.orDie, Effect.asVoid)
     })
+    yield* bus.project(SessionFact.BackgroundSettled, (event) =>
+      db
+        .update(JobBackgroundTable)
+        .set({ status: event.data.outcome, output: event.data.output ?? null, error: event.data.error ?? null })
+        .where(eq(JobBackgroundTable.notification_id, event.data.notificationID))
+        .run()
+        .pipe(Effect.orDie, Effect.asVoid),
+    )
     yield* bus.project(SessionFact.BackgroundTerminal, (event) =>
       db
         .update(JobBackgroundTable)

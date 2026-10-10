@@ -238,26 +238,40 @@ export const BackgroundRecovery = Schema.Union([
 ])
 export type BackgroundRecovery = typeof BackgroundRecovery.Type
 
-/** A recoverable background job, as it stands: until its notification is delivered, a restart resumes it. */
-export const BackgroundRecorded = Event.durable({
-  type: "session-background-recorded",
+/** A recoverable job went to the background: until its notification is delivered, a restart resumes it. */
+export const BackgroundStarted = Event.durable({
+  type: "session-background-started",
   durable: byNotification,
   schema: {
     notificationID: SessionMessage.ID,
     jobID: Schema.String,
     recovery: BackgroundRecovery,
-    status: Schema.Literals(["running", "completed", "error", "cancelled"]),
+  },
+})
+/**
+ * The one terminal of the job: how it ended, with its output or error. A job that ended before it went to
+ * the background records its start and its settlement together.
+ */
+export const BackgroundSettled = Event.durable({
+  type: "session-background-settled",
+  durable: byNotification,
+  schema: {
+    notificationID: SessionMessage.ID,
+    outcome: Schema.Literals(["completed", "error", "cancelled"]),
     output: optional(Schema.String),
     error: optional(Schema.String),
   },
 })
-/** The job's outcome reached its Session; only its notification is left to deliver. */
+/**
+ * The job's outcome reached its Session (for a Code Mode run, its `session-codemode-settled` does this); only its
+ * notification is left to deliver.
+ */
 export const BackgroundTerminal = Event.durable({
   type: "session-background-terminal",
   durable: byNotification,
   schema: { notificationID: SessionMessage.ID },
 })
-/** The job's notification was delivered, or the job discarded: nothing is left to recover. */
+/** The job's notification was delivered, or the job discarded: nothing is left to recover, and the marker goes. */
 export const BackgroundCompleted = Event.durable({
   type: "session-background-completed",
   durable: byNotification,
@@ -290,7 +304,8 @@ export const Definitions = Event.inventory(
   EventPlanned,
   EventFired,
   EventSkipped,
-  BackgroundRecorded,
+  BackgroundStarted,
+  BackgroundSettled,
   BackgroundTerminal,
   BackgroundCompleted,
 )

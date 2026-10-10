@@ -172,6 +172,20 @@ function errorText(error: unknown) {
   return String(error)
 }
 
+/** A finished job's settlement of its marker; none while it runs. */
+function settlement(notificationID: SessionMessage.ID, info: Info) {
+  if (info.status === "running") return
+  return [
+    SessionFact.BackgroundSettled,
+    {
+      notificationID,
+      outcome: info.status,
+      ...(info.output !== undefined ? { output: info.output } : {}),
+      ...(info.error !== undefined ? { error: info.error } : {}),
+    },
+  ] as const
+}
+
 function incrementSession(input: Map<SessionSchema.ID, number>, sessionID: SessionSchema.ID) {
   return new Map(input).set(sessionID, (input.get(sessionID) ?? 0) + 1)
 }
@@ -197,17 +211,25 @@ export const make = Effect.gen(function* () {
     scope: yield* Scope.Scope,
   }
 
-  // A recoverable job's marker is the projection of its facts in Specter's Event Log (JobProjector).
-  const persistBackground = Effect.fnUntraced(function* (job: Active) {
+  // A recoverable job's marker is the projection of its facts in Specter's Event Log (JobProjector):
+  // going to the background starts it, and the job's outcome settles it. A job that ends before its
+  // start was recorded records both at once.
+  const recordBackground = Effect.fnUntraced(function* (job: Active, recorded: boolean) {
     if (!job.recovery || !job.info.notificationID) return
-    yield* bus.publish(SessionFact.BackgroundRecorded, {
-      notificationID: job.info.notificationID,
-      jobID: job.info.id,
-      recovery: job.recovery,
-      status: job.info.status,
-      ...(job.info.output !== undefined ? { output: job.info.output } : {}),
-      ...(job.info.error !== undefined ? { error: job.info.error } : {}),
-    })
+    const settled = settlement(job.info.notificationID, job.info)
+    if (recorded) {
+      if (settled) yield* bus.publish(...settled)
+      return
+    }
+    const started = [
+      SessionFact.BackgroundStarted,
+      { notificationID: job.info.notificationID, jobID: job.info.id, recovery: job.recovery },
+    ] as const
+    if (!settled) {
+      yield* bus.publish(...started)
+      return
+    }
+    yield* bus.publishAll([started, settled])
   })
   const findBackground = (notificationID: SessionMessage.ID) =>
     db
@@ -248,7 +270,7 @@ export const make = Effect.gen(function* () {
             ...(Exit.isFailure(exit) ? { error: errorText(Cause.squash(exit.cause)) } : {}),
           },
         }
-        if (status !== "cancelled") yield* persistBackground(next)
+        if (status !== "cancelled") yield* recordBackground(next, job.isBackgrounded)
         return [{ info: snapshot(next), done: job.done, scope: job.scope }, new Map(jobs).set(id, next)]
       }),
     )
@@ -399,7 +421,7 @@ export const make = Effect.gen(function* () {
         ...(job.recovery ? { notificationID: job.info.notificationID ?? SessionMessage.ID.create() } : {}),
       },
     }
-    yield* persistBackground(next)
+    yield* recordBackground(next, false)
     return next
   })
 
@@ -460,7 +482,7 @@ export const make = Effect.gen(function* () {
             completed_at,
           },
         }
-        yield* persistBackground(next)
+        yield* recordBackground(next, job.isBackgrounded)
         return [{ info: snapshot(next), done: job.done, scope: job.scope }, new Map(jobs).set(id, next)]
       }),
     )
@@ -488,7 +510,7 @@ export const make = Effect.gen(function* () {
             blockingSessions: new Map<SessionSchema.ID, number>(),
             info: { ...job.info, status: "cancelled" as const, completed_at },
           }
-          yield* persistBackground(updated)
+          yield* recordBackground(updated, job.isBackgrounded)
           finished.push({ info: snapshot(updated), done: job.done, scope: job.scope })
           next.set(id, updated)
         }

@@ -1,9 +1,19 @@
-import { Database } from "bun:sqlite"
 import { expect } from "bun:test"
 import path from "node:path"
+import { Bus } from "@ocpp/core/bus"
+import { Database } from "@ocpp/core/database/database"
+import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
+import { Job } from "@ocpp/core/job"
+import { JobBackgroundTable } from "@ocpp/core/job/sql"
+import { SessionMessage } from "@ocpp/core/session/message"
+import { SessionSchema } from "@ocpp/core/session/schema"
+import { SessionFact } from "@ocpp/schema/session-fact"
+import { LayerNode } from "@ocpp/util/effect/layer-node"
+import { eq } from "drizzle-orm"
 import { Effect } from "effect"
 import { HttpServer, HttpServerError, HttpServerResponse } from "effect/http"
 import { it } from "../../core/test/lib/effect"
+import { Recorded } from "../../core/test/lib/recorded"
 import { tmpdirScoped } from "../../core/test/fixture/tmpdir"
 import { ServerProcess } from "../src/process"
 
@@ -11,33 +21,39 @@ it.live("recovers durable background work for a foreground server", () =>
   Effect.gen(function* () {
     const directory = yield* tmpdirScoped("ocpp-server-process-")
     const filename = path.join(directory.path, "process.db")
-    const options = {
-      hostname: "127.0.0.1",
-      port: 0,
-      database: { path: filename },
-    }
-    yield* ServerProcess.start<never, never>(options)
+    const database = [Database.node, Database.configured({ path: filename })] as const
+    const notificationID = SessionMessage.ID.make("msg_process_restart")
 
-    const database = new Database(filename)
-    yield* Effect.addFinalizer(() => Effect.sync(() => database.close()))
-    // A background job a stopped process left running.
-    const notificationID = "msg_process_restart"
-    database.query("insert into job_background (notification_id, job_id, recovery, status) values (?, ?, ?, ?)").run(
-      notificationID,
-      "exe_process_restart",
-      JSON.stringify({
-        kind: "codemode",
-        parentSessionID: "ses_process_restart_missing",
-        assistantMessageID: "msg_process_restart_assistant",
-        toolCallID: "call_process_restart",
-        code: "return 1",
-        timeoutMs: 1_000,
-      }),
-      "running",
-    )
+    // The process before the restart backgrounded a Code Mode run whose parent Session is gone, and stopped
+    // with the run still going. What it leaves behind is the marker its recorded fact projects.
+    yield* Job.Service.use((jobs) =>
+      jobs
+        .start({
+          id: "exe_process_restart",
+          type: "codemode",
+          notificationID,
+          recovery: {
+            kind: "codemode",
+            parentSessionID: SessionSchema.ID.make("ses_process_restart_missing"),
+            assistantMessageID: SessionMessage.ID.make("msg_process_restart_assistant"),
+            toolCallID: "call_process_restart",
+          },
+          run: Effect.never,
+        })
+        .pipe(Effect.andThen((job) => jobs.background(job.id))),
+    ).pipe(Effect.provide(AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, Job.node]), [database])))
 
-    yield* ServerProcess.start<never, never>(options)
-    yield* waitForMarkerRemoval(database, notificationID)
+    yield* Effect.gen(function* () {
+      expect(yield* marker(notificationID)).toMatchObject({ job_id: "exe_process_restart", status: "running" })
+
+      yield* ServerProcess.start<never, never>({ hostname: "127.0.0.1", port: 0, database: { path: filename } })
+      yield* waitForMarkerRemoval(notificationID)
+      // Recovery removed the marker by recording that nothing is left to deliver.
+      expect(yield* Recorded.types(notificationID)).toEqual([
+        SessionFact.BackgroundRecorded.type,
+        SessionFact.BackgroundCompleted.type,
+      ])
+    }).pipe(Effect.provide(AppNodeBuilder.build(Database.node, [database])))
   }),
 )
 
@@ -137,15 +153,26 @@ it.live("allows browser preflight requests without credentials", () =>
   }),
 )
 
-function waitForMarkerRemoval(
-  database: Database,
-  notificationID: string,
-  remaining = 1_000,
-): Effect.Effect<void, Error> {
-  if (!database.query("select job_id from job_background where notification_id = ?").get(notificationID))
-    return Effect.void
-  if (remaining === 0) return Effect.fail(new Error("Timed out waiting for restart recovery"))
-  return Effect.promise(() => Bun.sleep(1)).pipe(
-    Effect.andThen(waitForMarkerRemoval(database, notificationID, remaining - 1)),
+function marker(notificationID: SessionMessage.ID) {
+  return Database.Service.use((database) =>
+    database.db
+      .select()
+      .from(JobBackgroundTable)
+      .where(eq(JobBackgroundTable.notification_id, notificationID))
+      .get()
+      .pipe(Effect.orDie),
   )
+}
+
+// Recovery runs in the background once the server is up, so the marker goes some time after `start` returns.
+function waitForMarkerRemoval(
+  notificationID: SessionMessage.ID,
+  remaining = 1_000,
+): Effect.Effect<void, Error, Database.Service> {
+  return Effect.gen(function* () {
+    if (!(yield* marker(notificationID))) return
+    if (remaining === 0) return yield* Effect.fail(new Error("Timed out waiting for restart recovery"))
+    yield* Effect.sleep("2 millis")
+    yield* waitForMarkerRemoval(notificationID, remaining - 1)
+  })
 }

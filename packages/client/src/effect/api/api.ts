@@ -677,12 +677,14 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-shell-ended"
+          readonly type: "session-shell-settled"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
-            readonly shell: Shell.Info
+            readonly shellID: Shell.ID
+            readonly outcome: "exited" | "timeout" | "killed"
+            readonly exit?: number | undefined
             readonly output: {
               readonly output: string
               readonly cursor: number

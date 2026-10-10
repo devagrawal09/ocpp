@@ -200,14 +200,14 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
           }),
         )
       },
-      "session-shell-ended": (event) =>
+      "session-shell-settled": (event) =>
         Effect.gen(function* () {
-          const currentShell = yield* adapter.getShell(event.data.shell.id)
+          const currentShell = yield* adapter.getShell(event.data.shellID)
           if (currentShell) {
             yield* adapter.updateShell(
               produce(currentShell, (draft) => {
-                draft.status = event.data.shell.status
-                draft.exit = event.data.shell.exit
+                draft.status = event.data.outcome
+                draft.exit = event.data.exit
                 draft.output = event.data.output
                 draft.time.completed = created
               }),

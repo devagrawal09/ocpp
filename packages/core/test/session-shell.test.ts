@@ -128,7 +128,7 @@ describe("Session.shell", () => {
       const bus = yield* Bus.Service
       const Done = Bus.ephemeral({ type: "test.shell.move.done", schema: {} })
       const readers = yield* Effect.forEach([fixture.created.location, destination], (ref) =>
-        bus.subscribe([SessionEvent.Shell.Ended, SessionEvent.InboxEnqueued, Done]).pipe(
+        bus.subscribe([SessionEvent.Shell.Settled, SessionEvent.InboxEnqueued, Done]).pipe(
           Stream.takeUntil((event) => event.type === Done.type),
           Stream.runCollect,
           Effect.provideService(Location.Service, location(ref)),
@@ -149,7 +149,7 @@ describe("Session.shell", () => {
       const events = yield* Effect.forEach(readers, (reader) => Fiber.join(reader).pipe(Effect.timeout("5 seconds")))
       expect(events.map((items) => items.map((event) => event.type))).toEqual([
         [Done.type],
-        ["session-shell-ended", "session-inbox-enqueued", Done.type],
+        ["session-shell-settled", "session-inbox-enqueued", Done.type],
       ])
       expect(events[1][0]).toMatchObject({
         data: { output: { output: expect.stringContaining("moved finished") } },
@@ -206,7 +206,7 @@ describe("Session.shell", () => {
         expect(events.map((event) => event.type)).toEqual([
           "session-created",
           "session-shell-started",
-          "session-shell-ended",
+          "session-shell-settled",
           "session-inbox-enqueued",
           // The completion waits for the next wake instead of waking the model.
           "session-inbox-held",

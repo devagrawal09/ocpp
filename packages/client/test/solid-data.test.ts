@@ -904,7 +904,7 @@ test("ignores activity snapshots from an older connection", async () => {
   }
 })
 
-test("projects background user shell metadata from durable shell data", () => {
+test("projects a background user shell from its start and its settlement", () => {
   const setup = activityFixture(() => Response.json({ data: {} }))
   try {
     setup.emit({
@@ -928,6 +928,29 @@ test("projects background user shell metadata from durable shell data", () => {
     })
     expect(setup.data.session.message.list("ses_refresh")).toMatchObject([
       { type: "shell", shellID: "sh_user", status: "running", metadata: { background: true } },
+    ])
+    setup.emit({
+      id: "evt_user_shell_settled",
+      created: 2,
+      type: "session-shell-settled",
+      durable: { aggregateID: "ses_refresh", seq: 2 },
+      data: {
+        sessionID: "ses_refresh",
+        shellID: "sh_user",
+        outcome: "exited",
+        exit: 0,
+        output: { output: "/project", cursor: 8, size: 8, truncated: false },
+      },
+    })
+    expect(setup.data.session.message.list("ses_refresh")).toMatchObject([
+      {
+        type: "shell",
+        shellID: "sh_user",
+        status: "exited",
+        exit: 0,
+        output: { output: "/project" },
+        time: { completed: 2 },
+      },
     ])
   } finally {
     setup.dispose()

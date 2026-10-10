@@ -685,9 +685,11 @@ describe("Session.create", () => {
       ])
       expect(yield* session.context(running.id)).toMatchObject([Expected.user("Run a shell")])
 
-      yield* bus.publish(SessionEvent.Shell.Ended, {
+      yield* bus.publish(SessionEvent.Shell.Settled, {
         sessionID: parent.id,
-        shell: { ...shell, status: "exited", exit: 0, time: { started: 0, completed: 1 } },
+        shellID: shell.id,
+        outcome: "exited",
+        exit: 0,
         output: { output: "complete", cursor: 8, size: 8, truncated: false },
       })
       const completed = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })

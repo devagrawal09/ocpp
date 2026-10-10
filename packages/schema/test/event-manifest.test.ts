@@ -140,7 +140,7 @@ describe("public event manifest", () => {
         "session-displayed",
         "session-skill-activated",
         "session-shell-started",
-        "session-shell-ended",
+        "session-shell-settled",
         "session-step-started",
         "session-step-streamed",
         "session-step-settled",

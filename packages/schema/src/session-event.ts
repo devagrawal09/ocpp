@@ -315,6 +315,7 @@ export namespace Skill {
 }
 
 export namespace Shell {
+  /** A user shell command started in the background. */
   export const Started = Event.durable({
     type: "session-shell-started",
     ...options,
@@ -325,16 +326,19 @@ export namespace Shell {
   })
   export type Started = typeof Started.Type
 
-  export const Ended = Event.durable({
-    type: "session-shell-ended",
+  /** The one terminal of a user shell command: how it ended, its exit code, and the output it left. */
+  export const Settled = Event.durable({
+    type: "session-shell-settled",
     ...options,
     schema: {
       ...Base,
-      shell: ShellSchema.Info,
+      shellID: ShellSchema.ID,
+      outcome: Schema.Literals(["exited", "timeout", "killed"]),
+      exit: Schema.Finite.pipe(optional),
       output: ShellSchema.Output,
     },
   })
-  export type Ended = typeof Ended.Type
+  export type Settled = typeof Settled.Type
 }
 
 export namespace Step {
@@ -710,7 +714,7 @@ export const Definitions = Event.inventory(
   Displayed,
   Skill.Activated,
   Shell.Started,
-  Shell.Ended,
+  Shell.Settled,
   Step.Started,
   Step.Streamed,
   Step.Settled,

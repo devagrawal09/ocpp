@@ -639,6 +639,22 @@ export type SessionSkillActivated = {
   data: { sessionID: string; id: string; name: string; text: string }
 }
 
+export type SessionShellSettled = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session-shell-settled"
+  durable: { aggregateID: string; seq: number }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    shellID: string
+    outcome: "exited" | "timeout" | "killed"
+    exit?: number
+    output: { output: string; cursor: number; size: number; truncated: boolean }
+  }
+}
+
 export type SessionStepStarted = {
   id: string
   created: number
@@ -1191,20 +1207,6 @@ export type SessionShellStarted = {
   durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; shell: ShellInfo }
-}
-
-export type SessionShellEnded = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session-shell-ended"
-  durable: { aggregateID: string; seq: number }
-  location?: LocationRef
-  data: {
-    sessionID: string
-    shell: ShellInfo
-    output: { output: string; cursor: number; size: number; truncated: boolean }
-  }
 }
 
 export type ShellCreated = {
@@ -2270,7 +2272,7 @@ export type SessionEventDurable =
   | SessionDisplayed
   | SessionSkillActivated
   | SessionShellStarted
-  | SessionShellEnded
+  | SessionShellSettled
   | SessionStepStarted
   | SessionStepStreamed
   | SessionStepSettled
@@ -2329,7 +2331,7 @@ export type V2Event =
   | SessionDisplayed
   | SessionSkillActivated
   | SessionShellStarted
-  | SessionShellEnded
+  | SessionShellSettled
   | SessionStepStarted
   | SessionStepStreamed
   | SessionStepSettled

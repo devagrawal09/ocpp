@@ -245,9 +245,13 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       const preview = yield* shell
         .output(started.id, { limit: SHELL_MAX_CAPTURE_BYTES })
         .pipe(Effect.catchTag("Shell.NotFoundError", () => Effect.succeed(ShellResult.unavailable)))
-      yield* bus.publish(SessionEvent.Shell.Ended, {
+      const info = terminal.info
+      yield* bus.publish(SessionEvent.Shell.Settled, {
         sessionID,
-        shell: terminal.info,
+        shellID: info.id,
+        // `result` waits for the command to end, so its status is never still running.
+        outcome: info.status === "running" ? "killed" : info.status,
+        ...(info.exit === undefined ? {} : { exit: info.exit }),
         output: preview,
       })
       yield* synthetic(sessionID, {

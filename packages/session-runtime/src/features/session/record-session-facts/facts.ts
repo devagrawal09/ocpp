@@ -134,22 +134,11 @@ export const sessionFacts = {
       },
     },
   },
-  "session-shell-ended": {
+  "session-shell-settled": {
     sessionID: "ses_1",
-    shell: {
-      id: "sh_projector",
-      status: "exited",
-      command: "pwd",
-      cwd: "/project",
-      shell: "/bin/sh",
-      file: "/tmp/sh_projector.out",
-      exit: 0,
-      metadata: {},
-      time: {
-        started: 0,
-        completed: 1,
-      },
-    },
+    shellID: "sh_projector",
+    outcome: "exited",
+    exit: 0,
     output: {
       output: "/project",
       cursor: 8,

@@ -644,11 +644,13 @@
       }
     },
     {
-      "description": "Records session-shell-ended as the host published it.",
+      "description": "Records session-shell-settled as the host published it.",
       "expect": [
         {
-          "eventType": "session-shell-ended",
+          "eventType": "session-shell-settled",
           "examplePayload": {
+            "exit": 0,
+            "outcome": "exited",
             "output": {
               "cursor": 8,
               "output": "/project",
@@ -656,20 +658,7 @@
               "truncated": false
             },
             "sessionID": "ses_1",
-            "shell": {
-              "command": "pwd",
-              "cwd": "/project",
-              "exit": 0,
-              "file": "/tmp/sh_projector.out",
-              "id": "sh_projector",
-              "metadata": {},
-              "shell": "/bin/sh",
-              "status": "exited",
-              "time": {
-                "completed": 1,
-                "started": 0
-              }
-            }
+            "shellID": "sh_projector"
           },
           "kind": "scenario-event"
         }
@@ -679,6 +668,8 @@
         "facts": [
           {
             "payload": {
+              "exit": 0,
+              "outcome": "exited",
               "output": {
                 "cursor": 8,
                 "output": "/project",
@@ -686,22 +677,9 @@
                 "truncated": false
               },
               "sessionID": "ses_1",
-              "shell": {
-                "command": "pwd",
-                "cwd": "/project",
-                "exit": 0,
-                "file": "/tmp/sh_projector.out",
-                "id": "sh_projector",
-                "metadata": {},
-                "shell": "/bin/sh",
-                "status": "exited",
-                "time": {
-                  "completed": 1,
-                  "started": 0
-                }
-              }
+              "shellID": "sh_projector"
             },
-            "type": "session-shell-ended"
+            "type": "session-shell-settled"
           }
         ]
       }

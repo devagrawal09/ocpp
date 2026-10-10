@@ -802,12 +802,12 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session-shell-ended":
+      case "session-shell-settled":
         message.update(event.data.sessionID, (draft) => {
-          const match = message.shell(draft, event.data.shell.id)
+          const match = message.shell(draft, event.data.shellID)
           if (!match) return
-          match.status = event.data.shell.status
-          match.exit = event.data.shell.exit
+          match.status = event.data.outcome
+          match.exit = event.data.exit
           match.output = event.data.output
           match.time.completed = event.created
         })

@@ -505,19 +505,11 @@ describe("SessionProjector", () => {
           time: { started: 0 },
         }),
       })
-      yield* bus.publish(SessionEvent.Shell.Ended, {
+      yield* bus.publish(SessionEvent.Shell.Settled, {
         sessionID,
-        shell: Shell.Info.make({
-          id: Shell.ID.make("sh_projector"),
-          status: "exited",
-          command: "pwd",
-          cwd: "/project",
-          shell: "/bin/sh",
-          file: "/tmp/sh_projector.out",
-          exit: 0,
-          metadata: {},
-          time: { started: 0, completed: 1 },
-        }),
+        shellID: Shell.ID.make("sh_projector"),
+        outcome: "exited",
+        exit: 0,
         output: { output: "/project", cursor: 8, size: 8, truncated: false },
       })
       yield* bus.publish(SessionEvent.Compaction.Started, {

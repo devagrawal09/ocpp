@@ -80,6 +80,11 @@ import {
   sessionStatusStore,
 } from "./features/session/session-status-query/impl.ts"
 import {
+  activeSessions,
+  activeSessionsStore,
+  createActiveSessionsState,
+} from "./features/session/active-sessions-query/impl.ts"
+import {
   createInterruptExecutionState,
   interruptExecution,
   interruptExecutionStore,
@@ -136,6 +141,7 @@ export const createSessionAppConfig = (
       interruptExecution,
       wakeExecution,
       sessionStatus,
+      activeSessions,
       recordStepStarted,
       recordStepStreamed,
       settleStep,
@@ -195,6 +201,7 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(interruptExecutionStore, createInterruptExecutionState),
     provide(wakeExecutionStore, createWakeExecutionState),
     provide(sessionStatusStore, createSessionStatusState),
+    provide(activeSessionsStore, createActiveSessionsState),
     provide(recordStepStartedStore, createRecordStepStartedState),
     provide(recordStepStreamedStore, createRecordStepStreamedState),
     provide(settleStepStore, createSettleStepState),

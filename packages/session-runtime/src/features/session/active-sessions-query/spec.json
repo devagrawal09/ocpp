@@ -1,0 +1,110 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Lists the Sessions with an active execution, whichever process started it: what a host reports as running and checks before changing a Session's history.",
+  "formatVersion": 1,
+  "kind": "query",
+  "name": "activeSessions",
+  "scenarios": [
+    {
+      "description": "No Session is active before an execution starts.",
+      "expect": {
+        "sessionIDs": []
+      },
+      "given": [],
+      "when": {}
+    },
+    {
+      "description": "A Session is active from its execution's start until it settles.",
+      "expect": {
+        "sessionIDs": [
+          "ses_1"
+        ]
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {}
+    },
+    {
+      "description": "An execution a stopped process left running is still active: it settles only when the runtime settles it.",
+      "expect": {
+        "sessionIDs": [
+          "ses_1"
+        ]
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "shutdown",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {}
+    },
+    {
+      "description": "Sessions are listed in ID order.",
+      "expect": {
+        "sessionIDs": [
+          "ses_a",
+          "ses_b"
+        ]
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_b"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_a"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {}
+    }
+  ]
+}

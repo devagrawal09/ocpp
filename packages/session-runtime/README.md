@@ -23,3 +23,7 @@ bun install
 ```
 
 A linked package resolves `effect` from the Specter checkout's `node_modules`, so a process would load two copies. `src/preload.ts` makes every process that loads this package run one Effect, and the `effect` entries in `paths` do the same for the type checker. Every package that loads this one, directly or through core, lists the preload in its `bunfig.toml`.
+
+## History
+
+`docs/` holds the plan, the findings log and the last handoff, written while this runtime lived in the Specter repository as `apps/agent-runtime`.

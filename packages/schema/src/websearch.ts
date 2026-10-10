@@ -36,7 +36,7 @@ export class Response extends Schema.Class<Response>("WebSearch.Response")({
 }) {}
 
 const Updated = ephemeral({
-  type: "websearch.updated",
+  type: "websearch-updated",
   schema: {},
 })
 export const Event = { Updated, Definitions: inventory(Updated) }

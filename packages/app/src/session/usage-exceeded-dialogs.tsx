@@ -50,7 +50,7 @@ export function useUsageExceededDialogs() {
   )
 
   onCleanup(
-    sdk().event.on("session.status", (evt) => {
+    sdk().event.on("session-status", (evt) => {
       if (evt.data.sessionID !== params.id) return
       if (evt.data.status.type !== "retry") return
       const { action } = evt.data.status

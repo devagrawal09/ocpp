@@ -537,7 +537,7 @@ test("event.subscribe exposes the Promise event stream wire projection", async (
     baseUrl: "http://localhost:3000",
     fetch: async () =>
       new Response(
-        `: heartbeat\n\ndata: ${JSON.stringify({ id: "evt_connected", created: 0, type: "server.connected", data: {} })}\n\n` +
+        `: heartbeat\n\ndata: ${JSON.stringify({ id: "evt_connected", created: 0, type: "server-connected", data: {} })}\n\n` +
           `data: ${JSON.stringify(modelSwitchedEvent)}\n\n`,
         { headers: { "content-type": "text/event-stream" } },
       ),
@@ -545,16 +545,16 @@ test("event.subscribe exposes the Promise event stream wire projection", async (
   const events = []
   for await (const event of client.event.subscribe()) events.push(event)
 
-  expect(events).toEqual([{ id: "evt_connected", created: 0, type: "server.connected", data: {} }, modelSwitchedEvent])
-  expect(events[1]?.type === "session.model.selected" && events[1].created).toBe(1_717_171_717_000)
+  expect(events).toEqual([{ id: "evt_connected", created: 0, type: "server-connected", data: {} }, modelSwitchedEvent])
+  expect(events[1]?.type === "session-model-selected" && events[1].created).toBe(1_717_171_717_000)
 })
 
 // Moved from packages/app/e2e/regression/session-timeline-transport.spec.ts
 test("event.subscribe keeps one request open while delivering multiple events", async () => {
   const requests: Request[] = []
   const events = [
-    { id: "evt_first", created: 1, type: "server.connected", data: {} },
-    { id: "evt_second", created: 2, type: "server.connected", data: {} },
+    { id: "evt_first", created: 1, type: "server-connected", data: {} },
+    { id: "evt_second", created: 2, type: "server-connected", data: {} },
   ]
   const client = Ocpp.make({
     baseUrl: "http://localhost:3000",
@@ -576,7 +576,7 @@ test("event.subscribe delivers every event from one stream chunk", async () => {
   const events = Array.from({ length: 4 }, (_, index) => ({
     id: `evt_burst_${index}`,
     created: index,
-    type: "server.connected",
+    type: "server-connected",
     data: {},
   }))
   const client = Ocpp.make({
@@ -597,7 +597,7 @@ test("event.subscribe parses split JSON and a split multibyte code point", async
   const event = {
     id: "evt_split",
     created: 1,
-    type: "server.connected",
+    type: "server-connected",
     data: { text: "split snowman \u2603\u2603\u2603" },
   }
   const encoded = new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
@@ -623,7 +623,7 @@ test("event.subscribe parses split JSON and a split multibyte code point", async
 
 // Moved from packages/app/e2e/regression/session-timeline-transport.spec.ts
 test("event.subscribe ignores server heartbeat comments", async () => {
-  const event = { id: "evt_sentinel", created: 1, type: "server.connected", data: {} }
+  const event = { id: "evt_sentinel", created: 1, type: "server-connected", data: {} }
   const client = Ocpp.make({
     baseUrl: "http://localhost:3000",
     fetch: async () =>
@@ -639,7 +639,7 @@ test("event.subscribe ignores server heartbeat comments", async () => {
 // Moved from packages/app/e2e/regression/session-timeline-transport.spec.ts
 test("event transport passes through ordinary health requests", async () => {
   const requests: string[] = []
-  const event = { id: "evt_connected", created: 1, type: "server.connected", data: {} }
+  const event = { id: "evt_connected", created: 1, type: "server-connected", data: {} }
   const client = Ocpp.make({
     baseUrl: "http://localhost:3000",
     fetch: async (input, init) => {
@@ -891,12 +891,12 @@ const modelSwitchedMessage = {
   model: { id: "claude", providerID: "anthropic" },
 }
 
-const synced = { type: "log.synced", aggregateID: "ses_test", seq: 1 }
+const synced = { type: "log-synced", aggregateID: "ses_test", seq: 1 }
 
 const modelSwitchedEvent = {
   id: "evt_model",
   created: 1_717_171_717_000,
-  type: "session.model.selected",
+  type: "session-model-selected",
   durable: { aggregateID: "ses_test", seq: 1, version: 1 },
   data: {
     sessionID: "ses_test",

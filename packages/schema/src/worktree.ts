@@ -46,12 +46,12 @@ export const List = Schema.Array(Directory).annotate({ identifier: "Worktree.Lis
 export type List = typeof List.Type
 
 const Updated = ephemeral({
-  type: "worktree.updated",
+  type: "worktree-updated",
   schema: { projectID: Project.ID },
 })
 
 const Resolved = durable({
-  type: "worktree.resolved",
+  type: "worktree-resolved",
   durable: { aggregate: "projectID", version: 1 },
   schema: {
     projectID: Project.ID,

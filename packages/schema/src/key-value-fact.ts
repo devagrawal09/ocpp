@@ -7,12 +7,12 @@ const byKey = { aggregate: "key", version: 1 } as const
 
 /** A value stored under a key: a plugin's own storage, the web search provider, the well-known origins. */
 export const Stored = Event.durable({
-  type: "kv.stored",
+  type: "kv-stored",
   durable: byKey,
   schema: { key: Schema.String, value: Schema.Json },
 })
 export const Removed = Event.durable({
-  type: "kv.removed",
+  type: "kv-removed",
   durable: byKey,
   schema: { key: Schema.String },
 })

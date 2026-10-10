@@ -29,7 +29,7 @@ const server = Bun.serve({
         new ReadableStream({
           start(controller) {
             controller.enqueue(
-              new TextEncoder().encode('data: {"id":"evt_fixture_connected","type":"server.connected","data":{}}\n\n'),
+              new TextEncoder().encode('data: {"id":"evt_fixture_connected","type":"server-connected","data":{}}\n\n'),
             )
           },
         }),

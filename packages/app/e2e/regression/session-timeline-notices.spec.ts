@@ -352,7 +352,7 @@ test("separates blocking and already-backgrounded work into two rows", async ({ 
   await timeline.transport.send({
     id: "evt_background_shell_created",
     created: 3,
-    type: "shell.created",
+    type: "shell-created",
     location: { directory },
     data: {
       info: {
@@ -385,7 +385,7 @@ test("separates blocking and already-backgrounded work into two rows", async ({ 
   await timeline.transport.send({
     id: "evt_background_succeeded",
     created: Date.now(),
-    type: "session.execution.succeeded",
+    type: "session-execution-succeeded",
     data: { sessionID: backgroundID },
   } as never)
   await expect(backgroundCard.locator('[data-component="session-progress-indicator-v2"]')).toHaveCount(0)

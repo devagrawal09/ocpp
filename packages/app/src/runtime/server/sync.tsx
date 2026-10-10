@@ -219,7 +219,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK, data: Data) {
     connection.handleEvent({ type: event.type })
 
     if (!event.location) {
-      if (event.type === "config.updated" || event.type === "agent.updated" || event.type === "worktree.updated")
+      if (event.type === "config-updated" || event.type === "agent-updated" || event.type === "worktree-updated")
         bootstrap.refetch()
       return
     }
@@ -228,9 +228,9 @@ export function createServerSyncContextInner(serverSDK: ServerSDK, data: Data) {
     const key = directoryKey(directory)
     if (!children.children[key]) return
     children.mark(key)
-    if (event.type === "config.updated" || event.type === "agent.updated") queue.push(key)
-    if (event.type === "worktree.updated") void bootstrap.refetch()
-    if (event.type === "reference.updated" && children.active(key))
+    if (event.type === "config-updated" || event.type === "agent-updated") queue.push(key)
+    if (event.type === "worktree-updated") void bootstrap.refetch()
+    if (event.type === "reference-updated" && children.active(key))
       void data.location.reference.sync({ directory: key }).catch(() => undefined)
   })
 

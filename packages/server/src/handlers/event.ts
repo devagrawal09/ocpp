@@ -13,7 +13,7 @@ export const EventHandler = HttpApiBuilder.group(Api, "server.event", (handlers)
       Effect.gen(function* () {
         const connected = {
           id: Event.ID.create(),
-          type: "server.connected",
+          type: "server-connected",
           data: {},
         } as const
         const output = Stream.unwrap(

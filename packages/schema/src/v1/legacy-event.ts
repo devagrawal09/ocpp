@@ -6,7 +6,7 @@ import { SessionID } from "../session-id.js"
 import { SessionV1 } from "./session.js"
 
 export const CommandExecuted = ephemeral({
-  type: "command.executed",
+  type: "command-executed",
   schema: {
     name: Schema.String,
     sessionID: SessionID,

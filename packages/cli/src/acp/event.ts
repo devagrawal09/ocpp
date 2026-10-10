@@ -126,7 +126,7 @@ export async function streamTurn(input: {
       const next = await stream.next()
       if (next.done) throw new Error("event stream disconnected during prompt execution")
       const event = next.value
-      if (event.type === "session.created") {
+      if (event.type === "session-created") {
         const parentID = event.data.parentID
         if (!parentID) continue
         const parent = parentID === input.sessionID ? undefined : children.get(parentID)
@@ -149,7 +149,7 @@ export async function streamTurn(input: {
       const send = (update: SessionUpdate) => updateSession(update, child, mode)
       if (mode === "background" && !child) continue
 
-      if (event.type === "form.created" && (event.data.form.sessionID === input.sessionID || child)) {
+      if (event.type === "form-created" && (event.data.form.sessionID === input.sessionID || child)) {
         await input.client.form
           .cancel({ sessionID: event.data.form.sessionID, formID: event.data.form.id })
           .catch(() => input.client.session.interrupt({ sessionID: event.data.form.sessionID }).catch(() => {}))
@@ -162,18 +162,18 @@ export async function streamTurn(input: {
       }
       if (!started) continue
 
-      if (event.type === "session.execution.started") {
+      if (event.type === "session-execution-started") {
         if (child) {
           await notifyChild(child, { type: "status", status: "running" })
         }
         continue
       }
 
-      if (event.type === "session.step.started") {
+      if (event.type === "session-step-started") {
         if (!child) assistantMessageID = event.data.assistantMessageID
         continue
       }
-      if (event.type === "session.text.delta") {
+      if (event.type === "session-text-delta") {
         if (!child) assistantMessageID = event.data.assistantMessageID
         await send({
           sessionUpdate: "agent_message_chunk",
@@ -182,7 +182,7 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session.reasoning.delta") {
+      if (event.type === "session-reasoning-delta") {
         if (!child) assistantMessageID = event.data.assistantMessageID
         await send({
           sessionUpdate: "agent_thought_chunk",
@@ -191,7 +191,7 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session.tool.input.started") {
+      if (event.type === "session-tool-input-started") {
         if (!child) assistantMessageID = event.data.assistantMessageID
         tools.set(toolKey(event.data.sessionID, event.data.id), {
           name: event.data.name,
@@ -210,7 +210,7 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session.tool.called") {
+      if (event.type === "session-tool-called") {
         if (!child) assistantMessageID = event.data.assistantMessageID
         const key = toolKey(event.data.sessionID, event.data.id)
         const current = tools.get(key) ?? emptyToolState()
@@ -227,7 +227,7 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session.tool.progress") {
+      if (event.type === "session-tool-progress") {
         const current = tools.get(toolKey(event.data.sessionID, event.data.id))
         if (!current) continue
         current.metadata = event.data.metadata
@@ -242,7 +242,7 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session.tool.success") {
+      if (event.type === "session-tool-success") {
         const key = toolKey(event.data.sessionID, event.data.id)
         const current = tools.get(key) ?? emptyToolState()
         tools.delete(key)
@@ -267,7 +267,7 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session.tool.failed") {
+      if (event.type === "session-tool-failed") {
         const key = toolKey(event.data.sessionID, event.data.id)
         const current = tools.get(key) ?? emptyToolState()
         tools.delete(key)
@@ -285,28 +285,28 @@ export async function streamTurn(input: {
         })
         continue
       }
-      if (event.type === "session.step.ended") {
+      if (event.type === "session-step-ended") {
         if (!child) {
           assistantMessageID = event.data.assistantMessageID
           finish = event.data.finish
         }
         continue
       }
-      if (event.type === "session.execution.succeeded") {
+      if (event.type === "session-execution-succeeded") {
         if (!child) return "succeeded" as const
         openChildren.delete(child.id)
         await notifyChild(child, { type: "status", status: "completed" })
         if (mode === "background" && openChildren.size === 0) return "succeeded" as const
         continue
       }
-      if (event.type === "session.execution.interrupted") {
+      if (event.type === "session-execution-interrupted") {
         if (!child) return "interrupted" as const
         openChildren.delete(child.id)
         await notifyChild(child, { type: "status", status: "interrupted" })
         if (mode === "background" && openChildren.size === 0) return "interrupted" as const
         continue
       }
-      if (event.type === "session.execution.failed") {
+      if (event.type === "session-execution-failed") {
         if (child) {
           openChildren.delete(child.id)
           await notifyChild(child, { type: "status", status: "failed", error: event.data.error })
@@ -375,7 +375,7 @@ export async function streamTurn(input: {
 
 function sessionIDFromEvent(event: EventSubscribeOutput) {
   if ("sessionID" in event.data && typeof event.data.sessionID === "string") return event.data.sessionID
-  if (event.type === "form.created") return event.data.form.sessionID
+  if (event.type === "form-created") return event.data.form.sessionID
   return undefined
 }
 
@@ -529,9 +529,9 @@ async function replayMessage(
 }
 
 function matchesStart(event: EventSubscribeOutput, start: TurnStart) {
-  if (start.type === "input") return event.type === "session.inbox.delivered" && event.data.inboxID === start.id
-  if (start.type === "compaction") return event.type === "session.inbox.delivered" && event.data.inboxID === start.id
-  return event.type === "session.skill.activated" && event.id === start.id.replace(/^msg_/, "evt_")
+  if (start.type === "input") return event.type === "session-inbox-delivered" && event.data.inboxID === start.id
+  if (start.type === "compaction") return event.type === "session-inbox-delivered" && event.data.inboxID === start.id
+  return event.type === "session-skill-activated" && event.id === start.id.replace(/^msg_/, "evt_")
 }
 
 function response(

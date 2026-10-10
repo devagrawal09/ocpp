@@ -1035,7 +1035,7 @@ describe("SessionInbox command contracts", () => {
           .orderBy(EventTable.seq)
           .all()
           .pipe(Effect.orDie))
-          .filter((event) => event.type.startsWith("session.inbox."))
+          .filter((event) => event.type.startsWith("session-inbox-"))
           .map((event) => event.type),
       ).toEqual([
         Bus.versionedType(SessionEvent.InboxEnqueued.type, 1),

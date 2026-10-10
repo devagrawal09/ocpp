@@ -55,7 +55,7 @@ test("revalidates after an event overtakes an active session read", async () => 
     const viewed: OcppEvent = {
       id: "evt_viewed",
       created: 2,
-      type: "session.viewed",
+      type: "session-viewed",
       durable: { aggregateID: "ses_refresh", seq: 1, version: 1 },
       data: { sessionID: "ses_refresh", idle: 2 },
     }
@@ -115,7 +115,7 @@ test("updates authoritative cached project metadata from live events", async () 
     const updated: OcppEvent = {
       id: "evt_project_renamed",
       created: 2,
-      type: "project.updated",
+      type: "project-updated",
       data: {
         ...original,
         canonical: "/projects/renamed",
@@ -133,7 +133,7 @@ test("updates authoritative cached project metadata from live events", async () 
     const reset: OcppEvent = {
       id: "evt_project_name_reset",
       created: 3,
-      type: "project.updated",
+      type: "project-updated",
       data: {
         id: original.id,
         canonical: "/projects/renamed-again",
@@ -215,7 +215,7 @@ test("adopts cached directory-project sessions when their repository is resolved
       const updated: OcppEvent = {
         id: `evt_${project.id}`,
         created: 0,
-        type: "project.updated",
+        type: "project-updated",
         data: { ...project, time: { created: 0, updated: 0 }, sandboxes: [] },
       }
       listeners.forEach((listener) => listener({ name: updated.type, details: updated }))
@@ -224,7 +224,7 @@ test("adopts cached directory-project sessions when their repository is resolved
     const resolved: OcppEvent = {
       id: "evt_repository_resolved",
       created: 1,
-      type: "worktree.resolved",
+      type: "worktree-resolved",
       durable: { aggregateID: "repository", seq: 0, version: 1 },
       data: {
         projectID: "repository",
@@ -302,7 +302,7 @@ test("refreshes global credential events across every loaded location and worksp
     const updated: OcppEvent = {
       id: "evt_credential.updated",
       created: 1,
-      type: "credential.updated",
+      type: "credential-updated",
       data: {},
     }
     listeners.forEach((listener) => listener({ name: updated.type, details: updated }))
@@ -323,7 +323,7 @@ test("refreshes global credential events across every loaded location and worksp
       const switched: OcppEvent = {
         id: `evt_credential.switched.${credentialID}`,
         created: 2,
-        type: "credential.switched",
+        type: "credential-switched",
         data: { credentialID, integrationID: "integration" },
       }
       listeners.forEach((listener) => listener({ name: switched.type, details: switched }))
@@ -390,7 +390,7 @@ test("reloads a location's config when it changes", async () => {
     expect(configured()).toBe("demo")
 
     models.shift()
-    const updated: OcppEvent = { id: "evt_config.updated", created: 1, type: "config.updated", location, data: {} }
+    const updated: OcppEvent = { id: "evt_config.updated", created: 1, type: "config-updated", location, data: {} }
     listeners.forEach((listener) => listener({ name: updated.type, details: updated }))
     await wait(() => configured() === "claude")
   } finally {
@@ -469,7 +469,7 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
     publish({
       id: "evt_codemode_completed",
       created: 2,
-      type: "session.codemode.completed",
+      type: "session-codemode-completed",
       durable: { aggregateID: "ses_codemode", seq: 1, version: 1 },
       data: {
         sessionID: "ses_codemode",
@@ -482,7 +482,7 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
     publish({
       id: "evt_tool_success",
       created: 3,
-      type: "session.tool.success",
+      type: "session-tool-success",
       durable: { aggregateID: "ses_codemode", seq: 2, version: 2 },
       data: {
         sessionID: "ses_codemode",
@@ -577,7 +577,7 @@ test("refreshes a loaded Code Mode terminal after reconnect misses its event", a
     }),
     dispose,
   }))
-  const connected = { type: "server.connected", data: {} } satisfies OcppEvent
+  const connected = { type: "server-connected", data: {} } satisfies OcppEvent
   const executionStatus = () => {
     const message = setup.data.session.message.get("ses_codemode", "msg_codemode")
     if (message?.type !== "assistant") return
@@ -813,7 +813,7 @@ test("preserves assistant content replacement events across an active message re
     const updated: OcppEvent = {
       id: "evt_message_updated",
       created: 3,
-      type: "session.message.content.updated",
+      type: "session-message-content-updated",
       durable: { aggregateID: "ses_refresh", seq: 3, version: 1 },
       data: {
         sessionID: "ses_refresh",
@@ -834,11 +834,11 @@ test("preserves assistant content replacement events across an active message re
 })
 
 test.each([
-  "session.execution.succeeded",
-  "session.execution.failed",
-  "session.execution.interrupted",
-  "session.execution.started",
-  "session.deleted",
+  "session-execution-succeeded",
+  "session-execution-failed",
+  "session-execution-interrupted",
+  "session-execution-started",
+  "session-deleted",
 ] as const)("preserves %s activity when an older snapshot arrives", async (type) => {
   const release = Promise.withResolvers<void>()
   const requested = Promise.withResolvers<void>()
@@ -847,15 +847,15 @@ test.each([
     await release.promise
     return Response.json({
       data: {
-        ...(type === "session.execution.started" ? {} : { ses_refresh: { type: "running" } }),
+        ...(type === "session-execution-started" ? {} : { ses_refresh: { type: "running" } }),
         ses_hydrated: { type: "running" },
       },
     })
   })
 
   try {
-    if (type !== "session.execution.started") setup.data.session.setStatus("ses_refresh", "running")
-    setup.emit({ type: "server.connected", data: {} })
+    if (type !== "session-execution-started") setup.data.session.setStatus("ses_refresh", "running")
+    setup.emit({ type: "server-connected", data: {} })
     await requested.promise
     setup.emit({
       id: "evt_activity",
@@ -864,10 +864,10 @@ test.each([
       durable: { aggregateID: "ses_refresh", seq: 2, version: 1 },
       data: { sessionID: "ses_refresh", reason: "user" },
     })
-    expect(setup.data.session.status("ses_refresh")).toBe(type === "session.execution.started" ? "running" : "idle")
+    expect(setup.data.session.status("ses_refresh")).toBe(type === "session-execution-started" ? "running" : "idle")
     release.resolve()
     await wait(() => setup.data.session.status("ses_hydrated") === "running")
-    expect(setup.data.session.status("ses_refresh")).toBe(type === "session.execution.started" ? "running" : "idle")
+    expect(setup.data.session.status("ses_refresh")).toBe(type === "session-execution-started" ? "running" : "idle")
   } finally {
     release.resolve()
     setup.dispose()
@@ -883,9 +883,9 @@ test("ignores activity snapshots from an older connection", async () => {
   })
 
   try {
-    setup.emit({ type: "server.connected", data: {} })
+    setup.emit({ type: "server-connected", data: {} })
     await wait(() => reads.length === 1)
-    setup.emit({ type: "server.connected", data: {} })
+    setup.emit({ type: "server-connected", data: {} })
     await wait(() => reads.length === 2)
     reads[1]?.resolve(Response.json({ data: { ses_new: { type: "running" } } }))
     await wait(() => setup.data.session.status("ses_new") === "running")
@@ -905,7 +905,7 @@ test("projects background user shell metadata from durable shell data", () => {
     setup.emit({
       id: "evt_user_shell",
       created: 1,
-      type: "session.shell.started",
+      type: "session-shell-started",
       durable: { aggregateID: "ses_refresh", seq: 1, version: 1 },
       data: {
         sessionID: "ses_refresh",

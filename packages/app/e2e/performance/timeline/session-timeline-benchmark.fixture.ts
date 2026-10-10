@@ -149,8 +149,8 @@ export async function setupTimelineBenchmark(
 
 export function buildInitialStreamEvent(deltaCount: number): EventPayload[] {
   return [
-    timelineEvent("session.text.started", { sessionID, assistantMessageID, ordinal: 0 }, true),
-    timelineEvent("session.text.delta", {
+    timelineEvent("session-text-started", { sessionID, assistantMessageID, ordinal: 0 }, true),
+    timelineEvent("session-text-delta", {
       sessionID,
       assistantMessageID,
       ordinal: 0,
@@ -161,7 +161,7 @@ export function buildInitialStreamEvent(deltaCount: number): EventPayload[] {
 
 export function buildStreamDeltaEvents(deltaCount: number): EventPayload[] {
   return Array.from({ length: deltaCount }, (_, index) =>
-    timelineEvent("session.text.delta", {
+    timelineEvent("session-text-delta", {
       sessionID,
       assistantMessageID,
       ordinal: 0,
@@ -332,7 +332,7 @@ function toolContent(part: ToolSeed): SessionMessageAssistant["content"][number]
 
 let eventSequence = 0
 
-function timelineEvent<Type extends "session.text.started" | "session.text.delta">(
+function timelineEvent<Type extends "session-text-started" | "session-text-delta">(
   type: Type,
   data: Extract<OcppEvent, { type: Type }>["data"],
   durable = false,

@@ -14,14 +14,14 @@ const fields = {
 const schema = <const Definitions extends ReadonlyArray<Definition>>(definitions: Definitions) =>
   Schema.Union([
     ...definitions,
-    ...(definitions.some((definition) => definition.type === "server.connected")
+    ...(definitions.some((definition) => definition.type === "server-connected")
       ? []
       : [
           Schema.Struct({
             ...fields,
-            type: Schema.Literal("server.connected"),
+            type: Schema.Literal("server-connected"),
             data: Schema.Struct({}),
-          }).annotate({ identifier: "V2Event.server.connected" }),
+          }).annotate({ identifier: "V2Event.server-connected" }),
         ]),
   ]).annotate({ identifier: "V2Event" })
 
@@ -55,4 +55,4 @@ export const OcppEvent = event.schema
 export type OcppEvent = typeof OcppEvent.Type
 export type OcppEventEncoded = typeof OcppEvent.Encoded
 export const isOcppEvent = (event: { readonly type: string }): event is OcppEvent =>
-  event.type === "server.connected" || EventManifest.isServer(event)
+  event.type === "server-connected" || EventManifest.isServer(event)

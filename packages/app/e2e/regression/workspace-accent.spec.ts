@@ -98,7 +98,7 @@ for (const theme of ["light", "dark"] as const) {
       view.events.push({
         id: "evt_workspace_accent_inventory",
         created: 1700000001000,
-        type: "worktree.updated",
+        type: "worktree-updated",
         data: { projectID },
       })
       expect((await refreshed).ok()).toBe(true)
@@ -114,7 +114,7 @@ for (const theme of ["light", "dark"] as const) {
       view.events.push({
         id: "evt_workspace_accent_running",
         created: 1700000002000,
-        type: "session.execution.started",
+        type: "session-execution-started",
         durable: { aggregateID: sessionID, seq: 1, version: 1 },
         data: { sessionID },
       })

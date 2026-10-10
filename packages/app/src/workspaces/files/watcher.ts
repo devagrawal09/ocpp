@@ -1,7 +1,7 @@
 import type { FileNode } from "@/runtime/server/types"
 import type { OcppEvent } from "@ocpp/client/promise"
 
-type WatcherEvent = Extract<OcppEvent, { type: "filesystem.changed" }>
+type WatcherEvent = Extract<OcppEvent, { type: "filesystem-changed" }>
 
 type WatcherOps = {
   normalize: (input: string) => string

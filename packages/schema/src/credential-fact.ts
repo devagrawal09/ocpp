@@ -19,33 +19,33 @@ export type Sealed = typeof Sealed.Type
 
 /** A credential was stored for its integration and became the one the integration uses. */
 export const Created = Event.durable({
-  type: "credential.created",
+  type: "credential-created",
   durable: byCredential,
   schema: { ...credential, label: Schema.String, secret: Sealed },
 })
 /** The integration switched to this credential. */
 export const Activated = Event.durable({
-  type: "credential.activated",
+  type: "credential-activated",
   durable: byCredential,
   schema: credential,
 })
 export const Relabeled = Event.durable({
-  type: "credential.relabeled",
+  type: "credential-relabeled",
   durable: byCredential,
   schema: { ...credential, label: Schema.String },
 })
 /** The credential's secret changed: a new key, or refreshed tokens. */
 export const Rotated = Event.durable({
-  type: "credential.rotated",
+  type: "credential-rotated",
   durable: byCredential,
   schema: { ...credential, secret: Sealed },
 })
 /** The credential was removed with its secret; when it was in use, the newest remaining one replaces it. */
 export const Removed = Event.durable({
-  type: "credential.removed",
+  type: "credential-removed",
   durable: byCredential,
   schema: { ...credential, replacement: optional(Credential.ID) },
 })
 
-/** Internal persistence facts of credentials; clients see `credential.updated` and `credential.switched`. */
+/** Internal persistence facts of credentials; clients see `credential-updated` and `credential-switched`. */
 export const Definitions = Event.inventory(Created, Activated, Relabeled, Rotated, Removed)

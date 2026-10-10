@@ -367,9 +367,9 @@ let eventSequence = -1
 
 function textEvents(): OcppEvent[] {
   return [
-    eventValue("session.text.started", { sessionID, assistantMessageID, ordinal: 0 }, 1),
+    eventValue("session-text-started", { sessionID, assistantMessageID, ordinal: 0 }, 1),
     eventValue(
-      "session.text.ended",
+      "session-text-ended",
       {
         sessionID,
         assistantMessageID,
@@ -384,7 +384,7 @@ function textEvents(): OcppEvent[] {
 function toolEvents(part: typeof editPart): OcppEvent[] {
   return [
     eventValue(
-      "session.tool.input.started",
+      "session-tool-input-started",
       {
         sessionID,
         assistantMessageID,
@@ -394,7 +394,7 @@ function toolEvents(part: typeof editPart): OcppEvent[] {
       1,
     ),
     eventValue(
-      "session.tool.input.ended",
+      "session-tool-input-ended",
       {
         sessionID,
         assistantMessageID,
@@ -404,7 +404,7 @@ function toolEvents(part: typeof editPart): OcppEvent[] {
       1,
     ),
     eventValue(
-      "session.tool.called",
+      "session-tool-called",
       {
         sessionID,
         assistantMessageID,
@@ -415,7 +415,7 @@ function toolEvents(part: typeof editPart): OcppEvent[] {
       1,
     ),
     eventValue(
-      "session.tool.success",
+      "session-tool-success",
       {
         sessionID,
         assistantMessageID,

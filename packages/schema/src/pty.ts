@@ -31,10 +31,10 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "Pty" })
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
-const Created = ephemeral({ type: "pty.created", schema: { info: Info } })
-const Updated = ephemeral({ type: "pty.updated", schema: { info: Info } })
-const Exited = ephemeral({ type: "pty.exited", schema: { id: ID, exitCode: NonNegativeInt } })
-const Deleted = ephemeral({ type: "pty.deleted", schema: { id: ID } })
+const Created = ephemeral({ type: "pty-created", schema: { info: Info } })
+const Updated = ephemeral({ type: "pty-updated", schema: { info: Info } })
+const Exited = ephemeral({ type: "pty-exited", schema: { id: ID, exitCode: NonNegativeInt } })
+const Deleted = ephemeral({ type: "pty-deleted", schema: { id: ID } })
 export const Event = { Created, Updated, Exited, Deleted, Definitions: inventory(Created, Updated, Exited, Deleted) }
 
 export const CreateInput = Schema.Struct({

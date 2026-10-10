@@ -6,12 +6,12 @@ import { createOcppEventSource, createServerTransport } from "./client"
 const form = {
   id: "evt_form",
   created: 1,
-  type: "form.created",
+  type: "form-created",
   location: { directory: "/repo", workspaceID: "workspace_1" },
   data: {
     form: { id: "form_1", sessionID: "ses_1", title: "Questions", fields: [{ key: "q0", type: "string" }] },
   },
-} satisfies Extract<OcppEvent, { type: "form.created" }>
+} satisfies Extract<OcppEvent, { type: "form-created" }>
 
 function setup() {
   return createRoot((dispose) => ({ ...createOcppEventSource(), dispose }))
@@ -23,7 +23,7 @@ describe("server event stream", () => {
     const received: OcppEvent[] = []
     let requestID: string | undefined
 
-    server.event.on("form.created", (event) => {
+    server.event.on("form-created", (event) => {
       requestID = event.data.form.id
     })
     server.event.listen((event) => received.push(event))
@@ -43,12 +43,12 @@ describe("server event stream", () => {
     let workspaceID: string | undefined
     const global = {
       id: "evt_connected",
-      type: "server.connected",
+      type: "server-connected",
       data: {},
-    } satisfies Extract<OcppEvent, { type: "server.connected" }>
+    } satisfies Extract<OcppEvent, { type: "server-connected" }>
 
     const repoEvents = server.event.location("/repo")
-    repoEvents.on("form.created", (event) => {
+    repoEvents.on("form-created", (event) => {
       workspaceID = event.location?.workspaceID
     })
     repoEvents.listen((event) => repo.push(event))

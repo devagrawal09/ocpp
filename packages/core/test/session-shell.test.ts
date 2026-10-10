@@ -42,7 +42,7 @@ const log = (session: Session.Interface, sessionID: Session.ID, follow = false) 
 /** Executions the runtime started for the fixture's Session: what woke the model. */
 const executions = (fixture: Effect.Success<typeof setup>) =>
   log(fixture.session, fixture.created.id).pipe(
-    Stream.filter((event) => event.type === "session.execution.started"),
+    Stream.filter((event) => event.type === "session-execution-started"),
     Stream.runCount,
   )
 
@@ -64,7 +64,7 @@ const launch = Effect.fn(function* (fixture: Effect.Success<typeof setup>, name:
     Effect.timeout("5 seconds"),
   )
   const event = yield* log(fixture.session, fixture.created.id, true).pipe(
-    Stream.filter((event): event is SessionEvent.Shell.Started => event.type === "session.shell.started"),
+    Stream.filter((event): event is SessionEvent.Shell.Started => event.type === "session-shell-started"),
     Stream.filter((event) => event.data.shell.command === command),
     Stream.runHead,
     Effect.map(Option.getOrThrow),
@@ -149,7 +149,7 @@ describe("Session.shell", () => {
       const events = yield* Effect.forEach(readers, (reader) => Fiber.join(reader).pipe(Effect.timeout("5 seconds")))
       expect(events.map((items) => items.map((event) => event.type))).toEqual([
         [Done.type],
-        ["session.shell.ended", "session.inbox.enqueued", Done.type],
+        ["session-shell-ended", "session-inbox-enqueued", Done.type],
       ])
       expect(events[1][0]).toMatchObject({
         data: { output: { output: expect.stringContaining("moved finished") } },
@@ -204,10 +204,10 @@ describe("Session.shell", () => {
 
         const events = yield* log(fixture.session, fixture.created.id).pipe(Stream.runCollect)
         expect(events.map((event) => event.type)).toEqual([
-          "session.created",
-          "session.shell.started",
-          "session.shell.ended",
-          "session.inbox.enqueued",
+          "session-created",
+          "session-shell-started",
+          "session-shell-ended",
+          "session-inbox-enqueued",
         ])
         expect(events[1]).toMatchObject({ data: { shell: { metadata: { background: true } } } })
         const messages = yield* fixture.session.messages({ sessionID: fixture.created.id })
@@ -327,7 +327,7 @@ describe("Session.shell", () => {
 
       yield* command.release
       yield* log(fixture.session, fixture.created.id, true).pipe(
-        Stream.filter((event) => event.type === "session.inbox.enqueued"),
+        Stream.filter((event) => event.type === "session-inbox-enqueued"),
         Stream.runHead,
         Effect.timeout("5 seconds"),
       )

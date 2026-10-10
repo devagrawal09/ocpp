@@ -16,7 +16,7 @@ test("acp prompt resolves after ordered turn updates", async () => {
           new ReadableStream<Uint8Array>({
             start(controller) {
               events = controller
-              send(controller, { id: "evt_connected", type: "server.connected", data: {} })
+              send(controller, { id: "evt_connected", type: "server-connected", data: {} })
             },
           }),
           { headers: { "content-type": "text/event-stream" } },
@@ -34,19 +34,19 @@ test("acp prompt resolves after ordered turn updates", async () => {
           send(events, {
             id: "evt_promoted",
             created: 1,
-            type: "session.inbox.delivered",
+            type: "session-inbox-delivered",
             data: { sessionID: "ses_test", inboxID: id },
           })
           send(events, {
             id: "evt_text",
             created: 2,
-            type: "session.text.delta",
+            type: "session-text-delta",
             data: { sessionID: "ses_test", assistantMessageID: "msg_assistant", ordinal: 0, delta: "hello" },
           })
           send(events, {
             id: "evt_step",
             created: 3,
-            type: "session.step.ended",
+            type: "session-step-ended",
             data: {
               sessionID: "ses_test",
               assistantMessageID: "msg_assistant",
@@ -58,7 +58,7 @@ test("acp prompt resolves after ordered turn updates", async () => {
           send(events, {
             id: "evt_done",
             created: 4,
-            type: "session.execution.succeeded",
+            type: "session-execution-succeeded",
             data: { sessionID: "ses_test" },
           })
         })
@@ -130,7 +130,7 @@ test("acp action resolves without prompt lifecycle events", async () => {
       return new Response(
         new ReadableStream<Uint8Array>({
           start(controller) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "server.connected", data: {} })}\n\n`))
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "server-connected", data: {} })}\n\n`))
           },
         }),
         { headers: { "content-type": "text/event-stream" } },

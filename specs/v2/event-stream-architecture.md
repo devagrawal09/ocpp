@@ -61,7 +61,7 @@ When an offer returns `false`:
 
 Previously accepted frames drain before the queue failure surfaces. The overflow-causing frame is not accepted by that connection.
 
-Internal Core events, `server.connected`, and heartbeats do not consume the queue capacity.
+Internal Core events, `server-connected`, and heartbeats do not consume the queue capacity.
 
 ## Why Independent Queues
 
@@ -142,7 +142,7 @@ Each `feed.subscribe` acquisition:
 3. Returns `Stream.fromQueue(queue)`.
 4. Removes and shuts down the queue when the request scope closes.
 
-The raw handler acquires and registers the queue before prepending its connection-specific `server.connected` frame:
+The raw handler acquires and registers the queue before prepending its connection-specific `server-connected` frame:
 
 ```text
 register queue
@@ -150,7 +150,7 @@ register queue
   -> drain queued live frames
 ```
 
-Events before registration may be missed, consistent with a volatile stream. Events after registration queue behind `server.connected`.
+Events before registration may be missed, consistent with a volatile stream. Events after registration queue behind `server-connected`.
 
 Heartbeats remain connection-local and outside the feed.
 
@@ -175,7 +175,7 @@ HttpApiSchema.StreamSse({ data: OcppEvent })
 
 The raw handler continues to own:
 
-- the unique `server.connected` event;
+- the unique `server-connected` event;
 - the 15-second heartbeat;
 - SSE response headers;
 - `HttpServerResponse.stream` construction.

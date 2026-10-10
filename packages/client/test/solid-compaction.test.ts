@@ -76,15 +76,15 @@ test.each(["started", "cancelled", "failed"])(
     if (kind === "started")
       fixture.emit({
         ...event,
-        type: "session.compaction.started",
+        type: "session-compaction-started",
         data: { sessionID, inputID: "msg_canonical", reason: "manual" },
       })
     if (kind === "cancelled")
-      fixture.emit({ ...event, type: "session.inbox.cancelled", data: { sessionID, inboxID: "msg_canonical" } })
+      fixture.emit({ ...event, type: "session-inbox-cancelled", data: { sessionID, inboxID: "msg_canonical" } })
     if (kind === "failed")
       fixture.emit({
         ...event,
-        type: "session.compaction.failed",
+        type: "session-compaction-failed",
         data: {
           sessionID,
           inputID: "msg_canonical",
@@ -100,7 +100,7 @@ test.each(["started", "cancelled", "failed"])(
       expect(fixture.data.session.message.list(sessionID)).toMatchObject([{ type: "compaction", status: "running" }])
       fixture.emit({
         ...event,
-        type: "session.compaction.ended",
+        type: "session-compaction-ended",
         data: { sessionID, reason: "manual", text: "Summary", recent: "Recent" },
       })
       expect(fixture.data.session.message.list(sessionID)).toMatchObject([
@@ -159,7 +159,7 @@ test("uses a fresh control ID when the known pending compaction starts during mo
   await wait(() => fixture.calls.includes("model"))
   fixture.emit({
     ...event,
-    type: "session.compaction.started",
+    type: "session-compaction-started",
     data: { sessionID, inputID: "msg_existing", reason: "manual" },
   })
   fixture.model.resolve()
@@ -223,7 +223,7 @@ test("routes concurrent compaction observations by session through one listener"
   const firstID = fixture.data.session.pending.list(sessionID)[0].id
   const secondID = fixture.data.session.pending.list("ses_other")[0].id
   expect(fixture.listeners.size).toBe(1)
-  fixture.emit({ ...event, type: "session.inbox.cancelled", data: { sessionID, inboxID: firstID } })
+  fixture.emit({ ...event, type: "session-inbox-cancelled", data: { sessionID, inboxID: firstID } })
   expect(fixture.data.session.pending.list(sessionID)).toEqual([])
   expect(fixture.data.session.pending.list("ses_other").map((row) => row.id)).toEqual([secondID])
 
@@ -384,7 +384,7 @@ function setup(override?: (request: Request) => Promise<Response | undefined>) {
       emit({
         ...event,
         created,
-        type: "session.inbox.enqueued",
+        type: "session-inbox-enqueued",
         data: { sessionID, inboxID: id, item: { type: "compaction", delivery: "steer", payload: {} } },
       })
     },

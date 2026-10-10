@@ -84,7 +84,7 @@ benchmark("measures retained renderer memory with a large model catalog", async 
     {
       id: "evt_catalog_refresh",
       created: Date.now(),
-      type: "catalog.updated",
+      type: "catalog-updated",
       location: { directory: fixture.directory },
       data: {},
     } satisfies CatalogUpdated,

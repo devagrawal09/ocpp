@@ -709,12 +709,12 @@ const recordedEventTypes = (id: Session.ID) =>
 const recordedStepSettlementEvents = (id: Session.ID, assistantMessageID: SessionMessage.ID) =>
   Effect.gen(function* () {
     const settlementTypes = new Set([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.success.2",
-      "session.tool.failed.2",
-      "session.step.ended.1",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-success.2",
+      "session-tool-failed.2",
+      "session-step-ended.1",
+      "session-step-failed.1",
     ])
     return (yield* Recorded.events(eq(EventTable.aggregate_id, id)))
       .map((event) => ({ type: event.type, data: event.data }))
@@ -1514,7 +1514,7 @@ describe("SessionRunnerLLM", () => {
     const instructionEvents: Event.Payload[] = []
     const unsubscribe = yield* s.bus.listen((event) =>
       Effect.sync(() => {
-        if (event.type === "session.instructions.updated") instructionEvents.push(event)
+        if (event.type === "session-instructions-updated") instructionEvents.push(event)
       }),
     )
     yield* s.runPrompt("First")
@@ -1639,7 +1639,7 @@ describe("SessionRunnerLLM", () => {
     expect(s.closedTransports).toEqual([sessionID])
     // The delivery and the move are one commit; only the execution's own terminal follows them.
     expect(
-      (yield* recordedEventTypes(sessionID)).filter((type) => !type.startsWith("session.execution.")).slice(-2),
+      (yield* recordedEventTypes(sessionID)).filter((type) => !type.startsWith("session-execution-")).slice(-2),
     ).toEqual([Bus.versionedType(SessionEvent.InboxDelivered.type, 1), Bus.versionedType(SessionEvent.Moved.type, 1)])
   })
 
@@ -1807,7 +1807,7 @@ describe("SessionRunnerLLM", () => {
     expect(messageRoles(s.requests[0])).toEqual(["user", "user"])
     // The projected row is authoritative: a missing row admits a fresh baseline
     // instead of rebuilding from durable events.
-    expect(yield* Recorded.events(eq(EventTable.type, "session.instructions.updated.2"))).toHaveLength(2)
+    expect(yield* Recorded.events(eq(EventTable.type, "session-instructions-updated.2"))).toHaveLength(2)
     expect(yield* s.db.select().from(InstructionStateTable).get()).toMatchObject({
       initial_values: { "test/context": Instructions.hash("Initial context") },
       current_values: { "test/context": Instructions.hash("Initial context") },
@@ -1843,7 +1843,7 @@ describe("SessionRunnerLLM", () => {
     expect(messages).toHaveLength(3)
     expect(messages[1]).toMatchObject({ type: "system", text: "Changed context" })
 
-    const updates = yield* Recorded.events(eq(EventTable.type, "session.instructions.updated.2"))
+    const updates = yield* Recorded.events(eq(EventTable.type, "session-instructions-updated.2"))
     expect(updates).toHaveLength(2)
     expect(updates[0]?.data).toMatchObject({
       sessionID,
@@ -2928,10 +2928,10 @@ describe("SessionRunnerLLM", () => {
     ])
     const assistant = requireAssistant(context)
     expect(yield* recordedStepSettlementTypes(sessionID, assistant.id)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.success.2",
-      "session.step.ended.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-success.2",
+      "session-step-ended.1",
     ])
   })
 
@@ -2985,7 +2985,7 @@ describe("SessionRunnerLLM", () => {
     yield* tools.started
     yield* Deferred.await(tail)
     expect(s.requests).toHaveLength(1)
-    expect(yield* recordedEventTypes(sessionID)).not.toContain("session.step.streamed.1")
+    expect(yield* recordedEventTypes(sessionID)).not.toContain("session-step-streamed.1")
     expect(requireAssistant(yield* s.context).time.completed).toBeUndefined()
     yield* Deferred.succeed(complete, undefined)
     yield* Fiber.join(streamed)
@@ -2998,9 +2998,9 @@ describe("SessionRunnerLLM", () => {
     yield* tools.release
     yield* Fiber.join(run)
     const events = yield* recordedEventTypes(sessionID)
-    expect(events.indexOf("session.step.streamed.1")).toBeLessThan(events.indexOf("session.tool.success.2"))
-    expect(events.indexOf("session.tool.success.2")).toBeLessThan(events.indexOf("session.step.ended.1"))
-    expect(events.filter((type) => type === "session.step.streamed.1")).toHaveLength(2)
+    expect(events.indexOf("session-step-streamed.1")).toBeLessThan(events.indexOf("session-tool-success.2"))
+    expect(events.indexOf("session-tool-success.2")).toBeLessThan(events.indexOf("session-step-ended.1"))
+    expect(events.filter((type) => type === "session-step-streamed.1")).toHaveLength(2)
   })
 
   scenario("restores durable reasoning provider metadata in the next request", function* (s) {
@@ -3984,10 +3984,10 @@ describe("SessionRunnerLLM", () => {
     ])
     const assistant = requireAssistant(context)
     expect(yield* recordedStepSettlementTypes(sessionID, assistant.id)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.failed.2",
-      "session.step.ended.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-failed.2",
+      "session-step-ended.1",
     ])
   })
 
@@ -4094,10 +4094,10 @@ describe("SessionRunnerLLM", () => {
     ])
     const assistant = requireAssistant(context)
     expect(yield* recordedStepSettlementTypes(sessionID, assistant.id)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.success.2",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-success.2",
+      "session-step-failed.1",
     ])
   })
 
@@ -4129,10 +4129,10 @@ describe("SessionRunnerLLM", () => {
     ])
     const assistant = requireAssistant(context)
     expect(yield* recordedStepSettlementTypes(sessionID, assistant.id)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.failed.2",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-failed.2",
+      "session-step-failed.1",
     ])
 
     yield* replaySessionProjection(sessionID)
@@ -4162,7 +4162,7 @@ describe("SessionRunnerLLM", () => {
       Expected.user("Interrupt provider"),
       { type: "assistant", finish: "error", error: { type: "aborted", message: "Step interrupted" } },
     ])
-    expect(yield* recordedEventTypes(sessionID)).toContain("session.step.failed.1")
+    expect(yield* recordedEventTypes(sessionID)).toContain("session-step-failed.1")
     yield* s.session.interrupt(sessionID)
   })
 
@@ -4192,10 +4192,10 @@ describe("SessionRunnerLLM", () => {
       ]),
     ])
     const eventTypes = yield* recordedEventTypes(sessionID)
-    expect(eventTypes.filter((type) => type === "session.tool.failed.2")).toHaveLength(1)
-    expect(eventTypes.filter((type) => type === "session.step.failed.1")).toHaveLength(1)
-    expect(eventTypes).not.toContain("session.step.ended.1")
-    expect(eventTypes).not.toContain("session.retry.scheduled.1")
+    expect(eventTypes.filter((type) => type === "session-tool-failed.2")).toHaveLength(1)
+    expect(eventTypes.filter((type) => type === "session-step-failed.1")).toHaveLength(1)
+    expect(eventTypes).not.toContain("session-step-ended.1")
+    expect(eventTypes).not.toContain("session-retry-scheduled.1")
     expect(s.requests).toHaveLength(1)
   })
 
@@ -4348,7 +4348,7 @@ describe("SessionRunnerLLM", () => {
       cost: 0,
       tokens: { input: 8, output: 2, reasoning: 1, cache: { read: 0, write: 0 } },
     })
-    expect(yield* recordedEventTypes(sessionID)).not.toContain("session.step.ended.1")
+    expect(yield* recordedEventTypes(sessionID)).not.toContain("session-step-ended.1")
   })
 
   scenario("settles a local tool before one content-filter step failure", function* (s) {
@@ -4369,13 +4369,13 @@ describe("SessionRunnerLLM", () => {
     const assistant = requireAssistant(yield* s.context)
     const events = yield* recordedStepSettlementEvents(sessionID, assistant.id)
     expect(events.map((event) => event.type)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.success.2",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-success.2",
+      "session-step-failed.1",
     ])
     expect(
-      events.filter((event) => event.type.startsWith("session.step.") && event.type !== "session.step.started.1"),
+      events.filter((event) => event.type.startsWith("session-step-") && event.type !== "session-step-started.1"),
     ).toHaveLength(1)
   })
 
@@ -4423,8 +4423,8 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests).toHaveLength(2)
     const eventTypes = yield* recordedEventTypes(sessionID)
-    expect(eventTypes).toContain("session.retry.scheduled.1")
-    expect(eventTypes.filter((type) => type === "session.step.started.1")).toHaveLength(2)
+    expect(eventTypes).toContain("session-retry-scheduled.1")
+    expect(eventTypes.filter((type) => type === "session-step-started.1")).toHaveLength(2)
     expect(yield* s.context).toMatchObject([
       { type: "user" },
       Expected.assistant({ finish: "stop" }, [Expected.text("Recovered")]),
@@ -4454,7 +4454,7 @@ describe("SessionRunnerLLM", () => {
       attempt: 2,
       decision: { retry: false },
     })
-    expect(yield* recordedEventTypes(sessionID)).not.toContain("session.retry.scheduled.1")
+    expect(yield* recordedEventTypes(sessionID)).not.toContain("session-retry-scheduled.1")
   })
 
   scenario("allows session retry hooks to retry a terminal provider failure", function* (s) {
@@ -4516,8 +4516,8 @@ describe("SessionRunnerLLM", () => {
     yield* TestClock.adjust("1 minute")
     expect(s.requests).toHaveLength(1)
     const events = yield* recordedEventTypes(sessionID)
-    expect(events.filter((type) => type === "session.retry.scheduled.1")).toHaveLength(1)
-    expect(events).not.toContain("session.synthetic.1")
+    expect(events.filter((type) => type === "session-retry-scheduled.1")).toHaveLength(1)
+    expect(events).not.toContain("session-synthetic.1")
   })
 
   scenario("immediately rebuilds once after explicit continuation rejection", function* (s) {
@@ -4527,7 +4527,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Recover continuation")
 
     expect(s.requests).toHaveLength(2)
-    expect(yield* recordedEventTypes(sessionID)).not.toContain("session.retry.scheduled.1")
+    expect(yield* recordedEventTypes(sessionID)).not.toContain("session-retry-scheduled.1")
     expect(yield* s.context).toMatchObject([
       { type: "user" },
       Expected.assistant({ finish: "stop" }, [Expected.text("Recovered")]),
@@ -4541,7 +4541,7 @@ describe("SessionRunnerLLM", () => {
     expect(yield* s.runPrompt("Reject continuation twice").pipe(Effect.flip)).toEqual(stepFailure(failure))
 
     expect(s.requests).toHaveLength(2)
-    expect(yield* recordedEventTypes(sessionID)).not.toContain("session.retry.scheduled.1")
+    expect(yield* recordedEventTypes(sessionID)).not.toContain("session-retry-scheduled.1")
   })
 
   scenario("retries an incomplete stream before output", function* (s) {
@@ -4578,7 +4578,7 @@ describe("SessionRunnerLLM", () => {
     yield* Fiber.join(run)
 
     expect(s.requests).toHaveLength(2)
-    expect(yield* recordedEventTypes(sessionID)).toContain("session.retry.scheduled.1")
+    expect(yield* recordedEventTypes(sessionID)).toContain("session-retry-scheduled.1")
     expect(yield* s.context).toMatchObject([
       { type: "user" },
       Expected.assistant({ finish: "stop" }, [Expected.text("Recovered")]),
@@ -4661,7 +4661,7 @@ describe("SessionRunnerLLM", () => {
     const assistants = context.filter((message) => message.type === "assistant")
     expect(new Set(assistants.map((message) => message.id)).size).toBe(2)
     expect(context.find((message) => message.type === "synthetic")?.description).toBeUndefined()
-    expect(yield* recordedEventTypes(sessionID)).toContain("session.retry.scheduled.1")
+    expect(yield* recordedEventTypes(sessionID)).toContain("session-retry-scheduled.1")
     yield* replaySessionProjection(sessionID)
     expect(yield* s.context).toMatchObject(context)
   })
@@ -4726,7 +4726,7 @@ describe("SessionRunnerLLM", () => {
       role: "user",
       content: [{ type: "text", text: INCOMPLETE_STREAM_CONTINUATION }],
     })
-    expect(yield* recordedEventTypes(sessionID)).toContain("session.retry.scheduled.1")
+    expect(yield* recordedEventTypes(sessionID)).toContain("session-retry-scheduled.1")
     expect(yield* s.context).toMatchObject([
       Expected.user("Continue after rate limit"),
       Expected.assistant({ finish: "error", error: { type: "provider.rate-limit" } }, [Expected.text("Partial")]),
@@ -4829,7 +4829,7 @@ describe("SessionRunnerLLM", () => {
     yield* Fiber.join(run)
 
     expect(s.requests).toHaveLength(2)
-    expect(yield* recordedEventTypes(sessionID)).toContain("session.retry.scheduled.1")
+    expect(yield* recordedEventTypes(sessionID)).toContain("session-retry-scheduled.1")
     expect(s.requests[1]?.messages.slice(-2)).toMatchObject([
       { role: "user", content: [{ type: "text", text: "Recover disconnected reasoning" }] },
       { role: "user", content: [{ type: "text", text: INCOMPLETE_STREAM_CONTINUATION }] },
@@ -4943,8 +4943,8 @@ describe("SessionRunnerLLM", () => {
       expect(messages.filter((message) => message.type === "assistant")).toHaveLength(3)
       expect(messages.filter((message) => message.type === "synthetic")).toHaveLength(2)
       const events = yield* recordedEventTypes(sessionID)
-      expect(events.filter((type) => type === "session.retry.scheduled.1")).toHaveLength(4)
-      expect(events.filter((type) => type === "session.step.failed.1")).toHaveLength(3)
+      expect(events.filter((type) => type === "session-retry-scheduled.1")).toHaveLength(4)
+      expect(events.filter((type) => type === "session-step-failed.1")).toHaveLength(3)
     },
   )
 
@@ -4987,7 +4987,7 @@ describe("SessionRunnerLLM", () => {
     expect(yield* Fiber.join(run).pipe(Effect.flip)).toEqual(stepFailure(failure))
     expect(s.requests).toHaveLength(5)
 
-    const retries = yield* Recorded.events(eq(EventTable.type, "session.retry.scheduled.1"))
+    const retries = yield* Recorded.events(eq(EventTable.type, "session-retry-scheduled.1"))
     for (const [index, range] of [
       [1_600, 2_400],
       [4_800, 7_200],
@@ -4997,15 +4997,15 @@ describe("SessionRunnerLLM", () => {
       expect(retries[index]?.data.at).toBeGreaterThanOrEqual(range[0]!)
       expect(retries[index]?.data.at).toBeLessThanOrEqual(range[1]!)
     }
-    expect((yield* recordedEventTypes(sessionID)).filter((type) => type === "session.step.started.1")).toHaveLength(5)
+    expect((yield* recordedEventTypes(sessionID)).filter((type) => type === "session-step-started.1")).toHaveLength(5)
     const assistant = requireAssistant(yield* s.context)
     expect(yield* recordedStepSettlementEvents(sessionID, assistant.id)).toMatchObject([
-      { type: "session.step.started.1" },
-      { type: "session.step.started.1" },
-      { type: "session.step.started.1" },
-      { type: "session.step.started.1" },
-      { type: "session.step.started.1" },
-      { type: "session.step.failed.1" },
+      { type: "session-step-started.1" },
+      { type: "session-step-started.1" },
+      { type: "session-step-started.1" },
+      { type: "session-step-started.1" },
+      { type: "session-step-started.1" },
+      { type: "session-step-failed.1" },
     ])
   })
 
@@ -5045,8 +5045,8 @@ describe("SessionRunnerLLM", () => {
     })
     expect(s.executions).toEqual(["recovered"])
     const eventTypes = yield* recordedEventTypes(sessionID)
-    expect(eventTypes.filter((type) => type === "session.step.started.1")).toHaveLength(3)
-    expect(eventTypes.filter((type) => type === "session.retry.scheduled.1")).toHaveLength(1)
+    expect(eventTypes.filter((type) => type === "session-step-started.1")).toHaveLength(3)
+    expect(eventTypes.filter((type) => type === "session-retry-scheduled.1")).toHaveLength(1)
     expect((yield* s.context).filter((message) => message.type === "assistant")).toHaveLength(2)
   })
 
@@ -5056,7 +5056,7 @@ describe("SessionRunnerLLM", () => {
 
     expect(yield* s.runPrompt("Do not retry").pipe(Effect.flip)).toEqual(stepFailure(failure))
     expect(s.requests).toHaveLength(1)
-    expect(yield* recordedEventTypes(sessionID)).not.toContain("session.retry.scheduled.1")
+    expect(yield* recordedEventTypes(sessionID)).not.toContain("session-retry-scheduled.1")
   })
 
   scenario("settles malformed streamed tool input before the provider failure", function* (s) {
@@ -5079,16 +5079,16 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Continue")
 
     expect(yield* recordedStepSettlementEvents(sessionID, assistant.id)).toMatchObject([
-      { type: "session.step.started.1" },
+      { type: "session-step-started.1" },
       {
-        type: "session.tool.failed.2",
+        type: "session-tool-failed.2",
         data: {
           id: "call-malformed",
           error: { type: "provider.invalid-output", message: "Invalid JSON input for tool call echo" },
         },
       },
       {
-        type: "session.step.failed.1",
+        type: "session-step-failed.1",
         data: { error: { type: "provider.invalid-output", message: "Invalid JSON input for tool call echo" } },
       },
     ])
@@ -5165,13 +5165,13 @@ describe("SessionRunnerLLM", () => {
     if (!failed) throw new Error("Malformed tool assistant missing")
     expect(failed.error).toBeUndefined()
     expect(yield* recordedStepSettlementTypes(sessionID, failed.id)).toEqual([
-      "session.step.started.1",
-      "session.tool.failed.2",
-      "session.step.ended.1",
+      "session-step-started.1",
+      "session-tool-failed.2",
+      "session-step-ended.1",
     ])
 
     const durable = yield* Recorded.events(eq(EventTable.aggregate_id, sessionID))
-    expect(durable.find((event) => event.type === "session.tool.input.ended.1")?.data).toMatchObject({
+    expect(durable.find((event) => event.type === "session-tool-input-ended.1")?.data).toMatchObject({
       id: "call-malformed",
       text: raw,
     })
@@ -5313,7 +5313,7 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests).toHaveLength(4)
     expect(s.executions).toEqual(["valid"])
-    expect((yield* recordedEventTypes(sessionID)).filter((type) => type === "session.step.failed.1")).toHaveLength(0)
+    expect((yield* recordedEventTypes(sessionID)).filter((type) => type === "session-step-failed.1")).toHaveLength(0)
   })
 
   scenario("does not continue malformed tool input past the agent step limit", function* (s) {
@@ -5338,7 +5338,7 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(2)
     expect(s.requests[0]?.toolChoice).toBeUndefined()
     expect(s.requests[1]?.toolChoice).toMatchObject({ type: "none" })
-    expect((yield* recordedEventTypes(sessionID)).filter((type) => type === "session.tool.failed.2")).toHaveLength(2)
+    expect((yield* recordedEventTypes(sessionID)).filter((type) => type === "session-tool-failed.2")).toHaveLength(2)
   })
 
   scenario("does not continue automatically after a provider error follows a local tool call", function* (s) {
@@ -5360,10 +5360,10 @@ describe("SessionRunnerLLM", () => {
     const context = yield* s.context
     const assistant = requireAssistant(context)
     expect(yield* recordedStepSettlementTypes(sessionID, assistant.id)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.success.2",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-success.2",
+      "session-step-failed.1",
     ])
   })
 
@@ -5384,10 +5384,10 @@ describe("SessionRunnerLLM", () => {
     ])
     const assistant = requireAssistant(context)
     expect(yield* recordedStepSettlementTypes(sessionID, assistant.id)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.failed.2",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-failed.2",
+      "session-step-failed.1",
     ])
   })
 
@@ -5404,10 +5404,10 @@ describe("SessionRunnerLLM", () => {
     const assistant = requireAssistant(context)
     const events = yield* recordedStepSettlementEvents(sessionID, assistant.id)
     expect(events.map((event) => event.type)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.failed.2",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-failed.2",
+      "session-step-failed.1",
     ])
     expect(events[2]?.data.error).toMatchObject({ type: "unknown", message: "unexpected tool defect" })
   })
@@ -5446,13 +5446,13 @@ describe("SessionRunnerLLM", () => {
     const assistant = requireAssistant(yield* s.context)
     const events = yield* recordedStepSettlementEvents(sessionID, assistant.id)
     expect(events.map((event) => event.type)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.failed.2",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-failed.2",
+      "session-step-failed.1",
     ])
     expect(
-      events.filter((event) => event.type.startsWith("session.step.") && event.type !== "session.step.started.1"),
+      events.filter((event) => event.type.startsWith("session-step-") && event.type !== "session-step-started.1"),
     ).toHaveLength(1)
     yield* replaySessionProjection(sessionID)
 
@@ -5472,13 +5472,13 @@ describe("SessionRunnerLLM", () => {
     const assistant = requireAssistant(yield* s.context)
     const events = yield* recordedStepSettlementEvents(sessionID, assistant.id)
     expect(events.map((event) => event.type)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.failed.2",
-      "session.step.ended.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-failed.2",
+      "session-step-ended.1",
     ])
     expect(
-      events.filter((event) => event.type.startsWith("session.step.") && event.type !== "session.step.started.1"),
+      events.filter((event) => event.type.startsWith("session-step-") && event.type !== "session-step-started.1"),
     ).toHaveLength(1)
   })
 
@@ -5506,15 +5506,15 @@ describe("SessionRunnerLLM", () => {
     const assistant = requireAssistant(yield* s.context)
     const events = yield* recordedStepSettlementEvents(sessionID, assistant.id)
     expect(events.map((event) => ({ type: event.type, id: event.data.id }))).toEqual([
-      { type: "session.step.started.1", id: undefined },
-      { type: "session.tool.called.1", id: "call-local-raw-failure" },
-      { type: "session.tool.called.1", id: "call-hosted-raw-failure-pair" },
-      { type: "session.tool.failed.2", id: "call-local-raw-failure" },
-      { type: "session.tool.failed.2", id: "call-hosted-raw-failure-pair" },
-      { type: "session.step.failed.1", id: undefined },
+      { type: "session-step-started.1", id: undefined },
+      { type: "session-tool-called.1", id: "call-local-raw-failure" },
+      { type: "session-tool-called.1", id: "call-hosted-raw-failure-pair" },
+      { type: "session-tool-failed.2", id: "call-local-raw-failure" },
+      { type: "session-tool-failed.2", id: "call-hosted-raw-failure-pair" },
+      { type: "session-step-failed.1", id: undefined },
     ])
     expect(
-      events.filter((event) => event.type.startsWith("session.step.") && event.type !== "session.step.started.1"),
+      events.filter((event) => event.type.startsWith("session-step-") && event.type !== "session-step-started.1"),
     ).toHaveLength(1)
   })
 
@@ -5533,13 +5533,13 @@ describe("SessionRunnerLLM", () => {
     const assistant = requireAssistant(yield* s.context)
     const events = yield* recordedStepSettlementEvents(sessionID, assistant.id)
     expect(events.map((event) => event.type)).toEqual([
-      "session.step.started.1",
-      "session.tool.called.1",
-      "session.tool.failed.2",
-      "session.step.failed.1",
+      "session-step-started.1",
+      "session-tool-called.1",
+      "session-tool-failed.2",
+      "session-step-failed.1",
     ])
     expect(
-      events.filter((event) => event.type.startsWith("session.step.") && event.type !== "session.step.started.1"),
+      events.filter((event) => event.type.startsWith("session-step-") && event.type !== "session-step-started.1"),
     ).toHaveLength(1)
     yield* replaySessionProjection(sessionID)
     expect(yield* s.context).toMatchObject([

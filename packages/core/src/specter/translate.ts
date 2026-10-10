@@ -3,7 +3,7 @@ export * as SpecterTranslate from "./translate.js"
 import { Event } from "@ocpp/schema/event"
 import { DurableEventManifest } from "@ocpp/schema/durable-event-manifest"
 import { SessionEvent } from "@ocpp/schema/session-event"
-import { toOcppEventType, type PersistedEvent } from "@ocpp/session-runtime"
+import type { PersistedEvent } from "@ocpp/session-runtime"
 
 /** One OC++ wire event a Specter fact projects as. */
 export interface WireEvent {
@@ -144,7 +144,7 @@ export const toWire = (event: PersistedEvent): readonly WireEvent[] => {
     const { outcome, ...data } = event.payload as { readonly outcome: "succeeded" | "failed" }
     return [{ definition: outcome === "succeeded" ? SessionEvent.Tool.Success : SessionEvent.Tool.Failed, data, id }]
   }
-  const definition = durable.get(toOcppEventType(event.type))
+  const definition = durable.get(event.type)
   if (!definition) throw new Error(`Specter recorded ${event.type}, which OC++ cannot project`)
   return [{ definition, data: event.payload, id }]
 }

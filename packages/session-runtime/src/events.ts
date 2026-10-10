@@ -7,11 +7,6 @@ import { SessionMessage } from "@ocpp/schema/session-message"
 import { NonNegativeInt, optional, PositiveInt } from "@ocpp/schema/schema"
 import { Schema } from "effect"
 
-// Specter's spec format requires kebab-case event types; OC++ uses dotted
-// names. The mapping is mechanical and inverted by the OC++ bridge (M4).
-export const toSpecterEventType = (ocppType: string) => ocppType.replaceAll(".", "-")
-export const toOcppEventType = (specterType: string) => specterType.replaceAll("-", ".")
-
 // Session Execution facts the runtime owns, in the consolidated catalog. A
 // lifecycle has a started event and one settled event that carries its outcome.
 // A fact whose shape differs from OC++'s gets a new name, so one name never
@@ -138,24 +133,21 @@ const runtimeEventSchemas = {
 // Sessions it held to that project.
 const durableDefinitions = DurableEventManifest.Definitions
 
-// One Specter event definition per OC++ durable session fact (mapped name,
-// OC++'s payload schema as a Standard Schema), then the runtime's own facts.
+// One Specter event definition per OC++ durable fact (its name, its payload
+// schema as a Standard Schema), then the runtime's own facts.
 export const sessionEventDefinitions = [
   ...durableDefinitions.map((definition) =>
-    createEventDefinition(toSpecterEventType(definition.type), Schema.toStandardSchemaV1(definition.data)),
+    createEventDefinition(definition.type, Schema.toStandardSchemaV1(definition.data)),
   ),
   ...Object.entries(runtimeEventSchemas).map(([type, schema]) =>
     createEventDefinition(type, Schema.toStandardSchemaV1(schema)),
   ),
 ]
 
-// Type-level twin of toSpecterEventType: keeps the event name a literal.
-type Dashed<S extends string> = S extends `${infer A}.${infer B}` ? `${A}-${Dashed<B>}` : S
-
 type Definitions = (typeof durableDefinitions)[number]
 
 export type SessionEventPayloads = {
-  [D in Definitions as Dashed<D["type"]>]: Schema.Schema.Type<D["data"]>
+  [D in Definitions as D["type"]]: Schema.Schema.Type<D["data"]>
 } & {
   [K in keyof typeof runtimeEventSchemas]: Schema.Schema.Type<(typeof runtimeEventSchemas)[K]>
 }
@@ -166,8 +158,8 @@ export const sessionEvent = <K extends keyof SessionEventPayloads>(
   const definition = sessionEventDefinitions.find((candidate) => candidate.type === specterType)
   if (!definition) throw new Error(`Unknown session event: ${specterType}`)
   // Single cast (via unknown: create() is contravariant in the payload, so TS
-  // sees no overlap between the wide and the narrowed definition). The runtime array is built from the same DurableDefinitions (names mapped
-  // by toSpecterEventType) that SessionEventPayloads is derived from at the
-  // type level, so K and the payload type always correspond.
+  // sees no overlap between the wide and the narrowed definition). The runtime
+  // array is built from the same definitions SessionEventPayloads is derived
+  // from at the type level, so K and the payload type always correspond.
   return definition as unknown as EventDefinition<K, SessionEventPayloads[K]>
 }

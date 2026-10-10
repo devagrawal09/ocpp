@@ -157,7 +157,7 @@ export function makeACPFixture(options: FixtureOptions = {}) {
             start(value) {
               controller = value
               eventController = value
-              context.send({ id: "evt_connected", type: "server.connected", data: {} })
+              context.send({ id: "evt_connected", type: "server-connected", data: {} })
             },
             cancel() {
               if (eventController === controller) eventController = undefined

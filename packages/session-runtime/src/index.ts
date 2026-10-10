@@ -26,7 +26,7 @@ export type { DriveExecutionOutboxStore, ProvideSliceStore, RunStepOutboxStore }
 export { makeSessionEventStore } from "./event-store.ts"
 export { makeSnapshotSliceStores, type SliceSnapshot } from "./snapshots.ts"
 export { type EmbeddedSessionRuntime, makeEmbeddedSessionRuntime } from "./embedded.ts"
-export { sessionEvent, sessionEventDefinitions, toOcppEventType, toSpecterEventType } from "./events.ts"
+export { sessionEvent, sessionEventDefinitions } from "./events.ts"
 export {
   type AttemptOutcome,
   type AttemptRecorder,

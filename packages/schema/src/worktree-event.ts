@@ -5,7 +5,7 @@ import { optional } from "./schema.js"
 import { Event } from "./event.js"
 
 export const Ready = Event.ephemeral({
-  type: "worktree.ready",
+  type: "worktree-ready",
   schema: {
     name: Schema.String,
     branch: optional(Schema.String),
@@ -13,7 +13,7 @@ export const Ready = Event.ephemeral({
 })
 
 export const Failed = Event.ephemeral({
-  type: "worktree.failed",
+  type: "worktree-failed",
   schema: {
     message: Schema.String,
   },

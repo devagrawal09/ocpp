@@ -49,9 +49,9 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "Shell.Info" })
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
-const Created = ephemeral({ type: "shell.created", schema: { info: Info } })
-const Exited = ephemeral({ type: "shell.exited", schema: { id: ID, exit: optional(Schema.Finite), status: Status } })
-const Deleted = ephemeral({ type: "shell.deleted", schema: { id: ID } })
+const Created = ephemeral({ type: "shell-created", schema: { info: Info } })
+const Exited = ephemeral({ type: "shell-exited", schema: { id: ID, exit: optional(Schema.Finite), status: Status } })
+const Deleted = ephemeral({ type: "shell-deleted", schema: { id: ID } })
 export const Event = { Created, Exited, Deleted, Definitions: inventory(Created, Exited, Deleted) }
 
 export const CreateInput = Schema.Struct({

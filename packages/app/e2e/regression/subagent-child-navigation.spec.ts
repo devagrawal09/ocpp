@@ -134,7 +134,7 @@ test("shows the not found fallback when the viewed session is deleted", async ({
   events.push({
     id: "evt_session_deleted",
     created: 1700000003000,
-    type: "session.deleted",
+    type: "session-deleted",
     durable: { aggregateID: childID, seq: 1, version: 2 },
     location: { directory },
     data: { sessionID: childID },

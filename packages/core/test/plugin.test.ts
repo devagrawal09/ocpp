@@ -110,7 +110,7 @@ describe("Plugin", () => {
       const bus = yield* Bus.Service
       const host = yield* PluginHost.make(plugins)
       const received = yield* host.event.subscribe().pipe(
-        Stream.filter((event) => event.type === "config.updated"),
+        Stream.filter((event) => event.type === "config-updated"),
         Stream.runHead,
         Effect.forkScoped({ startImmediately: true }),
       )
@@ -118,7 +118,7 @@ describe("Plugin", () => {
 
       yield* bus.publish(ConfigSchema.Event.Updated, {})
 
-      expect((yield* Fiber.join(received)).valueOrUndefined?.type).toBe("config.updated")
+      expect((yield* Fiber.join(received)).valueOrUndefined?.type).toBe("config-updated")
     }),
   )
 

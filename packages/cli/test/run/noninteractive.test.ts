@@ -8,7 +8,7 @@ import {
 import { runNonInteractivePrompt } from "../../src/run/noninteractive"
 
 type V2Event = EventSubscribeOutput
-type FormInfo = Extract<V2Event, { type: "form.created" }>["data"]["form"]
+type FormInfo = Extract<V2Event, { type: "form-created" }>["data"]["form"]
 const location = { directory: "/work tree", workspaceID: "wrk_1" }
 
 function ok<T>(data: T) {
@@ -25,14 +25,14 @@ function form(id: string, sessionID: string): FormInfo {
 }
 
 function formCreated(info: FormInfo, eventLocation = location): V2Event {
-  return { id: `evt_${info.id}`, created: 0, type: "form.created", location: eventLocation, data: { form: info } }
+  return { id: `evt_${info.id}`, created: 0, type: "form-created", location: eventLocation, data: { form: info } }
 }
 
 function prompted(inboxID: string): V2Event {
   return {
     id: "evt_prompted",
     created: 0,
-    type: "session.inbox.delivered",
+    type: "session-inbox-delivered",
     durable: { aggregateID: "ses_1", seq: 0, version: 1 },
     data: { sessionID: "ses_1", inboxID },
   }
@@ -43,14 +43,14 @@ function settled(outcome: "success" | "interrupted" = "success"): V2Event {
     return {
       id: "evt_interrupted",
       created: 0,
-      type: "session.execution.interrupted",
+      type: "session-execution-interrupted",
       durable: { aggregateID: "ses_1", seq: 1, version: 1 },
       data: { sessionID: "ses_1", reason: "user" },
     }
   return {
     id: "evt_succeeded",
     created: 0,
-    type: "session.execution.succeeded",
+    type: "session-execution-succeeded",
     durable: { aggregateID: "ses_1", seq: 1, version: 1 },
     data: { sessionID: "ses_1" },
   }
@@ -60,7 +60,7 @@ function stepStarted(): V2Event {
   return {
     id: "evt_step_started",
     created: 1,
-    type: "session.step.started",
+    type: "session-step-started",
     durable: { aggregateID: "ses_1", seq: 1, version: 1 },
     data: {
       sessionID: "ses_1",
@@ -75,7 +75,7 @@ function stepFailed(message: string): V2Event {
   return {
     id: "evt_step_failed",
     created: 2,
-    type: "session.step.failed",
+    type: "session-step-failed",
     durable: { aggregateID: "ses_1", seq: 2, version: 1 },
     data: {
       sessionID: "ses_1",
@@ -89,7 +89,7 @@ function executionFailed(message: string): V2Event {
   return {
     id: "evt_execution_failed",
     created: 3,
-    type: "session.execution.failed",
+    type: "session-execution-failed",
     durable: { aggregateID: "ses_1", seq: 3, version: 1 },
     data: {
       sessionID: "ses_1",
@@ -104,7 +104,7 @@ function failedTool(inboxID: string): V2Event[] {
     {
       id: "evt_failed_tool_input",
       created: 1,
-      type: "session.tool.input.started",
+      type: "session-tool-input-started",
       durable: { aggregateID: "ses_1", seq: 1, version: 1 },
       data: {
         sessionID: "ses_1",
@@ -116,7 +116,7 @@ function failedTool(inboxID: string): V2Event[] {
     {
       id: "evt_failed_tool_called",
       created: 2,
-      type: "session.tool.called",
+      type: "session-tool-called",
       durable: { aggregateID: "ses_1", seq: 2, version: 1 },
       data: {
         sessionID: "ses_1",
@@ -129,7 +129,7 @@ function failedTool(inboxID: string): V2Event[] {
     {
       id: "evt_failed_tool_progress",
       created: 3,
-      type: "session.tool.progress",
+      type: "session-tool-progress",
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_failed_tool",
@@ -140,7 +140,7 @@ function failedTool(inboxID: string): V2Event[] {
     {
       id: "evt_failed_tool_terminal",
       created: 4,
-      type: "session.tool.failed",
+      type: "session-tool-failed",
       durable: { aggregateID: "ses_1", seq: 4, version: 2 },
       data: {
         sessionID: "ses_1",
@@ -163,7 +163,7 @@ function successfulGrep(inboxID: string): V2Event[] {
     {
       id: "evt_grep_input",
       created: 1,
-      type: "session.tool.input.started",
+      type: "session-tool-input-started",
       durable: { aggregateID: "ses_1", seq: 1, version: 1 },
       data: {
         sessionID: "ses_1",
@@ -175,7 +175,7 @@ function successfulGrep(inboxID: string): V2Event[] {
     {
       id: "evt_grep_called",
       created: 2,
-      type: "session.tool.called",
+      type: "session-tool-called",
       durable: { aggregateID: "ses_1", seq: 2, version: 1 },
       data: {
         sessionID: "ses_1",
@@ -188,7 +188,7 @@ function successfulGrep(inboxID: string): V2Event[] {
     {
       id: "evt_grep_success",
       created: 3,
-      type: "session.tool.success",
+      type: "session-tool-success",
       durable: { aggregateID: "ses_1", seq: 3, version: 2 },
       data: {
         sessionID: "ses_1",
@@ -219,7 +219,7 @@ async function run(input: {
   terminalDelay?: number
 }) {
   const sdk = Ocpp.make({ baseUrl: "https://ocpp.test" })
-  const values: V2Event[] = [{ id: "evt_connected", type: "server.connected", data: {} }]
+  const values: V2Event[] = [{ id: "evt_connected", type: "server-connected", data: {} }]
   let wake: (() => void) | undefined
   const wait = Promise.withResolvers<void>()
   const stream = (async function* (): AsyncGenerator<V2Event, void, unknown> {
@@ -231,7 +231,7 @@ async function run(input: {
         })
         continue
       }
-      if (value.type.startsWith("session.execution.")) {
+      if (value.type.startsWith("session-execution-")) {
         if (input.terminalDelay) await Bun.sleep(input.terminalDelay)
         setTimeout(wait.resolve, 0)
       }
@@ -509,7 +509,7 @@ describe("runNonInteractivePrompt", () => {
     const rendered: SessionMessageAssistantTool[] = []
     const failed: SessionMessageAssistantTool[] = []
     await capture({
-      turn: (inboxID) => failedTool(inboxID).filter((event) => event.type !== "session.tool.progress"),
+      turn: (inboxID) => failedTool(inboxID).filter((event) => event.type !== "session-tool-progress"),
       renderTool: (part) => {
         rendered.push(part)
         return Promise.resolve()

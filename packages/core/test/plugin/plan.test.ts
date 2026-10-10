@@ -22,7 +22,7 @@ const agentSelected = (agent: Agent.ID, previous: Agent.ID): SessionEvent.AgentS
   id: Event.ID.create(),
   created: 0,
   durable: { aggregateID: sessionID, seq: Event.Seq.make(0), version: Event.Version.make(1) },
-  type: "session.agent.selected",
+  type: "session-agent-selected",
   data: { sessionID, agent, previous },
 })
 

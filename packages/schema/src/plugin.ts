@@ -31,11 +31,11 @@ export const Info = Schema.Union([
 export type Info = typeof Info.Type
 
 const Added = ephemeral({
-  type: "plugin.added",
+  type: "plugin-added",
   schema: { id: ID },
 })
 const Updated = ephemeral({
-  type: "plugin.updated",
+  type: "plugin-updated",
   schema: {},
 })
 export const Event = { Added, Updated, Definitions: inventory(Added, Updated) }

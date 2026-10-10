@@ -85,7 +85,7 @@ export async function mockOcppServer(page: Page, config: MockServerConfig) {
             state.controller = controller
             if (retry !== undefined) controller.enqueue(encoder.encode(`retry: ${retry}\n\n`))
             controller.enqueue(
-              encoder.encode(frame({ id: `evt_mock_connected_${id}`, type: "server.connected", data: {} })),
+              encoder.encode(frame({ id: `evt_mock_connected_${id}`, type: "server-connected", data: {} })),
             )
             state.buffer.splice(0).forEach((item) => controller.enqueue(encoder.encode(item)))
             request.signal.addEventListener(
@@ -190,7 +190,7 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
       .handleRaw("event", () => {
         const events = config.events?.()
         const retry = config.eventRetry === undefined ? "" : `retry: ${config.eventRetry}\n\n`
-        const body = [{ id: "evt_mock_connected", type: "server.connected", data: {} }, ...(events ?? [])]
+        const body = [{ id: "evt_mock_connected", type: "server-connected", data: {} }, ...(events ?? [])]
           .map((event) => `data: ${JSON.stringify(event)}\n\n`)
           .join("")
         return Effect.succeed(HttpServerResponse.text(retry + body, { contentType: "text/event-stream" }))

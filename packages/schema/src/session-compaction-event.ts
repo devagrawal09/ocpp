@@ -4,7 +4,7 @@ import { Event } from "./event.js"
 import { SessionID } from "./session-id.js"
 
 export const Compacted = Event.ephemeral({
-  type: "session.compacted",
+  type: "session-compacted",
   schema: {
     sessionID: SessionID,
   },

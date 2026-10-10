@@ -43,7 +43,7 @@ test("Promise host uses the embedded router and releases plugins", async () => {
 
     expect(selected.id).toBe(session.id)
     expect(page.data.some((item) => item.id === session.id)).toBe(true)
-    expect((await events).some((event) => event.type === "session.created")).toBe(true)
+    expect((await events).some((event) => event.type === "session-created")).toBe(true)
     expect(setup).toBe(true)
 
     const missingSessionID = Session.ID.create()
@@ -65,7 +65,7 @@ test("Promise event streams support cancellation", async () => {
     await using ocpp = await Ocpp.create({ config: { directory: config, project: false, content: "{}" } })
     const controller = new AbortController()
     const events = ocpp.events.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
-    expect(await events.next()).toMatchObject({ value: { type: "server.connected" }, done: false })
+    expect(await events.next()).toMatchObject({ value: { type: "server-connected" }, done: false })
     const pending = events.next()
     controller.abort()
     const error = await pending.catch((error: unknown) => error)
@@ -80,7 +80,7 @@ test("closing cancels active Promise event streams", async () => {
   await mkdir(config)
   const ocpp = await Ocpp.create({ config: { directory: config, project: false, content: "{}" } })
   const events = ocpp.events.subscribe()[Symbol.asyncIterator]()
-  expect(await events.next()).toMatchObject({ value: { type: "server.connected" }, done: false })
+  expect(await events.next()).toMatchObject({ value: { type: "server-connected" }, done: false })
   const pending = events.next()
 
   await ocpp.close()

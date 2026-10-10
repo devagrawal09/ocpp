@@ -185,7 +185,7 @@ describe("Session.create", () => {
         expect(unbornAlias).toMatchObject({ projectID: Project.ID.global, subpath: "packages/app" })
         expect(
           (yield* Recorded.events(
-            and(eq(EventTable.aggregate_id, Project.ID.global), eq(EventTable.type, "worktree.resolved.1")),
+            and(eq(EventTable.aggregate_id, Project.ID.global), eq(EventTable.type, "worktree-resolved.1")),
           )).at(0),
         ).toMatchObject({ data: { adopted: expect.arrayContaining([created.projectID, child.projectID]) } })
         expect(project.id).toBe(Project.ID.make(Hash.fast("git-remote:github.com/owner/adopted")))
@@ -210,12 +210,12 @@ describe("Session.create", () => {
         // Adoption is a project-domain fact; the session log records nothing new. The runtime records the
         // execution that delivered the first prompt around its delivery.
         expect(log.map((event) => event.type)).toEqual([
-          "session.created",
-          "session.inbox.enqueued",
-          "session.execution.started",
-          "session.inbox.delivered",
-          "session.execution.succeeded",
-          "session.inbox.enqueued",
+          "session-created",
+          "session-inbox-enqueued",
+          "session-execution-started",
+          "session-inbox-delivered",
+          "session-execution-succeeded",
+          "session-inbox-enqueued",
         ])
         expect(yield* session.messages({ sessionID: created.id })).toMatchObject([
           { id: expect.any(String), ...Expected.user("Preserved history") },
@@ -235,9 +235,9 @@ describe("Session.create", () => {
           .all()
           .pipe(Effect.orDie)
         expect(announced.map((event) => event.type).toSorted()).toEqual([
-          "project.created.1",
-          "worktree.recorded.1",
-          "worktree.resolved.1",
+          "project-created.1",
+          "worktree-recorded.1",
+          "worktree-resolved.1",
         ])
         // Specter's log records it, as it does every durable fact.
         const recorded = yield* db
@@ -518,7 +518,7 @@ describe("Session.create", () => {
       expect(forkContext.map((message) => message.id)).not.toEqual(parentContext.map((message) => message.id))
       expect(history).toHaveLength(1)
       expect(history[0]).toMatchObject({
-        type: "session.forked",
+        type: "session-forked",
         durable: { seq: 0 },
         data: { sessionID: forked.id, parentID: parent.id },
       })
@@ -881,17 +881,17 @@ describe("Session.create", () => {
       expect(
         Array.from(yield* logEvents(session, created.id, true).pipe(Stream.take(4), Stream.runCollect)),
       ).toMatchObject([
-        { durable: { seq: 0 }, type: "session.created" },
+        { durable: { seq: 0 }, type: "session-created" },
         {
           durable: { seq: 1 },
-          type: "session.inbox.enqueued",
+          type: "session-inbox-enqueued",
           data: {
             inboxID: expect.any(String),
             item: { type: "user", payload: { text: "Hello" }, delivery: "steer" },
           },
         },
-        { durable: { seq: 2 }, type: "session.execution.started" },
-        { durable: { seq: 3 }, type: "session.inbox.delivered" },
+        { durable: { seq: 2 }, type: "session-execution-started" },
+        { durable: { seq: 3 }, type: "session-inbox-delivered" },
       ])
     }),
   )
@@ -961,7 +961,7 @@ describe("Session.create", () => {
       expect(yield* session.get(created.id)).toMatchObject({ agent: "plan" })
       expect(
         Array.from(yield* logEvents(session, created.id, true).pipe(Stream.drop(1), Stream.take(1), Stream.runCollect)),
-      ).toMatchObject([{ type: "session.agent.selected", data: { agent: "plan", previous: "build" } }])
+      ).toMatchObject([{ type: "session-agent-selected", data: { agent: "plan", previous: "build" } }])
       expect(yield* session.messages({ sessionID: created.id, order: "asc" })).toMatchObject([
         { type: "agent-switched", agent: "plan", previous: "build" },
       ])
@@ -1003,7 +1003,7 @@ describe("Session.create", () => {
       const bus = Array.from(
         yield* logEvents(session, created.id, true).pipe(Stream.drop(1), Stream.take(1), Stream.runCollect),
       )
-      expect(bus).toMatchObject([{ type: "session.model.selected" }])
+      expect(bus).toMatchObject([{ type: "session-model-selected" }])
       expect(bus[0]?.data).toEqual({ sessionID: created.id, model, previous })
       expect(yield* session.messages({ sessionID: created.id, order: "asc" })).toMatchObject([
         { type: "model-switched", model, previous },

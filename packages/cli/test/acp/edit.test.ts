@@ -39,14 +39,14 @@ describe("acp edit sync", () => {
     const writes: Parameters<AgentSideConnection["writeTextFile"]>[0][] = []
     const fixture = createSseFixture({
       onPrompt({ id, send }) {
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_edit", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_edit", inboxID: id }))
         called(send, "ses_edit", "msg_edit", "call_edit", "edit", {
           path: "file.ts",
           oldString: "before",
           newString: "after",
         })
         send(
-          durableEvent("session.tool.success", {
+          durableEvent("session-tool-success", {
             sessionID: "ses_edit",
             assistantMessageID: "msg_edit",
             id: "call_edit",
@@ -55,7 +55,7 @@ describe("acp edit sync", () => {
             executed: true,
           }),
         )
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_edit" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_edit" }))
       },
     })
     const connection = {
@@ -84,10 +84,10 @@ describe("acp edit sync", () => {
     const writes: Parameters<AgentSideConnection["writeTextFile"]>[0][] = []
     const fixture = createSseFixture({
       onPrompt({ id, send }) {
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_patch", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_patch", inboxID: id }))
         called(send, "ses_patch", "msg_patch", "call_patch", "patch", { patchText: "*** Begin Patch" })
         send(
-          durableEvent("session.tool.success", {
+          durableEvent("session-tool-success", {
             sessionID: "ses_patch",
             assistantMessageID: "msg_patch",
             id: "call_patch",
@@ -96,7 +96,7 @@ describe("acp edit sync", () => {
             executed: true,
           }),
         )
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_patch" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_patch" }))
       },
     })
     const connection = {
@@ -128,8 +128,8 @@ function called(
   name: string,
   input: Record<string, unknown>,
 ) {
-  send(durableEvent("session.tool.input.started", { sessionID, assistantMessageID, id, name }))
-  send(durableEvent("session.tool.called", { sessionID, assistantMessageID, id, input, executed: false }))
+  send(durableEvent("session-tool-input-started", { sessionID, assistantMessageID, id, name }))
+  send(durableEvent("session-tool-called", { sessionID, assistantMessageID, id, input, executed: false }))
 }
 
 function startTurn(fixture: Fixture, connection: Connection, sessionID: string, inboxID: string, cwd: string) {

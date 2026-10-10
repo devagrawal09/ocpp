@@ -84,7 +84,7 @@ export function createSseFixture(options: FixtureOptions = {}) {
               streams.add(stream)
               stream.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ id: "evt_connected", type: "server.connected", data: {} })}\n\n`,
+                  `data: ${JSON.stringify({ id: "evt_connected", type: "server-connected", data: {} })}\n\n`,
                 ),
               )
             },

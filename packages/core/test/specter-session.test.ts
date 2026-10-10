@@ -301,16 +301,16 @@ describe("Sessions on the Specter runtime", () => {
       expect(yield* session.inbox(sessionID)).toEqual([])
       expect(yield* session.active).toEqual(new Set())
       expect(yield* eventTypes).toEqual([
-        "session.inbox.enqueued",
-        "session.execution.started",
-        "session.instructions.updated",
-        "session.inbox.delivered",
-        "session.step.started",
-        "session.text.started",
-        "session.text.ended",
-        "session.step.streamed",
-        "session.step.ended",
-        "session.execution.succeeded",
+        "session-inbox-enqueued",
+        "session-execution-started",
+        "session-instructions-updated",
+        "session-inbox-delivered",
+        "session-step-started",
+        "session-text-started",
+        "session-text-ended",
+        "session-step-streamed",
+        "session-step-ended",
+        "session-execution-succeeded",
       ])
     }),
   )
@@ -337,18 +337,18 @@ describe("Sessions on the Specter runtime", () => {
       ).toEqual(["Second try"])
       expect(llm.requests).toHaveLength(2)
       expect(yield* eventTypes).toEqual([
-        "session.inbox.enqueued",
-        "session.execution.started",
-        "session.instructions.updated",
-        "session.inbox.delivered",
-        "session.step.started",
-        "session.retry.scheduled",
-        "session.step.started",
-        "session.text.started",
-        "session.text.ended",
-        "session.step.streamed",
-        "session.step.ended",
-        "session.execution.succeeded",
+        "session-inbox-enqueued",
+        "session-execution-started",
+        "session-instructions-updated",
+        "session-inbox-delivered",
+        "session-step-started",
+        "session-retry-scheduled",
+        "session-step-started",
+        "session-text-started",
+        "session-text-ended",
+        "session-step-streamed",
+        "session-step-ended",
+        "session-execution-succeeded",
       ])
     }),
   )
@@ -401,25 +401,25 @@ describe("Sessions on the Specter runtime", () => {
       expect(messages.slice(notice + 1).map((message) => message.type)).toEqual(["assistant"])
       const types = yield* eventTypes
       expect(types.slice(0, 8)).toEqual([
-        "session.inbox.enqueued",
-        "session.execution.started",
-        "session.instructions.updated",
-        "session.inbox.delivered",
-        "session.step.started",
-        "session.tool.input.started",
-        "session.tool.input.ended",
-        "session.tool.called",
+        "session-inbox-enqueued",
+        "session-execution-started",
+        "session-instructions-updated",
+        "session-inbox-delivered",
+        "session-step-started",
+        "session-tool-input-started",
+        "session-tool-input-ended",
+        "session-tool-called",
       ])
       // The end of the provider stream races the program, which starts and returns its result on the
       // tool call's own fiber.
       expect(types.slice(8, 11).toSorted()).toEqual([
-        "session.codemode.started",
-        "session.step.streamed",
-        "session.tool.success",
+        "session-codemode-started",
+        "session-step-streamed",
+        "session-tool-success",
       ])
-      expect(types.indexOf("session.codemode.started")).toBeLessThan(types.indexOf("session.tool.success"))
-      expect(types).toContain("session.codemode.completed")
-      expect(types.slice(-2)).toEqual(["session.step.ended", "session.execution.succeeded"])
+      expect(types.indexOf("session-codemode-started")).toBeLessThan(types.indexOf("session-tool-success"))
+      expect(types).toContain("session-codemode-completed")
+      expect(types.slice(-2)).toEqual(["session-step-ended", "session-execution-succeeded"])
     }),
   )
 
@@ -503,8 +503,8 @@ describe("Sessions on the Specter runtime", () => {
       expect(yield* session.active).toEqual(new Set())
       expect(yield* session.interrupt(sessionID)).toBe(false)
       const types = yield* eventTypes
-      expect(types.at(-1)).toBe("session.execution.interrupted")
-      expect(types).not.toContain("session.text.started")
+      expect(types.at(-1)).toBe("session-execution-interrupted")
+      expect(types).not.toContain("session-text-started")
     }),
   )
 
@@ -531,9 +531,9 @@ describe("Sessions on the Specter runtime", () => {
         "assistant",
       ])
       const types = yield* eventTypes
-      expect(types).toContain("session.inbox.delivery.changed")
+      expect(types).toContain("session-inbox-delivery-changed")
       // Steered input enters the same execution at the next step boundary.
-      expect(types.filter((type) => type === "session.execution.started")).toHaveLength(1)
+      expect(types.filter((type) => type === "session-execution-started")).toHaveLength(1)
     }),
   )
 
@@ -569,7 +569,7 @@ describe("Sessions on the Specter runtime", () => {
         (message) => message.type === "synthetic",
       )
       expect(synthetic.map((message) => (message.type === "synthetic" ? message.text : ""))).toEqual(["one + two"])
-      expect(yield* eventTypes).toContain("session.inbox.cancelled")
+      expect(yield* eventTypes).toContain("session-inbox-cancelled")
     }),
   )
 
@@ -582,7 +582,7 @@ describe("Sessions on the Specter runtime", () => {
 
       yield* session.synthetic({ sessionID, text: "Shell finished", resume: false })
       yield* session.wait(sessionID)
-      expect(yield* eventTypes).not.toContain("session.execution.started")
+      expect(yield* eventTypes).not.toContain("session-execution-started")
       expect((yield* session.inbox(sessionID)).map((item) => item.type)).toEqual(["synthetic"])
 
       // The next prompt wakes the Session, and its execution delivers the held notice with it.
@@ -666,7 +666,7 @@ describe("Sessions on the Specter runtime", () => {
           yield* session.wait(sessionID)
           // Replaying the log's Reactions at boot woke nothing: the prompt's execution is the only one.
           const after = (yield* eventTypes).slice(before.length)
-          expect(after.filter((type) => type === "session.execution.started")).toHaveLength(1)
+          expect(after.filter((type) => type === "session-execution-started")).toHaveLength(1)
           const messages = yield* session.messages({ sessionID, order: "asc" })
           expect(messages.map((message) => message.type)).toEqual(["user", "assistant", "user", "assistant"])
         }),
@@ -701,7 +701,7 @@ describe("Sessions on the Specter runtime", () => {
           expect(assistant.at(-1)).toMatchObject({
             content: [{ type: "text", text: "Answered after the restart" }],
           })
-          expect((yield* eventTypes).at(-1)).toBe("session.execution.succeeded")
+          expect((yield* eventTypes).at(-1)).toBe("session-execution-succeeded")
         }),
       )
     }),
@@ -721,13 +721,13 @@ describe("Sessions on the Specter runtime", () => {
 
       // The runtime delivers the compaction item; OC++ compacts and records its own facts.
       expect((yield* eventTypes).slice(10)).toEqual([
-        "session.inbox.enqueued",
-        "session.execution.started",
-        "session.inbox.delivered",
-        "session.compaction.started",
-        "session.usage.recorded",
-        "session.compaction.ended",
-        "session.execution.succeeded",
+        "session-inbox-enqueued",
+        "session-execution-started",
+        "session-inbox-delivered",
+        "session-compaction-started",
+        "session-usage-recorded",
+        "session-compaction-ended",
+        "session-execution-succeeded",
       ])
       const last = (yield* session.messages({ sessionID, order: "asc" })).at(-1)
       expect(last?.type).toBe("compaction")
@@ -757,10 +757,10 @@ describe("Sessions on the Specter runtime", () => {
       yield* session.wait(sessionID)
 
       expect((yield* eventTypes).slice(-4)).toEqual([
-        "session.execution.started",
-        "session.inbox.delivered",
-        "session.moved",
-        "session.execution.succeeded",
+        "session-execution-started",
+        "session-inbox-delivered",
+        "session-moved",
+        "session-execution-succeeded",
       ])
       const moved = yield* (yield* SessionStore.Service).get(sessionID)
       expect(String(moved?.location.directory)).toBe("/elsewhere")
@@ -809,7 +809,7 @@ describe("Sessions on the Specter runtime", () => {
         "First",
         "assistant",
       ])
-      expect(yield* eventTypes).toContain("session.inbox.cancelled")
+      expect(yield* eventTypes).toContain("session-inbox-cancelled")
       expect(llm.requests).toHaveLength(1)
     }),
   )

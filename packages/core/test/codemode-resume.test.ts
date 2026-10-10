@@ -283,7 +283,7 @@ describe("Code Mode resume", () => {
           saved: { id: "w-x3" },
           after: { id: "w-after" },
         })
-        expect(seen).toMatchObject([{ type: "session.codemode.completed", data: { resumed: true } }])
+        expect(seen).toMatchObject([{ type: "session-codemode-completed", data: { resumed: true } }])
         // Replayed calls stay visible in the trace, marked so they read as recovered rather than rerun.
         expect(seen[0]?.data.events.flatMap((event) => (event.type === "tool" ? [event] : []))).toMatchObject([
           { tool: "test.lookup", status: "completed", replayed: true, output: expect.stringContaining("3") },
@@ -424,7 +424,7 @@ describe("Code Mode resume", () => {
         expect(yield* readCodeModeNotebook(session.id)).toEqual({})
         expect(seen).toMatchObject([
           {
-            type: "session.codemode.failed",
+            type: "session-codemode-failed",
             data: { resumed: true, status: "error", error: expect.stringContaining("diverged") },
           },
         ])

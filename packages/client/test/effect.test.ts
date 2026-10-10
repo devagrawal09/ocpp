@@ -3,7 +3,7 @@ import { DateTime, Effect, Stream } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/http"
 import { AbsolutePath, Agent, Event, Location, Model, Ocpp, Prompt, Session, SessionMessage } from "../src/effect/index"
 
-const synced = { type: "log.synced" as const, aggregateID: "ses_test", seq: Event.Seq.make(1) }
+const synced = { type: "log-synced" as const, aggregateID: "ses_test", seq: Event.Seq.make(1) }
 
 test("health.get decodes the readiness response", async () => {
   const httpClient = HttpClient.make((request) =>
@@ -106,7 +106,7 @@ test("event.subscribe exposes and decodes the native Effect event stream", async
       HttpClientResponse.fromWeb(
         request,
         new Response(
-          `data: ${JSON.stringify({ id: "evt_connected", created: 0, type: "server.connected", data: {} })}\n\n` +
+          `data: ${JSON.stringify({ id: "evt_connected", created: 0, type: "server-connected", data: {} })}\n\n` +
             `data: ${JSON.stringify(modelSwitchedEvent)}\n\n`,
           { headers: { "content-type": "text/event-stream" } },
         ),
@@ -118,9 +118,9 @@ test("event.subscribe exposes and decodes the native Effect event stream", async
     return yield* client.event.subscribe().pipe(Stream.runCollect)
   }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient), Effect.runPromise)
 
-  expect(Array.from(events).map((event) => event.type)).toEqual(["server.connected", "session.model.selected"])
+  expect(Array.from(events).map((event) => event.type)).toEqual(["server-connected", "session-model-selected"])
   const durable = events[1]
-  if (durable?.type !== "session.model.selected") throw new Error("Expected model event")
+  if (durable?.type !== "session-model-selected") throw new Error("Expected model event")
   expect(durable.created).toBe(1_717_171_717_000)
   expect(durable.durable).toEqual({ aggregateID: "ses_test", seq: 1, version: 1 })
 })
@@ -130,7 +130,7 @@ test("event.subscribe terminates on Effect protocol decode failures", async () =
     Effect.succeed(
       HttpClientResponse.fromWeb(
         request,
-        new Response(`data: {"type":"server.connected"}\n\n`, {
+        new Response(`data: {"type":"server-connected"}\n\n`, {
           headers: { "content-type": "text/event-stream" },
         }),
       ),
@@ -244,8 +244,8 @@ test("session methods retain decoded Effect inputs and outputs", async () => {
   expect(logQueries[0]).toEqual({ after: "0" })
   expect(requests).toContainEqual({ method: "POST", url: "http://localhost:3000/api/session/ses_test/view" })
   const logged = Array.from(result.log)
-  expect(logged.map((item) => item.type)).toEqual(["session.model.selected", "log.synced"])
-  expect(logged[0]?.type === "session.model.selected" && logged[0].created).toBe(1_717_171_717_000)
+  expect(logged.map((item) => item.type)).toEqual(["session-model-selected", "log-synced"])
+  expect(logged[0]?.type === "session-model-selected" && logged[0].created).toBe(1_717_171_717_000)
   expect(logged.at(-1)).toEqual(synced)
   expect(result.message).toEqual(expect.objectContaining({ id: "msg_model", type: "model-switched" }))
 })
@@ -324,7 +324,7 @@ const modelSwitchedMessage = {
 const modelSwitchedEvent = {
   id: "evt_model",
   created: 1_717_171_717_000,
-  type: "session.model.selected",
+  type: "session-model-selected",
   durable: { aggregateID: "ses_test", seq: 1, version: 1 },
   data: {
     sessionID: "ses_test",

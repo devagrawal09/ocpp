@@ -137,7 +137,7 @@ export const Entry = Schema.Union([Document, Directory, AgentsDirectory, ClaudeD
 export type Entry = typeof Entry.Type
 
 const Updated = ephemeral({
-  type: "config.updated",
+  type: "config-updated",
   schema: {},
 })
 

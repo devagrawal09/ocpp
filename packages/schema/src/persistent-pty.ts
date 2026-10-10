@@ -65,6 +65,6 @@ export const ReadResult = Schema.Struct({
 }).annotate({ identifier: "PersistentPty.ReadResult" })
 export interface ReadResult extends Schema.Schema.Type<typeof ReadResult> {}
 
-export const Added = ephemeral({ type: "persistent-pty.added", schema: { sessionID: Session.ID, terminal: Info } })
-export const Removed = ephemeral({ type: "persistent-pty.removed", schema: { sessionID: Session.ID, ptyID: Pty.ID } })
+export const Added = ephemeral({ type: "persistent-pty-added", schema: { sessionID: Session.ID, terminal: Info } })
+export const Removed = ephemeral({ type: "persistent-pty-removed", schema: { sessionID: Session.ID, ptyID: Pty.ID } })
 export const Event = { Added, Removed, Definitions: inventory(Added, Removed) }

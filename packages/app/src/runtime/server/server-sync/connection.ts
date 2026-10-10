@@ -13,7 +13,7 @@ export function createConnectionSync(input: {
 
   let connectedOnce = false
   function handleEvent(event: { type: string }) {
-    if (event.type !== "server.connected") return
+    if (event.type !== "server-connected") return
     input.connected({ reconnect: connectedOnce })
     connectedOnce = true
   }

@@ -167,7 +167,7 @@ function createMessageHandoff(key: string, sessionID: string, event: ServerSDK["
     set(message: SessionMessageUser) {
       unsubscribe?.()
       setSessionMessageHandoff(key, message)
-      unsubscribe = event.on("session.inbox.enqueued", (item) => {
+      unsubscribe = event.on("session-inbox-enqueued", (item) => {
         if (item.data.sessionID !== sessionID || item.data.inboxID !== message.id) return
         unsubscribe?.()
         unsubscribe = undefined

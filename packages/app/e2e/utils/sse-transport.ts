@@ -177,7 +177,7 @@ export async function installSseTransport<T extends OcppEvent = OcppEvent>(
             connections.push(record)
             if (retry !== undefined) controller.enqueue(encoder.encode(`retry: ${retry}\n\n`))
             controller.enqueue(
-              encoder.encode(frame({ id: `evt_mock_connected_${id}`, type: "server.connected", data: {} })),
+              encoder.encode(frame({ id: `evt_mock_connected_${id}`, type: "server-connected", data: {} })),
             )
             request.signal.addEventListener(
               "abort",

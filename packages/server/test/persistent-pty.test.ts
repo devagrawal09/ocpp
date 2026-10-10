@@ -194,7 +194,7 @@ smoke(
       expect(first.command).toBe("/usr/bin/env")
       expect(first.args).toEqual(["/bin/sh", "-c", "stty -echo; printf terminal-one; cat"])
       expect(first.cwd).toBe(process.cwd())
-      expect(yield* Effect.promise(() => events.next("persistent-pty.added"))).toMatchObject({
+      expect(yield* Effect.promise(() => events.next("persistent-pty-added"))).toMatchObject({
         data: { sessionID, terminal: { id: first.id } },
       })
       expect(first.size).toEqual({ cols: 80, rows: 24 })
@@ -269,7 +269,7 @@ smoke(
           socket.close()
         }
       })
-      expect(yield* Effect.promise(() => events.next("persistent-pty.removed"))).toMatchObject({
+      expect(yield* Effect.promise(() => events.next("persistent-pty-removed"))).toMatchObject({
         data: { sessionID, ptyID: first.id },
       })
       yield* request(base, "DELETE", `/api/experimental/persistent-pty/${second.id}`)
@@ -736,7 +736,9 @@ function installedDaemon() {
     .join("-")
   const core = createRequire(path.resolve(import.meta.dirname, "../../core/package.json"))
   try {
-    return createRequire(core.resolve("@opencode-ai/pty/package.json")).resolve(`@opencode-ai/pty-${suffix}/bin/opencode-pty`)
+    return createRequire(core.resolve("@opencode-ai/pty/package.json")).resolve(
+      `@opencode-ai/pty-${suffix}/bin/opencode-pty`,
+    )
   } catch {
     return ""
   }

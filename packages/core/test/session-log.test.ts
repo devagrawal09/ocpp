@@ -29,12 +29,12 @@ describe("Session.log", () => {
     Effect.gen(function* () {
       const session = yield* Session.Service
       const created = yield* session.create({ location })
-      yield* session.rename({ sessionID: created.id, title: "session.renamed" })
+      yield* session.rename({ sessionID: created.id, title: "session-renamed" })
 
       const items = Array.from(yield* Stream.runCollect(session.log({ sessionID: created.id })))
 
-      expect(items.map((item) => item.type)).toEqual(["session.created", "session.renamed", "log.synced"])
-      expect(items.at(-1)).toEqual({ type: "log.synced", aggregateID: created.id, seq: Event.Seq.make(1) })
+      expect(items.map((item) => item.type)).toEqual(["session-created", "session-renamed", "log-synced"])
+      expect(items.at(-1)).toEqual({ type: "log-synced", aggregateID: created.id, seq: Event.Seq.make(1) })
     }),
   )
 
@@ -50,7 +50,7 @@ describe("Session.log", () => {
       yield* session.rename({ sessionID: created.id, title: "renamed live" })
 
       const items = Array.from(yield* Fiber.join(fiber))
-      expect(items.map((item) => item.type)).toEqual(["log.synced", "session.renamed"])
+      expect(items.map((item) => item.type)).toEqual(["log-synced", "session-renamed"])
     }),
   )
 

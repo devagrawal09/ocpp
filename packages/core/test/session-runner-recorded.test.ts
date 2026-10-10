@@ -224,16 +224,16 @@ describe("Sessions on the Specter runtime, recorded", () => {
           .orderBy(EventTable.seq)
           .all()).map((event) => event.type),
       ).toEqual([
-        "session.inbox.enqueued.1",
-        "session.execution.started.1",
-        "session.instructions.updated.2",
-        "session.inbox.delivered.1",
-        "session.step.started.1",
-        "session.text.started.1",
-        "session.text.ended.1",
-        "session.step.streamed.1",
-        "session.step.ended.1",
-        "session.execution.succeeded.1",
+        "session-inbox-enqueued.1",
+        "session-execution-started.1",
+        "session-instructions-updated.2",
+        "session-inbox-delivered.1",
+        "session-step-started.1",
+        "session-text-started.1",
+        "session-text-ended.1",
+        "session-step-streamed.1",
+        "session-step-ended.1",
+        "session-execution-succeeded.1",
       ])
     }),
   )

@@ -646,18 +646,18 @@ describe("Session.prompt", () => {
       const streamed = Array.from(yield* Fiber.join(fiber))
 
       expect(streamed.map((event): [number | undefined, string] => [event.durable?.seq, event.type])).toEqual([
-        [0, "session.inbox.enqueued"],
-        [1, "session.inbox.enqueued"],
-        [2, "session.execution.started"],
-        [3, "session.inbox.delivered"],
-        [4, "session.inbox.delivered"],
-        [5, "session.execution.succeeded"],
+        [0, "session-inbox-enqueued"],
+        [1, "session-inbox-enqueued"],
+        [2, "session-execution-started"],
+        [3, "session-inbox-delivered"],
+        [4, "session-inbox-delivered"],
+        [5, "session-execution-succeeded"],
       ])
       expect(
         Array.from(
           yield* publicEvents({ sessionID, after: streamed[0].durable?.seq }).pipe(Stream.take(1), Stream.runCollect),
         ).map((event): [number | undefined, string] => [event.durable?.seq, event.type]),
-      ).toEqual([[1, "session.inbox.enqueued"]])
+      ).toEqual([[1, "session-inbox-enqueued"]])
     }),
   )
 

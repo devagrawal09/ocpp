@@ -520,7 +520,7 @@ export function createData(config: CreateDataInput) {
 
   function handleEvent(event: OcppEvent) {
     switch (event.type) {
-      case "server.connected": {
+      case "server-connected": {
         if (streamConnected)
           Object.keys(store.session.message).forEach((sessionID) => {
             result.session.message.invalidate(sessionID)
@@ -556,10 +556,10 @@ export function createData(config: CreateDataInput) {
         void result.project.sync().catch((error) => console.error("Failed to preload projects", error))
         return
       }
-      case "project.updated":
+      case "project-updated":
         setStore("project", "info", event.data.id, reconcile(event.data))
         return
-      case "session.created":
+      case "session-created":
         sessionOutbox.delete(event.data.sessionID)
         result.session.invalidate(event.data.sessionID)
         void result.session.sync(event.data.sessionID)
@@ -570,17 +570,17 @@ export function createData(config: CreateDataInput) {
         sync.complete(`session.pending:${event.data.sessionID}`)
         sync.complete(`session.message:${event.data.sessionID}`)
         return
-      case "session.deleted":
+      case "session-deleted":
         removeSession(event.data.sessionID)
         return
-      case "session.usage.updated":
+      case "session-usage-updated":
         if (store.session.info[event.data.sessionID])
           setStore("session", "info", event.data.sessionID, {
             cost: event.data.cost,
             tokens: event.data.tokens,
           })
         return
-      case "session.agent.selected": {
+      case "session-agent-selected": {
         const previous = store.session.info[event.data.sessionID]?.agent
         if (store.session.info[event.data.sessionID])
           setStore("session", "info", event.data.sessionID, "agent", event.data.agent)
@@ -595,7 +595,7 @@ export function createData(config: CreateDataInput) {
         })
         return
       }
-      case "session.model.selected":
+      case "session-model-selected":
         if (store.session.info[event.data.sessionID])
           setStore("session", "info", event.data.sessionID, "model", event.data.model)
         if (!store.session.message[event.data.sessionID]) return
@@ -618,14 +618,14 @@ export function createData(config: CreateDataInput) {
           })
           .catch((error) => console.error("Failed to load projected model switch message", error))
         return
-      case "session.renamed":
+      case "session-renamed":
         // Preserve the live title when it races the session's initial read.
         void result.session.sync(event.data.sessionID).then(() => {
           if (store.session.info[event.data.sessionID])
             setStore("session", "info", event.data.sessionID, "title", event.data.title)
         })
         return
-      case "session.moved": {
+      case "session-moved": {
         const current = store.session.info[event.data.sessionID]
         if (current) {
           const previous = {
@@ -650,7 +650,7 @@ export function createData(config: CreateDataInput) {
         }
         return
       }
-      case "worktree.resolved": {
+      case "worktree-resolved": {
         for (const [sessionID, info] of Object.entries(store.session.info)) {
           const explicit = event.data.adopted?.includes(info.projectID)
           const directory = explicit ? store.project.info[info.projectID]?.canonical : info.location.directory
@@ -674,7 +674,7 @@ export function createData(config: CreateDataInput) {
         }
         return
       }
-      case "session.inbox.delivered": {
+      case "session-inbox-delivered": {
         const admitted = store.session.input[event.data.sessionID]?.includes(event.data.inboxID) ?? false
         removePending(event.data.sessionID, event.data.inboxID)
         message.update(event.data.sessionID, (draft, index) => {
@@ -690,15 +690,15 @@ export function createData(config: CreateDataInput) {
         compacting.get(event.data.sessionID)?.observed.add(event.data.inboxID)
         return
       }
-      case "session.inbox.delivery.changed":
+      case "session-inbox-delivery-changed":
         updatePending(event.data.sessionID, event.data.inboxID, event.data.delivery)
         return
-      case "session.inbox.cancelled": {
+      case "session-inbox-cancelled": {
         retractLocal(event.data.sessionID, event.data.inboxID)
         compacting.get(event.data.sessionID)?.observed.add(event.data.inboxID)
         return
       }
-      case "session.inbox.enqueued": {
+      case "session-inbox-enqueued": {
         outbox.delete(event.data.inboxID)
         admitLocal({
           id: event.data.inboxID,
@@ -714,7 +714,7 @@ export function createData(config: CreateDataInput) {
         }
         return
       }
-      case "session.instructions.updated":
+      case "session-instructions-updated":
         // Mirror the projector: the initial baseline and empty-rendering deltas carry no text
         // and produce no transcript message.
         const updateText = event.data.text
@@ -730,7 +730,7 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.synthetic":
+      case "session-synthetic":
         message.update(event.data.sessionID, (draft, index) => {
           message.append(draft, index, {
             id: messageIDFromEvent(event.id),
@@ -742,7 +742,7 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.displayed":
+      case "session-displayed":
         message.update(event.data.sessionID, (draft, index) => {
           message.append(draft, index, {
             id: messageIDFromEvent(event.id),
@@ -754,7 +754,7 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.shell.started":
+      case "session-shell-started":
         message.update(event.data.sessionID, (draft, index) => {
           message.append(draft, index, {
             id: messageIDFromEvent(event.id),
@@ -769,7 +769,7 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.shell.ended":
+      case "session-shell-ended":
         message.update(event.data.sessionID, (draft) => {
           const match = message.shell(draft, event.data.shell.id)
           if (!match) return
@@ -779,7 +779,7 @@ export function createData(config: CreateDataInput) {
           match.time.completed = event.created
         })
         return
-      case "session.message.content.updated": {
+      case "session-message-content-updated": {
         if (store.session.message[event.data.sessionID])
           message.update(event.data.sessionID, (draft, index) => {
             const assistant = message.assistant(draft, index, event.data.messageID)
@@ -790,7 +790,7 @@ export function createData(config: CreateDataInput) {
         void result.session.message.sync(event.data.sessionID)
         return
       }
-      case "session.step.started":
+      case "session-step-started":
         message.update(event.data.sessionID, (draft, index) => {
           const position = index.get(event.data.assistantMessageID)
           const existing = position === undefined ? undefined : draft[position]
@@ -824,13 +824,13 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.step.streamed":
+      case "session-step-streamed":
         message.update(event.data.sessionID, (draft, index) => {
           const currentAssistant = message.assistant(draft, index, event.data.assistantMessageID)
           if (currentAssistant) currentAssistant.time.streamed = event.created
         })
         return
-      case "session.step.ended": {
+      case "session-step-ended": {
         message.update(event.data.sessionID, (draft, index) => {
           const currentAssistant = message.assistant(draft, index, event.data.assistantMessageID)
           if (!currentAssistant) return
@@ -845,7 +845,7 @@ export function createData(config: CreateDataInput) {
         })
         return
       }
-      case "session.step.failed":
+      case "session-step-failed":
         message.update(event.data.sessionID, (draft, index) => {
           const currentAssistant = message.assistant(draft, index, event.data.assistantMessageID)
           if (!currentAssistant) return
@@ -861,7 +861,7 @@ export function createData(config: CreateDataInput) {
           }
         })
         return
-      case "session.text.started":
+      case "session-text-started":
         message.update(event.data.sessionID, (draft, index) => {
           message.assistant(draft, index, event.data.assistantMessageID)?.content.push({
             type: "text",
@@ -869,19 +869,19 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.text.delta":
+      case "session-text-delta":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestText(message.assistant(draft, index, event.data.assistantMessageID))
           if (match) match.text += event.data.delta
         })
         return
-      case "session.text.ended":
+      case "session-text-ended":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestText(message.assistant(draft, index, event.data.assistantMessageID))
           if (match) match.text = event.data.text
         })
         return
-      case "session.tool.input.started":
+      case "session-tool-input-started":
         message.update(event.data.sessionID, (draft, index) => {
           message.assistant(draft, index, event.data.assistantMessageID)?.content.push({
             type: "tool",
@@ -892,7 +892,7 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.tool.input.delta":
+      case "session-tool-input-delta":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
@@ -901,7 +901,7 @@ export function createData(config: CreateDataInput) {
           if (match?.state.status === "streaming") match.state.input += event.data.delta
         })
         return
-      case "session.tool.input.ended":
+      case "session-tool-input-ended":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
@@ -910,7 +910,7 @@ export function createData(config: CreateDataInput) {
           if (match?.state.status === "streaming") match.state.input = event.data.text
         })
         return
-      case "session.tool.called":
+      case "session-tool-called":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
@@ -923,7 +923,7 @@ export function createData(config: CreateDataInput) {
           match.state = { status: "running", input: event.data.input, metadata: {} }
         })
         return
-      case "session.tool.progress":
+      case "session-tool-progress":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
@@ -933,9 +933,9 @@ export function createData(config: CreateDataInput) {
           match.state.metadata = event.data.metadata
         })
         return
-      case "session.codemode.started":
+      case "session-codemode-started":
         return
-      case "session.invocation.started":
+      case "session-invocation-started":
         message.update(event.data.sessionID, (draft, index) => {
           message.append(draft, index, {
             id: messageIDFromEvent(event.id),
@@ -949,16 +949,16 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.codemode.progress":
-      case "session.codemode.completed":
-      case "session.codemode.failed":
+      case "session-codemode-progress":
+      case "session-codemode-completed":
+      case "session-codemode-failed":
         message.update(event.data.sessionID, (draft, index) => {
           const invocation = message.invocation(draft, index, event.data.assistantMessageID)
           if (invocation?.executionID === event.data.executionID) {
             if (event.data.events.length > 0) invocation.events = [...event.data.events]
-            if (event.type === "session.codemode.progress") return
-            invocation.status = event.type === "session.codemode.completed" ? "completed" : event.data.status
-            if (event.type === "session.codemode.failed") invocation.error = event.data.error
+            if (event.type === "session-codemode-progress") return
+            invocation.status = event.type === "session-codemode-completed" ? "completed" : event.data.status
+            if (event.type === "session-codemode-failed") invocation.error = event.data.error
             invocation.time.completed = event.created
             return
           }
@@ -971,17 +971,17 @@ export function createData(config: CreateDataInput) {
             ...match.state.metadata,
             executionID: event.data.executionID,
             executionStatus:
-              event.type === "session.codemode.progress"
+              event.type === "session-codemode-progress"
                 ? "running"
-                : event.type === "session.codemode.completed"
+                : event.type === "session-codemode-completed"
                   ? "completed"
                   : event.data.status,
             events: [...event.data.events],
-            ...(event.type === "session.codemode.failed" ? { error: event.data.error } : {}),
+            ...(event.type === "session-codemode-failed" ? { error: event.data.error } : {}),
             ...(event.data.resumed === true ? { resumed: true } : {}),
           }
         })
-        if (event.type === "session.codemode.progress" || !store.session.event[event.data.sessionID]) return
+        if (event.type === "session-codemode-progress" || !store.session.event[event.data.sessionID]) return
         // An event's latest outcome is read from the invocation of its latest firing, which just settled. A
         // quick firing can settle before the list names it, so an event's invocation settling counts too.
         const settled = result.session.message.get(event.data.sessionID, event.data.assistantMessageID)
@@ -995,7 +995,7 @@ export function createData(config: CreateDataInput) {
           void result.session.event.sync(event.data.sessionID)
         }
         return
-      case "session.tool.success":
+      case "session-tool-success":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
@@ -1017,7 +1017,7 @@ export function createData(config: CreateDataInput) {
           match.time.completed = event.created
         })
         return
-      case "session.tool.failed":
+      case "session-tool-failed":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestTool(
             message.assistant(draft, index, event.data.assistantMessageID),
@@ -1036,7 +1036,7 @@ export function createData(config: CreateDataInput) {
           match.time.completed = event.created
         })
         return
-      case "session.reasoning.started":
+      case "session-reasoning-started":
         message.update(event.data.sessionID, (draft, index) => {
           message.assistant(draft, index, event.data.assistantMessageID)?.content.push({
             type: "reasoning",
@@ -1046,13 +1046,13 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.reasoning.delta":
+      case "session-reasoning-delta":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestReasoning(message.assistant(draft, index, event.data.assistantMessageID))
           if (match) match.text += event.data.delta
         })
         return
-      case "session.reasoning.ended":
+      case "session-reasoning-ended":
         message.update(event.data.sessionID, (draft, index) => {
           const match = message.latestReasoning(message.assistant(draft, index, event.data.assistantMessageID))
           if (match) {
@@ -1062,7 +1062,7 @@ export function createData(config: CreateDataInput) {
           }
         })
         return
-      case "session.retry.scheduled":
+      case "session-retry-scheduled":
         message.update(event.data.sessionID, (draft, index) => {
           const currentAssistant = message.assistant(draft, index, event.data.assistantMessageID)
           if (!currentAssistant) return
@@ -1073,10 +1073,10 @@ export function createData(config: CreateDataInput) {
           }
         })
         return
-      case "session.execution.started":
+      case "session-execution-started":
         setSessionActive(event.data.sessionID, "running")
         return
-      case "session.compaction.started":
+      case "session-compaction-started":
         if (event.data.inputID) removePending(event.data.sessionID, event.data.inputID)
         message.update(event.data.sessionID, (draft, index) => {
           message.append(draft, index, {
@@ -1091,34 +1091,34 @@ export function createData(config: CreateDataInput) {
         })
         if (event.data.inputID) compacting.get(event.data.sessionID)?.observed.add(event.data.inputID)
         return
-      case "session.execution.succeeded":
-      case "session.execution.failed":
-      case "session.execution.interrupted":
+      case "session-execution-succeeded":
+      case "session-execution-failed":
+      case "session-execution-interrupted":
         setSessionActive(event.data.sessionID, "idle")
         message.update(event.data.sessionID, (draft) => {
           const currentAssistant = message.activeAssistant(draft)
           if (currentAssistant) currentAssistant.retry = undefined
         })
-        if (event.type === "session.execution.interrupted" && event.data.reason === "shutdown") return
+        if (event.type === "session-execution-interrupted" && event.data.reason === "shutdown") return
         // An event can overtake the first read; queue a revalidation when that read is still active.
         if (!store.session.info[event.data.sessionID] && !sync.has(`session:${event.data.sessionID}`)) return
         result.session.invalidate(event.data.sessionID)
         void result.session.sync(event.data.sessionID)
         return
-      case "session.viewed":
+      case "session-viewed":
         if (!store.session.info[event.data.sessionID] && !sync.has(`session:${event.data.sessionID}`)) return
         result.session.invalidate(event.data.sessionID)
         void result.session.sync(event.data.sessionID)
         return
-      case "session.revert.staged":
+      case "session-revert-staged":
         if (store.session.info[event.data.sessionID])
           setStore("session", "info", event.data.sessionID, "revert", event.data.revert)
         return
-      case "session.revert.cleared":
+      case "session-revert-cleared":
         if (store.session.info[event.data.sessionID])
           setStore("session", "info", event.data.sessionID, "revert", undefined)
         return
-      case "session.revert.committed":
+      case "session-revert-committed":
         if (store.session.info[event.data.sessionID]) {
           setStore("session", "info", event.data.sessionID, "revert", undefined)
         }
@@ -1143,13 +1143,13 @@ export function createData(config: CreateDataInput) {
           void result.session.event.sync(event.data.sessionID)
         }
         return
-      case "session.compaction.delta":
+      case "session-compaction-delta":
         message.update(event.data.sessionID, (draft) => {
           const current = message.compaction(draft)
           if (current?.status === "running") current.summary += event.data.text
         })
         return
-      case "session.compaction.ended":
+      case "session-compaction-ended":
         message.update(event.data.sessionID, (draft, index) => {
           const position = draft.findLastIndex((item) => item.type === "compaction" && item.status === "running")
           const current = draft[position]
@@ -1173,7 +1173,7 @@ export function createData(config: CreateDataInput) {
           })
         })
         return
-      case "session.compaction.failed":
+      case "session-compaction-failed":
         if (event.data.inputID) removePending(event.data.sessionID, event.data.inputID)
         message.update(event.data.sessionID, (draft, index) => {
           const position = draft.findLastIndex((item) => item.type === "compaction" && item.status === "running")
@@ -1198,7 +1198,7 @@ export function createData(config: CreateDataInput) {
         })
         if (event.data.inputID) compacting.get(event.data.sessionID)?.observed.add(event.data.inputID)
         return
-      case "form.created":
+      case "form-created":
         if (event.data.form.sessionID === "global") break
         if (store.session.form[event.data.form.sessionID]?.some((form) => form.id === event.data.form.id)) return
         setStore("session", "form", event.data.form.sessionID, [
@@ -1206,22 +1206,22 @@ export function createData(config: CreateDataInput) {
           event.data.form,
         ])
         return
-      case "form.replied":
-      case "form.cancelled":
+      case "form-replied":
+      case "form-cancelled":
         removeForm(event.data.sessionID, event.data.id, event.location)
         return
-      case "codemode.event.updated":
+      case "codemode-event-updated":
         if (!store.session.event[event.data.sessionID]) return
         result.session.event.invalidate(event.data.sessionID)
         void result.session.event.sync(event.data.sessionID)
         return
     }
 
-    if (event.type === "credential.updated" || event.type === "credential.switched") {
+    if (event.type === "credential-updated" || event.type === "credential-switched") {
       Object.keys(store.location).forEach((key) => {
         const ref = JSON.parse(key) as [string, string | null]
         const location = { directory: ref[0], workspaceID: ref[1] ?? undefined }
-        if (event.type === "credential.updated") {
+        if (event.type === "credential-updated") {
           result.location.integration.invalidate(location)
           void result.location.integration.sync(location)
           return
@@ -1250,16 +1250,16 @@ export function createData(config: CreateDataInput) {
     if (!event.location) return
     const location = event.location
     switch (event.type) {
-      case "catalog.updated":
+      case "catalog-updated":
         result.location.model.invalidate(location)
         result.location.provider.invalidate(location)
         void Promise.all([result.location.model.sync(location), result.location.provider.sync(location)])
         break
-      case "agent.updated":
+      case "agent-updated":
         result.location.agent.invalidate(location)
         void result.location.agent.sync(location)
         break
-      case "command.updated":
+      case "command-updated":
         result.location.command.invalidate(location)
         void result.location.command.sync(location)
         // Session commands change through the same event, published at the Session's Location.
@@ -1268,11 +1268,11 @@ export function createData(config: CreateDataInput) {
           void result.session.command.sync(sessionID)
         })
         break
-      case "skill.updated":
+      case "skill-updated":
         result.location.skill.invalidate(location)
         void result.location.skill.sync(location)
         break
-      case "vcs.branch.updated":
+      case "vcs-branch-updated":
         setStore("location", locationKey(location), (data) => ({
           ...data,
           vcs: {
@@ -1283,14 +1283,14 @@ export function createData(config: CreateDataInput) {
           },
         }))
         break
-      case "form.created":
+      case "form-created":
         if (store.session.form[event.data.form.sessionID]?.some((form) => form.id === event.data.form.id)) break
         setStore("session", "form", event.data.form.sessionID, [
           ...(store.session.form[event.data.form.sessionID] ?? []),
           event.data.form.sessionID === "global" ? { ...event.data.form, location } : event.data.form,
         ])
         break
-      case "shell.created":
+      case "shell-created":
         setStore("location", locationKey(location), (data) => ({
           ...data,
           shell: {
@@ -1299,18 +1299,18 @@ export function createData(config: CreateDataInput) {
           },
         }))
         break
-      case "shell.exited":
-      case "shell.deleted":
+      case "shell-exited":
+      case "shell-deleted":
         setStore("location", locationKey(location), (data) => ({
           ...data,
           shell: Object.fromEntries(Object.entries(data?.shell ?? {}).filter(([id]) => id !== event.data.id)),
         }))
         break
-      case "reference.updated":
+      case "reference-updated":
         result.location.reference.invalidate()
         void result.location.reference.sync()
         break
-      case "integration.updated":
+      case "integration-updated":
         result.location.integration.invalidate(location)
         result.location.model.invalidate(location)
         result.location.provider.invalidate(location)
@@ -1320,21 +1320,21 @@ export function createData(config: CreateDataInput) {
           result.location.provider.sync(location),
         ])
         break
-      case "config.updated":
+      case "config-updated":
         result.location.config.invalidate(location)
         void result.location.config.sync(location)
         void result.location.websearch.refresh(location)
         break
-      case "websearch.updated":
+      case "websearch-updated":
         void result.location.websearch.refresh(location)
         break
       // Authenticating an MCP integration reconnects its server, which emits mcp.status.changed,
       // so the mcp list syncs here rather than off integration.updated.
-      case "mcp.status.changed":
+      case "mcp-status-changed":
         result.location.mcp.server.invalidate(location)
         void result.location.mcp.server.sync(location)
         break
-      case "mcp.resources.changed":
+      case "mcp-resources-changed":
         result.location.mcp.resource.invalidate(location)
         void result.location.mcp.resource.sync(location)
         break

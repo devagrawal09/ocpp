@@ -245,43 +245,43 @@ function timelineEvents(input: TimelineEvent) {
 }
 
 function describeEvent(event: OcppEvent) {
-  if (event.type.startsWith("session.tool.")) {
+  if (event.type.startsWith("session-tool-")) {
     const data = event.data as { id?: string }
     return [event.type, data.id].filter(Boolean).join(":")
   }
   return event.type
 }
 
-export function event(type: "session.status", data: Extract<OcppEvent, { type: "session.status" }>["data"]): OcppEvent {
+export function event(type: "session-status", data: Extract<OcppEvent, { type: "session-status" }>["data"]): OcppEvent {
   return makeEvent(type, data)
 }
 
-export function compactionStarted(data: Extract<OcppEvent, { type: "session.compaction.started" }>["data"]) {
-  return makeEvent("session.compaction.started", data)
+export function compactionStarted(data: Extract<OcppEvent, { type: "session-compaction-started" }>["data"]) {
+  return makeEvent("session-compaction-started", data)
 }
 
-export function compactionDelta(data: Extract<OcppEvent, { type: "session.compaction.delta" }>["data"]) {
-  return makeEvent("session.compaction.delta", data)
+export function compactionDelta(data: Extract<OcppEvent, { type: "session-compaction-delta" }>["data"]) {
+  return makeEvent("session-compaction-delta", data)
 }
 
-export function compactionEnded(data: Extract<OcppEvent, { type: "session.compaction.ended" }>["data"]) {
-  return makeEvent("session.compaction.ended", data)
+export function compactionEnded(data: Extract<OcppEvent, { type: "session-compaction-ended" }>["data"]) {
+  return makeEvent("session-compaction-ended", data)
 }
 
-export function compactionFailed(data: Extract<OcppEvent, { type: "session.compaction.failed" }>["data"]) {
-  return makeEvent("session.compaction.failed", data)
+export function compactionFailed(data: Extract<OcppEvent, { type: "session-compaction-failed" }>["data"]) {
+  return makeEvent("session-compaction-failed", data)
 }
 
-export function toolInputStarted(data: Extract<OcppEvent, { type: "session.tool.input.started" }>["data"]) {
-  return makeEvent("session.tool.input.started", data)
+export function toolInputStarted(data: Extract<OcppEvent, { type: "session-tool-input-started" }>["data"]) {
+  return makeEvent("session-tool-input-started", data)
 }
 
-export function toolInputEnded(data: Extract<OcppEvent, { type: "session.tool.input.ended" }>["data"]) {
-  return makeEvent("session.tool.input.ended", data)
+export function toolInputEnded(data: Extract<OcppEvent, { type: "session-tool-input-ended" }>["data"]) {
+  return makeEvent("session-tool-input-ended", data)
 }
 
-export function toolCalled(data: Extract<OcppEvent, { type: "session.tool.called" }>["data"]) {
-  return makeEvent("session.tool.called", data)
+export function toolCalled(data: Extract<OcppEvent, { type: "session-tool-called" }>["data"]) {
+  return makeEvent("session-tool-called", data)
 }
 
 export function validateTimelineEvent(input: unknown): OcppEvent {
@@ -385,8 +385,8 @@ export function partUpdated(part: PartSeed<"assistant">): readonly OcppEvent[] {
     return [
       ...(started
         ? []
-        : [makeEvent("session.text.started", { sessionID, assistantMessageID: messageID, ordinal: ref.ordinal! })]),
-      makeEvent("session.text.ended", {
+        : [makeEvent("session-text-started", { sessionID, assistantMessageID: messageID, ordinal: ref.ordinal! })]),
+      makeEvent("session-text-ended", {
         sessionID,
         assistantMessageID: messageID,
         ordinal: ref.ordinal!,
@@ -398,7 +398,7 @@ export function partUpdated(part: PartSeed<"assistant">): readonly OcppEvent[] {
     startedParts.add(part.id)
     if (!started && !part.text)
       return [
-        makeEvent("session.reasoning.started", {
+        makeEvent("session-reasoning-started", {
           sessionID,
           assistantMessageID: messageID,
           ordinal: ref.ordinal!,
@@ -409,14 +409,14 @@ export function partUpdated(part: PartSeed<"assistant">): readonly OcppEvent[] {
       ...(started
         ? []
         : [
-            makeEvent("session.reasoning.started", {
+            makeEvent("session-reasoning-started", {
               sessionID,
               assistantMessageID: messageID,
               ordinal: ref.ordinal!,
               state: jsonRecord(part.metadata),
             }),
           ]),
-      makeEvent("session.reasoning.ended", {
+      makeEvent("session-reasoning-ended", {
         sessionID,
         assistantMessageID: messageID,
         ordinal: ref.ordinal!,
@@ -437,7 +437,7 @@ export function renderedPartID(partID: string) {
 export function partDelta(partID: string, delta: string, messageID = assistantID) {
   const ref = partRefs.get(partID)
   if (!ref || ref.type !== "text" || ref.ordinal === undefined) throw new Error(`Unknown text part: ${partID}`)
-  return makeEvent("session.text.delta", {
+  return makeEvent("session-text-delta", {
     sessionID,
     assistantMessageID: messageID,
     ordinal: ref.ordinal,
@@ -447,14 +447,14 @@ export function partDelta(partID: string, delta: string, messageID = assistantID
 
 export function messageUpdated(info: SessionMessageAssistant) {
   if (info.error)
-    return makeEvent("session.step.failed", {
+    return makeEvent("session-step-failed", {
       sessionID,
       assistantMessageID: info.id,
       error: info.error,
       cost: info.cost,
       tokens: info.tokens,
     })
-  return makeEvent("session.step.ended", {
+  return makeEvent("session-step-ended", {
     sessionID,
     assistantMessageID: info.id,
     finish: info.finish ?? "stop",
@@ -464,9 +464,9 @@ export function messageUpdated(info: SessionMessageAssistant) {
 }
 
 export function status(type: SessionStatus["type"], attempt = 1) {
-  if (type === "busy") return makeEvent("session.execution.started", { sessionID })
-  if (type === "idle") return makeEvent("session.execution.succeeded", { sessionID })
-  return makeEvent("session.retry.scheduled", {
+  if (type === "busy") return makeEvent("session-execution-started", { sessionID })
+  if (type === "idle") return makeEvent("session-execution-succeeded", { sessionID })
+  return makeEvent("session-retry-scheduled", {
     sessionID,
     assistantMessageID: assistantID,
     attempt,
@@ -476,7 +476,7 @@ export function status(type: SessionStatus["type"], attempt = 1) {
 }
 
 export function stepStarted(message: SessionMessageAssistant) {
-  return makeEvent("session.step.started", {
+  return makeEvent("session-step-started", {
     sessionID,
     assistantMessageID: message.id,
     agent: message.agent,
@@ -760,7 +760,7 @@ function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
   const events: OcppEvent[] = []
   if (!previous) {
     events.push(
-      makeEvent("session.tool.input.started", {
+      makeEvent("session-tool-input-started", {
         sessionID,
         assistantMessageID: messageID,
         id: part.id,
@@ -774,13 +774,13 @@ function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
   }
   if (!previous || previous === "streaming") {
     events.push(
-      makeEvent("session.tool.input.ended", {
+      makeEvent("session-tool-input-ended", {
         sessionID,
         assistantMessageID: messageID,
         id: part.id,
         text: JSON.stringify(part.state.input),
       }),
-      makeEvent("session.tool.called", {
+      makeEvent("session-tool-called", {
         sessionID,
         assistantMessageID: messageID,
         id: part.id,
@@ -797,7 +797,7 @@ function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
     }
     if (previous === "running" || Object.keys(metadata).length)
       events.push(
-        makeEvent("session.tool.progress", {
+        makeEvent("session-tool-progress", {
           sessionID,
           assistantMessageID: messageID,
           id: part.id,
@@ -809,7 +809,7 @@ function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
   }
   if (part.state.status === "error") {
     events.push(
-      makeEvent("session.tool.failed", {
+      makeEvent("session-tool-failed", {
         sessionID,
         assistantMessageID: messageID,
         id: part.id,
@@ -823,7 +823,7 @@ function toolEvents(part: ToolSeed, messageID: string): readonly OcppEvent[] {
     return events
   }
   events.push(
-    makeEvent("session.tool.success", {
+    makeEvent("session-tool-success", {
       sessionID,
       assistantMessageID: messageID,
       id: part.id,

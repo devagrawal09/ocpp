@@ -7,7 +7,7 @@ import { Model } from "./model.js"
 import { Provider } from "./provider.js"
 import { PositiveInt, brand, statics } from "./schema.js"
 
-const Updated = ephemeral({ type: "agent.updated", schema: {} })
+const Updated = ephemeral({ type: "agent-updated", schema: {} })
 
 export const ID = Schema.String.pipe(brand("Agent.ID"))
 export type ID = typeof ID.Type

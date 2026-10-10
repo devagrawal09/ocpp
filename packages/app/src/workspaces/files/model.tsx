@@ -226,7 +226,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
         )
 
     createEffect(() => {
-      const stop = sdk().event.on("filesystem.changed", (event) => {
+      const stop = sdk().event.on("filesystem-changed", (event) => {
         invalidateFromWatcher(event, {
           normalize: path.normalize,
           hasFile: (file) => Boolean(store.file[file]),

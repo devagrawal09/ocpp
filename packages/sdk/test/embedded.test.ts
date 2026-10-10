@@ -210,8 +210,8 @@ it.live(
 
         yield* ocpp.events.subscribe().pipe(
           Stream.runForEach((event) => {
-            if (event.type === "server.connected") return connected.open
-            if (event.type !== "plugin.updated" || event.location?.directory !== fixture.directory) return Effect.void
+            if (event.type === "server-connected") return connected.open
+            if (event.type !== "plugin-updated" || event.location?.directory !== fixture.directory) return Effect.void
             return Ref.updateAndGet(generations, (total) => total + 1).pipe(
               Effect.flatMap((total) => {
                 if (total === 1) return Deferred.succeed(booted, undefined)
@@ -267,29 +267,29 @@ it.live(
         const subscriber = yield* ocpp.events.subscribe().pipe(
           Stream.runForEach((event) =>
             Effect.gen(function* () {
-              if (event.type === "server.connected") {
+              if (event.type === "server-connected") {
                 yield* connected.open
                 return
               }
               if (event.location?.directory !== fixture.directory) return
-              if (event.type === "plugin.updated") {
+              if (event.type === "plugin-updated") {
                 yield* Deferred.succeed(booted, undefined)
                 return
               }
               if (
-                event.type !== "catalog.updated" &&
-                event.type !== "agent.updated" &&
-                event.type !== "command.updated"
+                event.type !== "catalog-updated" &&
+                event.type !== "agent-updated" &&
+                event.type !== "command-updated"
               )
                 return
               yield* Ref.update(updates, (types) => [...types, event.type])
               // A connected consumer re-reads invalidated resources through the real router.
-              if (event.type === "catalog.updated") {
+              if (event.type === "catalog-updated") {
                 yield* ocpp.model.list({ location: ref })
                 yield* ocpp.provider.list({ location: ref })
                 return
               }
-              if (event.type === "agent.updated") {
+              if (event.type === "agent-updated") {
                 yield* ocpp.agent.list({ location: ref })
                 return
               }
@@ -302,7 +302,7 @@ it.live(
         yield* ocpp.plugin.list({ location: ref })
         yield* Deferred.await(booted).pipe(Effect.timeout("5 seconds"))
         expect(yield* Ref.get(updates)).toEqual(
-          expect.arrayContaining(["catalog.updated", "agent.updated", "command.updated"]),
+          expect.arrayContaining(["catalog-updated", "agent-updated", "command-updated"]),
         )
         yield* Ref.set(updates, [])
 
@@ -408,7 +408,7 @@ it.live(
           text: "Promote this input",
         })
         const prompted = yield* ocpp.sessions.log({ sessionID: id, follow: true }).pipe(
-          Stream.filter((event) => event.type === "session.inbox.delivered" && event.data.inboxID === wake.id),
+          Stream.filter((event) => event.type === "session-inbox-delivered" && event.data.inboxID === wake.id),
           Stream.runHead,
           Effect.timeout("10 seconds"),
           Effect.map(Option.getOrThrow),
@@ -416,7 +416,7 @@ it.live(
         const wakeContext = yield* ocpp.sessions.context({ sessionID: id })
         const pendingAfterPromote = yield* ocpp.sessions.inbox.list({ sessionID: id })
         const event = yield* ocpp.sessions.log({ sessionID: id }).pipe(
-          Stream.filter((item) => item.type === "session.model.selected"),
+          Stream.filter((item) => item.type === "session-model-selected"),
           Stream.take(1),
           Stream.runHead,
           Effect.map(Option.getOrUndefined),
@@ -454,7 +454,7 @@ it.live(
         expect(pendingAfterAdmit).toContainEqual(
           expect.objectContaining({ id: admitted.id, type: "user", delivery: "steer" }),
         )
-        expect(prompted.type).toBe("session.inbox.delivered")
+        expect(prompted.type).toBe("session-inbox-delivered")
         expect(pendingAfterPromote.map((item) => item.id)).not.toContainAnyValues([admitted.id, wake.id])
         expect(wakeContext).toContainEqual(expect.objectContaining({ id: wake.id, type: "user" }))
         expect(contextEntries).toEqual([
@@ -463,7 +463,7 @@ it.live(
         ])
         expect(remainingContextEntries).toEqual([{ key: "deploy-target", value: "production" }])
         expect(context.some((message) => message.type === "model-switched")).toBe(true)
-        expect(event).toMatchObject({ type: "session.model.selected", durable: { seq: 1 } })
+        expect(event).toMatchObject({ type: "session-model-selected", durable: { seq: 1 } })
         expect(message).toEqual(modelMessage)
         expect(missing.map((error) => error._tag)).toEqual([
           "SessionNotFoundError",
@@ -518,13 +518,13 @@ it.live(
         const ocpp = yield* fixture.sdk.Ocpp.create()
         const id = sessionID(fixture)
         const connected = yield* Latch.make(false)
-        const prompted = yield* Deferred.make<Extract<OcppEvent, { type: "session.inbox.delivered" }>>()
+        const prompted = yield* Deferred.make<Extract<OcppEvent, { type: "session-inbox-delivered" }>>()
 
         yield* ocpp.events.subscribe().pipe(
           Stream.runForEach((event) =>
-            event.type === "server.connected"
+            event.type === "server-connected"
               ? connected.open
-              : event.type === "session.inbox.delivered" && event.data.sessionID === id
+              : event.type === "session-inbox-delivered" && event.data.sessionID === id
                 ? Deferred.succeed(prompted, event).pipe(Effect.asVoid)
                 : Effect.void,
           ),
@@ -558,9 +558,9 @@ it.live(
         const secondEvent = yield* Latch.make(false)
         const observe = (ready: Latch.Latch, event: Latch.Latch) =>
           Stream.runForEach((notification: OcppEvent) =>
-            notification.type === "server.connected"
+            notification.type === "server-connected"
               ? ready.open
-              : notification.type === "session.agent.selected" && notification.data.sessionID === id
+              : notification.type === "session-agent-selected" && notification.data.sessionID === id
                 ? event.open
                 : Effect.void,
           )

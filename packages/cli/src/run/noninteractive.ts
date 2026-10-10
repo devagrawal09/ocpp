@@ -59,7 +59,7 @@ type ToolState = StartedPart & {
 }
 
 type V2Event = EventSubscribeOutput
-type FormRequest = Extract<V2Event, { type: "form.created" }>["data"]["form"]
+type FormRequest = Extract<V2Event, { type: "form-created" }>["data"]["form"]
 
 // MCP elicitations are temporarily owned by the "global" sentinel instead of a real
 // session. An exclusive local process may treat them as this run's blockers; an
@@ -155,7 +155,7 @@ export async function runNonInteractivePrompt(input: Input) {
       const event = next.value
 
       if (
-        event.type === "form.created" &&
+        event.type === "form-created" &&
         submitted &&
         (event.data.form.sessionID === input.sessionID ||
           (!input.attached &&
@@ -168,7 +168,7 @@ export async function runNonInteractivePrompt(input: Input) {
       if (!("sessionID" in event.data) || event.data.sessionID !== input.sessionID) continue
       const time = toMillis("created" in event ? event.created : undefined)
 
-      if (event.type === "session.inbox.delivered") {
+      if (event.type === "session-inbox-delivered") {
         if (event.data.inboxID === messageID) {
           promoted = true
           prePromotionError = undefined
@@ -176,13 +176,13 @@ export async function runNonInteractivePrompt(input: Input) {
         }
       }
       if (
-        event.type === "session.execution.interrupted" &&
+        event.type === "session-execution-interrupted" &&
         event.data.reason === "user" &&
         (interrupted || formCancelled)
       ) {
         return
       }
-      if (!promoted && event.type === "session.execution.failed") {
+      if (!promoted && event.type === "session-execution-failed") {
         prePromotionError = event.data.error
         if (finalizing) return
         continue
@@ -190,13 +190,13 @@ export async function runNonInteractivePrompt(input: Input) {
       if (
         !promoted &&
         finalizing &&
-        (event.type === "session.execution.succeeded" || event.type === "session.execution.interrupted")
+        (event.type === "session-execution-succeeded" || event.type === "session-execution-interrupted")
       )
         return
       if (!promoted) continue
-      if (finalizing && !event.type.startsWith("session.execution.")) continue
+      if (finalizing && !event.type.startsWith("session-execution-")) continue
 
-      if (event.type === "session.step.started") {
+      if (event.type === "session-step-started") {
         const part = {
           id: partID(event.id),
           sessionID: input.sessionID,
@@ -220,7 +220,7 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
 
-      if (event.type === "session.text.started") {
+      if (event.type === "session-text-started") {
         flushStep()
         starts.set(`text\u0000${contentKey(event.data.assistantMessageID, event.data.ordinal)}`, {
           id: partID(event.id),
@@ -228,7 +228,7 @@ export async function runNonInteractivePrompt(input: Input) {
         })
         continue
       }
-      if (event.type === "session.text.ended") {
+      if (event.type === "session-text-ended") {
         const key = contentKey(event.data.assistantMessageID, event.data.ordinal)
         const started = starts.get(`text\u0000${key}`)
         starts.delete(`text\u0000${key}`)
@@ -245,7 +245,7 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
 
-      if (event.type === "session.reasoning.started") {
+      if (event.type === "session-reasoning-started") {
         flushStep()
         starts.set(`reasoning\u0000${contentKey(event.data.assistantMessageID, event.data.ordinal)}`, {
           id: partID(event.id),
@@ -253,7 +253,7 @@ export async function runNonInteractivePrompt(input: Input) {
         })
         continue
       }
-      if (event.type === "session.reasoning.ended" && input.thinking) {
+      if (event.type === "session-reasoning-ended" && input.thinking) {
         const key = contentKey(event.data.assistantMessageID, event.data.ordinal)
         const started = starts.get(`reasoning\u0000${key}`)
         starts.delete(`reasoning\u0000${key}`)
@@ -271,7 +271,7 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
 
-      if (event.type === "session.tool.input.started") {
+      if (event.type === "session-tool-input-started") {
         flushStep()
         tools.set(toolKey(event.data.assistantMessageID, event.data.id), {
           id: partID(event.id),
@@ -284,17 +284,17 @@ export async function runNonInteractivePrompt(input: Input) {
         })
         continue
       }
-      if (event.type === "session.tool.input.ended") {
+      if (event.type === "session-tool-input-ended") {
         const current = tools.get(toolKey(event.data.assistantMessageID, event.data.id))
         if (current) current.raw = event.data.text
         continue
       }
-      if (event.type === "session.tool.input.delta") {
+      if (event.type === "session-tool-input-delta") {
         const current = tools.get(toolKey(event.data.assistantMessageID, event.data.id))
         if (current) current.raw = (current.raw ?? "") + event.data.delta
         continue
       }
-      if (event.type === "session.tool.called") {
+      if (event.type === "session-tool-called") {
         flushStep()
         const key = toolKey(event.data.assistantMessageID, event.data.id)
         const current = tools.get(key)
@@ -312,14 +312,14 @@ export async function runNonInteractivePrompt(input: Input) {
         })
         continue
       }
-      if (event.type === "session.tool.progress") {
+      if (event.type === "session-tool-progress") {
         const current = tools.get(toolKey(event.data.assistantMessageID, event.data.id))
         if (current) {
           current.metadata = event.data.metadata
         }
         continue
       }
-      if (event.type === "session.tool.success") {
+      if (event.type === "session-tool-success") {
         const key = toolKey(event.data.assistantMessageID, event.data.id)
         const current = tools.get(key) ?? fallbackTool(event)
         const tool: SessionMessageAssistantTool = {
@@ -364,7 +364,7 @@ export async function runNonInteractivePrompt(input: Input) {
         if (!emit("tool_use", time, { part })) await input.renderTool(tool)
         continue
       }
-      if (event.type === "session.tool.failed") {
+      if (event.type === "session-tool-failed") {
         const key = toolKey(event.data.assistantMessageID, event.data.id)
         const current = tools.get(key) ?? fallbackTool(event)
         const error = event.data.error.message
@@ -425,7 +425,7 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
 
-      if (event.type === "session.step.ended") {
+      if (event.type === "session-step-ended") {
         flushStep()
         const part = {
           id: partID(event.id),
@@ -440,7 +440,7 @@ export async function runNonInteractivePrompt(input: Input) {
         emit("step_finish", time, { part })
         continue
       }
-      if (event.type === "session.step.failed") {
+      if (event.type === "session-step-failed") {
         if (input.compatibility === "v1" && event.data.error.message === "The provider response ended unexpectedly.") {
           pendingStep = undefined
           v1InvalidOutput = true
@@ -453,7 +453,7 @@ export async function runNonInteractivePrompt(input: Input) {
         if (!emit("error", time, { error: event.data.error })) UI.error(event.data.error.message)
         continue
       }
-      if (event.type === "session.execution.failed") {
+      if (event.type === "session-execution-failed") {
         if (input.compatibility === "v1" && (v1InvalidOutput || formCancelled)) return
         flushStep()
         if (!emittedError && !formCancelled) {
@@ -463,7 +463,7 @@ export async function runNonInteractivePrompt(input: Input) {
         }
         return
       }
-      if (event.type === "session.execution.interrupted") {
+      if (event.type === "session-execution-interrupted") {
         if (input.compatibility === "v1" && formCancelled) return
         if (event.data.reason === "user" && interrupted) process.exitCode = 130
         if (event.data.reason !== "user" && !emittedError) {
@@ -474,7 +474,7 @@ export async function runNonInteractivePrompt(input: Input) {
         }
         return
       }
-      if (event.type === "session.execution.succeeded") return
+      if (event.type === "session-execution-succeeded") return
     }
   }
 

@@ -50,7 +50,7 @@ export const Method = Schema.Union([OAuthMethod, CommandMethod, KeyMethod, EnvMe
 export type Method = typeof Method.Type
 
 const Updated = ephemeral({
-  type: "integration.updated",
+  type: "integration-updated",
   schema: {},
 })
 export const Event = { Updated, Definitions: inventory(Updated) }

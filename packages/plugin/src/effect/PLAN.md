@@ -186,7 +186,7 @@ The shared low-level machinery owns registration order, scope cleanup, disposal,
 The Effect API exposes the existing event system as typed streams using generated SDK event discriminants.
 
 ```ts
-ctx.event.subscribe("catalog.updated")
+ctx.event.subscribe("catalog-updated")
 // Stream.Stream<EventCatalogUpdated>
 ```
 
@@ -194,7 +194,7 @@ Example:
 
 ```ts
 yield *
-  ctx.event.subscribe("catalog.updated").pipe(
+  ctx.event.subscribe("catalog-updated").pipe(
     Stream.runForEach(() => ctx.agent.rebuild()),
     Effect.forkScoped,
   )
@@ -394,7 +394,7 @@ export const AnthropicAgentPlugin = define({
         }),
       )
 
-      yield* ctx.event.subscribe("catalog.updated").pipe(
+      yield* ctx.event.subscribe("catalog-updated").pipe(
         Stream.runForEach(() => ctx.agent.rebuild()),
         Effect.forkScoped,
       )
@@ -477,7 +477,7 @@ The Effect implementation remains the canonical runtime. Promise and embedding w
 
 - Remove `HookFunctions` as the plugin setup return value.
 - Remove catalog's special finalizer-triggered plugin hook path.
-- Remove `plugin.added` catalog mutation handling.
+- Remove `plugin-added` catalog mutation handling.
 - Make add/remove/replacement rely on scoped registration and domain rebuilds.
 
 ### 8. Add Event Adapter

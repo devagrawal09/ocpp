@@ -13,7 +13,7 @@ test("server dialog keeps focus above fullscreen settings", async ({ page }) => 
       return route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: 'data: {"id":"evt_connected","type":"server.connected","data":{}}\n\n',
+        body: 'data: {"id":"evt_connected","type":"server-connected","data":{}}\n\n',
       })
     }
     if (url.pathname === "/api/global/health" || url.pathname === "/api/health") {

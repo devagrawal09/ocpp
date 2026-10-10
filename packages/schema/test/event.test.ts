@@ -39,13 +39,13 @@ describe("public event schemas", () => {
   test("synced marker encodes the captured watermark", () => {
     expect(
       Schema.encodeSync(EventLog.Synced)({
-        type: "log.synced",
+        type: "log-synced",
         aggregateID: "ses_test",
         seq: Event.Seq.make(1),
       }),
-    ).toEqual({ type: "log.synced", aggregateID: "ses_test", seq: 1 })
-    expect(Schema.encodeSync(EventLog.Synced)({ type: "log.synced", aggregateID: "ses_test" })).toEqual({
-      type: "log.synced",
+    ).toEqual({ type: "log-synced", aggregateID: "ses_test", seq: 1 })
+    expect(Schema.encodeSync(EventLog.Synced)({ type: "log-synced", aggregateID: "ses_test" })).toEqual({
+      type: "log-synced",
       aggregateID: "ses_test",
     })
   })

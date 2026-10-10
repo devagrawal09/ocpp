@@ -150,7 +150,7 @@ describe("Bus", () => {
       const bus = yield* Bus.Service
       const event = yield* bus.publish(VersionedMessage, { sessionID: Session.ID.create() })
 
-      expect(event.type).toBe("session.deleted")
+      expect(event.type).toBe("session-deleted")
       expect(event.durable?.version).toBe(Event.Version.make(2))
     }),
   )
@@ -728,7 +728,7 @@ describe("Bus", () => {
       const exit = yield* bus.publish(VersionedMessageV1, { id: aggregateID }).pipe(Effect.exit)
 
       expect(String(exit)).toContain("not in OC++'s inventory of recorded facts")
-      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([{ type: "log.synced", aggregateID }])
+      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([{ type: "log-synced", aggregateID }])
     }),
   )
   it.effect("rejects an event ID already recorded", () =>
@@ -759,7 +759,7 @@ describe("Bus", () => {
         yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
       ).toEqual([])
       expect(yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).toEqual([])
-      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([{ type: "log.synced", aggregateID }])
+      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([{ type: "log-synced", aggregateID }])
     }),
   )
   it.effect("log without follow replays events and completes with a synced marker", () =>
@@ -774,9 +774,9 @@ describe("Bus", () => {
       expect(items.map((item) => (Bus.isSynced(item) ? item.type : item.durable?.seq))).toEqual([
         Event.Seq.make(0),
         Event.Seq.make(1),
-        "log.synced",
+        "log-synced",
       ])
-      expect(items.at(-1)).toEqual({ type: "log.synced", aggregateID, seq: Event.Seq.make(1) })
+      expect(items.at(-1)).toEqual({ type: "log-synced", aggregateID, seq: Event.Seq.make(1) })
     }),
   )
 
@@ -789,9 +789,9 @@ describe("Bus", () => {
       yield* bus.publish(DurableMessage, durableData(aggregateID, "zero"))
       const drained = yield* Stream.runCollect(bus.log({ aggregateID, after: 0 }))
 
-      expect(empty).toEqual([{ type: "log.synced", aggregateID }])
+      expect(empty).toEqual([{ type: "log-synced", aggregateID }])
       expect(empty[0]).not.toHaveProperty("seq")
-      expect(drained).toEqual([{ type: "log.synced", aggregateID, seq: Event.Seq.make(0) }])
+      expect(drained).toEqual([{ type: "log-synced", aggregateID, seq: Event.Seq.make(0) }])
     }),
   )
 
@@ -810,7 +810,7 @@ describe("Bus", () => {
       const items = yield* Fiber.join(fiber)
       expect(items.map((item) => (Bus.isSynced(item) ? item : item.durable?.seq))).toEqual([
         Event.Seq.make(0),
-        { type: "log.synced", aggregateID, seq: Event.Seq.make(0) },
+        { type: "log-synced", aggregateID, seq: Event.Seq.make(0) },
         Event.Seq.make(1),
       ])
     }),
@@ -839,9 +839,9 @@ describe("Bus", () => {
           Event.Seq.make(2),
           Event.Seq.make(3),
           Event.Seq.make(4),
-          "log.synced",
+          "log-synced",
         ])
-        expect(items.at(-1)).toEqual({ type: "log.synced", aggregateID, seq: Event.Seq.make(4) })
+        expect(items.at(-1)).toEqual({ type: "log-synced", aggregateID, seq: Event.Seq.make(4) })
       }).pipe(Effect.provide(eventLayer))
     }),
   )
@@ -881,7 +881,7 @@ describe("Bus", () => {
         const items = yield* Fiber.join(fiber)
         expect(items.map((item) => (Bus.isSynced(item) ? item : item.durable?.seq))).toEqual([
           Event.Seq.make(0),
-          { type: "log.synced", aggregateID, seq: Event.Seq.make(0) },
+          { type: "log-synced", aggregateID, seq: Event.Seq.make(0) },
           Event.Seq.make(1),
         ])
       }).pipe(Effect.provide(eventLayer))

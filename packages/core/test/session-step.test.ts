@@ -147,10 +147,10 @@ for (const fixture of [
         .orderBy(asc(EventTable.seq))
         .all()
       const types = events.map((event) => event.type)
-      const terminal = fixture.finish === "stop" ? "session.step.ended.1" : "session.step.failed.1"
+      const terminal = fixture.finish === "stop" ? "session-step-ended.1" : "session-step-failed.1"
       expect(types.filter((type) => type === terminal)).toHaveLength(1)
       expect(
-        types.indexOf(fixture.toolChoice === "none" ? "session.tool.failed.2" : "session.tool.success.2"),
+        types.indexOf(fixture.toolChoice === "none" ? "session-tool-failed.2" : "session-tool-success.2"),
       ).toBeLessThan(types.indexOf(terminal))
     }),
   )

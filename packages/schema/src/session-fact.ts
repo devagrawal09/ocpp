@@ -15,7 +15,7 @@ const bySession = { aggregate: "sessionID", version: 1 } as const
  * what the Session had used and when, as the export gave them.
  */
 export const Imported = Event.durable({
-  type: "session.imported",
+  type: "session-imported",
   durable: bySession,
   schema: {
     sessionID: SessionID,
@@ -49,19 +49,19 @@ export const Imported = Event.durable({
 
 /** Instruction values the Session's instructions refer to by hash, stored with the update that uses them. */
 export const InstructionBlobsStored = Event.durable({
-  type: "session.instruction.blobs.stored",
+  type: "session-instruction-blobs-stored",
   durable: bySession,
   schema: { sessionID: SessionID, blobs: Schema.Record(Schema.String, Schema.Json) },
 })
 
 /** An API client attached a value to the Session's instructions, or changed it. */
 export const InstructionEntrySet = Event.durable({
-  type: "session.instruction.entry.set",
+  type: "session-instruction-entry-set",
   durable: bySession,
   schema: { sessionID: SessionID, key: InstructionEntry.Key, value: Schema.Json },
 })
 export const InstructionEntryRemoved = Event.durable({
-  type: "session.instruction.entry.removed",
+  type: "session-instruction-entry-removed",
   durable: bySession,
   schema: { sessionID: SessionID, key: InstructionEntry.Key },
 })
@@ -73,7 +73,7 @@ const execution = { sessionID: SessionID, executionID: Schema.String }
 
 /** A Code Mode program received its execution: the notebook names it sees and the names it reserves. */
 export const ExecutionAdmitted = Event.durable({
-  type: "session.codemode.execution.admitted",
+  type: "session-codemode-execution-admitted",
   durable: byExecution,
   schema: {
     ...execution,
@@ -87,13 +87,13 @@ export const ExecutionAdmitted = Event.durable({
   },
 })
 export const ExecutionStarted = Event.durable({
-  type: "session.codemode.execution.started",
+  type: "session-codemode-execution-started",
   durable: byExecution,
   schema: execution,
 })
 /** A running execution resumed after its host restarted. */
 export const ExecutionResumed = Event.durable({
-  type: "session.codemode.execution.resumed",
+  type: "session-codemode-execution-resumed",
   durable: byExecution,
   schema: execution,
 })
@@ -103,7 +103,7 @@ export const ExecutionResumed = Event.durable({
  * `failed` or `indeterminate` one ended without finishing, which settles its calls still scheduled.
  */
 export const ExecutionSettled = Event.durable({
-  type: "session.codemode.execution.settled",
+  type: "session-codemode-execution-settled",
   durable: byExecution,
   schema: {
     ...execution,
@@ -114,7 +114,7 @@ export const ExecutionSettled = Event.durable({
 })
 /** An execution admitted but never started was withdrawn. */
 export const ExecutionDiscarded = Event.durable({
-  type: "session.codemode.execution.discarded",
+  type: "session-codemode-execution-discarded",
   durable: byExecution,
   schema: execution,
 })
@@ -122,7 +122,7 @@ export const ExecutionDiscarded = Event.durable({
 const call = { ...execution, index: NonNegativeInt }
 
 export const CallScheduled = Event.durable({
-  type: "session.codemode.call.scheduled",
+  type: "session-codemode-call-scheduled",
   durable: byExecution,
   schema: {
     ...call,
@@ -133,12 +133,12 @@ export const CallScheduled = Event.durable({
   },
 })
 export const CallProgressed = Event.durable({
-  type: "session.codemode.call.progressed",
+  type: "session-codemode-call-progressed",
   durable: byExecution,
   schema: { ...call, progress: Schema.Record(Schema.String, Schema.Json) },
 })
 export const CallSettled = Event.durable({
-  type: "session.codemode.call.settled",
+  type: "session-codemode-call-settled",
   durable: byExecution,
   schema: {
     ...call,
@@ -153,18 +153,18 @@ const named = { sessionID: SessionID, name: Schema.String }
 
 /** A slash command of the Session, calling a notebook function; defining an existing one replaces it. */
 export const CommandDefined = Event.durable({
-  type: "session.codemode.command.defined",
+  type: "session-codemode-command-defined",
   durable: bySession,
   schema: { ...named, description: Schema.String, handler: Schema.String },
 })
 export const CommandRemoved = Event.durable({
-  type: "session.codemode.command.removed",
+  type: "session-codemode-command-removed",
   durable: bySession,
   schema: named,
 })
 /** A scheduled event of the Session; defining an existing one replaces it and starts it over. */
 export const EventDefined = Event.durable({
-  type: "session.codemode.event.defined",
+  type: "session-codemode-event-defined",
   durable: bySession,
   schema: {
     ...named,
@@ -177,24 +177,24 @@ export const EventDefined = Event.durable({
   },
 })
 export const EventToggled = Event.durable({
-  type: "session.codemode.event.toggled",
+  type: "session-codemode-event-toggled",
   durable: bySession,
   schema: { ...named, enabled: Schema.Boolean },
 })
 export const EventRemoved = Event.durable({
-  type: "session.codemode.event.removed",
+  type: "session-codemode-event-removed",
   durable: bySession,
   schema: named,
 })
 /** When the scheduler will fire the event next, or that it will not. */
 export const EventPlanned = Event.durable({
-  type: "session.codemode.event.planned",
+  type: "session-codemode-event-planned",
   durable: bySession,
   schema: { ...named, next: optional(NonNegativeInt) },
 })
 /** A firing: the execution it started and its invocation message, or why it could not start. */
 export const EventFired = Event.durable({
-  type: "session.codemode.event.fired",
+  type: "session-codemode-event-fired",
   durable: bySession,
   schema: {
     ...named,
@@ -205,7 +205,7 @@ export const EventFired = Event.durable({
   },
 })
 export const EventSkipped = Event.durable({
-  type: "session.codemode.event.skipped",
+  type: "session-codemode-event-skipped",
   durable: bySession,
   schema: { ...named, at: NonNegativeInt },
 })
@@ -240,7 +240,7 @@ export type BackgroundRecovery = typeof BackgroundRecovery.Type
 
 /** A recoverable background job, as it stands: until its notification is delivered, a restart resumes it. */
 export const BackgroundRecorded = Event.durable({
-  type: "session.background.recorded",
+  type: "session-background-recorded",
   durable: byNotification,
   schema: {
     notificationID: SessionMessage.ID,
@@ -253,13 +253,13 @@ export const BackgroundRecorded = Event.durable({
 })
 /** The job's outcome reached its Session; only its notification is left to deliver. */
 export const BackgroundTerminal = Event.durable({
-  type: "session.background.terminal",
+  type: "session-background-terminal",
   durable: byNotification,
   schema: { notificationID: SessionMessage.ID },
 })
 /** The job's notification was delivered, or the job discarded: nothing is left to recover. */
 export const BackgroundCompleted = Event.durable({
-  type: "session.background.completed",
+  type: "session-background-completed",
   durable: byNotification,
   schema: { notificationID: SessionMessage.ID },
 })

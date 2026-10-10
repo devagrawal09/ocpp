@@ -44,5 +44,5 @@ function document(shell: string): Entry {
 }
 
 function updated() {
-  return { id: Event.ID.create(), created: Date.now(), type: "config.updated" as const, data: {} }
+  return { id: Event.ID.create(), created: Date.now(), type: "config-updated" as const, data: {} }
 }

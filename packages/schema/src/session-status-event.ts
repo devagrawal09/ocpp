@@ -33,7 +33,7 @@ export const Info = Schema.Union([
 export type Info = Schema.Schema.Type<typeof Info>
 
 export const Status = Event.ephemeral({
-  type: "session.status",
+  type: "session-status",
   // The bare SessionStatus identifier belongs to the status union above.
   identifier: "SessionStatusUpdated",
   schema: {
@@ -44,7 +44,7 @@ export const Status = Event.ephemeral({
 
 // deprecated
 export const Idle = Event.ephemeral({
-  type: "session.idle",
+  type: "session-idle",
   schema: {
     sessionID: SessionID,
   },

@@ -110,7 +110,7 @@ test("restores the draft caret after a locationless request dock closes", async 
   await transport.send({
     id: "evt_form_created",
     created: 1700000001000,
-    type: "form.created",
+    type: "form-created",
     data: {
       form: {
         id: "frm_question_caret",
@@ -137,7 +137,7 @@ test("restores the draft caret after a locationless request dock closes", async 
   await transport.send({
     id: "evt_form_cancelled",
     created: 1700000002000,
-    type: "form.cancelled",
+    type: "form-cancelled",
     location: { directory },
     data: { sessionID, id: "frm_question_caret" },
   })

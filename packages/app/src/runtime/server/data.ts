@@ -7,7 +7,7 @@ type SessionMutation = { readonly id: string; readonly type: "remove"; readonly 
 
 export function createDesktopData(input: { data: Data; remove: (sessionID: string) => Promise<void> }) {
   const mutation = createSessionMutations(input.remove)
-  onCleanup(input.data.on("session.deleted", (event) => mutation.deleted(event.data.sessionID)))
+  onCleanup(input.data.on("session-deleted", (event) => mutation.deleted(event.data.sessionID)))
 
   return {
     ...input.data,

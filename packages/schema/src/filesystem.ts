@@ -6,7 +6,7 @@ import { ephemeral, inventory } from "./event.js"
 import { NonNegativeInt, PositiveInt, RelativePath } from "./schema.js"
 
 const Changed = ephemeral({
-  type: "filesystem.changed",
+  type: "filesystem-changed",
   schema: {
     file: Schema.String,
     event: Schema.Literals(["add", "change", "unlink"]),

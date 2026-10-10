@@ -86,7 +86,7 @@ test("local tool success serializes media base64 once through canonical content"
     }),
   )
 
-  const success = published.find((event) => event.type === "session.tool.success.2")
+  const success = published.find((event) => event.type === "session-tool-success.2")
   expect(success).toBeDefined()
   const serialized = JSON.stringify(success)
   expect(serialized.split(base64)).toHaveLength(2)
@@ -113,7 +113,7 @@ test("provider-executed success derives content and retains provider result stat
       }),
     ),
   )
-  const success = published.find((event) => event.type === "session.tool.success.2")
+  const success = published.find((event) => event.type === "session-tool-success.2")
   expect(success?.data).not.toHaveProperty("result")
   expect(success?.data).toMatchObject({
     executed: true,
@@ -194,8 +194,8 @@ testEffect(
       .from(EventTable)
       .where(eq(EventTable.aggregate_id, sessionID))
       .all()
-    expect(events.filter((event) => event.type === "session.tool.success.2")).toHaveLength(1)
-    expect(events.some((event) => event.type === "session.tool.failed.2")).toBe(false)
+    expect(events.filter((event) => event.type === "session-tool-success.2")).toHaveLength(1)
+    expect(events.some((event) => event.type === "session-tool-failed.2")).toBe(false)
     const message = yield* database.db
       .select()
       .from(SessionMessageTable)
@@ -214,7 +214,7 @@ test("interrupted progress metadata remains in the terminal failure snapshot", a
   expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(true)
   await Effect.runPromise(publisher.failUnsettledTools({ type: "aborted", message: "interrupted" }))
 
-  expect(published.find((event) => event.type === "session.tool.failed.2")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-tool-failed.2")?.data).toMatchObject({
     metadata: { phase: "visible" },
   })
 })
@@ -230,7 +230,7 @@ test("interrupted subagent failures expose their existing child session to the m
   await Effect.runPromiseExit(publisher.progress(subagent.id, { sessionID: "ses_existing_child", status: "running" }))
   await Effect.runPromise(publisher.failUnsettledTools({ type: "aborted", message: "Tool execution interrupted" }))
 
-  expect(published.find((event) => event.type === "session.tool.failed.2")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-tool-failed.2")?.data).toMatchObject({
     error: { type: "aborted", message: "Tool execution interrupted (sessionID: ses_existing_child)" },
     metadata: { sessionID: "ses_existing_child", status: "running" },
   })
@@ -242,7 +242,7 @@ test("interrupted non-subagent failures do not expose their progress session IDs
   await Effect.runPromise(publisher.progress(call.id, { sessionID: "ses_private", status: "running" }))
   await Effect.runPromise(publisher.failUnsettledTools({ type: "aborted", message: "Tool execution interrupted" }))
 
-  expect(published.find((event) => event.type === "session.tool.failed.2")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-tool-failed.2")?.data).toMatchObject({
     error: { type: "aborted", message: "Tool execution interrupted" },
     metadata: { sessionID: "ses_private", status: "running" },
   })
@@ -256,7 +256,7 @@ test("local failure metadata completes the progress snapshot", async () => {
     publisher.failTool(call.id, { type: "tool.execution", message: "failed" }, { provider: "exa" }),
   )
 
-  expect(published.find((event) => event.type === "session.tool.failed.2")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-tool-failed.2")?.data).toMatchObject({
     metadata: { phase: "running", provider: "exa" },
   })
 })
@@ -268,7 +268,7 @@ test("failure snapshot retains canonical progress above the default byte limit",
   await Effect.runPromiseExit(publisher.progress(call.id, { detail }))
   await Effect.runPromise(publisher.failUnsettledTools({ type: "aborted", message: "interrupted" }))
 
-  expect(published.find((event) => event.type === "session.tool.failed.2")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-tool-failed.2")?.data).toMatchObject({
     metadata: { detail },
   })
 })
@@ -278,7 +278,7 @@ test("failure before progress omits partial output fields", async () => {
   await Effect.runPromise(publisher.publish(call))
   await Effect.runPromise(publisher.failUnsettledTools({ type: "aborted", message: "interrupted" }))
 
-  const failed = published.find((event) => event.type === "session.tool.failed.2")?.data
+  const failed = published.find((event) => event.type === "session-tool-failed.2")?.data
   expect(failed).not.toHaveProperty("content")
   expect(failed).not.toHaveProperty("metadata")
 })
@@ -291,7 +291,7 @@ test("provider metadata is flattened using the route key", async () => {
     ),
   )
 
-  expect(published.find((event) => event.type === "session.reasoning.started.1")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-reasoning-started.1")?.data).toMatchObject({
     state: { signature: "signed" },
   })
 })
@@ -318,7 +318,7 @@ test("reasoning state from start, empty delta, and end is merged", async () => {
     ),
   )
 
-  expect(published.find((event) => event.type === "session.reasoning.ended.1")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-reasoning-ended.1")?.data).toMatchObject({
     state: { blockType: "thinking", signature: "signed", stopReason: "tool_use" },
   })
 })
@@ -337,18 +337,18 @@ it.effect("batches text deltas and flushes pending text before the terminal even
       { discard: true },
     )
 
-    expect(published.filter((event) => event.type === "session.text.delta")).toHaveLength(0)
+    expect(published.filter((event) => event.type === "session-text-delta")).toHaveLength(0)
     yield* TestClock.adjust("99 millis")
-    expect(published.filter((event) => event.type === "session.text.delta")).toHaveLength(0)
+    expect(published.filter((event) => event.type === "session-text-delta")).toHaveLength(0)
     yield* TestClock.adjust("1 millis")
     yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: " four" }))
-    expect(published.filter((event) => event.type === "session.text.delta").map((event) => event.data)).toMatchObject([
+    expect(published.filter((event) => event.type === "session-text-delta").map((event) => event.data)).toMatchObject([
       { delta: "one two three four" },
     ])
 
     yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: " five" }))
     yield* publisher.publish(LLMEvent.textEnd({ id: "text" }))
-    expect(published.slice(-2).map((event) => event.type)).toEqual(["session.text.delta", "session.text.ended.1"])
+    expect(published.slice(-2).map((event) => event.type)).toEqual(["session-text-delta", "session-text-ended.1"])
     expect(published.at(-2)?.data).toMatchObject({ delta: " five" })
   }),
 )
@@ -369,11 +369,11 @@ it.effect("batches reasoning deltas and flushes pending reasoning before the ter
     )
 
     expect(
-      published.filter((event) => event.type === "session.reasoning.delta").map((event) => event.data),
+      published.filter((event) => event.type === "session-reasoning-delta").map((event) => event.data),
     ).toMatchObject([{ delta: "one two three" }])
     expect(published.slice(-2).map((event) => event.type)).toEqual([
-      "session.reasoning.delta",
-      "session.reasoning.ended.1",
+      "session-reasoning-delta",
+      "session-reasoning-ended.1",
     ])
   }),
 )
@@ -395,8 +395,8 @@ test("authoritative end values replace accumulated deltas in the durable ended e
     ),
   )
 
-  expect(published.find((event) => event.type === "session.text.ended.1")?.data).toMatchObject({ text: "Hello!" })
-  expect(published.find((event) => event.type === "session.reasoning.ended.1")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-text-ended.1")?.data).toMatchObject({ text: "Hello!" })
+  expect(published.find((event) => event.type === "session-reasoning-ended.1")?.data).toMatchObject({
     text: "Thinking done.",
   })
 })
@@ -416,8 +416,8 @@ test("tool input deltas are accumulated without being published", async () => {
     ),
   )
 
-  expect(published.some((event) => event.type === "session.tool.input.delta")).toBe(false)
-  expect(published.find((event) => event.type === "session.tool.input.ended.1")?.data).toMatchObject({
+  expect(published.some((event) => event.type === "session-tool-input-delta")).toBe(false)
+  expect(published.find((event) => event.type === "session-tool-input-ended.1")?.data).toMatchObject({
     text: '{"path":"file.txt"}',
   })
 })
@@ -447,10 +447,10 @@ test("provider-executed tool metadata is flattened using the route key", async (
     ),
   )
 
-  expect(published.find((event) => event.type === "session.tool.called.1")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-tool-called.1")?.data).toMatchObject({
     state: { itemId: "call" },
   })
-  expect(published.find((event) => event.type === "session.tool.success.2")?.data).toMatchObject({
+  expect(published.find((event) => event.type === "session-tool-success.2")?.data).toMatchObject({
     resultState: { itemId: "result" },
   })
 })
@@ -459,8 +459,8 @@ test("binary failure emits no success event", async () => {
   const { published, publisher } = capture()
   await Effect.runPromise(publisher.publish(call))
   await Effect.runPromise(publisher.failTool(call.id, { type: "tool.execution", message: "Cannot read binary file" }))
-  expect(published.some((event) => event.type === "session.tool.success.2")).toBe(false)
-  expect(published.some((event) => event.type === "session.tool.failed.2")).toBe(true)
+  expect(published.some((event) => event.type === "session-tool-success.2")).toBe(false)
+  expect(published.some((event) => event.type === "session-tool-failed.2")).toBe(true)
 })
 
 test("success event data can carry provider-executed result state", () => {
@@ -485,7 +485,7 @@ test("step finish records settlement without publishing step ended", async () =>
   await Effect.runPromise(publisher.publish(LLMEvent.stepStart({ index: 0 })))
   await Effect.runPromise(publisher.publish(LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } })))
 
-  expect(published.map((event) => event.type)).toEqual(["session.step.started.1"])
+  expect(published.map((event) => event.type)).toEqual(["session-step-started.1"])
   expect(publisher.record().finish).toMatchObject({ finish: "stop" })
 })
 
@@ -511,7 +511,7 @@ test("content-filter finish retains failure evidence until step closeout", async
     ),
   )
 
-  expect(published.map((event) => event.type)).toEqual(["session.step.started.1"])
+  expect(published.map((event) => event.type)).toEqual(["session-step-started.1"])
   const settlement = publisher.record().finish
   expect(settlement).toMatchObject({
     finish: "content-filter",
@@ -530,7 +530,7 @@ test("content-filter finish retains failure evidence until step closeout", async
       files: [RelativePath.make("src/changed.ts")],
     }),
   )
-  expect(published.map((event) => event.type)).toEqual(["session.step.started.1", "session.step.failed.1"])
+  expect(published.map((event) => event.type)).toEqual(["session-step-started.1", "session-step-failed.1"])
   expect(published.at(-1)?.data).toMatchObject({
     error: { type: "provider.content-filter", message: "Provider blocked the response" },
     finish: "content-filter",
@@ -561,9 +561,9 @@ test("content-filter finish preserves partial streamed text and never ends the s
   )
   await Effect.runPromise(publisher.publishStepFailure())
 
-  expect(published.some((event) => event.type === "session.step.ended.1")).toBe(false)
-  expect(published.find((event) => event.type === "session.text.ended.1")?.data).toMatchObject({ text: "Partial" })
-  expect(published.find((event) => event.type === "session.step.failed.1")?.data).toMatchObject({
+  expect(published.some((event) => event.type === "session-step-ended.1")).toBe(false)
+  expect(published.find((event) => event.type === "session-text-ended.1")?.data).toMatchObject({ text: "Partial" })
+  expect(published.find((event) => event.type === "session-step-failed.1")?.data).toMatchObject({
     error: { type: "provider.content-filter" },
   })
 })

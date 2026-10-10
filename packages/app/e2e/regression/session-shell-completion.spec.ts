@@ -106,7 +106,7 @@ for (const grouped of [false, true]) {
       await timeline.transport.send({
         id: "evt_shell_exited",
         created: 4,
-        type: "shell.exited",
+        type: "shell-exited",
         location: { directory },
         data: { id: shell.id, status, exit: status === "exited" ? 0 : 1 },
       })
@@ -173,7 +173,7 @@ test("shows the authoritative foreground result after streaming shell output", a
   await timeline.transport.send({
     id: "evt_foreground_complete",
     created: 3,
-    type: "session.tool.success",
+    type: "session-tool-success",
     durable: { aggregateID: sessionID, seq: 0, version: 2 },
     data: {
       sessionID,

@@ -308,7 +308,7 @@ let eventSequence = -1
 function toolEvents(part: ContextTool): OcppEvent[] {
   return [
     eventValue(
-      "session.tool.success",
+      "session-tool-success",
       {
         sessionID,
         assistantMessageID: part.messageID,

@@ -5,7 +5,7 @@ import { optional } from "./schema.js"
 import { ephemeral, inventory } from "./event.js"
 import { AbsolutePath } from "./schema.js"
 
-const Updated = ephemeral({ type: "reference.updated", schema: {} })
+const Updated = ephemeral({ type: "reference-updated", schema: {} })
 export const Event = { Updated, Definitions: inventory(Updated) }
 
 export interface LocalSource extends Schema.Schema.Type<typeof LocalSource> {}

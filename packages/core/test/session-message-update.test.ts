@@ -78,7 +78,7 @@ describe("Session.updateMessage", () => {
 
       const events = Array.from(yield* Stream.runCollect(session.log({ sessionID: created.id })))
       expect(events.at(-2)).toMatchObject({
-        type: "session.message.content.updated",
+        type: "session-message-content-updated",
         data: {
           sessionID: created.id,
           messageID,

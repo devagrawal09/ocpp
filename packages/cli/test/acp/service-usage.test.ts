@@ -18,7 +18,7 @@ describe("acp service prompt routing and usage", () => {
           const id = requestID(request)
           completeTurn(context, "ses_routes", {
             id: id.replace(/^msg_/, "evt_"),
-            type: "session.skill.activated",
+            type: "session-skill-activated",
             data: { sessionID: "ses_routes", skill: "verify" },
           })
           return new Response(null, { status: 204 })
@@ -27,7 +27,7 @@ describe("acp service prompt routing and usage", () => {
           const id = requestID(request)
           completeTurn(context, "ses_routes", {
             id: `evt_${id}`,
-            type: "session.inbox.delivered",
+            type: "session-inbox-delivered",
             data: { sessionID: "ses_routes", inboxID: id },
           })
           return Response.json({ data: {} })
@@ -88,12 +88,12 @@ describe("acp service prompt routing and usage", () => {
           const id = requestID(request)
           context.send({
             id: `evt_${id}`,
-            type: "session.inbox.delivered",
+            type: "session-inbox-delivered",
             data: { sessionID: "ses_usage", inboxID: id },
           })
           context.send({
             id: "evt_step",
-            type: "session.step.ended",
+            type: "session-step-ended",
             data: {
               sessionID: "ses_usage",
               assistantMessageID: "msg_assistant",
@@ -104,7 +104,7 @@ describe("acp service prompt routing and usage", () => {
           })
           context.send({
             id: "evt_done",
-            type: "session.execution.succeeded",
+            type: "session-execution-succeeded",
             data: { sessionID: "ses_usage" },
           })
           return Response.json({ data: {} })
@@ -182,12 +182,12 @@ describe("acp service prompt routing and usage", () => {
           const id = requestID(request)
           context.send({
             id: `evt_${id}`,
-            type: "session.inbox.delivered",
+            type: "session-inbox-delivered",
             data: { sessionID: "ses_usage_failure", inboxID: id },
           })
           context.send({
             id: "evt_step_failure",
-            type: "session.step.ended",
+            type: "session-step-ended",
             data: {
               sessionID: "ses_usage_failure",
               assistantMessageID: "msg_usage_failure",
@@ -198,7 +198,7 @@ describe("acp service prompt routing and usage", () => {
           })
           context.send({
             id: "evt_done_failure",
-            type: "session.execution.succeeded",
+            type: "session-execution-succeeded",
             data: { sessionID: "ses_usage_failure" },
           })
           return Response.json({ data: {} })
@@ -246,7 +246,7 @@ function completeTurn(context: FixtureContext, sessionID: string, start: unknown
   context.send(start)
   context.send({
     id: `evt_done_${sessionID}`,
-    type: "session.execution.succeeded",
+    type: "session-execution-succeeded",
     data: { sessionID },
   })
 }

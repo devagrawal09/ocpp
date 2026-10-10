@@ -38,7 +38,7 @@ function createQueueMock(seed: string[], messages: SessionMessageInfo[] = []) {
       id: `evt_queue_${sequence}`,
       type,
       created: Date.now(),
-      durable: { aggregateID: sessionID, seq: sequence, version: type === "session.tool.success" ? 2 : 1 },
+      durable: { aggregateID: sessionID, seq: sequence, version: type === "session-tool-success" ? 2 : 1 },
       data,
     } as OcppEvent)
   }
@@ -65,7 +65,7 @@ function createQueueMock(seed: string[], messages: SessionMessageInfo[] = []) {
         delivery: input.body.delivery === "queue" ? "queue" : "steer",
       }
       rows.push(row)
-      emit("session.inbox.enqueued", {
+      emit("session-inbox-enqueued", {
         sessionID: input.sessionID,
         inboxID: row.id,
         item: { type: "user", payload: row.payload, delivery: row.delivery },
@@ -79,11 +79,11 @@ function createQueueMock(seed: string[], messages: SessionMessageInfo[] = []) {
       if (!row) return
       if (input.action === "cancel") {
         rows.splice(index, 1)
-        emit("session.inbox.cancelled", { sessionID: input.sessionID, inboxID: input.inboxID })
+        emit("session-inbox-cancelled", { sessionID: input.sessionID, inboxID: input.inboxID })
         return
       }
       row.delivery = "steer"
-      emit("session.inbox.delivery.changed", {
+      emit("session-inbox-delivery-changed", {
         sessionID: input.sessionID,
         inboxID: input.inboxID,
         delivery: "steer",
@@ -281,22 +281,22 @@ for (const delivery of ["steer", "queue"] as const) {
     await expect(thinking).toHaveCount(0)
 
     // The next assistant step still belongs to U1: U2 has been admitted, not delivered.
-    mock.emit("session.step.started", { sessionID, assistantMessageID: assistantID, agent: "build", model })
+    mock.emit("session-step-started", { sessionID, assistantMessageID: assistantID, agent: "build", model })
     for (const tool of [
       { id: "tool_queue_read", name: "read", input: { path: "src/queue.ts" } },
       { id: "tool_queue_grep", name: "grep", input: { pattern: "retry", path: "src" } },
     ]) {
       const ref = { sessionID, assistantMessageID: assistantID, id: tool.id }
-      mock.emit("session.tool.input.started", { ...ref, name: tool.name })
-      mock.emit("session.tool.input.ended", { ...ref, text: JSON.stringify(tool.input) })
-      mock.emit("session.tool.called", { ...ref, input: tool.input, executed: true })
-      mock.emit("session.tool.success", {
+      mock.emit("session-tool-input-started", { ...ref, name: tool.name })
+      mock.emit("session-tool-input-ended", { ...ref, text: JSON.stringify(tool.input) })
+      mock.emit("session-tool-called", { ...ref, input: tool.input, executed: true })
+      mock.emit("session-tool-success", {
         ...ref,
         content: [{ type: "text", text: "Inspection complete." }],
         executed: true,
       })
     }
-    mock.emit("session.step.ended", {
+    mock.emit("session-step-ended", {
       sessionID,
       assistantMessageID: assistantID,
       finish: "tool-calls",
@@ -328,7 +328,7 @@ for (const delivery of ["steer", "queue"] as const) {
       .toBe(true)
 
     mock.rows.splice(0, 1)
-    mock.emit("session.inbox.delivered", { sessionID, inboxID })
+    mock.emit("session-inbox-delivered", { sessionID, inboxID })
     await expect(thinking).toHaveCount(0)
     await expect(pending).toHaveCount(1)
     await expect(transcript.locator('[data-timeline-row="UserMessage"]')).toHaveCount(2)
@@ -338,9 +338,9 @@ for (const delivery of ["steer", "queue"] as const) {
     )
 
     const later = { sessionID, assistantMessageID: "msg_queue_follow_up_assistant" }
-    mock.emit("session.step.started", { ...later, agent: "build", model })
-    mock.emit("session.text.started", { ...later, ordinal: 0 })
-    mock.emit("session.text.ended", { ...later, ordinal: 0, text: "A3: Now checking the retry path for U2." })
+    mock.emit("session-step-started", { ...later, agent: "build", model })
+    mock.emit("session-text-started", { ...later, ordinal: 0 })
+    mock.emit("session-text-ended", { ...later, ordinal: 0, text: "A3: Now checking the retry path for U2." })
     const response = transcript
       .locator('[data-timeline-row="AssistantPart"]')
       .filter({ hasText: "A3: Now checking the retry path for U2." })

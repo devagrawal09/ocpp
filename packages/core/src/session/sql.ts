@@ -41,7 +41,7 @@ export const SessionTable = sqliteTable(
     tokens_cache_write: integer().notNull().default(0),
     revert: text({ mode: "json" }).$type<Session.Revert>(),
     agent: text(),
-    /** The Code Mode paths a subagent may call, projected from `session.tools.selected` and copied into a fork. */
+    /** The Code Mode paths a subagent may call, projected from `session-tools-selected` and copied into a fork. */
     tools: text({ mode: "json" }).$type<ReadonlyArray<string>>(),
     model: text({ mode: "json" }).$type<{
       id: string

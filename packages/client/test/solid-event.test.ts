@@ -56,7 +56,7 @@ test("refreshes a session's events when the server announces a change", async ()
     setup.publish({
       id: "evt_updated",
       created: 1,
-      type: "codemode.event.updated",
+      type: "codemode-event-updated",
       data: { sessionID: "ses_events", name: "poll" },
     })
     await wait(() => setup.data.session.event.list("ses_events")?.[0]?.enabled === false)
@@ -64,7 +64,7 @@ test("refreshes a session's events when the server announces a change", async ()
     setup.publish({
       id: "evt_other",
       created: 2,
-      type: "codemode.event.updated",
+      type: "codemode-event-updated",
       data: { sessionID: "ses_other", name: "poll" },
     })
     await Bun.sleep(20)
@@ -85,7 +85,7 @@ test("refreshes an event's latest outcome when its firing settles", async () => 
     setup.publish({
       id: "evt_other",
       created: 1,
-      type: "session.codemode.completed",
+      type: "session-codemode-completed",
       durable: { aggregateID: "ses_firing", seq: 1, version: 1 },
       data: { ...base, assistantMessageID: "msg_other" },
     })
@@ -95,7 +95,7 @@ test("refreshes an event's latest outcome when its firing settles", async () => 
     setup.publish({
       id: "evt_failed",
       created: 2,
-      type: "session.codemode.failed",
+      type: "session-codemode-failed",
       durable: { aggregateID: "ses_firing", seq: 2, version: 1 },
       data: {
         ...base,
@@ -126,7 +126,7 @@ test("refreshes the events when a firing settles before the list names it", asyn
     setup.publish({
       id: "evt_quick",
       created: 1,
-      type: "session.invocation.started",
+      type: "session-invocation-started",
       durable: { aggregateID: "ses_quick", seq: 1, version: 1 },
       data: {
         sessionID: "ses_quick",
@@ -140,7 +140,7 @@ test("refreshes the events when a firing settles before the list names it", asyn
     setup.publish({
       id: "evt_done",
       created: 2,
-      type: "session.codemode.completed",
+      type: "session-codemode-completed",
       durable: { aggregateID: "ses_quick", seq: 2, version: 1 },
       data: {
         sessionID: "ses_quick",
@@ -166,7 +166,7 @@ test("refreshes a session's events after a revert", async () => {
     setup.publish({
       id: "evt_revert",
       created: 1,
-      type: "session.revert.committed",
+      type: "session-revert-committed",
       durable: { aggregateID: "ses_revert", seq: 1, version: 1 },
       data: { sessionID: "ses_revert", to: "msg_revert" },
     })

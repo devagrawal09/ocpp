@@ -61,7 +61,7 @@ const setup = (sessionID: SessionSchema.ID) =>
   })
 
 const instructionEvents = (sessionID: SessionSchema.ID) =>
-  Recorded.events(and(eq(EventTable.aggregate_id, sessionID), eq(EventTable.type, "session.instructions.updated.2")))
+  Recorded.events(and(eq(EventTable.aggregate_id, sessionID), eq(EventTable.type, "session-instructions-updated.2")))
 
 const preview = (db: Database.Interface["db"], sessionID: SessionSchema.ID, instructions: Instructions.List) =>
   Instructions.read(instructions).pipe(
@@ -93,7 +93,7 @@ describe("InstructionState", () => {
       const published: Event.Payload[] = []
       const unsubscribe = yield* events.listen((event) =>
         Effect.sync(() => {
-          if (event.type === "session.instructions.updated") published.push(event)
+          if (event.type === "session-instructions-updated") published.push(event)
         }),
       )
 
@@ -150,7 +150,7 @@ describe("InstructionState", () => {
       const published: Event.Payload[] = []
       const unsubscribe = yield* events.listen((event) =>
         Effect.sync(() => {
-          if (event.type === "session.instructions.updated") published.push(event)
+          if (event.type === "session-instructions-updated") published.push(event)
         }),
       )
 

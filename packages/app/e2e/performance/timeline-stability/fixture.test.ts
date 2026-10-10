@@ -24,7 +24,7 @@ describe("timeline fixture validation", () => {
       validateTimelineEvent({
         id: "evt_invalid_status",
         created: 1,
-        type: "session.status",
+        type: "session-status",
         data: { sessionID: "ses_timeline_stability", status: { type: "retry", attempt: 1 } },
       }),
     ).toThrow()
@@ -49,8 +49,8 @@ describe("timeline fixture validation", () => {
   })
 
   test("assigns deterministic event IDs", () => {
-    const first = event("session.status", { sessionID: "ses_timeline_stability", status: { type: "busy" } })
-    const second = event("session.status", { sessionID: "ses_timeline_stability", status: { type: "idle" } })
+    const first = event("session-status", { sessionID: "ses_timeline_stability", status: { type: "busy" } })
+    const second = event("session-status", { sessionID: "ses_timeline_stability", status: { type: "idle" } })
     expect(first.id).toMatch(/^evt_timeline_\d{4}$/)
     expect(Number(second.id.slice(-4))).toBe(Number(first.id.slice(-4)) + 1)
   })
@@ -72,5 +72,5 @@ if (false) {
   ])
 
   // @ts-expect-error Retry status events require message and next.
-  event("session.status", { sessionID: "ses_timeline_stability", status: { type: "retry", attempt: 1 } })
+  event("session-status", { sessionID: "ses_timeline_stability", status: { type: "retry", attempt: 1 } })
 }

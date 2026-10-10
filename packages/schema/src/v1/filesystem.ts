@@ -4,7 +4,7 @@ import { Schema } from "effect"
 import { ephemeral, inventory } from "../event.js"
 
 const Edited = ephemeral({
-  type: "file.edited",
+  type: "file-edited",
   schema: { file: Schema.String },
 })
 

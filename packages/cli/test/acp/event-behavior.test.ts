@@ -15,26 +15,26 @@ describe("acp event behavior", () => {
     const fixture = createSseFixture({
       onPrompt({ id, send }) {
         send(
-          ephemeralEvent("session.text.delta", {
+          ephemeralEvent("session-text-delta", {
             sessionID: "ses_a",
             assistantMessageID: "msg_before",
             ordinal: 0,
             delta: "before admission",
           }),
         )
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_b", inboxID: id }))
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_a", inboxID: "input_other" }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_b", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_a", inboxID: "input_other" }))
         send(
-          ephemeralEvent("session.text.delta", {
+          ephemeralEvent("session-text-delta", {
             sessionID: "ses_a",
             assistantMessageID: "msg_wrong_input",
             ordinal: 0,
             delta: "wrong input",
           }),
         )
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_a", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_a", inboxID: id }))
         send(
-          ephemeralEvent("session.text.delta", {
+          ephemeralEvent("session-text-delta", {
             sessionID: "ses_b",
             assistantMessageID: "msg_b",
             ordinal: 0,
@@ -42,7 +42,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          ephemeralEvent("session.text.delta", {
+          ephemeralEvent("session-text-delta", {
             sessionID: "ses_a",
             assistantMessageID: "msg_a",
             ordinal: 0,
@@ -50,7 +50,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.step.ended", {
+          durableEvent("session-step-ended", {
             sessionID: "ses_a",
             assistantMessageID: "msg_a",
             finish: "stop",
@@ -58,8 +58,8 @@ describe("acp event behavior", () => {
             tokens: tokens(),
           }),
         )
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_b" }))
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_a" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_b" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_a" }))
       },
     })
 
@@ -99,9 +99,9 @@ describe("acp event behavior", () => {
     const updates: SessionUpdateParams[] = []
     const fixture = createSseFixture({
       async onPrompt({ id, send }) {
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_order", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_order", inboxID: id }))
         send(
-          ephemeralEvent("session.reasoning.delta", {
+          ephemeralEvent("session-reasoning-delta", {
             sessionID: "ses_order",
             assistantMessageID: "msg_order",
             ordinal: 0,
@@ -109,7 +109,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          ephemeralEvent("session.text.delta", {
+          ephemeralEvent("session-text-delta", {
             sessionID: "ses_order",
             assistantMessageID: "msg_order",
             ordinal: 1,
@@ -117,7 +117,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          ephemeralEvent("session.reasoning.delta", {
+          ephemeralEvent("session-reasoning-delta", {
             sessionID: "ses_order",
             assistantMessageID: "msg_order",
             ordinal: 2,
@@ -125,7 +125,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.step.ended", {
+          durableEvent("session-step-ended", {
             sessionID: "ses_order",
             assistantMessageID: "msg_order",
             finish: "stop",
@@ -133,7 +133,7 @@ describe("acp event behavior", () => {
             tokens: tokens(),
           }),
         )
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_order" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_order" }))
         await releaseSubmit.promise
       },
     })
@@ -194,16 +194,16 @@ describe("acp event behavior", () => {
     const updates: SessionUpdateParams[] = []
     const fixture = createSseFixture({
       onPrompt({ id, send }) {
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_parent", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_parent", inboxID: id }))
         send(
-          durableEvent("session.created", {
+          durableEvent("session-created", {
             sessionID: "ses_child",
             ...childSession("ses_child", "ses_parent", "Explore code"),
           }),
         )
-        send(durableEvent("session.execution.started", { sessionID: "ses_child" }))
+        send(durableEvent("session-execution-started", { sessionID: "ses_child" }))
         send(
-          durableEvent("session.tool.input.started", {
+          durableEvent("session-tool-input-started", {
             sessionID: "ses_child",
             assistantMessageID: "msg_child",
             id: "call_read",
@@ -211,7 +211,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.tool.called", {
+          durableEvent("session-tool-called", {
             sessionID: "ses_child",
             assistantMessageID: "msg_child",
             id: "call_read",
@@ -220,7 +220,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.tool.success", {
+          durableEvent("session-tool-success", {
             sessionID: "ses_child",
             assistantMessageID: "msg_child",
             id: "call_read",
@@ -229,8 +229,8 @@ describe("acp event behavior", () => {
             executed: true,
           }),
         )
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_child" }))
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_parent" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_child" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_parent" }))
       },
     })
 
@@ -275,14 +275,14 @@ describe("acp event behavior", () => {
     const completed = Promise.withResolvers<void>()
     const fixture = createSseFixture({
       onPrompt({ id, send }) {
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_parent", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_parent", inboxID: id }))
         send(
-          durableEvent("session.created", {
+          durableEvent("session-created", {
             sessionID: "ses_background",
             ...childSession("ses_background", "ses_parent", "Background research"),
           }),
         )
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_parent" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_parent" }))
       },
     })
 
@@ -300,15 +300,15 @@ describe("acp event behavior", () => {
       expect(response.stopReason).toBe("end_turn")
 
       fixture.send(
-        durableEvent("session.created", {
+        durableEvent("session-created", {
           sessionID: "ses_future",
           ...childSession("ses_future", "ses_parent", "Later turn child"),
         }),
       )
-      fixture.send(durableEvent("session.execution.started", { sessionID: "ses_future" }))
-      fixture.send(durableEvent("session.execution.started", { sessionID: "ses_background" }))
+      fixture.send(durableEvent("session-execution-started", { sessionID: "ses_future" }))
+      fixture.send(durableEvent("session-execution-started", { sessionID: "ses_background" }))
       fixture.send(
-        durableEvent("session.tool.input.started", {
+        durableEvent("session-tool-input-started", {
           sessionID: "ses_background",
           assistantMessageID: "msg_background",
           id: "call_shell",
@@ -316,7 +316,7 @@ describe("acp event behavior", () => {
         }),
       )
       fixture.send(
-        durableEvent("session.tool.called", {
+        durableEvent("session-tool-called", {
           sessionID: "ses_background",
           assistantMessageID: "msg_background",
           id: "call_shell",
@@ -325,7 +325,7 @@ describe("acp event behavior", () => {
         }),
       )
       fixture.send(
-        durableEvent("session.tool.success", {
+        durableEvent("session-tool-success", {
           sessionID: "ses_background",
           assistantMessageID: "msg_background",
           id: "call_shell",
@@ -334,7 +334,7 @@ describe("acp event behavior", () => {
           executed: true,
         }),
       )
-      fixture.send(durableEvent("session.execution.succeeded", { sessionID: "ses_background" }))
+      fixture.send(durableEvent("session-execution-succeeded", { sessionID: "ses_background" }))
       await withTimeout(completed.promise, "background child completion was not delivered")
 
       expect(updates).toEqual([])
@@ -369,9 +369,9 @@ describe("acp event behavior", () => {
     const updates: SessionUpdateParams[] = []
     const fixture = createSseFixture({
       onPrompt({ id, send }) {
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_tools", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_tools", inboxID: id }))
         send(
-          durableEvent("session.tool.input.started", {
+          durableEvent("session-tool-input-started", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             id: "call_ok",
@@ -379,7 +379,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.tool.called", {
+          durableEvent("session-tool-called", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             id: "call_ok",
@@ -388,7 +388,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          ephemeralEvent("session.tool.progress", {
+          ephemeralEvent("session-tool-progress", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             id: "call_ok",
@@ -396,7 +396,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.tool.success", {
+          durableEvent("session-tool-success", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             id: "call_ok",
@@ -406,7 +406,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.tool.input.started", {
+          durableEvent("session-tool-input-started", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             id: "call_fail",
@@ -414,7 +414,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.tool.called", {
+          durableEvent("session-tool-called", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             id: "call_fail",
@@ -423,7 +423,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          ephemeralEvent("session.tool.progress", {
+          ephemeralEvent("session-tool-progress", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             id: "call_fail",
@@ -431,7 +431,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.tool.failed", {
+          durableEvent("session-tool-failed", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             id: "call_fail",
@@ -442,7 +442,7 @@ describe("acp event behavior", () => {
           }),
         )
         send(
-          durableEvent("session.step.ended", {
+          durableEvent("session-step-ended", {
             sessionID: "ses_tools",
             assistantMessageID: "msg_tools",
             finish: "stop",
@@ -450,7 +450,7 @@ describe("acp event behavior", () => {
             tokens: tokens(),
           }),
         )
-        send(durableEvent("session.execution.succeeded", { sessionID: "ses_tools" }))
+        send(durableEvent("session-execution-succeeded", { sessionID: "ses_tools" }))
       },
     })
 
@@ -596,10 +596,10 @@ describe("acp event behavior", () => {
     const control: TurnControl = { cancelled: false, admission: new AbortController() }
     const fixture = createSseFixture({
       onPrompt({ id, send }) {
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_cancel", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_cancel", inboxID: id }))
       },
       onInterrupt({ sessionID, send }) {
-        send(durableEvent("session.execution.interrupted", { sessionID, reason: "user" }))
+        send(durableEvent("session-execution-interrupted", { sessionID, reason: "user" }))
         return true
       },
     })
@@ -680,9 +680,9 @@ describe("acp event behavior", () => {
   test("cancels unsupported session forms so execution can continue", async () => {
     const fixture = createSseFixture({
       onPrompt({ id, send }) {
-        send(durableEvent("session.inbox.delivered", { sessionID: "ses_form", inboxID: id }))
+        send(durableEvent("session-inbox-delivered", { sessionID: "ses_form", inboxID: id }))
         send(
-          ephemeralEvent("form.created", {
+          ephemeralEvent("form-created", {
             form: {
               id: "frm_question",
               sessionID: "ses_form",
@@ -694,8 +694,8 @@ describe("acp event behavior", () => {
         )
       },
       onFormCancel({ sessionID, formID, send }) {
-        send(ephemeralEvent("form.cancelled", { sessionID, id: formID }))
-        send(durableEvent("session.execution.succeeded", { sessionID }))
+        send(ephemeralEvent("form-cancelled", { sessionID, id: formID }))
+        send(durableEvent("session-execution-succeeded", { sessionID }))
       },
     })
 

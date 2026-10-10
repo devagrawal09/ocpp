@@ -34,7 +34,7 @@ export const Info = Schema.Struct({
   content: Schema.String,
 }).annotate({ identifier: "Skill.Info" })
 
-const Updated = ephemeral({ type: "skill.updated", schema: {} })
+const Updated = ephemeral({ type: "skill-updated", schema: {} })
 export const Event = { Updated, Definitions: inventory(Updated) }
 
 export interface EmbeddedSource extends Schema.Schema.Type<typeof EmbeddedSource> {}

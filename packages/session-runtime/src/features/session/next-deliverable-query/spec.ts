@@ -4,7 +4,7 @@ type JsonObject = { readonly [key: string]: JsonValue }
 
 // Pure fold over a session's inbox events (session.md, "Prompt Admission
 // Precedes Execution"). Pending = enqueued, not delivered, not cancelled; the
-// latest `session.inbox.delivery.changed` wins; order is enqueue order.
+// latest `session-inbox-delivery-changed` wins; order is enqueue order.
 // At a "step" boundary only steers deliver. At an "idle" boundary steers still
 // take priority, otherwise the earliest queued item delivers. A pending
 // compaction/move control item is a boundary: later items never cross it.

@@ -56,5 +56,5 @@ export const UpdateInput = Schema.Struct({
 }).annotate({ identifier: "Project.UpdateInput" })
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 
-const Updated = ephemeral({ type: "project.updated", schema: Info.fields })
+const Updated = ephemeral({ type: "project-updated", schema: Info.fields })
 export const Event = { Updated, Definitions: inventory(Updated) }

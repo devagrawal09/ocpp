@@ -25,17 +25,17 @@ export interface Info extends Schema.Schema.Type<typeof Info> {}
 
 const durable = { aggregate: "sessionID", version: 1 } as const
 export const Bound = Event.durable({
-  type: "session.external.bound",
+  type: "session-external-bound",
   durable,
   schema: { sessionID: SessionID, provider: Provider, directory: AbsolutePath },
 })
 export const Linked = Event.durable({
-  type: "session.external.linked",
+  type: "session-external-linked",
   durable,
   schema: { sessionID: SessionID, vendorSessionID: Schema.String },
 })
 export const Checkpointed = Event.durable({
-  type: "session.external.checkpointed",
+  type: "session-external-checkpointed",
   durable,
   schema: { sessionID: SessionID, checkpoint: Schema.String, historyHash: Schema.String },
 })

@@ -22,10 +22,10 @@ type JsonShape<Value> = Value extends string | number | boolean | null
 const wireReady: [JsonShape<OcppEvent>] extends [JsonShape<OcppEventEncoded>] ? true : false = true
 
 test("classifies public events by type", () => {
-  expect(isOcppEvent({ type: "server.connected" })).toBe(true)
-  expect(isOcppEvent({ type: "mcp.status.changed" })).toBe(true)
-  expect(isOcppEvent({ type: "mcp.resources.changed" })).toBe(true)
-  expect(isOcppEvent({ type: "mcp.tools.changed" })).toBe(false)
+  expect(isOcppEvent({ type: "server-connected" })).toBe(true)
+  expect(isOcppEvent({ type: "mcp-status-changed" })).toBe(true)
+  expect(isOcppEvent({ type: "mcp-resources-changed" })).toBe(true)
+  expect(isOcppEvent({ type: "mcp-tools-changed" })).toBe(false)
 })
 
 test("keeps public event runtime values within the encoded contract", () => {

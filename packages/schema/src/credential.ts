@@ -15,11 +15,11 @@ export const ID = Schema.String.pipe(
 export type ID = typeof ID.Type
 
 const Updated = ephemeral({
-  type: "credential.updated",
+  type: "credential-updated",
   schema: {},
 })
 const Switched = ephemeral({
-  type: "credential.switched",
+  type: "credential-switched",
   schema: { integrationID: IntegrationID, credentialID: Schema.NullOr(ID) },
 })
 export const Event = {

@@ -742,7 +742,7 @@ tools.event.define({
 
 - **Handlers.** `handler` names a top-level notebook function, which may be declared by the same
   program. The invocation runs `return handler(input)`: a command passes `{ text, command }`, an
-  event `{ event, firedAt, input }`. The durable `session.invocation.started` event records only the
+  event `{ event, firedAt, input }`. The durable `session-invocation-started` event records only the
   trigger, handler, input, and execution ID; the program is derived from them.
 - **Names.** A command or event name is 1 to 64 letters, digits, `-`, or `_`. `command.define`
   refuses the web app's built-in slash commands (`/new`, `/undo`, `/redo`, `/compact`, `/fork`,

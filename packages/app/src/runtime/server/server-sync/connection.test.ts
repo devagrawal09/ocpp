@@ -12,7 +12,7 @@ test("invalidates disconnected data and synchronizes after the handshake", () =>
       connected: () => calls.push("connected"),
     })
 
-    connection.handleEvent({ type: "server.connected" })
+    connection.handleEvent({ type: "server-connected" })
     expect(calls).toContain("connected")
     setStatus("connected")
     return dispose

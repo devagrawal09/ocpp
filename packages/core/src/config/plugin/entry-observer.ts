@@ -15,7 +15,7 @@ export const observe = Effect.fnUntraced(function* (
     Effect.andThen(reload),
   )
   yield* event.subscribe().pipe(
-    Stream.filter((event) => event.type === "config.updated"),
+    Stream.filter((event) => event.type === "config-updated"),
     Stream.runForEach(() => refresh),
     Effect.forkScoped({ startImmediately: true }),
   )

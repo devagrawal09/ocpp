@@ -22,7 +22,7 @@ export const register = Effect.fn("ConfigMCPPlugin.register")(function* (
   const loaded = { entries: [] as Entry[] }
 
   yield* events.pipe(
-    Stream.filter((event) => event.type === "config.updated"),
+    Stream.filter((event) => event.type === "config-updated"),
     Stream.runForEach(() =>
       config.entries().pipe(
         Effect.tap((entries) => Effect.sync(() => (loaded.entries = entries))),

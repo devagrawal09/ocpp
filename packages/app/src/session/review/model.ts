@@ -126,7 +126,7 @@ export function createSessionReview(input: {
   }, 100)
   createEffect(() => {
     const stop = location().event.listen((event) => {
-      if (event.type === "filesystem.changed") refresh()
+      if (event.type === "filesystem-changed") refresh()
     })
     onCleanup(stop)
   })

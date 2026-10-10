@@ -79,7 +79,7 @@ export function createClientConnection(initialApi: OcppClient, options: ClientCo
             request.signal.reason instanceof Error ? request.signal.reason : new Error("Event stream disconnected"),
           connectedAt,
         }
-      if (first.value.type !== "server.connected")
+      if (first.value.type !== "server-connected")
         return { error: new Error("Event stream did not start with server.connected"), connectedAt }
 
       clearTimeout(timeout)

@@ -38,10 +38,10 @@ describe("EventLogger", () => {
     expect(
       output.flatMap((entry) => (Array.isArray(entry.message) && entry.message[0] === "event" ? [entry.message] : [])),
     ).toEqual([
-      ["event", { event: expect.objectContaining({ type: "agent.updated" }) }],
-      ["event", { event: expect.objectContaining({ type: "catalog.updated" }) }],
-      ["event", { event: expect.objectContaining({ type: "command.updated" }) }],
-      ["event", { event: expect.objectContaining({ type: "config.updated" }) }],
+      ["event", { event: expect.objectContaining({ type: "agent-updated" }) }],
+      ["event", { event: expect.objectContaining({ type: "catalog-updated" }) }],
+      ["event", { event: expect.objectContaining({ type: "command-updated" }) }],
+      ["event", { event: expect.objectContaining({ type: "config-updated" }) }],
     ])
   })
 })

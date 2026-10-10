@@ -19,7 +19,6 @@ import {
   EventLog as SpecterEventLogService,
   makeSessionEventStore,
   type PersistedEvent,
-  toSpecterEventType,
 } from "@ocpp/session-runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
 import { SpecterSnapshots } from "./specter/snapshots.js"
@@ -131,7 +130,7 @@ export type PublishResult<I extends readonly PublishInput[]> = {
 /** Marker/event union emitted by `log`. */
 export type LogItem = Event.Payload | EventLog.Synced
 
-export const isSynced = (item: LogItem): item is EventLog.Synced => item.type === "log.synced"
+export const isSynced = (item: LogItem): item is EventLog.Synced => item.type === "log-synced"
 
 const mapNonEmpty = <A, B>(items: readonly [A, ...A[]], f: (item: A) => B): [B, ...B[]] => [
   f(items[0]),
@@ -248,16 +247,16 @@ export function configured(options?: Options) {
           for (const event of events) {
             if (!isSessionEvent(event)) continue
             const id = event.data.sessionID
-            if (event.type === "session.created") {
+            if (event.type === "session-created") {
               updates.set(id, event.data.location)
               resolved.set(event, [event.location ?? event.data.location])
               continue
             }
-            if (event.location && event.type !== "session.forked" && event.type !== "session.moved") {
-              if (event.type === "session.deleted") updates.set(id, undefined)
+            if (event.location && event.type !== "session-forked" && event.type !== "session-moved") {
+              if (event.type === "session-deleted") updates.set(id, undefined)
               continue
             }
-            const owner = event.type === "session.forked" ? event.data.parentID : id
+            const owner = event.type === "session-forked" ? event.data.parentID : id
             let ref = updates.has(owner) ? updates.get(owner) : sessions.get(owner)
             if (!ref && !updates.has(owner)) {
               const row = yield* db
@@ -271,16 +270,16 @@ export function configured(options?: Options) {
                 : undefined
               updates.set(owner, ref)
             }
-            if (event.type === "session.moved") {
+            if (event.type === "session-moved") {
               // Both owners need the transition, even if the producer supplied
               // an envelope location. Later events use only the destination.
               updates.set(id, event.data.location)
               resolved.set(event, ref ? [ref, event.data.location] : [event.data.location])
               continue
             }
-            if (event.type === "session.forked") updates.set(id, ref)
+            if (event.type === "session-forked") updates.set(id, ref)
             resolved.set(event, event.location ? [event.location] : ref ? [ref] : [])
-            if (event.type === "session.deleted") updates.set(id, undefined)
+            if (event.type === "session-deleted") updates.set(id, undefined)
           }
           // Apply only after the projection transaction commits. A failed move
           // must not redirect events away from the Session's actual location.
@@ -612,7 +611,7 @@ export function configured(options?: Options) {
                     type: "recordSessionFacts",
                     payload: {
                       facts: mapNonEmpty(items, (item) => ({
-                        type: toSpecterEventType(item.definition.type),
+                        type: item.definition.type,
                         payload: Schema.encodeUnknownSync(item.definition.data)(item.event.data),
                       })),
                     },
@@ -913,7 +912,7 @@ export function configured(options?: Options) {
               const wakes = input.follow ? yield* subscribeDurable(input.aggregateID) : undefined
               const target = yield* latestSequence(db, input.aggregateID)
               const marker: EventLog.Synced = {
-                type: "log.synced",
+                type: "log-synced",
                 aggregateID: input.aggregateID,
                 ...(target >= 0 ? { seq: Event.Seq.make(target) } : {}),
               }

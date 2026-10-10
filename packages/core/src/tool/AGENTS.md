@@ -41,7 +41,7 @@ Type safety ends at registration. The registry validates model input and declare
 
 ## Tool lists
 
-A Session's Code Mode catalog is exactly its tool list (`tool/lists.ts`), a plain `ToolLists.Selection` of Code Mode paths, where a path selects a tool or a whole namespace. A Session that stores a list, projected from `session.tools.selected`, has those paths: a subagent has the paths its caller passed (none when it passed none), and a fork copies its parent's stored list. Any other top-level Session's list comes from `init.ts` for its agent (`tool/init.ts` evaluates it) or the built-in default. Tools lent to the Session, such as the call's `tool.define` handles and `submit_result`, join it. The compile check refuses every other path as `UnknownTool`.
+A Session's Code Mode catalog is exactly its tool list (`tool/lists.ts`), a plain `ToolLists.Selection` of Code Mode paths, where a path selects a tool or a whole namespace. A Session that stores a list, projected from `session-tools-selected`, has those paths: a subagent has the paths its caller passed (none when it passed none), and a fork copies its parent's stored list. Any other top-level Session's list comes from `init.ts` for its agent (`tool/init.ts` evaluates it) or the built-in default. Tools lent to the Session, such as the call's `tool.define` handles and `submit_result`, join it. The compile check refuses every other path as `UnknownTool`.
 
 A child never holds a tool its caller lacks: continuing a child intersects its stored list with the caller's current catalog, publishes the narrowed list, and names the dropped tools in the call's result.
 

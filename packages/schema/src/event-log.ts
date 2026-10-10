@@ -10,7 +10,7 @@ import { optional } from "./schema.js"
  * captured watermark is empty. Emitted once for the captured watermark.
  */
 export const Synced = Schema.Struct({
-  type: Schema.Literal("log.synced"),
+  type: Schema.Literal("log-synced"),
   aggregateID: Schema.String,
   seq: optional(Event.Seq),
 }).annotate({

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test"
 
-import { sessionEventDefinitions, toOcppEventType, toSpecterEventType } from "../src/events.ts"
+import { DurableEventManifest } from "@ocpp/schema/durable-event-manifest"
+
+import { sessionEventDefinitions } from "../src/events.ts"
 
 test("every durable OC++ session event becomes a Specter event definition", async () => {
   expect(sessionEventDefinitions.length).toBeGreaterThan(0)
@@ -10,9 +12,9 @@ test("every durable OC++ session event becomes a Specter event definition", asyn
   expect(names.every((name) => !name.includes("."))).toBe(true)
 })
 
-test("event type mapping round-trips", () => {
-  expect(toSpecterEventType("session.inbox.enqueued")).toBe("session-inbox-enqueued")
-  expect(toOcppEventType("session-inbox-enqueued")).toBe("session.inbox.enqueued")
+test("an OC++ fact keeps its name in the log", () => {
+  const names = new Set(sessionEventDefinitions.map((definition) => definition.type))
+  expect(DurableEventManifest.Definitions.filter((definition) => !names.has(definition.type))).toEqual([])
 })
 
 test("payload decoding goes through the Standard Schema", async () => {

@@ -48,7 +48,7 @@ export const Info = Schema.Struct({
  * invocation message instead.
  */
 const Updated = ephemeral({
-  type: "codemode.event.updated",
+  type: "codemode-event-updated",
   identifier: "CodeModeEvent.Updated",
   schema: { sessionID: SessionID, name: Schema.String },
 })

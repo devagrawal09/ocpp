@@ -157,8 +157,8 @@ export const Reply = Schema.Struct({
 }).annotate({ identifier: "Form.Reply" })
 export interface Reply extends Schema.Schema.Type<typeof Reply> {}
 
-const Created = ephemeral({ type: "form.created", schema: { form: Info } })
-const Replied = ephemeral({ type: "form.replied", schema: { id: ID, sessionID: Schema.String, answer: Answer } })
-const Cancelled = ephemeral({ type: "form.cancelled", schema: { id: ID, sessionID: Schema.String } })
+const Created = ephemeral({ type: "form-created", schema: { form: Info } })
+const Replied = ephemeral({ type: "form-replied", schema: { id: ID, sessionID: Schema.String, answer: Answer } })
+const Cancelled = ephemeral({ type: "form-cancelled", schema: { id: ID, sessionID: Schema.String } })
 
 export const Event = { Created, Replied, Cancelled, Definitions: inventory(Created, Replied, Cancelled) }

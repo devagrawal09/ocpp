@@ -56,7 +56,7 @@ export const Plugin = define({
     yield* ctx.event.subscribe().pipe(
       Stream.filter(
         (event): event is SessionEvent.Created | SessionEvent.AgentSelected =>
-          event.type === "session.created" || event.type === "session.agent.selected",
+          event.type === "session-created" || event.type === "session-agent-selected",
       ),
       Stream.runForEach((event) => {
         const text = switchReminder(event)
@@ -79,7 +79,7 @@ export const Plugin = define({
 })
 
 function switchReminder(event: SessionEvent.Created | SessionEvent.AgentSelected): string | undefined {
-  if (event.type === "session.created") {
+  if (event.type === "session-created") {
     if (event.data.agent !== plan) return undefined
     return enterReminder
   }

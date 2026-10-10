@@ -46,8 +46,8 @@ describe("legacy public event schemas", () => {
       "question.asked",
       "question.replied",
       "question.rejected",
-      "project.updated",
-      "command.executed",
+      "project-updated",
+      "command-executed",
     ])
   })
 })

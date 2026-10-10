@@ -5,7 +5,7 @@ import { optional } from "./schema.js"
 import { Event } from "./event.js"
 
 export const BranchUpdated = Event.ephemeral({
-  type: "vcs.branch.updated",
+  type: "vcs-branch-updated",
   schema: {
     branch: optional(Schema.String),
   },

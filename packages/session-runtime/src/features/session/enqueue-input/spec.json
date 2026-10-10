@@ -49,7 +49,7 @@
       }
     },
     {
-      "description": "A replacing admission (OC++ coalescing) cancels the replaced pending items and admits the new one in the same commit.",
+      "description": "A coalesced notice replaces the pending notices admitted under its key: they are cancelled in the same commit, and it carries the key.",
       "expect": [
         {
           "eventType": "session-inbox-cancelled",
@@ -74,9 +74,12 @@
             "item": {
               "delivery": "steer",
               "payload": {
+                "metadata": {
+                  "coalesce": "notify:build"
+                },
                 "text": "both notices"
               },
-              "type": "user"
+              "type": "synthetic"
             },
             "sessionID": "ses_1"
           },
@@ -104,7 +107,96 @@
             "item": {
               "delivery": "steer",
               "payload": {
+                "metadata": {
+                  "coalesce": "notify:build"
+                },
                 "text": "first notice"
+              },
+              "type": "synthetic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "metadata": {
+                  "coalesce": "notify:build"
+                },
+                "text": "second notice"
+              },
+              "type": "synthetic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "coalesce": {
+          "key": "notify:build",
+          "replaces": [
+            "msg_1",
+            "msg_2"
+          ]
+        },
+        "inboxID": "msg_3",
+        "payload": {
+          "text": "both notices"
+        },
+        "sessionID": "ses_1",
+        "type": "synthetic"
+      }
+    },
+    {
+      "description": "The first notice under a key replaces nothing: pending input under another key, or none, stays pending.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "metadata": {
+                  "coalesce": "notify:build"
+                },
+                "text": "first notice"
+              },
+              "type": "synthetic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "a prompt"
               },
               "type": "user"
             },
@@ -119,9 +211,12 @@
             "item": {
               "delivery": "steer",
               "payload": {
-                "text": "second notice"
+                "metadata": {
+                  "coalesce": "notify:test"
+                },
+                "text": "another source"
               },
-              "type": "user"
+              "type": "synthetic"
             },
             "sessionID": "ses_1"
           },
@@ -129,20 +224,20 @@
         }
       ],
       "when": {
+        "coalesce": {
+          "key": "notify:build",
+          "replaces": []
+        },
         "inboxID": "msg_3",
         "payload": {
-          "text": "both notices"
+          "text": "first notice"
         },
-        "replaces": [
-          "msg_1",
-          "msg_2"
-        ],
         "sessionID": "ses_1",
-        "type": "user"
+        "type": "synthetic"
       }
     },
     {
-      "description": "A replaced item that was already delivered is not pending: the replacement is rejected so the caller decides again.",
+      "description": "A replaced notice that was delivered meanwhile is not pending: the admission is refused so the caller merges again.",
       "expect": [],
       "given": [
         {
@@ -165,9 +260,12 @@
             "item": {
               "delivery": "steer",
               "payload": {
+                "metadata": {
+                  "coalesce": "notify:build"
+                },
                 "text": "first notice"
               },
-              "type": "user"
+              "type": "synthetic"
             },
             "sessionID": "ses_1"
           },
@@ -183,22 +281,105 @@
         }
       ],
       "reject": {
-        "reason": "Replaced input not pending"
+        "reason": "Coalesced input changed"
       },
       "when": {
+        "coalesce": {
+          "key": "notify:build",
+          "replaces": [
+            "msg_1"
+          ]
+        },
         "inboxID": "msg_2",
         "payload": {
           "text": "merged"
         },
-        "replaces": [
-          "msg_1"
-        ],
         "sessionID": "ses_1",
-        "type": "user"
+        "type": "synthetic"
       }
     },
     {
-      "description": "A replaced item that was cancelled, or belongs to another Session, is not pending here either.",
+      "description": "A notice coalesced under the key meanwhile, which the caller did not merge, would stay beside this one: the admission is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "metadata": {
+                  "coalesce": "notify:build"
+                },
+                "text": "first notice"
+              },
+              "type": "synthetic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "metadata": {
+                  "coalesce": "notify:build"
+                },
+                "text": "first and second"
+              },
+              "type": "synthetic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Coalesced input changed"
+      },
+      "when": {
+        "coalesce": {
+          "key": "notify:build",
+          "replaces": [
+            "msg_1"
+          ]
+        },
+        "inboxID": "msg_3",
+        "payload": {
+          "text": "first and third"
+        },
+        "sessionID": "ses_1",
+        "type": "synthetic"
+      }
+    },
+    {
+      "description": "Only the Session's own pending notices under the key are replaced: another Session's are not.",
       "expect": [],
       "given": [
         {
@@ -234,51 +415,34 @@
             "item": {
               "delivery": "steer",
               "payload": {
+                "metadata": {
+                  "coalesce": "notify:build"
+                },
                 "text": "elsewhere"
               },
-              "type": "user"
+              "type": "synthetic"
             },
             "sessionID": "ses_2"
-          },
-          "kind": "scenario-event"
-        },
-        {
-          "eventType": "session-inbox-enqueued",
-          "examplePayload": {
-            "inboxID": "msg_2",
-            "item": {
-              "delivery": "steer",
-              "payload": {
-                "text": "cancelled"
-              },
-              "type": "user"
-            },
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        },
-        {
-          "eventType": "session-inbox-cancelled",
-          "examplePayload": {
-            "inboxID": "msg_2",
-            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
       ],
       "reject": {
-        "reason": "Replaced input not pending"
+        "reason": "Coalesced input changed"
       },
       "when": {
-        "inboxID": "msg_3",
+        "coalesce": {
+          "key": "notify:build",
+          "replaces": [
+            "msg_1"
+          ]
+        },
+        "inboxID": "msg_2",
         "payload": {
           "text": "merged"
         },
-        "replaces": [
-          "msg_1"
-        ],
         "sessionID": "ses_1",
-        "type": "user"
+        "type": "synthetic"
       }
     },
     {
@@ -316,6 +480,133 @@
       "when": {
         "delivery": "queue",
         "inboxID": "msg_1",
+        "payload": {},
+        "sessionID": "ses_1",
+        "type": "compaction"
+      }
+    },
+    {
+      "description": "A manual compaction while another is pending is refused: the pending one absorbs the request.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Compaction already pending"
+      },
+      "when": {
+        "inboxID": "msg_2",
+        "payload": {},
+        "sessionID": "ses_1",
+        "type": "compaction"
+      }
+    },
+    {
+      "description": "A compaction that was delivered, or another Session's pending one, absorbs nothing: a new one is admitted.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "item": {
+              "delivery": "steer",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_3",
         "payload": {},
         "sessionID": "ses_1",
         "type": "compaction"

@@ -12,7 +12,7 @@ const created = (sessionID: string) =>
 const enqueued = (
   sessionID: string,
   inboxID: string,
-  item: { type: string; payload: Record<string, string>; delivery: string },
+  item: { type: string; payload: Record<string, string | Record<string, string>>; delivery: string },
 ) => event("session-inbox-enqueued", { sessionID, inboxID, item })
 
 const held = (sessionID: string, inboxID: string) => event("session-inbox-held", { sessionID, inboxID })
@@ -21,6 +21,12 @@ const userItem = (text: string, delivery = "steer") => ({
   type: "user",
   payload: { text },
   delivery,
+})
+
+const notice = (text: string, coalesce: string) => ({
+  type: "synthetic",
+  payload: { text, metadata: { coalesce } },
+  delivery: "steer",
 })
 
 export const enqueueInputSpec = createCommandSlice("enqueueInput")
@@ -42,18 +48,18 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
     },
     {
       description:
-        "A replacing admission (OC++ coalescing) cancels the replaced pending items and admits the new one in the same commit.",
+        "A coalesced notice replaces the pending notices admitted under its key: they are cancelled in the same commit, and it carries the key.",
       given: [
         created("ses_1"),
-        enqueued("ses_1", "msg_1", userItem("first notice")),
-        enqueued("ses_1", "msg_2", userItem("second notice")),
+        enqueued("ses_1", "msg_1", notice("first notice", "notify:build")),
+        enqueued("ses_1", "msg_2", notice("second notice", "notify:build")),
       ],
       when: {
         sessionID: "ses_1",
         inboxID: "msg_3",
-        type: "user",
+        type: "synthetic",
         payload: { text: "both notices" },
-        replaces: ["msg_1", "msg_2"],
+        coalesce: { key: "notify:build", replaces: ["msg_1", "msg_2"] },
       },
       expect: [
         event("session-inbox-cancelled", {
@@ -64,15 +70,32 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
           sessionID: "ses_1",
           inboxID: "msg_2",
         }),
-        enqueued("ses_1", "msg_3", userItem("both notices")),
+        enqueued("ses_1", "msg_3", notice("both notices", "notify:build")),
       ],
     },
     {
       description:
-        "A replaced item that was already delivered is not pending: the replacement is rejected so the caller decides again.",
+        "The first notice under a key replaces nothing: pending input under another key, or none, stays pending.",
       given: [
         created("ses_1"),
-        enqueued("ses_1", "msg_1", userItem("first notice")),
+        enqueued("ses_1", "msg_1", userItem("a prompt")),
+        enqueued("ses_1", "msg_2", notice("another source", "notify:test")),
+      ],
+      when: {
+        sessionID: "ses_1",
+        inboxID: "msg_3",
+        type: "synthetic",
+        payload: { text: "first notice" },
+        coalesce: { key: "notify:build", replaces: [] },
+      },
+      expect: [enqueued("ses_1", "msg_3", notice("first notice", "notify:build"))],
+    },
+    {
+      description:
+        "A replaced notice that was delivered meanwhile is not pending: the admission is refused so the caller merges again.",
+      given: [
+        created("ses_1"),
+        enqueued("ses_1", "msg_1", notice("first notice", "notify:build")),
         event("session-inbox-delivered", {
           sessionID: "ses_1",
           inboxID: "msg_1",
@@ -81,34 +104,47 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
       when: {
         sessionID: "ses_1",
         inboxID: "msg_2",
-        type: "user",
+        type: "synthetic",
         payload: { text: "merged" },
-        replaces: ["msg_1"],
+        coalesce: { key: "notify:build", replaces: ["msg_1"] },
       },
       expect: [],
-      reject: { reason: "Replaced input not pending" },
+      reject: { reason: "Coalesced input changed" },
     },
     {
-      description: "A replaced item that was cancelled, or belongs to another Session, is not pending here either.",
+      description:
+        "A notice coalesced under the key meanwhile, which the caller did not merge, would stay beside this one: the admission is refused.",
       given: [
         created("ses_1"),
-        created("ses_2"),
-        enqueued("ses_2", "msg_1", userItem("elsewhere")),
-        enqueued("ses_1", "msg_2", userItem("cancelled")),
+        enqueued("ses_1", "msg_1", notice("first notice", "notify:build")),
         event("session-inbox-cancelled", {
           sessionID: "ses_1",
-          inboxID: "msg_2",
+          inboxID: "msg_1",
         }),
+        enqueued("ses_1", "msg_2", notice("first and second", "notify:build")),
       ],
       when: {
         sessionID: "ses_1",
         inboxID: "msg_3",
-        type: "user",
-        payload: { text: "merged" },
-        replaces: ["msg_1"],
+        type: "synthetic",
+        payload: { text: "first and third" },
+        coalesce: { key: "notify:build", replaces: ["msg_1"] },
       },
       expect: [],
-      reject: { reason: "Replaced input not pending" },
+      reject: { reason: "Coalesced input changed" },
+    },
+    {
+      description: "Only the Session's own pending notices under the key are replaced: another Session's are not.",
+      given: [created("ses_1"), created("ses_2"), enqueued("ses_2", "msg_1", notice("elsewhere", "notify:build"))],
+      when: {
+        sessionID: "ses_1",
+        inboxID: "msg_2",
+        type: "synthetic",
+        payload: { text: "merged" },
+        coalesce: { key: "notify:build", replaces: ["msg_1"] },
+      },
+      expect: [],
+      reject: { reason: "Coalesced input changed" },
     },
     {
       description: "A manual compaction is admitted as a control item; nothing behind it crosses it.",
@@ -125,6 +161,57 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
           sessionID: "ses_1",
           inboxID: "msg_1",
           item: { type: "compaction", payload: {}, delivery: "queue" },
+        }),
+      ],
+    },
+    {
+      description: "A manual compaction while another is pending is refused: the pending one absorbs the request.",
+      given: [
+        created("ses_1"),
+        event("session-inbox-enqueued", {
+          sessionID: "ses_1",
+          inboxID: "msg_1",
+          item: { type: "compaction", payload: {}, delivery: "steer" },
+        }),
+      ],
+      when: {
+        sessionID: "ses_1",
+        inboxID: "msg_2",
+        type: "compaction",
+        payload: {},
+      },
+      expect: [],
+      reject: { reason: "Compaction already pending" },
+    },
+    {
+      description:
+        "A compaction that was delivered, or another Session's pending one, absorbs nothing: a new one is admitted.",
+      given: [
+        created("ses_1"),
+        created("ses_2"),
+        event("session-inbox-enqueued", {
+          sessionID: "ses_1",
+          inboxID: "msg_1",
+          item: { type: "compaction", payload: {}, delivery: "steer" },
+        }),
+        event("session-inbox-delivered", { sessionID: "ses_1", inboxID: "msg_1" }),
+        event("session-inbox-enqueued", {
+          sessionID: "ses_2",
+          inboxID: "msg_2",
+          item: { type: "compaction", payload: {}, delivery: "steer" },
+        }),
+      ],
+      when: {
+        sessionID: "ses_1",
+        inboxID: "msg_3",
+        type: "compaction",
+        payload: {},
+      },
+      expect: [
+        event("session-inbox-enqueued", {
+          sessionID: "ses_1",
+          inboxID: "msg_3",
+          item: { type: "compaction", payload: {}, delivery: "steer" },
         }),
       ],
     },

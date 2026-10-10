@@ -8,12 +8,12 @@ import { sessionEvent } from "../../../events.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Slice state is a rebuildable projection of the Event Log: which Sessions
-// exist, which Session/type each inbox ID was admitted under, and whether it
-// is still pending. It is a duplicate of the projection in cancel-inbox-item on
-// purpose.
+// exist, which Session/type each inbox ID was admitted under, whether it is
+// still pending, and the coalescing key a synthetic item was admitted under.
+// It is a duplicate of the projection in cancel-inbox-item on purpose.
 export type EnqueueInputState = {
   sessions: Record<string, true>
-  items: Record<string, { sessionID: string; type: string; pending: boolean }>
+  items: Record<string, { sessionID: string; type: string; pending: boolean; coalesce?: string }>
 }
 
 export const enqueueInputStore = Context.Service<SliceStoreService<EnqueueInputState, EnqueueInputState, unknown>>(
@@ -38,9 +38,6 @@ const base = {
   delivery: Schema.optional(SessionInbox.Delivery),
   // false: the input waits for the next wake instead of waking the Session.
   resume: Schema.optional(Schema.Boolean),
-  // Pending items of the same Session this input replaces (OC++ coalescing):
-  // they are cancelled in the same commit.
-  replaces: Schema.optional(Schema.Array(SessionMessage.ID)),
 }
 
 // The flat Command input, discriminated on `type` so the payload reaches the
@@ -55,6 +52,17 @@ const commandSchema = Schema.Union([
     ...base,
     type: Schema.Literal("synthetic"),
     payload: SessionInbox.SyntheticPayload,
+    // Repeated notices from one source reach the model once: this input
+    // replaces the pending synthetic items admitted under the same key, which
+    // are cancelled in the same commit, and carries the key in its metadata.
+    // `replaces` names exactly those items: the caller merged their payloads
+    // into this one, so a set that changed meanwhile is refused.
+    coalesce: Schema.optional(
+      Schema.Struct({
+        key: Schema.String,
+        replaces: Schema.Array(SessionMessage.ID),
+      }),
+    ),
   }),
   // Control items: a manual compaction, and a move to another Location.
   Schema.Struct({
@@ -79,7 +87,17 @@ const item = (command: Command) => {
     case "user":
       return { type: "user" as const, payload: command.payload, delivery }
     case "synthetic":
-      return { type: "synthetic" as const, payload: command.payload, delivery }
+      return {
+        type: "synthetic" as const,
+        payload:
+          command.coalesce === undefined
+            ? command.payload
+            : {
+                ...command.payload,
+                metadata: { ...command.payload.metadata, coalesce: command.coalesce.key },
+              },
+        delivery,
+      }
     case "compaction":
       return {
         type: "compaction" as const,
@@ -100,7 +118,13 @@ export const enqueueInput = implementCommand(specification)
   })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
-    state.items[inboxID] ??= { sessionID, type: item.type, pending: true }
+    const coalesce = item.type === "synthetic" ? item.payload.metadata?.coalesce : undefined
+    state.items[inboxID] ??= {
+      sessionID,
+      type: item.type,
+      pending: true,
+      ...(typeof coalesce === "string" ? { coalesce } : {}),
+    }
   })
   .apply(inboxDelivered, async (event, state) => {
     const item = state.items[event.payload.inboxID]
@@ -123,12 +147,29 @@ export const enqueueInput = implementCommand(specification)
       throw new Error("Inbox item already admitted")
     }
 
-    // A replaced item must still be pending, or the replacement would drop
-    // input that was already delivered or cancelled: the caller decides again.
-    const replaced = command.replaces ?? []
-    for (const inboxID of replaced) {
-      const item = state.items[inboxID]
-      if (item?.sessionID !== command.sessionID || !item.pending) throw new Error("Replaced input not pending")
+    // A pending manual compaction absorbs another request for one: the caller
+    // takes the pending one.
+    if (
+      command.type === "compaction" &&
+      Object.values(state.items).some(
+        (item) => item.sessionID === command.sessionID && item.type === "compaction" && item.pending,
+      )
+    )
+      throw new Error("Compaction already pending")
+
+    // The replaced items must be exactly the ones pending under the key:
+    // one delivered or cancelled meanwhile would be dropped, and one coalesced
+    // meanwhile would stay beside this one. The caller reads them again.
+    const coalesce = command.type === "synthetic" ? command.coalesce : undefined
+    const replaced = [...new Set(coalesce?.replaces ?? [])]
+    if (coalesce) {
+      const pending = new Set(
+        Object.entries(state.items).flatMap(([inboxID, item]) =>
+          item.sessionID === command.sessionID && item.pending && item.coalesce === coalesce.key ? [inboxID] : [],
+        ),
+      )
+      if (pending.size !== replaced.length || replaced.some((inboxID) => !pending.has(inboxID)))
+        throw new Error("Coalesced input changed")
     }
 
     // The wake Reaction reads `resume: false` from the held fact; OC++'s

@@ -1,6 +1,5 @@
 export * as DurableEventManifest from "./durable-event-manifest.js"
 
-import { AdoptionFact } from "./adoption-fact.js"
 import { CredentialFact } from "./credential-fact.js"
 import { ExternalSession } from "./external-session.js"
 import { Event } from "./event.js"
@@ -19,7 +18,6 @@ export const Definitions = [
   ...SessionFact.Definitions,
   ...CredentialFact.Definitions,
   ...KeyValueFact.Definitions,
-  ...AdoptionFact.Definitions,
 ] as const
 
 export const Durable = Event.durableMap(Definitions)

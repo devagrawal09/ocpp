@@ -7,8 +7,6 @@ import { and, asc, eq, gt, lte, sql, type SQL } from "drizzle-orm"
 import { Database } from "./database/database.js"
 import { EventSequenceTable, EventTable } from "./event/sql.js"
 import { SpecterEventTable } from "./specter/sql.js"
-import { Adoption } from "./adoption.js"
-import { AdoptionFact } from "@ocpp/schema/adoption-fact"
 import type { Location } from "@ocpp/schema/location"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
@@ -962,9 +960,6 @@ export function configured(options?: Options) {
             list.push((event) => projector(event as Event.Payload<D>))
             projectors.set(key, list)
           })
-
-        // Rows stored without a fact behind them are adopted into the log; the Bus projects them itself.
-        yield* project(AdoptionFact.Adopted, Adoption.projector(db))
 
         return Service.of({
           publish,

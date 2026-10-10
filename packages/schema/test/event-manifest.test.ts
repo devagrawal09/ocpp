@@ -13,7 +13,6 @@ import {
   Workspace,
 } from "../src/index.js"
 import { EventManifest } from "../src/event-manifest.js"
-import { AdoptionFact } from "../src/adoption-fact.js"
 import { CredentialFact } from "../src/credential-fact.js"
 import { KeyValueFact } from "../src/key-value-fact.js"
 import { ProjectFact } from "../src/project-fact.js"
@@ -208,7 +207,6 @@ describe("public event manifest", () => {
         "credential.removed.1",
         "kv.stored.1",
         "kv.removed.1",
-        "rows.adopted.1",
       ].toSorted(),
     )
     for (const definition of [
@@ -216,7 +214,6 @@ describe("public event manifest", () => {
       ...SessionFact.Definitions,
       ...CredentialFact.Definitions,
       ...KeyValueFact.Definitions,
-      ...AdoptionFact.Definitions,
     ])
       expect(EventManifest.Server.has(definition.type)).toBe(false)
     expect(SessionEvent.DurableDefinitions).toEqual([

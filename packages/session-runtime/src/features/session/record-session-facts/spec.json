@@ -2706,53 +2706,6 @@
       }
     },
     {
-      "description": "Records rows-adopted as the host published it.",
-      "expect": [
-        {
-          "eventType": "rows-adopted",
-          "examplePayload": {
-            "aggregate": "ses_1",
-            "rows": [
-              {
-                "data": "{\"text\":\"hello\"}",
-                "id": "msg_1",
-                "seq": 0,
-                "session_id": "ses_1",
-                "time_created": 1,
-                "time_updated": 1,
-                "type": "user"
-              }
-            ],
-            "table": "session_message"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "aggregate": "ses_1",
-              "rows": [
-                {
-                  "data": "{\"text\":\"hello\"}",
-                  "id": "msg_1",
-                  "seq": 0,
-                  "session_id": "ses_1",
-                  "time_created": 1,
-                  "time_updated": 1,
-                  "type": "user"
-                }
-              ],
-              "table": "session_message"
-            },
-            "type": "rows-adopted"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records credential-created as the host published it.",
       "expect": [
         {

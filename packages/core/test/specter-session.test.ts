@@ -18,7 +18,6 @@ import { InstructionDiscovery } from "@ocpp/core/instruction-discovery"
 import { InstructionBuiltIns } from "@ocpp/core/instructions/builtins"
 import { Instructions } from "@ocpp/core/instructions/index"
 import { Location } from "@ocpp/core/location"
-import adoptRows from "@ocpp/core/database/migration/20261009230400_adopt_rows"
 import { Credential } from "@ocpp/core/credential"
 import { Integration } from "@ocpp/core/integration"
 import { KV } from "@ocpp/core/kv"
@@ -592,68 +591,6 @@ describe("Sessions on the Specter runtime", () => {
       expect(yield* session.inbox(sessionID)).toEqual([])
       const messages = yield* session.messages({ sessionID, order: "asc" })
       expect(messages.map((message) => message.type)).toEqual(["synthetic", "user", "assistant"])
-    }),
-  )
-
-  it.live("adopts the rows a database held before the log, which then rebuild from it", () =>
-    Effect.gen(function* () {
-      const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
-      // A database from before Specter's log: its project, Session, messages and plugin state were written
-      // as rows, with no fact behind them.
-      yield* boot(
-        file,
-        Effect.gen(function* () {
-          yield* setup
-          const { db } = yield* Database.Service
-          yield* db
-            .run(
-              sql`
-              INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data)
-              VALUES ('msg_before_log', ${sessionID}, 'user', 0, 1, 1, ${JSON.stringify({ text: "Before the log", time: { created: 1 } })})
-            `,
-            )
-            .pipe(Effect.orDie)
-          yield* db.run(sql`INSERT INTO event_sequence (aggregate_id, seq) VALUES (${sessionID}, 0)`).pipe(Effect.orDie)
-          yield* db
-            .run(sql`INSERT INTO kv (key, value, time_created, time_updated) VALUES ('plugin:before', '"kept"', 1, 2)`)
-            .pipe(Effect.orDie)
-          yield* db.run(sql`DELETE FROM migration WHERE id = ${adoptRows.id}`).pipe(Effect.orDie)
-        }),
-      )
-      // The upgrade adopts them.
-      yield* boot(
-        file,
-        Effect.gen(function* () {
-          yield* setupAgents
-          const { db } = yield* Database.Service
-          // Rows that already had facts are adopted too, which records the state they already have.
-          const adopted = new Set<string>([Project.ID.global, sessionID, "plugin:before"])
-          expect(
-            (yield* db
-              .all<{
-                readonly aggregate_id: string
-              }>(sql`SELECT aggregate_id FROM event WHERE type = 'rows.adopted.1' ORDER BY log_order`)
-              .pipe(Effect.orDie)).filter((row) => adopted.has(row.aggregate_id)),
-          ).toEqual([
-            { aggregate_id: Project.ID.global },
-            { aggregate_id: sessionID },
-            { aggregate_id: sessionID },
-            { aggregate_id: "plugin:before" },
-          ])
-          const before = yield* projections
-          yield* rebuildProjections
-          expect(yield* projections).toEqual(before)
-
-          // The adopted Session carries on from its history.
-          yield* (yield* TestLLM.Service).push(TestLLM.text("After the log", "text_1"))
-          const session = yield* Session.Service
-          yield* session.prompt({ sessionID, text: "Hello again" })
-          yield* session.wait(sessionID)
-          const messages = yield* session.messages({ sessionID, order: "asc" })
-          expect(messages.map((message) => message.type)).toEqual(["user", "user", "assistant"])
-          expect(yield* (yield* KV.Service).get("plugin:before")).toBe("kept")
-        }),
-      )
     }),
   )
 

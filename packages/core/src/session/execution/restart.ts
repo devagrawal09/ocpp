@@ -177,8 +177,9 @@ export const layer = Layer.effect(
         yield* notify(background)
         return
       }
-      if (yield* execution.isActive(recovery.childSessionID)) return
 
+      // A child the stopped process left mid-execution is already active again: the runtime resumed it from
+      // its log at boot. Its job joins that execution, which is how the parent hears how it ended.
       yield* jobs.start({
         id: background.id,
         type: "subagent",

@@ -571,6 +571,53 @@ describe("SessionRestart background recovery", () => {
     }),
   )
 
+  it.effect("notifies the parent of a subagent whose execution the stopped process left running", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const jobs = yield* Job.Service
+      const parent = Session.ID.make("ses_subagent_left_running_parent")
+      const child = Session.ID.make("ses_subagent_left_running_child")
+      yield* seedSessions(database, [parent])
+      yield* seedSessions(database, [child], { parent_id: parent })
+      yield* jobs.start({
+        id: child,
+        type: "subagent",
+        recovery: {
+          kind: "subagent",
+          parentSessionID: parent,
+          childSessionID: child,
+          agent: "explore",
+          description: "Inspect across the restart",
+        },
+        run: Effect.never,
+      })
+      yield* jobs.background(child)
+      // The process stopped mid-step: the runtime resumes the child's execution from its log at boot, so the
+      // child is already active when recovery runs.
+      const childStep = yield* steps.busy(child)
+
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const restarted = yield* Job.make.pipe(Scope.provide(scope))
+      const context = yield* buildRestart(scope, restarted)
+      yield* Context.get(context, SessionRestart.Service).resumeSuspendedSessions
+      // Its job joins the resumed execution rather than starting another.
+      expect(yield* restarted.get(child)).toMatchObject({ status: "running" })
+
+      yield* childStep.release
+      yield* restarted.wait({ id: child })
+      yield* awaitDelivered(parent)
+      expect(yield* executions(child)).toBe(1)
+      expect(yield* syntheticMessages(parent)).toMatchObject([
+        {
+          description: "Inspect across the restart",
+          metadata: { source: "subagent", childID: child, agent: "explore", state: "completed" },
+        },
+      ])
+      expect(yield* restarted.pendingBackground).toEqual([])
+    }),
+  )
+
   it.effect("delivers a subagent result persisted before restart without rerunning the child", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service

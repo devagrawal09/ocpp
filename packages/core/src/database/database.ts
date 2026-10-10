@@ -58,7 +58,7 @@ export function layer(options: Options = { path: ":memory:" }) {
 // The database service over an injected SqlClient, for runtimes that receive
 // database storage instead of opening a filesystem path. Any client provided
 // here still goes through the pragma guards and migrations; Global is required
-// because migrations may read it (the v1 import).
+// because migrations may read it.
 export const layerFromClient: Layer.Layer<Service, never, SqlClient.SqlClient | Global.Service> = databaseLayer
 
 export function configured(options?: Options) {

@@ -259,7 +259,6 @@ import type {
   DebugLocationListOutput,
   DebugLocationEvictInput,
   DebugLocationEvictOutput,
-  MigrationV1StatusOutput,
   WebsearchProvidersInput,
   WebsearchProvidersOutput,
   WebsearchQueryInput,
@@ -1532,11 +1531,6 @@ const adaptGroupDebug = (raw: RawClient["server.debug"]) => ({
   location: { list: EndpointDebugLocationList(raw), evict: EndpointDebugLocationEvict(raw) },
 })
 
-const EndpointMigrationV1Status = (raw: RawClient["server.migration"]) => () =>
-  preserveEffect<MigrationV1StatusOutput>()(raw["migration.v1.status"]({}).pipe(Effect.mapError(mapClientError)))
-
-const adaptGroupMigration = (raw: RawClient["server.migration"]) => ({ v1: { status: EndpointMigrationV1Status(raw) } })
-
 const EndpointWebsearchProviders = (raw: RawClient["server.websearch"]) => (input?: WebsearchProvidersInput) =>
   preserveEffect<WebsearchProvidersOutput>()(
     raw["websearch.providers"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
@@ -1590,7 +1584,6 @@ const adaptClient = (raw: RawClient) => ({
   workspace: adaptGroupWorkspace(raw["server.workspace"]),
   vcs: adaptGroupVcs(raw["server.vcs"]),
   debug: adaptGroupDebug(raw["server.debug"]),
-  migration: adaptGroupMigration(raw["server.migration"]),
   websearch: adaptGroupWebsearch(raw["server.websearch"]),
   config: adaptGroupConfig(raw["server.config"]),
 })

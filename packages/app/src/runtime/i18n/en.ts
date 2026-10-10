@@ -485,7 +485,6 @@ export const dict = {
 
   "toast.session.listFailed.title": "Failed to load sessions for {{project}}",
   "toast.project.reloadFailed.title": "Failed to reload {{project}}",
-  "toast.migration.failed.title": "Data migration failed",
 
   "error.page.title": "Something went wrong",
   "error.page.title.status": "Server request failed",

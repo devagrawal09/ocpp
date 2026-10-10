@@ -1,5 +1,4 @@
 import { Database } from "@ocpp/core/database/database"
-import { V1Migration } from "@ocpp/core/database/v1-migration"
 import { App } from "@ocpp/core/app"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { httpClient } from "@ocpp/util/effect/app-node-platform"
@@ -132,7 +131,7 @@ export function createRoutes(
         Layer.succeedContext(Context.pick(Database.Service, Project.Service, WellKnown.Service)(context)),
         ServerInfo.layer(serviceURLs, options.app),
       )
-      const api = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
+      return HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
         Layer.provide(handlers.pipe(Layer.provide(services), Layer.provide(Layer.succeed(CorsConfig, options)))),
         Layer.provide(formLocationLayer),
         Layer.provide(sessionLocationLayer),
@@ -142,7 +141,6 @@ export function createRoutes(
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),
       )
-      return Layer.merge(api, V1Migration.layer.pipe(Layer.provide(services)))
     }),
   )
 }

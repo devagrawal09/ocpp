@@ -19,7 +19,7 @@ const result = await Bun.build({
   target: "node",
   format: "esm",
   packages: "external",
-  external: ["#sqlite", "#pty", "#persistent-pty-binary", "#fff", "#photon-wasm", "#process-lock-ffi", "#v1-migration"],
+  external: ["#sqlite", "#pty", "#persistent-pty-binary", "#fff", "#photon-wasm", "#process-lock-ffi"],
   splitting: true,
   loader: {
     ".txt": "text",

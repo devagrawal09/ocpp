@@ -255,7 +255,6 @@ import type {
   DebugLocationListOutput,
   DebugLocationEvictInput,
   DebugLocationEvictOutput,
-  MigrationV1StatusOutput,
   WebsearchProvidersInput,
   WebsearchProvidersOutput,
   WebsearchQueryInput,
@@ -2072,21 +2071,6 @@ export function make(options: ClientOptions) {
               successStatus: 204,
               declaredStatuses: [400],
               empty: true,
-            },
-            requestOptions,
-          ),
-      },
-    },
-    migration: {
-      v1: {
-        status: (requestOptions?: RequestOptions) =>
-          request<MigrationV1StatusOutput>(
-            {
-              method: "GET",
-              path: `/api/experimental/migration/v1`,
-              successStatus: 200,
-              declaredStatuses: [400],
-              empty: false,
             },
             requestOptions,
           ),

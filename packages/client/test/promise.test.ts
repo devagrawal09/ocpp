@@ -32,7 +32,6 @@ test("exposes every standard HTTP API group", () => {
     "workspace",
     "vcs",
     "debug",
-    "migration",
     "websearch",
     "config",
   ])

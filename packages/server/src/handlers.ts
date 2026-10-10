@@ -27,7 +27,6 @@ import { ProjectHandler } from "./handlers/project"
 import { WorktreeHandler } from "./handlers/worktree"
 import { VcsHandler } from "./handlers/vcs"
 import { EventFeed } from "./event-feed"
-import { MigrationHandler } from "./handlers/migration"
 import { ConfigHandler } from "./handlers/config"
 import { WorkspaceHandler } from "./handlers/workspace"
 
@@ -35,7 +34,6 @@ export const handlers = Layer.mergeAll(
   HealthHandler,
   ServerHandler,
   DebugHandler,
-  MigrationHandler,
   LocationHandler,
   AgentHandler,
   PluginHandler,

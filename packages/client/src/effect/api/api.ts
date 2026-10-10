@@ -2226,23 +2226,6 @@ export interface DebugApi<E = never> {
   readonly location: { readonly list: DebugLocationListOperation<E>; readonly evict: DebugLocationEvictOperation<E> }
 }
 
-export type MigrationV1StatusOutput =
-  | { readonly status: "required" | "completed" }
-  | {
-      readonly status: "running"
-      readonly progress: {
-        readonly label: string
-        readonly numerator?: number | undefined
-        readonly denominator?: number | undefined
-      }
-    }
-  | { readonly status: "error"; readonly error: string }
-export type MigrationV1StatusOperation<E = never> = () => Effect.Effect<MigrationV1StatusOutput, E>
-
-export interface MigrationApi<E = never> {
-  readonly v1: { readonly status: MigrationV1StatusOperation<E> }
-}
-
 export type WebsearchProvidersInput = {
   readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
 }
@@ -2305,7 +2288,6 @@ export interface AppApi<E = never> {
   readonly workspace: WorkspaceApi<E>
   readonly vcs: VcsApi<E>
   readonly debug: DebugApi<E>
-  readonly migration: MigrationApi<E>
   readonly websearch: WebsearchApi<E>
   readonly config: ConfigApi<E>
 }

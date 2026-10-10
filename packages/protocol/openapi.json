@@ -11246,107 +11246,6 @@
         "summary": "Evict a loaded location"
       }
     },
-    "/api/experimental/migration/v1": {
-      "get": {
-        "tags": ["migration"],
-        "operationId": "v2.experimental.migration.v1.status",
-        "parameters": [],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": ["required", "completed"]
-                        }
-                      },
-                      "required": ["status"],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": ["running"]
-                        },
-                        "progress": {
-                          "type": "object",
-                          "properties": {
-                            "label": {
-                              "type": "string"
-                            },
-                            "numerator": {
-                              "anyOf": [
-                                {
-                                  "type": "integer",
-                                  "minimum": 0
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "denominator": {
-                              "anyOf": [
-                                {
-                                  "type": "integer",
-                                  "minimum": 0
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["label"],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": ["status", "progress"],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": ["error"]
-                        },
-                        "error": {
-                          "type": "string"
-                        }
-                      },
-                      "required": ["status", "error"],
-                      "additionalProperties": false
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Return the progress of the V1 to V2 session history migration.",
-        "summary": "Get V1 migration status"
-      }
-    },
     "/api/websearch/provider": {
       "get": {
         "tags": ["websearch"],
@@ -17357,6 +17256,12 @@
               "type": "string"
             }
           },
+          "aliases": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "variants": {
             "type": "array",
             "items": {
@@ -18291,9 +18196,6 @@
     },
     {
       "name": "debug"
-    },
-    {
-      "name": "migration"
     },
     {
       "name": "websearch",

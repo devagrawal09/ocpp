@@ -29,7 +29,6 @@ import { CredentialGroup } from "./groups/credential.js"
 import { ProjectGroup } from "./groups/project.js"
 import { WorktreeGroup } from "./groups/worktree.js"
 import { VcsGroup } from "./groups/vcs.js"
-import { MigrationGroup } from "./groups/migration.js"
 import { ConfigGroup } from "./groups/config.js"
 import { WorkspaceGroup } from "./groups/workspace.js"
 
@@ -76,7 +75,6 @@ type ApiGroups<
   | typeof HealthGroup
   | typeof ServerGroup
   | typeof DebugGroup
-  | typeof MigrationGroup
   | typeof WorktreeGroup
   | typeof WorkspaceGroup
   | typeof GenerateGroup
@@ -163,7 +161,6 @@ const makeApiFromGroup = <
     .add(WorkspaceGroup)
     .add(VcsGroup.middleware(locationMiddleware))
     .add(DebugGroup)
-    .add(MigrationGroup)
     .add(WebSearchGroup.middleware(locationMiddleware))
     .add(ConfigGroup.middleware(locationMiddleware))
     .annotateMerge(

@@ -8,14 +8,15 @@ import type { JsonlEventLog } from "@specter-ts/jsonl"
 import { Effect } from "effect"
 import { afterEach, describe, expect, it } from "bun:test"
 
-import { openJsonlSessionApp } from "./fixture/jsonl-app.ts"
-import { makeScriptedModel } from "./fixture/scripted-model.ts"
+import { openJsonlRuntime } from "./fixture/jsonl-runtime.ts"
+import { makeScriptedStepHost } from "./fixture/scripted-step-host.ts"
 
-// Crash and restart over the JSONL composition. "App A" is a real child
-// process killed with SIGKILL: the JSONL Event Log and outbox refuse a second
-// open of a file inside one process, and an in-process "abandon" would keep
-// the first app's lock and worker alive, so only a dead process exercises
-// lock takeover and the outbox's resume of the attempt it left running.
+// Crash and restart of the embedded runtime, kept in JSONL files. "App A" is
+// a real child process killed with SIGKILL: the JSONL Event Log and outbox
+// refuse a second open of a file inside one process, and an in-process
+// "abandon" would keep the first app's lock and worker alive, so only a dead
+// process exercises lock takeover and the outbox's resume of the attempt it
+// left running.
 const root = join(import.meta.dir, "..")
 
 const directories: string[] = []
@@ -77,10 +78,10 @@ describe("crash and restart (JSONL)", () => {
     const a = await startAppA(directory)
     await a.kill()
 
-    // App B: same directory, a model that completes.
-    const model = makeScriptedModel()
-    model.script("ses_1", [{ finish: "stop", text: "done" }])
-    const b = await openJsonlSessionApp({ directory, model })
+    // App B: same directory, a host whose step completes.
+    const host = makeScriptedStepHost()
+    host.script("ses_1", [{ finish: "stop", text: "done" }])
+    const b = await openJsonlRuntime({ directory, host })
     running.push(b)
     const types = () => events(b.log).map((event) => event.type)
     await waitFor(
@@ -101,7 +102,7 @@ describe("crash and restart (JSONL)", () => {
       "session-step-started", // A
       "session-step-settled", // orphan reconciliation
       "session-step-started", // B: a new physical attempt
-      "session-block-recorded", // the scripted text is now durable
+      "session-block-recorded",
       "session-step-settled",
       "session-execution-settled",
     ])
@@ -122,10 +123,12 @@ describe("crash and restart (JSONL)", () => {
     expect(of("session-execution-started")).toHaveLength(1)
     expect(of("session-inbox-delivered").map((p) => p.inboxID)).toEqual(["msg_a"])
     expect(
-      await b.app.query({
-        type: "sessionStatus",
-        payload: { sessionID: "ses_1" },
-      }),
+      await Effect.runPromise(
+        b.runtime.query({
+          type: "sessionStatus",
+          payload: { sessionID: "ses_1" },
+        }),
+      ),
     ).toEqual({
       status: "settled",
       executions: 1,
@@ -149,35 +152,23 @@ describe("crash and restart (JSONL)", () => {
     const count = events(b.log).length
     await b.close()
     running.pop()
-    const c = await openJsonlSessionApp({
-      directory,
-      model: makeScriptedModel(),
-    })
+    const c = await openJsonlRuntime({ directory, host: makeScriptedStepHost() })
     running.push(c)
     await new Promise((resolve) => setTimeout(resolve, 200))
     expect(events(c.log)).toHaveLength(count)
     expect(c.outbox.releasedOnOpen).toEqual([])
   }, 30_000)
 
-  it("settles a tool call that was running when its process died as aborted, before failing the step, and the retry sees the result", async () => {
+  it("settles a tool call that was running when its process died as aborted, before failing the step", async () => {
     const directory = mkdtempSync(join(tmpdir(), "session-runtime-recovery-"))
     directories.push(directory)
 
     const a = await startAppA(directory, "tool")
     await a.kill()
 
-    // App B: records what the retried attempt sends the provider.
-    const scripted = makeScriptedModel()
-    scripted.script("ses_1", [{ finish: "stop", text: "done" }])
-    const sent: unknown[] = []
-    const model = {
-      ...scripted,
-      nextOutcome: (input: Parameters<typeof scripted.nextOutcome>[0]) => {
-        sent.push(input.messages)
-        return scripted.nextOutcome(input)
-      },
-    }
-    const b = await openJsonlSessionApp({ directory, model })
+    const host = makeScriptedStepHost()
+    host.script("ses_1", [{ finish: "stop", text: "done" }])
+    const b = await openJsonlRuntime({ directory, host })
     running.push(b)
     const types = () => events(b.log).map((event) => event.type)
     await waitFor(
@@ -217,35 +208,6 @@ describe("crash and restart (JSONL)", () => {
       outcome: "failed",
       error: { type: "orphaned" },
     })
-
-    // The retried attempt sent the call together with its aborted result.
-    expect(sent).toHaveLength(1)
-    expect(sent[0]).toEqual([
-      expect.objectContaining({ role: "user" }),
-      expect.objectContaining({
-        role: "assistant",
-        content: [expect.objectContaining({ type: "tool-call", id: "call_1" })],
-      }),
-      {
-        role: "tool",
-        content: [
-          expect.objectContaining({
-            type: "tool-result",
-            id: "call_1",
-            result: {
-              type: "error",
-              value: {
-                error: {
-                  type: "aborted",
-                  message: "Tool execution interrupted: execute",
-                },
-                content: [],
-              },
-            },
-          }),
-        ],
-      },
-    ])
   }, 30_000)
 
   it("fails the execution when orphaned attempts exhaust the retry budget", async () => {
@@ -263,10 +225,7 @@ describe("crash and restart (JSONL)", () => {
       await next.kill()
     }
 
-    const b = await openJsonlSessionApp({
-      directory,
-      model: makeScriptedModel(),
-    })
+    const b = await openJsonlRuntime({ directory, host: makeScriptedStepHost() })
     running.push(b)
     const types = () => events(b.log).map((event) => event.type)
     await waitFor(

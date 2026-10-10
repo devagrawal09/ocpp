@@ -86,179 +86,194 @@ const reconcileOrphan = (
     )
   })
 
-export type RunStepOptions = {
-  // Plugin input: the assistant message ID of a Session's step. It must return
-  // the same ID for the same Session and ordinal, because a retried attempt
-  // reuses its step's ID. The default, msg_<sessionID>_<ordinal>, is unique
-  // within one Event Log.
-  readonly assistantMessageID?: (step: { readonly sessionID: string; readonly ordinal: number }) => string
-}
-
 // One job = one safe-step boundary: deliver, run one step, maybe finish.
-export const makeRunStepPlugin =
-  (options: RunStepOptions = {}): ReactionPlugin<RunStepRequest, StepHost> =>
-  ({ command, query }) =>
-    Effect.gen(function* () {
-      const host = yield* StepHost
-      // Jobs run on the embedding's clock (a host's test clock included).
-      const clock = yield* Clock.Clock
-      return (request, delivery) =>
-        Effect.gen(function* () {
-          const { sessionID, ordinal } = request.payload
-          // A failure outside a step fails the execution.
-          const fail = (error: { readonly type: string; readonly message: string }, idempotencyKey: string) =>
-            unlessRejected(command({ type: "failExecution", payload: { sessionID, error } }, { idempotencyKey }))
-          // Runs a compaction the host owns; false when the job should stop.
-          const compact = (input: Parameters<typeof host.compact>[0], key: string) =>
-            Effect.gen(function* () {
-              const outcome = yield* host.compact(input)
-              if (outcome.outcome === "stopped") return false
-              // A manual compaction that failed is recorded on its own item:
-              // the execution goes on. The history must fit for a step, so an
-              // automatic one that failed fails the execution, and so does
-              // one that broke.
-              if (outcome.outcome === "failed" && (input.reason === "auto" || outcome.fatal)) {
-                yield* fail(outcome.error, `${key}:failed`)
-                return false
-              }
-              return true
-            })
+export const runStepPlugin: ReactionPlugin<RunStepRequest, StepHost> = ({ command, query }) =>
+  Effect.gen(function* () {
+    const host = yield* StepHost
+    // Jobs run on the embedding's clock (a host's test clock included).
+    const clock = yield* Clock.Clock
+    return (request, delivery) =>
+      Effect.gen(function* () {
+        const { sessionID, ordinal } = request.payload
+        // A failure outside a step fails the execution.
+        const fail = (error: { readonly type: string; readonly message: string }, idempotencyKey: string) =>
+          unlessRejected(command({ type: "failExecution", payload: { sessionID, error } }, { idempotencyKey }))
+        // Runs a compaction the host owns; false when the job should stop.
+        const compact = (input: Parameters<typeof host.compact>[0], key: string) =>
+          Effect.gen(function* () {
+            const outcome = yield* host.compact(input)
+            if (outcome.outcome === "stopped") return false
+            // A manual compaction that failed is recorded on its own item:
+            // the execution goes on. The history must fit for a step, so an
+            // automatic one that failed fails the execution, and so does
+            // one that broke.
+            if (outcome.outcome === "failed" && (input.reason === "auto" || outcome.fatal)) {
+              yield* fail(outcome.error, `${key}:failed`)
+              return false
+            }
+            return true
+          })
 
-          // Requests are derived from state, so a duplicate or stale one can be
-          // queued behind the job that already ran this boundary.
-          // One snapshot of the Session at this boundary.
-          const { status, step: steps, next: upcoming } = yield* query(sessionStatus, { sessionID })
-          if (status !== "active") return
-          // A step still in flight when a job starts belongs to a dead attempt:
-          // the outbox worker runs one job at a time, so no live handler can own
-          // it. The outbox does not tell the handler that its job was claimed
-          // before, so the slice state is the evidence.
-          if (steps.inFlight !== undefined) {
-            if (ordinal === steps.started - 1) {
-              // The host settles what it knows more about first; the runtime
-              // settles the calls still open after it.
-              const recovered =
-                host.recover === undefined
-                  ? steps
-                  : yield* host.recover(sessionID).pipe(
-                      Effect.andThen(query(sessionStatus, { sessionID })),
-                      Effect.map((after) => after.step),
-                    )
-              yield* reconcileOrphan(
-                { command },
+        // Requests are derived from state, so a duplicate or stale one can be
+        // queued behind the job that already ran this boundary.
+        // One snapshot of the Session at this boundary.
+        const { status, step: steps, next: upcoming } = yield* query(sessionStatus, { sessionID })
+        if (status !== "active") return
+        // A step still in flight when a job starts belongs to a dead attempt:
+        // the outbox worker runs one job at a time, so no live handler can own
+        // it. The outbox does not tell the handler that its job was claimed
+        // before, so the slice state is the evidence.
+        if (steps.inFlight !== undefined) {
+          if (ordinal === steps.started - 1) {
+            // The host settles what it knows more about first; the runtime
+            // settles the calls still open after it.
+            const recovered =
+              host.recover === undefined
+                ? steps
+                : yield* host.recover(sessionID).pipe(
+                    Effect.andThen(query(sessionStatus, { sessionID })),
+                    Effect.map((after) => after.step),
+                  )
+            yield* reconcileOrphan(
+              { command },
+              {
+                sessionID,
+                assistantMessageID: steps.inFlight,
+                deliveryId: delivery.deliveryId,
+                openCalls: recovered.openCalls ?? [],
+              },
+            )
+          }
+          return
+        }
+        // A request for a retry repeats the ordinal of the step that failed.
+        const expected = steps.retrying ? steps.started - 1 : steps.started
+        if (expected !== ordinal) return
+
+        // Delivery law (OC++ runner): every pending steer enters history
+        // before the next step; at an idle boundary (the execution's start,
+        // or after a step that needed no continuation) with no steer
+        // pending, one queued item may enter instead, with the steers that
+        // arrive behind it.
+        const { boundary, stepsInExecution, stepsSinceInput, retryAt, attempt } = upcoming
+        // A retried step waits until it is due: backoff is recorded with the
+        // failure and honored here, one Session's job at a time.
+        const now = yield* Clock.currentTimeMillis
+        if (retryAt !== undefined && retryAt > now) yield* Effect.sleep(retryAt - now)
+        let scope = boundary
+        let delivered = 0
+        // A delivered control item (compaction, move) is not input for a step.
+        let controlled = false
+        let prepared = false
+        for (;;) {
+          const next = yield* query(nextDeliverable, {
+            sessionID,
+            boundary: scope,
+          })
+          if (next.item === null) break
+          const control = next.item.type === "compaction" || next.item.type === "move"
+          // Delivery stops before a control item: the input delivered ahead
+          // of it gets its step first.
+          if (control && delivered > 0) break
+          if (!control && !prepared && host.prepare) {
+            const ready = yield* host.prepare(sessionID)
+            if (ready.outcome === "failed") {
+              yield* fail(ready.error, `${delivery.deliveryId}:unprepared`)
+              return
+            }
+            prepared = true
+            // Preparing can change what is pending (a cancelled input).
+            continue
+          }
+          if (next.item.type === "move" && host.moving) yield* host.moving(sessionID)
+          const inboxID = next.item.inboxID
+          const accepted = yield* unlessRejected(
+            command(
+              { type: "deliverInboxItem", payload: { sessionID, inboxID } },
+              { idempotencyKey: `${delivery.deliveryId}:deliver:${inboxID}` },
+            ),
+          ).pipe(
+            // Delivering it broke (a defect, which a retried job would only
+            // repeat, unlike a failure to record): the input stays pending
+            // and the execution fails, as OC++'s runner failed its run.
+            Effect.catchDefect((defect) =>
+              fail(
                 {
-                  sessionID,
-                  assistantMessageID: steps.inFlight,
-                  deliveryId: delivery.deliveryId,
-                  openCalls: recovered.openCalls ?? [],
+                  type: "unknown",
+                  message: defect instanceof Error ? defect.message : String(defect),
                 },
-              )
-            }
-            return
-          }
-          // A request for a retry repeats the ordinal of the step that failed.
-          const expected = steps.retrying ? steps.started - 1 : steps.started
-          if (expected !== ordinal) return
-
-          // Delivery law (OC++ runner): every pending steer enters history
-          // before the next step; at an idle boundary (the execution's start,
-          // or after a step that needed no continuation) with no steer
-          // pending, one queued item may enter instead, with the steers that
-          // arrive behind it.
-          const { boundary, stepsInExecution, stepsSinceInput, retryAt, attempt } = upcoming
-          // A retried step waits until it is due: backoff is recorded with the
-          // failure and honored here, one Session's job at a time.
-          const now = yield* Clock.currentTimeMillis
-          if (retryAt !== undefined && retryAt > now) yield* Effect.sleep(retryAt - now)
-          let scope = boundary
-          let delivered = 0
-          // A delivered control item (compaction, move) is not input for a step.
-          let controlled = false
-          let prepared = false
-          for (;;) {
-            const next = yield* query(nextDeliverable, {
-              sessionID,
-              boundary: scope,
-            })
-            if (next.item === null) break
-            const control = next.item.type === "compaction" || next.item.type === "move"
-            // Delivery stops before a control item: the input delivered ahead
-            // of it gets its step first.
-            if (control && delivered > 0) break
-            if (!control && !prepared && host.prepare) {
-              const ready = yield* host.prepare(sessionID)
-              if (ready.outcome === "failed") {
-                yield* fail(ready.error, `${delivery.deliveryId}:unprepared`)
-                return
-              }
-              prepared = true
-              // Preparing can change what is pending (a cancelled input).
-              continue
-            }
-            if (next.item.type === "move" && host.moving) yield* host.moving(sessionID)
-            const inboxID = next.item.inboxID
-            const accepted = yield* unlessRejected(
-              command(
-                { type: "deliverInboxItem", payload: { sessionID, inboxID } },
-                { idempotencyKey: `${delivery.deliveryId}:deliver:${inboxID}` },
-              ),
-            ).pipe(
-              // Delivering it broke (a defect, which a retried job would only
-              // repeat, unlike a failure to record): the input stays pending
-              // and the execution fails, as OC++'s runner failed its run.
-              Effect.catchDefect((defect) =>
-                fail(
-                  {
-                    type: "unknown",
-                    message: defect instanceof Error ? defect.message : String(defect),
-                  },
-                  `${delivery.deliveryId}:undelivered:${inboxID}`,
-                ).pipe(Effect.as(false)),
-              ),
+                `${delivery.deliveryId}:undelivered:${inboxID}`,
+              ).pipe(Effect.as(false)),
+            ),
+          )
+          if (!accepted) return
+          // A delivered compaction item compacts the history now; what
+          // follows it is delivered after.
+          if (next.item.type === "compaction") {
+            const settled = yield* compact(
+              { sessionID, reason: "manual", inputID: next.item.inboxID },
+              `${delivery.deliveryId}:compaction:${next.item.inboxID}`,
             )
-            if (!accepted) return
-            // A delivered compaction item compacts the history now; what
-            // follows it is delivered after.
-            if (next.item.type === "compaction") {
-              const settled = yield* compact(
-                { sessionID, reason: "manual", inputID: next.item.inboxID },
-                `${delivery.deliveryId}:compaction:${next.item.inboxID}`,
-              )
-              if (!settled) return
-              controlled = true
-              continue
-            }
-            // A delivered move moved the Session: what follows runs in its
-            // new Location, whose entry takes queued control items too.
-            if (next.item.type === "move") {
-              controlled = true
-              if (scope === "step") scope = "entry"
-              continue
-            }
-            delivered += 1
-            // An idle boundary delivers its steers, or one queued item with the
-            // steers that arrive behind it: never steers and a queued item.
-            scope = "step"
+            if (!settled) return
+            controlled = true
+            continue
           }
-          // An execution at rest with nothing left to deliver is done.
-          if (boundary !== "step" && (stepsInExecution > 0 || controlled) && delivered === 0) {
-            yield* unlessRejected(
-              command(
-                { type: "finishExecution", payload: { sessionID } },
-                { idempotencyKey: `${delivery.deliveryId}:finished` },
-              ),
+          // A delivered move moved the Session: what follows runs in its
+          // new Location, whose entry takes queued control items too.
+          if (next.item.type === "move") {
+            controlled = true
+            if (scope === "step") scope = "entry"
+            continue
+          }
+          delivered += 1
+          // An idle boundary delivers its steers, or one queued item with the
+          // steers that arrive behind it: never steers and a queued item.
+          scope = "step"
+        }
+        // An execution at rest with nothing left to deliver is done.
+        if (boundary !== "step" && (stepsInExecution > 0 || controlled) && delivered === 0) {
+          yield* unlessRejected(
+            command(
+              { type: "finishExecution", payload: { sessionID } },
+              { idempotencyKey: `${delivery.deliveryId}:finished` },
+            ),
+          )
+          return
+        }
+
+        // A retried attempt reuses its step's ID: the same Session and ordinal give the same one, unique
+        // within one Event Log.
+        const assistantMessageID = `msg_${sessionID}_${ordinal}`
+        // The step's number since input was last delivered (the agent's step
+        // limit counts these): delivered input starts again at 1, a retried
+        // step keeps its number.
+        const step = delivered > 0 ? 1 : retryAt !== undefined ? stepsSinceInput : stepsSinceInput + 1
+        // The host compacts first when the history no longer fits.
+        let plan = yield* host.begin({
+          sessionID,
+          assistantMessageID,
+          ordinal,
+          step,
+          attempt,
+          transcript: query(modelTranscript, { sessionID }),
+        })
+        for (let compactions = 1; "compact" in plan; compactions++) {
+          if (compactions > 2) {
+            yield* fail(
+              {
+                type: "compaction.ineffective",
+                message: "The history still does not fit after compacting",
+              },
+              `${delivery.deliveryId}:compaction-failed`,
             )
             return
           }
-
-          const assistantMessageID =
-            options.assistantMessageID?.({ sessionID, ordinal }) ?? `msg_${sessionID}_${ordinal}`
-          // The step's number since input was last delivered (the agent's step
-          // limit counts these): delivered input starts again at 1, a retried
-          // step keeps its number.
-          const step = delivered > 0 ? 1 : retryAt !== undefined ? stepsSinceInput : stepsSinceInput + 1
-          // The host compacts first when the history no longer fits.
-          let plan = yield* host.begin({
+          const settled = yield* compact(
+            { sessionID, reason: "auto" },
+            `${delivery.deliveryId}:compaction:auto:${compactions}`,
+          )
+          if (!settled) return
+          plan = yield* host.begin({
             sessionID,
             assistantMessageID,
             ordinal,
@@ -266,198 +281,172 @@ export const makeRunStepPlugin =
             attempt,
             transcript: query(modelTranscript, { sessionID }),
           })
-          for (let compactions = 1; "compact" in plan; compactions++) {
-            if (compactions > 2) {
-              yield* fail(
-                {
-                  type: "compaction.ineffective",
-                  message: "The history still does not fit after compacting",
-                },
-                `${delivery.deliveryId}:compaction-failed`,
-              )
-              return
-            }
-            const settled = yield* compact(
-              { sessionID, reason: "auto" },
-              `${delivery.deliveryId}:compaction:auto:${compactions}`,
-            )
-            if (!settled) return
-            plan = yield* host.begin({
-              sessionID,
-              assistantMessageID,
-              ordinal,
-              step,
-              attempt,
-              transcript: query(modelTranscript, { sessionID }),
-            })
-          }
-          const key = delivery.deliveryId
-          // The step starts with the attempt's first fact: an attempt that
-          // ends without one produced nothing, and is not a step.
-          let begun: boolean | undefined
-          const started: Effect.Effect<boolean, RecordFailure> = Effect.suspend(() =>
-            begun !== undefined
-              ? Effect.succeed(begun)
-              : unlessRejected(
-                  command(
-                    {
-                      type: "recordStepStarted",
-                      payload: {
-                        sessionID,
-                        assistantMessageID,
-                        agent: plan.agent,
-                        model: plan.model,
-                        ...(plan.snapshot === undefined ? {} : { snapshot: plan.snapshot }),
-                      },
+        }
+        const key = delivery.deliveryId
+        // The step starts with the attempt's first fact: an attempt that
+        // ends without one produced nothing, and is not a step.
+        let begun: boolean | undefined
+        const started: Effect.Effect<boolean, RecordFailure> = Effect.suspend(() =>
+          begun !== undefined
+            ? Effect.succeed(begun)
+            : unlessRejected(
+                command(
+                  {
+                    type: "recordStepStarted",
+                    payload: {
+                      sessionID,
+                      assistantMessageID,
+                      agent: plan.agent,
+                      model: plan.model,
+                      ...(plan.snapshot === undefined ? {} : { snapshot: plan.snapshot }),
                     },
-                    { idempotencyKey: `${key}:started` },
-                  ),
-                ).pipe(
-                  Effect.map((accepted) => {
-                    begun = accepted
-                    return accepted
-                  }),
+                  },
+                  { idempotencyKey: `${key}:started` },
                 ),
+              ).pipe(
+                Effect.map((accepted) => {
+                  begun = accepted
+                  return accepted
+                }),
+              ),
+        )
+        const afterStart = (record: Effect.Effect<boolean, RecordFailure>) =>
+          started.pipe(Effect.flatMap((accepted) => (accepted ? record : Effect.succeed(false))))
+        const outcome = yield* plan.run({
+          started: () => started,
+          streamed: () =>
+            afterStart(
+              unlessRejected(
+                command(
+                  {
+                    type: "recordStepStreamed",
+                    payload: { sessionID, assistantMessageID },
+                  },
+                  { idempotencyKey: `${key}:streamed` },
+                ),
+              ),
+            ),
+          block: (block) =>
+            afterStart(
+              unlessRejected(
+                command(
+                  {
+                    type: "recordBlock",
+                    payload: { sessionID, assistantMessageID, ...block },
+                  },
+                  {
+                    idempotencyKey: `${key}:block:${block.kind}:${block.ordinal}`,
+                  },
+                ),
+              ),
+            ),
+          toolRequested: (call) =>
+            afterStart(
+              unlessRejected(
+                command(
+                  {
+                    type: "recordToolCall",
+                    payload: { sessionID, assistantMessageID, ...call },
+                  },
+                  { idempotencyKey: `${key}:call:${call.id}` },
+                ),
+              ),
+            ),
+          toolInputFailed: (failure) =>
+            afterStart(
+              unlessRejected(
+                command(
+                  {
+                    type: "failToolInput",
+                    payload: { sessionID, assistantMessageID, ...failure },
+                  },
+                  { idempotencyKey: `${key}:input-failed:${failure.id}` },
+                ),
+              ),
+            ),
+          toolSettled: (result) =>
+            afterStart(
+              unlessRejected(
+                command(
+                  {
+                    type: "settleToolCall",
+                    payload: { sessionID, assistantMessageID, ...result },
+                  },
+                  { idempotencyKey: `${key}:result:${result.id}` },
+                ),
+              ),
+            ),
+        })
+        if (outcome.outcome === "stopped") return
+        if (outcome.outcome === "interrupted") {
+          yield* unlessRejected(
+            command({ type: "interruptExecution", payload: { sessionID } }, { idempotencyKey: `${key}:interrupted` }),
           )
-          const afterStart = (record: Effect.Effect<boolean, RecordFailure>) =>
-            started.pipe(Effect.flatMap((accepted) => (accepted ? record : Effect.succeed(false))))
-          const outcome = yield* plan.run({
-            started: () => started,
-            streamed: () =>
-              afterStart(
-                unlessRejected(
-                  command(
-                    {
-                      type: "recordStepStreamed",
-                      payload: { sessionID, assistantMessageID },
-                    },
-                    { idempotencyKey: `${key}:streamed` },
-                  ),
-                ),
-              ),
-            block: (block) =>
-              afterStart(
-                unlessRejected(
-                  command(
-                    {
-                      type: "recordBlock",
-                      payload: { sessionID, assistantMessageID, ...block },
-                    },
-                    {
-                      idempotencyKey: `${key}:block:${block.kind}:${block.ordinal}`,
-                    },
-                  ),
-                ),
-              ),
-            toolRequested: (call) =>
-              afterStart(
-                unlessRejected(
-                  command(
-                    {
-                      type: "recordToolCall",
-                      payload: { sessionID, assistantMessageID, ...call },
-                    },
-                    { idempotencyKey: `${key}:call:${call.id}` },
-                  ),
-                ),
-              ),
-            toolInputFailed: (failure) =>
-              afterStart(
-                unlessRejected(
-                  command(
-                    {
-                      type: "failToolInput",
-                      payload: { sessionID, assistantMessageID, ...failure },
-                    },
-                    { idempotencyKey: `${key}:input-failed:${failure.id}` },
-                  ),
-                ),
-              ),
-            toolSettled: (result) =>
-              afterStart(
-                unlessRejected(
-                  command(
-                    {
-                      type: "settleToolCall",
-                      payload: { sessionID, assistantMessageID, ...result },
-                    },
-                    { idempotencyKey: `${key}:result:${result.id}` },
-                  ),
-                ),
-              ),
-          })
-          if (outcome.outcome === "stopped") return
-          if (outcome.outcome === "interrupted") {
-            yield* unlessRejected(
-              command({ type: "interruptExecution", payload: { sessionID } }, { idempotencyKey: `${key}:interrupted` }),
-            )
-            return
-          }
+          return
+        }
 
-          if (outcome.outcome === "failed") {
-            // A failure is a step's, even one before any output.
-            if (!(yield* started)) return
-            // Retry is narrow: the host classifies, the Command owns the
-            // budget and records either the retry or the failed execution in
-            // the same fact as the step failure. A retry is requested by the
-            // Reaction from that fact, not by this job.
-            const { outcome: _, retryable, retryDelay, fresh, limit, ...failure } = outcome
-            yield* unlessRejected(
+        if (outcome.outcome === "failed") {
+          // A failure is a step's, even one before any output.
+          if (!(yield* started)) return
+          // Retry is narrow: the host classifies, the Command owns the
+          // budget and records either the retry or the failed execution in
+          // the same fact as the step failure. A retry is requested by the
+          // Reaction from that fact, not by this job.
+          const { outcome: _, retryable, retryDelay, fresh, limit, ...failure } = outcome
+          yield* unlessRejected(
+            command(
+              {
+                type: "settleStep",
+                payload: {
+                  sessionID,
+                  assistantMessageID,
+                  outcome: "failed",
+                  ...failure,
+                  retryable,
+                  ...(fresh ? { fresh: true } : {}),
+                  ...(limit === undefined ? {} : { limit }),
+                  // The retry's due time: backoff is recorded, not waited on.
+                  at: (yield* Clock.currentTimeMillis) + (retryDelay ?? 0),
+                },
+              },
+              { idempotencyKey: `${key}:failed` },
+            ),
+          )
+          return
+        }
+
+        const { outcome: _, continue: next, ...success } = outcome
+        // Nothing was produced, so no step ran: the execution is at its
+        // idle boundary.
+        const ended = !begun
+          ? true
+          : yield* unlessRejected(
               command(
                 {
                   type: "settleStep",
                   payload: {
                     sessionID,
                     assistantMessageID,
-                    outcome: "failed",
-                    ...failure,
-                    retryable,
-                    ...(fresh ? { fresh: true } : {}),
-                    ...(limit === undefined ? {} : { limit }),
-                    // The retry's due time: backoff is recorded, not waited on.
-                    at: (yield* Clock.currentTimeMillis) + (retryDelay ?? 0),
+                    outcome: "succeeded",
+                    ...success,
+                    continues: next,
                   },
                 },
-                { idempotencyKey: `${key}:failed` },
+                { idempotencyKey: `${key}:ended` },
               ),
             )
-            return
-          }
+        if (!ended || (begun && next)) return
+        // Input waiting for this idle boundary keeps the execution going: the
+        // next step delivers it.
+        const { next: rest } = yield* query(sessionStatus, { sessionID })
+        const waiting = yield* query(nextDeliverable, {
+          sessionID,
+          boundary: rest.boundary,
+        })
+        if (waiting.item !== null) return
 
-          const { outcome: _, continue: next, ...success } = outcome
-          // Nothing was produced, so no step ran: the execution is at its
-          // idle boundary.
-          const ended = !begun
-            ? true
-            : yield* unlessRejected(
-                command(
-                  {
-                    type: "settleStep",
-                    payload: {
-                      sessionID,
-                      assistantMessageID,
-                      outcome: "succeeded",
-                      ...success,
-                      continues: next,
-                    },
-                  },
-                  { idempotencyKey: `${key}:ended` },
-                ),
-              )
-          if (!ended || (begun && next)) return
-          // Input waiting for this idle boundary keeps the execution going: the
-          // next step delivers it.
-          const { next: rest } = yield* query(sessionStatus, { sessionID })
-          const waiting = yield* query(nextDeliverable, {
-            sessionID,
-            boundary: rest.boundary,
-          })
-          if (waiting.item !== null) return
-
-          yield* unlessRejected(
-            command({ type: "finishExecution", payload: { sessionID } }, { idempotencyKey: `${key}:finished` }),
-          )
-        }).pipe(Effect.provideService(Clock.Clock, clock))
-    })
-
-export const runStepPlugin = makeRunStepPlugin()
+        yield* unlessRejected(
+          command({ type: "finishExecution", payload: { sessionID } }, { idempotencyKey: `${key}:finished` }),
+        )
+      }).pipe(Effect.provideService(Clock.Clock, clock))
+  })

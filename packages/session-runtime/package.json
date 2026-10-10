@@ -14,8 +14,6 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@ocpp/ai": "workspace:*",
-    "@ocpp/codemode": "workspace:*",
     "@ocpp/schema": "workspace:*",
     "@specter-ts/core": "link:@specter-ts/core",
     "@specter-ts/memory": "link:@specter-ts/memory",

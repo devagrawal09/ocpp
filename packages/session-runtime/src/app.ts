@@ -11,7 +11,7 @@ import { Layer } from "effect"
 
 import { sessionEventDefinitions } from "./events.ts"
 import { makeDriveExecutionPlugin } from "./plugins/drive-execution.ts"
-import { makeRunStepPlugin, type RunStepOptions } from "./plugins/run-step.ts"
+import { runStepPlugin } from "./plugins/run-step.ts"
 import {
   createDriveExecution,
   createDriveExecutionState,
@@ -138,7 +138,6 @@ export type RunStepOutboxOptions = Omit<ReactionOutboxPluginOptions<RunStepReque
 export const createSessionAppConfig = (
   runStepOutbox: RunStepOutboxStore,
   outboxOptions: RunStepOutboxOptions = {},
-  stepOptions: RunStepOptions = {},
   // An external agent's executions, which the host drives whole.
   driveOutbox: DriveExecutionOutboxStore = createMemoryReactionOutboxStore(),
 ) =>
@@ -173,7 +172,7 @@ export const createSessionAppConfig = (
       commitRevert,
       revertStatus,
       runStep: createRunStep(
-        withReactionOutbox(makeRunStepPlugin(stepOptions), {
+        withReactionOutbox(runStepPlugin, {
           // A step can run for minutes: shutdown stops it instead of waiting,
           // and the next run settles the step it left started.
           interruptOnShutdown: true,
@@ -200,10 +199,10 @@ export const createSessionAppConfig = (
 // Used by the per-Slice scenario tests, which never run Plugins; the
 // integration test builds its own config around an outbox store it inspects.
 export const sessionAppConfig = createSessionAppConfig(createMemoryReactionOutboxStore())
-export const sessionRegistrations = sessionAppConfig.slices
 
 // Every Slice owns its own projection store; an adapter composition supplies
-// how one store is provided (memory here, JSONL in test/fixture/jsonl-app.ts).
+// how one store is provided (memory here, snapshots in snapshots.ts, JSONL in
+// test/fixture/jsonl-runtime.ts).
 export type ProvideSliceStore = <TIdentifier, TWriteState, TReadState>(
   tag: SliceStoreTag<TIdentifier, SliceStoreService<TReadState, TWriteState, unknown>>,
   createState: () => TWriteState,

@@ -10,7 +10,7 @@ import {
 } from "@specter-ts/core"
 import { createImmediateReactionSchedulerService, createMemoryEventLog } from "@specter-ts/memory"
 import { createMemoryReactionOutboxStore, type OutboxedReaction } from "@specter-ts/reaction-outbox"
-import { Effect, Exit, Layer, PubSub, Scope } from "effect"
+import { Effect, Layer } from "effect"
 import { afterEach, describe, expect, it } from "bun:test"
 
 import {
@@ -22,25 +22,23 @@ import {
 import { makeSnapshotSliceStores } from "../src/snapshots.ts"
 import { sessionEvent } from "../src/events.ts"
 import type { RunStepRequest } from "../src/features/session/run-step-reaction/impl.ts"
-import { type Delta, DeltaChannel } from "../src/plugins/delta-channel.ts"
-import { Model } from "../src/plugins/model.ts"
-import { modelStepHostLayer, StepHost } from "../src/plugins/step-host.ts"
-import { makeScriptedModel } from "./fixture/scripted-model.ts"
+import { StepHost } from "../src/plugins/step-host.ts"
+import { makeScriptedStepHost } from "./fixture/scripted-step-host.ts"
 
 // The real app, in process: memory Event Log, memory Slice stores, immediate
-// Reaction scheduler, memory outbox store for the step Plugin, and the
-// Model (scripted) + delta channel services the Plugin reads.
+// Reaction scheduler, memory outbox store for the step Plugin, and a scripted
+// host for the step's I/O.
 const boot = async (
   options: {
     readonly concurrency?: number
-    // The host's compaction: the runtime's own model host has none.
+    // The host's compaction: the scripted host has none.
     readonly compact?: StepHost["Service"]["compact"]
     // How many times the host asks to compact before a step.
     readonly compactFirst?: number
     readonly moving?: StepHost["Service"]["moving"]
     readonly recover?: StepHost["Service"]["recover"]
     readonly drive?: StepHost["Service"]["drive"]
-    // Wraps the model host's begin.
+    // Wraps the scripted host's begin.
     readonly begin?: (
       input: Parameters<StepHost["Service"]["begin"]>[0],
       begin: StepHost["Service"]["begin"],
@@ -69,10 +67,9 @@ const boot = async (
         ),
       ),
     )
-  const model = makeScriptedModel()
-  const pubsub = Effect.runSync(PubSub.unbounded<Delta>())
-  const scope = Effect.runSync(Scope.make())
-  const subscription = Effect.runSync(Scope.provide(PubSub.subscribe(pubsub), scope))
+  const scripted = makeScriptedStepHost()
+  const host = scripted.host
+  let compactFirst = options.compactFirst ?? 0
   const outbox = options.outbox ?? createMemoryReactionOutboxStore<OutboxedReaction<RunStepRequest>>()
 
   const full = createSessionAppConfig(outbox, {
@@ -117,29 +114,20 @@ const boot = async (
       Layer.succeed(EventLog, log),
       options.slices ? createSliceStoreLayer(options.slices) : memorySliceStoreLayer,
       Layer.succeed(ReactionScheduler, scheduler),
-      Layer.effect(
+      Layer.succeed(
         StepHost,
-        Effect.map(StepHost, (host) => {
-          let compactFirst = options.compactFirst ?? 0
-          return StepHost.of({
-            ...(options.moving ? { moving: options.moving } : {}),
-            ...(options.recover ? { recover: options.recover } : {}),
-            ...(options.drive ? { drive: options.drive } : {}),
-            compact: options.compact ?? host.compact,
-            begin: (input) =>
-              compactFirst-- > 0
-                ? Effect.succeed({ compact: true } as const)
-                : options.begin
-                  ? options.begin(input, host.begin)
-                  : host.begin(input),
-          })
+        StepHost.of({
+          ...(options.moving ? { moving: options.moving } : {}),
+          ...(options.recover ? { recover: options.recover } : {}),
+          ...(options.drive ? { drive: options.drive } : {}),
+          compact: options.compact ?? host.compact,
+          begin: (input) =>
+            compactFirst-- > 0
+              ? Effect.succeed({ compact: true } as const)
+              : options.begin
+                ? options.begin(input, host.begin)
+                : host.begin(input),
         }),
-      ).pipe(
-        Layer.provide(
-          modelStepHostLayer().pipe(
-            Layer.provide(Layer.mergeAll(Layer.succeed(Model, model), Layer.succeed(DeltaChannel, { pubsub }))),
-          ),
-        ),
       ),
     ),
   )
@@ -183,16 +171,12 @@ const boot = async (
     app,
     log,
     outbox,
-    model,
+    host: scripted,
     types,
     waitFor,
     outboxSettled,
     settled,
-    deltas: () => Effect.runSync(PubSub.takeAll(subscription)),
-    close: async () => {
-      await app.close()
-      await Effect.runPromise(Scope.close(scope, Exit.void))
-    },
+    close: () => app.close(),
   }
 }
 
@@ -235,10 +219,10 @@ afterEach(async () => {
   running = undefined
 })
 
-describe("step loop with a scripted model", () => {
+describe("step loop with a scripted host", () => {
   it("runs a prompt through two steps and succeeds", async () => {
     const t = await start()
-    t.model.script("ses_1", [
+    t.host.script("ses_1", [
       { finish: "tool-calls", text: "thinking" },
       { finish: "stop", text: "done" },
     ])
@@ -252,7 +236,7 @@ describe("step loop with a scripted model", () => {
       "session-execution-started",
       "session-inbox-delivered",
       "session-step-started",
-      "session-block-recorded", // scripted text is durable now
+      "session-block-recorded",
       "session-step-settled",
       "session-step-started",
       "session-block-recorded",
@@ -272,24 +256,18 @@ describe("step loop with a scripted model", () => {
     // The step after the last one was requested too (state-derived), then ran
     // as a no-op because the execution had already settled.
     expect(jobs.length).toBe(3)
-    // Ephemeral deltas reach the side channel and never the Event Log.
-    expect(t.deltas()).toEqual([
-      { sessionID: "ses_1", type: "session.text.delta", text: "thinking" },
-      { sessionID: "ses_1", type: "session.text.delta", text: "done" },
-    ])
-    expect(t.types().some((type) => type.includes("delta"))).toBe(false)
   })
 
   it("runs steps of different Sessions at once, one step per Session at a time", async () => {
     const t = await start({ concurrency: 2 })
     const first = gate()
     const second = gate()
-    t.model.script("ses_1", [{ finish: "stop", text: "one", gate: first.promise }])
-    t.model.script("ses_2", [{ finish: "stop", text: "two", gate: second.promise }])
+    t.host.script("ses_1", [{ finish: "stop", text: "one", gate: first.promise }])
+    t.host.script("ses_2", [{ finish: "stop", text: "two", gate: second.promise }])
 
     await t.app.command(enqueue("msg_a"))
     await t.app.command(enqueue("msg_b", undefined, "ses_2"))
-    // Both steps are in flight before either model call returns.
+    // Both steps are in flight before either attempt returns.
     await t.waitFor(() => t.log.inspect().filter((event) => event.type === "session-step-started").length === 2)
     second.open()
     await t.waitFor(() =>
@@ -309,7 +287,7 @@ describe("step loop with a scripted model", () => {
   it("delivers a queued input once the execution is idle, within the same execution", async () => {
     const t = await start()
     const hold = gate()
-    t.model.script("ses_1", [
+    t.host.script("ses_1", [
       { finish: "stop", text: "first", gate: hold.promise },
       { finish: "stop", text: "second" },
     ])
@@ -373,7 +351,7 @@ describe("step loop with a scripted model", () => {
           return { outcome: "completed" } as const
         }),
     })
-    t.model.script("ses_1", [{ finish: "stop", text: "after" }])
+    t.host.script("ses_1", [{ finish: "stop", text: "after" }])
 
     await t.app.command(enqueue("msg_a"))
     await t.waitFor(() => t.types().includes("session-execution-settled"))
@@ -427,7 +405,7 @@ describe("step loop with a scripted model", () => {
     const t = await start({
       compact: () => Effect.succeed({ outcome: "failed", error } as const),
     })
-    t.model.script("ses_1", [{ finish: "stop", text: "Still here" }])
+    t.host.script("ses_1", [{ finish: "stop", text: "Still here" }])
 
     await t.app.command(compactionItem("msg_c"))
     await t.app.command(enqueue("msg_a", "queue"))
@@ -487,7 +465,7 @@ describe("step loop with a scripted model", () => {
         }),
     })
     app = t.app
-    t.model.script("ses_1", [{ finish: "stop", text: "done" }])
+    t.host.script("ses_1", [{ finish: "stop", text: "done" }])
 
     await t.app.command(enqueue("msg_a"))
     await t.waitFor(() => t.types().includes("session-execution-settled"))
@@ -522,7 +500,7 @@ describe("step loop with a scripted model", () => {
     // The first boot runs a prompt to its end; the second opens the same log.
     const firstBoot = async (slices?: ProvideSliceStore) => {
       const first = await boot(slices ? { slices } : {})
-      first.model.script("ses_1", [{ finish: "stop", text: "done" }])
+      first.host.script("ses_1", [{ finish: "stop", text: "done" }])
       await first.app.command(enqueue("msg_a"))
       await first.waitFor(() => first.types().includes("session-execution-settled"))
       // Including the last fact's Reactions, so every Slice holds the whole log.
@@ -686,7 +664,7 @@ describe("step loop with a scripted model", () => {
   it("delivers a steer enqueued mid-step at the next boundary, before the next step", async () => {
     const t = await start()
     const hold = gate()
-    t.model.script("ses_1", [{ finish: "tool-calls", gate: hold.promise }, { finish: "stop" }])
+    t.host.script("ses_1", [{ finish: "tool-calls", gate: hold.promise }, { finish: "stop" }])
 
     await t.app.command(enqueue("msg_a"))
     await t.waitFor(() => t.types().includes("session-step-started"))
@@ -717,7 +695,7 @@ describe("step loop with a scripted model", () => {
   it("interrupt stops step events and keeps pending input pending", async () => {
     const t = await start()
     const hold = gate()
-    t.model.script("ses_1", [{ finish: "tool-calls", gate: hold.promise }, { finish: "stop" }])
+    t.host.script("ses_1", [{ finish: "tool-calls", gate: hold.promise }, { finish: "stop" }])
 
     await t.app.command(enqueue("msg_a"))
     await t.waitFor(() => t.types().includes("session-step-started"))
@@ -758,6 +736,48 @@ describe("step loop with a scripted model", () => {
     expect(pending.item).toMatchObject({ inboxID: "msg_c" })
   })
 
+  it("settles an open tool call as aborted with the interrupt, and stays quiet after the call is released", async () => {
+    const t = await start()
+    const release = gate()
+    t.host.script("ses_1", [
+      { finish: "tool-calls", toolCalls: [{ id: "call_1", name: "execute", gate: release.promise }] },
+      { finish: "stop", text: "unreachable" },
+    ])
+
+    await t.app.command(enqueue("msg_a"))
+    await t.waitFor(() => t.types().includes("session-tool-requested"))
+    await t.app.command({
+      type: "interruptExecution",
+      payload: { sessionID: "ses_1" },
+    })
+
+    const expected = [
+      "session-inbox-enqueued",
+      "session-execution-started",
+      "session-inbox-delivered",
+      "session-step-started",
+      "session-tool-requested",
+      "session-tool-settled",
+      "session-step-settled", // the interrupted step, aborted
+      "session-execution-settled",
+    ]
+    expect(t.types()).toEqual(expected)
+    expect(t.log.inspect().find((event) => event.type === "session-tool-settled")?.payload).toMatchObject({
+      id: "call_1",
+      error: {
+        type: "aborted",
+        message: "Tool execution interrupted: execute",
+      },
+    })
+
+    // Release the call: its late result is rejected (the execution is no
+    // longer active), so nothing more is recorded and no step follows.
+    release.open()
+    await t.outboxSettled()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(t.types()).toEqual(expected)
+  })
+
   describe("physical attempts and retry", () => {
     const transport = { type: "transport", message: "connection reset" }
     const retryable = (text?: string) => ({
@@ -774,7 +794,7 @@ describe("step loop with a scripted model", () => {
 
     it("retries a retryable failure as the same step and continues to stop", async () => {
       const t = await start()
-      t.model.script("ses_1", [retryable(), { finish: "stop", text: "done" }])
+      t.host.script("ses_1", [retryable(), { finish: "stop", text: "done" }])
 
       await t.app.command(enqueue("msg_a"))
       await t.waitFor(() => t.types().includes("session-execution-settled"))
@@ -816,7 +836,7 @@ describe("step loop with a scripted model", () => {
     it("fails the execution on a non-retryable failure, with no retry event", async () => {
       const t = await start()
       const error = { type: "auth", message: "bad key" }
-      t.model.script("ses_1", [{ finish: "error", retryable: false, error }])
+      t.host.script("ses_1", [{ finish: "error", retryable: false, error }])
 
       await t.app.command(enqueue("msg_a"))
       await t.waitFor(() => t.types().includes("session-execution-settled"))
@@ -851,7 +871,7 @@ describe("step loop with a scripted model", () => {
       const t = await start()
       const limit = 3
       // The initial attempt plus <limit> retries all fail.
-      t.model.script(
+      t.host.script(
         "ses_1",
         Array.from({ length: limit + 1 }, () => retryable()),
       )

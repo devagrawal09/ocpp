@@ -3,14 +3,10 @@ import type { SessionError } from "@ocpp/schema/session-error"
 import type { SessionMessage } from "@ocpp/schema/session-message"
 import type { Tool } from "@ocpp/schema/tool"
 import type { TokenUsage } from "@ocpp/schema/token-usage"
-import type { Tool as CodeModeTool } from "@ocpp/codemode"
 import type { SpecterEffectError } from "@specter-ts/core"
-import { Context, Effect, Layer, PubSub, type Schema } from "effect"
+import { Context, type Effect, type Schema } from "effect"
 
 import type { ModelMessage } from "../features/session/model-transcript-query/impl.ts"
-import { executeToolSpec, runTool } from "./code-mode-tool.ts"
-import { DeltaChannel } from "./delta-channel.ts"
-import { Model } from "./model.ts"
 
 // A runtime failure while recording or reading (not a rejection). The host
 // lets it fail the attempt, so the outbox retries the step's job.
@@ -210,108 +206,3 @@ export class StepHost extends Context.Service<
     }) => Effect.Effect<CompactionOutcome>
   }
 >()("@ocpp/session-runtime/StepHost") {}
-
-export const DEFAULT_SYSTEM_PROMPT =
-  "You are a coding agent. Use the execute tool to run programs when it helps, then answer concisely."
-
-export type ModelStepHostOptions = {
-  // The system prompt of every model request.
-  readonly system?: string
-  // Extra host tools exposed to Code Mode programs (scenario tests use it to
-  // hold a program open). The model-visible spec is unchanged.
-  readonly hostTools?: Record<string, CodeModeTool.Tool>
-  // The agent recorded on each step (default `build`).
-  readonly agent?: (sessionID: string) => Effect.Effect<string>
-}
-
-// The runtime's own step I/O: the Model port over the runtime's transcript,
-// with Code Mode's `execute` as the only tool. Text deltas go to the
-// DeltaChannel.
-export const modelStepHostLayer = (options: ModelStepHostOptions = {}) =>
-  Layer.effect(
-    StepHost,
-    Effect.gen(function* () {
-      const model = yield* Model
-      const deltas = yield* DeltaChannel
-      const system = options.system ?? DEFAULT_SYSTEM_PROMPT
-      return StepHost.of({
-        // The runtime's own model has no compaction.
-        compact: () =>
-          Effect.succeed({
-            outcome: "failed",
-            error: {
-              type: "compaction.unavailable",
-              message: "This runtime cannot compact a Session",
-            },
-          } as const),
-        begin: ({ sessionID, transcript }) =>
-          Effect.gen(function* () {
-            const agent = options.agent ? yield* options.agent(sessionID) : "build"
-            const ref = model.refFor ? yield* model.refFor(sessionID) : model.ref
-            return {
-              agent,
-              model: { id: ref.id, providerID: ref.providerID },
-              run: (record) =>
-                Effect.gen(function* () {
-                  // Every model call of this runtime is a step.
-                  if (!(yield* record.started())) return { outcome: "stopped" }
-                  // The model sees durable history only: the transcript Query
-                  // is the single source of the request messages.
-                  const { messages } = yield* transcript
-                  const outcome = yield* model.nextOutcome({
-                    sessionID,
-                    system,
-                    messages,
-                    tools: [executeToolSpec],
-                    onText: (text) =>
-                      PubSub.publish(deltas.pubsub, {
-                        sessionID,
-                        type: "session.text.delta" as const,
-                        text,
-                      }).pipe(Effect.asVoid),
-                  })
-                  if (outcome.finish === "error")
-                    return {
-                      outcome: "failed",
-                      error: outcome.error,
-                      retryable: outcome.retryable,
-                    } as const
-                  const stopped = { outcome: "stopped" } as const
-                  if (
-                    outcome.text &&
-                    !(yield* record.block({
-                      kind: "text",
-                      ordinal: 0,
-                      text: outcome.text,
-                    }))
-                  )
-                    return stopped
-                  // Tool calls are durable before any side effect (session.md):
-                  // record every complete call first, then execute them one at
-                  // a time.
-                  const calls = outcome.toolCalls ?? []
-                  for (const call of calls) if (!(yield* record.toolRequested(call))) return stopped
-                  for (const call of calls) {
-                    const settlement = yield* runTool(call.name, call.input, options.hostTools)
-                    const settled = yield* record.toolSettled(
-                      settlement.ok
-                        ? {
-                            id: call.id,
-                            content: [{ type: "text", text: settlement.text }],
-                          }
-                        : { id: call.id, error: settlement.error },
-                    )
-                    if (!settled) return stopped
-                  }
-                  return {
-                    outcome: "succeeded",
-                    finish: outcome.finish,
-                    continue: outcome.finish === "tool-calls",
-                    ...(outcome.usage ? { tokens: outcome.usage } : {}),
-                  } as const
-                }),
-            }
-          }),
-      })
-    }),
-  )

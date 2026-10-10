@@ -7,39 +7,29 @@ import { SessionID } from "@ocpp/schema/session-id"
 
 import { Effect } from "effect"
 
-import { openJsonlSessionApp } from "./jsonl-app.ts"
 import { sessionEvent } from "../../src/events.ts"
-import { makeScriptedModel } from "./scripted-model.ts"
+import { openJsonlRuntime } from "./jsonl-runtime.ts"
+import { makeScriptedStepHost } from "./scripted-step-host.ts"
 
 const directory = process.argv[2]
-// Mode `tool`: the step records an `execute` call whose program never settles,
-// so the process dies with a running tool call in durable history.
+// Mode `tool`: the step requests a call that never settles, so the process
+// dies with a running tool call in durable history.
 const mode = process.argv[3] ?? "step"
 if (!directory) throw new Error("usage: recovery-child.ts <directory> [tool]")
 
-const model = makeScriptedModel()
-// The first outcome blocks forever: the step stays in flight.
-model.script(
+const host = makeScriptedStepHost()
+const never = new Promise<void>(() => {})
+// The first step blocks forever: it stays in flight.
+host.script(
   "ses_1",
   mode === "tool"
-    ? [
-        {
-          finish: "tool-calls",
-          toolCalls: [
-            {
-              id: "call_1",
-              name: "execute",
-              input: { code: "await new Promise(() => {})" },
-            },
-          ],
-        },
-      ]
-    : [{ finish: "tool-calls", gate: new Promise(() => {}) }],
+    ? [{ finish: "tool-calls", toolCalls: [{ id: "call_1", name: "execute", gate: never }] }]
+    : [{ finish: "tool-calls", gate: never }],
 )
 
-const { app, log } = await openJsonlSessionApp({
+const { runtime, log } = await openJsonlRuntime({
   directory,
-  model,
+  host,
   outbox: { worker: { leaseMs: 300 } },
 })
 const stepStarts = () =>
@@ -59,15 +49,17 @@ if (Effect.runSync(log.currentVersion) === 0) {
       }),
     ]),
   )
-  await app.command({
-    type: "enqueueInput",
-    payload: {
-      sessionID: "ses_1",
-      inboxID: "msg_a",
-      type: "user",
-      payload: { text: "prompt msg_a" },
-    },
-  })
+  await Effect.runPromise(
+    runtime.command({
+      type: "enqueueInput",
+      payload: {
+        sessionID: "ses_1",
+        inboxID: "msg_a",
+        type: "user",
+        payload: { text: "prompt msg_a" },
+      },
+    }),
+  )
 }
 
 while (stepStarts() <= before) await new Promise((resolve) => setTimeout(resolve, 5))

@@ -18,7 +18,7 @@ import {
 // family by family.
 const slices = { recordSessionFacts } as const
 
-export const sessionEventStoreConfig = {
+const config = {
   events: [
     ...new Map(
       Object.values(slices)
@@ -33,7 +33,7 @@ export const sessionEventStoreConfig = {
 // in memory unless the host supplies a store that starts from a snapshot
 // (makeSnapshotSliceStores), as for the embedded runtime.
 export const makeSessionEventStore = (options: { readonly slices?: ProvideSliceStore } = {}) =>
-  makeSpecterRuntime(sessionEventStoreConfig).pipe(
+  makeSpecterRuntime(config).pipe(
     Effect.provide(
       Layer.mergeAll(
         (options.slices ?? createMemorySliceStoreLayer)(recordSessionFactsStore, createRecordSessionFactsState),
@@ -41,5 +41,3 @@ export const makeSessionEventStore = (options: { readonly slices?: ProvideSliceS
       ),
     ),
   )
-
-export type SessionEventStore = Effect.Success<ReturnType<typeof makeSessionEventStore>>

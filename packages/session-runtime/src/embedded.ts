@@ -14,14 +14,12 @@ import {
   type RunStepOutboxStore,
 } from "./app.ts"
 import type { RunStepRequest } from "./features/session/run-step-reaction/impl.ts"
-import type { RunStepOptions } from "./plugins/run-step.ts"
 
 // The runtime embedded in a host process (OC++ core) to run whole Sessions. It
 // owns every Session Execution fact it records, into the Event Log the host
 // provides (OC++ keeps it in its own database and projects each commit as its
 // own events in the same transaction).
 export type EmbeddedSessionRuntimeOptions = {
-  readonly step?: RunStepOptions
   // The step outbox's worker, including how many Sessions run steps at once.
   readonly outbox?: RunStepOutboxOptions
   // Where the runtime keeps its own state. In memory by default, so each
@@ -41,12 +39,11 @@ export type EmbeddedSessionRuntimeOptions = {
 }
 
 // Requires the EventLog and StepHost services and a Scope. The host supplies the
-// step's I/O through StepHost (or the runtime's own, modelStepHostLayer).
+// step's I/O through StepHost.
 export const makeEmbeddedSessionRuntime = (options: EmbeddedSessionRuntimeOptions = {}) => {
   const config = createSessionAppConfig(
     options.stores?.runStep ?? createMemoryReactionOutboxStore<OutboxedReaction<RunStepRequest>>(),
     options.outbox,
-    options.step,
     options.stores?.drive,
   )
   // Conformance wants every registered Event covered by a scenario, and most

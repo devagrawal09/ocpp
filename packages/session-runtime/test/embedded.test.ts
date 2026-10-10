@@ -1,14 +1,11 @@
 import { EventLog } from "@specter-ts/core"
 import { createMemoryEventLog } from "@specter-ts/memory"
-import { Effect, Layer, PubSub, type Scope } from "effect"
+import { Effect, Layer, type Scope } from "effect"
 import { describe, expect, it } from "bun:test"
 
 import { type EmbeddedSessionRuntimeOptions, makeEmbeddedSessionRuntime } from "../src/embedded.ts"
-import { type Delta, DeltaChannel } from "../src/plugins/delta-channel.ts"
-import { Model } from "../src/plugins/model.ts"
-import { makeScriptedModel } from "./fixture/scripted-model.ts"
-import { modelStepHostLayer } from "../src/plugins/step-host.ts"
 import { makeSnapshotSliceStores, type SliceSnapshot } from "../src/snapshots.ts"
+import { makeScriptedStepHost } from "./fixture/scripted-step-host.ts"
 
 const hostLog = () => {
   let next = 0
@@ -17,37 +14,15 @@ const hostLog = () => {
   })
 }
 
-// The runtime as a host embeds it: over the host's Event Log, with the
-// assistant message IDs and step I/O the host supplies.
+// The runtime as a host embeds it: over the host's Event Log, with the step
+// I/O the host supplies.
 const bootOver = (log: ReturnType<typeof hostLog>, options: EmbeddedSessionRuntimeOptions = {}) =>
   Effect.gen(function* () {
-    const model = makeScriptedModel()
-    const runtime = yield* makeEmbeddedSessionRuntime({
-      ...options,
-      step: {
-        assistantMessageID: ({ sessionID, ordinal }) => `msg_boot_${sessionID}_${ordinal}`,
-      },
-    }).pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          Layer.succeed(EventLog, log),
-          modelStepHostLayer({ agent: () => Effect.succeed("plan") }).pipe(
-            Layer.provide(
-              Layer.mergeAll(
-                Layer.succeed(Model, model),
-                Layer.effect(
-                  DeltaChannel,
-                  Effect.map(PubSub.unbounded<Delta>(), (pubsub) => ({
-                    pubsub,
-                  })),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    const host = makeScriptedStepHost({ agent: "plan" })
+    const runtime = yield* makeEmbeddedSessionRuntime(options).pipe(
+      Effect.provide(Layer.mergeAll(Layer.succeed(EventLog, log), host.layer)),
     )
-    return { runtime, model, recorded: () => log.inspect() }
+    return { runtime, host, recorded: () => log.inspect() }
   })
 const boot = Effect.suspend(() => bootOver(hostLog()))
 
@@ -74,8 +49,8 @@ describe("embedded runtime", () => {
   it("runs a session over the host Event Log", () =>
     run(
       Effect.gen(function* () {
-        const { runtime, model, recorded } = yield* boot
-        model.script("ses_1", [{ finish: "stop", text: "Hello" }])
+        const { runtime, host, recorded } = yield* boot
+        host.script("ses_1", [{ finish: "stop", text: "Hello" }])
         yield* runtime.command(registration)
         yield* runtime.command({
           type: "enqueueInput",
@@ -107,8 +82,9 @@ describe("embedded runtime", () => {
         })
         const step = recorded().find((event) => event.type === "session-step-started")
         expect(step?.payload).toMatchObject({
-          assistantMessageID: "msg_boot_ses_1_0",
+          assistantMessageID: "msg_ses_1_0",
           agent: "plan",
+          model: { id: "scripted", providerID: "test" },
         })
       }),
     ))
@@ -126,11 +102,11 @@ describe("embedded runtime", () => {
         const first = makeSnapshotSliceStores([])
         const saved = yield* Effect.scoped(
           Effect.gen(function* () {
-            const { runtime, model, recorded } = yield* bootOver(log, {
+            const { runtime, host, recorded } = yield* bootOver(log, {
               catchUp: true,
               stores: { slices: first.provide },
             })
-            model.script("ses_1", [{ finish: "stop", text: "Hello" }])
+            host.script("ses_1", [{ finish: "stop", text: "Hello" }])
             yield* runtime.command(registration)
             yield* runtime.command({
               type: "enqueueInput",

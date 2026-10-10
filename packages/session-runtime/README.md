@@ -22,6 +22,8 @@ for package in core memory reaction-outbox jsonl spec; do (cd packages/$package 
 bun install
 ```
 
+Run `bun install` in OC++ again after rebuilding Specter: the links pick up the new `dist` by themselves, but a rebuilt `specter-spec` bin loses the executable bit that install sets.
+
 A linked package resolves `effect` from the Specter checkout's `node_modules`, so a process would load two copies. `src/preload.ts` makes every process that loads this package run one Effect, and the `effect` entries in `paths` do the same for the type checker. Every package that loads this one, directly or through core, lists the preload in its `bunfig.toml`.
 
 ## History

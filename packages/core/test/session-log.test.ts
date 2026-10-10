@@ -1,21 +1,16 @@
 import { describe, expect } from "bun:test"
 import { Effect, Fiber, Stream } from "effect"
 import { Database } from "@ocpp/core/database/database"
-import { Agent } from "@ocpp/core/agent"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
 import { Event } from "@ocpp/schema/event"
-import { EventTable } from "@ocpp/core/event/sql"
-import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { Location } from "@ocpp/core/location"
 import { Project } from "@ocpp/core/project"
-import { ProjectTable } from "@ocpp/core/project/sql"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionStore } from "@ocpp/core/session/store"
-import { SessionTable } from "@ocpp/core/session/sql"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { TestStepHost } from "./fixture/step-host"
@@ -64,77 +59,6 @@ describe("Session.log", () => {
       const session = yield* Session.Service
       const error = yield* Effect.flip(Stream.runCollect(session.log({ sessionID: Session.ID.create() })))
       expect(error._tag).toBe("Session.NotFoundError")
-    }),
-  )
-
-  it.effect("reads across undecodable gaps in aggregate order and marks the true log position", () =>
-    Effect.gen(function* () {
-      const session = yield* Session.Service
-      const { db } = yield* Database.Service
-      const created = yield* session.create({ location })
-      yield* session.switchAgent({ sessionID: created.id, agent: Agent.ID.make("one") })
-      // An event archived in the log under a type this process does not know: reads must skip it
-      // without failing.
-      const [fact] = yield* db
-        .insert(SpecterEventTable)
-        .values({
-          id: "evt_gap",
-          type: "test.session.log.gap.1",
-          payload: { sessionID: created.id, value: "filtered" },
-          recorded_at: new Date().toISOString(),
-        })
-        .returning({ order: SpecterEventTable.order })
-        .all()
-        .pipe(Effect.orDie)
-      yield* db
-        .insert(EventTable)
-        .values({
-          id: Event.ID.make("evt_gap"),
-          aggregate_id: created.id,
-          seq: 2,
-          type: "test.session.log.gap.1",
-          log_order: fact!.order,
-        })
-        .run()
-        .pipe(Effect.orDie)
-      yield* Bus.reserveSequence(db, created.id, 2)
-      yield* session.switchAgent({ sessionID: created.id, agent: Agent.ID.make("two") })
-      yield* session.switchAgent({ sessionID: created.id, agent: Agent.ID.make("three") })
-
-      const items = Array.from(yield* Stream.runCollect(session.log({ sessionID: created.id, after: 1 })))
-
-      expect(
-        items.map((item): number | string | undefined => (Bus.isSynced(item) ? item.type : item.durable?.seq)),
-      ).toEqual([3, 4, "log.synced"])
-      expect(items.at(-1)).toEqual({ type: "log.synced", aggregateID: created.id, seq: Event.Seq.make(4) })
-    }),
-  )
-
-  it.effect("completes with a bare synced marker for a migrated Session with no event sequence", () =>
-    Effect.gen(function* () {
-      const db = (yield* Database.Service).db
-      const session = yield* Session.Service
-      const sessionID = Session.ID.make("ses_empty_log")
-      yield* db
-        .insert(ProjectTable)
-        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
-        .onConflictDoNothing()
-        .run()
-      yield* db
-        .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "empty-log",
-          directory: "/project",
-          title: "Empty log",
-          version: "test",
-        })
-        .run()
-
-      const items = Array.from(yield* Stream.runCollect(session.log({ sessionID })))
-
-      expect(items).toEqual([{ type: "log.synced", aggregateID: sessionID }])
     }),
   )
 })

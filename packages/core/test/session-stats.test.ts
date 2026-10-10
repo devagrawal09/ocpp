@@ -200,12 +200,12 @@ describe("SessionStats", () => {
         ],
         ({ data, ...event }) =>
           Effect.gen(function* () {
-            // Archived OC++ events sit in Specter's log under their versioned type, with their data as payload.
+            // Usage facts sit in Specter's log under the runtime's name, with the event's data as payload.
             const fact = yield* db
               .insert(SpecterEventTable)
               .values({
                 id: event.id,
-                type: usageType,
+                type: "session-usage-recorded",
                 payload: data,
                 recorded_at: new Date(event.created).toISOString(),
               })

@@ -276,48 +276,6 @@ describe("Bus", () => {
       ).toEqual([{ aggregate_id: aggregateID, seq: 0 }])
     }),
   )
-  it.effect("reads and rebuilds events archived in the log under their OC++ type", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
-      const aggregateID = Session.ID.create()
-      const id = Event.ID.create()
-      const type = Bus.versionedType(DurableMessage.type, DurableMessage.durable.version)
-      const [fact] = yield* db
-        .insert(SpecterEventTable)
-        .values({ id, type, payload: durableData(aggregateID, "archived"), recorded_at: new Date(5).toISOString() })
-        .returning({ order: SpecterEventTable.order })
-        .all()
-        .pipe(Effect.orDie)
-      yield* db.insert(EventSequenceTable).values({ aggregate_id: aggregateID, seq: 0 }).run().pipe(Effect.orDie)
-      yield* db
-        .insert(EventTable)
-        .values({ id, aggregate_id: aggregateID, seq: 0, created: 5, type, log_order: fact!.order })
-        .run()
-        .pipe(Effect.orDie)
-      const archived = {
-        id,
-        created: 5,
-        type: DurableMessage.type,
-        durable: { aggregateID, seq: Event.Seq.make(0), version: Event.Version.make(DurableMessage.durable.version) },
-        data: durableData(aggregateID, "archived"),
-      }
-
-      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([
-        archived,
-        { type: "log.synced", aggregateID, seq: Event.Seq.make(0) },
-      ])
-      const projected = new Array<Event.Payload>()
-      yield* bus.project(DurableMessage, (event) => Effect.sync(() => projected.push(event)))
-      yield* bus.rebuild(aggregateID)
-      expect(projected).toEqual([archived])
-      // The next event continues the aggregate's sequence.
-      expect((yield* bus.publish(DurableMessage, durableData(aggregateID, "recorded"))).durable?.seq).toBe(
-        Event.Seq.make(1),
-      )
-    }),
-  )
-
   it.effect("rejects local commit hooks on live-only events", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service

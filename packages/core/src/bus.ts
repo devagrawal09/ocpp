@@ -84,22 +84,14 @@ type Indexed = {
   readonly fact: PersistedEvent
 }
 
-/**
- * The OC++ event an index entry names: the fact itself for an event archived in the log under its
- * versioned OC++ type, else the fact's translation that carries the entry's ID. Undefined for a type
- * this process cannot decode.
- */
+/** The OC++ event an index entry names: the translation of its fact that carries the entry's ID. */
 const decodeIndexed = (
   entry: Indexed,
   translate: (fact: PersistedEvent) => readonly SpecterTranslate.WireEvent[],
-): Event.Payload | undefined => {
+): Event.Payload => {
   const definition = Durable.get(entry.type)
-  if (!definition?.durable) return undefined
-  const data =
-    entry.fact.type === entry.type
-      ? entry.fact.payload
-      : translate(entry.fact).find((wire) => wire.id === entry.id)?.data
-  if (data === undefined)
+  const data = translate(entry.fact).find((wire) => wire.id === entry.id)?.data
+  if (!definition?.durable || data === undefined)
     throw new InvalidDurableEventError({
       type: entry.type,
       message: `Fact ${entry.fact.id} does not project as event ${entry.id}`,
@@ -743,11 +735,8 @@ export function configured(options?: Options) {
 
         const streamLive = (): Stream.Stream<Event.Payload> => local(Stream.fromPubSub(pubsub.live))
 
-        // An aggregate's events after a sequence, read from Specter's log through their sequence index.
-        // Indexed events read from Specter's log, each decoded as OC++ recorded it. Types missing from the
-        // durable manifest are skipped instead of failing the read: an aggregate may hold events this process
-        // cannot decode. The raw rows keep cursors advancing across the resulting gaps. A fact projecting as
-        // several events is translated once.
+        // Indexed events read from Specter's log through their sequence index, each the translation of
+        // its fact. A fact projecting as several events is translated once.
         const readIndex = (where: SQL, orderBy: readonly SQL[], limit: number) =>
           db
             .select({
@@ -783,10 +772,7 @@ export function configured(options?: Options) {
                 }
                 return {
                   last: rows.at(-1),
-                  events: rows.flatMap((row) => {
-                    const event = decodeIndexed(row as Indexed, translate)
-                    return event ? [event] : []
-                  }),
+                  events: rows.map((row) => decodeIndexed(row as Indexed, translate)),
                 }
               }),
             )

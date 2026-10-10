@@ -33,9 +33,7 @@ export const events = (where?: SQL) =>
       .pipe(Effect.orDie)
     return rows.map(({ fact, log_order: _, ...row }) => ({
       ...row,
-      // An archived event is the fact itself; otherwise it is one of the fact's translations.
-      data: (fact.type === row.type
-        ? fact.payload
-        : SpecterTranslate.toWire(fact).find((wire) => wire.id === row.id)?.data) as Record<string, unknown>,
+      // One of the fact's translations: the one that carries the event's ID.
+      data: SpecterTranslate.toWire(fact).find((wire) => wire.id === row.id)?.data as Record<string, unknown>,
     }))
   })

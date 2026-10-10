@@ -1,0 +1,3107 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records the Session facts an embedding host published, in order: its own executions as external ones, and its steps' facts in the runtime's consolidated form.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "recordSessionFacts",
+  "scenarios": [
+    {
+      "description": "Records session-created as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/a"
+            },
+            "projectID": "global",
+            "sessionID": "ses_1",
+            "slug": "routing",
+            "version": "test"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "location": {
+                "directory": "/a"
+              },
+              "projectID": "global",
+              "sessionID": "ses_1",
+              "slug": "routing",
+              "version": "test"
+            },
+            "type": "session-created"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-agent-selected as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-agent-selected",
+          "examplePayload": {
+            "agent": "review",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "agent": "review",
+              "sessionID": "ses_1"
+            },
+            "type": "session-agent-selected"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-model-selected as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-model-selected",
+          "examplePayload": {
+            "model": {
+              "id": "replacement",
+              "providerID": "fake"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "model": {
+                "id": "replacement",
+                "providerID": "fake"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-model-selected"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-tools-selected as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-tools-selected",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "tools": []
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "tools": []
+            },
+            "type": "session-tools-selected"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-moved as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-moved",
+          "examplePayload": {
+            "location": {
+              "directory": "/b"
+            },
+            "projectID": "global",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "location": {
+                "directory": "/b"
+              },
+              "projectID": "global",
+              "sessionID": "ses_1"
+            },
+            "type": "session-moved"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-renamed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-renamed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "title": "Renamed"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-viewed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-viewed",
+          "examplePayload": {
+            "idle": 0,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "idle": 0,
+              "sessionID": "ses_1"
+            },
+            "type": "session-viewed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-deleted as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1"
+            },
+            "type": "session-deleted"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-forked as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_fork_codemode",
+              "type": "through"
+            },
+            "parentID": "ses_0",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "boundary": {
+                "messageID": "msg_fork_codemode",
+                "type": "through"
+              },
+              "parentID": "ses_0",
+              "sessionID": "ses_1"
+            },
+            "type": "session-forked"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-inbox-delivered as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_first",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "inboxID": "msg_first",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-delivered"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-inbox-enqueued as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_first",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "first"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "inboxID": "msg_first",
+              "item": {
+                "delivery": "steer",
+                "payload": {
+                  "text": "first"
+                },
+                "type": "user"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-enqueued"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-inbox-cancelled as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_cancelled_queue",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "inboxID": "msg_cancelled_queue",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-inbox-delivery-changed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-inbox-delivery-changed",
+          "examplePayload": {
+            "delivery": "steer",
+            "inboxID": "msg_120d4f1eb0014acSbWw4y75Onf",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "delivery": "steer",
+              "inboxID": "msg_120d4f1eb0014acSbWw4y75Onf",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-delivery-changed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-execution-started as session-external-execution-started, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-external-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1"
+            },
+            "type": "session-execution-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-execution-succeeded as session-external-execution-settled, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-external-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1"
+            },
+            "type": "session-execution-succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-execution-failed as session-external-execution-settled, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-external-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "failed",
+              "type": "unknown"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "error": {
+                "message": "failed",
+                "type": "unknown"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-execution-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-execution-interrupted as session-external-execution-settled, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-external-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "reason": "user",
+              "sessionID": "ses_1"
+            },
+            "type": "session-execution-interrupted"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-instructions-updated as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-instructions-updated",
+          "examplePayload": {
+            "delta": {},
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "delta": {},
+              "sessionID": "ses_1"
+            },
+            "type": "session-instructions-updated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-synthetic as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-synthetic",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "text": "Fork boundary"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "text": "Fork boundary"
+            },
+            "type": "session-synthetic"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-displayed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-displayed",
+          "examplePayload": {
+            "blocks": [
+              {
+                "text": "Second",
+                "type": "markdown"
+              }
+            ],
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "blocks": [
+                {
+                  "text": "Second",
+                  "type": "markdown"
+                }
+              ],
+              "sessionID": "ses_1"
+            },
+            "type": "session-displayed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-skill-activated as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-skill-activated",
+          "examplePayload": {
+            "id": "effect",
+            "name": "Effect",
+            "sessionID": "ses_1",
+            "text": "Use Effect"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "id": "effect",
+              "name": "Effect",
+              "sessionID": "ses_1",
+              "text": "Use Effect"
+            },
+            "type": "session-skill-activated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-shell-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-shell-started",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "shell": {
+              "command": "pwd",
+              "cwd": "/project",
+              "file": "/tmp/sh_projector.out",
+              "id": "sh_projector",
+              "metadata": {
+                "background": true
+              },
+              "shell": "/bin/sh",
+              "status": "running",
+              "time": {
+                "started": 0
+              }
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "shell": {
+                "command": "pwd",
+                "cwd": "/project",
+                "file": "/tmp/sh_projector.out",
+                "id": "sh_projector",
+                "metadata": {
+                  "background": true
+                },
+                "shell": "/bin/sh",
+                "status": "running",
+                "time": {
+                  "started": 0
+                }
+              }
+            },
+            "type": "session-shell-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-shell-ended as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-shell-ended",
+          "examplePayload": {
+            "output": {
+              "cursor": 8,
+              "output": "/project",
+              "size": 8,
+              "truncated": false
+            },
+            "sessionID": "ses_1",
+            "shell": {
+              "command": "pwd",
+              "cwd": "/project",
+              "exit": 0,
+              "file": "/tmp/sh_projector.out",
+              "id": "sh_projector",
+              "metadata": {},
+              "shell": "/bin/sh",
+              "status": "exited",
+              "time": {
+                "completed": 1,
+                "started": 0
+              }
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "output": {
+                "cursor": 8,
+                "output": "/project",
+                "size": 8,
+                "truncated": false
+              },
+              "sessionID": "ses_1",
+              "shell": {
+                "command": "pwd",
+                "cwd": "/project",
+                "exit": 0,
+                "file": "/tmp/sh_projector.out",
+                "id": "sh_projector",
+                "metadata": {},
+                "shell": "/bin/sh",
+                "status": "exited",
+                "time": {
+                  "completed": 1,
+                  "started": 0
+                }
+              }
+            },
+            "type": "session-shell-ended"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-step-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_retry_first",
+            "model": {
+              "id": "model",
+              "providerID": "provider"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "agent": "build",
+              "assistantMessageID": "msg_retry_first",
+              "model": {
+                "id": "model",
+                "providerID": "provider"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-step-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-step-streamed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-step-streamed",
+          "examplePayload": {
+            "assistantMessageID": "msg_ended",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_ended",
+              "sessionID": "ses_1"
+            },
+            "type": "session-step-streamed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-step-ended as session-step-settled, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_2",
+            "cost": 1.25,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 3,
+                "write": 1
+              },
+              "input": 10,
+              "output": 4,
+              "reasoning": 2
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_assistant_2",
+              "cost": 1.25,
+              "finish": "stop",
+              "sessionID": "ses_1",
+              "tokens": {
+                "cache": {
+                  "read": 3,
+                  "write": 1
+                },
+                "input": 10,
+                "output": 4,
+                "reasoning": 2
+              }
+            },
+            "type": "session-step-ended"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-step-failed as session-step-settled, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_120d46f31001cQVYQHHlOP5V11",
+            "error": {
+              "message": "Step interrupted",
+              "type": "aborted"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d46f31001cQVYQHHlOP5V11",
+              "error": {
+                "message": "Step interrupted",
+                "type": "aborted"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-step-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-text-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-text-started",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_completed",
+            "ordinal": 0,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_assistant_completed",
+              "ordinal": 0,
+              "sessionID": "ses_1"
+            },
+            "type": "session-text-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-text-ended as session-block-recorded, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_120d494790015kgpzR2ebVz1Vv",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": ""
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d494790015kgpzR2ebVz1Vv",
+              "ordinal": 0,
+              "sessionID": "ses_1",
+              "text": ""
+            },
+            "type": "session-text-ended"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-reasoning-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-reasoning-started",
+          "examplePayload": {
+            "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
+            "ordinal": 0,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
+              "ordinal": 0,
+              "sessionID": "ses_1"
+            },
+            "type": "session-reasoning-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-reasoning-ended as session-block-recorded, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
+            "kind": "reasoning",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "Think"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
+              "ordinal": 0,
+              "sessionID": "ses_1",
+              "text": "Think"
+            },
+            "type": "session-reasoning-ended"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-tool-input-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-tool-input-started",
+          "examplePayload": {
+            "assistantMessageID": "msg_120d46bcb0018vBBYLGAvLOWQT",
+            "id": "tool_0",
+            "name": "echo",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d46bcb0018vBBYLGAvLOWQT",
+              "id": "tool_0",
+              "name": "echo",
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-input-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-tool-input-ended as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-tool-input-ended",
+          "examplePayload": {
+            "assistantMessageID": "msg_120d46bcb0018vBBYLGAvLOWQT",
+            "id": "tool_0",
+            "sessionID": "ses_1",
+            "text": ""
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d46bcb0018vBBYLGAvLOWQT",
+              "id": "tool_0",
+              "sessionID": "ses_1",
+              "text": ""
+            },
+            "type": "session-tool-input-ended"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-tool-called as session-tool-requested, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_120d47b2b001BrE1aLIUaQE9Iu",
+            "executed": false,
+            "id": "call-defect",
+            "input": {},
+            "name": "unknown",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d47b2b001BrE1aLIUaQE9Iu",
+              "executed": false,
+              "id": "call-defect",
+              "input": {},
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-called"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-tool-success as session-tool-settled, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_hooks",
+            "content": [
+              {
+                "text": "Execution started",
+                "type": "text"
+              }
+            ],
+            "executed": false,
+            "id": "call-hooks",
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_hooks",
+              "content": [
+                {
+                  "text": "Execution started",
+                  "type": "text"
+                }
+              ],
+              "executed": false,
+              "id": "call-hooks",
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-success"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-tool-failed as session-tool-input-failed, the runtime's form of that fact.",
+      "expect": [
+        {
+          "eventType": "session-tool-input-failed",
+          "examplePayload": {
+            "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
+            "error": {
+              "message": "Denied",
+              "type": "tool.execution"
+            },
+            "executed": true,
+            "id": "call-error",
+            "name": "unknown",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
+              "error": {
+                "message": "Denied",
+                "type": "tool.execution"
+              },
+              "executed": true,
+              "id": "call-error",
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-started",
+          "examplePayload": {
+            "assistantMessageID": "msg_hooks",
+            "executionID": "exe_120d6eb7a0018Juxs09pbN2YD1",
+            "id": "call-hooks",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_hooks",
+              "executionID": "exe_120d6eb7a0018Juxs09pbN2YD1",
+              "id": "call-hooks",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-completed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-completed",
+          "examplePayload": {
+            "assistantMessageID": "msg_tool_test",
+            "events": [],
+            "executionID": "exe_120d4a070001OEFUsw9FIwUf9g",
+            "id": "call_notebook_later",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_tool_test",
+              "events": [],
+              "executionID": "exe_120d4a070001OEFUsw9FIwUf9g",
+              "id": "call_notebook_later",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-completed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-failed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-failed",
+          "examplePayload": {
+            "assistantMessageID": "msg_registry",
+            "error": "Execution failed",
+            "events": [],
+            "executionID": "exe_120d6e54d001jZKD3tFeHCH1qz",
+            "id": "detached-0",
+            "sessionID": "ses_1",
+            "status": "cancelled"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_registry",
+              "error": "Execution failed",
+              "events": [],
+              "executionID": "exe_120d6e54d001jZKD3tFeHCH1qz",
+              "id": "detached-0",
+              "sessionID": "ses_1",
+              "status": "cancelled"
+            },
+            "type": "session-codemode-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-invocation-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-invocation-started",
+          "examplePayload": {
+            "executionID": "exe_120d4bf92001ZrLxicESUosyJQ",
+            "handler": "look",
+            "input": {
+              "command": "look",
+              "text": ""
+            },
+            "sessionID": "ses_1",
+            "trigger": {
+              "name": "look",
+              "text": "",
+              "type": "command"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executionID": "exe_120d4bf92001ZrLxicESUosyJQ",
+              "handler": "look",
+              "input": {
+                "command": "look",
+                "text": ""
+              },
+              "sessionID": "ses_1",
+              "trigger": {
+                "name": "look",
+                "text": "",
+                "type": "command"
+              }
+            },
+            "type": "session-invocation-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-retry-scheduled as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-retry-scheduled",
+          "examplePayload": {
+            "assistantMessageID": "msg_retry_second",
+            "at": 6000,
+            "attempt": 3,
+            "error": {
+              "message": "Unavailable",
+              "type": "provider.internal"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_retry_second",
+              "at": 6000,
+              "attempt": 3,
+              "error": {
+                "message": "Unavailable",
+                "type": "provider.internal"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-retry-scheduled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-compaction-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-compaction-started",
+          "examplePayload": {
+            "reason": "manual",
+            "recent": "",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "reason": "manual",
+              "recent": "",
+              "sessionID": "ses_1"
+            },
+            "type": "session-compaction-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-compaction-ended as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-compaction-ended",
+          "examplePayload": {
+            "reason": "manual",
+            "recent": "",
+            "sessionID": "ses_1",
+            "text": "summary"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "reason": "manual",
+              "recent": "",
+              "sessionID": "ses_1",
+              "text": "summary"
+            },
+            "type": "session-compaction-ended"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-compaction-failed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-compaction-failed",
+          "examplePayload": {
+            "error": {
+              "message": "summary unavailable",
+              "type": "provider.error"
+            },
+            "reason": "auto",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "error": {
+                "message": "summary unavailable",
+                "type": "provider.error"
+              },
+              "reason": "auto",
+              "sessionID": "ses_1"
+            },
+            "type": "session-compaction-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-revert-staged as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "files": [],
+              "messageID": "msg_boundary"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "revert": {
+                "files": [],
+                "messageID": "msg_boundary"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-revert-staged"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-revert-cleared as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-revert-cleared",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1"
+            },
+            "type": "session-revert-cleared"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-revert-committed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-revert-committed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "to": "msg_boundary"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "to": "msg_boundary"
+            },
+            "type": "session-revert-committed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-message-content-updated as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-message-content-updated",
+          "examplePayload": {
+            "content": [],
+            "messageID": "msg_120d4f6d1001gwPXiERssl4wDM",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "content": [],
+              "messageID": "msg_120d4f6d1001gwPXiERssl4wDM",
+              "sessionID": "ses_1"
+            },
+            "type": "session-message-content-updated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-usage-recorded as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-usage-recorded",
+          "examplePayload": {
+            "cost": 0,
+            "sessionID": "ses_1",
+            "source": "title",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "cost": 0,
+              "sessionID": "ses_1",
+              "source": "title",
+              "tokens": {
+                "cache": {
+                  "read": 0,
+                  "write": 0
+                },
+                "input": 0,
+                "output": 0,
+                "reasoning": 0
+              }
+            },
+            "type": "session-usage-recorded"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-external-bound as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/a",
+            "provider": "claude",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "directory": "/a",
+              "provider": "claude",
+              "sessionID": "ses_1"
+            },
+            "type": "session-external-bound"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-external-linked as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-external-linked",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "vendorSessionID": "vendor_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "vendorSessionID": "vendor_1"
+            },
+            "type": "session-external-linked"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-external-checkpointed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-external-checkpointed",
+          "examplePayload": {
+            "checkpoint": "checkpoint_1",
+            "historyHash": "hash_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "checkpoint": "checkpoint_1",
+              "historyHash": "hash_1",
+              "sessionID": "ses_1"
+            },
+            "type": "session-external-checkpointed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records worktree-resolved as the host published it.",
+      "expect": [
+        {
+          "eventType": "worktree-resolved",
+          "examplePayload": {
+            "directory": "/a",
+            "previous": "global",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "directory": "/a",
+              "previous": "global",
+              "projectID": "prj_1"
+            },
+            "type": "worktree-resolved"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records project-created as the host published it.",
+      "expect": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/a",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "canonical": "/a",
+              "projectID": "prj_1",
+              "vcs": "git"
+            },
+            "type": "project-created"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records project-vcs-changed as the host published it.",
+      "expect": [
+        {
+          "eventType": "project-vcs-changed",
+          "examplePayload": {
+            "projectID": "prj_1",
+            "vcs": "hg"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "projectID": "prj_1",
+              "vcs": "hg"
+            },
+            "type": "project-vcs-changed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records project-relocated as the host published it.",
+      "expect": [
+        {
+          "eventType": "project-relocated",
+          "examplePayload": {
+            "canonical": "/b",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "canonical": "/b",
+              "projectID": "prj_1"
+            },
+            "type": "project-relocated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records project-edited as the host published it.",
+      "expect": [
+        {
+          "eventType": "project-edited",
+          "examplePayload": {
+            "commands": {
+              "start": "bun install"
+            },
+            "icon": {
+              "color": "blue"
+            },
+            "name": "Routing",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "commands": {
+                "start": "bun install"
+              },
+              "icon": {
+                "color": "blue"
+              },
+              "name": "Routing",
+              "projectID": "prj_1"
+            },
+            "type": "project-edited"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records worktree-recorded as the host published it.",
+      "expect": [
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/a/feature",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "directory": "/a/feature",
+              "projectID": "prj_1",
+              "strategy": "git"
+            },
+            "type": "worktree-recorded"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records worktree-removed as the host published it.",
+      "expect": [
+        {
+          "eventType": "worktree-removed",
+          "examplePayload": {
+            "directory": "/a/feature",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "directory": "/a/feature",
+              "projectID": "prj_1"
+            },
+            "type": "worktree-removed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records workspace-created as the host published it.",
+      "expect": [
+        {
+          "eventType": "workspace-created",
+          "examplePayload": {
+            "provider": "local",
+            "time": 1,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "provider": "local",
+              "time": 1,
+              "workspaceID": "wrk_1"
+            },
+            "type": "workspace-created"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records workspace-bound as the host published it.",
+      "expect": [
+        {
+          "eventType": "workspace-bound",
+          "examplePayload": {
+            "binding": {
+              "sandbox": "sbx_1"
+            },
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "binding": {
+                "sandbox": "sbx_1"
+              },
+              "workspaceID": "wrk_1"
+            },
+            "type": "workspace-bound"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records workspace-used as the host published it.",
+      "expect": [
+        {
+          "eventType": "workspace-used",
+          "examplePayload": {
+            "time": 2,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "time": 2,
+              "workspaceID": "wrk_1"
+            },
+            "type": "workspace-used"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records workspace-destroyed as the host published it.",
+      "expect": [
+        {
+          "eventType": "workspace-destroyed",
+          "examplePayload": {
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "workspaceID": "wrk_1"
+            },
+            "type": "workspace-destroyed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-imported as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-imported",
+          "examplePayload": {
+            "cost": 0.25,
+            "messages": [
+              {
+                "created": 1,
+                "data": {
+                  "text": "Hello"
+                },
+                "id": "msg_1",
+                "seq": 1,
+                "type": "user"
+              }
+            ],
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "time": {
+              "created": 1,
+              "idle": 2,
+              "updated": 2
+            },
+            "tokens": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 10,
+              "output": 5,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "cost": 0.25,
+              "messages": [
+                {
+                  "created": 1,
+                  "data": {
+                    "text": "Hello"
+                  },
+                  "id": "msg_1",
+                  "seq": 1,
+                  "type": "user"
+                }
+              ],
+              "outcome": "succeeded",
+              "sessionID": "ses_1",
+              "time": {
+                "created": 1,
+                "idle": 2,
+                "updated": 2
+              },
+              "tokens": {
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "input": 10,
+                "output": 5,
+                "reasoning": 0
+              }
+            },
+            "type": "session-imported"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-instruction-blobs-stored as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-instruction-blobs-stored",
+          "examplePayload": {
+            "blobs": {
+              "sha_1": "Follow the style guide."
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "blobs": {
+                "sha_1": "Follow the style guide."
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-instruction-blobs-stored"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-instruction-entry-set as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "ticket",
+              "sessionID": "ses_1",
+              "value": {
+                "id": 42
+              }
+            },
+            "type": "session-instruction-entry-set"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-instruction-entry-removed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-instruction-entry-removed",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "ticket",
+              "sessionID": "ses_1"
+            },
+            "type": "session-instruction-entry-removed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-execution-admitted as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "version": 1
+            },
+            "reserved": [
+              "report"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [
+              "summary"
+            ],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_1",
+              "executionID": "exe_1",
+              "program": {
+                "version": 1
+              },
+              "reserved": [
+                "report"
+              ],
+              "sessionID": "ses_1",
+              "snapshot": [
+                "summary"
+              ],
+              "toolCallID": "call_1"
+            },
+            "type": "session-codemode-execution-admitted"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-execution-started as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executionID": "exe_1",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-execution-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-execution-resumed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-resumed",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executionID": "exe_1",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-execution-resumed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-execution-settled as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "report": "done"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executionID": "exe_1",
+              "outcome": "finished",
+              "sessionID": "ses_1",
+              "values": {
+                "report": "done"
+              }
+            },
+            "type": "session-codemode-execution-settled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-execution-discarded as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-discarded",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executionID": "exe_1",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-execution-discarded"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-call-scheduled as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executionID": "exe_1",
+              "index": 0,
+              "input": {
+                "path": "a.txt"
+              },
+              "omitted": false,
+              "sessionID": "ses_1",
+              "tool": "read"
+            },
+            "type": "session-codemode-call-scheduled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-call-progressed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-call-progressed",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "progress": {
+              "sessionID": "ses_2"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executionID": "exe_1",
+              "index": 0,
+              "progress": {
+                "sessionID": "ses_2"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-call-progressed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-call-settled as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-call-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "omitted": false,
+            "outcome": "completed",
+            "output": "text",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executionID": "exe_1",
+              "index": 0,
+              "omitted": false,
+              "outcome": "completed",
+              "output": "text",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-call-settled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-command-defined as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-command-defined",
+          "examplePayload": {
+            "description": "Deploys the app",
+            "handler": "deploy",
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "description": "Deploys the app",
+              "handler": "deploy",
+              "name": "deploy",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-command-defined"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-command-removed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-command-removed",
+          "examplePayload": {
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "name": "deploy",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-command-removed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-event-defined as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-defined",
+          "examplePayload": {
+            "description": "Runs the nightly check",
+            "handler": "check",
+            "name": "nightly",
+            "next": 3600001,
+            "schedule": {
+              "every": "1h"
+            },
+            "sessionID": "ses_1",
+            "time": 1
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "description": "Runs the nightly check",
+              "handler": "check",
+              "name": "nightly",
+              "next": 3600001,
+              "schedule": {
+                "every": "1h"
+              },
+              "sessionID": "ses_1",
+              "time": 1
+            },
+            "type": "session-codemode-event-defined"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-event-toggled as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-toggled",
+          "examplePayload": {
+            "enabled": false,
+            "name": "nightly",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "enabled": false,
+              "name": "nightly",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-event-toggled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-event-removed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-removed",
+          "examplePayload": {
+            "name": "nightly",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "name": "nightly",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-event-removed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-event-planned as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-planned",
+          "examplePayload": {
+            "name": "nightly",
+            "next": 3600001,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "name": "nightly",
+              "next": 3600001,
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-event-planned"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-event-fired as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-fired",
+          "examplePayload": {
+            "at": 3600001,
+            "executionID": "exe_2",
+            "messageID": "msg_2",
+            "name": "nightly",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "at": 3600001,
+              "executionID": "exe_2",
+              "messageID": "msg_2",
+              "name": "nightly",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-event-fired"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-event-skipped as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-skipped",
+          "examplePayload": {
+            "at": 7200001,
+            "name": "nightly",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "at": 7200001,
+              "name": "nightly",
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-event-skipped"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-background-recorded as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-background-recorded",
+          "examplePayload": {
+            "jobID": "exe_2",
+            "notificationID": "msg_3",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            },
+            "status": "running"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "jobID": "exe_2",
+              "notificationID": "msg_3",
+              "recovery": {
+                "assistantMessageID": "msg_1",
+                "kind": "codemode",
+                "parentSessionID": "ses_1",
+                "toolCallID": "call_1"
+              },
+              "status": "running"
+            },
+            "type": "session-background-recorded"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-background-terminal as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-background-terminal",
+          "examplePayload": {
+            "notificationID": "msg_3"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "notificationID": "msg_3"
+            },
+            "type": "session-background-terminal"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-background-completed as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_3"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "notificationID": "msg_3"
+            },
+            "type": "session-background-completed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records kv-stored as the host published it.",
+      "expect": [
+        {
+          "eventType": "kv-stored",
+          "examplePayload": {
+            "key": "websearch:provider",
+            "value": "exa"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records kv-removed as the host published it.",
+      "expect": [
+        {
+          "eventType": "kv-removed",
+          "examplePayload": {
+            "key": "websearch:provider"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider"
+            },
+            "type": "kv-removed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records rows-adopted as the host published it.",
+      "expect": [
+        {
+          "eventType": "rows-adopted",
+          "examplePayload": {
+            "aggregate": "ses_1",
+            "rows": [
+              {
+                "data": "{\"text\":\"hello\"}",
+                "id": "msg_1",
+                "seq": 0,
+                "session_id": "ses_1",
+                "time_created": 1,
+                "time_updated": 1,
+                "type": "user"
+              }
+            ],
+            "table": "session_message"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "aggregate": "ses_1",
+              "rows": [
+                {
+                  "data": "{\"text\":\"hello\"}",
+                  "id": "msg_1",
+                  "seq": 0,
+                  "session_id": "ses_1",
+                  "time_created": 1,
+                  "time_updated": 1,
+                  "type": "user"
+                }
+              ],
+              "table": "session_message"
+            },
+            "type": "rows-adopted"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records credential-created as the host published it.",
+      "expect": [
+        {
+          "eventType": "credential-created",
+          "examplePayload": {
+            "credentialID": "cred_1",
+            "integrationID": "anthropic",
+            "label": "default",
+            "secret": {
+              "data": "c2VhbGVk",
+              "iv": "aXY="
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "credentialID": "cred_1",
+              "integrationID": "anthropic",
+              "label": "default",
+              "secret": {
+                "data": "c2VhbGVk",
+                "iv": "aXY="
+              }
+            },
+            "type": "credential-created"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records credential-activated as the host published it.",
+      "expect": [
+        {
+          "eventType": "credential-activated",
+          "examplePayload": {
+            "credentialID": "cred_1",
+            "integrationID": "anthropic"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "credentialID": "cred_1",
+              "integrationID": "anthropic"
+            },
+            "type": "credential-activated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records credential-relabeled as the host published it.",
+      "expect": [
+        {
+          "eventType": "credential-relabeled",
+          "examplePayload": {
+            "credentialID": "cred_1",
+            "integrationID": "anthropic",
+            "label": "work"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "credentialID": "cred_1",
+              "integrationID": "anthropic",
+              "label": "work"
+            },
+            "type": "credential-relabeled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records credential-rotated as the host published it.",
+      "expect": [
+        {
+          "eventType": "credential-rotated",
+          "examplePayload": {
+            "credentialID": "cred_1",
+            "integrationID": "anthropic",
+            "secret": {
+              "data": "cm90YXRlZA==",
+              "iv": "aXYy"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "credentialID": "cred_1",
+              "integrationID": "anthropic",
+              "secret": {
+                "data": "cm90YXRlZA==",
+                "iv": "aXYy"
+              }
+            },
+            "type": "credential-rotated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records credential-removed as the host published it.",
+      "expect": [
+        {
+          "eventType": "credential-removed",
+          "examplePayload": {
+            "credentialID": "cred_1",
+            "integrationID": "anthropic",
+            "replacement": "cred_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "credentialID": "cred_1",
+              "integrationID": "anthropic",
+              "replacement": "cred_2"
+            },
+            "type": "credential-removed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "A requested call that fails is settled; one never requested failed as input, with the raw input it had.",
+      "expect": [
+        {
+          "eventType": "session-tool-input-failed",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_1",
+            "error": {
+              "message": "malformed",
+              "type": "tool.input-json"
+            },
+            "executed": false,
+            "id": "call_1",
+            "name": "echo",
+            "sessionID": "ses_1",
+            "text": "{\"text\":"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-tool-input-started",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_1",
+            "id": "call_1",
+            "name": "echo",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-input-ended",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_1",
+            "id": "call_1",
+            "sessionID": "ses_1",
+            "text": "{\"text\":"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_assistant_1",
+              "error": {
+                "message": "malformed",
+                "type": "tool.input-json"
+              },
+              "executed": false,
+              "id": "call_1",
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "A requested call that fails is settled.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_1",
+            "error": {
+              "message": "Tool execution interrupted",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {},
+            "name": "echo",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_assistant_1",
+              "error": {
+                "message": "Tool execution interrupted",
+                "type": "aborted"
+              },
+              "executed": false,
+              "id": "call_1",
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "A requested call takes its name from the start of the call's input.",
+      "expect": [
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "text": "hi"
+            },
+            "name": "echo",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-tool-input-started",
+          "examplePayload": {
+            "assistantMessageID": "msg_assistant_1",
+            "id": "call_1",
+            "name": "echo",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "assistantMessageID": "msg_assistant_1",
+              "executed": false,
+              "id": "call_1",
+              "input": {
+                "text": "hi"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-called"
+          }
+        ]
+      }
+    },
+    {
+      "description": "A publication of several facts is one commit, in the order the host published them.",
+      "expect": [
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_first",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-moved",
+          "examplePayload": {
+            "location": {
+              "directory": "/b"
+            },
+            "projectID": "global",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "inboxID": "msg_first",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-delivered"
+          },
+          {
+            "payload": {
+              "location": {
+                "directory": "/b"
+              },
+              "projectID": "global",
+              "sessionID": "ses_1"
+            },
+            "type": "session-moved"
+          }
+        ]
+      }
+    }
+  ]
+}

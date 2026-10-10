@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "noUncheckedIndexedAccess": false,
+    // The linked Specter packages declare their types against the Specter checkout's copy of effect. Map
+    // effect to OC++'s declarations so both sides name the same types; src/single-effect.ts does the same
+    // at runtime. Both go away once Specter is installed from a registry or a packed tarball.
+    "paths": {
+      "effect": ["./node_modules/effect/dist/index.d.ts"],
+      "effect/*": ["./node_modules/effect/dist/*.d.ts", "./node_modules/effect/dist/*/index.d.ts"]
+    }
+  }
+}

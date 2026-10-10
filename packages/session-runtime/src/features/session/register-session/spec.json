@@ -1,0 +1,114 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records a Session the embedding host created, so runtime Commands can address it.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "registerSession",
+  "scenarios": [
+    {
+      "description": "An unknown Session is registered with the host's session.created payload.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "location": {
+          "directory": "/tmp/ws"
+        },
+        "projectID": "prj_1",
+        "sessionID": "ses_1",
+        "slug": "brave-otter",
+        "version": "2"
+      }
+    },
+    {
+      "description": "A child Session keeps its parent: the payload is recorded as the host published it.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "parentID": "ses_1",
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "brave-otter",
+            "title": "Child",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "location": {
+          "directory": "/tmp/ws"
+        },
+        "parentID": "ses_1",
+        "projectID": "prj_1",
+        "sessionID": "ses_2",
+        "slug": "brave-otter",
+        "title": "Child",
+        "version": "2"
+      }
+    },
+    {
+      "description": "Registering a Session twice is rejected; the first registration stands.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session already registered"
+      },
+      "when": {
+        "location": {
+          "directory": "/tmp/ws"
+        },
+        "projectID": "prj_1",
+        "sessionID": "ses_1",
+        "slug": "brave-otter",
+        "version": "2"
+      }
+    }
+  ]
+}

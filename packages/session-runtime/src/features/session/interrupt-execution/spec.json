@@ -1,0 +1,854 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Interrupts the active execution of a Session without touching pending input (session.md: Execution Is Process-Local). OC++ treats idle/settled interrupt as a public no-op; the app models it as a rejection and the M4 facade translates it back.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "interruptExecution",
+  "scenarios": [
+    {
+      "description": "Interruption stops locally owned execution: an active execution is interrupted (reason defaults to user).",
+      "expect": [
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An open tool call is settled atomically with the interrupt: one aborted tool failure (naming the tool) precedes the interrupted execution in the same commit.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Step interrupted",
+              "type": "aborted"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "x"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Every open call is settled in call order, and the executed flag of each call is carried over; settled calls are left alone.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": true,
+            "id": "call_2",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Step interrupted",
+              "type": "aborted"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "x"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": true,
+            "id": "call_2",
+            "input": {
+              "code": "x"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_3",
+            "input": {
+              "code": "x"
+            },
+            "name": "lookup",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "executed": true,
+            "id": "call_3",
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call that already failed is settled and not failed again: only the interrupted event is emitted.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Step interrupted",
+              "type": "aborted"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "x"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A new step attempt starts with a clean call table: calls left open by an earlier attempt are not settled by the interrupt.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_2",
+            "error": {
+              "message": "Step interrupted",
+              "type": "aborted"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "x"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_2",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A step that already settled is left alone: only the interrupted event is emitted.",
+      "expect": [
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The interruption reason is recorded (user, shutdown, superseded).",
+      "expect": [
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "shutdown",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "reason": "shutdown",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Interruption stops locally owned execution without deleting pending input: a pending inbox item yields only the interrupted event.",
+      "expect": [
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "still pending"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A known Session that is idle is a public no-op in OC++; modelled as the rejection \"Session is idle\".",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session is idle"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A known Session that is settled is a public no-op in OC++; modelled as \"Session is idle\" (success released the claim).",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session is idle"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Failure releases the claim: interrupting a failed (settled) Session is a no-op in OC++; modelled as \"Session is idle\".",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "boom",
+              "type": "provider"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session is idle"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A second interrupt after an interruption is a no-op in OC++; modelled as \"Session is idle\".",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session is idle"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The public interrupt operation verifies that the durable Session exists: an unknown Session fails.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "sessionID": "ses_missing"
+      }
+    },
+    {
+      "description": "Different Sessions run concurrently: interrupting one does not require the other to be active.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session is idle"
+      },
+      "when": {
+        "sessionID": "ses_2"
+      }
+    }
+  ]
+}

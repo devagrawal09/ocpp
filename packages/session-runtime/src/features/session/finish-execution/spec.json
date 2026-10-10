@@ -1,0 +1,251 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Ends the busy period successfully once no step is in flight (session.md: Execution Is Process-Local). Failure is not recorded here: settleStep owns the failure outcome.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "finishExecution",
+  "scenarios": [
+    {
+      "description": "A failed step whose retry produced nothing leaves its failure standing: the execution may finish.",
+      "expect": [
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An active execution with all steps ended succeeds.",
+      "expect": [
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Success cannot be recorded while a step is in flight.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step in flight"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Session without an active execution cannot finish.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An interrupted execution is settled: it cannot also succeed.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A succeeded execution cannot succeed twice.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A failed execution cannot finish again.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "boom",
+              "type": "provider"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

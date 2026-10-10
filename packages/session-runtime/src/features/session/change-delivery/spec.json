@@ -1,0 +1,258 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Changes how a pending inbox item is delivered (session.md: steer and queue): a steered item enters history at the next step boundary, a queued one waits for idle.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "changeDelivery",
+  "scenarios": [
+    {
+      "description": "A queued item is steered.",
+      "expect": [
+        {
+          "eventType": "session-inbox-delivery-changed",
+          "examplePayload": {
+            "delivery": "steer",
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "delivery": "steer",
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A steered item is queued.",
+      "expect": [
+        {
+          "eventType": "session-inbox-delivery-changed",
+          "examplePayload": {
+            "delivery": "queue",
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "delivery": "queue",
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An item can change back after an earlier change.",
+      "expect": [
+        {
+          "eventType": "session-inbox-delivery-changed",
+          "examplePayload": {
+            "delivery": "queue",
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivery-changed",
+          "examplePayload": {
+            "delivery": "steer",
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "delivery": "queue",
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An item already delivered that way is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item already steer"
+      },
+      "when": {
+        "delivery": "steer",
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Delivered input is no longer pending.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item not pending"
+      },
+      "when": {
+        "delivery": "steer",
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Cancelled input is no longer pending.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item not pending"
+      },
+      "when": {
+        "delivery": "steer",
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown item, or one admitted to another Session, is not found.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item not found"
+      },
+      "when": {
+        "delivery": "steer",
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

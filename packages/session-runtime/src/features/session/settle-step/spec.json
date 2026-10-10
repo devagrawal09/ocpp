@@ -1,0 +1,1654 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records the single terminal fact of one physical attempt of an in-flight step (session.md: One Step May Have Several Physical Attempts: \"Every local and hosted call reaches durable success or failure before the Step publishes its single terminal ended or failed event\"). A success records its finish reason and usage. A failure records, in the same fact, whether the step is retried; which failures are retryable is the caller's classification, while this Command owns the budget (limit, default 3) and fails the execution in the same commit once it is spent.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "settleStep",
+  "scenarios": [
+    {
+      "description": "A fresh retry runs as a new step because the failed attempt's output stands; the new step keeps the retry budget the first one spent.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_2",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 2000,
+              "attempt": 2,
+              "fresh": true
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1,
+              "fresh": true
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_2",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_2",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "fresh": true,
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A started step succeeds with its finish reason; cost and tokens default to zero.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A tool-calls finish is recorded as such.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "finish": "tool-calls",
+        "outcome": "succeeded",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A step whose tool results the model must answer records that another step follows.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "continues": true,
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "continues": true,
+        "finish": "tool-calls",
+        "outcome": "succeeded",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Reported cost and token usage are recorded with the step.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0.5,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 10,
+              "output": 4,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "cost": 0.5,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "What the host observed of the attempt is recorded as given: raw finish, provider state, snapshot and changed files.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "files": [
+              "src/a.ts"
+            ],
+            "finish": "stop",
+            "outcome": "succeeded",
+            "providerState": {
+              "openai": {
+                "responseID": "resp_1"
+              }
+            },
+            "rawFinish": "end_turn",
+            "sessionID": "ses_1",
+            "snapshot": "snap_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "files": [
+          "src/a.ts"
+        ],
+        "finish": "stop",
+        "outcome": "succeeded",
+        "providerState": {
+          "openai": {
+            "responseID": "resp_1"
+          }
+        },
+        "rawFinish": "end_turn",
+        "sessionID": "ses_1",
+        "snapshot": "snap_1"
+      }
+    },
+    {
+      "description": "A retryable failure within budget carries its retry (session.md, Retry Is Narrow And Observable: \"session.retry.scheduled records generic backoff\"): attempt 1, due at the given time.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 2000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A normalized content-filter finish, raw finish, cost, and tokens are recorded with the failure.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0.25,
+            "error": {
+              "message": "blocked",
+              "status": 400,
+              "type": "content-filter"
+            },
+            "finish": "content-filter",
+            "outcome": "failed",
+            "rawFinish": "safety",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "blocked",
+              "status": 400,
+              "type": "content-filter"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "cost": 0.25,
+        "error": {
+          "message": "blocked",
+          "status": 400,
+          "type": "content-filter"
+        },
+        "finish": "content-filter",
+        "outcome": "failed",
+        "rawFinish": "safety",
+        "retryable": false,
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 0,
+          "output": 0,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "A retried physical attempt of the same step can fail again: the step id is reused and the retries keep counting.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 2000,
+              "attempt": 2
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The third failure is retried as attempt 3, still within the default budget of 3.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 2000,
+              "attempt": 3
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 2
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The default budget is exhausted after 3 retries: the fourth failure fails the execution instead of retrying.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 2
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 3
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An explicit limit of 1 allows one retry.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 2000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "limit": 1,
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An explicit limit of 1 is exhausted after one retry: the next failure fails the execution.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "limit": 1,
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A limit of 0 never retries.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "limit": 0,
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A non-retryable failure fails the execution in the same commit, with budget to spare.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": false,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The retry follows the latest failure, not the first: \"Before durable output, generic retries retain the logical step number and assistant message ID\".",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 2000,
+              "attempt": 2
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A step that was never started cannot settle.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not started"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A step started in another Session cannot settle here.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not started"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An attempt settles once: a succeeded step cannot fail.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step already settled"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An attempt settles once: a succeeded step cannot succeed again.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step already settled"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A step whose retry is pending has no attempt in flight: it cannot settle again until a new attempt starts.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step already settled"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A failed execution records no further step facts: settling its in-flight step is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An interrupted execution records no further step facts: settling its in-flight step is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A settled execution records no further step facts: a succeeded execution cannot settle a step.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

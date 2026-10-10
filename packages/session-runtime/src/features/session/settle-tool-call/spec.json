@@ -1,0 +1,1338 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Settles a recorded tool call of the in-flight step with its content or its error (session.md: tool outcomes after durable calls).",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "settleToolCall",
+  "scenarios": [
+    {
+      "description": "A requested call succeeds with its content.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "content": [
+              {
+                "text": "2",
+                "type": "text"
+              }
+            ],
+            "executed": false,
+            "id": "call_1",
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A requested call fails with its error.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "boom",
+              "type": "tool.execution"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "boom",
+          "type": "tool.execution"
+        },
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "UI metadata and provider result state are recorded with the outcome as given.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "content": [
+              {
+                "text": "2",
+                "type": "text"
+              }
+            ],
+            "executed": false,
+            "id": "call_1",
+            "metadata": {
+              "exitCode": 0
+            },
+            "outcome": "succeeded",
+            "resultState": {
+              "openai": {
+                "itemID": "out_1"
+              }
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "metadata": {
+          "exitCode": 0
+        },
+        "resultState": {
+          "openai": {
+            "itemID": "out_1"
+          }
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A failure may carry the partial content the tool produced before failing.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "content": [
+              {
+                "text": "partial",
+                "type": "text"
+              }
+            ],
+            "error": {
+              "message": "boom",
+              "type": "tool.execution"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "partial",
+            "type": "text"
+          }
+        ],
+        "error": {
+          "message": "boom",
+          "type": "tool.execution"
+        },
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Calls settle independently and in any order: the second call settles while the first is still open.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "content": [
+              {
+                "text": "B",
+                "type": "text"
+              }
+            ],
+            "executed": false,
+            "id": "call_2",
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_2",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "B",
+            "type": "text"
+          }
+        ],
+        "id": "call_2",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A success needs non-empty content (the terminal fact is one non-empty model representation).",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Success needs content"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call settles once: a second outcome is rejected, which makes a duplicate request harmless.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "content": [
+              {
+                "text": "2",
+                "type": "text"
+              }
+            ],
+            "executed": false,
+            "id": "call_1",
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call already settled"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "3",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A failed call cannot then succeed.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "boom",
+              "type": "tool.execution"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call already settled"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "3",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call that was never recorded has no outcome: durability comes first.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call not recorded"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A retried attempt forgets the failed attempt calls: its call ids are unknown until recorded again.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call not recorded"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An outcome needs an active execution.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An interrupted execution records no further outcomes: a running tool settles nothing after the interrupt.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An outcome after the execution failed is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "boom",
+              "type": "provider"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An outcome after the execution succeeded is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An outcome after the step ended is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An outcome after the attempt failed is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "content": [
+          {
+            "text": "2",
+            "type": "text"
+          }
+        ],
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An open call is aborted with the type \"aborted\": the failure carries that error (orphan reconciliation and interrupt settle calls this way).",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool execution interrupted: execute",
+          "type": "aborted"
+        },
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The executed flag of the outcome is the caller's: an aborted call whose execution had begun says so.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": true,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool execution interrupted: execute",
+          "type": "aborted"
+        },
+        "executed": true,
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call already settled cannot be aborted: a stale reconciliation is harmless.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "content": [
+              {
+                "text": "2",
+                "type": "text"
+              }
+            ],
+            "executed": false,
+            "id": "call_1",
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call already settled"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool execution interrupted: execute",
+          "type": "aborted"
+        },
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call already aborted cannot be aborted again.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call already settled"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool execution interrupted: execute",
+          "type": "aborted"
+        },
+        "id": "call_1",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

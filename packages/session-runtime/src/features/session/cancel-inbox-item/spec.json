@@ -1,0 +1,192 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Cancels a pending inbox item; cancellation never schedules execution (session.md: pending-input mutation).",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "cancelInboxItem",
+  "scenarios": [
+    {
+      "description": "Cancels an inbox item that is still pending.",
+      "expect": [
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "hello"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An item whose inbox row was consumed by delivery cannot be cancelled.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "hello"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item already delivered"
+      },
+      "when": {
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Cancelling an already cancelled item is rejected",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "hello"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item already cancelled"
+      },
+      "when": {
+        "inboxID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Cancelling an unknown inbox item fails.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item not found"
+      },
+      "when": {
+        "inboxID": "msg_missing",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Cancelling in an unknown Session fails.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "inboxID": "msg_1",
+        "sessionID": "ses_missing"
+      }
+    }
+  ]
+}

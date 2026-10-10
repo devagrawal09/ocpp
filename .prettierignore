@@ -1,3 +1,4 @@
 sst-env.d.ts
 packages/client/src/generated/
 packages/client/src/generated-effect/
+packages/session-runtime/src/features/**/spec.json

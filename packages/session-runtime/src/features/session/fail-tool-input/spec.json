@@ -1,0 +1,366 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Fails a tool call whose input never became a call (it stopped streaming, or never parsed), with the raw input it had.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "failToolInput",
+  "scenarios": [
+    {
+      "description": "Malformed input fails the call it was for, with its raw text; nothing ran.",
+      "expect": [
+        {
+          "eventType": "session-tool-input-failed",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
+              "type": "tool.input-json"
+            },
+            "executed": false,
+            "id": "call_1",
+            "name": "echo",
+            "sessionID": "ses_1",
+            "text": "{\"text\":"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
+          "type": "tool.input-json"
+        },
+        "id": "call_1",
+        "name": "echo",
+        "sessionID": "ses_1",
+        "text": "{\"text\":"
+      }
+    },
+    {
+      "description": "Input that stopped streaming fails without text when none finished.",
+      "expect": [
+        {
+          "eventType": "session-tool-input-failed",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Step interrupted",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_1",
+            "name": "echo",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Step interrupted",
+          "type": "aborted"
+        },
+        "id": "call_1",
+        "name": "echo",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call that was requested is settled, not failed here.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {},
+            "name": "echo",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call already recorded"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
+          "type": "tool.input-json"
+        },
+        "id": "call_1",
+        "name": "echo",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call fails as input once.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-input-failed",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
+              "type": "tool.input-json"
+            },
+            "executed": false,
+            "id": "call_1",
+            "name": "echo",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call already recorded"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
+          "type": "tool.input-json"
+        },
+        "id": "call_1",
+        "name": "echo",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A settled step records no more calls.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
+          "type": "tool.input-json"
+        },
+        "id": "call_1",
+        "name": "echo",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Only the in-flight step records its calls.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_2",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
+          "type": "tool.input-json"
+        },
+        "id": "call_1",
+        "name": "echo",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An interrupted execution records nothing more.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": {
+          "message": "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
+          "type": "tool.input-json"
+        },
+        "id": "call_1",
+        "name": "echo",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

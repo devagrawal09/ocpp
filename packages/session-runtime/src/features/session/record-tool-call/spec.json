@@ -1,0 +1,732 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records a complete local tool call of the in-flight step before any side effect (session.md: tool-call durability).",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "recordToolCall",
+  "scenarios": [
+    {
+      "description": "A tool call is recorded with its decoded input, not yet executed.",
+      "expect": [
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "return 1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "return 1"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The tool name is recorded with the call.",
+      "expect": [
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "x"
+            },
+            "name": "lookup",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "x"
+        },
+        "name": "lookup",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call the provider executes itself is recorded as executed, with its provider state.",
+      "expect": [
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": true,
+            "id": "call_1",
+            "input": {
+              "query": "x"
+            },
+            "name": "web_search",
+            "sessionID": "ses_1",
+            "state": {
+              "openai": {
+                "itemID": "ws_1"
+              }
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executed": true,
+        "id": "call_1",
+        "input": {
+          "query": "x"
+        },
+        "name": "web_search",
+        "sessionID": "ses_1",
+        "state": {
+          "openai": {
+            "itemID": "ws_1"
+          }
+        }
+      }
+    },
+    {
+      "description": "A step may record several calls, each with its own call id.",
+      "expect": [
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_2",
+            "input": {
+              "code": "b"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "a"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_2",
+        "input": {
+          "code": "b"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call id is recorded once per attempt: a duplicate request is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "a"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Tool call already recorded"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A retried attempt may reuse a call id: the new step.started opens a fresh attempt.",
+      "expect": [
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "a"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "a"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call needs an active execution.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call after the execution succeeded is rejected: nothing is recorded or run for a settled execution.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call after an interrupt is rejected, so an interrupted execution runs no further tools.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call after the execution failed is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "boom",
+              "type": "provider"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call needs a started step.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call for an ended step is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call for a failed attempt is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A call belongs to the in-flight step: another step id is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_2",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

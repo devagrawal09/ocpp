@@ -1,0 +1,206 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Reports the staged revert of a Session, or null when none is staged (for the UI).",
+  "formatVersion": 1,
+  "kind": "query",
+  "name": "revertStatus",
+  "scenarios": [
+    {
+      "description": "A Session with no revert events has nothing staged.",
+      "expect": {
+        "staged": null
+      },
+      "given": [],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A staged revert is reported with its boundary message.",
+      "expect": {
+        "staged": {
+          "messageID": "msg_1"
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Staging again moves the boundary.",
+      "expect": {
+        "staged": {
+          "messageID": "msg_2"
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_2"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Clearing discards the staged revert.",
+      "expect": {
+        "staged": null
+      },
+      "given": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-cleared",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Committing consumes the staged revert.",
+      "expect": {
+        "staged": null
+      },
+      "given": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-committed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "to": "msg_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A revert can be staged again after a commit.",
+      "expect": {
+        "staged": {
+          "messageID": "msg_1"
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_2"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-committed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "to": "msg_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Sessions are independent.",
+      "expect": {
+        "staged": {
+          "messageID": "msg_5"
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "messageID": "msg_5"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_2"
+      }
+    }
+  ]
+}

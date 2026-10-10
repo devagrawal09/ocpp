@@ -1,0 +1,1084 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Returns the inbox item that delivers next at a step or idle boundary, and why.",
+  "formatVersion": 1,
+  "kind": "query",
+  "name": "nextDeliverable",
+  "scenarios": [
+    {
+      "description": "At an entry (a continued turn's rest point, or a new Location's), the queue's head goes in when it is a control item.",
+      "expect": {
+        "item": {
+          "delivery": "queue",
+          "inboxID": "msg_1",
+          "type": "compaction"
+        },
+        "reason": "entry-control"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "entry",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "At an entry, queued input at the head of the queue waits for an idle boundary, and so does a control item behind it.",
+      "expect": {
+        "item": null,
+        "reason": "queue-waits-for-idle"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "queue",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "entry",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "At an entry, steers deliver before a queued control item, in enqueue order.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Now"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Then"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "entry",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An inbox item remains pending outside history until delivery: an empty inbox has nothing deliverable.",
+      "expect": {
+        "item": null,
+        "reason": "nothing-pending"
+      },
+      "given": [],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A steer delivers at the next Safe Step Boundary.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_1",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Fix it"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Steers deliver in enqueue order.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_1",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "First"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Second"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Steers deliver in enqueue order: once the first is delivered the second is next.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "First"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Second"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A queue item remains pending while the Session can continue (step boundary).",
+      "expect": {
+        "item": null,
+        "reason": "queue-waits-for-idle"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A queue item remains pending while the Session can continue: a later steer still delivers at a step boundary.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Now"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "At an idle boundary, steers still take priority over an earlier queue item.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Now"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "idle",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "At an idle boundary with no steers, one queued item delivers (the earliest).",
+      "expect": {
+        "item": {
+          "delivery": "queue",
+          "inboxID": "msg_1",
+          "type": "user"
+        },
+        "reason": "idle-queued"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Even later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "idle",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "After a queued item delivers, steers that arrived during delivery are followed before another queued item.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_3",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Even later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Arrived during delivery"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "idle",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "After the arrived steers deliver, the next queued item delivers at the idle boundary.",
+      "expect": {
+        "item": {
+          "delivery": "queue",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "idle-queued"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Even later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Arrived during delivery"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "idle",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Steering delivery is among steers: a queued compaction does not hold back a steer enqueued after it.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "After compaction"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A queued move does not hold back a later steer either; it waits for an idle boundary or an entry.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "location": {
+                  "directory": "/tmp/ws"
+                },
+                "projectID": "prj_1"
+              },
+              "type": "move"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "After move"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Steers ahead of a control item deliver first; the control item forms a boundary for later steers.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_1",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Before compaction"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "After compaction"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A control item forms a delivery boundary so later steers do not cross it: with a steer control item at the head it delivers alone before later steers.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_1",
+          "type": "compaction"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "After compaction"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "At an idle boundary steers take priority over a queued control item.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "location": {
+                  "directory": "/tmp/ws"
+                },
+                "projectID": "prj_1"
+              },
+              "type": "move"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "After move"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "idle",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "With no steer pending, a queued control item is the next idle delivery.",
+      "expect": {
+        "item": {
+          "delivery": "queue",
+          "inboxID": "msg_1",
+          "type": "move"
+        },
+        "reason": "idle-queued"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "location": {
+                  "directory": "/tmp/ws"
+                },
+                "projectID": "prj_1"
+              },
+              "type": "move"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "After move"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "idle",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Each request has its own delivery mode: changing a queued item to steer makes it deliverable at a step boundary.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_1",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "Later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivery-changed",
+          "examplePayload": {
+            "delivery": "steer",
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Cancelled items never deliver.",
+      "expect": {
+        "item": null,
+        "reason": "nothing-pending"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Oops"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A cancelled control item no longer forms a boundary.",
+      "expect": {
+        "item": {
+          "delivery": "steer",
+          "inboxID": "msg_2",
+          "type": "user"
+        },
+        "reason": "steer-in-order"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "After compaction"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "step",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Delivered items never deliver twice.",
+      "expect": {
+        "item": null,
+        "reason": "nothing-pending"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Once"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "idle",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

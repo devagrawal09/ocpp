@@ -1,0 +1,1922 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Reports a Session's executions (idle, active or settled, with the last outcome and whether pending input will wake it), its steps (the one in flight, its attempts, failure and open calls) and what its next step starts from (session.md: Execution Is Process-Local; One Step May Have Several Physical Attempts).",
+  "formatVersion": 1,
+  "kind": "query",
+  "name": "sessionStatus",
+  "scenarios": [
+    {
+      "description": "A Session with no events is idle (no busy period has started).",
+      "expect": {
+        "executions": 0,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "idle",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A started, unended execution is a busy period currently owned: active, at an idle boundary.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "active",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Success ends the busy period: the Session is settled.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": "succeeded",
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "settled",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Failure ends the busy period: the Session is settled, with the error that failed it.",
+      "expect": {
+        "error": {
+          "message": "boom",
+          "type": "provider"
+        },
+        "executions": 1,
+        "lastOutcome": "failed",
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "settled",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "boom",
+              "type": "provider"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Interruption ends the busy period: the Session is settled with outcome interrupted and its reason.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": "interrupted",
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "reason": "user",
+        "status": "settled",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A new busy period after a settled one makes the Session active again.",
+      "expect": {
+        "executions": 2,
+        "lastOutcome": "succeeded",
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "active",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Different Sessions run concurrently: status is per Session, so an active ses_2 leaves ses_1 idle.",
+      "expect": {
+        "executions": 0,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "idle",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Input that will wake the Session keeps it from idle: the next execution starts from it.",
+      "expect": {
+        "error": {
+          "message": "boom",
+          "type": "provider"
+        },
+        "executions": 1,
+        "lastOutcome": "failed",
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "settled",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        },
+        "wakes": true
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "boom",
+              "type": "provider"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An execution takes the wakes recorded before it started: input it never delivered before failing waits for the next wake, and the Session is idle.",
+      "expect": {
+        "error": {
+          "message": "boom",
+          "type": "provider"
+        },
+        "executions": 1,
+        "lastOutcome": "failed",
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "settled",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "boom",
+              "type": "provider"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Held, delivered or cancelled input wakes nothing, and an interruption parks what is pending.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": "interrupted",
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "reason": "user",
+        "status": "settled",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-held",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_4",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A started, unended step is in flight: not a boundary yet.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "inFlight": "msg_1",
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_in",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_in",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A step that needs no follow-up is no longer in flight and leaves the execution idle: queued input may enter.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A step whose tool results the model must answer continues at a step boundary, and the steps since input keep counting.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 2,
+          "stepsSinceInput": 2
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "started": 2
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_in",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_in",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "continues": true,
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_2",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_2",
+            "continues": true,
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Delivered input starts the step-limit count again.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 0
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "continues": true,
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_in",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_in",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A delivered control item does not start the count again.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_in",
+            "item": {
+              "delivery": "steer",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_in",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The step count spans executions of one Session; a new execution starts idle with no steps of its own.",
+      "expect": {
+        "executions": 2,
+        "lastOutcome": "interrupted",
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "reason": "user",
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "continues": true,
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An execution continuing an interrupted turn rests at entry boundaries: never queued input.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "entry",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "active",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-continued",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Interruption clears the step in flight; the counts stay.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": "interrupted",
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "reason": "user",
+        "status": "settled",
+        "step": {
+          "attempts": 1,
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A failed attempt is no longer in flight and exposes its failure; the attempt still counts.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "lastFailure": {
+            "message": "connection reset",
+            "type": "transport"
+          },
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A retried step is retried at a step boundary when it is due, keeps its number, and keeps the failure visible until the next attempt starts.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 2,
+          "boundary": "step",
+          "retryAt": 5000,
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "lastFailure": {
+            "message": "connection reset",
+            "type": "transport"
+          },
+          "retrying": true,
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 5000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The retried attempt is the same step with a second physical attempt: the step counts do not grow and the failure clears.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 2,
+          "boundary": "step",
+          "stepsInExecution": 2,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 2,
+          "inFlight": "msg_1",
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A fresh retry runs as the next step: it keeps the step's number and counts as its next attempt.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 2,
+          "boundary": "step",
+          "stepsInExecution": 2,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "inFlight": "msg_2",
+          "started": 2
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1,
+              "fresh": true
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_2",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A retried step that then ends reports every attempt it took; the next step counts its attempts from one.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 3,
+          "stepsSinceInput": 2
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "inFlight": "msg_2",
+          "started": 2
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "continues": true,
+            "cost": 0,
+            "finish": "tool-calls",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_2",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A terminal execution event clears the failure; the counts stay.",
+      "expect": {
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "executions": 1,
+        "lastOutcome": "failed",
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "status": "settled",
+        "step": {
+          "attempts": 1,
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Open calls keep call order, with their names and executed flags, and a settled one (success or failure) leaves the list.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "inFlight": "msg_1",
+          "openCalls": [
+            {
+              "assistantMessageID": "msg_1",
+              "executed": true,
+              "id": "call_2",
+              "name": "execute"
+            }
+          ],
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": true,
+            "id": "call_2",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_3",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "content": [
+              {
+                "text": "2",
+                "type": "text"
+              }
+            ],
+            "executed": false,
+            "id": "call_1",
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_3",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "When every call is settled the field is omitted.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 1,
+          "inFlight": "msg_1",
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "Tool execution interrupted: execute",
+              "type": "aborted"
+            },
+            "executed": false,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A new attempt of the same step starts with a clean call table: calls the failed attempt left open are not reported.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 2,
+          "boundary": "step",
+          "stepsInExecution": 2,
+          "stepsSinceInput": 1
+        },
+        "status": "active",
+        "step": {
+          "attempts": 2,
+          "inFlight": "msg_1",
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A terminal execution event drops open calls: an interrupted execution has nothing left to settle.",
+      "expect": {
+        "executions": 1,
+        "lastOutcome": "interrupted",
+        "next": {
+          "attempt": 1,
+          "boundary": "step",
+          "stepsInExecution": 1,
+          "stepsSinceInput": 1
+        },
+        "reason": "user",
+        "status": "settled",
+        "step": {
+          "attempts": 1,
+          "started": 1
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executed": false,
+            "id": "call_1",
+            "input": {
+              "code": "1"
+            },
+            "name": "execute",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

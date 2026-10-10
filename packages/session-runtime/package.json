@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ocpp/session-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "spec:build": "specter-spec export src/features",
+    "test": "bun run spec:build && bun test --only-failures",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@ocpp/ai": "workspace:*",
+    "@ocpp/codemode": "workspace:*",
+    "@ocpp/schema": "workspace:*",
+    "@specter-ts/core": "link:@specter-ts/core",
+    "@specter-ts/memory": "link:@specter-ts/memory",
+    "@specter-ts/reaction-outbox": "link:@specter-ts/reaction-outbox",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@specter-ts/jsonl": "link:@specter-ts/jsonl",
+    "@specter-ts/spec": "link:@specter-ts/spec",
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

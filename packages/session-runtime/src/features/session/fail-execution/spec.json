@@ -1,0 +1,89 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Fails the active execution of a Session for a reason outside a step, such as a compaction that failed (OC++ runner: a failed compaction fails the drain).",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "failExecution",
+  "scenarios": [
+    {
+      "description": "An active execution fails with the error.",
+      "expect": [
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "Compaction produced no summary",
+              "type": "compaction.failed"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "error": {
+          "message": "Compaction produced no summary",
+          "type": "compaction.failed"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An idle Session has no execution to fail.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "error": {
+          "message": "Compaction produced no summary",
+          "type": "compaction.failed"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A settled execution cannot fail again.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "error": {
+          "message": "Compaction produced no summary",
+          "type": "compaction.failed"
+        },
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

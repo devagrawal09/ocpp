@@ -1,0 +1,927 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Admits a user or synthetic input to a Session inbox before execution begins (session.md: Prompt Admission Precedes Execution).",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "enqueueInput",
+  "scenarios": [
+    {
+      "description": "Session.prompt publishes one durable session.inbox.enqueued fact; the input stays pending outside Session History until delivery.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Inspect the failing tests"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "Inspect the failing tests"
+        },
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "A replacing admission (OC++ coalescing) cancels the replaced pending items and admits the new one in the same commit.",
+      "expect": [
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_3",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "both notices"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "first notice"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "second notice"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_3",
+        "payload": {
+          "text": "both notices"
+        },
+        "replaces": [
+          "msg_1",
+          "msg_2"
+        ],
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "A replaced item that was already delivered is not pending: the replacement is rejected so the caller decides again.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "first notice"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-delivered",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Replaced input not pending"
+      },
+      "when": {
+        "inboxID": "msg_2",
+        "payload": {
+          "text": "merged"
+        },
+        "replaces": [
+          "msg_1"
+        ],
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "A replaced item that was cancelled, or belongs to another Session, is not pending here either.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "elsewhere"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "cancelled"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-cancelled",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Replaced input not pending"
+      },
+      "when": {
+        "inboxID": "msg_3",
+        "payload": {
+          "text": "merged"
+        },
+        "replaces": [
+          "msg_1"
+        ],
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "A manual compaction is admitted as a control item; nothing behind it crosses it.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {},
+              "type": "compaction"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "delivery": "queue",
+        "inboxID": "msg_1",
+        "payload": {},
+        "sessionID": "ses_1",
+        "type": "compaction"
+      }
+    },
+    {
+      "description": "A move to another Location is admitted as a control item with its destination.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "location": {
+                  "directory": "/tmp/other"
+                },
+                "projectID": "prj_2"
+              },
+              "type": "move"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "location": {
+            "directory": "/tmp/other"
+          },
+          "projectID": "prj_2"
+        },
+        "sessionID": "ses_1",
+        "type": "move"
+      }
+    },
+    {
+      "description": "Delivery is explicit: steer is the default when delivery is omitted.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hello"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "hello"
+        },
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "Delivery queue is recorded when requested.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "queue",
+              "payload": {
+                "text": "later"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "delivery": "queue",
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "later"
+        },
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "Completion and startup-failure notifications are admitted as synthetic input.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Shell command finished"
+              },
+              "type": "synthetic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-held",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_2",
+        "payload": {
+          "text": "Shell command finished"
+        },
+        "resume": false,
+        "sessionID": "ses_1",
+        "type": "synthetic"
+      }
+    },
+    {
+      "description": "resume: false records the input as held: it waits for the next wake instead of waking the Session.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "record only"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-held",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "record only"
+        },
+        "resume": false,
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "Omitted or true resume records the input alone: the wake Reaction starts execution from it.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "record and wake"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "record and wake"
+        },
+        "resume": true,
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "Reusing a Session ID adopts the existing Session: a second input to the same Session is admitted.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "second"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "first"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_2",
+        "payload": {
+          "text": "second"
+        },
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "Reusing a user inbox item ID for the same Session and type is rejected as already admitted.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "first"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item already admitted"
+      },
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "retry"
+        },
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "Reusing a synthetic inbox item ID for the same Session and type is rejected as already admitted.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Shell command finished"
+              },
+              "type": "synthetic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item already admitted"
+      },
+      "when": {
+        "inboxID": "msg_2",
+        "payload": {
+          "text": "Shell command finished"
+        },
+        "sessionID": "ses_1",
+        "type": "synthetic"
+      }
+    },
+    {
+      "description": "Cross-type reuse fails: an existing inbox item ID cannot be reused with a different type.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "first"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item type does not match existing item"
+      },
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "not a user prompt"
+        },
+        "sessionID": "ses_1",
+        "type": "synthetic"
+      }
+    },
+    {
+      "description": "Cross-Session reuse fails: an inbox item ID owned by another Session cannot be admitted.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "first"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Inbox item belongs to a different session"
+      },
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "steal"
+        },
+        "sessionID": "ses_2",
+        "type": "user"
+      }
+    },
+    {
+      "description": "Admission after a committed revert works normally: the revert changes history, not the inbox.",
+      "expect": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_2",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "try again"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-committed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "to": "msg_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inboxID": "msg_2",
+        "payload": {
+          "text": "try again"
+        },
+        "sessionID": "ses_1",
+        "type": "user"
+      }
+    },
+    {
+      "description": "Admission to an unknown Session fails.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "inboxID": "msg_1",
+        "payload": {
+          "text": "hello"
+        },
+        "sessionID": "ses_missing",
+        "type": "user"
+      }
+    }
+  ]
+}

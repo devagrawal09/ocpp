@@ -1,0 +1,791 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records one finished text or reasoning block of the in-flight step (session.md: durable assistant output; deltas stay ephemeral).",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "recordBlock",
+  "scenarios": [
+    {
+      "description": "The in-flight step gets a text block with its ordinal and text.",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "hello"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "hello"
+      }
+    },
+    {
+      "description": "A second block with the next ordinal is recorded after the first.",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 1,
+            "sessionID": "ses_1",
+            "text": "two"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "one"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 1,
+        "sessionID": "ses_1",
+        "text": "two"
+      }
+    },
+    {
+      "description": "Provider continuation state is recorded with the block as given.",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "state": {
+              "openai": {
+                "itemID": "msg_abc"
+              }
+            },
+            "text": "hello"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "state": {
+          "openai": {
+            "itemID": "msg_abc"
+          }
+        },
+        "text": "hello"
+      }
+    },
+    {
+      "description": "A reasoning block counts its ordinals apart from text: reasoning 0 is recorded after text 0.",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "reasoning",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "thinking"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "one"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "reasoning",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "thinking"
+      }
+    },
+    {
+      "description": "A block ordinal is used once per attempt: recording it again is rejected, which makes a duplicate request harmless.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "one"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Block already recorded"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "one again"
+      }
+    },
+    {
+      "description": "A retried attempt starts its ordinals over: ordinal 0 is free again after the new step.started.",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "complete"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "partial"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "retry": {
+              "at": 1000,
+              "attempt": 1
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "complete"
+      }
+    },
+    {
+      "description": "A block closed with no text is still a finished block (OC++ closes an opened fragment when its stream ends).",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": ""
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": ""
+      }
+    },
+    {
+      "description": "Text needs an active execution.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "hello"
+      }
+    },
+    {
+      "description": "Text after the execution succeeded is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "late"
+      }
+    },
+    {
+      "description": "Text after an interrupt is rejected: an interrupted execution records nothing more.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "late"
+      }
+    },
+    {
+      "description": "Text after the execution failed is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "error": {
+              "message": "boom",
+              "type": "provider"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "late"
+      }
+    },
+    {
+      "description": "Text needs a started step.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "hello"
+      }
+    },
+    {
+      "description": "Text for an ended step is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "cost": 0,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "late"
+      }
+    },
+    {
+      "description": "Text for a failed attempt is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": {
+              "message": "connection reset",
+              "type": "transport"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "late"
+      }
+    },
+    {
+      "description": "Text belongs to the in-flight step: another step id is rejected.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_2",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "hello"
+      }
+    },
+    {
+      "description": "Sessions are independent: another Session's step does not accept the text.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_2",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_2",
+        "text": "hello"
+      }
+    }
+  ]
+}

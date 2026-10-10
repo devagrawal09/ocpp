@@ -1,0 +1,271 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Requests that the host drive an execution of a Session an external agent runs, once per execution.",
+  "formatVersion": 1,
+  "kind": "reaction",
+  "name": "driveExecution",
+  "scenarios": [
+    {
+      "description": "An execution of a Session whose model selects an external agent is driven by the host.",
+      "expect": [
+        {
+          "payload": {
+            "execution": 1,
+            "sessionID": "ses_1"
+          },
+          "type": "driveExecution"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "slug-ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
+    },
+    {
+      "description": "A Session this runtime runs takes its steps from the step Reaction, not from the host's agent.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "slug-ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
+    },
+    {
+      "description": "Each execution is its own request, numbered from 1.",
+      "expect": [
+        {
+          "payload": {
+            "execution": 2,
+            "sessionID": "ses_1"
+          },
+          "type": "driveExecution"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "slug-ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
+    },
+    {
+      "description": "A settled execution needs no driving.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "slug-ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
+    },
+    {
+      "description": "The driver is read when the execution starts: selecting a vendor model makes the next execution driven.",
+      "expect": [
+        {
+          "payload": {
+            "execution": 1,
+            "sessionID": "ses_1"
+          },
+          "type": "driveExecution"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "slug-ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-model-selected",
+          "examplePayload": {
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
+    },
+    {
+      "description": "Different Sessions are independent: the Session whose execution started last is the one requested.",
+      "expect": [
+        {
+          "payload": {
+            "execution": 1,
+            "sessionID": "ses_1"
+          },
+          "type": "driveExecution"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "slug-ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "slug-ses_2",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
+    }
+  ]
+}

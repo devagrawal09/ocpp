@@ -1,0 +1,126 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Starts compacting a live Session's history: why (a delivered compaction item, or a history that no longer fits), and the recent context it keeps. A manual compaction names its inbox input. A compaction that cannot start does not start: it fails with settleCompaction.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "startCompaction",
+  "scenarios": [
+    {
+      "description": "A manual compaction starts for its inbox input.",
+      "expect": [
+        {
+          "eventType": "session-compaction-started",
+          "examplePayload": {
+            "inputID": "msg_1",
+            "reason": "manual",
+            "recent": "",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "inputID": "msg_1",
+        "reason": "manual",
+        "recent": "",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An automatic compaction starts with the recent context it keeps.",
+      "expect": [
+        {
+          "eventType": "session-compaction-started",
+          "examplePayload": {
+            "reason": "auto",
+            "recent": "The last exchange",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "reason": "auto",
+        "recent": "The last exchange",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "reason": "auto",
+        "recent": "The last exchange",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "reason": "auto",
+        "recent": "The last exchange",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

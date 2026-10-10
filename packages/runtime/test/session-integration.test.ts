@@ -343,6 +343,55 @@ describe("step loop with a scripted host", () => {
     })
   })
 
+  it("records the host's compaction through the runtime's recorder", async () => {
+    const usage = { cost: 0.01, tokens: { input: 10, output: 2, reasoning: 0, cache: { read: 0, write: 0 } } }
+    const t = await start({
+      compact: (input, record) =>
+        Effect.gen(function* () {
+          yield* record.started({ reason: input.reason, recent: "", inputID: input.inputID })
+          yield* record.settled({ reason: input.reason, outcome: "completed", text: "Summary", recent: "", usage })
+          return { outcome: "completed" } as const
+        }).pipe(Effect.orDie),
+    })
+
+    await t.app.command(compactionItem("msg_c"))
+    await t.waitFor(() => t.types().includes("session-execution-settled"))
+    await t.outboxSettled()
+
+    expect(t.types()).toEqual([
+      "session-inbox-enqueued",
+      "session-execution-started",
+      "session-inbox-delivered",
+      "session-compaction-started",
+      "session-usage-recorded",
+      "session-compaction-settled",
+      "session-execution-settled",
+    ])
+  })
+
+  it("records a manual compaction that cannot start as failed, and the execution goes on", async () => {
+    const error = { type: "compaction.unavailable", message: "Nothing to compact yet" }
+    const t = await start({
+      compact: (input, record) =>
+        record
+          .settled({ reason: "manual", outcome: "failed", error, inputID: input.inputID })
+          .pipe(Effect.orDie, Effect.as({ outcome: "failed", error } as const)),
+    })
+
+    await t.app.command(compactionItem("msg_c"))
+    await t.waitFor(() => t.types().includes("session-execution-settled"))
+    await t.outboxSettled()
+
+    expect(t.types()).toEqual([
+      "session-inbox-enqueued",
+      "session-execution-started",
+      "session-inbox-delivered",
+      "session-compaction-settled",
+      "session-execution-settled",
+    ])
+    expect(t.log.inspect().at(-1)?.payload).toMatchObject({ outcome: "succeeded" })
+  })
+
   it("compacts before a step when the host asks, then runs the step", async () => {
     const compactions: unknown[] = []
     const t = await start({

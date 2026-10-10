@@ -1,0 +1,369 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Settles a live Session's compaction: completed with its summary and the recent context it keeps, or failed. Only a compaction that started completes; one that could not start fails without a start, naming its input. What the compaction spent is recorded in the same commit, before its outcome.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "settleCompaction",
+  "scenarios": [
+    {
+      "description": "A started compaction completes with its summary.",
+      "expect": [
+        {
+          "eventType": "session-compaction-settled",
+          "examplePayload": {
+            "outcome": "completed",
+            "reason": "auto",
+            "recent": "Recent",
+            "sessionID": "ses_1",
+            "text": "Summary"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-compaction-started",
+          "examplePayload": {
+            "reason": "auto",
+            "recent": "Recent",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "outcome": "completed",
+        "reason": "auto",
+        "recent": "Recent",
+        "sessionID": "ses_1",
+        "text": "Summary"
+      }
+    },
+    {
+      "description": "What the compaction spent is recorded with its outcome, in one commit.",
+      "expect": [
+        {
+          "eventType": "session-usage-recorded",
+          "examplePayload": {
+            "cost": 0.02,
+            "sessionID": "ses_1",
+            "source": "compaction",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 100,
+              "output": 20,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-compaction-settled",
+          "examplePayload": {
+            "outcome": "completed",
+            "reason": "auto",
+            "recent": "Recent",
+            "sessionID": "ses_1",
+            "text": "Summary"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-compaction-started",
+          "examplePayload": {
+            "reason": "auto",
+            "recent": "Recent",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "outcome": "completed",
+        "reason": "auto",
+        "recent": "Recent",
+        "sessionID": "ses_1",
+        "text": "Summary",
+        "usage": {
+          "cost": 0.02,
+          "tokens": {
+            "cache": {
+              "read": 0,
+              "write": 0
+            },
+            "input": 100,
+            "output": 20,
+            "reasoning": 0
+          }
+        }
+      }
+    },
+    {
+      "description": "A compaction that never started cannot complete.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "No compaction running"
+      },
+      "when": {
+        "outcome": "completed",
+        "reason": "auto",
+        "recent": "Recent",
+        "sessionID": "ses_1",
+        "text": "Summary"
+      }
+    },
+    {
+      "description": "A completed compaction cannot complete again.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-compaction-started",
+          "examplePayload": {
+            "reason": "auto",
+            "recent": "Recent",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-compaction-settled",
+          "examplePayload": {
+            "outcome": "completed",
+            "reason": "auto",
+            "recent": "Recent",
+            "sessionID": "ses_1",
+            "text": "Summary"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "No compaction running"
+      },
+      "when": {
+        "outcome": "completed",
+        "reason": "auto",
+        "recent": "Recent",
+        "sessionID": "ses_1",
+        "text": "Summary"
+      }
+    },
+    {
+      "description": "A compaction that could not start fails without a start.",
+      "expect": [
+        {
+          "eventType": "session-compaction-settled",
+          "examplePayload": {
+            "error": {
+              "message": "Nothing to compact yet",
+              "type": "compaction.unavailable"
+            },
+            "inputID": "msg_1",
+            "outcome": "failed",
+            "reason": "manual",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "error": {
+          "message": "Nothing to compact yet",
+          "type": "compaction.unavailable"
+        },
+        "inputID": "msg_1",
+        "outcome": "failed",
+        "reason": "manual",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A started compaction fails.",
+      "expect": [
+        {
+          "eventType": "session-compaction-settled",
+          "examplePayload": {
+            "error": {
+              "message": "Compaction was interrupted",
+              "type": "compaction.interrupted"
+            },
+            "outcome": "failed",
+            "reason": "auto",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-compaction-started",
+          "examplePayload": {
+            "reason": "auto",
+            "recent": "Recent",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "error": {
+          "message": "Compaction was interrupted",
+          "type": "compaction.interrupted"
+        },
+        "outcome": "failed",
+        "reason": "auto",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "error": {
+          "message": "Nothing to compact yet",
+          "type": "compaction.unavailable"
+        },
+        "inputID": "msg_1",
+        "outcome": "failed",
+        "reason": "manual",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-compaction-started",
+          "examplePayload": {
+            "reason": "auto",
+            "recent": "Recent",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "outcome": "completed",
+        "reason": "auto",
+        "recent": "Recent",
+        "sessionID": "ses_1",
+        "text": "Summary"
+      }
+    }
+  ]
+}

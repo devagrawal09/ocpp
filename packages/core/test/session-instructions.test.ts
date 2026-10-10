@@ -252,14 +252,21 @@ describe("SessionInstructions", () => {
 
       // A completed compaction truncates model-visible history at its boundary, dropping
       // the synthetic that carried sub's instructions.
-      yield* bus.publish(SessionEvent.Compaction.Started, { sessionID, reason: "manual", recent: "" })
-      yield* bus.publish(SessionEvent.Compaction.Settled, {
-        sessionID,
-        reason: "manual",
-        outcome: "completed",
-        text: "summary",
-        recent: "",
-      })
+      yield* bus
+        .command({ type: "startCompaction", payload: { sessionID, reason: "manual", recent: "" } })
+        .pipe(Effect.orDie)
+      yield* bus
+        .command({
+          type: "settleCompaction",
+          payload: {
+            sessionID,
+            reason: "manual",
+            outcome: "completed",
+            text: "summary",
+            recent: "",
+          },
+        })
+        .pipe(Effect.orDie)
       expect(yield* synthetics(sessionID)).toHaveLength(0)
 
       // The model no longer has the rules, so the next read under the subtree must

@@ -96,9 +96,10 @@ const layer = Layer.effect(
         (message): message is SessionMessage.CompactionRunning =>
           message.type === "compaction" && message.status === "running",
       )
+      // The harness's compactions record through the Bus: no runtime attempt runs them.
+      const compactions = SessionCompaction.record(bus, sessionID)
       yield* Effect.forEach(stale, (message) =>
-        bus.publish(SessionEvent.Compaction.Settled, {
-          sessionID,
+        compactions.settled({
           reason: message.reason,
           outcome: "failed",
           inputID: message.id,
@@ -169,6 +170,7 @@ const layer = Layer.effect(
           reason,
           inputID,
           started: reason === "manual",
+          record: compactions,
           generate: (prompt, delta) =>
             Effect.gen(function* () {
               const chunks: string[] = []
@@ -211,6 +213,9 @@ const layer = Layer.effect(
             }),
         })
         if (outcome.status === "failed") return yield* new StepFailedError({ error: outcome.error })
+        // The Session went away while it compacted.
+        if (outcome.status === "stopped")
+          return yield* new StepFailedError({ error: { type: "aborted", message: "Compaction stopped" } })
         state.vendor = undefined
       })
 
@@ -351,14 +356,13 @@ const layer = Layer.effect(
               if (head?.type !== "compaction") return
               if (!(yield* input.inbox.deliver(head.inboxID).pipe(Effect.orDie))) return
               const inputID = SessionMessage.ID.make(head.inboxID)
-              yield* bus.publish(SessionEvent.Compaction.Started, { sessionID, reason: "manual", recent: "", inputID })
+              yield* compactions.started({ reason: "manual", recent: "", inputID })
               return inputID
             })
             if (requested === undefined) return
             yield* restore(compact("manual", requested)).pipe(
               Effect.onInterrupt(() =>
-                bus.publish(SessionEvent.Compaction.Settled, {
-                  sessionID,
+                compactions.settled({
                   reason: "manual",
                   outcome: "failed",
                   inputID: requested,

@@ -23,6 +23,7 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { DateTime, Effect, Fiber, Layer, Option, Schema, Stream } from "effect"
 import { testEffect } from "../lib/effect"
 import { host } from "../plugin/host"
+import { recordSession } from "../fixture/session"
 
 const model = LanguageModel.make({
   id: "test-model",
@@ -75,12 +76,14 @@ describe("ConfigCompactionPlugin.Plugin", () => {
       yield* ConfigCompactionPlugin.Plugin.effect(host({ event: { subscribe: () => bus.subscribe(Event.Updated) } }))
 
       expect(compaction.required(nearInput)).toBe(false)
+      yield* recordSession({ id: session.id, directory: "/tmp" })
       const started = yield* bus
         .subscribe(SessionEvent.Compaction.Started)
         .pipe(Stream.runHead, Effect.forkScoped({ startImmediately: true }))
       expect(
         yield* compaction.compactManual({
           session,
+          record: SessionCompaction.record(yield* Bus.Service, session.id),
           resolveModel: () => Effect.succeed(resolved),
           prepare: modelRequests.prepare,
           messages: [

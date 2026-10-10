@@ -681,7 +681,7 @@ describe("Session.create", () => {
         metadata: {},
         time: { started: 0 },
       })
-      yield* bus.publish(SessionEvent.Shell.Started, { sessionID: parent.id, shell })
+      yield* bus.command({ type: "runShell", payload: { sessionID: parent.id, shell } }).pipe(Effect.orDie)
 
       const running = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
 
@@ -691,13 +691,18 @@ describe("Session.create", () => {
       ])
       expect(yield* session.context(running.id)).toMatchObject([Expected.user("Run a shell")])
 
-      yield* bus.publish(SessionEvent.Shell.Settled, {
-        sessionID: parent.id,
-        shellID: shell.id,
-        outcome: "exited",
-        exit: 0,
-        output: { output: "complete", cursor: 8, size: 8, truncated: false },
-      })
+      yield* bus
+        .command({
+          type: "settleShell",
+          payload: {
+            sessionID: parent.id,
+            shellID: shell.id,
+            outcome: "exited",
+            exit: 0,
+            output: { output: "complete", cursor: 8, size: 8, truncated: false },
+          },
+        })
+        .pipe(Effect.orDie)
       const completed = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
 
       expect(yield* session.context(running.id)).toMatchObject([Expected.user("Run a shell")])
@@ -1081,24 +1086,34 @@ describe("SessionTransfer", () => {
         agent: Agent.ID.make("build"),
         model: Model.Ref.make({ id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }),
       })
-      yield* bus.publish(SessionEvent.Shell.Started, {
-        sessionID: source.id,
-        shell: Shell.Info.make({
-          id: Shell.ID.make("sh_transfer_export"),
-          status: "running",
-          command: "sleep 10",
-          cwd: location.directory,
-          shell: "/bin/sh",
-          file: "/tmp/sh_transfer_export.out",
-          metadata: {},
-          time: { started: 0 },
-        }),
-      })
-      yield* bus.publish(SessionEvent.Compaction.Started, {
-        sessionID: source.id,
-        reason: "manual",
-        recent: "pending",
-      })
+      yield* bus
+        .command({
+          type: "runShell",
+          payload: {
+            sessionID: source.id,
+            shell: Shell.Info.make({
+              id: Shell.ID.make("sh_transfer_export"),
+              status: "running",
+              command: "sleep 10",
+              cwd: location.directory,
+              shell: "/bin/sh",
+              file: "/tmp/sh_transfer_export.out",
+              metadata: {},
+              time: { started: 0 },
+            }),
+          },
+        })
+        .pipe(Effect.orDie)
+      yield* bus
+        .command({
+          type: "startCompaction",
+          payload: {
+            sessionID: source.id,
+            reason: "manual",
+            recent: "pending",
+          },
+        })
+        .pipe(Effect.orDie)
 
       expect((yield* transfer.export({ sessionID: source.id })).messages).toMatchObject([Expected.user("Settled")])
     }),

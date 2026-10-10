@@ -1,0 +1,268 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Settles a user's shell command in a live Session: how it ended, its exit code and the output it left. Only a shell the Session runs settles, and only once.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "settleShell",
+  "scenarios": [
+    {
+      "description": "A running shell settles with its outcome.",
+      "expect": [
+        {
+          "eventType": "session-shell-settled",
+          "examplePayload": {
+            "exit": 0,
+            "outcome": "exited",
+            "output": {
+              "cursor": 7,
+              "output": "/tmp/ws",
+              "size": 7,
+              "truncated": false
+            },
+            "sessionID": "ses_1",
+            "shellID": "sh_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-shell-started",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "shell": {
+              "command": "pwd",
+              "cwd": "/tmp/ws",
+              "file": "/tmp/sh_1.out",
+              "id": "sh_1",
+              "metadata": {
+                "background": true,
+                "sessionID": "ses_1"
+              },
+              "shell": "/bin/sh",
+              "status": "running",
+              "time": {
+                "started": 1
+              }
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "exit": 0,
+        "outcome": "exited",
+        "output": {
+          "cursor": 7,
+          "output": "/tmp/ws",
+          "size": 7,
+          "truncated": false
+        },
+        "sessionID": "ses_1",
+        "shellID": "sh_1"
+      }
+    },
+    {
+      "description": "A shell the Session never ran is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Shell not running"
+      },
+      "when": {
+        "exit": 0,
+        "outcome": "exited",
+        "output": {
+          "cursor": 7,
+          "output": "/tmp/ws",
+          "size": 7,
+          "truncated": false
+        },
+        "sessionID": "ses_1",
+        "shellID": "sh_1"
+      }
+    },
+    {
+      "description": "A shell that has settled is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-shell-started",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "shell": {
+              "command": "pwd",
+              "cwd": "/tmp/ws",
+              "file": "/tmp/sh_1.out",
+              "id": "sh_1",
+              "metadata": {
+                "background": true,
+                "sessionID": "ses_1"
+              },
+              "shell": "/bin/sh",
+              "status": "running",
+              "time": {
+                "started": 1
+              }
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-shell-settled",
+          "examplePayload": {
+            "exit": 0,
+            "outcome": "exited",
+            "output": {
+              "cursor": 7,
+              "output": "/tmp/ws",
+              "size": 7,
+              "truncated": false
+            },
+            "sessionID": "ses_1",
+            "shellID": "sh_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Shell not running"
+      },
+      "when": {
+        "exit": 0,
+        "outcome": "exited",
+        "output": {
+          "cursor": 7,
+          "output": "/tmp/ws",
+          "size": 7,
+          "truncated": false
+        },
+        "sessionID": "ses_1",
+        "shellID": "sh_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "exit": 0,
+        "outcome": "exited",
+        "output": {
+          "cursor": 7,
+          "output": "/tmp/ws",
+          "size": 7,
+          "truncated": false
+        },
+        "sessionID": "ses_1",
+        "shellID": "sh_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-shell-started",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "shell": {
+              "command": "pwd",
+              "cwd": "/tmp/ws",
+              "file": "/tmp/sh_1.out",
+              "id": "sh_1",
+              "metadata": {
+                "background": true,
+                "sessionID": "ses_1"
+              },
+              "shell": "/bin/sh",
+              "status": "running",
+              "time": {
+                "started": 1
+              }
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "exit": 0,
+        "outcome": "exited",
+        "output": {
+          "cursor": 7,
+          "output": "/tmp/ws",
+          "size": 7,
+          "truncated": false
+        },
+        "sessionID": "ses_1",
+        "shellID": "sh_1"
+      }
+    }
+  ]
+}

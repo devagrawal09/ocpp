@@ -308,6 +308,7 @@ it.effect("refreshes the notebook checkpoint only at successful compaction witho
           expect(
             yield* compaction.compactManual({
               session,
+              record: SessionCompaction.record(yield* Bus.Service, session.id),
               resolveModel: () => Effect.succeed(resolved),
               prepare: modelRequests.prepare,
               messages: [
@@ -402,6 +403,7 @@ it.effect("manual compaction summarizes short context instead of no-op", () =>
     expect(
       yield* compaction.compactManual({
         session,
+        record: SessionCompaction.record(yield* Bus.Service, session.id),
         resolveModel: () => Effect.succeed(resolved),
         prepare: modelRequests.prepare,
         messages: [
@@ -490,6 +492,7 @@ it.effect("manual compaction records model resolution failures without calling t
     expect(
       yield* compaction.compactManual({
         session,
+        record: SessionCompaction.record(yield* Bus.Service, session.id),
         resolveModel: () =>
           Effect.fail(
             new SessionRunnerModel.ModelUnavailableError({
@@ -542,6 +545,7 @@ it.effect("forked session compaction reuses the fork root prompt cache key", () 
     expect(
       yield* compaction.compactManual({
         session,
+        record: SessionCompaction.record(yield* Bus.Service, session.id),
         resolveModel: () => Effect.succeed(resolved),
         prepare: modelRequests.prepare,
         messages: [
@@ -578,6 +582,7 @@ it.effect("keeps session context hooks away from compaction requests", () =>
     expect(
       yield* compaction.compactManual({
         session,
+        record: SessionCompaction.record(yield* Bus.Service, session.id),
         resolveModel: () => Effect.succeed(resolved),
         prepare: modelRequests.prepare,
         messages: [

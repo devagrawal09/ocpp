@@ -2,7 +2,9 @@ export * as SessionCompaction from "./compaction.js"
 
 import { LLMClient, LLMEvent, Message } from "@ocpp/ai"
 import { Agent } from "@ocpp/schema/agent"
+import { Money } from "@ocpp/schema/money"
 import { SessionError } from "@ocpp/schema/session-error"
+import { TokenUsage } from "@ocpp/schema/token-usage"
 import { Context, Effect, Layer, Schema, Stream } from "effect"
 import { Bus } from "../bus.js"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
@@ -17,6 +19,7 @@ import { toSessionError } from "./to-session-error.js"
 import { Token } from "../util/token.js"
 import { SessionUsage } from "./usage.js"
 import { State } from "../state.js"
+import { SpecterRejection } from "../specter/rejection.js"
 
 const encodeUsage = Schema.encodeSync(SessionEvent.UsageRecorded.data)
 
@@ -66,11 +69,70 @@ export type Draft = {
   configure: (settings: Partial<Settings>) => void
 }
 
+/**
+ * Records a compaction's facts: its start, what it spent and how it settled. Each answers false once the runtime
+ * refused it (the Session is gone), and the compaction stops. The runtime's attempt records a compaction it runs;
+ * an external agent's harness records through the Bus (`record`).
+ */
+export interface Recorder {
+  readonly started: (start: {
+    readonly reason: SessionMessage.Compaction["reason"]
+    readonly recent: string
+    readonly inputID?: SessionMessage.ID
+  }) => Effect.Effect<boolean>
+  /** What a compaction spent when it records no outcome of its own. */
+  readonly usage: (usage: SessionUsage.Recorded) => Effect.Effect<boolean>
+  /** How it ended, with what it spent, in one commit. */
+  readonly settled: (settled: Settled, usage?: SessionUsage.Recorded) => Effect.Effect<boolean>
+}
+
+export type Settled =
+  | {
+      readonly reason: SessionMessage.Compaction["reason"]
+      readonly outcome: "completed"
+      readonly text: string
+      readonly recent: string
+    }
+  | {
+      readonly reason: SessionMessage.Compaction["reason"]
+      readonly outcome: "failed"
+      readonly error: SessionError.Error
+      readonly inputID?: SessionMessage.ID
+    }
+
+const encodeSettled = Schema.encodeSync(SessionEvent.Compaction.Settled.data)
+const encodeStarted = Schema.encodeSync(SessionEvent.Compaction.Started.data)
+const encodeUsageFields = Schema.encodeSync(Schema.Struct({ cost: Money.USD, tokens: TokenUsage.Info }))
+
+/** A Session's compaction facts as the Bus dispatches them: for a compaction no runtime attempt runs. */
+export const record = (bus: Bus.Interface, sessionID: SessionSchema.ID): Recorder => {
+  const dispatch = (command: Bus.RuntimeCommand) =>
+    bus.command(command).pipe(
+      Effect.as(true),
+      Effect.catchIf(SpecterRejection.isMissingSession, () => Effect.succeed(false)),
+      Effect.orDie,
+    )
+  return {
+    started: (start) => dispatch({ type: "startCompaction", payload: encodeStarted({ sessionID, ...start }) }),
+    usage: (usage) =>
+      dispatch({ type: "recordUsage", payload: encodeUsage({ sessionID, source: "compaction", ...usage }) }),
+    settled: (settled, usage) =>
+      dispatch({
+        type: "settleCompaction",
+        payload: {
+          ...encodeSettled({ sessionID, ...settled }),
+          ...(usage === undefined ? {} : { usage: encodeUsageFields(usage) }),
+        },
+      }),
+  }
+}
+
 export type AutoInput = {
   readonly session: SessionSchema.Info
   readonly messages: readonly SessionMessage.Info[]
   readonly resolved: SessionRunnerModel.Resolved
   readonly prepare: SessionModelRequest.Interface["prepare"]
+  readonly record: Recorder
 }
 
 type RequiredInput = Pick<AutoInput, "messages" | "resolved">
@@ -83,6 +145,7 @@ export type ManualInput = {
   /** Invoked after content planning, not when the caller captures the operation. */
   readonly resolveModel: SessionContext.Interface["resolveModel"]
   readonly prepare: SessionModelRequest.Interface["prepare"]
+  readonly record: Recorder
 }
 
 export type GeneratedInput = {
@@ -91,6 +154,7 @@ export type GeneratedInput = {
   readonly reason: SessionMessage.Compaction["reason"]
   readonly inputID?: SessionMessage.ID
   readonly started?: boolean
+  readonly record: Recorder
   readonly generate: (
     prompt: string,
     delta: (text: string) => Effect.Effect<void>,
@@ -104,11 +168,14 @@ type Plan = {
   readonly recent: string
   readonly inputID?: SessionMessage.ID
   readonly started?: boolean
+  readonly record: Recorder
 } & (Pick<AutoInput, "resolved" | "prepare"> | Pick<GeneratedInput, "generate">)
 
 export type Outcome =
   | Pick<SessionMessage.CompactionCompleted, "status">
   | Pick<SessionMessage.CompactionFailed, "status" | "error">
+  // A record was refused: the Session is gone, and nothing more is recorded.
+  | { readonly status: "stopped" }
 
 export interface Interface extends State.Transformable<Draft> {
   readonly enabled: () => boolean
@@ -267,37 +334,44 @@ export const layer = Layer.effect(
         },
       }),
     })
-    const failed = Effect.fnUntraced(function* (input: {
-      readonly sessionID: SessionSchema.ID
-      readonly reason: SessionMessage.Compaction["reason"]
-      readonly error: SessionError.Error
-      readonly inputID?: SessionMessage.ID
-    }) {
-      yield* bus.publish(SessionEvent.Compaction.Settled, { ...input, outcome: "failed" })
+    const stopped = { status: "stopped" } as const
+    const failed = Effect.fnUntraced(function* (
+      record: Recorder,
+      input: {
+        readonly reason: SessionMessage.Compaction["reason"]
+        readonly error: SessionError.Error
+        readonly inputID?: SessionMessage.ID
+      },
+      usage?: SessionUsage.Recorded,
+    ) {
+      if (
+        !(yield* record.settled(
+          {
+            reason: input.reason,
+            outcome: "failed",
+            error: input.error,
+            ...(input.inputID === undefined ? {} : { inputID: input.inputID }),
+          },
+          usage,
+        ))
+      )
+        return stopped
       return { status: "failed" as const, error: input.error }
     })
     const execute = Effect.fn("SessionCompaction.execute")(function* (plan: Plan) {
-      if (!plan.started)
-        yield* bus.publish(SessionEvent.Compaction.Started, {
-          sessionID: plan.session.id,
+      if (
+        !plan.started &&
+        !(yield* plan.record.started({
           reason: plan.reason,
           recent: plan.recent,
-          inputID: plan.inputID,
-        })
+          ...(plan.inputID === undefined ? {} : { inputID: plan.inputID }),
+        }))
+      )
+        return stopped
 
       const chunks: string[] = []
       let failure: SessionError.Error | undefined
       let usage: SessionUsage.Recorded | undefined
-      const recordUsage = Effect.suspend(() =>
-        usage
-          ? bus
-              .command({
-                type: "recordUsage",
-                payload: encodeUsage({ sessionID: plan.session.id, source: "compaction", ...usage }),
-              })
-              .pipe(Effect.orDie)
-          : Effect.void,
-      )
       yield* Effect.gen(function* () {
         if ("generate" in plan) {
           const result = yield* plan
@@ -344,39 +418,36 @@ export const layer = Layer.effect(
           ),
         )
       }).pipe(
+        // An interrupted automatic compaction fails with what it spent; a manual one leaves its failure to its
+        // host, so it records only what it spent.
         Effect.onInterrupt(() =>
-          recordUsage.pipe(
-            Effect.andThen(
-              plan.reason === "auto"
-                ? failed({
-                    sessionID: plan.session.id,
-                    reason: plan.reason,
-                    error: { type: "compaction.interrupted", message: "Compaction was interrupted" },
-                    inputID: plan.inputID,
-                  }).pipe(Effect.asVoid)
-                : Effect.void,
-            ),
-          ),
+          plan.reason === "auto"
+            ? failed(
+                plan.record,
+                {
+                  reason: plan.reason,
+                  error: { type: "compaction.interrupted", message: "Compaction was interrupted" },
+                  inputID: plan.inputID,
+                },
+                usage,
+              )
+            : usage
+              ? plan.record.usage(usage)
+              : Effect.void,
         ),
       )
-      yield* recordUsage
       const summary = chunks.join("")
       if (failure || !summary.trim()) {
         const error = failure ?? { type: "compaction.failed" as const, message: "Compaction produced no summary" }
-        return yield* failed({
-          sessionID: plan.session.id,
-          reason: plan.reason,
-          error,
-          inputID: plan.inputID,
-        })
+        return yield* failed(plan.record, { reason: plan.reason, error, inputID: plan.inputID }, usage)
       }
-      yield* bus.publish(SessionEvent.Compaction.Settled, {
-        sessionID: plan.session.id,
-        reason: plan.reason,
-        outcome: "completed",
-        text: summary,
-        recent: plan.recent,
-      })
+      if (
+        !(yield* plan.record.settled(
+          { reason: plan.reason, outcome: "completed", text: summary, recent: plan.recent },
+          usage,
+        ))
+      )
+        return stopped
       return { status: "completed" as const }
     })
     const compact = Effect.fn("SessionCompaction.compact")(function* (input: AutoInput) {
@@ -387,10 +458,10 @@ export const layer = Layer.effect(
           resolved: input.resolved,
           prepare: input.prepare,
           reason: "auto",
+          record: input.record,
           ...content,
         })
-      return yield* failed({
-        sessionID: input.session.id,
+      return yield* failed(input.record, {
         reason: "auto",
         error: { type: "compaction.unavailable", message: "Nothing to compact yet" },
       })
@@ -423,8 +494,7 @@ export const layer = Layer.effect(
     const compactManual = Effect.fn("SessionCompaction.compactManual")(function* (input: ManualInput) {
       const content = planContent(input.messages, state.get().tokens)
       if (!content)
-        return yield* failed({
-          sessionID: input.session.id,
+        return yield* failed(input.record, {
           reason: "manual",
           error: { type: "compaction.unavailable", message: "Nothing to compact yet" },
           inputID: input.inputID,
@@ -432,8 +502,7 @@ export const layer = Layer.effect(
       return yield* input.resolveModel(input.session).pipe(
         Effect.matchEffect({
           onFailure: (cause) =>
-            failed({
-              sessionID: input.session.id,
+            failed(input.record, {
               reason: "manual",
               error: toSessionError(cause),
               inputID: input.inputID,
@@ -446,6 +515,7 @@ export const layer = Layer.effect(
               reason: "manual",
               inputID: input.inputID,
               started: input.started,
+              record: input.record,
               ...content,
             }),
         }),
@@ -454,8 +524,7 @@ export const layer = Layer.effect(
     const compactWith = Effect.fn("SessionCompaction.compactWith")(function* (input: GeneratedInput) {
       const content = planContent(input.messages, state.get().tokens)
       if (!content)
-        return yield* failed({
-          sessionID: input.session.id,
+        return yield* failed(input.record, {
           reason: input.reason,
           error: { type: "compaction.unavailable", message: "Nothing to compact yet" },
           inputID: input.inputID,

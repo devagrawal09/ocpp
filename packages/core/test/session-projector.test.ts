@@ -94,12 +94,17 @@ describe("SessionProjector", () => {
       const busy = yield* steps.busy(sessionID)
       yield* inbox.admitCompaction({ id: inputID, sessionID, delivery: "queue" })
 
-      yield* bus.publish(SessionEvent.Compaction.Settled, {
-        sessionID,
-        reason: "auto",
-        outcome: "failed",
-        error: { type: "compaction.failed", message: "Auto compaction failed" },
-      })
+      yield* bus
+        .command({
+          type: "settleCompaction",
+          payload: {
+            sessionID,
+            reason: "auto",
+            outcome: "failed",
+            error: { type: "compaction.failed", message: "Auto compaction failed" },
+          },
+        })
+        .pipe(Effect.orDie)
 
       expect(yield* SessionInbox.find(db, inputID)).toMatchObject({ id: inputID })
       yield* busy.release
@@ -497,31 +502,46 @@ describe("SessionProjector", () => {
         })
         .pipe(Effect.orDie)
       // No transient envelope metadata supplies the background marker: it comes from the event's data.
-      yield* bus.publish(SessionEvent.Shell.Started, {
-        sessionID,
-        shell: Shell.Info.make({
-          id: Shell.ID.make("sh_projector"),
-          status: "running",
-          command: "pwd",
-          cwd: "/project",
-          shell: "/bin/sh",
-          file: "/tmp/sh_projector.out",
-          metadata: { background: true },
-          time: { started: 0 },
-        }),
-      })
-      yield* bus.publish(SessionEvent.Shell.Settled, {
-        sessionID,
-        shellID: Shell.ID.make("sh_projector"),
-        outcome: "exited",
-        exit: 0,
-        output: { output: "/project", cursor: 8, size: 8, truncated: false },
-      })
-      yield* bus.publish(SessionEvent.Compaction.Started, {
-        sessionID,
-        reason: "manual",
-        recent: "recent context",
-      })
+      yield* bus
+        .command({
+          type: "runShell",
+          payload: {
+            sessionID,
+            shell: Shell.Info.make({
+              id: Shell.ID.make("sh_projector"),
+              status: "running",
+              command: "pwd",
+              cwd: "/project",
+              shell: "/bin/sh",
+              file: "/tmp/sh_projector.out",
+              metadata: { background: true },
+              time: { started: 0 },
+            }),
+          },
+        })
+        .pipe(Effect.orDie)
+      yield* bus
+        .command({
+          type: "settleShell",
+          payload: {
+            sessionID,
+            shellID: Shell.ID.make("sh_projector"),
+            outcome: "exited",
+            exit: 0,
+            output: { output: "/project", cursor: 8, size: 8, truncated: false },
+          },
+        })
+        .pipe(Effect.orDie)
+      yield* bus
+        .command({
+          type: "startCompaction",
+          payload: {
+            sessionID,
+            reason: "manual",
+            recent: "recent context",
+          },
+        })
+        .pipe(Effect.orDie)
       yield* bus.publish(SessionEvent.Compaction.Delta, {
         sessionID,
         text: "partial",
@@ -535,13 +555,18 @@ describe("SessionProjector", () => {
           .all()
           .pipe(Effect.orDie),
       ).toEqual([{ data: expect.objectContaining({ status: "running", summary: "", recent: "recent context" }) }])
-      yield* bus.publish(SessionEvent.Compaction.Settled, {
-        sessionID,
-        reason: "manual",
-        outcome: "completed",
-        text: "summary",
-        recent: "recent context",
-      })
+      yield* bus
+        .command({
+          type: "settleCompaction",
+          payload: {
+            sessionID,
+            reason: "manual",
+            outcome: "completed",
+            text: "summary",
+            recent: "recent context",
+          },
+        })
+        .pipe(Effect.orDie)
 
       const rows = yield* db
         .select()

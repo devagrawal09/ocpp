@@ -63,7 +63,47 @@ export type AttemptRecorder = {
         }
     ),
   ) => Effect.Effect<boolean, RecordFailure>
+  // A compaction the attempt runs (the provider's context overflowed), as
+  // the host's compact hook records one.
+  readonly compaction: CompactionRecorder
 }
+
+// What a compaction the host runs produces, recorded as it is produced: its
+// start, what it spent, and how it settled. Each call records through a
+// runtime Command and answers false when the runtime rejected it (the Session
+// is gone, or no compaction runs to complete): the compaction should stop. A
+// compaction that cannot start settles as failed without a start.
+export type CompactionRecorder = {
+  readonly started: (start: {
+    readonly reason: "auto" | "manual"
+    // The recent context the compaction keeps.
+    readonly recent: string
+    // A manual compaction's inbox input.
+    readonly inputID?: string
+  }) => Effect.Effect<boolean, RecordFailure>
+  // What the compaction spent so far, when it records no outcome (a manual
+  // compaction cancelled: its host records the failure).
+  readonly usage: (usage: CompactionUsage) => Effect.Effect<boolean, RecordFailure>
+  // How it ended, with what it spent, in one commit.
+  readonly settled: (
+    settled: (
+      | {
+          readonly reason: "auto" | "manual"
+          readonly outcome: "completed"
+          readonly text: string
+          readonly recent: string
+        }
+      | {
+          readonly reason: "auto" | "manual"
+          readonly outcome: "failed"
+          readonly error: SessionError.Error
+          readonly inputID?: string
+        }
+    ) & { readonly usage?: CompactionUsage },
+  ) => Effect.Effect<boolean, RecordFailure>
+}
+
+export type CompactionUsage = { readonly cost: number; readonly tokens: TokenUsage.Info }
 
 type Usage = {
   readonly rawFinish?: string
@@ -102,8 +142,8 @@ export type AttemptOutcome =
   // what it produced is recorded, and the execution is interrupted.
   | { readonly outcome: "interrupted" }
 
-// How a compaction the host ran ended. Its own facts (started, ended or
-// failed, usage) are the host's; the runtime decides when it runs.
+// How a compaction the host ran ended. It records its facts through the
+// runtime's recorder; the runtime decides when it runs.
 export type CompactionOutcome =
   | { readonly outcome: "completed" }
   // `fatal`: the compaction itself broke (not an outcome it records), so even
@@ -194,11 +234,15 @@ export class StepHost extends Context.Service<
     // it knows more about (OC++'s delegated child Sessions) first.
     readonly recover?: (sessionID: string) => Effect.Effect<void>
     // Compacts the Session's history: manually, for a delivered compaction
-    // item, or automatically, when begin asked for it.
-    readonly compact: (input: {
-      readonly sessionID: string
-      readonly reason: "auto" | "manual"
-      readonly inputID?: string
-    }) => Effect.Effect<CompactionOutcome>
+    // item, or automatically, when begin asked for it. Its facts go through
+    // the recorder.
+    readonly compact: (
+      input: {
+        readonly sessionID: string
+        readonly reason: "auto" | "manual"
+        readonly inputID?: string
+      },
+      record: CompactionRecorder,
+    ) => Effect.Effect<CompactionOutcome>
   }
 >()("@ocpp/runtime/StepHost") {}

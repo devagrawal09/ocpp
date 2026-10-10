@@ -20,6 +20,18 @@ import { createDeleteSessionState, deleteSession, deleteSessionStore } from "./f
 import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
+import { createRunShellState, runShell, runShellStore } from "./features/session/run-shell/impl.ts"
+import { createSettleShellState, settleShell, settleShellStore } from "./features/session/settle-shell/impl.ts"
+import {
+  createStartCompactionState,
+  startCompaction,
+  startCompactionStore,
+} from "./features/session/start-compaction/impl.ts"
+import {
+  createSettleCompactionState,
+  settleCompaction,
+  settleCompactionStore,
+} from "./features/session/settle-compaction/impl.ts"
 import {
   createUpdateInstructionsState,
   updateInstructions,
@@ -187,6 +199,10 @@ export const createRuntimeConfig = (options: {
       updateInstructions,
       setInstructionEntry,
       removeInstructionEntry,
+      runShell,
+      settleShell,
+      startCompaction,
+      settleCompaction,
       enqueueInput,
       cancelInboxItem,
       changeDelivery,
@@ -269,6 +285,10 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(updateInstructionsStore, createUpdateInstructionsState),
     provide(setInstructionEntryStore, createSetInstructionEntryState),
     provide(removeInstructionEntryStore, createRemoveInstructionEntryState),
+    provide(runShellStore, createRunShellState),
+    provide(settleShellStore, createSettleShellState),
+    provide(startCompactionStore, createStartCompactionState),
+    provide(settleCompactionStore, createSettleCompactionState),
     provide(enqueueInputStore, createEnqueueInputState),
     provide(cancelInboxItemStore, createCancelInboxItemState),
     provide(changeDeliveryStore, createChangeDeliveryState),

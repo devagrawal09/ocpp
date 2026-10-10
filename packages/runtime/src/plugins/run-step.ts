@@ -5,7 +5,7 @@ import { Clock, Effect } from "effect"
 import { nextDeliverable } from "../features/session/next-deliverable-query/impl.ts"
 import type { RunStepRequest } from "../features/session/run-step-reaction/impl.ts"
 import { sessionStatus } from "../features/session/session-status-query/impl.ts"
-import type { RecordFailure, StepHost } from "./step-host.ts"
+import type { CompactionRecorder, RecordFailure, StepHost } from "./step-host.ts"
 
 // A rejected Command means the world moved on (execution interrupted, step
 // already recorded by a duplicate request): stop quietly. Anything else fails
@@ -85,6 +85,10 @@ const reconcileOrphan = (
     )
   })
 
+// Command payloads carry no undefined values: an absent field stays absent.
+const present = <T extends object>(value: T) =>
+  Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined)) as T
+
 // One job = one safe-step boundary: deliver, run one step, maybe finish.
 // `stepHost` is the host's step I/O, which a job resolves before it does
 // anything: a host composed after the runtime binds it late, and its jobs wait
@@ -102,10 +106,34 @@ export const makeRunStepPlugin =
           // A failure outside a step fails the execution.
           const fail = (error: { readonly type: string; readonly message: string }, idempotencyKey: string) =>
             unlessRejected(command({ type: "failExecution", payload: { sessionID, error } }, { idempotencyKey }))
+          // Records a compaction the host runs, each fact once per job.
+          const compaction = (key: string): CompactionRecorder => ({
+            started: (start) =>
+              unlessRejected(
+                command(
+                  { type: "startCompaction", payload: { sessionID, ...present(start) } },
+                  { idempotencyKey: `${key}:started` },
+                ),
+              ),
+            usage: (usage) =>
+              unlessRejected(
+                command(
+                  { type: "recordUsage", payload: { sessionID, source: "compaction", ...usage } },
+                  { idempotencyKey: `${key}:usage` },
+                ),
+              ),
+            settled: (settled) =>
+              unlessRejected(
+                command(
+                  { type: "settleCompaction", payload: { sessionID, ...present(settled) } },
+                  { idempotencyKey: `${key}:settled` },
+                ),
+              ),
+          })
           // Runs a compaction the host owns; false when the job should stop.
           const compact = (input: Parameters<typeof host.compact>[0], key: string) =>
             Effect.gen(function* () {
-              const outcome = yield* host.compact(input)
+              const outcome = yield* host.compact(input, compaction(key))
               if (outcome.outcome === "stopped") return false
               // A manual compaction that failed is recorded on its own item:
               // the execution goes on. The history must fit for a step, so an
@@ -378,6 +406,7 @@ export const makeRunStepPlugin =
                   ),
                 ),
               ),
+            compaction: compaction(`${key}:compaction`),
           })
           if (outcome.outcome === "stopped") return
           if (outcome.outcome === "interrupted") {

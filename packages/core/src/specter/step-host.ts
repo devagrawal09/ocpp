@@ -9,6 +9,7 @@ import {
   StepHost,
   type AttemptOutcome,
   type AttemptRecorder,
+  type CompactionRecorder,
   type CompactFirst,
   type CompactionOutcome,
   type DriveOutcome,
@@ -133,6 +134,17 @@ const recordingBus = (bus: Bus.Interface, record: AttemptRecorder) => {
   return { bus: { ...bus, publish }, settled, stopped: () => stopped }
 }
 
+/**
+ * The runtime's compaction recorder, as OC++'s compaction records through it. A failure to record fails the
+ * compaction, and its job retries it.
+ */
+const recorder = (record: CompactionRecorder): SessionCompaction.Recorder => ({
+  started: (start) => record.started(start).pipe(Effect.orDie),
+  usage: (usage) => record.usage(usage).pipe(Effect.orDie),
+  settled: (settled, usage) =>
+    record.settled({ ...settled, ...(usage === undefined ? {} : { usage }) }).pipe(Effect.orDie),
+})
+
 const CONTINUE_AFTER_INCOMPLETE_STREAM =
   "The previous response was interrupted. Continue from where you left off without repeating completed content."
 
@@ -172,11 +184,14 @@ export class StepIO extends Context.Service<
       /** Which attempt of that step this is, from 1. */
       readonly attempt: number
     }) => Effect.Effect<StepPlan | CompactFirst>
-    readonly compact: (input: {
-      readonly sessionID: SessionSchema.ID
-      readonly reason: "auto" | "manual"
-      readonly inputID?: SessionMessage.ID
-    }) => Effect.Effect<CompactionOutcome>
+    readonly compact: (
+      input: {
+        readonly sessionID: SessionSchema.ID
+        readonly reason: "auto" | "manual"
+        readonly inputID?: SessionMessage.ID
+      },
+      record: SessionCompaction.Recorder,
+    ) => Effect.Effect<CompactionOutcome>
     /** Brings the Session's context up to date before input is delivered. */
     readonly prepare: (sessionID: SessionSchema.ID) => Effect.Effect<PrepareOutcome>
     /** Releases the Session's model transport here before it moves to another Location. */
@@ -307,6 +322,8 @@ const stepIOLayer = Layer.effect(
                     messages: current.messages,
                     resolved: current.model,
                     prepare: context.prepare,
+                    // Recorded through the attempt.
+                    record: recorder(record.compaction),
                   })
                   .pipe(Effect.map((result) => result.status === "completed"))
               }),
@@ -353,12 +370,15 @@ const stepIOLayer = Layer.effect(
       } satisfies StepPlan
     })
 
-    // OC++'s own compaction, publishing its facts (started, settled, usage).
-    const compact = Effect.fn("SpecterStepIO.compact")(function* (input: {
-      readonly sessionID: SessionSchema.ID
-      readonly reason: "auto" | "manual"
-      readonly inputID?: SessionMessage.ID
-    }) {
+    // OC++'s own compaction, recording its facts (started, settled, usage) through the runtime's recorder.
+    const compact = Effect.fn("SpecterStepIO.compact")(function* (
+      input: {
+        readonly sessionID: SessionSchema.ID
+        readonly reason: "auto" | "manual"
+        readonly inputID?: SessionMessage.ID
+      },
+      record: SessionCompaction.Recorder,
+    ) {
       const session = yield* store.get(input.sessionID)
       if (!session) return yield* Effect.die(new Error(`Session not found: ${input.sessionID}`))
       const messages = yield* store.context(input.sessionID)
@@ -370,32 +390,33 @@ const stepIOLayer = Layer.effect(
               inputID: input.inputID,
               resolveModel: context.resolveModel,
               prepare: context.prepare,
+              record,
             })
           : context
               .resolveModel(session)
               .pipe(
                 Effect.flatMap((resolved) =>
-                  compaction.compact({ session, messages, resolved, prepare: context.prepare }),
+                  compaction.compact({ session, messages, resolved, prepare: context.prepare, record }),
                 ),
               )
       const outcome = yield* run.pipe(
         Effect.onError((cause) =>
           // OC++'s runner records a manual compaction that was cancelled or broke; an automatic one records its own.
           input.reason === "manual"
-            ? bus
-                .publish(SessionEvent.Compaction.Settled, {
-                  sessionID: input.sessionID,
+            ? record
+                .settled({
                   reason: "manual",
                   outcome: "failed",
                   error: Cause.hasInterruptsOnly(cause)
                     ? { type: "aborted", message: "Compaction cancelled" }
                     : { type: "compaction.failed", message: Cause.pretty(cause) },
-                  inputID: input.inputID,
+                  ...(input.inputID === undefined ? {} : { inputID: input.inputID }),
                 })
                 .pipe(Effect.asVoid)
             : Effect.void,
         ),
       )
+      if (outcome.status === "stopped") return { outcome: "stopped" } as const
       return outcome.status === "completed"
         ? ({ outcome: "completed" } as const)
         : ({ outcome: "failed", error: outcome.error } as const)
@@ -413,8 +434,8 @@ const stepIOLayer = Layer.effect(
         ),
       begin: (input) => begin(input).pipe(Effect.catchCause((cause) => Effect.succeed(unprepared(cause)))),
       moving: (sessionID) => transport.close(sessionID),
-      compact: (input) =>
-        compact(input).pipe(
+      compact: (input, record) =>
+        compact(input, record).pipe(
           Effect.catchCause((cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.interrupt
@@ -533,17 +554,20 @@ export const make = Effect.gen(function* () {
         // Releasing a transport is best effort: the move goes ahead.
         Effect.catchCause((cause) => Effect.logWarning("Could not release the model transport", { cause })),
       ),
-    compact: (input) =>
+    compact: (input, record) =>
       Effect.gen(function* () {
         const sessionID = SessionSchema.ID.make(input.sessionID)
         const location = yield* locationOf(sessionID)
         return yield* StepIO.use(
           (io): Effect.Effect<CompactionOutcome> =>
-            io.compact({
-              sessionID,
-              reason: input.reason,
-              ...(input.inputID === undefined ? {} : { inputID: SessionMessage.ID.make(input.inputID) }),
-            }),
+            io.compact(
+              {
+                sessionID,
+                reason: input.reason,
+                ...(input.inputID === undefined ? {} : { inputID: SessionMessage.ID.make(input.inputID) }),
+              },
+              recorder(record),
+            ),
         ).pipe(Effect.provide(location))
       }).pipe(
         Effect.catchCause((cause) =>

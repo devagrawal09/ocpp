@@ -929,13 +929,21 @@ describe("vendor-driven session control", () => {
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Finish the task" })
       yield* env.sessions.wait(env.session.id)
       const bus = yield* Bus.Service
-      yield* bus.publishAll([
-        [SessionEvent.Compaction.Started, { sessionID: env.session.id, reason: "auto", recent: "" }],
-        [
-          SessionEvent.Compaction.Settled,
-          { sessionID: env.session.id, reason: "auto", outcome: "completed", recent: "", text: "Durable summary" },
-        ],
-      ])
+      yield* bus
+        .command({ type: "startCompaction", payload: { sessionID: env.session.id, reason: "auto", recent: "" } })
+        .pipe(Effect.orDie)
+      yield* bus
+        .command({
+          type: "settleCompaction",
+          payload: {
+            sessionID: env.session.id,
+            reason: "auto",
+            outcome: "completed",
+            recent: "",
+            text: "Durable summary",
+          },
+        })
+        .pipe(Effect.orDie)
       vendor.turn = async () => {
         throw new Error("prompt is too long")
       }
@@ -1004,7 +1012,9 @@ describe("vendor-driven session control", () => {
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Original prompt" })
       yield* env.sessions.wait(env.session.id)
       const bus = yield* Bus.Service
-      yield* bus.publish(SessionEvent.Compaction.Started, { sessionID: env.session.id, reason: "manual", recent: "" })
+      yield* bus
+        .command({ type: "startCompaction", payload: { sessionID: env.session.id, reason: "manual", recent: "" } })
+        .pipe(Effect.orDie)
       yield* env.sessions.resume(env.session.id)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
       const failures = log.filter(compactionFailed)

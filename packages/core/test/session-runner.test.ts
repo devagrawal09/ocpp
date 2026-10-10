@@ -2227,18 +2227,28 @@ describe("SessionRunnerLLM", () => {
 
   scenario("moves the epoch at compaction and narrates later changes", function* (s) {
     yield* s.runPrompt("First")
-    yield* s.bus.publish(SessionEvent.Compaction.Started, {
-      sessionID,
-      reason: "manual",
-      recent: "",
-    })
-    yield* s.bus.publish(SessionEvent.Compaction.Settled, {
-      sessionID,
-      reason: "manual",
-      outcome: "completed",
-      text: "summary",
-      recent: "",
-    })
+    yield* s.bus
+      .command({
+        type: "startCompaction",
+        payload: {
+          sessionID,
+          reason: "manual",
+          recent: "",
+        },
+      })
+      .pipe(Effect.orDie)
+    yield* s.bus
+      .command({
+        type: "settleCompaction",
+        payload: {
+          sessionID,
+          reason: "manual",
+          outcome: "completed",
+          text: "summary",
+          recent: "",
+        },
+      })
+      .pipe(Effect.orDie)
     s.systemBaseline = "Replacement context"
     yield* s.runPrompt("Second")
 
@@ -2825,18 +2835,28 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
     s.systemBaseline = "Changed context"
     yield* s.runPrompt("Second")
-    yield* s.bus.publish(SessionEvent.Compaction.Started, {
-      sessionID,
-      reason: "manual",
-      recent: "",
-    })
-    yield* s.bus.publish(SessionEvent.Compaction.Settled, {
-      sessionID,
-      reason: "manual",
-      outcome: "completed",
-      text: "summary",
-      recent: "",
-    })
+    yield* s.bus
+      .command({
+        type: "startCompaction",
+        payload: {
+          sessionID,
+          reason: "manual",
+          recent: "",
+        },
+      })
+      .pipe(Effect.orDie)
+    yield* s.bus
+      .command({
+        type: "settleCompaction",
+        payload: {
+          sessionID,
+          reason: "manual",
+          outcome: "completed",
+          text: "summary",
+          recent: "",
+        },
+      })
+      .pipe(Effect.orDie)
     s.systemUnavailable = true
     yield* s.runPrompt("Third")
 

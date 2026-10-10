@@ -226,98 +226,6 @@
       }
     },
     {
-      "description": "Records session-shell-started as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-shell-started",
-          "examplePayload": {
-            "sessionID": "ses_1",
-            "shell": {
-              "command": "pwd",
-              "cwd": "/project",
-              "file": "/tmp/sh_projector.out",
-              "id": "sh_projector",
-              "metadata": {
-                "background": true
-              },
-              "shell": "/bin/sh",
-              "status": "running",
-              "time": {
-                "started": 0
-              }
-            }
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1",
-              "shell": {
-                "command": "pwd",
-                "cwd": "/project",
-                "file": "/tmp/sh_projector.out",
-                "id": "sh_projector",
-                "metadata": {
-                  "background": true
-                },
-                "shell": "/bin/sh",
-                "status": "running",
-                "time": {
-                  "started": 0
-                }
-              }
-            },
-            "type": "session-shell-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-shell-settled as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-shell-settled",
-          "examplePayload": {
-            "exit": 0,
-            "outcome": "exited",
-            "output": {
-              "cursor": 8,
-              "output": "/project",
-              "size": 8,
-              "truncated": false
-            },
-            "sessionID": "ses_1",
-            "shellID": "sh_projector"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "exit": 0,
-              "outcome": "exited",
-              "output": {
-                "cursor": 8,
-                "output": "/project",
-                "size": 8,
-                "truncated": false
-              },
-              "sessionID": "ses_1",
-              "shellID": "sh_projector"
-            },
-            "type": "session-shell-settled"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records session-step-started as the host published it.",
       "expect": [
         {
@@ -679,68 +587,6 @@
               }
             },
             "type": "session-invocation-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-compaction-started as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-compaction-started",
-          "examplePayload": {
-            "reason": "manual",
-            "recent": "",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "reason": "manual",
-              "recent": "",
-              "sessionID": "ses_1"
-            },
-            "type": "session-compaction-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-compaction-settled as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-compaction-settled",
-          "examplePayload": {
-            "error": {
-              "message": "summary unavailable",
-              "type": "provider.error"
-            },
-            "outcome": "failed",
-            "reason": "auto",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "error": {
-                "message": "summary unavailable",
-                "type": "provider.error"
-              },
-              "outcome": "failed",
-              "reason": "auto",
-              "sessionID": "ses_1"
-            },
-            "type": "session-compaction-settled"
           }
         ]
       }
@@ -2545,6 +2391,137 @@
               "sessionID": "ses_1"
             },
             "type": "session-instruction-entry-removed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-shell-started: runShell decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-shell-started is recorded by runShell"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "shell": {
+                "command": "pwd",
+                "cwd": "/project",
+                "file": "/tmp/sh_projector.out",
+                "id": "sh_projector",
+                "metadata": {
+                  "background": true
+                },
+                "shell": "/bin/sh",
+                "status": "running",
+                "time": {
+                  "started": 0
+                }
+              }
+            },
+            "type": "session-shell-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-shell-settled: settleShell decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-shell-settled is recorded by settleShell"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "exit": 0,
+              "outcome": "exited",
+              "output": {
+                "cursor": 8,
+                "output": "/project",
+                "size": 8,
+                "truncated": false
+              },
+              "sessionID": "ses_1",
+              "shellID": "sh_projector"
+            },
+            "type": "session-shell-settled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-compaction-started: startCompaction decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-compaction-started is recorded by startCompaction"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "reason": "manual",
+              "recent": "",
+              "sessionID": "ses_1"
+            },
+            "type": "session-compaction-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-compaction-settled: settleCompaction decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-compaction-settled is recorded by settleCompaction"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "error": {
+                "message": "summary unavailable",
+                "type": "provider.error"
+              },
+              "outcome": "failed",
+              "reason": "auto",
+              "sessionID": "ses_1"
+            },
+            "type": "session-compaction-settled"
           }
         ]
       }

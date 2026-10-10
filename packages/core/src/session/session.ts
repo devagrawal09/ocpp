@@ -41,6 +41,8 @@ const missing = (sessionID: SessionSchema.ID, error: unknown) =>
 
 const encodeModel = Schema.encodeSync(SessionEvent.ModelSelected.data.fields.model)
 const encodeDisplayed = Schema.encodeSync(SessionEvent.Displayed.data)
+const encodeShellStarted = Schema.encodeSync(SessionEvent.Shell.Started.data)
+const encodeShellSettled = Schema.encodeSync(SessionEvent.Shell.Settled.data)
 
 export type Services =
   | PluginSupervisor.Service
@@ -263,27 +265,35 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
           ),
           Effect.orDie,
         )
-      yield* bus.publish(
-        SessionEvent.Shell.Started,
-        {
-          sessionID,
-          shell: started,
-        },
-        { id: input.id },
-      )
+      // The shell's timeline entry takes its ID from its event's.
+      yield* bus
+        .command(
+          { type: "runShell", payload: encodeShellStarted({ sessionID, shell: started }) },
+          { facts: [input.id === undefined ? undefined : { id: input.id }] },
+        )
+        .pipe(Effect.catch((error) => missing(sessionID, error)))
       const terminal = yield* shell.result(started)
       const preview = yield* shell
         .output(started.id, { limit: SHELL_MAX_CAPTURE_BYTES })
         .pipe(Effect.catchTag("Shell.NotFoundError", () => Effect.succeed(ShellResult.unavailable)))
       const info = terminal.info
-      yield* bus.publish(SessionEvent.Shell.Settled, {
-        sessionID,
-        shellID: info.id,
-        // `result` waits for the command to end, so its status is never still running.
-        outcome: info.status === "running" ? "killed" : info.status,
-        ...(info.exit === undefined ? {} : { exit: info.exit }),
-        output: preview,
-      })
+      // A Session deleted while its shell ran settles nothing.
+      yield* bus
+        .command({
+          type: "settleShell",
+          payload: encodeShellSettled({
+            sessionID,
+            shellID: info.id,
+            // `result` waits for the command to end, so its status is never still running.
+            outcome: info.status === "running" ? "killed" : info.status,
+            ...(info.exit === undefined ? {} : { exit: info.exit }),
+            output: preview,
+          }),
+        })
+        .pipe(
+          Effect.catchIf(SpecterRejection.isMissingSession, () => Effect.void),
+          Effect.orDie,
+        )
       yield* synthetic(sessionID, {
         ...ShellResult.userNotification(terminal),
         resume: false,

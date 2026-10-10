@@ -31,6 +31,8 @@ export {
   type AttemptRecorder,
   type CompactFirst,
   type CompactionOutcome,
+  type CompactionRecorder,
+  type CompactionUsage,
   type DriveInbox,
   type DriveOutcome,
   type PrepareOutcome,

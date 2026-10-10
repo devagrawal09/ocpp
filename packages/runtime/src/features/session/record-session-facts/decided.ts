@@ -23,6 +23,10 @@ export const decided = {
   "session-instruction-blobs-stored": "updateInstructions",
   "session-instruction-entry-set": "setInstructionEntry",
   "session-instruction-entry-removed": "removeInstructionEntry",
+  "session-shell-started": "runShell",
+  "session-shell-settled": "settleShell",
+  "session-compaction-started": "startCompaction",
+  "session-compaction-settled": "settleCompaction",
 } as const
 
 export const refusal = (type: string) =>

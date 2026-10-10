@@ -108,8 +108,8 @@ const layer = Layer.effect(
                 },
           ),
         ),
-      compact: (input) =>
-        untilIdle<CompactionOutcome, never>(input.sessionID, host.compact(input), { outcome: "stopped" }),
+      compact: (input, record) =>
+        untilIdle<CompactionOutcome, never>(input.sessionID, host.compact(input, record), { outcome: "stopped" }),
       ...(host.prepare ? { prepare: host.prepare } : {}),
       ...(host.moving ? { moving: host.moving } : {}),
       ...(host.recover ? { recover: host.recover } : {}),

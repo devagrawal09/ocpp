@@ -3,7 +3,7 @@ export * as SessionTitle from "./title.js"
 import { isDeepStrictEqual } from "node:util"
 import { LLMClient, LLMEvent, Message, SystemPart } from "@ocpp/ai"
 import type { Agent } from "@ocpp/schema/agent"
-import { Context, DateTime, Effect, Layer, Stream } from "effect"
+import { Context, DateTime, Effect, Layer, Schema, Stream } from "effect"
 import { Database } from "../database/database.js"
 import { Bus } from "../bus.js"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
@@ -16,11 +16,12 @@ import type { SessionRunnerModel } from "./runner/model.js"
 import { SessionSchema } from "./schema.js"
 import { SessionUsage } from "./usage.js"
 import { SessionStore } from "./store.js"
+import { SpecterRejection } from "../specter/rejection.js"
 
 const MAX_LENGTH = 100
 const MAX_CONTEXT_LENGTH = 8_000
 const MAX_FIRST_MESSAGE_LENGTH = 2_000
-const titleChanged = Symbol("Session title changed")
+const encodeUsage = Schema.encodeSync(SessionEvent.UsageRecorded.data)
 
 export interface Interface {
   /** Generates an initial title or regenerates one from bounded conversation history. */
@@ -54,13 +55,18 @@ export const layer = Layer.effect(
       const chunks: string[] = []
       let failed = false
       let usage: SessionUsage.Recorded | undefined
+      // A Session deleted meanwhile records nothing.
       const recordUsage = Effect.suspend(() =>
         usage
-          ? bus.publish(SessionEvent.UsageRecorded, {
-              sessionID: input.session.id,
-              source: "title",
-              ...usage,
-            })
+          ? bus
+              .command({
+                type: "recordUsage",
+                payload: encodeUsage({ sessionID: input.session.id, source: "title", ...usage }),
+              })
+              .pipe(
+                Effect.catchIf(SpecterRejection.isMissingSession, () => Effect.void),
+                Effect.orDie,
+              )
           : Effect.void,
       )
       const prepared = yield* context.prepare({
@@ -132,19 +138,25 @@ export const layer = Layer.effect(
           ? yield* attempt({ session, agent: selection.agent, text, model: selection.primary })
           : undefined)
       if (!title) return
-      const expectedSequence = (yield* Bus.latestSequence(db, sessionID)) + 1
       const current = yield* store.get(sessionID)
       if (!current || current.title !== session.title || current.title === truncate(title)) return
+      // The title replaces the one it was generated for; the runtime refuses it once another rename landed.
       yield* bus
-        .publish(
-          SessionEvent.Renamed,
-          {
+        .command({
+          type: "renameSession",
+          payload: {
             sessionID: session.id,
             title: truncate(title),
+            replacing: session.title === undefined ? {} : { title: session.title },
           },
-          { commit: (sequence) => (sequence === expectedSequence ? Effect.void : Effect.die(titleChanged)) },
+        })
+        .pipe(
+          Effect.catchIf(
+            (error) => SpecterRejection.isMissingSession(error) || SpecterRejection.reason(error) === "Title changed",
+            () => Effect.void,
+          ),
+          Effect.orDie,
         )
-        .pipe(Effect.catchDefect((defect) => (defect === titleChanged ? Effect.void : Effect.die(defect))))
     })
     return Service.of({ generate })
   }),

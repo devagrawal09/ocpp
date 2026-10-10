@@ -11,6 +11,9 @@ import { MessageDecodeError } from "./error.js"
 import { SessionMessage } from "./message.js"
 import { SessionSchema } from "./schema.js"
 import { SessionStore } from "./store.js"
+import { SpecterRejection } from "../specter/rejection.js"
+
+const encodeSynthetic = Schema.encodeSync(SessionEvent.Synthetic.data)
 
 const InjectedMetadata = Schema.Struct({
   instruction: Schema.Struct({ paths: Schema.Array(Schema.String) }),
@@ -71,12 +74,21 @@ const layer = Layer.effect(
         // cannot depend on Session (it routes through LocationServiceMap, forming a type
         // cycle with this node). The durable publish commits the synthetic and its metadata
         // ledger atomically, so releasing the claim afterwards cannot readmit the paths.
-        yield* bus.publish(SessionEvent.Synthetic, {
-          sessionID: input.sessionID,
-          text: readable.map((file) => `Instructions from: ${file.path}\n${file.content}`).join("\n\n"),
-          description: `Loaded ${readable.map((file) => describePath(root, file.path)).join(", ")}`,
-          metadata: { instruction: { paths: readable.map((file) => file.path) } },
-        })
+        yield* bus
+          .command({
+            type: "appendSynthetic",
+            payload: encodeSynthetic({
+              sessionID: input.sessionID,
+              text: readable.map((file) => `Instructions from: ${file.path}\n${file.content}`).join("\n\n"),
+              description: `Loaded ${readable.map((file) => describePath(root, file.path)).join(", ")}`,
+              metadata: { instruction: { paths: readable.map((file) => file.path) } },
+            }),
+          })
+          // A Session deleted meanwhile takes no instructions.
+          .pipe(
+            Effect.catchIf(SpecterRejection.isMissingSession, () => Effect.void),
+            Effect.orDie,
+          )
       }).pipe(
         Effect.ensuring(
           Ref.update(inFlight, (map) => {

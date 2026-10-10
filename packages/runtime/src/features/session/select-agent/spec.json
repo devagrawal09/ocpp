@@ -1,0 +1,163 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Selects the agent a live Session runs as. The selection records the agent it replaces: the one the Session was created with, or last selected.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "selectAgent",
+  "scenarios": [
+    {
+      "description": "The agent the Session was created with is the one the selection replaces.",
+      "expect": [
+        {
+          "eventType": "session-agent-selected",
+          "examplePayload": {
+            "agent": "plan",
+            "previous": "build",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "agent": "build",
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "agent": "plan",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The last selection is the one a new selection replaces.",
+      "expect": [
+        {
+          "eventType": "session-agent-selected",
+          "examplePayload": {
+            "agent": "review",
+            "previous": "plan",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "agent": "build",
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-agent-selected",
+          "examplePayload": {
+            "agent": "plan",
+            "previous": "build",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "agent": "review",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Session that never had an agent replaces none.",
+      "expect": [
+        {
+          "eventType": "session-agent-selected",
+          "examplePayload": {
+            "agent": "plan",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "agent": "plan",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "agent": "plan",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "agent": "plan",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

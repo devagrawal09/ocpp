@@ -1,0 +1,198 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Renames a live Session. A title the host generated replaces the title it was generated for, and only while the Session still has it: a rename that landed meanwhile wins.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "renameSession",
+  "scenarios": [
+    {
+      "description": "A live Session takes the new title.",
+      "expect": [
+        {
+          "eventType": "session-renamed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "title": "Fix the build"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1",
+        "title": "Fix the build"
+      }
+    },
+    {
+      "description": "A generated title replaces the untitled Session's missing title.",
+      "expect": [
+        {
+          "eventType": "session-renamed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "title": "Fix the build"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "replacing": {},
+        "sessionID": "ses_1",
+        "title": "Fix the build"
+      }
+    },
+    {
+      "description": "A generated title replaces the title it was generated for.",
+      "expect": [
+        {
+          "eventType": "session-renamed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "title": "Fix the build"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "title": "New session",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-renamed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "title": "Old title"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "replacing": {
+          "title": "Old title"
+        },
+        "sessionID": "ses_1",
+        "title": "Fix the build"
+      }
+    },
+    {
+      "description": "A generated title does not replace a title the Session took meanwhile.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-renamed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "title": "Manual title"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Title changed"
+      },
+      "when": {
+        "replacing": {},
+        "sessionID": "ses_1",
+        "title": "Fix the build"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "sessionID": "ses_1",
+        "title": "Fix the build"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "sessionID": "ses_1",
+        "title": "Fix the build"
+      }
+    }
+  ]
+}

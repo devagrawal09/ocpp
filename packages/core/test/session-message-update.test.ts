@@ -149,7 +149,12 @@ describe("Session.updateMessage", () => {
       const session = yield* Session.Service
       const bus = yield* Bus.Service
       const created = yield* session.create({ location })
-      const synthetic = yield* bus.publish(SessionEvent.Synthetic, { sessionID: created.id, text: "synthetic" })
+      const synthetic = yield* bus
+        .command({ type: "appendSynthetic", payload: { sessionID: created.id, text: "synthetic" } })
+        .pipe(
+          Effect.orDie,
+          Effect.map((events) => events[0]!),
+        )
       const syntheticID = SessionMessage.ID.fromEvent(synthetic.id)
 
       expect(

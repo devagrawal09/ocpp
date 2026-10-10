@@ -13,6 +13,7 @@ import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { SessionTable } from "@ocpp/core/session/sql"
+import { eq } from "drizzle-orm"
 import { SessionStore } from "@ocpp/core/session/store"
 import { SessionTitle } from "@ocpp/core/session/title"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
@@ -145,21 +146,15 @@ const insertSession = (id: Session.ID, title?: string, created?: number, model?:
       .onConflictDoNothing()
       .run()
       .pipe(Effect.orDie)
-    yield* db
-      .insert(SessionTable)
-      .values({
-        id,
-        project_id: Project.ID.global,
-        slug: id,
-        directory: "/project",
-        title,
-        model,
-        time_created: created,
-        version: "test",
-      })
-      .onConflictDoNothing()
-      .run()
-      .pipe(Effect.orDie)
+    yield* recordSession({ id, directory: "/project", title, model })
+    // A Session the test dates itself: its creation time names its fallback title.
+    if (created !== undefined)
+      yield* db
+        .update(SessionTable)
+        .set({ time_created: created })
+        .where(eq(SessionTable.id, id))
+        .run()
+        .pipe(Effect.orDie)
   })
 
 const prompt = (sessionID: Session.ID, text: string) =>
@@ -568,7 +563,7 @@ it.effect("preserves a manual rename completed while generation is in flight", (
     const fiber = yield* title.generate(sessionID).pipe(Effect.forkScoped)
     yield* Deferred.await(started)
     const events = yield* Bus.Service
-    yield* events.publish(SessionEvent.Renamed, { sessionID, title: "Manual title" })
+    yield* events.command({ type: "renameSession", payload: { sessionID, title: "Manual title" } }).pipe(Effect.orDie)
     yield* Deferred.succeed(release, undefined)
     yield* Fiber.join(fiber)
 

@@ -12,7 +12,7 @@ import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { Session } from "@ocpp/core/session"
 import { SessionProjector } from "@ocpp/core/session/projector"
-import { SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
+import { SessionMessageTable } from "@ocpp/core/session/sql"
 import { Project } from "@ocpp/core/project"
 import { ProjectTable } from "@ocpp/core/project/sql"
 import { Model } from "@ocpp/core/model"
@@ -22,6 +22,7 @@ import { Snapshot } from "@ocpp/core/snapshot"
 import { createLLMEventPublisher } from "@ocpp/core/session/runner/publish-llm-event"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Recorded } from "./lib/recorded"
+import { recordSession } from "./fixture/session"
 import { it, testEffect } from "./lib/effect"
 import { TestClock } from "effect/testing"
 
@@ -147,10 +148,7 @@ testEffect(
       .insert(ProjectTable)
       .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
       .run()
-    yield* database.db
-      .insert(SessionTable)
-      .values({ id: sessionID, project_id: Project.ID.global, slug: "publish", directory: "/project", version: "test" })
-      .run()
+    yield* recordSession({ id: sessionID, directory: "/project", slug: "publish" })
     const publisher = createLLMEventPublisher(
       {
         publish: (definition, data, options) =>
@@ -177,7 +175,8 @@ testEffect(
     )
     // Listener delivery holds the aggregate lock after this unrelated event commits.
     const holder = yield* bus
-      .publish(SessionEvent.Renamed, { sessionID, title: "Hold publication" })
+      .command({ type: "renameSession", payload: { sessionID, title: "Hold publication" } })
+      .pipe(Effect.orDie)
       .pipe(Effect.forkScoped({ startImmediately: true }))
     yield* Deferred.await(held)
     const publication = yield* publisher

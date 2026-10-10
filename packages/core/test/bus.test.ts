@@ -3,7 +3,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Layer, Ref, Schema, Stream } from
 import { Bus } from "@ocpp/core/bus"
 import { Event } from "@ocpp/schema/event"
 import { Session } from "@ocpp/schema/session"
-import { SessionEvent } from "@ocpp/schema/session-event"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -56,11 +55,9 @@ const CountMessage = Bus.ephemeral({
   },
 })
 
-const DurableMessage = SessionEvent.Renamed
-const durableData = (sessionID: Session.ID, text: string) => ({
-  sessionID,
-  title: text,
-})
+// A fact the Bus still records as published, in an aggregate of its own.
+const DurableMessage = KeyValueFact.Stored
+const durableData = (key: string, text: string) => ({ key, value: text })
 
 /** Followed log read without markers: the old `durable` stream shape. */
 const tail = (bus: Bus.Interface, input: { aggregateID: string; after?: number }) =>
@@ -146,11 +143,11 @@ describe("Bus", () => {
   it.effect("places a durable event in its aggregate, with no version", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
-      const sessionID = Session.ID.create()
-      const event = yield* bus.publish(SessionEvent.Renamed, { sessionID, title: "Placed" })
+      const key = Session.ID.create()
+      const event = yield* bus.publish(KeyValueFact.Stored, { key, value: "Placed" })
 
-      expect(event.type).toBe("session-renamed")
-      expect(event.durable).toEqual({ aggregateID: sessionID, seq: Event.Seq.make(0) })
+      expect(event.type).toBe("kv-stored")
+      expect(event.durable).toEqual({ aggregateID: key, seq: Event.Seq.make(0) })
     }),
   )
 

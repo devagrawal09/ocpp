@@ -6,137 +6,6 @@
   "name": "recordSessionFacts",
   "scenarios": [
     {
-      "description": "Records session-agent-selected as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-agent-selected",
-          "examplePayload": {
-            "agent": "review",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "agent": "review",
-              "sessionID": "ses_1"
-            },
-            "type": "session-agent-selected"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-model-selected as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-model-selected",
-          "examplePayload": {
-            "model": {
-              "id": "replacement",
-              "providerID": "fake"
-            },
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "model": {
-                "id": "replacement",
-                "providerID": "fake"
-              },
-              "sessionID": "ses_1"
-            },
-            "type": "session-model-selected"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-tools-selected as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-tools-selected",
-          "examplePayload": {
-            "sessionID": "ses_1",
-            "tools": []
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1",
-              "tools": []
-            },
-            "type": "session-tools-selected"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-renamed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-renamed",
-          "examplePayload": {
-            "sessionID": "ses_1",
-            "title": "Renamed"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
-            },
-            "type": "session-renamed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-viewed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-viewed",
-          "examplePayload": {
-            "idle": 0,
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "idle": 0,
-              "sessionID": "ses_1"
-            },
-            "type": "session-viewed"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records session-inbox-delivered as the host published it.",
       "expect": [
         {
@@ -377,95 +246,6 @@
               "sessionID": "ses_1"
             },
             "type": "session-instructions-updated"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-synthetic as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-synthetic",
-          "examplePayload": {
-            "sessionID": "ses_1",
-            "text": "Fork boundary"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1",
-              "text": "Fork boundary"
-            },
-            "type": "session-synthetic"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-displayed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-displayed",
-          "examplePayload": {
-            "blocks": [
-              {
-                "text": "Second",
-                "type": "markdown"
-              }
-            ],
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "blocks": [
-                {
-                  "text": "Second",
-                  "type": "markdown"
-                }
-              ],
-              "sessionID": "ses_1"
-            },
-            "type": "session-displayed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-skill-activated as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-skill-activated",
-          "examplePayload": {
-            "id": "effect",
-            "name": "Effect",
-            "sessionID": "ses_1",
-            "text": "Use Effect"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "id": "effect",
-              "name": "Effect",
-              "sessionID": "ses_1",
-              "text": "Use Effect"
-            },
-            "type": "session-skill-activated"
           }
         ]
       }
@@ -986,78 +766,6 @@
               "sessionID": "ses_1"
             },
             "type": "session-compaction-settled"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-message-content-updated as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-message-content-updated",
-          "examplePayload": {
-            "content": [],
-            "messageID": "msg_120d4f6d1001gwPXiERssl4wDM",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "content": [],
-              "messageID": "msg_120d4f6d1001gwPXiERssl4wDM",
-              "sessionID": "ses_1"
-            },
-            "type": "session-message-content-updated"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-usage-recorded as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-usage-recorded",
-          "examplePayload": {
-            "cost": 0,
-            "sessionID": "ses_1",
-            "source": "title",
-            "tokens": {
-              "cache": {
-                "read": 0,
-                "write": 0
-              },
-              "input": 0,
-              "output": 0,
-              "reasoning": 0
-            }
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "cost": 0,
-              "sessionID": "ses_1",
-              "source": "title",
-              "tokens": {
-                "cache": {
-                  "read": 0,
-                  "write": 0
-                },
-                "input": 0,
-                "output": 0,
-                "reasoning": 0
-              }
-            },
-            "type": "session-usage-recorded"
           }
         ]
       }
@@ -2327,10 +2035,10 @@
         "facts": [
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-renamed"
+            "type": "kv-stored"
           },
           {
             "payload": {
@@ -2358,10 +2066,10 @@
         "facts": [
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-renamed"
+            "type": "kv-stored"
           },
           {
             "payload": {
@@ -2408,10 +2116,10 @@
         "facts": [
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-renamed"
+            "type": "kv-stored"
           },
           {
             "payload": {
@@ -2438,10 +2146,10 @@
         "facts": [
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-renamed"
+            "type": "kv-stored"
           },
           {
             "payload": {
@@ -2467,10 +2175,10 @@
         "facts": [
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-renamed"
+            "type": "kv-stored"
           },
           {
             "payload": {
@@ -2492,10 +2200,10 @@
         "facts": [
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-renamed"
+            "type": "kv-stored"
           },
           {
             "payload": {
@@ -2521,10 +2229,10 @@
         "facts": [
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-renamed"
+            "type": "kv-stored"
           },
           {
             "payload": {
@@ -2546,10 +2254,10 @@
         "facts": [
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-renamed"
+            "type": "kv-stored"
           },
           {
             "payload": {
@@ -2562,21 +2270,301 @@
       }
     },
     {
+      "description": "Refuses session-renamed: renameSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-renamed is recorded by renameSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-agent-selected: selectAgent decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-agent-selected is recorded by selectAgent"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "agent": "review",
+              "sessionID": "ses_1"
+            },
+            "type": "session-agent-selected"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-model-selected: selectModel decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-model-selected is recorded by selectModel"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "model": {
+                "id": "replacement",
+                "providerID": "fake"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-model-selected"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-tools-selected: selectTools decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-tools-selected is recorded by selectTools"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "tools": []
+            },
+            "type": "session-tools-selected"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-viewed: viewSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-viewed is recorded by viewSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "idle": 0,
+              "sessionID": "ses_1"
+            },
+            "type": "session-viewed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-displayed: displayResult decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-displayed is recorded by displayResult"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "blocks": [
+                {
+                  "text": "Second",
+                  "type": "markdown"
+                }
+              ],
+              "sessionID": "ses_1"
+            },
+            "type": "session-displayed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-usage-recorded: recordUsage decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-usage-recorded is recorded by recordUsage"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "cost": 0,
+              "sessionID": "ses_1",
+              "source": "title",
+              "tokens": {
+                "cache": {
+                  "read": 0,
+                  "write": 0
+                },
+                "input": 0,
+                "output": 0,
+                "reasoning": 0
+              }
+            },
+            "type": "session-usage-recorded"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-message-content-updated: editMessage decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-message-content-updated is recorded by editMessage"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "content": [],
+              "messageID": "msg_120d4f6d1001gwPXiERssl4wDM",
+              "sessionID": "ses_1"
+            },
+            "type": "session-message-content-updated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-skill-activated: activateSkill decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-skill-activated is recorded by activateSkill"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "id": "effect",
+              "name": "Effect",
+              "sessionID": "ses_1",
+              "text": "Use Effect"
+            },
+            "type": "session-skill-activated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-synthetic: appendSynthetic decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-synthetic is recorded by appendSynthetic"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "text": "Fork boundary"
+            },
+            "type": "session-synthetic"
+          }
+        ]
+      }
+    },
+    {
       "description": "A publication of several facts is one commit, in the order the host published them.",
       "expect": [
         {
-          "eventType": "session-inbox-delivered",
+          "eventType": "kv-stored",
           "examplePayload": {
-            "inboxID": "msg_first",
-            "sessionID": "ses_1"
+            "key": "websearch:provider",
+            "value": "exa"
           },
           "kind": "scenario-event"
         },
         {
-          "eventType": "session-renamed",
+          "eventType": "kv-removed",
           "examplePayload": {
-            "sessionID": "ses_1",
-            "title": "Renamed"
+            "key": "websearch:provider"
           },
           "kind": "scenario-event"
         }
@@ -2586,17 +2574,16 @@
         "facts": [
           {
             "payload": {
-              "inboxID": "msg_first",
-              "sessionID": "ses_1"
+              "key": "websearch:provider",
+              "value": "exa"
             },
-            "type": "session-inbox-delivered"
+            "type": "kv-stored"
           },
           {
             "payload": {
-              "sessionID": "ses_1",
-              "title": "Renamed"
+              "key": "websearch:provider"
             },
-            "type": "session-renamed"
+            "type": "kv-removed"
           }
         ]
       }

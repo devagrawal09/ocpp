@@ -1,7 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
 import { decided, refusal } from "./decided.ts"
-import { sessionFacts } from "./facts.ts"
+import { sessionFacts } from "../../facts.ts"
 
 // The embedding host (OC++) decides some Session facts itself and records
 // them here: they are stored as the host published them, in order, one commit
@@ -20,7 +20,7 @@ const refuseOne = (type: keyof typeof decided) => ({
   given: [],
   when: {
     facts: [
-      { type: "session-renamed", payload: sessionFacts["session-renamed"] },
+      { type: "kv-stored", payload: sessionFacts["kv-stored"] },
       { type, payload: sessionFacts[type] },
     ],
   },
@@ -41,17 +41,11 @@ export const recordSessionFactsSpec = createCommandSlice("recordSessionFacts")
     given: [],
     when: {
       facts: [
-        {
-          type: "session-inbox-delivered",
-          payload: sessionFacts["session-inbox-delivered"],
-        },
-        { type: "session-renamed", payload: sessionFacts["session-renamed"] },
+        { type: "kv-stored", payload: sessionFacts["kv-stored"] },
+        { type: "kv-removed", payload: sessionFacts["kv-removed"] },
       ],
     },
-    expect: [
-      event("session-inbox-delivered", sessionFacts["session-inbox-delivered"]),
-      event("session-renamed", sessionFacts["session-renamed"]),
-    ],
+    expect: [event("kv-stored", sessionFacts["kv-stored"]), event("kv-removed", sessionFacts["kv-removed"])],
   })
 
 export default recordSessionFactsSpec

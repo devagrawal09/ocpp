@@ -1,0 +1,98 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Selects the Code Mode paths a live subagent Session may call.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "selectTools",
+  "scenarios": [
+    {
+      "description": "The Session may call the selected paths.",
+      "expect": [
+        {
+          "eventType": "session-tools-selected",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "tools": [
+              "read",
+              "glob"
+            ]
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1",
+        "tools": [
+          "read",
+          "glob"
+        ]
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "sessionID": "ses_1",
+        "tools": [
+          "read",
+          "glob"
+        ]
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "sessionID": "ses_1",
+        "tools": [
+          "read",
+          "glob"
+        ]
+      }
+    }
+  ]
+}

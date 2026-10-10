@@ -123,11 +123,12 @@ const layer = Layer.effect(
                 // stop counts as left running too.
                 const resumed = yield* Deferred.await(left)
                 if (resumed.delete(sessionID))
-                  yield* bus.publish(SessionEvent.Synthetic, {
-                    sessionID,
-                    text: CONTINUE_AFTER_RESTART,
-                    description: "Continuing after restart",
-                  })
+                  yield* bus
+                    .command({
+                      type: "appendSynthetic",
+                      payload: { sessionID, text: CONTINUE_AFTER_RESTART, description: "Continuing after restart" },
+                    })
+                    .pipe(Effect.orDie)
                 return yield* untilIdle<DriveOutcome, never>(input.sessionID, host.drive!(input), {
                   outcome: "stopped",
                 })

@@ -18,6 +18,7 @@ import {
   type EventLogService as SpecterEventLogContract,
   EventLog as SpecterEventLogService,
   makeRuntime,
+  SpecterCommandRejectedError,
   type DriveExecutionOutboxStore,
   type PersistedEvent,
   type ReactionOutboxStore,
@@ -207,12 +208,30 @@ export interface Interface {
   readonly rebuild: (aggregateID?: string) => Effect.Effect<void>
   readonly remove: (aggregateID: string) => Effect.Effect<void>
   /**
+   * Dispatches one of the runtime's Commands, whose facts are published as `publishAll` publishes events: each
+   * takes the options at its position (its ID, metadata, Location and commit hook), the ambient Location and the
+   * time of the dispatch, and is projected in the append transaction and notified once it commits. Answers the
+   * events the Command recorded, in order, or fails with its rejection.
+   */
+  readonly command: (
+    command: RuntimeCommand,
+    options?: CommandOptions,
+  ) => Effect.Effect<readonly Event.Payload[], SpecterCommandRejectedError>
+  /**
    * OC++'s one Specter runtime, over Specter's Event Log in this database: every Command, Query and
    * Reaction. `publish` records through its `recordSessionFacts`; Session operations dispatch their own
    * Commands. Each commit is projected here as OC++ events in the append transaction and notified once it
    * commits. Its Reactions start when the Session runtime binds the step I/O (`runtime.start`).
    */
   readonly runtime: Runtime
+}
+
+/** A Command of the runtime, as `runtime.command` takes it. */
+export type RuntimeCommand = Parameters<Runtime["command"]>[0]
+
+export interface CommandOptions {
+  /** The publication options of the facts the Command records, by position. */
+  readonly facts?: ReadonlyArray<PublishOptions | undefined>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/Bus") {}
@@ -502,22 +521,38 @@ export function configured(options?: Options) {
         // Every fact is recorded by the Specter runtime into its Event Log, kept in this database. The
         // log's append runs projectBatch inside its own transaction, so a recorded fact and OC++'s read
         // models change together or not at all.
-        type Pending = {
-          readonly items: readonly [BatchItem, ...BatchItem[]]
-          committed?: Effect.Success<ReturnType<typeof projectBatch>>
-        }
+        type Pending =
+          // A publication through this Bus: its events, under the lock of their aggregate, which the publisher
+          // holds and notifies once the record returns.
+          | {
+              readonly items: readonly [BatchItem, ...BatchItem[]]
+              committed?: Effect.Success<ReturnType<typeof projectBatch>>
+            }
+          // A Command dispatched through this Bus: the options of the facts it records, by position, and when
+          // and where it was dispatched. Its facts are projected and notified as the Command records them.
+          | {
+              readonly dispatch: {
+                readonly created: number
+                readonly location?: Location.Ref
+                readonly facts: ReadonlyArray<PublishOptions | undefined>
+              }
+              recorded?: readonly Event.Payload[]
+            }
         const pending = new Map<string, Pending>()
         const specterLog = SpecterEventLog.make(db, {
           drafts: (key, count) =>
             Array.from({ length: count }, (_, index) => {
-              const event = key === undefined ? undefined : pending.get(key)?.items[index]?.event
+              const entry = key === undefined ? undefined : pending.get(key)
+              if (entry && "dispatch" in entry)
+                return { id: entry.dispatch.facts[index]?.id ?? Event.ID.create(), created: entry.dispatch.created }
+              const event = entry?.items[index]?.event
               return event ? { id: event.id, created: event.created } : { id: Event.ID.create() }
             }),
           appended: (key, events) =>
             Effect.gen(function* () {
               const entry = key === undefined ? undefined : pending.get(key)
               // A publication through this Bus: publish and publishAll notify once it returns.
-              if (entry) {
+              if (entry && "items" in entry) {
                 entry.committed = yield* projectBatch(
                   entry.items[0].aggregateID,
                   entry.items,
@@ -525,19 +560,26 @@ export function configured(options?: Options) {
                 )
                 return Effect.void
               }
-              // Facts a runtime Command recorded directly: project each as the event it is here, and notify
-              // after the transaction commits.
-              const created = Date.parse(events[0]?.recordedAt ?? "") || (yield* Clock.currentTimeMillis)
+              // Facts a runtime Command recorded: project each as the event it is here, and notify after the
+              // transaction commits. A Command dispatched through this Bus publishes them with its options.
+              const dispatch = entry?.dispatch
+              const created =
+                dispatch?.created ?? (Date.parse(events[0]?.recordedAt ?? "") || (yield* Clock.currentTimeMillis))
               type Placed = BatchItem & { readonly order: number }
-              const items = events.map((recorded): Placed => {
+              const items = events.map((recorded, index): Placed => {
                 const definition = definitionOf(recorded)
+                const options = dispatch?.facts[index]
+                const location = options?.global ? undefined : (options?.location ?? dispatch?.location)
                 return {
                   definition,
                   aggregateID: aggregateOf(definition, recorded.payload),
+                  commit: options?.commit,
                   event: {
                     id: Event.ID.make(recorded.id),
                     created,
+                    ...(options?.metadata ? { metadata: options.metadata } : {}),
                     type: definition.type,
+                    ...(location ? { location } : {}),
                     data: Schema.decodeUnknownSync(definition.data)(recorded.payload),
                   } as Event.Payload,
                   order: recorded.order,
@@ -550,8 +592,18 @@ export function configured(options?: Options) {
                   batch[0]!.aggregateID,
                   batch as [Placed, ...Placed[]],
                   batch.map((item) => item.order),
+                ).pipe(
+                  Effect.map((projected) => ({
+                    ...projected,
+                    placed: projected.events.map((event, index) => ({ event, order: batch[index]!.order })),
+                  })),
                 ),
               )
+              if (entry)
+                entry.recorded = committed
+                  .flatMap((batch) => batch.placed)
+                  .toSorted((left, right) => left.order - right.order)
+                  .map((placed) => placed.event)
               const aggregates = [...batches.keys()]
               // The log runs this uninterruptibly once the append commits; as for a publish, only
               // notifying listeners can be interrupted.
@@ -580,8 +632,9 @@ export function configured(options?: Options) {
         // each aggregate's events in order. A publication through this Bus already holds its aggregate's.
         const runtimeLog: SpecterEventLogContract = {
           ...specterLog,
-          append: (drafts, options) =>
-            options?.idempotencyKey !== undefined && pending.has(options.idempotencyKey)
+          append: (drafts, options) => {
+            const entry = options?.idempotencyKey === undefined ? undefined : pending.get(options.idempotencyKey)
+            return entry && "items" in entry
               ? specterLog.append(drafts, options)
               : [
                   ...new Set(
@@ -598,7 +651,8 @@ export function configured(options?: Options) {
                   .reduce(
                     (append, aggregateID) => durableLocks.withLock(aggregateID)(append),
                     specterLog.append(drafts, options),
-                  ),
+                  )
+          },
         }
         // The runtime keeps its state in this database too, so a boot resumes from where the last one
         // stopped: its Slices from their snapshots, and its Reactions' jobs from the outbox, where a
@@ -619,7 +673,7 @@ export function configured(options?: Options) {
         }).pipe(Effect.provideService(SpecterEventLogService, runtimeLog), Effect.orDie)
         const recordFacts = (items: readonly [BatchItem, ...BatchItem[]]) => {
           const key = `bus:${crypto.randomUUID()}`
-          const entry: Pending = { items }
+          const entry: Extract<Pending, { readonly items: unknown }> = { items }
           return Effect.acquireUseRelease(
             Effect.sync(() => pending.set(key, entry)),
             () =>
@@ -643,6 +697,32 @@ export function configured(options?: Options) {
             () => Effect.sync(() => pending.delete(key)),
           )
         }
+
+        const command: Interface["command"] = (envelope, options) =>
+          Effect.gen(function* () {
+            const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
+            const key = `bus:${crypto.randomUUID()}`
+            const entry: Extract<Pending, { readonly dispatch: unknown }> = {
+              dispatch: {
+                created: yield* Clock.currentTimeMillis,
+                ...(serviceLocation
+                  ? { location: { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID } }
+                  : {}),
+                facts: options?.facts ?? [],
+              },
+            }
+            return yield* Effect.acquireUseRelease(
+              Effect.sync(() => pending.set(key, entry)),
+              () =>
+                runtime.command(envelope, { idempotencyKey: key }).pipe(
+                  Effect.catch((error) =>
+                    error instanceof SpecterCommandRejectedError ? Effect.fail(error) : Effect.die(error),
+                  ),
+                  Effect.map(() => entry.recorded ?? []),
+                ),
+              () => Effect.sync(() => pending.delete(key)),
+            )
+          })
 
         function publishAll<const I extends readonly [PublishInput, ...PublishInput[]]>(events: I) {
           return Effect.gen(function* () {
@@ -944,6 +1024,7 @@ export function configured(options?: Options) {
         return Service.of({
           publish,
           publishAll,
+          command,
           subscribe,
           log,
           listen,

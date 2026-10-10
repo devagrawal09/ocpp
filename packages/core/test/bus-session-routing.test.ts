@@ -102,7 +102,10 @@ describe("Bus Session routing", () => {
       yield* seed()
       const bus = yield* Bus.Service
       const database = yield* Database.Service
-      yield* bus.publish(SessionEvent.Synthetic, { sessionID: id, text: "Fork boundary" })
+      yield* bus.command({ type: "appendSynthetic", payload: { sessionID: id, text: "Fork boundary" } }).pipe(
+        Effect.orDie,
+        Effect.map((events) => events[0]!),
+      )
       const boundary = yield* database.db
         .select({ id: SessionMessageTable.id })
         .from(SessionMessageTable)
@@ -152,7 +155,10 @@ describe("Bus Session routing", () => {
         }),
       )
 
-      const renamed = yield* bus.publish(SessionEvent.Renamed, { sessionID: id, title: "first" })
+      const renamed = yield* bus.command({ type: "renameSession", payload: { sessionID: id, title: "first" } }).pipe(
+        Effect.orDie,
+        Effect.map((events) => events[0]!),
+      )
       const text = yield* delta(bus)
       const broadcast = yield* bus.publish(Global, { sessionID: id })
       const explicit = yield* bus.publish(
@@ -195,9 +201,17 @@ describe("Bus Session routing", () => {
         Effect.provideService(Location.Service, location(b)),
         Effect.forkScoped({ startImmediately: true }),
       )
-      yield* bus.publish(SessionEvent.Renamed, { sessionID: id, title: "wrong location" })
+      yield* bus.command({ type: "renameSession", payload: { sessionID: id, title: "wrong location" } }).pipe(
+        Effect.orDie,
+        Effect.map((events) => events[0]!),
+      )
       yield* move(bus, b)
-      const expected = yield* bus.publish(SessionEvent.Renamed, { sessionID: id, title: "destination" })
+      const expected = yield* bus
+        .command({ type: "renameSession", payload: { sessionID: id, title: "destination" } })
+        .pipe(
+          Effect.orDie,
+          Effect.map((events) => events[0] as Event.Payload<typeof SessionEvent.Renamed>),
+        )
       const done = yield* bus.publish(Done, {})
       expect(yield* Fiber.join(typed)).toEqual([expected])
       expect(yield* Fiber.join(multiple)).toEqual([expected, done])
@@ -229,7 +243,10 @@ describe("Bus Session routing", () => {
           },
         })
         .pipe(Effect.orDie)
-      const before = yield* bus.publish(SessionEvent.Renamed, { sessionID: id, title: "before" })
+      const before = yield* bus.command({ type: "renameSession", payload: { sessionID: id, title: "before" } }).pipe(
+        Effect.orDie,
+        Effect.map((events) => events[0]!),
+      )
       const moved = yield* move(bus, b)
       const after = yield* delta(bus)
       const done = yield* bus.publish(Done, {})

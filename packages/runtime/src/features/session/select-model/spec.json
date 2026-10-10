@@ -1,0 +1,274 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Selects the model a live Session runs on. The selection records the model it replaces: the one the Session was created with, or last selected. Selecting the model already selected records nothing; a model without a variant is its default variant.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "selectModel",
+  "scenarios": [
+    {
+      "description": "The model the Session was created with is the one the selection replaces.",
+      "expect": [
+        {
+          "eventType": "session-model-selected",
+          "examplePayload": {
+            "model": {
+              "id": "opus",
+              "providerID": "anthropic"
+            },
+            "previous": {
+              "id": "sonnet",
+              "providerID": "anthropic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "anthropic"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "model": {
+          "id": "opus",
+          "providerID": "anthropic"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The last selection is the one a new selection replaces.",
+      "expect": [
+        {
+          "eventType": "session-model-selected",
+          "examplePayload": {
+            "model": {
+              "id": "opus",
+              "providerID": "anthropic",
+              "variant": "high"
+            },
+            "previous": {
+              "id": "opus",
+              "providerID": "anthropic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "anthropic"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-model-selected",
+          "examplePayload": {
+            "model": {
+              "id": "opus",
+              "providerID": "anthropic"
+            },
+            "previous": {
+              "id": "sonnet",
+              "providerID": "anthropic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "model": {
+          "id": "opus",
+          "providerID": "anthropic",
+          "variant": "high"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Session that never had a model replaces none.",
+      "expect": [
+        {
+          "eventType": "session-model-selected",
+          "examplePayload": {
+            "model": {
+              "id": "opus",
+              "providerID": "anthropic"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "model": {
+          "id": "opus",
+          "providerID": "anthropic"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The model already selected is refused: there is nothing to change.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "anthropic"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Model already selected"
+      },
+      "when": {
+        "model": {
+          "id": "sonnet",
+          "providerID": "anthropic"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A model without a variant is the same selection as its default variant.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "sonnet",
+              "providerID": "anthropic"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Model already selected"
+      },
+      "when": {
+        "model": {
+          "id": "sonnet",
+          "providerID": "anthropic",
+          "variant": "default"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "model": {
+          "id": "opus",
+          "providerID": "anthropic"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "model": {
+          "id": "opus",
+          "providerID": "anthropic"
+        },
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

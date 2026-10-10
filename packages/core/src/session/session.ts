@@ -6,6 +6,7 @@ import type { Model } from "@ocpp/schema/model"
 import type { FileAttachment } from "@ocpp/schema/prompt"
 import { Event } from "@ocpp/schema/event"
 import { Bus } from "../bus.js"
+import { SpecterRejection } from "../specter/rejection.js"
 import { Location } from "../location.js"
 import { PluginSupervisor } from "../plugin/supervisor-service.js"
 import { Shell } from "../shell.js"
@@ -33,6 +34,13 @@ import { SessionPrompt } from "./prompt.js"
 import { SessionRevert } from "./revert.js"
 import { SessionSchema } from "./schema.js"
 import { SessionStore } from "./store.js"
+
+/** A Session Command refused for a Session that is gone (never created, or deleted); any other rejection is a defect. */
+const missing = (sessionID: SessionSchema.ID, error: unknown) =>
+  SpecterRejection.isMissingSession(error) ? Effect.fail(new NotFoundError({ sessionID })) : Effect.die(error)
+
+const encodeModel = Schema.encodeSync(SessionEvent.ModelSelected.data.fields.model)
+const encodeDisplayed = Schema.encodeSync(SessionEvent.Displayed.data)
 
 export type Services =
   | PluginSupervisor.Service
@@ -78,10 +86,23 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     if (current.type !== "assistant") return yield* new MessageNotAssistantError(ref)
     if (!current.time.completed) return yield* new MessageIncompleteError(ref)
     if (input.content.some(isUnfinishedTool)) return yield* new MessageToolIncompleteError(ref)
-    yield* bus.publish(SessionEvent.MessageContentUpdated, {
-      ...ref,
-      content: Schema.encodeSync(Schema.Array(SessionMessage.AssistantContent))(input.content),
-    })
+    // The runtime refuses the edit once an execution started meanwhile.
+    yield* bus
+      .command({
+        type: "editMessage",
+        payload: {
+          ...ref,
+          content: Schema.encodeSync(Schema.Array(SessionMessage.AssistantContent))(input.content),
+        },
+      })
+      .pipe(
+        Effect.catch(
+          (error): Effect.Effect<never, BusyError | NotFoundError> =>
+            SpecterRejection.reason(error) === "Session is busy"
+              ? Effect.fail(new BusyError({ sessionID }))
+              : missing(sessionID, error),
+        ),
+      )
     const updated = yield* message(sessionID, input.messageID)
     if (updated?.type !== "assistant") return yield* new MessageNotFoundError(ref)
     return updated
@@ -94,38 +115,44 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       (session.time.viewed !== undefined && DateTime.toEpochMillis(session.time.viewed) >= input.idle)
     )
       return
-    yield* bus.publish(SessionEvent.Viewed, { sessionID, idle: input.idle })
+    yield* bus
+      .command({ type: "viewSession", payload: { sessionID, idle: input.idle } })
+      .pipe(Effect.catch((error) => missing(sessionID, error)))
   })
   const rename = Effect.fn("Session.rename")(function* (sessionID: SessionSchema.ID, input: { title: string }) {
-    yield* get(sessionID)
-    yield* bus.publish(SessionEvent.Renamed, { sessionID, title: input.title })
+    yield* bus
+      .command({ type: "renameSession", payload: { sessionID, title: input.title } })
+      .pipe(Effect.catch((error) => missing(sessionID, error)))
   })
+  // The runtime records the agent the selection replaces.
   const switchAgent = Effect.fn("Session.switchAgent")(function* (
     sessionID: SessionSchema.ID,
     input: { agent: Agent.ID },
   ) {
-    const session = yield* get(sessionID)
-    yield* bus.publish(SessionEvent.AgentSelected, { sessionID, agent: input.agent, previous: session.agent })
+    yield* bus
+      .command({ type: "selectAgent", payload: { sessionID, agent: input.agent } })
+      .pipe(Effect.catch((error) => missing(sessionID, error)))
   })
   const selectTools = Effect.fn("Session.selectTools")(function* (
     sessionID: SessionSchema.ID,
     input: { tools: ReadonlyArray<string> },
   ) {
-    yield* get(sessionID)
-    yield* bus.publish(SessionEvent.ToolsSelected, { sessionID, tools: input.tools })
+    yield* bus
+      .command({ type: "selectTools", payload: { sessionID, tools: input.tools } })
+      .pipe(Effect.catch((error) => missing(sessionID, error)))
   })
+  // The runtime records the model the selection replaces, and nothing when it is selected already.
   const switchModel = Effect.fn("Session.switchModel")(function* (
     sessionID: SessionSchema.ID,
     input: { model: Model.Ref },
   ) {
-    const session = yield* get(sessionID)
-    if (
-      session.model?.providerID === input.model.providerID &&
-      session.model.id === input.model.id &&
-      (session.model.variant ?? "default") === (input.model.variant ?? "default")
-    )
-      return
-    yield* bus.publish(SessionEvent.ModelSelected, { sessionID, model: input.model, previous: session.model })
+    yield* bus
+      .command({ type: "selectModel", payload: { sessionID, model: encodeModel(input.model) } })
+      .pipe(
+        Effect.catch((error) =>
+          SpecterRejection.reason(error) === "Model already selected" ? Effect.void : missing(sessionID, error),
+        ),
+      )
   })
   const mutatePending = (
     sessionID: SessionSchema.ID,
@@ -395,8 +422,14 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     }).pipe(Effect.mapError((error) => new DisplayInvalidError({ message: error.message })))
     const problem = displayProblem(content)
     if (problem) return yield* new DisplayInvalidError({ message: problem })
+    // The displayed message's ID derives from its event's.
     const eventID = input.id ? Event.ID.make("evt_" + input.id.slice("msg_".length)) : Event.ID.create()
-    yield* bus.publish(SessionEvent.Displayed, { sessionID, ...content }, { id: eventID })
+    yield* bus
+      .command(
+        { type: "displayResult", payload: encodeDisplayed({ sessionID, ...content }) },
+        { facts: [{ id: eventID }] },
+      )
+      .pipe(Effect.catch((error) => missing(sessionID, error)))
     return { id: SessionMessage.ID.fromEvent(eventID) }
   })
   const stage = Effect.fn("Session.revert.stage")(function* (

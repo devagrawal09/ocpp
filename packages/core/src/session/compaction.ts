@@ -3,7 +3,7 @@ export * as SessionCompaction from "./compaction.js"
 import { LLMClient, LLMEvent, Message } from "@ocpp/ai"
 import { Agent } from "@ocpp/schema/agent"
 import { SessionError } from "@ocpp/schema/session-error"
-import { Context, Effect, Layer, Stream } from "effect"
+import { Context, Effect, Layer, Schema, Stream } from "effect"
 import { Bus } from "../bus.js"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { llmClient } from "../effect/app-node-platform.js"
@@ -17,6 +17,8 @@ import { toSessionError } from "./to-session-error.js"
 import { Token } from "../util/token.js"
 import { SessionUsage } from "./usage.js"
 import { State } from "../state.js"
+
+const encodeUsage = Schema.encodeSync(SessionEvent.UsageRecorded.data)
 
 const DEFAULT_BUFFER = 20_000
 const DEFAULT_KEEP_TOKENS = 15_000
@@ -288,11 +290,12 @@ export const layer = Layer.effect(
       let usage: SessionUsage.Recorded | undefined
       const recordUsage = Effect.suspend(() =>
         usage
-          ? bus.publish(SessionEvent.UsageRecorded, {
-              sessionID: plan.session.id,
-              source: "compaction",
-              ...usage,
-            })
+          ? bus
+              .command({
+                type: "recordUsage",
+                payload: encodeUsage({ sessionID: plan.session.id, source: "compaction", ...usage }),
+              })
+              .pipe(Effect.orDie)
           : Effect.void,
       )
       yield* Effect.gen(function* () {

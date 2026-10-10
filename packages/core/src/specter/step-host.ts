@@ -335,7 +335,9 @@ const stepIOLayer = Layer.effect(
             }
             // The partial output stands: the step continues in a new step, told what happened.
             if (outcome?._tag === "Continue" && !recording.stopped())
-              yield* bus.publish(SessionEvent.Synthetic, { sessionID, text: CONTINUE_AFTER_INCOMPLETE_STREAM })
+              yield* bus
+                .command({ type: "appendSynthetic", payload: { sessionID, text: CONTINUE_AFTER_INCOMPLETE_STREAM } })
+                .pipe(Effect.orDie)
             return outcomeOf(exit, recording)
           }
         }).pipe(

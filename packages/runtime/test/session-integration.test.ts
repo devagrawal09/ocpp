@@ -547,18 +547,8 @@ describe("step loop with a scripted host", () => {
 
   describe("a Session an external agent runs", () => {
     const vendor = {
-      type: "recordSessionFacts" as const,
-      payload: {
-        facts: [
-          {
-            type: "session-model-selected",
-            payload: {
-              sessionID: "ses_1",
-              model: { id: "sonnet", providerID: "claude" },
-            },
-          },
-        ] as const,
-      },
+      type: "selectModel" as const,
+      payload: { sessionID: "ses_1", model: { id: "sonnet", providerID: "claude" } },
     }
 
     it("wakes, and the host drives the execution whole, delivering through the runtime's inbox", async () => {

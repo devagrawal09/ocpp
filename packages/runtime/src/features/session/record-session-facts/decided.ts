@@ -9,6 +9,16 @@ export const decided = {
   "session-revert-staged": "stageRevert",
   "session-revert-cleared": "clearRevert",
   "session-revert-committed": "commitRevert",
+  "session-renamed": "renameSession",
+  "session-agent-selected": "selectAgent",
+  "session-model-selected": "selectModel",
+  "session-tools-selected": "selectTools",
+  "session-viewed": "viewSession",
+  "session-displayed": "displayResult",
+  "session-usage-recorded": "recordUsage",
+  "session-message-content-updated": "editMessage",
+  "session-skill-activated": "activateSkill",
+  "session-synthetic": "appendSynthetic",
 } as const
 
 export const refusal = (type: string) =>

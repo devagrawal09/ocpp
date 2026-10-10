@@ -105,12 +105,17 @@ const synthetics = (sessionID: Session.ID) =>
 const seedSynthetic = (sessionID: Session.ID, paths: string[]) =>
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    yield* bus.publish(SessionEvent.Synthetic, {
-      sessionID,
-      text: `Instructions from: ${paths[0]}\nprior`,
-      description: `Loaded ${paths[0]}`,
-      metadata: { instruction: { paths } },
-    })
+    yield* bus
+      .command({
+        type: "appendSynthetic",
+        payload: {
+          sessionID,
+          text: `Instructions from: ${paths[0]}\nprior`,
+          description: `Loaded ${paths[0]}`,
+          metadata: { instruction: { paths } },
+        },
+      })
+      .pipe(Effect.orDie)
   })
 
 describe("SessionInstructions", () => {

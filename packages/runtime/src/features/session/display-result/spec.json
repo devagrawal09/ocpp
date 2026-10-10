@@ -1,0 +1,110 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Displays a result in a live Session's timeline: it never enters the model's history. The host names the event, from which the displayed message takes its ID.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "displayResult",
+  "scenarios": [
+    {
+      "description": "The result is displayed.",
+      "expect": [
+        {
+          "eventType": "session-displayed",
+          "examplePayload": {
+            "blocks": [
+              {
+                "text": "Done",
+                "type": "markdown"
+              }
+            ],
+            "sessionID": "ses_1",
+            "title": "Report"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "blocks": [
+          {
+            "text": "Done",
+            "type": "markdown"
+          }
+        ],
+        "sessionID": "ses_1",
+        "title": "Report"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "blocks": [
+          {
+            "text": "Done",
+            "type": "markdown"
+          }
+        ],
+        "sessionID": "ses_1",
+        "title": "Report"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "blocks": [
+          {
+            "text": "Done",
+            "type": "markdown"
+          }
+        ],
+        "sessionID": "ses_1",
+        "title": "Report"
+      }
+    }
+  ]
+}

@@ -468,19 +468,34 @@ describe("SessionProjector", () => {
       const db = yield* seedSession({ agent: "plan", model: previousModel })
       const bus = yield* Bus.Service
 
-      yield* bus.publish(SessionEvent.AgentSelected, {
-        sessionID,
-        agent: build,
-      })
-      yield* bus.publish(SessionEvent.ModelSelected, {
-        sessionID,
-        model,
-      })
-      yield* bus.publish(SessionEvent.Synthetic, {
-        sessionID,
-        text: "synthetic context",
-        metadata: { source: "projector-test" },
-      })
+      yield* bus
+        .command({
+          type: "selectAgent",
+          payload: {
+            sessionID,
+            agent: build,
+          },
+        })
+        .pipe(Effect.orDie)
+      yield* bus
+        .command({
+          type: "selectModel",
+          payload: {
+            sessionID,
+            model,
+          },
+        })
+        .pipe(Effect.orDie)
+      yield* bus
+        .command({
+          type: "appendSynthetic",
+          payload: {
+            sessionID,
+            text: "synthetic context",
+            metadata: { source: "projector-test" },
+          },
+        })
+        .pipe(Effect.orDie)
       // No transient envelope metadata supplies the background marker: it comes from the event's data.
       yield* bus.publish(SessionEvent.Shell.Started, {
         sessionID,

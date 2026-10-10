@@ -20,6 +20,20 @@ import { createDeleteSessionState, deleteSession, deleteSessionStore } from "./f
 import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
+import { createRenameSessionState, renameSession, renameSessionStore } from "./features/session/rename-session/impl.ts"
+import { createSelectAgentState, selectAgent, selectAgentStore } from "./features/session/select-agent/impl.ts"
+import { createSelectModelState, selectModel, selectModelStore } from "./features/session/select-model/impl.ts"
+import { createSelectToolsState, selectTools, selectToolsStore } from "./features/session/select-tools/impl.ts"
+import { createViewSessionState, viewSession, viewSessionStore } from "./features/session/view-session/impl.ts"
+import { createDisplayResultState, displayResult, displayResultStore } from "./features/session/display-result/impl.ts"
+import { createRecordUsageState, recordUsage, recordUsageStore } from "./features/session/record-usage/impl.ts"
+import { createEditMessageState, editMessage, editMessageStore } from "./features/session/edit-message/impl.ts"
+import { createActivateSkillState, activateSkill, activateSkillStore } from "./features/session/activate-skill/impl.ts"
+import {
+  createAppendSyntheticState,
+  appendSynthetic,
+  appendSyntheticStore,
+} from "./features/session/append-synthetic/impl.ts"
 import {
   createDriveExecution,
   createDriveExecutionState,
@@ -145,6 +159,16 @@ export const createRuntimeConfig = (options: {
       stageRevert,
       clearRevert,
       commitRevert,
+      renameSession,
+      selectAgent,
+      selectModel,
+      selectTools,
+      viewSession,
+      displayResult,
+      recordUsage,
+      editMessage,
+      activateSkill,
+      appendSynthetic,
       enqueueInput,
       cancelInboxItem,
       changeDelivery,
@@ -214,6 +238,16 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(stageRevertStore, createStageRevertState),
     provide(clearRevertStore, createClearRevertState),
     provide(commitRevertStore, createCommitRevertState),
+    provide(renameSessionStore, createRenameSessionState),
+    provide(selectAgentStore, createSelectAgentState),
+    provide(selectModelStore, createSelectModelState),
+    provide(selectToolsStore, createSelectToolsState),
+    provide(viewSessionStore, createViewSessionState),
+    provide(displayResultStore, createDisplayResultState),
+    provide(recordUsageStore, createRecordUsageState),
+    provide(editMessageStore, createEditMessageState),
+    provide(activateSkillStore, createActivateSkillState),
+    provide(appendSyntheticStore, createAppendSyntheticState),
     provide(enqueueInputStore, createEnqueueInputState),
     provide(cancelInboxItemStore, createCancelInboxItemState),
     provide(changeDeliveryStore, createChangeDeliveryState),

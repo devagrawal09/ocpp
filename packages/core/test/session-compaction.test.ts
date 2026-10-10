@@ -37,6 +37,7 @@ import { Skill } from "@ocpp/schema/skill"
 import { Shell } from "@ocpp/schema/shell"
 import { DateTime, Effect, Fiber, Layer, Schema, Stream } from "effect"
 import { asc, eq } from "drizzle-orm"
+import { recordSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
 
 let requests: LLMRequest[] = []
@@ -216,19 +217,9 @@ const insertSession = (id: Session.ID, overrides?: Partial<typeof SessionTable.$
       .onConflictDoNothing()
       .run()
       .pipe(Effect.orDie)
-    yield* db
-      .insert(SessionTable)
-      .values({
-        id,
-        project_id: Project.ID.global,
-        slug: id,
-        directory: "/project",
-        title: id,
-        version: "test",
-        ...overrides,
-      })
-      .run()
-      .pipe(Effect.orDie)
+    yield* recordSession({ id, directory: "/project", title: id })
+    // What a test gives the Session beyond its creation (a parent, a fork root) only shapes its row.
+    if (overrides) yield* db.update(SessionTable).set(overrides).where(eq(SessionTable.id, id)).run().pipe(Effect.orDie)
     const store = yield* SessionStore.Service
     return yield* store
       .get(id)
@@ -461,6 +452,7 @@ it.effect("manual compaction summarizes short context instead of no-op", () =>
       tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 2 } },
     })
     expect(yield* Recorded.types(sessionID)).toEqual([
+      SessionEvent.Created.type,
       SessionEvent.Compaction.Started.type,
       SessionEvent.UsageRecorded.type,
       SessionEvent.Compaction.Settled.type,

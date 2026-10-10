@@ -1,0 +1,86 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records that a viewer saw a live Session as of an idle time. Whether that time is newer than what was viewed is the host's to decide from its projection: the idle watermark is the time its execution settled, which only the host's events carry.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "viewSession",
+  "scenarios": [
+    {
+      "description": "A viewer saw the Session as of an idle time.",
+      "expect": [
+        {
+          "eventType": "session-viewed",
+          "examplePayload": {
+            "idle": 1700000000000,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "idle": 1700000000000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "idle": 1700000000000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "idle": 1700000000000,
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

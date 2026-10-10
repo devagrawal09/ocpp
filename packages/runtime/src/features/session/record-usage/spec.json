@@ -1,0 +1,126 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records what a live Session spent outside its steps: generating its title, or compacting its history.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "recordUsage",
+  "scenarios": [
+    {
+      "description": "The usage counts toward the Session.",
+      "expect": [
+        {
+          "eventType": "session-usage-recorded",
+          "examplePayload": {
+            "cost": 0.01,
+            "sessionID": "ses_1",
+            "source": "title",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 10,
+              "output": 4,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "cost": 0.01,
+        "sessionID": "ses_1",
+        "source": "title",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "cost": 0.01,
+        "sessionID": "ses_1",
+        "source": "title",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "cost": 0.01,
+        "sessionID": "ses_1",
+        "source": "title",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    }
+  ]
+}

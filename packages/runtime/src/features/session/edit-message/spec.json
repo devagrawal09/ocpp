@@ -1,0 +1,208 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Replaces the content of a completed assistant message of an idle Session. The host checks the message; the Session must not be running, since a step builds on its history.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "editMessage",
+  "scenarios": [
+    {
+      "description": "An idle Session's message takes the new content.",
+      "expect": [
+        {
+          "eventType": "session-message-content-updated",
+          "examplePayload": {
+            "content": [
+              {
+                "text": "Edited",
+                "type": "text"
+              }
+            ],
+            "messageID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "content": [
+          {
+            "text": "Edited",
+            "type": "text"
+          }
+        ],
+        "messageID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Session whose execution has settled is idle again.",
+      "expect": [
+        {
+          "eventType": "session-message-content-updated",
+          "examplePayload": {
+            "content": [
+              {
+                "text": "Edited",
+                "type": "text"
+              }
+            ],
+            "messageID": "msg_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "content": [
+          {
+            "text": "Edited",
+            "type": "text"
+          }
+        ],
+        "messageID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A running Session's history cannot change under its step.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session is busy"
+      },
+      "when": {
+        "content": [
+          {
+            "text": "Edited",
+            "type": "text"
+          }
+        ],
+        "messageID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "content": [
+          {
+            "text": "Edited",
+            "type": "text"
+          }
+        ],
+        "messageID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "content": [
+          {
+            "text": "Edited",
+            "type": "text"
+          }
+        ],
+        "messageID": "msg_1",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

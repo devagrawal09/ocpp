@@ -640,16 +640,22 @@ const layer = Layer.effect(
         const skills = yield* Skill.Service.pipe(Effect.provide(locations.get(session.location)))
         const skill = yield* skills.get(input.skill)
         if (!skill) return yield* new SkillNotFoundError({ skill: input.skill })
-        yield* bus.publish(
-          SessionEvent.Skill.Activated,
-          {
-            sessionID: input.sessionID,
-            id: skill.id,
-            name: skill.name,
-            text: skill.content,
-          },
-          { id: input.id ? Event.ID.make(input.id.replace(/^msg_/, "evt_")) : undefined },
-        )
+        // The skill's message takes its ID from its event's.
+        yield* bus
+          .command(
+            {
+              type: "activateSkill",
+              payload: encodeSkill({ sessionID: input.sessionID, id: skill.id, name: skill.name, text: skill.content }),
+            },
+            { facts: [input.id ? { id: Event.ID.make(input.id.replace(/^msg_/, "evt_")) } : undefined] },
+          )
+          .pipe(
+            Effect.catch((error) =>
+              SpecterRejection.isMissingSession(error)
+                ? Effect.fail(new NotFoundError({ sessionID: input.sessionID }))
+                : Effect.die(error),
+            ),
+          )
         if (input.resume !== false)
           yield* execution
             .resume(input.sessionID)
@@ -749,6 +755,7 @@ const layer = Layer.effect(
 const encodeCreated = Schema.encodeSync(SessionEvent.Created.data)
 const encodeForked = Schema.encodeSync(SessionEvent.Forked.data)
 const encodeMoved = Schema.encodeSync(SessionEvent.Moved.data)
+const encodeSkill = Schema.encodeSync(SessionEvent.Skill.Activated.data)
 const decodeModel = Schema.decodeUnknownSync(Model.Ref)
 
 const forkTitle = (value?: string) => {

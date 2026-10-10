@@ -136,7 +136,9 @@ describe("Session.view", () => {
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(stale.time.idle) })
       const acked = yield* session.get(created.id)
       expect(acked.time.viewed).toEqual(acked.time.idle)
-      yield* bus.publish(SessionEvent.Viewed, { sessionID: created.id, idle: DateTime.toEpochMillis(observed) })
+      yield* bus
+        .command({ type: "viewSession", payload: { sessionID: created.id, idle: DateTime.toEpochMillis(observed) } })
+        .pipe(Effect.orDie)
       expect((yield* session.get(created.id)).time.viewed).toEqual(acked.time.viewed)
     }),
   )

@@ -518,78 +518,83 @@ const otherSessionID = Session.ID.make("ses_runner_other")
 const hasPending = (db: Database.Interface["db"], delivery: SessionInbox.Delivery) =>
   SessionInbox.list(db, sessionID).pipe(Effect.map((items) => items.some((item) => item.delivery === delivery)))
 
-const insertSession = (id: Session.ID) => recordSession({ id, directory: "/project", title: "test" })
+const insertSession = (id: Session.ID, options: { readonly untitled?: true } = {}) =>
+  recordSession({ id, directory: "/project", title: options.untitled ? undefined : "test" })
 
-const setup = Effect.gen(function* () {
-  yield* sharedLocation.bind
-  const { db } = yield* Database.Service
-  const bus = yield* Bus.Service
-  const sessionInbox = yield* SessionInbox.Service
-  const agents = yield* Agent.Service
-  const catalog = yield* Catalog.Service
-  const hooks = yield* PluginHooks.Service
-  const pluginHost = host({
-    agent: agentHost(agents),
-    catalog: catalogHost(catalog),
-    session: { hook: (name, callback) => hooks.register("session", name, callback) },
+// A titled Session by default, so its first step generates no title; title scenarios start untitled.
+const setupWith = (options: { readonly untitled?: true }) =>
+  Effect.gen(function* () {
+    yield* sharedLocation.bind
+    const { db } = yield* Database.Service
+    const bus = yield* Bus.Service
+    const sessionInbox = yield* SessionInbox.Service
+    const agents = yield* Agent.Service
+    const catalog = yield* Catalog.Service
+    const hooks = yield* PluginHooks.Service
+    const pluginHost = host({
+      agent: agentHost(agents),
+      catalog: catalogHost(catalog),
+      session: { hook: (name, callback) => hooks.register("session", name, callback) },
+    })
+    yield* Effect.forEach(SystemPromptPlugin.Plugins, (plugin) => plugin.effect(pluginHost), {
+      discard: true,
+    })
+    yield* agents.transform((draft) =>
+      draft.update(Agent.ID.make("build"), (agent) => {
+        agent.mode = "primary"
+      }),
+    )
+    yield* db
+      .insert(ProjectTable)
+      .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+      .onConflictDoNothing()
+      .run()
+      .pipe(Effect.orDie)
+    yield* insertSession(sessionID, options)
+    const state = yield* RunnerState
+    const session = yield* Session.Service
+    const llm = yield* TestLLM.Service
+    const admit = (text: string) => session.prompt({ sessionID, text, resume: false })
+    const resume = session.resume(sessionID)
+    return Object.assign(state, {
+      db,
+      bus,
+      sessionInbox,
+      session,
+      llm,
+      requests: llm.requests,
+      admit,
+      resume,
+      context: session.context(sessionID),
+      hooks,
+      messages: session.messages({ sessionID }),
+      inbox: session.inbox(sessionID),
+      runPrompt: Effect.fnUntraced(function* (text: string) {
+        const message = yield* admit(text)
+        yield* resume
+        return message
+      }),
+      // Pause coordinated Session.resume at its first model request, not a direct runner drain.
+      resumePaused: Effect.gen(function* () {
+        const gate = yield* llm.gate
+        const run = yield* resume.pipe(Effect.forkChild)
+        yield* gate.started
+        return { finish: gate.release.pipe(Effect.andThen(Fiber.join(run))) }
+      }),
+    })
   })
-  yield* Effect.forEach(SystemPromptPlugin.Plugins, (plugin) => plugin.effect(pluginHost), {
-    discard: true,
-  })
-  yield* agents.transform((draft) =>
-    draft.update(Agent.ID.make("build"), (agent) => {
-      agent.mode = "primary"
-    }),
-  )
-  yield* db
-    .insert(ProjectTable)
-    .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
-    .onConflictDoNothing()
-    .run()
-    .pipe(Effect.orDie)
-  yield* insertSession(sessionID)
-  const state = yield* RunnerState
-  const session = yield* Session.Service
-  const llm = yield* TestLLM.Service
-  const admit = (text: string) => session.prompt({ sessionID, text, resume: false })
-  const resume = session.resume(sessionID)
-  return Object.assign(state, {
-    db,
-    bus,
-    sessionInbox,
-    session,
-    llm,
-    requests: llm.requests,
-    admit,
-    resume,
-    context: session.context(sessionID),
-    hooks,
-    messages: session.messages({ sessionID }),
-    inbox: session.inbox(sessionID),
-    runPrompt: Effect.fnUntraced(function* (text: string) {
-      const message = yield* admit(text)
-      yield* resume
-      return message
-    }),
-    // Pause coordinated Session.resume at its first model request, not a direct runner drain.
-    resumePaused: Effect.gen(function* () {
-      const gate = yield* llm.gate
-      const run = yield* resume.pipe(Effect.forkChild)
-      yield* gate.started
-      return { finish: gate.release.pipe(Effect.andThen(Fiber.join(run))) }
-    }),
-  })
-})
 
+const setup = setupWith({})
 type Scenario = Effect.Success<typeof setup>
 const scenario = (
   name: string,
   body: (s: Scenario) => Effect.gen.Return<void, unknown, Layer.Success<typeof layer> | Scope.Scope>,
+  options: { readonly untitled?: true } = {},
 ) =>
   it.effect(
     name,
     Effect.gen(function* () {
-      const s = yield* setup
+      const s = yield* setupWith(options)
       return yield* body(s)
     }),
   )
@@ -899,10 +904,9 @@ function* verifyPartialFlushOnInterruption(s: Scenario, kind: FragmentKind) {
   ])
 }
 
+// For a scenario whose Session starts untitled.
 const prepareTitleGeneration = Effect.gen(function* () {
   const agents = yield* Agent.Service
-  const { db } = yield* Database.Service
-  yield* db.update(SessionTable).set({ title: null }).where(eq(SessionTable.id, sessionID)).run().pipe(Effect.orDie)
   yield* agents.transform((draft) =>
     draft.update(Agent.ID.make("title"), (agent) => {
       agent.mode = "primary"
@@ -992,98 +996,114 @@ describe("SessionRunnerLLM", () => {
     expect(systems[0]).not.toContain("stepValue")
   })
 
-  scenario("generates the title while the first model step is still running", function* (s) {
-    yield* prepareTitleGeneration
+  scenario(
+    "generates the title while the first model step is still running",
+    function* (s) {
+      yield* prepareTitleGeneration
 
-    yield* s.admit("First prompt")
-    yield* s.llm.push(TestLLM.text("Generated title", "text-title"), Stream.never)
-    const renamed = yield* watchRename(sessionID)
-    const fiber = yield* s.resume.pipe(Effect.forkChild)
-    yield* Fiber.join(renamed)
-
-    expect((yield* s.session.get(sessionID)).title).toBe("Generated title")
-    yield* s.session.interrupt(sessionID)
-  })
-
-  scenario("does not automatically replace an existing session title", function* (s) {
-    yield* prepareTitleGeneration
-    yield* s.session.rename({ sessionID, title: "Manual title" })
-    yield* s.admit("Follow-up prompt")
-    yield* s.llm.push(TestLLM.text("Assistant response", "text-response"))
-
-    yield* s.resume
-
-    expect(s.requests).toHaveLength(1)
-    expect((yield* s.session.get(sessionID)).title).toBe("Manual title")
-  })
-
-  scenario("coalesces title generation while a request is active", function* (s) {
-    yield* prepareTitleGeneration
-
-    const titleStarted = yield* Deferred.make<void>()
-    const releaseTitle = yield* Deferred.make<void>()
-    yield* Effect.gen(function* () {
       yield* s.admit("First prompt")
-      yield* s.llm.push(
-        Stream.unwrap(
-          Deferred.succeed(titleStarted, undefined).pipe(
-            Effect.andThen(Deferred.await(releaseTitle)),
-            Effect.as(Stream.fromIterable(TestLLM.text("Generated title", "text-title"))),
-          ),
-        ),
-        TestLLM.text("First response", "text-first"),
-        TestLLM.text("Second response", "text-second"),
-      )
+      yield* s.llm.push(TestLLM.text("Generated title", "text-title"), Stream.never)
+      const renamed = yield* watchRename(sessionID)
+      const fiber = yield* s.resume.pipe(Effect.forkChild)
+      yield* Fiber.join(renamed)
 
-      const first = yield* s.resume.pipe(Effect.forkChild)
-      yield* Deferred.await(titleStarted).pipe(Effect.timeout("5 seconds"))
-      expect(s.requests[0]?.system.map((part) => part.text)).toContain("Generate a title.")
-      yield* Fiber.join(first)
-      yield* s.admit("Second prompt")
+      expect((yield* s.session.get(sessionID)).title).toBe("Generated title")
+      yield* s.session.interrupt(sessionID)
+    },
+    { untitled: true },
+  )
+
+  scenario(
+    "does not automatically replace an existing session title",
+    function* (s) {
+      yield* prepareTitleGeneration
+      yield* s.session.rename({ sessionID, title: "Manual title" })
+      yield* s.admit("Follow-up prompt")
+      yield* s.llm.push(TestLLM.text("Assistant response", "text-response"))
+
       yield* s.resume
 
-      expect(s.requests).toHaveLength(3)
+      expect(s.requests).toHaveLength(1)
+      expect((yield* s.session.get(sessionID)).title).toBe("Manual title")
+    },
+    { untitled: true },
+  )
+
+  scenario(
+    "coalesces title generation while a request is active",
+    function* (s) {
+      yield* prepareTitleGeneration
+
+      const titleStarted = yield* Deferred.make<void>()
+      const releaseTitle = yield* Deferred.make<void>()
+      yield* Effect.gen(function* () {
+        yield* s.admit("First prompt")
+        yield* s.llm.push(
+          Stream.unwrap(
+            Deferred.succeed(titleStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(releaseTitle)),
+              Effect.as(Stream.fromIterable(TestLLM.text("Generated title", "text-title"))),
+            ),
+          ),
+          TestLLM.text("First response", "text-first"),
+          TestLLM.text("Second response", "text-second"),
+        )
+
+        const first = yield* s.resume.pipe(Effect.forkChild)
+        yield* Deferred.await(titleStarted).pipe(Effect.timeout("5 seconds"))
+        expect(s.requests[0]?.system.map((part) => part.text)).toContain("Generate a title.")
+        yield* Fiber.join(first)
+        yield* s.admit("Second prompt")
+        yield* s.resume
+
+        expect(s.requests).toHaveLength(3)
+        const renamed = yield* watchRename(sessionID)
+        yield* Deferred.succeed(releaseTitle, undefined)
+        yield* Fiber.join(renamed)
+        expect((yield* s.session.get(sessionID)).title).toBe("Generated title")
+      }).pipe(Effect.ensuring(Deferred.succeed(releaseTitle, undefined)))
+    },
+    { untitled: true },
+  )
+
+  scenario(
+    "retries title generation from the first prompt after title and execution failures",
+    function* (s) {
+      yield* prepareTitleGeneration
+
+      yield* s.admit("First prompt")
+      yield* s.llm.push(Stream.fail(invalidRequest()), Stream.fail(invalidRequest()))
+      expect((yield* s.resume.pipe(Effect.exit))._tag).toBe("Failure")
+
+      yield* s.admit("Second prompt")
+      const titleFailed = yield* Deferred.make<void>()
+      yield* s.llm.push(
+        Stream.make(LLMEvent.providerError({ message: "Title provider unavailable" })).pipe(
+          Stream.ensuring(Deferred.succeed(titleFailed, undefined)),
+        ),
+        TestLLM.text("Recovered", "text-recovered"),
+      )
+      yield* s.resume
+      yield* Deferred.await(titleFailed)
+      yield* Effect.yieldNow
+      expect((yield* s.session.get(sessionID)).title).toBeUndefined()
+
       const renamed = yield* watchRename(sessionID)
-      yield* Deferred.succeed(releaseTitle, undefined)
+      yield* s.admit("Third prompt")
+      yield* s.llm.push(
+        TestLLM.text("Generated title", "text-title"),
+        TestLLM.text("Recovered again", "text-recovered-again"),
+      )
+      yield* s.resume
       yield* Fiber.join(renamed)
+
+      expect(s.requests).toHaveLength(6)
+      expect(s.requests[2]?.messages).toContainEqual(Message.user("First prompt"))
+      expect(s.requests[4]?.messages).toContainEqual(Message.user("First prompt"))
       expect((yield* s.session.get(sessionID)).title).toBe("Generated title")
-    }).pipe(Effect.ensuring(Deferred.succeed(releaseTitle, undefined)))
-  })
-
-  scenario("retries title generation from the first prompt after title and execution failures", function* (s) {
-    yield* prepareTitleGeneration
-
-    yield* s.admit("First prompt")
-    yield* s.llm.push(Stream.fail(invalidRequest()), Stream.fail(invalidRequest()))
-    expect((yield* s.resume.pipe(Effect.exit))._tag).toBe("Failure")
-
-    yield* s.admit("Second prompt")
-    const titleFailed = yield* Deferred.make<void>()
-    yield* s.llm.push(
-      Stream.make(LLMEvent.providerError({ message: "Title provider unavailable" })).pipe(
-        Stream.ensuring(Deferred.succeed(titleFailed, undefined)),
-      ),
-      TestLLM.text("Recovered", "text-recovered"),
-    )
-    yield* s.resume
-    yield* Deferred.await(titleFailed)
-    yield* Effect.yieldNow
-    expect((yield* s.session.get(sessionID)).title).toBeUndefined()
-
-    const renamed = yield* watchRename(sessionID)
-    yield* s.admit("Third prompt")
-    yield* s.llm.push(
-      TestLLM.text("Generated title", "text-title"),
-      TestLLM.text("Recovered again", "text-recovered-again"),
-    )
-    yield* s.resume
-    yield* Fiber.join(renamed)
-
-    expect(s.requests).toHaveLength(6)
-    expect(s.requests[2]?.messages).toContainEqual(Message.user("First prompt"))
-    expect(s.requests[4]?.messages).toContainEqual(Message.user("First prompt"))
-    expect((yield* s.session.get(sessionID)).title).toBe("Generated title")
-  })
+    },
+    { untitled: true },
+  )
 
   scenario("applies session context hooks without exposing unavailable tools", function* (s) {
     s.directTools = false
@@ -1985,10 +2005,15 @@ describe("SessionRunnerLLM", () => {
     s.skillBaselines.set(Agent.ID.make("build"), "Build skills")
     yield* s.runPrompt("First")
     s.skillBaselines.set(Agent.ID.make("plan"), "Plan skills")
-    yield* s.bus.publish(SessionEvent.AgentSelected, {
-      sessionID,
-      agent: Agent.ID.make("plan"),
-    })
+    yield* s.bus
+      .command({
+        type: "selectAgent",
+        payload: {
+          sessionID,
+          agent: Agent.ID.make("plan"),
+        },
+      })
+      .pipe(Effect.orDie)
     yield* s.runPrompt("Second")
 
     // The instruction baseline keeps build's guidance; plan's arrives as an update.
@@ -2015,10 +2040,14 @@ describe("SessionRunnerLLM", () => {
       if (switched) return Effect.void
       switched = true
       return s.bus
-        .publish(SessionEvent.AgentSelected, {
-          sessionID,
-          agent: Agent.ID.make("plan"),
+        .command({
+          type: "selectAgent",
+          payload: {
+            sessionID,
+            agent: Agent.ID.make("plan"),
+          },
         })
+        .pipe(Effect.orDie)
         .pipe(Effect.asVoid)
     })
     yield* s.runPrompt("First")
@@ -2033,10 +2062,14 @@ describe("SessionRunnerLLM", () => {
       if (switched) return Effect.void
       switched = true
       return s.bus
-        .publish(SessionEvent.ModelSelected, {
-          sessionID,
-          model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
+        .command({
+          type: "selectModel",
+          payload: {
+            sessionID,
+            model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
+          },
         })
+        .pipe(Effect.orDie)
         .pipe(Effect.asVoid)
     })
     yield* s.runPrompt("First")
@@ -2136,10 +2169,15 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
     s.systemBaseline = "Changed context"
     yield* s.runPrompt("Second")
-    yield* s.bus.publish(SessionEvent.ModelSelected, {
-      sessionID,
-      model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
-    })
+    yield* s.bus
+      .command({
+        type: "selectModel",
+        payload: {
+          sessionID,
+          model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
+        },
+      })
+      .pipe(Effect.orDie)
     s.systemBaseline = "Replacement context"
     yield* s.runPrompt("Third")
 
@@ -2165,10 +2203,15 @@ describe("SessionRunnerLLM", () => {
 
   scenario("preserves instruction values while a source is temporarily unavailable", function* (s) {
     yield* s.runPrompt("First")
-    yield* s.bus.publish(SessionEvent.ModelSelected, {
-      sessionID,
-      model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
-    })
+    yield* s.bus
+      .command({
+        type: "selectModel",
+        payload: {
+          sessionID,
+          model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
+        },
+      })
+      .pipe(Effect.orDie)
     s.systemUnavailable = true
     yield* s.runPrompt("Second")
     s.systemUnavailable = false
@@ -2583,10 +2626,15 @@ describe("SessionRunnerLLM", () => {
     yield* first.release
     yield* summary.started
     s.systemBaseline = "Changed during compaction"
-    yield* s.bus.publish(SessionEvent.ModelSelected, {
-      sessionID,
-      model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
-    })
+    yield* s.bus
+      .command({
+        type: "selectModel",
+        payload: {
+          sessionID,
+          model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
+        },
+      })
+      .pipe(Effect.orDie)
     const queued = yield* s.session.prompt({
       sessionID,
       text: "Queued during compaction",
@@ -2921,10 +2969,15 @@ describe("SessionRunnerLLM", () => {
     const tools = yield* s.blockTools()
     const run = yield* Effect.forkChild(s.resume)
     yield* tools.started
-    yield* s.bus.publish(SessionEvent.ModelSelected, {
-      sessionID,
-      model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
-    })
+    yield* s.bus
+      .command({
+        type: "selectModel",
+        payload: {
+          sessionID,
+          model: { id: ID.make("replacement"), providerID: Provider.ID.make("fake") },
+        },
+      })
+      .pipe(Effect.orDie)
     s.systemBaseline = "Replacement context"
     yield* tools.release
     yield* Fiber.join(run)

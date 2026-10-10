@@ -141,14 +141,11 @@ const migration: DatabaseMigration.Migration = {
       `)
       yield* tx.run(`
         CREATE TABLE \`event\` (
-          \`id\` text PRIMARY KEY,
+          \`log_order\` integer PRIMARY KEY,
           \`aggregate_id\` text NOT NULL,
           \`seq\` integer NOT NULL,
-          \`created\` integer NOT NULL,
-          \`type\` text NOT NULL,
-          \`log_order\` integer NOT NULL,
-          CONSTRAINT \`fk_event_aggregate_id_event_sequence_aggregate_id_fk\` FOREIGN KEY (\`aggregate_id\`) REFERENCES \`event_sequence\`(\`aggregate_id\`) ON DELETE CASCADE,
-          CONSTRAINT \`fk_event_log_order_specter_event_order_fk\` FOREIGN KEY (\`log_order\`) REFERENCES \`specter_event\`(\`order\`)
+          CONSTRAINT \`fk_event_log_order_specter_event_order_fk\` FOREIGN KEY (\`log_order\`) REFERENCES \`specter_event\`(\`order\`),
+          CONSTRAINT \`fk_event_aggregate_id_event_sequence_aggregate_id_fk\` FOREIGN KEY (\`aggregate_id\`) REFERENCES \`event_sequence\`(\`aggregate_id\`) ON DELETE CASCADE
         );
       `)
       yield* tx.run(`
@@ -361,7 +358,6 @@ const migration: DatabaseMigration.Migration = {
         `CREATE INDEX \`codemode_reservation_execution_idx\` ON \`codemode_reservation\` (\`execution_id\`);`,
       )
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)
-      yield* tx.run(`CREATE INDEX \`event_aggregate_type_seq_idx\` ON \`event\` (\`aggregate_id\`,\`type\`,\`seq\`);`)
       yield* tx.run(`CREATE INDEX \`job_background_job_idx\` ON \`job_background\` (\`job_id\`);`)
       yield* tx.run(
         `CREATE INDEX \`session_inbox_session_delivery_seq_idx\` ON \`session_inbox\` (\`session_id\`,\`delivery\`,\`enqueued_seq\`);`,

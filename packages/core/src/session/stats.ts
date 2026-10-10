@@ -2,7 +2,6 @@ export * as SessionStats from "./stats.js"
 
 import { DateTime, Effect, Option, Schema } from "effect"
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm"
-import { Event } from "@ocpp/schema/event"
 import { Model } from "@ocpp/schema/model"
 import { Money } from "@ocpp/schema/money"
 import { Project } from "@ocpp/schema/project"
@@ -75,7 +74,6 @@ type ToolAggregate = {
 }
 
 const decodeUsage = Schema.decodeUnknownOption(SessionEvent.UsageRecorded.data)
-const usageType = Event.versionedType(SessionEvent.UsageRecorded.type, SessionEvent.UsageRecorded.durable.version)
 const Window = 31 * 24 * 60 * 60 * 1_000
 
 export class InvalidRangeError extends Schema.TaggedError<InvalidRangeError>()("SessionStats.InvalidRangeError", {
@@ -289,7 +287,7 @@ export const get = Effect.fn("SessionStats.get")(function* (input: Input = {}) {
   const events = (yield* Effect.forEach(
     batches(ids.map((row) => row.id)),
     (batch) =>
-      // Usage is recorded in Specter's log as OC++ records it, so the fact's payload is the event's data.
+      // A fact in Specter's log is the event: its payload is the event's data, and its time the event's.
       db
         .select({ data: SpecterEventTable.payload })
         .from(EventTable)
@@ -297,10 +295,10 @@ export const get = Effect.fn("SessionStats.get")(function* (input: Input = {}) {
         .where(
           and(
             inArray(EventTable.aggregate_id, batch),
-            eq(EventTable.type, usageType),
+            eq(SpecterEventTable.type, SessionEvent.UsageRecorded.type),
             sql`json_extract(${SpecterEventTable.payload}, '$.source') = 'compaction'`,
-            gte(EventTable.created, from),
-            lt(EventTable.created, to),
+            gte(SpecterEventTable.recorded_at, new Date(from).toISOString()),
+            lt(SpecterEventTable.recorded_at, new Date(to).toISOString()),
           ),
         )
         .all()

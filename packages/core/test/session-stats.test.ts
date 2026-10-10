@@ -29,7 +29,6 @@ const usageOnlyID = Session.ID.make("ses_stats_usage_only")
 const otherSessionID = Session.ID.make("ses_stats_other")
 const encodeMessage = Schema.encodeSync(SessionMessage.Info)
 const encodeUsage = Schema.encodeSync(SessionEvent.UsageRecorded.data)
-const usageType = Event.versionedType(SessionEvent.UsageRecorded.type, SessionEvent.UsageRecorded.durable.version)
 
 describe("SessionStats", () => {
   it.effect("aggregates activity and tool reliability without reading message payloads outside the range", () =>
@@ -200,12 +199,12 @@ describe("SessionStats", () => {
         ],
         ({ data, ...event }) =>
           Effect.gen(function* () {
-            // Usage facts sit in Specter's log under the runtime's name, with the event's data as payload.
+            // A usage fact sits in Specter's log under its name, with the event's data as payload and its time.
             const fact = yield* db
               .insert(SpecterEventTable)
               .values({
                 id: event.id,
-                type: "session-usage-recorded",
+                type: SessionEvent.UsageRecorded.type,
                 payload: data,
                 recorded_at: new Date(event.created).toISOString(),
               })
@@ -214,7 +213,7 @@ describe("SessionStats", () => {
               .pipe(Effect.orDie)
             yield* db
               .insert(EventTable)
-              .values({ ...event, type: usageType, log_order: fact.order })
+              .values({ log_order: fact.order, aggregate_id: event.aggregate_id, seq: event.seq })
               .run()
               .pipe(Effect.orDie)
           }),

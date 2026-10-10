@@ -16,8 +16,14 @@ import { SpecterCommitTable, SpecterEventTable } from "./sql.js"
 type DatabaseService = Database.Interface["db"]
 
 export interface Hooks {
-  /** IDs for a commit's events: the Bus event IDs the publisher chose, so both logs name an event alike. */
-  readonly eventIDs: (idempotencyKey: string | undefined, count: number) => readonly string[]
+  /**
+   * The identity of a commit's events: the IDs and creation times the Bus publisher chose, so the log names and dates
+   * an event as its publisher did. An event without a time is recorded at the time of the append.
+   */
+  readonly drafts: (
+    idempotencyKey: string | undefined,
+    count: number,
+  ) => readonly { readonly id: string; readonly created?: number }[]
   /**
    * Runs inside the append transaction, after the events are stored: OC++ projects the commit there
    * (projectors, commit hooks, Bus sequences). A failure, defects included, rolls the append back, so
@@ -93,22 +99,25 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
             const version = yield* currentVersion
             if (options.expectedVersion !== undefined && options.expectedVersion !== version)
               return yield* fail("append")(new SpecterVersionConflictError(options.expectedVersion, version))
-            const ids = hooks.eventIDs(options.idempotencyKey, drafts.length)
             const recordedAt = new Date().toISOString()
+            const identities = hooks.drafts(options.idempotencyKey, drafts.length).map((identity) => ({
+              id: identity.id,
+              recordedAt: identity.created === undefined ? recordedAt : new Date(identity.created).toISOString(),
+            }))
             const rows = yield* db
               .insert(SpecterEventTable)
               .values(
                 drafts.map((draft, index) => ({
-                  id: ids[index]!,
+                  id: identities[index]!.id,
                   type: draft.type,
                   payload: draft.payload,
-                  recorded_at: recordedAt,
+                  recorded_at: identities[index]!.recordedAt,
                 })),
               )
               .returning({ order: SpecterEventTable.order })
               .all()
             const events = drafts.map(
-              (draft, index): PersistedEvent => ({ ...draft, id: ids[index]!, order: rows[index]!.order, recordedAt }),
+              (draft, index): PersistedEvent => ({ ...draft, ...identities[index]!, order: rows[index]!.order }),
             )
             const committedVersion = events.at(-1)!.order
             yield* db

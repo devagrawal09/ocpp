@@ -887,12 +887,12 @@
       "table": "event_sequence"
     },
     {
-      "type": "text",
+      "type": "integer",
       "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "id",
+      "name": "log_order",
       "entityType": "columns",
       "table": "event"
     },
@@ -913,36 +913,6 @@
       "default": null,
       "generated": null,
       "name": "seq",
-      "entityType": "columns",
-      "table": "event"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created",
-      "entityType": "columns",
-      "table": "event"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "type",
-      "entityType": "columns",
-      "table": "event"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "log_order",
       "entityType": "columns",
       "table": "event"
     },
@@ -2305,17 +2275,6 @@
       "table": "credential_secret"
     },
     {
-      "columns": ["aggregate_id"],
-      "tableTo": "event_sequence",
-      "columnsTo": ["aggregate_id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "name": "fk_event_aggregate_id_event_sequence_aggregate_id_fk",
-      "entityType": "fks",
-      "table": "event"
-    },
-    {
       "columns": ["log_order"],
       "tableTo": "specter_event",
       "columnsTo": ["order"],
@@ -2323,6 +2282,17 @@
       "onDelete": "NO ACTION",
       "nameExplicit": false,
       "name": "fk_event_log_order_specter_event_order_fk",
+      "entityType": "fks",
+      "table": "event"
+    },
+    {
+      "columns": ["aggregate_id"],
+      "tableTo": "event_sequence",
+      "columnsTo": ["aggregate_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_event_aggregate_id_event_sequence_aggregate_id_fk",
       "entityType": "fks",
       "table": "event"
     },
@@ -2495,7 +2465,7 @@
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": ["log_order"],
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
@@ -2664,28 +2634,6 @@
       "where": null,
       "origin": "manual",
       "name": "event_aggregate_seq_idx",
-      "entityType": "indexes",
-      "table": "event"
-    },
-    {
-      "columns": [
-        {
-          "value": "aggregate_id",
-          "isExpression": false
-        },
-        {
-          "value": "type",
-          "isExpression": false
-        },
-        {
-          "value": "seq",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "event_aggregate_type_seq_idx",
       "entityType": "indexes",
       "table": "event"
     },

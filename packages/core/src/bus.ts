@@ -88,21 +88,19 @@ const definitionOf = (fact: PersistedEvent) => {
   return definition
 }
 
-/** An aggregate's event as its sequence index names it, with the fact in Specter's log it is. */
+/** A fact in Specter's log with its sequence in its aggregate, from the event index. */
 type Indexed = {
-  readonly id: Event.ID
   readonly aggregateID: string
   readonly seq: number
-  readonly created: number
   readonly fact: PersistedEvent
 }
 
-/** The event an index entry names: its fact, decoded. */
+/** The event a fact is: its ID, its time, its payload decoded, and its place in its aggregate. */
 const decodeIndexed = (entry: Indexed): Event.Payload => {
   const definition = definitionOf(entry.fact)
   return {
-    id: entry.id,
-    created: entry.created,
+    id: Event.ID.make(entry.fact.id),
+    created: Date.parse(entry.fact.recordedAt),
     type: definition.type,
     durable: envelope(entry.aggregateID, entry.seq, definition.durable.version),
     data: Schema.decodeUnknownSync(definition.data)(entry.fact.payload),
@@ -481,13 +479,10 @@ export function configured(options?: Options) {
             yield* db
               .insert(EventTable)
               .values(
-                queued.map((event, index) => ({
-                  id: event.id,
+                queued.map((_, index) => ({
+                  log_order: orders[index]!,
                   aggregate_id: aggregateID,
                   seq: firstSeq + index,
-                  created: event.created,
-                  type: versionedType(payloads[index]!.definition.type, payloads[index]!.definition.durable.version),
-                  log_order: orders[index]!,
                 })),
               )
               .run()
@@ -504,12 +499,11 @@ export function configured(options?: Options) {
         }
         const pending = new Map<string, Pending>()
         const specterLog = SpecterEventLog.make(db, {
-          eventIDs: (key, count) =>
-            Array.from(
-              { length: count },
-              (_, index) =>
-                (key === undefined ? undefined : pending.get(key)?.items[index]?.event.id) ?? Event.ID.create(),
-            ),
+          drafts: (key, count) =>
+            Array.from({ length: count }, (_, index) => {
+              const event = key === undefined ? undefined : pending.get(key)?.items[index]?.event
+              return event ? { id: event.id, created: event.created } : { id: Event.ID.create() }
+            }),
           appended: (key, events) =>
             Effect.gen(function* () {
               const entry = key === undefined ? undefined : pending.get(key)
@@ -744,10 +738,8 @@ export function configured(options?: Options) {
         const readIndex = (where: SQL, orderBy: readonly SQL[], limit: number) =>
           db
             .select({
-              id: EventTable.id,
               aggregateID: EventTable.aggregate_id,
               seq: EventTable.seq,
-              created: EventTable.created,
               fact: {
                 id: SpecterEventTable.id,
                 order: SpecterEventTable.order,
@@ -837,17 +829,15 @@ export function configured(options?: Options) {
               () =>
                 Effect.gen(function* () {
                   yield* db.run(sql`PRAGMA defer_foreign_keys = ON`).pipe(Effect.orDie)
-                  let after: { readonly order: number; readonly seq: number; readonly id: string } | undefined
+                  let after: number | undefined
                   while (true) {
                     const page = yield* readIndex(
-                      after === undefined
-                        ? sql`1 = 1`
-                        : sql`(${EventTable.log_order}, ${EventTable.seq}, ${EventTable.id}) > (${after.order}, ${after.seq}, ${after.id})`,
-                      [asc(EventTable.log_order), asc(EventTable.seq), asc(EventTable.id)],
+                      after === undefined ? sql`1 = 1` : gt(EventTable.log_order, after),
+                      [asc(EventTable.log_order)],
                       logReadPageSize,
                     )
                     if (!page.last) return
-                    after = { order: page.last.fact.order, seq: page.last.seq, id: page.last.id }
+                    after = page.last.fact.order
                     yield* reproject(page.events)
                   }
                 }),

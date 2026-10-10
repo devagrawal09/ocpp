@@ -11,6 +11,7 @@ import { llmClient } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
 import { EventTable } from "@ocpp/core/event/sql"
+import { Recorded } from "./lib/recorded"
 import { SessionCompaction } from "@ocpp/core/session/compaction"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionHistory } from "@ocpp/core/session/history"
@@ -459,18 +460,10 @@ it.effect("manual compaction summarizes short context instead of no-op", () =>
       cost: 0.0000233,
       tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 2 } },
     })
-    expect(
-      yield* db
-        .select({ type: EventTable.type })
-        .from(EventTable)
-        .where(eq(EventTable.aggregate_id, sessionID))
-        .orderBy(asc(EventTable.seq))
-        .all()
-        .pipe(Effect.orDie),
-    ).toEqual([
-      { type: Bus.versionedType(SessionEvent.Compaction.Started.type, 1) },
-      { type: Bus.versionedType(SessionEvent.UsageRecorded.type, 1) },
-      { type: Bus.versionedType(SessionEvent.Compaction.Ended.type, 1) },
+    expect(yield* Recorded.types(sessionID)).toEqual([
+      SessionEvent.Compaction.Started.type,
+      SessionEvent.UsageRecorded.type,
+      SessionEvent.Compaction.Ended.type,
     ])
   }),
 )

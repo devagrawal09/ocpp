@@ -245,7 +245,7 @@ describe("Bus", () => {
     }),
   )
 
-  it.effect("indexes each durable event at its fact in Specter's log, which holds its data", () =>
+  it.effect("numbers each durable event's fact in its aggregate; Specter's log holds the event", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const { db } = yield* Database.Service
@@ -254,7 +254,7 @@ describe("Bus", () => {
       const event = yield* bus.publish(SyncMessage, { key: aggregateID, value: "hello" })
 
       const indexed = yield* db
-        .select({ id: EventTable.id, seq: EventTable.seq, fact: SpecterEventTable })
+        .select({ seq: EventTable.seq, fact: SpecterEventTable })
         .from(EventTable)
         .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
         .where(eq(EventTable.aggregate_id, aggregateID))
@@ -262,12 +262,13 @@ describe("Bus", () => {
         .pipe(Effect.orDie)
       expect(indexed).toEqual([
         {
-          id: event.id,
           seq: 0,
           fact: expect.objectContaining({
             id: event.id,
             type: "kv-stored",
             payload: { key: aggregateID, value: "hello" },
+            // The fact keeps the time its publisher gave the event.
+            recorded_at: new Date(event.created).toISOString(),
           }),
         },
       ])
@@ -361,9 +362,10 @@ describe("Bus", () => {
         event.type !== SyncMessage.type
           ? Effect.void
           : db
-              .select({ id: EventTable.id, seq: EventTable.seq })
+              .select({ id: SpecterEventTable.id, seq: EventTable.seq })
               .from(EventTable)
-              .where(eq(EventTable.id, event.id))
+              .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+              .where(eq(SpecterEventTable.id, event.id))
               .get()
               .pipe(
                 Effect.orDie,
@@ -391,7 +393,7 @@ describe("Bus", () => {
 
       const exit = yield* bus.publish(SyncMessage, { key: "interrupted", value: "hello" }).pipe(Effect.exit)
       const committed = yield* db
-        .select({ id: EventTable.id })
+        .select({ order: EventTable.log_order })
         .from(EventTable)
         .where(eq(EventTable.aggregate_id, "interrupted"))
         .get()
@@ -427,9 +429,8 @@ describe("Bus", () => {
         .pipe(Effect.orDie)
 
       expect(rows).toHaveLength(1)
-      expect(rows[0]?.type).toBe(Bus.versionedType(SyncMessage.type, 1))
       expect(rows[0]?.aggregate_id).toBe(aggregateID)
-      expect(rows[0]?.created).toBe(event.created)
+      expect(rows[0]?.seq).toBe(event.durable.seq)
     }),
   )
 

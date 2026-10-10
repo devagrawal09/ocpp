@@ -146,7 +146,7 @@ The raw handler acquires and registers the queue before prepending its connectio
 
 ```text
 register queue
-  -> emit server.connected
+  -> emit server-connected
   -> drain queued live frames
 ```
 

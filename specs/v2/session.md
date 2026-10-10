@@ -46,36 +46,36 @@ Location services are acquired only when an operation needs them. In particular,
 
 Each instance constructs its `SessionRevert.Service` through `SessionRevert.make`, capturing Database, Bus, PluginSupervisor, and Snapshot. Stage and clear check plugin readiness on each invocation and require no service provisioning inside their implementations. Session methods select the current instance for each operation, so an ID-bound Session does not retain a previous instance's snapshots after movement. Commit uses only the host's captured Bus and does not acquire an instance.
 
-`SessionInbox.Service` is host-scoped. Its node depends on Database and Bus, and its layer uses `SessionInbox.make` to capture those services and construct admission and pending-input commands that take only domain inputs. Its `list` method supplies the normal pending-input read without exposing Database to Session. `Session.make` and the facade's move admission consume the registered service rather than constructing separate command objects. The service is not Session-ID scoped and does not own execution. Its commands retain the existing shared inbox serialization lock. Standalone query helpers, transaction-facing projectors, and runner delivery retain their explicit database/Bus inputs. The layer compiler is unchanged.
+`SessionInbox.Service` is host-scoped and is the embedded session runtime's inbox (`SpecterSessionInbox`). Admission, cancellation, and delivery changes are runtime Commands (`enqueueInput`, `cancelInboxItem`, `changeDelivery`); the runtime decides each, including a retried item ID, which it rejects with an exact reason that the inbox answers with the first admission, the coalescing of repeated notices, and a pending compaction absorbing another. Its `list` method reads the `session_inbox` projection, which the runtime's facts build in the transaction that records them, without exposing Database to Session. `Session.make` and the facade's move admission consume the registered service. The service is not Session-ID scoped and does not own execution. Transaction-facing projectors keep their explicit database inputs.
 
 Inbox commands own identity and type checks and return typed `SessionInbox.LifecycleConflict` errors. Session operations translate these into their public operation-specific errors and decide whether to wake execution. The Bus/projector boundary still uses defects to abort invalid projections; Inbox translates only lifecycle conflicts, not unrelated defects. Pending-input mutation does not schedule execution itself: steering wakes after a successful mutation, while queueing and cancellation do not.
 
 ## Execution Is Process-Local
 
-`SessionExecution` is process-global and keyed only by Session ID. At drain start it loads the Session, enters its Location through `LocationServiceMap`, and invokes the Location-scoped runner. The runner, model resolution, tools and tool lists, plugins, and filesystem remain Location-scoped.
+`SessionExecution` is process-global and keyed only by Session ID. It is the embedded session runtime's execution (`SpecterSessionExecution`): the runtime starts, runs, settles, and interrupts every execution, and OC++ supplies each step's I/O through the `StepHost` port. For each step it loads the Session, enters its Location through `LocationServiceMap`, and runs the Location-scoped request, model stream, and tools. Model resolution, tools and tool lists, plugins, and filesystem remain Location-scoped.
 
-`SessionRunCoordinator` provides the local ownership rules:
+The runtime provides the ownership rules:
 
-- Explicit resumes join the active execution for the same Session.
-- Repeated wakes coalesce into one follow-up drain.
-- Different Sessions run concurrently.
-- Interruption stops locally owned execution without deleting pending input.
+- An execution starts once per busy period: recorded input wakes the Session through the runtime's wake Reaction unless it was held, and an explicit resume joins the active execution for the same Session.
+- An execution takes every wake recorded before it started, so repeated wakes coalesce.
+- Each Session runs one outboxed step job at a time; different Sessions run concurrently.
+- Interruption stops the Session's running attempt, which records what it produced, then settles the in-flight step as aborted, without deleting pending input.
 
-The public interrupt operation verifies that the durable Session exists. An unknown Session fails with `SessionNotFoundError`; a known Session that is idle, settled, or not locally owned is a no-op.
+Interrupting a Session that is unknown, idle, or settled is a no-op.
 
-`sessions.active()` snapshots busy periods currently owned by this process. Durable execution events and claims are historical and recovery records, not proof that this process is still live.
+`sessions.active()` reads the runtime's `activeSessions` Query: the Sessions with an active execution, including one a stopped process left running.
 
-Execution commits a write-ahead claim when a process-local busy period starts. Success, failure, and user interruption release the claim; shutdown interruption and unclean process death preserve it. On startup, managed Node and fetch runtimes resume claimed top-level Sessions, append a durable continuation instruction, and count recovery attempts. Recovery is bounded per claimed execution but does not guarantee exactly-once provider requests or tool effects.
+The runtime owns restart continuity. On startup it resumes the executions a stopped process left running from its own log, bounded by its per-step retry budget, and appends a durable continuation instruction before the agent's turn goes on; an OC++-run Session retries the step that died from the same history. OC++'s own restart recovery covers background work only (shells, Code Mode runs, subagents). Recovery does not guarantee exactly-once provider requests or tool effects.
 
 ## One Step May Have Several Physical Attempts
 
 Before each Step, the runner reloads Session History, resolves the selected agent and model, prepares instructions, and materializes tools. Most Steps make one Physical Attempt. Generic retry, continuation-state rejection, incomplete-stream continuation, or overflow-triggered compaction may make another attempt without promoting input again.
 
-Each complete local tool call is durable before side effects begin. Local calls start eagerly and may run concurrently, but terminal outcome publication remains serialized. Every local and hosted call reaches durable success or failure before the Step publishes its single terminal ended or failed event.
+Each complete local tool call is durable before side effects begin. Local calls start eagerly and may run concurrently, but terminal outcome publication remains serialized. Every local and hosted call reaches a durable `session-tool-settled` before the step's attempt settles with its single `session-step-settled`.
 
 Tool calls belong to their assistant message. A tool-call `id` is unique only within that Step, so durable tool events also carry `assistantMessageID`.
 
-At drain start, orphan reconciliation fails tool calls still projected as streaming or running from an earlier process before further model work. It preserves the original assistant attribution and never directly replays ambiguous side effects.
+Before a step continues a Session, orphan reconciliation fails tool calls still projected as running from an earlier process. A call whose input only streamed was never requested, so nothing durable remains of it. It preserves the original assistant attribution and never directly replays ambiguous side effects.
 
 After a local outcome, continuation reloads projected history and begins a new Step. The runner never delegates orchestration to an in-memory tool loop.
 
@@ -83,13 +83,13 @@ After a local outcome, continuation reloads projected history and begins a new S
 
 Generic scheduled retry covers rate-limit and provider-internal failures, transport failures that are unsent or have unknown delivery, and provider output classified as an incomplete stream. The initial request plus at most four retries use jittered exponential backoff, increased when the provider supplies a longer retry delay.
 
-Before durable output, generic retries retain the logical step number and assistant message ID and do not consume another agent-step allowance. An incomplete stream after durable output instead preserves the failed partial assistant, adds a synthetic continuation instruction, and continues with a new assistant message ID under the same retry budget. Provider continuation rejection permits one immediate full-context rebuild without a scheduled-retry event. `session-retry-scheduled` records generic backoff; later activity or a terminal execution event clears projected retry state.
+Before durable output, generic retries retain the logical step number and assistant message ID and do not consume another agent-step allowance. An incomplete stream after durable output instead preserves the failed partial assistant, adds a synthetic continuation instruction, and continues with a new assistant message ID under the same retry budget. Provider continuation rejection permits one immediate full-context rebuild without a scheduled-retry event. A failed `session-step-settled` carrying its `retry` records generic backoff; later activity or the execution's settlement clears projected retry state.
 
 A normalized content-filter finish fails the Step. Any partial streamed content remains visible.
 
 ## Instructions Are Value Deltas
 
-Instruction sync persists content-addressed values and may freeze rendered chronological prose. `session.instructions.updated { delta, text? }` maps each changed source key to a SHA-256 content hash, with the literal `"removed"` for observed absence. Canonical JSON bodies live once in the machine-local `instruction_blob` store. The projected `instruction_state` row supplies current and epoch-initial values during normal boundary processing. The runner explicitly combines built-ins, ambient discovery, selected-agent skill guidance, references, MCP guidance, and API-managed instruction entries. There is no instruction registry.
+Instruction sync persists content-addressed values and may freeze rendered chronological prose. `session-instructions-updated { delta, text? }` maps each changed source key to a SHA-256 content hash, with the literal `"removed"` for observed absence. Canonical JSON bodies live once in the machine-local `instruction_blob` store. The projected `instruction_state` row supplies current and epoch-initial values during normal boundary processing. The runner explicitly combines built-ins, ambient discovery, selected-agent skill guidance, references, MCP guidance, and API-managed instruction entries. There is no instruction registry.
 
 Before each Physical Attempt that reaches model execution, the runner reads every source concurrently exactly once, hashes encoded values, and admits one delta atomically with its new blobs before input delivery. The initial delta must be complete; it carries no update text. An unavailable source blocks only that initial delta and otherwise silently retains the stored value. Request assembly renders the epoch baseline from stored values. Later changes render once at admission, freeze optional `text` in the durable event, and project that text as a chronological System message; clients display changed keys rather than privileged prose.
 
@@ -107,12 +107,12 @@ If automatic compaction is enabled and the provider reports context overflow bef
 
 `sessions.log({ sessionID, after?, follow? })` verifies the Session and reads public durable Session events after an exclusive aggregate sequence. With `follow: true`, it subscribes before replay and emits one synchronization marker at the captured watermark before live durable events continue.
 
-Live-only text, reasoning, tool-input, and compaction deltas are intentionally absent from replay. The instance-wide live event stream has different schemas and no replay guarantee.
+Live-only block starts and deltas (text and reasoning), tool-input starts and deltas, tool and Code Mode progress, and compaction deltas are intentionally absent from replay; the durable log carries each block, call, and settlement whole. The instance-wide live event stream has different schemas and no replay guarantee.
 
 There is no separate finite Session-history endpoint. Request/response consumers use authoritative Session projections such as messages, pending input, and context; replay consumers use the durable log.
 
 ## Recovery Boundaries Stay Explicit
 
-An advisory wake is not itself crash recovery. Crash recovery is driven by a write-ahead execution claim that survives without a releasing terminal. Startup recovery resumes claimed top-level Sessions from durable projected history with bounded attempt accounting. It fails stale running tool projections before continuing, but it cannot prove whether an interrupted external operation already took effect and does not guarantee exactly-once provider or tool behavior.
+An advisory wake is not itself crash recovery. Crash recovery is driven by the runtime's log: an execution started without a settlement, and its outboxed step job, survive the process. Startup recovery resumes those executions from durable projected history within the per-step retry budget. It fails stale running tool projections before continuing, but it cannot prove whether an interrupted external operation already took effect and does not guarantee exactly-once provider or tool behavior.
 
 Event replay ownership is separate from Session execution ownership. Local execution remains process-owned until clustering introduces an explicit placement and fencing protocol.

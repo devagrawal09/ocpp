@@ -3,6 +3,7 @@
 OC++ Session Execution (inbox, step, steer, interrupt, recovery) as a Specter application, written spec-first. OC++ core embeds it through `src/index.ts`, which exports only what core uses.
 
 - **One composition runs Sessions.** `makeEmbeddedSessionRuntime` runs them over the Event Log, Slice stores and outbox stores the host provides, and `makeSessionEventStore` records the facts the host decides itself. OC++ keeps all of these in its database.
+- **One vocabulary.** The runtime's facts are OC++'s durable wire events. `src/events.ts` defines every fact from `@ocpp/schema`'s durable event manifest under the kebab-case name the log stores, so nothing translates between the two. The host's own facts go through `recordSessionFacts`, which stores them as given; the host's projections still hold their invariants in the append transaction.
 - **The runtime is OC++'s only inbox.** It decides admission, including a retried item ID (rejected with an exact reason, which the host reads as its first admission), the coalescing of repeated notices and a pending compaction absorbing another. It also decides delivery, cancellation and delivery changes.
 - **The host supplies each step's I/O** through the `StepHost` port (`src/plugins/step-host.ts`). The step Plugin (`run-step.ts`) owns delivery, the step lifecycle, retries, recovery and finishing; the drive Plugin (`drive-execution.ts`) hands the host an external agent's execution whole.
 - **Slices are the ones something invokes**: OC++ core, a Plugin or a Reaction.

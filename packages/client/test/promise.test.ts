@@ -897,7 +897,7 @@ const modelSwitchedEvent = {
   id: "evt_model",
   created: 1_717_171_717_000,
   type: "session-model-selected",
-  durable: { aggregateID: "ses_test", seq: 1, version: 1 },
+  durable: { aggregateID: "ses_test", seq: 1 },
   data: {
     sessionID: "ses_test",
     model: { id: "claude", providerID: "anthropic" },

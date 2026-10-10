@@ -12,7 +12,7 @@ import { SessionFact } from "../src/session-fact.js"
 
 test("external persistence facts are durable and internal; children use ordinary public Session events", () => {
   for (const event of ExternalSession.Definitions) {
-    expect(DurableEventManifest.Durable.get(event.type + ".1")).toBe(event)
+    expect(DurableEventManifest.Durable.get(event.type)).toBe(event)
     expect(EventManifest.Server.has(event.type)).toBe(false)
   }
 })
@@ -23,7 +23,7 @@ test("project, Session and credential persistence facts are durable and internal
     ...CredentialFact.Definitions,
     ...KeyValueFact.Definitions,
   ]) {
-    expect(DurableEventManifest.Durable.get(event.type + ".1")).toBe(event)
+    expect(DurableEventManifest.Durable.get(event.type)).toBe(event)
     expect(EventManifest.Server.has(event.type)).toBe(false)
   }
 })

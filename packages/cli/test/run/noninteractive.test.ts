@@ -33,7 +33,7 @@ function prompted(inboxID: string): V2Event {
     id: "evt_prompted",
     created: 0,
     type: "session-inbox-delivered",
-    durable: { aggregateID: "ses_1", seq: 0, version: 1 },
+    durable: { aggregateID: "ses_1", seq: 0 },
     data: { sessionID: "ses_1", inboxID },
   }
 }
@@ -44,14 +44,14 @@ function settled(outcome: "success" | "interrupted" = "success"): V2Event {
       id: "evt_interrupted",
       created: 0,
       type: "session-execution-settled",
-      durable: { aggregateID: "ses_1", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_1", seq: 1 },
       data: { sessionID: "ses_1", outcome: "interrupted", reason: "user" },
     }
   return {
     id: "evt_succeeded",
     created: 0,
     type: "session-execution-settled",
-    durable: { aggregateID: "ses_1", seq: 1, version: 1 },
+    durable: { aggregateID: "ses_1", seq: 1 },
     data: { sessionID: "ses_1", outcome: "succeeded" },
   }
 }
@@ -61,7 +61,7 @@ function stepStarted(): V2Event {
     id: "evt_step_started",
     created: 1,
     type: "session-step-started",
-    durable: { aggregateID: "ses_1", seq: 1, version: 1 },
+    durable: { aggregateID: "ses_1", seq: 1 },
     data: {
       sessionID: "ses_1",
       assistantMessageID: "msg_assistant",
@@ -76,7 +76,7 @@ function stepFailed(message: string): V2Event {
     id: "evt_step_failed",
     created: 2,
     type: "session-step-settled",
-    durable: { aggregateID: "ses_1", seq: 2, version: 1 },
+    durable: { aggregateID: "ses_1", seq: 2 },
     data: {
       sessionID: "ses_1",
       assistantMessageID: "msg_assistant",
@@ -91,7 +91,7 @@ function executionFailed(message: string): V2Event {
     id: "evt_execution_failed",
     created: 3,
     type: "session-execution-settled",
-    durable: { aggregateID: "ses_1", seq: 3, version: 1 },
+    durable: { aggregateID: "ses_1", seq: 3 },
     data: {
       sessionID: "ses_1",
       outcome: "failed",
@@ -118,7 +118,7 @@ function failedTool(inboxID: string): V2Event[] {
       id: "evt_failed_tool_called",
       created: 2,
       type: "session-tool-requested",
-      durable: { aggregateID: "ses_1", seq: 2, version: 1 },
+      durable: { aggregateID: "ses_1", seq: 2 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_failed_tool",
@@ -143,7 +143,7 @@ function failedTool(inboxID: string): V2Event[] {
       id: "evt_failed_tool_terminal",
       created: 4,
       type: "session-tool-settled",
-      durable: { aggregateID: "ses_1", seq: 4, version: 1 },
+      durable: { aggregateID: "ses_1", seq: 4 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_failed_tool",
@@ -178,7 +178,7 @@ function successfulGrep(inboxID: string): V2Event[] {
       id: "evt_grep_called",
       created: 2,
       type: "session-tool-requested",
-      durable: { aggregateID: "ses_1", seq: 2, version: 1 },
+      durable: { aggregateID: "ses_1", seq: 2 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_grep",
@@ -192,7 +192,7 @@ function successfulGrep(inboxID: string): V2Event[] {
       id: "evt_grep_success",
       created: 3,
       type: "session-tool-settled",
-      durable: { aggregateID: "ses_1", seq: 3, version: 1 },
+      durable: { aggregateID: "ses_1", seq: 3 },
       data: {
         sessionID: "ses_1",
         assistantMessageID: "msg_grep",

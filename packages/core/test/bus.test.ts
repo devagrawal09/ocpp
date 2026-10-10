@@ -38,9 +38,9 @@ const SyncMessage = KeyValueFact.Stored
 const SyncSent = CredentialFact.Relabeled
 
 /** Not in the inventory. */
-const VersionedMessageV1 = Bus.durable({
-  type: "test.versioned",
-  durable: { version: 1, aggregate: "id" },
+const Uninventoried = Bus.durable({
+  type: "test.uninventoried",
+  durable: { aggregate: "id" },
   schema: { id: Schema.String },
 })
 const GlobalMessage = Bus.ephemeral({
@@ -55,8 +55,6 @@ const CountMessage = Bus.ephemeral({
     count: Schema.Number,
   },
 })
-
-const VersionedMessage = SessionEvent.Deleted
 
 const DurableMessage = SessionEvent.Renamed
 const durableData = (sessionID: Session.ID, text: string) => ({
@@ -145,31 +143,14 @@ describe("Bus", () => {
     }),
   )
 
-  it.effect("publishes definition version", () =>
+  it.effect("places a durable event in its aggregate, with no version", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
-      const event = yield* bus.publish(VersionedMessage, { sessionID: Session.ID.create() })
+      const sessionID = Session.ID.create()
+      const event = yield* bus.publish(SessionEvent.Deleted, { sessionID })
 
       expect(event.type).toBe("session-deleted")
-      expect(event.durable?.version).toBe(Event.Version.make(2))
-    }),
-  )
-
-  it.effect("selects the latest durable definition independent of declaration order", () =>
-    Effect.sync(() => {
-      const latest = Bus.durable({
-        type: "test.out-of-order",
-        durable: { version: 2, aggregate: "id" },
-        schema: { id: Schema.String },
-      })
-      const historical = Bus.durable({
-        type: "test.out-of-order",
-        durable: { version: 1, aggregate: "id" },
-        schema: { id: Schema.String },
-      })
-
-      expect(Event.latest([latest, historical]).get("test.out-of-order")).toBe(latest)
-      expect(Event.latest([historical, latest]).get("test.out-of-order")).toBe(latest)
+      expect(event.durable).toEqual({ aggregateID: sessionID, seq: Event.Seq.make(0) })
     }),
   )
 
@@ -726,7 +707,7 @@ describe("Bus", () => {
       const bus = yield* Bus.Service
       const aggregateID = Session.ID.create()
 
-      const exit = yield* bus.publish(VersionedMessageV1, { id: aggregateID }).pipe(Effect.exit)
+      const exit = yield* bus.publish(Uninventoried, { id: aggregateID }).pipe(Effect.exit)
 
       expect(String(exit)).toContain("not in OC++'s inventory of recorded facts")
       expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([{ type: "log-synced", aggregateID }])

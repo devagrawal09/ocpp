@@ -7,7 +7,7 @@ import { ProjectID } from "./project-id.js"
 import { AbsolutePath, NonNegativeInt, optional } from "./schema.js"
 import { WorkspaceID } from "./workspace-id.js"
 
-const byProject = { aggregate: "projectID", version: 1 } as const
+const byProject = { aggregate: "projectID" } as const
 
 /** A project was first resolved, at its canonical directory. */
 export const Created = Event.durable({
@@ -45,7 +45,7 @@ export const WorktreeRemoved = Event.durable({
   schema: { projectID: ProjectID, directory: AbsolutePath },
 })
 
-const byWorkspace = { aggregate: "workspaceID", version: 1 } as const
+const byWorkspace = { aggregate: "workspaceID" } as const
 
 export const WorkspaceCreated = Event.durable({
   type: "workspace-created",

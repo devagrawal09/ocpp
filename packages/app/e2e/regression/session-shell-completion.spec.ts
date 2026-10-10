@@ -174,7 +174,7 @@ test("shows the authoritative foreground result after streaming shell output", a
     id: "evt_foreground_complete",
     created: 3,
     type: "session-tool-settled",
-    durable: { aggregateID: sessionID, seq: 0, version: 1 },
+    durable: { aggregateID: sessionID, seq: 0 },
     data: {
       outcome: "succeeded",
       sessionID,

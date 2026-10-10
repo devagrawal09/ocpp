@@ -23,7 +23,7 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "ExternalSession.Info" })
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
-const durable = { aggregate: "sessionID", version: 1 } as const
+const durable = { aggregate: "sessionID" } as const
 export const Bound = Event.durable({
   type: "session-external-bound",
   durable,

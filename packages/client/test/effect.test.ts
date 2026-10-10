@@ -122,7 +122,7 @@ test("event.subscribe exposes and decodes the native Effect event stream", async
   const durable = events[1]
   if (durable?.type !== "session-model-selected") throw new Error("Expected model event")
   expect(durable.created).toBe(1_717_171_717_000)
-  expect(durable.durable).toEqual({ aggregateID: "ses_test", seq: 1, version: 1 })
+  expect(durable.durable).toEqual({ aggregateID: "ses_test", seq: 1 })
 })
 
 test("event.subscribe terminates on Effect protocol decode failures", async () => {
@@ -325,7 +325,7 @@ const modelSwitchedEvent = {
   id: "evt_model",
   created: 1_717_171_717_000,
   type: "session-model-selected",
-  durable: { aggregateID: "ses_test", seq: 1, version: 1 },
+  durable: { aggregateID: "ses_test", seq: 1 },
   data: {
     sessionID: "ses_test",
     model: { id: "claude", providerID: "anthropic" },

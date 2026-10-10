@@ -367,65 +367,48 @@ let eventSequence = -1
 
 function textEvents(): OcppEvent[] {
   return [
-    eventValue("session-block-started", { sessionID, assistantMessageID, ordinal: 0, kind: "text" }, 1),
-    eventValue(
-      "session-block-recorded",
-      {
-        sessionID,
-        assistantMessageID,
-        kind: "text",
-        ordinal: 0,
-        text: streamedTextPart.text,
-      },
-      1,
-    ),
+    eventValue("session-block-started", { sessionID, assistantMessageID, ordinal: 0, kind: "text" }),
+    eventValue("session-block-recorded", {
+      sessionID,
+      assistantMessageID,
+      kind: "text",
+      ordinal: 0,
+      text: streamedTextPart.text,
+    }),
   ]
 }
 
 function toolEvents(part: typeof editPart): OcppEvent[] {
   return [
-    eventValue(
-      "session-tool-input-started",
-      {
-        sessionID,
-        assistantMessageID,
-        id: part.callID,
-        name: part.tool,
-      },
-      1,
-    ),
-    eventValue(
-      "session-tool-requested",
-      {
-        sessionID,
-        assistantMessageID,
-        id: part.callID,
-        name: part.tool,
-        input: part.state.input,
-        executed: true,
-      },
-      1,
-    ),
-    eventValue(
-      "session-tool-settled",
-      {
-        sessionID,
-        assistantMessageID,
-        id: part.callID,
-        outcome: "succeeded",
-        content: [{ type: "text", text: part.state.output }],
-        metadata: part.state.metadata as Record<string, JsonValue>,
-        executed: true,
-      },
-      1,
-    ),
+    eventValue("session-tool-input-started", {
+      sessionID,
+      assistantMessageID,
+      id: part.callID,
+      name: part.tool,
+    }),
+    eventValue("session-tool-requested", {
+      sessionID,
+      assistantMessageID,
+      id: part.callID,
+      name: part.tool,
+      input: part.state.input,
+      executed: true,
+    }),
+    eventValue("session-tool-settled", {
+      sessionID,
+      assistantMessageID,
+      id: part.callID,
+      outcome: "succeeded",
+      content: [{ type: "text", text: part.state.output }],
+      metadata: part.state.metadata as Record<string, JsonValue>,
+      executed: true,
+    }),
   ]
 }
 
 function eventValue<Type extends OcppEvent["type"]>(
   type: Type,
   data: Extract<OcppEvent, { type: Type }>["data"],
-  version: 1 | 2,
 ): Extract<OcppEvent, { type: Type }> {
   eventSequence++
   return {
@@ -434,7 +417,7 @@ function eventValue<Type extends OcppEvent["type"]>(
     type,
     data,
     location: { directory },
-    durable: { aggregateID: sessionID, seq: eventSequence, version },
+    durable: { aggregateID: sessionID, seq: eventSequence },
   } as unknown as Extract<OcppEvent, { type: Type }>
 }
 
@@ -466,7 +449,7 @@ async function mockServer(
     provider: provider(),
     sessions: [session()],
     pageMessages: () => ({ items: messages }),
-    events: () => events.splice(0, 1),
+    events: () => events.splice(0),
     eventRetry: 16,
   })
 }

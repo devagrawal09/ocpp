@@ -406,7 +406,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-created"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -427,7 +427,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-agent-selected"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -440,7 +440,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-model-selected"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -453,7 +453,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-tools-selected"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly tools: ReadonlyArray<string> }
         }
@@ -462,7 +462,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-moved"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -476,7 +476,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-renamed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly title: string }
         }
@@ -485,7 +485,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-viewed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly idle: number }
         }
@@ -494,7 +494,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-deleted"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID }
         }
@@ -503,7 +503,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-forked"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -520,7 +520,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-inbox-delivered"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly inboxID: SessionMessage.ID }
         }
@@ -529,7 +529,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-inbox-enqueued"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -542,7 +542,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-inbox-cancelled"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly inboxID: SessionMessage.ID }
         }
@@ -551,7 +551,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-inbox-delivery-changed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -564,7 +564,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-inbox-held"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly inboxID: SessionMessage.ID }
         }
@@ -573,7 +573,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-execution-started"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID }
         }
@@ -582,7 +582,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-execution-continued"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID }
         }
@@ -591,7 +591,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-execution-settled"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data:
             | { readonly sessionID: Session.ID; readonly outcome: "succeeded" }
@@ -615,7 +615,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-instructions-updated"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -628,7 +628,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-synthetic"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -642,7 +642,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-displayed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -655,7 +655,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-skill-activated"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -669,7 +669,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-shell-started"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly shell: Shell.Info }
         }
@@ -678,7 +678,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-shell-ended"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -696,7 +696,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-step-started"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -711,7 +711,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-step-streamed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly assistantMessageID: SessionMessage.ID }
         }
@@ -720,7 +720,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-step-settled"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data:
             | {
@@ -774,7 +774,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-block-recorded"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -790,7 +790,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-tool-input-failed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -831,7 +831,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-tool-requested"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -848,7 +848,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-tool-settled"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data:
             | {
@@ -922,7 +922,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-codemode-started"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -936,7 +936,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-codemode-completed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -986,7 +986,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-codemode-failed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -1038,7 +1038,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-invocation-started"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -1053,7 +1053,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-compaction-started"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -1067,7 +1067,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-compaction-ended"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -1081,7 +1081,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-compaction-failed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -1095,7 +1095,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-revert-staged"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly revert: Session.Revert }
         }
@@ -1104,7 +1104,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-revert-cleared"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID }
         }
@@ -1113,7 +1113,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-revert-committed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: { readonly sessionID: Session.ID; readonly to: SessionMessage.ID }
         }
@@ -1122,7 +1122,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-message-content-updated"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID
@@ -1135,7 +1135,7 @@ export type SessionLogOutput =
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session-usage-recorded"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
           readonly data: {
             readonly sessionID: Session.ID

@@ -115,7 +115,7 @@ for (const theme of ["light", "dark"] as const) {
         id: "evt_workspace_accent_running",
         created: 1700000002000,
         type: "session-execution-started",
-        durable: { aggregateID: sessionID, seq: 1, version: 1 },
+        durable: { aggregateID: sessionID, seq: 1 },
         data: { sessionID },
       })
       const stop = view.composer.getByRole("button", { name: "Stop", exact: true })

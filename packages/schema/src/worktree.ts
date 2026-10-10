@@ -52,7 +52,7 @@ const Updated = ephemeral({
 
 const Resolved = durable({
   type: "worktree-resolved",
-  durable: { aggregate: "projectID", version: 1 },
+  durable: { aggregate: "projectID" },
   schema: {
     projectID: Project.ID,
     directory: AbsolutePath,

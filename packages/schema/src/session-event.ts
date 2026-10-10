@@ -43,10 +43,7 @@ const Base = {
 }
 
 const options = {
-  durable: {
-    aggregate: "sessionID",
-    version: 1,
-  },
+  durable: { aggregate: "sessionID" },
 } as const
 export const Created = Event.durable({
   type: "session-created",
@@ -171,20 +168,14 @@ export type UsageUpdated = typeof UsageUpdated.Type
 
 export const Deleted = Event.durable({
   type: "session-deleted",
-  durable: {
-    aggregate: "sessionID",
-    version: 2,
-  },
+  ...options,
   schema: Base,
 })
 export type Deleted = typeof Deleted.Type
 
 export const Forked = Event.durable({
   type: "session-forked",
-  durable: {
-    aggregate: "sessionID",
-    version: 2,
-  },
+  ...options,
   schema: {
     ...Base,
     parentID: SessionID,
@@ -273,10 +264,7 @@ export namespace Execution {
 
 export const InstructionsUpdated = Event.durable({
   type: "session-instructions-updated",
-  durable: {
-    aggregate: "sessionID",
-    version: 2,
-  },
+  ...options,
   schema: {
     ...Base,
     delta: Instruction.Delta,

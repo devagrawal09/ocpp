@@ -72,7 +72,7 @@ export const ServerDefinitions = Event.inventory(
   McpEvent.StatusChanged,
   McpEvent.ResourcesChanged,
 )
-export const Server = Event.latest(ServerDefinitions)
+export const Server = Event.byType(ServerDefinitions)
 export type ServerEvent = Schema.Schema.Type<(typeof ServerDefinitions)[number]>
 export const isServer = (event: { readonly type: string }): event is ServerEvent => Server.has(event.type)
 
@@ -91,5 +91,5 @@ export const Definitions = Event.inventory(
   ...WorktreeEvent.Definitions,
   ...ServerEvent.Definitions,
 )
-export const Latest = Event.latest(Definitions)
+export const ByType = Event.byType(Definitions)
 export { Durable }

@@ -494,7 +494,7 @@ export type SessionAgentSelected = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-agent-selected"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; agent: string; previous?: string }
 }
@@ -504,7 +504,7 @@ export type SessionModelSelected = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-model-selected"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; model: ModelRef; previous?: ModelRef }
 }
@@ -514,7 +514,7 @@ export type SessionToolsSelected = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-tools-selected"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; tools: Array<string> }
 }
@@ -524,7 +524,7 @@ export type SessionMoved = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-moved"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; location: LocationRef; projectID: string; subpath?: string }
 }
@@ -534,7 +534,7 @@ export type SessionRenamed = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-renamed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; title: string }
 }
@@ -544,7 +544,7 @@ export type SessionViewed = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-viewed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; idle: number }
 }
@@ -554,7 +554,7 @@ export type SessionDeleted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-deleted"
-  durable: { aggregateID: string; seq: number; version: 2 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string }
 }
@@ -564,7 +564,7 @@ export type SessionInboxDelivered = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-inbox-delivered"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; inboxID: string }
 }
@@ -574,7 +574,7 @@ export type SessionInboxCancelled = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-inbox-cancelled"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; inboxID: string }
 }
@@ -584,7 +584,7 @@ export type SessionInboxHeld = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-inbox-held"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; inboxID: string }
 }
@@ -594,7 +594,7 @@ export type SessionExecutionStarted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-execution-started"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string }
 }
@@ -604,7 +604,7 @@ export type SessionExecutionContinued = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-execution-continued"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string }
 }
@@ -614,7 +614,7 @@ export type SessionInstructionsUpdated = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-instructions-updated"
-  durable: { aggregateID: string; seq: number; version: 2 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; delta: { [x: string]: string | "removed" }; text?: string }
 }
@@ -624,7 +624,7 @@ export type SessionSynthetic = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-synthetic"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; text: string; description?: string; metadata?: { [x: string]: any } }
 }
@@ -634,7 +634,7 @@ export type SessionSkillActivated = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-skill-activated"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; id: string; name: string; text: string }
 }
@@ -644,7 +644,7 @@ export type SessionStepStarted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-step-started"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; assistantMessageID: string; agent: string; model: ModelRef; snapshot?: string }
 }
@@ -654,7 +654,7 @@ export type SessionStepStreamed = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-step-streamed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; assistantMessageID: string }
 }
@@ -664,7 +664,7 @@ export type SessionCodemodeStarted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-codemode-started"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; assistantMessageID: string; id: string; executionID: string }
 }
@@ -674,7 +674,7 @@ export type SessionCompactionStarted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-compaction-started"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; reason: "auto" | "manual"; recent: string; inputID?: string }
 }
@@ -684,7 +684,7 @@ export type SessionCompactionEnded = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-compaction-ended"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; reason: "auto" | "manual"; text: string; recent: string }
 }
@@ -694,7 +694,7 @@ export type SessionRevertCleared = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-revert-cleared"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string }
 }
@@ -704,7 +704,7 @@ export type SessionRevertCommitted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-revert-committed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; to: string }
 }
@@ -714,7 +714,7 @@ export type SessionUsageRecorded = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-usage-recorded"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; source: "title" | "compaction"; cost: MoneyUSD; tokens: TokenUsageInfo }
 }
@@ -886,7 +886,7 @@ export type WorktreeResolved = {
   created: number
   metadata?: { [x: string]: any }
   type: "worktree-resolved"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { projectID: string; directory: string; previous: string; adopted?: Array<string> }
 }
@@ -1057,7 +1057,7 @@ export type SessionCreated = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-created"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -1101,7 +1101,7 @@ export type SessionInvocationStarted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-invocation-started"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -1142,7 +1142,7 @@ export type SessionExecutionSettled = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-execution-settled"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data:
     | { sessionID: string; outcome: "succeeded" }
@@ -1155,7 +1155,7 @@ export type SessionCompactionFailed = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-compaction-failed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; reason: "auto" | "manual"; error: SessionStructuredError; inputID?: string }
 }
@@ -1165,7 +1165,7 @@ export type SessionInboxDeliveryChanged = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-inbox-delivery-changed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; inboxID: string; delivery: SessionInboxDelivery }
 }
@@ -1188,7 +1188,7 @@ export type SessionShellStarted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-shell-started"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; shell: ShellInfo }
 }
@@ -1198,7 +1198,7 @@ export type SessionShellEnded = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-shell-ended"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -1221,7 +1221,7 @@ export type SessionStepSettled = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-step-settled"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data:
     | {
@@ -1258,7 +1258,7 @@ export type SessionBlockRecorded = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-block-recorded"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -1275,7 +1275,7 @@ export type SessionToolRequested = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-tool-requested"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -1607,7 +1607,7 @@ export type SessionRevertStaged = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-revert-staged"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; revert: SessionRevert }
 }
@@ -1711,7 +1711,7 @@ export type SessionForked = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-forked"
-  durable: { aggregateID: string; seq: number; version: 2 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -1727,7 +1727,7 @@ export type SessionToolInputFailed = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-tool-input-failed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -1748,7 +1748,7 @@ export type SessionToolSettled = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-tool-settled"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data:
     | {
@@ -2058,7 +2058,7 @@ export type SessionCodemodeCompleted = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-codemode-completed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -2075,7 +2075,7 @@ export type SessionCodemodeFailed = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-codemode-failed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: {
     sessionID: string
@@ -2146,7 +2146,7 @@ export type SessionInboxEnqueued = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-inbox-enqueued"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; inboxID: string; item: SessionInboxItem }
 }
@@ -2165,7 +2165,7 @@ export type SessionDisplayed = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-displayed"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; title?: string; blocks: Array<SessionMessageDisplayBlock> }
 }
@@ -2220,7 +2220,7 @@ export type SessionMessageContentUpdated = {
   created: number
   metadata?: { [x: string]: any }
   type: "session-message-content-updated"
-  durable: { aggregateID: string; seq: number; version: 1 }
+  durable: { aggregateID: string; seq: number }
   location?: LocationRef
   data: { sessionID: string; messageID: string; content: Array<SessionMessageAssistantContentEncoded> }
 }

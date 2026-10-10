@@ -56,7 +56,7 @@ test("revalidates after an event overtakes an active session read", async () => 
       id: "evt_viewed",
       created: 2,
       type: "session-viewed",
-      durable: { aggregateID: "ses_refresh", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_refresh", seq: 1 },
       data: { sessionID: "ses_refresh", idle: 2 },
     }
     listeners.forEach((listener) => listener({ name: viewed.type, details: viewed }))
@@ -225,7 +225,7 @@ test("adopts cached directory-project sessions when their repository is resolved
       id: "evt_repository_resolved",
       created: 1,
       type: "worktree-resolved",
-      durable: { aggregateID: "repository", seq: 0, version: 1 },
+      durable: { aggregateID: "repository", seq: 0 },
       data: {
         projectID: "repository",
         directory: "/repo",
@@ -470,7 +470,7 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
       id: "evt_codemode_completed",
       created: 2,
       type: "session-codemode-completed",
-      durable: { aggregateID: "ses_codemode", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_codemode", seq: 1 },
       data: {
         sessionID: "ses_codemode",
         assistantMessageID: assistant.id,
@@ -483,7 +483,7 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
       id: "evt_tool_success",
       created: 3,
       type: "session-tool-settled",
-      durable: { aggregateID: "ses_codemode", seq: 2, version: 1 },
+      durable: { aggregateID: "ses_codemode", seq: 2 },
       data: {
         sessionID: "ses_codemode",
         assistantMessageID: assistant.id,
@@ -815,7 +815,7 @@ test("preserves assistant content replacement events across an active message re
       id: "evt_message_updated",
       created: 3,
       type: "session-message-content-updated",
-      durable: { aggregateID: "ses_refresh", seq: 3, version: 1 },
+      durable: { aggregateID: "ses_refresh", seq: 3 },
       data: {
         sessionID: "ses_refresh",
         messageID: "msg_assistant",
@@ -862,7 +862,7 @@ test.each([
       id: "evt_activity",
       created: 2,
       type,
-      durable: { aggregateID: "ses_refresh", seq: 2, version: 1 },
+      durable: { aggregateID: "ses_refresh", seq: 2 },
       data: {
         sessionID: "ses_refresh",
         ...(outcome === undefined ? {} : { outcome }),
@@ -911,7 +911,7 @@ test("projects background user shell metadata from durable shell data", () => {
       id: "evt_user_shell",
       created: 1,
       type: "session-shell-started",
-      durable: { aggregateID: "ses_refresh", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_refresh", seq: 1 },
       data: {
         sessionID: "ses_refresh",
         shell: {
@@ -940,7 +940,7 @@ test("renders blocks and tool input while they stream, then the recorded facts",
   const assistantMessageID = "msg_stream"
   let seq = 0
   let created = 0
-  const durable = () => ({ aggregateID: sessionID, seq: seq++, version: 1 as const })
+  const durable = () => ({ aggregateID: sessionID, seq: seq++ })
   const live = () => ({ id: `evt_live_${created}`, created: ++created })
   const message = () => {
     const found = setup.data.session.message.get(sessionID, assistantMessageID)

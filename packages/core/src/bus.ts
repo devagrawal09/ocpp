@@ -66,11 +66,7 @@ export class InvalidDurableEventError extends Schema.TaggedError<InvalidDurableE
   },
 ) {}
 
-const envelope = (aggregateID: string, seq: number, version: number) => ({
-  aggregateID,
-  seq: Event.Seq.make(seq),
-  version: Event.Version.make(version),
-})
+const envelope = (aggregateID: string, seq: number) => ({ aggregateID, seq: Event.Seq.make(seq) })
 
 /** OC++'s durable events, each a fact in Specter's log under the same name. */
 const durableDefinitions = new Map<string, Event.DurableDefinition>(
@@ -102,12 +98,11 @@ const decodeIndexed = (entry: Indexed): Event.Payload => {
     id: Event.ID.make(entry.fact.id),
     created: Date.parse(entry.fact.recordedAt),
     type: definition.type,
-    durable: envelope(entry.aggregateID, entry.seq, definition.durable.version),
+    durable: envelope(entry.aggregateID, entry.seq),
     data: Schema.decodeUnknownSync(definition.data)(entry.fact.payload),
   }
 }
 
-export const versionedType = Event.versionedType
 export const durable = Event.durable
 export const ephemeral = Event.ephemeral
 
@@ -454,14 +449,12 @@ export function configured(options?: Options) {
             const finalSeq = firstSeq + payloads.length - 1
             const queued = payloads.map((item, index) => ({
               ...item.event,
-              durable: envelope(aggregateID, firstSeq + index, item.definition.durable.version),
+              durable: envelope(aggregateID, firstSeq + index),
             }))
             const route = yield* prepareRoutes(queued)
             for (const [index, item] of payloads.entries()) {
               const event = queued[index]
-              for (const projector of projectors.get(
-                versionedType(item.definition.type, item.definition.durable.version),
-              ) ?? []) {
+              for (const projector of projectors.get(item.definition.type) ?? []) {
                 yield* projector(event)
               }
               if (item.commit) yield* item.commit(firstSeq + index)
@@ -791,11 +784,7 @@ export function configured(options?: Options) {
           Effect.forEach(
             events,
             (event) =>
-              Effect.forEach(
-                projectors.get(versionedType(event.type, event.durable!.version)) ?? [],
-                (projector) => projector(event),
-                { discard: true },
-              ),
+              Effect.forEach(projectors.get(event.type) ?? [], (projector) => projector(event), { discard: true }),
             { discard: true },
           )
 
@@ -922,12 +911,9 @@ export function configured(options?: Options) {
 
         const project = <D extends Event.Definition>(definition: D, projector: Subscriber<D>): Effect.Effect<void> =>
           Effect.sync(() => {
-            const key = definition.durable
-              ? versionedType(definition.type, definition.durable.version)
-              : definition.type
-            const list = projectors.get(key) ?? []
+            const list = projectors.get(definition.type) ?? []
             list.push((event) => projector(event as Event.Payload<D>))
-            projectors.set(key, list)
+            projectors.set(definition.type, list)
           })
 
         return Service.of({

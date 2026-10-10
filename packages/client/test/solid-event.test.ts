@@ -86,7 +86,7 @@ test("refreshes an event's latest outcome when its firing settles", async () => 
       id: "evt_other",
       created: 1,
       type: "session-codemode-completed",
-      durable: { aggregateID: "ses_firing", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_firing", seq: 1 },
       data: { ...base, assistantMessageID: "msg_other" },
     })
     await Bun.sleep(20)
@@ -96,7 +96,7 @@ test("refreshes an event's latest outcome when its firing settles", async () => 
       id: "evt_failed",
       created: 2,
       type: "session-codemode-failed",
-      durable: { aggregateID: "ses_firing", seq: 2, version: 1 },
+      durable: { aggregateID: "ses_firing", seq: 2 },
       data: {
         ...base,
         assistantMessageID: "msg_firing",
@@ -127,7 +127,7 @@ test("refreshes the events when a firing settles before the list names it", asyn
       id: "evt_quick",
       created: 1,
       type: "session-invocation-started",
-      durable: { aggregateID: "ses_quick", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_quick", seq: 1 },
       data: {
         sessionID: "ses_quick",
         executionID: "exe_quick",
@@ -141,7 +141,7 @@ test("refreshes the events when a firing settles before the list names it", asyn
       id: "evt_done",
       created: 2,
       type: "session-codemode-completed",
-      durable: { aggregateID: "ses_quick", seq: 2, version: 1 },
+      durable: { aggregateID: "ses_quick", seq: 2 },
       data: {
         sessionID: "ses_quick",
         assistantMessageID: "msg_quick",
@@ -167,7 +167,7 @@ test("refreshes a session's events after a revert", async () => {
       id: "evt_revert",
       created: 1,
       type: "session-revert-committed",
-      durable: { aggregateID: "ses_revert", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_revert", seq: 1 },
       data: { sessionID: "ses_revert", to: "msg_revert" },
     })
     await wait(() => setup.data.session.event.list("ses_revert")?.[0]?.name === "watch")

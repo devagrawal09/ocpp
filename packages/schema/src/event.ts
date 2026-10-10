@@ -1,6 +1,6 @@
 export * as Event from "./event.js"
 
-import { Schema, SchemaTransformation } from "effect"
+import { Schema } from "effect"
 import { optional } from "./schema.js"
 import { ascending } from "./identifier.js"
 import { Location } from "./location.js"
@@ -20,11 +20,11 @@ export type ID = typeof ID.Type
 export const Seq = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).pipe(brand("Event.Seq"))
 export type Seq = typeof Seq.Type
 
-/** Durable schema version of one event type, from the event definition that committed it. */
-export const Version = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).pipe(brand("Event.Version"))
-export type Version = typeof Version.Type
-
-const DurableEnvelope = Schema.Struct({ aggregateID: Schema.String, seq: Seq, version: Version })
+/**
+ * Where a durable event sits: its aggregate and its sequence there. Event types carry no version: a fact
+ * whose shape changes gets a new name, so one name never carries two shapes.
+ */
+const DurableEnvelope = Schema.Struct({ aggregateID: Schema.String, seq: Seq })
 export type DurableEnvelope = typeof DurableEnvelope.Type
 
 export type DurableDefinition<
@@ -34,7 +34,6 @@ export type DurableDefinition<
   readonly type: Type
   readonly durability: "durable"
   readonly durable: {
-    readonly version: number
     readonly aggregate: string
   }
   readonly data: DataSchema
@@ -76,7 +75,6 @@ type Input<Type extends string, Fields> = {
   readonly type: Type
   readonly identifier?: string
   readonly durable?: {
-    readonly version: number
     readonly aggregate: string
   }
   readonly schema: Fields
@@ -92,25 +90,12 @@ export function durable<const Type extends string, const Data extends Fields | S
   input: Input<Type, Data> & { readonly durable: NonNullable<Input<Type, Data>["durable"]> },
 ) {
   const data = dataOf(input.schema)
-  const durable = Schema.Struct({
-    aggregateID: DurableEnvelope.fields.aggregateID,
-    seq: DurableEnvelope.fields.seq,
-    version: Schema.Literal(input.durable.version).pipe(
-      Schema.decodeTo(
-        Schema.toType(Version),
-        SchemaTransformation.transform({
-          decode: () => Version.make(input.durable.version),
-          encode: () => input.durable.version,
-        }),
-      ),
-    ),
-  })
   return Schema.Struct({
     id: ID,
     created: Schema.Finite,
     metadata: optional(Schema.Record(Schema.String, Schema.Unknown)),
     type: Schema.Literal(input.type),
-    durable,
+    durable: DurableEnvelope,
     location: optional(Location.Ref),
     data,
   })
@@ -152,35 +137,24 @@ export function inventory<const Definitions extends ReadonlyArray<Definition>>(.
   return Object.freeze(definitions)
 }
 
-export function latest(definitions: ReadonlyArray<Definition>) {
+/** Definitions by type. One type names one definition: a fact whose shape changes gets a new name. */
+export function byType(definitions: ReadonlyArray<Definition>) {
   return readonlyMap(
     definitions.reduce((result, definition) => {
       const existing = result.get(definition.type)
-      if (!existing) {
-        result.set(definition.type, definition)
-        return result
-      }
-      if (definition.durable && existing.durable && definition.durable.version !== existing.durable.version) {
-        if (definition.durable.version > existing.durable.version) result.set(definition.type, definition)
-        return result
-      }
-      if (definition !== existing) throw new Error(`Duplicate latest event definition for ${definition.type}`)
-      return result
+      if (existing !== undefined && existing !== definition)
+        throw new Error(`Duplicate event definition for ${definition.type}`)
+      return result.set(definition.type, definition)
     }, new Map<string, Definition>()),
   )
-}
-
-export function versionedType(type: string, version: number) {
-  return `${type}.${version}`
 }
 
 export function durableMap<const Definitions extends ReadonlyArray<Definition>>(definitions: Definitions) {
   return readonlyMap(
     definitions.reduce((result, definition) => {
       if (definition.durability !== "durable") return result
-      const key = versionedType(definition.type, definition.durable.version)
-      if (result.has(key)) throw new Error(`Duplicate durable event definition for ${key}`)
-      result.set(key, definition)
+      if (result.has(definition.type)) throw new Error(`Duplicate durable event definition for ${definition.type}`)
+      result.set(definition.type, definition)
       return result
     }, new Map<string, DurableDefinition>()),
   )

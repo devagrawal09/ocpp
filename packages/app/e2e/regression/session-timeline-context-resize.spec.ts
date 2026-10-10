@@ -307,26 +307,21 @@ let eventSequence = -1
 
 function toolEvents(part: ContextTool): OcppEvent[] {
   return [
-    eventValue(
-      "session-tool-settled",
-      {
-        sessionID,
-        assistantMessageID: part.messageID,
-        id: part.callID,
-        outcome: "succeeded",
-        content: [{ type: "text", text: part.state.output }],
-        metadata: part.state.metadata,
-        executed: true,
-      },
-      1,
-    ),
+    eventValue("session-tool-settled", {
+      sessionID,
+      assistantMessageID: part.messageID,
+      id: part.callID,
+      outcome: "succeeded",
+      content: [{ type: "text", text: part.state.output }],
+      metadata: part.state.metadata,
+      executed: true,
+    }),
   ]
 }
 
 function eventValue<Type extends OcppEvent["type"]>(
   type: Type,
   data: Extract<OcppEvent, { type: Type }>["data"],
-  version: 1 | 2,
 ): Extract<OcppEvent, { type: Type }> {
   eventSequence++
   return {
@@ -335,7 +330,7 @@ function eventValue<Type extends OcppEvent["type"]>(
     type,
     data,
     location: { directory },
-    durable: { aggregateID: sessionID, seq: eventSequence, version },
+    durable: { aggregateID: sessionID, seq: eventSequence },
   } as unknown as Extract<OcppEvent, { type: Type }>
 }
 
@@ -347,7 +342,7 @@ async function mockServer(page: Page, events: OcppEvent[] = [], fixtureMessages 
     provider: provider(),
     sessions: [session()],
     pageMessages: () => ({ items: fixtureMessages }),
-    events: () => events.splice(0, 1),
+    events: () => events.splice(0),
     eventRetry: 50,
   })
 }

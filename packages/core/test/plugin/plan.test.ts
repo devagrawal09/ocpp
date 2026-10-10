@@ -21,7 +21,7 @@ const build = Agent.ID.make("build")
 const agentSelected = (agent: Agent.ID, previous: Agent.ID): SessionEvent.AgentSelected => ({
   id: Event.ID.create(),
   created: 0,
-  durable: { aggregateID: sessionID, seq: Event.Seq.make(0), version: Event.Version.make(1) },
+  durable: { aggregateID: sessionID, seq: Event.Seq.make(0) },
   type: "session-agent-selected",
   data: { sessionID, agent, previous },
 })

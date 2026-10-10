@@ -6,7 +6,7 @@ import { Event } from "./event.js"
 import { IntegrationID } from "./integration-id.js"
 import { optional } from "./schema.js"
 
-const byCredential = { aggregate: "credentialID", version: 1 } as const
+const byCredential = { aggregate: "credentialID" } as const
 const credential = { credentialID: Credential.ID, integrationID: IntegrationID }
 
 // A credential's secret enters the log sealed with a key of its own, which is kept apart from the log

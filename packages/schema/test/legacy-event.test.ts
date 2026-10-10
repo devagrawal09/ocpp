@@ -22,7 +22,6 @@ describe("legacy public event schemas", () => {
     const durable = SessionV1.Event.Definitions.filter((event) => event.durable !== undefined)
     expect(durable).toHaveLength(7)
     expect(durable.every((event) => event.durable?.aggregate === "sessionID")).toBe(true)
-    expect(durable.every((event) => event.durable?.version === 1)).toBe(true)
   })
 
   test("owns the legacy transient public definitions", () => {

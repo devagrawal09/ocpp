@@ -8,7 +8,7 @@ import { NonNegativeInt, optional } from "./schema.js"
 import { SessionID } from "./session-id.js"
 import { SessionMessage } from "./session-message.js"
 
-const bySession = { aggregate: "sessionID", version: 1 } as const
+const bySession = { aggregate: "sessionID" } as const
 
 /**
  * A Session created from another server's export, recorded with its creation: its settled messages and
@@ -68,7 +68,7 @@ export const InstructionEntryRemoved = Event.durable({
 
 // An execution's facts are its own aggregate: journaling its calls does not advance the Session's
 // sequence. Each carries its Session, which its rows belong to.
-const byExecution = { aggregate: "executionID", version: 1 } as const
+const byExecution = { aggregate: "executionID" } as const
 const execution = { sessionID: SessionID, executionID: Schema.String }
 
 /** A Code Mode program received its execution: the notebook names it sees and the names it reserves. */
@@ -212,7 +212,7 @@ export const EventSkipped = Event.durable({
 
 // A background job's marker is its own aggregate, keyed by the notification its result arrives in: it
 // is recorded from the job registry, which Session listeners call while holding their Session.
-const byNotification = { aggregate: "notificationID", version: 1 } as const
+const byNotification = { aggregate: "notificationID" } as const
 
 /** How restart recovery resumes a background job: a shell, a subagent's Session or a Code Mode run. */
 export const BackgroundRecovery = Schema.Union([

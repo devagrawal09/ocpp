@@ -38,7 +38,7 @@ function createQueueMock(seed: string[], messages: SessionMessageInfo[] = []) {
       id: `evt_queue_${sequence}`,
       type,
       created: Date.now(),
-      durable: { aggregateID: sessionID, seq: sequence, version: 1 },
+      durable: { aggregateID: sessionID, seq: sequence },
       data,
     } as OcppEvent)
   }

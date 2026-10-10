@@ -39,7 +39,7 @@ export function durableEvent<Type extends DurableEvent["type"]>(
     id: `evt_${ids.next}`,
     created: ids.next,
     type,
-    durable: { aggregateID: "test", seq: ids.next, version: 1 },
+    durable: { aggregateID: "test", seq: ids.next },
     data,
   }
 }

@@ -346,7 +346,7 @@ function timelineEvent<Type extends "session-block-started" | "session-block-del
     type,
     data,
     location: { directory },
-    ...(durable ? { durable: { aggregateID: sessionID, seq: eventSequence, version: 1 } } : {}),
+    ...(durable ? { durable: { aggregateID: sessionID, seq: eventSequence } } : {}),
   } as unknown as Extract<OcppEvent, { type: Type }>
 }
 

@@ -500,10 +500,7 @@ export type WithParts = {
 }
 
 const options = {
-  durable: {
-    aggregate: "sessionID",
-    version: 1,
-  },
+  durable: { aggregate: "sessionID" },
 } as const
 
 const SessionSummary = Schema.Struct({

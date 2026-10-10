@@ -844,7 +844,7 @@ function makeEvent<Type extends OcppEvent["type"]>(
     definition.durability === "durable"
       ? {
           ...base,
-          durable: { aggregateID: sessionID, seq: ++durableSequence, version: definition.durable.version },
+          durable: { aggregateID: sessionID, seq: ++durableSequence },
         }
       : base
   return Schema.decodeUnknownSync(definition)(input) as unknown as OcppEvent

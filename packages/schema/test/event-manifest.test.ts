@@ -36,11 +36,11 @@ describe("public event manifest", () => {
     expect(EventManifest.Definitions.filter((definition) => definition.type === "agent-updated")).toEqual([
       Agent.Event.Updated,
     ])
-    expect(Array.from(EventManifest.Latest.keys())).toEqual(
+    expect(Array.from(EventManifest.ByType.keys())).toEqual(
       Array.from(new Set(EventManifest.Definitions.map((definition) => definition.type))),
     )
-    expect(EventManifest.Latest.get("agent-updated")).toBe(Agent.Event.Updated)
-    expect(EventManifest.Latest.get("plugin-updated")).toBe(Plugin.Event.Updated)
+    expect(EventManifest.ByType.get("agent-updated")).toBe(Agent.Event.Updated)
+    expect(EventManifest.ByType.get("plugin-updated")).toBe(Plugin.Event.Updated)
     expect(EventManifest.Server.get("mcp-status-changed")).toBe(McpEvent.StatusChanged)
     expect(EventManifest.Server.get("mcp-resources-changed")).toBe(McpEvent.ResourcesChanged)
     expect(EventManifest.Server.get("session-created")).toBe(SessionEvent.Created)
@@ -59,9 +59,9 @@ describe("public event manifest", () => {
     expect(Session.Event.Definitions).toBe(SessionEvent.Definitions)
     expect(Workspace.Event).toBe(WorkspaceEvent)
     expect(Workspace.Event.Definitions).toBe(WorkspaceEvent.Definitions)
-    expect(EventManifest.Latest.get("session-step-settled")).toBe(SessionEvent.Step.Settled)
-    expect(EventManifest.Latest.get("agent-updated")).toBe(Agent.Event.Updated)
-    expect(EventManifest.Latest.get("project-updated")).toBe(Project.Event.Updated)
+    expect(EventManifest.ByType.get("session-step-settled")).toBe(SessionEvent.Step.Settled)
+    expect(EventManifest.ByType.get("agent-updated")).toBe(Agent.Event.Updated)
+    expect(EventManifest.ByType.get("project-updated")).toBe(Project.Event.Updated)
     expect(Agent.Event.Definitions).toEqual([Agent.Event.Updated])
     expect(Credential.Event.Definitions).toEqual([Credential.Event.Updated, Credential.Event.Switched])
     expect(Project.Event.Definitions).toEqual([Project.Event.Updated])
@@ -74,11 +74,10 @@ describe("public event manifest", () => {
     expect(Reference.Event.Definitions).toEqual([Reference.Event.Updated])
     expect(Plugin.Event.Definitions).toEqual([Plugin.Event.Added, Plugin.Event.Updated])
     expect(McpEvent.Definitions).toEqual([McpEvent.ToolsChanged, McpEvent.ResourcesChanged, McpEvent.StatusChanged])
-    expect(EventManifest.Latest.has("mcp-browser-open-failed")).toBe(false)
-    expect(EventManifest.Latest.has("ide-installed")).toBe(false)
+    expect(EventManifest.ByType.has("mcp-browser-open-failed")).toBe(false)
+    expect(EventManifest.ByType.has("ide-installed")).toBe(false)
     expect(IdeEvent.Definitions).toEqual([IdeEvent.Installed])
-    expect(EventManifest.Durable.get("session-step-settled.1")).toBe(SessionEvent.Step.Settled)
-    expect(EventManifest.Durable.has("session-step-settled.2")).toBe(false)
+    expect(EventManifest.Durable.get("session-step-settled")).toBe(SessionEvent.Step.Settled)
   })
 
   test("keeps credential events public, canonical, and ephemeral", () => {
@@ -89,7 +88,7 @@ describe("public event manifest", () => {
       expect(EventManifest.ServerDefinitions).toContain(definition)
       expect(EventManifest.Definitions).toContain(definition)
       expect(EventManifest.Server.get(definition.type)).toBe(definition)
-      expect(EventManifest.Latest.get(definition.type)).toBe(definition)
+      expect(EventManifest.ByType.get(definition.type)).toBe(definition)
       expect(definition.durability).toBe("ephemeral")
       expect(EventManifest.Durable.has(definition.type)).toBe(false)
     }
@@ -107,99 +106,99 @@ describe("public event manifest", () => {
     expect(EventManifest.Server.has("credential-activated")).toBe(false)
     expect(EventManifest.Server.has("credential-deleted")).toBe(false)
     expect(EventManifest.Server.has("integration-connection-updated")).toBe(false)
-    expect(EventManifest.Latest.has("integration-connection-updated")).toBe(false)
+    expect(EventManifest.ByType.has("integration-connection-updated")).toBe(false)
   })
 
   test("derives durable definitions from explicit definition durability", () => {
     expect(Array.from(EventManifest.Durable.keys()).toSorted()).toEqual(
       [
-        "session-created.1",
-        "session-external-bound.1",
-        "session-external-linked.1",
-        "session-external-checkpointed.1",
-        "session-deleted.2",
-        "session-agent-selected.1",
-        "session-model-selected.1",
-        "session-tools-selected.1",
-        "session-moved.1",
-        "session-renamed.1",
-        "session-viewed.1",
-        "session-message-content-updated.1",
-        "session-usage-recorded.1",
-        "session-forked.2",
-        "session-inbox-delivered.1",
-        "session-inbox-enqueued.1",
-        "session-inbox-cancelled.1",
-        "session-inbox-delivery-changed.1",
-        "session-inbox-held.1",
-        "session-execution-started.1",
-        "session-execution-continued.1",
-        "session-execution-settled.1",
-        "session-instructions-updated.2",
-        "session-invocation-started.1",
-        "session-synthetic.1",
-        "session-displayed.1",
-        "session-skill-activated.1",
-        "session-shell-started.1",
-        "session-shell-ended.1",
-        "session-step-started.1",
-        "session-step-streamed.1",
-        "session-step-settled.1",
-        "session-block-recorded.1",
-        "session-tool-input-failed.1",
-        "session-tool-requested.1",
-        "session-tool-settled.1",
-        "session-codemode-started.1",
-        "session-codemode-completed.1",
-        "session-codemode-failed.1",
-        "session-compaction-started.1",
-        "session-compaction-ended.1",
-        "session-compaction-failed.1",
-        "session-revert-staged.1",
-        "session-revert-cleared.1",
-        "session-revert-committed.1",
-        "worktree-resolved.1",
+        "session-created",
+        "session-external-bound",
+        "session-external-linked",
+        "session-external-checkpointed",
+        "session-deleted",
+        "session-agent-selected",
+        "session-model-selected",
+        "session-tools-selected",
+        "session-moved",
+        "session-renamed",
+        "session-viewed",
+        "session-message-content-updated",
+        "session-usage-recorded",
+        "session-forked",
+        "session-inbox-delivered",
+        "session-inbox-enqueued",
+        "session-inbox-cancelled",
+        "session-inbox-delivery-changed",
+        "session-inbox-held",
+        "session-execution-started",
+        "session-execution-continued",
+        "session-execution-settled",
+        "session-instructions-updated",
+        "session-invocation-started",
+        "session-synthetic",
+        "session-displayed",
+        "session-skill-activated",
+        "session-shell-started",
+        "session-shell-ended",
+        "session-step-started",
+        "session-step-streamed",
+        "session-step-settled",
+        "session-block-recorded",
+        "session-tool-input-failed",
+        "session-tool-requested",
+        "session-tool-settled",
+        "session-codemode-started",
+        "session-codemode-completed",
+        "session-codemode-failed",
+        "session-compaction-started",
+        "session-compaction-ended",
+        "session-compaction-failed",
+        "session-revert-staged",
+        "session-revert-cleared",
+        "session-revert-committed",
+        "worktree-resolved",
         // Internal facts: recorded in Specter's log, projected into OC++'s tables, never sent to clients.
-        "project-created.1",
-        "project-vcs-changed.1",
-        "project-relocated.1",
-        "project-edited.1",
-        "worktree-recorded.1",
-        "worktree-removed.1",
-        "workspace-created.1",
-        "workspace-bound.1",
-        "workspace-used.1",
-        "workspace-destroyed.1",
-        "session-imported.1",
-        "session-instruction-blobs-stored.1",
-        "session-instruction-entry-set.1",
-        "session-instruction-entry-removed.1",
-        "session-codemode-execution-admitted.1",
-        "session-codemode-execution-started.1",
-        "session-codemode-execution-resumed.1",
-        "session-codemode-execution-settled.1",
-        "session-codemode-execution-discarded.1",
-        "session-codemode-call-scheduled.1",
-        "session-codemode-call-progressed.1",
-        "session-codemode-call-settled.1",
-        "session-codemode-command-defined.1",
-        "session-codemode-command-removed.1",
-        "session-codemode-event-defined.1",
-        "session-codemode-event-toggled.1",
-        "session-codemode-event-removed.1",
-        "session-codemode-event-planned.1",
-        "session-codemode-event-fired.1",
-        "session-codemode-event-skipped.1",
-        "session-background-recorded.1",
-        "session-background-terminal.1",
-        "session-background-completed.1",
-        "credential-created.1",
-        "credential-activated.1",
-        "credential-relabeled.1",
-        "credential-rotated.1",
-        "credential-removed.1",
-        "kv-stored.1",
-        "kv-removed.1",
+        "project-created",
+        "project-vcs-changed",
+        "project-relocated",
+        "project-edited",
+        "worktree-recorded",
+        "worktree-removed",
+        "workspace-created",
+        "workspace-bound",
+        "workspace-used",
+        "workspace-destroyed",
+        "session-imported",
+        "session-instruction-blobs-stored",
+        "session-instruction-entry-set",
+        "session-instruction-entry-removed",
+        "session-codemode-execution-admitted",
+        "session-codemode-execution-started",
+        "session-codemode-execution-resumed",
+        "session-codemode-execution-settled",
+        "session-codemode-execution-discarded",
+        "session-codemode-call-scheduled",
+        "session-codemode-call-progressed",
+        "session-codemode-call-settled",
+        "session-codemode-command-defined",
+        "session-codemode-command-removed",
+        "session-codemode-event-defined",
+        "session-codemode-event-toggled",
+        "session-codemode-event-removed",
+        "session-codemode-event-planned",
+        "session-codemode-event-fired",
+        "session-codemode-event-skipped",
+        "session-background-recorded",
+        "session-background-terminal",
+        "session-background-completed",
+        "credential-created",
+        "credential-activated",
+        "credential-relabeled",
+        "credential-rotated",
+        "credential-removed",
+        "kv-stored",
+        "kv-removed",
       ].toSorted(),
     )
     for (const definition of [
@@ -214,28 +213,28 @@ describe("public event manifest", () => {
       SessionEvent.UsageRecorded,
     ])
     expect(SessionEvent.UsageRecorded.durability).toBe("durable")
-    expect(EventManifest.Durable.get("session-usage-recorded.1")).toBe(SessionEvent.UsageRecorded)
+    expect(EventManifest.Durable.get("session-usage-recorded")).toBe(SessionEvent.UsageRecorded)
     expect(SessionEvent.Definitions).not.toContain(SessionEvent.UsageRecorded)
     expect(EventManifest.Definitions).not.toContain(SessionEvent.UsageRecorded)
     expect(EventManifest.ServerDefinitions).not.toContain(SessionEvent.UsageRecorded)
-    expect(EventManifest.Latest.has("session-usage-recorded")).toBe(false)
+    expect(EventManifest.ByType.has("session-usage-recorded")).toBe(false)
     expect(SessionEvent.UsageUpdated.durability).toBe("ephemeral")
     expect(SessionEvent.Compaction.Delta.durability).toBe("ephemeral")
     expect(SessionEvent.Tool.Progress.durability).toBe("ephemeral")
     expect(SessionEvent.CodeMode.Progress.durability).toBe("ephemeral")
     expect(EventManifest.Server.get("session-codemode-progress")).toBe(SessionEvent.CodeMode.Progress)
     expect(EventManifest.Server.get("session-tool-progress")).toBe(SessionEvent.Tool.Progress)
-    expect(EventManifest.Durable.has("session-compaction-delta.1")).toBe(false)
+    expect(EventManifest.Durable.has("session-compaction-delta")).toBe(false)
     expect(EventManifest.ServerDefinitions).toContain(SessionEvent.UsageUpdated)
     expect(EventManifest.Definitions.every((definition) => definition.durability !== undefined)).toBe(true)
   })
 
-  test("uses the current Session skill event as durable version 1", () => {
-    expect(EventManifest.Durable.get("session-skill-activated.1")).toBe(SessionEvent.Skill.Activated)
-    expect(EventManifest.Latest.get("session-skill-activated")).toBe(SessionEvent.Skill.Activated)
+  test("uses the current Session skill event", () => {
+    expect(EventManifest.Durable.get("session-skill-activated")).toBe(SessionEvent.Skill.Activated)
+    expect(EventManifest.ByType.get("session-skill-activated")).toBe(SessionEvent.Skill.Activated)
   })
 
-  test("keeps simplified session block and tool payloads on durable version 1", () => {
+  test("keeps simplified session block and tool payloads", () => {
     const sessionID = SessionID.make("ses_test")
     const assistantMessageID = SessionMessage.ID.make("msg_test")
     const block = SessionEvent.Block.Recorded.data.make({
@@ -260,8 +259,6 @@ describe("public event manifest", () => {
     expect(block).not.toHaveProperty("providerMetadata")
     expect(tool).not.toHaveProperty("tool")
     expect(tool).not.toHaveProperty("provider")
-    expect(SessionEvent.Block.Recorded.durable?.version).toBe(1)
-    expect(SessionEvent.Tool.Requested.durable?.version).toBe(1)
   })
 
   test("streams blocks and tool input live only", () => {
@@ -280,6 +277,6 @@ describe("public event manifest", () => {
     const sessionID = SessionID.make("ses_test")
 
     expect(SessionEvent.Deleted.data.make({ sessionID })).toEqual({ sessionID })
-    expect(SessionEvent.Deleted.durable?.version).toBe(2)
+    expect(SessionEvent.Deleted.durable).toEqual({ aggregate: "sessionID" })
   })
 })

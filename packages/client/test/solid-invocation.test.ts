@@ -33,7 +33,7 @@ test("projects an invocation and its Code Mode run", async () => {
       id: "evt_invocation",
       created: 1,
       type: "session-invocation-started",
-      durable: { aggregateID: "ses_invocation", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_invocation", seq: 1 },
       data: {
         sessionID: "ses_invocation",
         executionID: "exe_invocation",
@@ -61,7 +61,7 @@ test("projects an invocation and its Code Mode run", async () => {
       id: "evt_completed",
       created: 3,
       type: "session-codemode-completed",
-      durable: { aggregateID: "ses_invocation", seq: 2, version: 1 },
+      durable: { aggregateID: "ses_invocation", seq: 2 },
       data: { ...base, executionID: "exe_invocation", events: [{ type: "trace", kind: "return", value: "done" }] },
     })
     expect(setup.data.session.message.get("ses_invocation", "msg_invocation")).toMatchObject({
@@ -92,7 +92,7 @@ test("refreshes a session's commands after a revert", async () => {
       id: "evt_revert",
       created: 1,
       type: "session-revert-committed",
-      durable: { aggregateID: "ses_revert", seq: 1, version: 1 },
+      durable: { aggregateID: "ses_revert", seq: 1 },
       data: { sessionID: "ses_revert", to: "msg_revert" },
     })
     await wait(() => requests.length === 2)

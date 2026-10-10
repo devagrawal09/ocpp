@@ -10,30 +10,39 @@ describe("public event schemas", () => {
     expect(definitions).toEqual([])
   })
 
-  test("latest selection is independent of declaration order", () => {
-    const historical = Event.durable({
-      type: "test.versioned",
-      durable: { aggregate: "id", version: 1 },
+  test("one type names one definition", () => {
+    const definition = Event.durable({
+      type: "test.typed",
+      durable: { aggregate: "id" },
       schema: { id: Schema.String },
     })
-    const current = Event.durable({
-      type: "test.versioned",
-      durable: { aggregate: "id", version: 2 },
+    const reshaped = Event.durable({
+      type: "test.typed",
+      durable: { aggregate: "id" },
       schema: { id: Schema.String, value: Schema.String },
     })
 
-    expect(Event.latest([historical, current]).get(current.type)).toBe(current)
-    expect(Event.latest([current, historical]).get(current.type)).toBe(current)
+    expect(Event.byType([definition, definition]).get(definition.type)).toBe(definition)
+    expect(() => Event.byType([definition, reshaped])).toThrow("Duplicate event definition for test.typed")
   })
 
-  test("durable definitions are indexed by type and version", () => {
+  test("durable definitions are indexed by type, and their envelope carries no version", () => {
     const definition = Event.durable({
       type: "test.durable",
-      durable: { aggregate: "id", version: 1 },
+      durable: { aggregate: "id" },
       schema: { id: Schema.String },
     })
 
-    expect(Event.durableMap([definition]).get("test.durable.1")).toBe(definition)
+    expect(Event.durableMap([definition]).get("test.durable")).toBe(definition)
+    expect(
+      Schema.encodeSync(definition)({
+        id: Event.ID.make("evt_test"),
+        created: 1,
+        type: "test.durable",
+        durable: { aggregateID: "id_test", seq: Event.Seq.make(0) },
+        data: { id: "id_test" },
+      }).durable,
+    ).toEqual({ aggregateID: "id_test", seq: 0 })
   })
 
   test("synced marker encodes the captured watermark", () => {

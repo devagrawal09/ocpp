@@ -3,7 +3,7 @@ export * as KeyValueFact from "./key-value-fact.js"
 import { Schema } from "effect"
 import { Event } from "./event.js"
 
-const byKey = { aggregate: "key", version: 1 } as const
+const byKey = { aggregate: "key" } as const
 
 /** A value stored under a key: a plugin's own storage, the web search provider, the well-known origins. */
 export const Stored = Event.durable({

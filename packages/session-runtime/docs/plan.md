@@ -317,6 +317,25 @@ The owner's goal: Specter's repository holds only library code, consumed through
     - `recordSessionFacts` is a pass-through for the facts core still decides. S4 replaces it with Commands.
     - A fork's child is still registered with a `register:` commit that has no index entry; S4's fork Command should record `session-created` itself.
     - The hosted services' documentation still names dotted events: `packages/web`'s `plugins.mdx` and `server.mdx` in each locale (`server.connected`, `command.executed`, `file.edited` and others) and `packages/www`'s Effect plugin guide (`config.updated`). The hosted OpenAPI copies name no events, and the GitHub action reads only V1 events.
+- **S3b done: OC++'s other lifecycles follow the catalog's rule, and events carry no version.**
+  - **One started and one settled fact, where a lifecycle had several endings or a terminal that repeated its start:**
+    - Shell: `session-shell-settled` (`exited`, `timeout` or `killed`, with the exit code and output) replaces `session-shell-ended`, which repeated the whole shell info the start had recorded.
+    - Code Mode: `session-codemode-settled` (`completed`, or `error` or `cancelled` with the error, each with the trace) replaces completed and failed. Its outcomes are the tool call's `executionStatus` and the invocation message's status, so projections copy them.
+    - Compaction: `session-compaction-settled` (`completed` with the summary and the recent context it keeps, or `failed` with the error) replaces ended and failed. A compaction that cannot start still fails without a start, so the failure keeps its reason and inbox input. Only a completed one moves the instruction epoch.
+    - Background job markers: `session-background-recorded` was recorded when the job went to the background and again when it ended, so one name was both a start and an outcome. `session-background-started` (the job and its recovery) and `session-background-settled` (`completed`, `error` or `cancelled`, with the output or error) replace it. A job that ends before its start is recorded records both in one commit, so a marker exists exactly when it did.
+  - **Left as they are, and why:**
+    - Invocation: `session-invocation-started` has no end of its own. It creates the invocation message, and its execution's `session-codemode-settled` settles it; its definition says so.
+    - `session-background-terminal` and `-completed`: later changes to a marker whose job has settled (its outcome reached the Session; its notification was delivered and the marker removed), not alternative endings.
+    - Code Mode executions (`-admitted`, `-started`, `-resumed`, `-settled`, `-discarded`): states of the execution row that recovery and the notebook read. `settled` is the one terminal of a run. `discarded` withdraws an admission that never ran, when no slot was free: its row and reservations go as if never admitted, with no notification. Folding it into `settled` would change that fact's shape, and so its name, for nothing a consumer reads.
+    - Code Mode calls (`-scheduled`, `-progressed`, `-settled`): already one start and one settled fact; durable progress is a state a resumed run reads.
+    - Code Mode command and event definitions (`-defined`, `-removed`, `-toggled`, `-planned`, `-fired`, `-skipped`): independent changes to a definition. A firing has no start: `fired` and `skipped` each record one, and the run it starts is an invocation.
+    - Revert (`-staged`, `-cleared`, `-committed`): distinct operations, not one lifecycle. A stage replaces an earlier one, a clear drops it, a commit cuts history. S4 makes them Commands.
+  - **No event versions.** Every fact was version 1 except `session-deleted`, `session-forked` and `session-instructions-updated` at 2, and nothing decoded by version. With the rule that a changed shape gets a new name, a version only restates the type. A durable definition takes `durable: { aggregate }`, the envelope is `{ aggregateID, seq }`, and the Bus keys projectors by type. `Event.Version` and `versionedType` are gone, and `Event.byType` (was `latest`) refuses a second definition under one type.
+  - **Also gone:** the ephemeral `session-compacted`, which nothing published.
+  - **What the tests now expect.** The runtime's recorded-fact Command has one scenario per fact, so its scenarios follow the manifest: two fewer for Code Mode and compaction, one more for background markers.
+  - **Left for later.**
+    - The hosted site's OpenAPI copies (`packages/www/openapi.json`, `packages/www/public/openapi.json`) still describe the shell endpoint with `shell.started` and `shell.ended`.
+    - S4: the facts core still decides (shell, Code Mode, compaction, background markers) go through `recordSessionFacts`; their Commands can take the same settled shapes. A compaction's failure without a start, and a background marker's start and settlement in one commit, are the cases a Command must keep.
 
 ## Specter work this will force (own it as Specter features, not app workarounds)
 

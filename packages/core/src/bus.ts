@@ -22,7 +22,7 @@ import {
   makeSessionEventStore,
   type PersistedEvent,
   toSpecterEventType,
-} from "@specter/agent-runtime"
+} from "@ocpp/session-runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
 import { SpecterSnapshots } from "./specter/snapshots.js"
 import { SpecterTranslate } from "./specter/translate.js"

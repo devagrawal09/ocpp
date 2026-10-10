@@ -1,4 +1,4 @@
-preload = ["@opentui/solid/preload", "../core/src/specter/preload.ts"]
+preload = ["@opentui/solid/preload", "../session-runtime/src/preload.ts"]
 
 [test]
-preload = ["@opentui/solid/preload", "../core/src/specter/preload.ts"]
+preload = ["@opentui/solid/preload", "../session-runtime/src/preload.ts"]

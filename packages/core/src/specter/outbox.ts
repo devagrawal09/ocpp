@@ -8,7 +8,7 @@ import {
   type ReactionOutboxJob,
   type ReactionOutboxStatus,
   type ReactionOutboxStore,
-} from "@specter/agent-runtime"
+} from "@ocpp/session-runtime"
 import type { Database } from "../database/database.js"
 import { SpecterOutboxJobTable } from "./sql.js"
 

@@ -4,10 +4,11 @@
   "compilerOptions": {
     "incremental": true,
     "noUncheckedIndexedAccess": false,
-    // The linked Specter runtime declares its types against its own copy of effect. Map effect to
-    // OC++'s declarations so both sides name the same types. Bun ignores .d.ts targets at runtime; the
-    // runtime side is unified by src/specter/single-effect.ts. The bare `effect` key is spelled
-    // `effect*` because drizzle-kit applies exact keys at runtime but skips this wildcard form.
+    // @ocpp/session-runtime links Specter's packages, whose declarations name the Specter checkout's copy
+    // of effect. Map effect to OC++'s declarations so both sides name the same types. Bun ignores .d.ts
+    // targets at runtime; the runtime side is unified by session-runtime's src/single-effect.ts. Both go
+    // away once Specter is installed from a registry or a packed tarball. The bare `effect` key is
+    // spelled `effect*` because drizzle-kit applies exact keys at runtime but skips this wildcard form.
     "paths": {
       "effect*": ["./node_modules/effect/dist/index.d.ts"],
       "effect/*": ["./node_modules/effect/dist/*.d.ts", "./node_modules/effect/dist/*/index.d.ts"]

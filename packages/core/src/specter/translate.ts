@@ -3,7 +3,7 @@ export * as SpecterTranslate from "./translate.js"
 import { Event } from "@ocpp/schema/event"
 import { DurableEventManifest } from "@ocpp/schema/durable-event-manifest"
 import { SessionEvent } from "@ocpp/schema/session-event"
-import { toOcppEventType, type PersistedEvent } from "@specter/agent-runtime"
+import { toOcppEventType, type PersistedEvent } from "@ocpp/session-runtime"
 
 /** One OC++ wire event a Specter fact projects as. */
 export interface WireEvent {

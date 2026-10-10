@@ -15,7 +15,7 @@ import {
   type PrepareOutcome,
   type RecordFailure,
   type StepPlan,
-} from "@specter/agent-runtime"
+} from "@ocpp/session-runtime"
 import { Bus } from "../bus.js"
 import { ExternalAgentHarness } from "../external-agent/harness.js"
 import { Database } from "../database/database.js"

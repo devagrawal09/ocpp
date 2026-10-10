@@ -2,7 +2,7 @@ export * as SpecterSnapshots from "./snapshots.js"
 
 import { lt } from "drizzle-orm"
 import { Duration, Effect, Schedule } from "effect"
-import { makeSnapshotSliceStores, type SliceSnapshot } from "@specter/agent-runtime"
+import { makeSnapshotSliceStores, type SliceSnapshot } from "@ocpp/session-runtime"
 import type { Database } from "../database/database.js"
 import { SpecterSliceSnapshotTable } from "./sql.js"
 

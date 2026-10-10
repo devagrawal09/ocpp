@@ -3,7 +3,14 @@
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": false,
+    // Core's declarations import @ocpp/session-runtime, whose sources reach the Specter packages it links;
+    // they bring the Specter checkout's copy of effect: types resolve to OC++'s one copy, as core's own
+    // tsconfig maps them.
+    "paths": {
+      "effect*": ["./node_modules/effect/dist/index.d.ts"],
+      "effect/*": ["./node_modules/effect/dist/*.d.ts", "./node_modules/effect/dist/*/index.d.ts"]
+    }
   },
   "references": [{ "path": "../core" }]
 }

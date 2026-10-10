@@ -1,7 +1,7 @@
 export * as ExternalAgentHarness from "./harness.js"
 
 import { Context, type Effect } from "effect"
-import type { DriveInbox } from "@specter/agent-runtime"
+import type { DriveInbox } from "@ocpp/session-runtime"
 import type { AgentNotFoundError, MessageDecodeError, StepFailedError } from "../session/error.js"
 import type { SessionInbox } from "../session/inbox.js"
 import type { DrainResult } from "../session/runner/index.js"

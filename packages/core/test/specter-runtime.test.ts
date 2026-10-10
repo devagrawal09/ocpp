@@ -1,22 +1,22 @@
 import { describe, expect, test } from "bun:test"
-import { Effect, Layer } from "effect"
+import fs from "fs"
+import path from "path"
+import { Effect } from "effect"
 import { ExternalSession } from "@ocpp/schema/external-session"
 import { SessionEvent } from "@ocpp/schema/session-event"
-import { Model, sessionEvent, sessionEventDefinitions, toOcppEventType } from "@specter/agent-runtime"
+import { sessionEvent, sessionEventDefinitions, toOcppEventType } from "@ocpp/session-runtime"
 import { SpecterTranslate } from "../src/specter/translate"
 
-// The Specter runtime is linked from a sibling checkout with its own node_modules. These checks
-// fail when it loads a second Effect or diverges from OC++'s event catalog.
+// The session runtime links Specter's packages from a Specter checkout with its own node_modules.
+// These checks fail when the process loads a second Effect or the runtime diverges from OC++'s
+// event catalog.
 describe("embedded Specter runtime", () => {
   test("shares OC++'s Effect runtime", async () => {
-    const model: Model["Service"] = {
-      ref: { providerID: "test", id: "scripted" } as never,
-      nextOutcome: () => Effect.die("unused"),
-    }
-    const read = Effect.gen(function* () {
-      return yield* Model
-    })
-    expect(await Effect.runPromise(read.pipe(Effect.provide(Layer.succeed(Model, model))))).toBe(model)
+    // The effect module Specter's core resolves is OC++'s own, through the session runtime's preload.
+    const runtime = path.dirname(Bun.resolveSync("@ocpp/session-runtime", import.meta.dir))
+    const specter = path.dirname(fs.realpathSync(Bun.resolveSync("@specter-ts/core", runtime)))
+    const loaded = await import(Bun.resolveSync("effect", specter))
+    expect(loaded.Effect).toBe(Effect)
   })
 
   test("defines OC++'s durable Session facts under kebab-case names", () => {

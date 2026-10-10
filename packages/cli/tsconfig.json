@@ -6,8 +6,8 @@
     "jsxImportSource": "@opentui/solid",
     "lib": ["ESNext", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
     "noUncheckedIndexedAccess": false,
-    // Core's sources link the Specter runtime, which brings its own copy of effect: types resolve to
-    // OC++'s one copy, as core's own tsconfig maps them.
+    // Core's sources reach the Specter packages @ocpp/session-runtime links, which bring the Specter
+    // checkout's copy of effect: types resolve to OC++'s one copy, as core's own tsconfig maps them.
     "paths": {
       "effect*": ["./node_modules/effect/dist/index.d.ts"],
       "effect/*": ["./node_modules/effect/dist/*.d.ts", "./node_modules/effect/dist/*/index.d.ts"]

@@ -18,7 +18,7 @@ import {
   type PersistedEvent,
   type ReactionOutboxStore,
   type RunStepOutboxStore,
-} from "@specter/agent-runtime"
+} from "@ocpp/session-runtime"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { LocationServiceMap } from "../location-service-map.js"

@@ -891,7 +891,7 @@ describe("Session.create", () => {
     }),
   )
 
-  liveIt.live("runs a shell command and projects the started/ended shell message", () =>
+  liveIt.live("runs a shell command and projects the started/settled shell message", () =>
     withTmp((directory) =>
       Effect.gen(function* () {
         const session = yield* Session.Service

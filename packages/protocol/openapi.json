@@ -2195,7 +2195,7 @@
             }
           }
         },
-        "description": "Execute one shell command in the session's working directory. Emits a shell.started event before execution and a shell.ended event with the merged output after.",
+        "description": "Execute one shell command in the session's working directory. Records session-shell-started before execution and session-shell-settled, with how it ended and the merged output, after.",
         "summary": "Run shell command",
         "requestBody": {
           "content": {

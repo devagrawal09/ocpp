@@ -462,7 +462,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
             identifier: "v2.session.shell",
             summary: "Run shell command",
             description:
-              "Execute one shell command in the session's working directory. Emits a shell.started event before execution and a shell.ended event with the merged output after.",
+              "Execute one shell command in the session's working directory. Records session-shell-started before execution and session-shell-settled, with how it ended and the merged output, after.",
           }),
         ),
     )

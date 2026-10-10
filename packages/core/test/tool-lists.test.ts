@@ -17,7 +17,6 @@ import { Project } from "@ocpp/core/project"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEnvironment } from "@ocpp/core/session/environment"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { SessionProjector } from "@ocpp/core/session/projector"
@@ -29,19 +28,9 @@ import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdirScoped } from "./fixture/tmpdir"
-import * as InboxPromotion from "./fixture/inbox-promotion"
+import { TestStepHost } from "./fixture/step-host"
 
-const execution = Layer.succeed(
-  SessionExecution.Service,
-  SessionExecution.Service.of({
-    active: Effect.succeed(new Set()),
-    isActive: () => Effect.succeed(false),
-    resume: () => Effect.void,
-    wake: () => Effect.void,
-    interrupt: () => Effect.succeed(false),
-    awaitIdle: () => Effect.void,
-  }),
-)
+const steps = TestStepHost.make()
 const transport = Layer.succeed(
   SessionModelTransport.Service,
   SessionModelTransport.Service.of({
@@ -66,7 +55,7 @@ const it = testEffect(
     ]),
     [
       [Project.node, globalProjectNode],
-      [SessionExecution.node, execution],
+      steps.replacement,
       [SessionModelTransport.node, transport],
       [Global.node, tempGlobalLayer],
     ],
@@ -250,12 +239,10 @@ describe("ToolLists", () => {
     () =>
       Effect.gen(function* () {
         const context = yield* setup("return { build: [tools.read, tools.grep] }")
-        const { db } = yield* Database.Service
-        const bus = yield* Bus.Service
         const fork = (sessionID: Session.ID) =>
           Effect.gen(function* () {
             yield* context.sessions.prompt({ sessionID, text: "Fork here", resume: false })
-            yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+            yield* context.sessions.resume(sessionID)
             return yield* context.sessions.fork({ sessionID, boundary: { type: "through" } })
           })
 

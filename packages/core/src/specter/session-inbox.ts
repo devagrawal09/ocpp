@@ -2,7 +2,6 @@ export * as SpecterSessionInbox from "./session-inbox.js"
 
 import { Effect, Layer, Schema } from "effect"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
-import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { SessionInbox } from "../session/inbox.js"
 import { SessionMessage } from "../session/message.js"
@@ -12,32 +11,54 @@ import { rejection, SpecterSessionRuntime } from "./session-runtime.js"
 const encodeUser = Schema.encodeSync(SessionInbox.UserPayload)
 const encodeSynthetic = Schema.encodeSync(SessionInbox.SyntheticPayload)
 const encodeMove = Schema.encodeSync(SessionInbox.MovePayload)
+const decodeInfo = Schema.decodeUnknownSync(SessionInbox.Info)
+
+type Admission<Type extends SessionInbox.Item["type"]> = {
+  readonly id: SessionMessage.ID
+  readonly sessionID: SessionSchema.ID
+  readonly item: SessionInbox.Item & { readonly type: Type }
+  readonly coalesce?: { readonly key: string; readonly replaces: ReadonlyArray<SessionMessage.ID> }
+  readonly resume?: boolean
+}
 
 /**
- * `SessionInbox.Service` when the embedded Specter runtime runs Sessions. Admission and cancellation
- * are runtime Commands. Reads stay on OC++'s inbox projection, which the runtime's events build
- * through the Bus, so `list` and the idempotent `reconcile` are OC++'s own.
+ * The Session inbox: the embedded Specter runtime's. Admission, cancellation and delivery changes are
+ * runtime Commands, and the runtime decides each, retried admissions included. Reads are OC++'s inbox
+ * projection, which the runtime's facts build in the transaction that records them.
  */
 export const layer = Layer.effect(
   SessionInbox.Service,
   Effect.gen(function* () {
-    const local = yield* SessionInbox.make()
     const specter = yield* SpecterSessionRuntime.Service
     const db = (yield* Database.Service).db
 
-    const admit = Effect.fn("SpecterSessionInbox.admit")(function* <Type extends SessionInbox.Item["type"]>(request: {
+    const admitted = Effect.fn("SpecterSessionInbox.admitted")(function* <
+      Type extends SessionInbox.Item["type"],
+    >(request: {
       readonly id: SessionMessage.ID
       readonly sessionID: SessionSchema.ID
-      readonly item: SessionInbox.Item & { readonly type: Type }
-      readonly replaces?: ReadonlyArray<SessionMessage.ID>
-      readonly resume?: boolean
+      readonly type: Type
+      readonly delivery: SessionInbox.Delivery
     }) {
-      const existing = yield* local.reconcile({ ...request, type: request.item.type, delivery: request.item.delivery })
-      if (existing !== undefined) return existing
+      const existing =
+        (yield* SessionInbox.find(db, request.id)) ??
+        (yield* SessionInbox.delivered(db, request.sessionID, request.id, request.delivery))
+      if (existing === undefined) return undefined
+      if (existing.type === "compaction" || existing.sessionID !== request.sessionID || existing.type !== request.type)
+        return yield* new SessionInbox.LifecycleConflict({ id: request.id })
+      return existing as Extract<SessionInbox.Info, { readonly type: Type }>
+    })
+
+    // Records an item, or answers why the runtime refused it.
+    const enqueue = Effect.fn("SpecterSessionInbox.enqueue")(function* <Type extends SessionInbox.Item["type"]>(
+      request: Admission<Type>,
+    ) {
       const item: SessionInbox.Item = request.item
       yield* specter.register(request.sessionID)
-      const options = {
-        ...(request.replaces === undefined || request.replaces.length === 0 ? {} : { replaces: request.replaces }),
+      const base = {
+        sessionID: request.sessionID,
+        inboxID: request.id,
+        delivery: item.delivery,
         // The runtime wakes on admission unless told the input waits.
         ...(request.resume === false ? { resume: false } : {}),
       }
@@ -46,54 +67,59 @@ export const layer = Layer.effect(
           type: "enqueueInput",
           payload:
             item.type === "user"
-              ? {
-                  sessionID: request.sessionID,
-                  inboxID: request.id,
-                  type: "user",
-                  payload: encodeUser(item.payload),
-                  delivery: item.delivery,
-                  ...options,
-                }
+              ? { ...base, type: "user", payload: encodeUser(item.payload) }
               : item.type === "synthetic"
                 ? {
-                    sessionID: request.sessionID,
-                    inboxID: request.id,
+                    ...base,
                     type: "synthetic",
                     payload: encodeSynthetic(item.payload),
-                    delivery: item.delivery,
-                    ...options,
+                    ...(request.coalesce === undefined ? {} : { coalesce: request.coalesce }),
                   }
                 : item.type === "compaction"
-                  ? {
-                      sessionID: request.sessionID,
-                      inboxID: request.id,
-                      type: "compaction",
-                      payload: {},
-                      delivery: item.delivery,
-                      ...options,
-                    }
-                  : {
-                      sessionID: request.sessionID,
-                      inboxID: request.id,
-                      type: "move",
-                      payload: encodeMove(item.payload),
-                      delivery: item.delivery,
-                      ...options,
-                    },
+                  ? { ...base, type: "compaction", payload: {} }
+                  : { ...base, type: "move", payload: encodeMove(item.payload) },
         })
         .pipe(
-          Effect.map((execution) => execution.reactions),
-          // A rejected admission (already admitted, or reused across Sessions or types) is decided
-          // below from what OC++ projected for this ID.
-          Effect.catch((error) => (rejection(error) === undefined ? Effect.die(error) : Effect.succeed(Effect.void))),
+          Effect.map((execution) => ({ execution })),
+          Effect.catch((error) => {
+            const reason = rejection(error)
+            return reason === undefined ? Effect.die(error) : Effect.succeed({ reason })
+          }),
+          // The inbox projection refused the item: its ID names a message already.
+          Effect.catchDefect((defect) =>
+            defect instanceof SessionInbox.LifecycleConflict ? Effect.fail(defect) : Effect.die(defect),
+          ),
         )
-      // The runtime starts execution from its own Reaction; settle it before returning, so a caller
-      // that waits for the Session sees the execution this input started.
-      yield* recorded.pipe(Effect.orDie)
-      const admitted = yield* SessionInbox.find(db, request.id)
-      if (admitted?.sessionID !== request.sessionID || admitted.type !== request.item.type)
-        return yield* new SessionInbox.LifecycleConflict({ id: request.id })
-      return admitted as Extract<SessionInbox.Info, { readonly type: Type }>
+      if ("reason" in recorded) return recorded
+      // The runtime starts execution from its own Reaction; settle it before returning, so a caller that
+      // waits for the Session sees the execution this input started.
+      yield* recorded.execution.reactions.pipe(Effect.orDie)
+      // The item as the runtime admitted it: the runtime may deliver it before a projection read.
+      const enqueued = recorded.execution.events.find((event) => event.type === "session-inbox-enqueued")
+      if (!enqueued) return yield* Effect.die(new Error(`Admission of ${request.id} recorded no input`))
+      return {
+        admitted: decodeInfo({
+          id: request.id,
+          sessionID: request.sessionID,
+          timeCreated: Date.parse(enqueued.recordedAt),
+          ...(enqueued.payload as { readonly item: object }).item,
+        }) as Extract<SessionInbox.Info, { readonly type: Type }>,
+      }
+    })
+
+    const admit = Effect.fn("SpecterSessionInbox.admit")(function* <Type extends SessionInbox.Item["type"]>(
+      request: Admission<Type>,
+    ) {
+      const recorded = yield* enqueue(request)
+      if ("admitted" in recorded) return recorded.admitted
+      // A retried admission: the first one wins.
+      const first =
+        recorded.reason === "Inbox item already admitted"
+          ? yield* admitted({ ...request, type: request.item.type, delivery: request.item.delivery })
+          : undefined
+      if (first) return first
+      // Reused across Sessions or types, cancelled, or (coalescing) the replaced items changed.
+      return yield* new SessionInbox.LifecycleConflict({ id: request.id })
     })
 
     // Steering a queued item or queueing a steered one; a rejection means it is no longer pending that way.
@@ -134,11 +160,11 @@ export const layer = Layer.effect(
     })
 
     return SessionInbox.Service.of({
-      ...local,
-      // Same contract as OC++'s admit; its generic signature does not unify with this one.
+      list: (sessionID) => SessionInbox.list(db, sessionID),
+      // Same contract as the interface's; their generic signatures do not unify.
+      admitted: admitted as SessionInbox.Interface["admitted"],
       admit: admit as SessionInbox.Interface["admit"],
       cancel,
-      // As OC++'s inbox: a pending compaction absorbs a second request.
       admitCompaction: Effect.fn("SpecterSessionInbox.admitCompaction")(function* (input: {
         readonly id: SessionMessage.ID
         readonly sessionID: SessionSchema.ID
@@ -149,13 +175,21 @@ export const layer = Layer.effect(
           if (exact.type === "compaction" && exact.sessionID === input.sessionID) return exact
           return yield* new SessionInbox.LifecycleConflict({ id: input.id })
         }
-        const pending = (yield* local.list(input.sessionID)).find((item) => item.type === "compaction")
-        if (pending) return pending
-        return yield* admit({
+        const recorded = yield* enqueue({
           id: input.id,
           sessionID: input.sessionID,
           item: { type: "compaction", payload: {}, delivery: input.delivery },
         })
+        if ("admitted" in recorded) return recorded.admitted
+        if (recorded.reason !== "Compaction already pending")
+          return yield* new SessionInbox.LifecycleConflict({ id: input.id })
+        // The runtime refused it for the pending one, which absorbs this request.
+        const pending = (yield* SessionInbox.list(db, input.sessionID)).find(
+          (item): item is SessionInbox.Compaction => item.type === "compaction",
+        )
+        if (pending) return pending
+        // Delivered meanwhile: ask again.
+        return yield* new SessionInbox.LifecycleConflict({ id: input.id })
       }),
       steer: changeDelivery(SessionInbox.Delivery.make("steer")),
       queue: changeDelivery(SessionInbox.Delivery.make("queue")),
@@ -166,5 +200,5 @@ export const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: SessionInbox.Service,
   layer,
-  deps: [Database.node, Bus.node, SpecterSessionRuntime.node],
+  deps: [Database.node, SpecterSessionRuntime.node],
 })

@@ -7,11 +7,10 @@ import { SpecterSessionExecution } from "./session-execution.js"
 import { SpecterSessionInbox } from "./session-inbox.js"
 
 /**
- * The switch: these replacements run every Session on the embedded Specter runtime instead of OC++'s
- * own inbox, run coordinator and runner. The Session facade, HTTP handlers and projections are
- * unchanged; they see the runtime's events on the Bus.
+ * Every Session runs on the embedded Specter runtime: AppNodeBuilder binds the inbox and execution nodes to
+ * the runtime's. A composition that must not run OC++'s steps replaces `SpecterStepHost.node` instead.
  */
-export const replacements = [
+export const bindings = [
   [SessionInbox.node, SpecterSessionInbox.node],
   [SessionExecution.node, SpecterSessionExecution.node],
 ] as const satisfies LayerNode.Replacements

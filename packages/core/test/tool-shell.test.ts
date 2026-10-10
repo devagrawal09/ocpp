@@ -4,10 +4,9 @@ import os from "os"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect"
-import { Money } from "@ocpp/schema/money"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { filesystem } from "@ocpp/util/effect/app-node-platform"
 import { Database } from "@ocpp/core/database/database"
 import { CodeModeCatalog } from "@ocpp/core/codemode/catalog"
@@ -24,13 +23,10 @@ import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { Model } from "@ocpp/core/model"
 import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath } from "@ocpp/core/schema"
-import { Agent } from "@ocpp/core/agent"
 import { Job } from "@ocpp/core/job"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionExecution } from "@ocpp/core/session/execution"
-import { SessionMessage } from "@ocpp/core/session/message"
-import { SessionStore } from "@ocpp/core/session/store"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
@@ -44,6 +40,7 @@ import { definition } from "@ocpp/core/tool/runtime"
 import { tmpdir } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
+import { TestStepHost } from "./fixture/step-host"
 import { Expected } from "./lib/session-message"
 import {
   codeModeTools,
@@ -60,54 +57,8 @@ import {
 const sessionID = Session.ID.make("ses_shell_tool_test")
 const sessionModel = Model.Ref.make({ id: Model.ID.make("test"), providerID: Provider.ID.make("test") })
 
-const executionNode = makeGlobalNode({
-  service: SessionExecution.Service,
-  layer: Layer.effect(
-    SessionExecution.Service,
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const store = yield* SessionStore.Service
-      const complete = Effect.fn("ShellTest.complete")(function* (id: Session.ID) {
-        const session = yield* store.get(id)
-        if (!session) return
-        const assistantMessageID = SessionMessage.ID.create()
-        yield* bus.publish(SessionEvent.Step.Started, {
-          sessionID: id,
-          assistantMessageID,
-          agent: session.agent ?? Agent.ID.make("code"),
-          model: sessionModel,
-        })
-        yield* bus.publish(SessionEvent.Text.Started, {
-          sessionID: id,
-          assistantMessageID,
-          ordinal: 0,
-        })
-        yield* bus.publish(SessionEvent.Text.Ended, {
-          sessionID: id,
-          assistantMessageID,
-          ordinal: 0,
-          text: "ok",
-        })
-        yield* bus.publish(SessionEvent.Step.Ended, {
-          sessionID: id,
-          assistantMessageID,
-          finish: "stop",
-          cost: Money.USD.zero,
-          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-        })
-      })
-      return SessionExecution.Service.of({
-        active: Effect.succeed(new Set()),
-        isActive: () => Effect.succeed(false),
-        resume: complete,
-        wake: () => Effect.void,
-        interrupt: () => Effect.succeed(false),
-        awaitIdle: (id) => complete(id).pipe(Effect.exit, Effect.asVoid),
-      })
-    }),
-  ),
-  deps: [Bus.node, SessionStore.node],
-})
+// The runtime runs every Session; a step produces nothing unless a test scripts one.
+const steps = TestStepHost.make()
 
 const shellPluginSupervisor = makeLocationNode({
   service: PluginSupervisor.Service,
@@ -140,10 +91,7 @@ const nodes = LayerNode.group([
   FSUtil.node,
   Global.node,
 ])
-const replacements = [
-  [SessionExecution.node, executionNode],
-  [Global.node, tempGlobalLayer],
-] satisfies LayerNode.Replacements
+const replacements = [steps.replacement, [Global.node, tempGlobalLayer]] satisfies LayerNode.Replacements
 const productionIt = testEffect(AppNodeBuilder.build(nodes, replacements))
 const it = testEffect(AppNodeBuilder.build(nodes, [...replacements, [PluginSupervisor.node, shellPluginSupervisor]]))
 

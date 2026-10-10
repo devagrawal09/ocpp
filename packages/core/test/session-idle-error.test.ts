@@ -7,7 +7,6 @@ import { Project } from "@ocpp/core/project"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionTable } from "@ocpp/core/session/sql"
 import { SessionStore } from "@ocpp/core/session/store"
@@ -16,15 +15,13 @@ import { Effect } from "effect"
 import { eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
+import { TestStepHost } from "./fixture/step-host"
 
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [
-      [Bus.node, Bus.configured()],
-      [Project.node, globalProjectNode],
-      [SessionExecution.node, SessionExecution.noopLayer],
-    ],
+    [[Bus.node, Bus.configured()], [Project.node, globalProjectNode], steps.replacement],
   ),
 )
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })

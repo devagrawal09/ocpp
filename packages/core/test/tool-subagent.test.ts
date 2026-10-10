@@ -10,7 +10,7 @@ import { LayerNodePlatform } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Global } from "@ocpp/util/global"
-import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Database } from "@ocpp/core/database/database"
 import { Bus } from "@ocpp/core/bus"
 import { Catalog } from "@ocpp/core/catalog"
@@ -53,7 +53,7 @@ import {
   toolIdentity,
   waitForCodeMode,
 } from "./lib/tool"
-import * as InboxPromotion from "./fixture/inbox-promotion"
+import { TestStepHost } from "./fixture/step-host"
 
 const childText = "child final response"
 const completedOutput = (sessionID: Session.ID, message = childText) =>
@@ -66,61 +66,30 @@ const childModel = Model.Ref.make({ id: Model.ID.make("child"), providerID: Prov
 const parentModel = Model.Ref.make({ id: Model.ID.make("parent"), providerID: Provider.ID.make("test") })
 const tokens = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
 
+/** The prompts a Session's history holds, oldest first: the runtime delivers each before the step answering it. */
+const userTexts = (sessionID: Session.ID) =>
+  Session.Service.use((sessions) => sessions.messages({ sessionID, order: "asc" })).pipe(
+    Effect.map((messages) => messages.flatMap((message) => (message.type === "user" ? [message.text] : []))),
+  )
+
 const outputSessionID = (value: unknown) =>
   Schema.decodeUnknownSync(Schema.Struct({ sessionID: Session.ID }))(value).sessionID
 
-const executionNode = makeGlobalNode({
-  service: SessionExecution.Service,
-  layer: Layer.effect(
-    SessionExecution.Service,
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const store = yield* SessionStore.Service
-      const completed = new Set<Session.ID>()
-      const complete = Effect.fn("SubagentTest.complete")(function* (sessionID: Session.ID) {
-        if (completed.has(sessionID)) return
-        if ((yield* store.get(sessionID))?.title?.includes("fail")) {
-          yield* new SessionRunnerModel.ModelNotSelectedError({ sessionID })
-          return
-        }
-        completed.add(sessionID)
-        const assistantMessageID = SessionMessage.ID.create()
-        yield* bus.publish(SessionEvent.Step.Started, {
-          sessionID,
-          assistantMessageID,
-          agent: Agent.ID.make("reviewer"),
-          model: childModel,
-        })
-        yield* bus.publish(SessionEvent.Text.Started, {
-          sessionID,
-          assistantMessageID,
-          ordinal: 0,
-        })
-        yield* bus.publish(SessionEvent.Text.Ended, {
-          sessionID,
-          assistantMessageID,
-          ordinal: 0,
-          text: childText,
-        })
-        yield* bus.publish(SessionEvent.Step.Ended, {
-          sessionID,
-          assistantMessageID,
-          finish: "stop",
-          cost: Money.USD.zero,
-          tokens,
-        })
-      })
-      return SessionExecution.Service.of({
-        active: Effect.succeed(new Set()),
-        isActive: () => Effect.succeed(false),
-        resume: complete,
-        wake: () => Effect.void,
-        interrupt: () => Effect.succeed(false),
-        awaitIdle: (sessionID) => complete(sessionID).pipe(Effect.exit, Effect.asVoid),
-      })
-    }),
-  ),
-  deps: [Bus.node, SessionStore.node],
+// A child answers in one step with its final text, or fails to resolve a model when its title asks it to.
+const steps = TestStepHost.make({
+  step: (sessionID) =>
+    SessionStore.Service.use((store) => store.get(sessionID)).pipe(
+      Effect.map((session): TestStepHost.Step | undefined => {
+        if (!session?.parentID) return undefined
+        if (session.title?.includes("fail"))
+          return {
+            finish: "error",
+            retryable: false,
+            error: { type: "provider.no-route", message: `No model is available for session ${sessionID}` },
+          }
+        return { finish: "stop", text: childText, agent: "reviewer", model: childModel }
+      }),
+    ),
 })
 
 const subagentPluginSupervisor = makeLocationNode({
@@ -154,7 +123,7 @@ const nodes = LayerNode.group([
   LocationServiceMap.node,
 ])
 const replacements = [
-  [SessionExecution.node, executionNode],
+  steps.replacement,
   [Global.node, tempGlobalLayer],
   [ExternalAgentDrivers.node, noVendorDrivers],
 ] satisfies LayerNode.Replacements
@@ -578,9 +547,7 @@ describe("SubagentTool", () => {
             agent: "reviewer",
             model: childModel,
           })
-          expect((yield* sessions.inbox(child.id)).find((message) => message.type === "user")?.payload.text).toBe(
-            "You are a subagent spawned by another session.\nreview this",
-          )
+          expect((yield* userTexts(child.id))[0]).toBe("You are a subagent spawned by another session.\nreview this")
 
           const fallback = yield* executeTool(registry, {
             sessionID: parent.id,
@@ -651,11 +618,10 @@ describe("SubagentTool", () => {
           )
           expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
           expect((yield* sessions.get(childID)).title).toBe("review")
-          expect(
-            (yield* sessions.inbox(childID)).flatMap((message) =>
-              message.type === "user" ? [message.payload.text] : [],
-            ),
-          ).toEqual(["You are a subagent spawned by another session.\nreview this", "continue this"])
+          expect(yield* userTexts(childID)).toEqual([
+            "You are a subagent spawned by another session.\nreview this",
+            "continue this",
+          ])
           expect(second.content).toEqual([{ type: "text", text: completedOutput(childID) }])
         }),
       ),
@@ -781,11 +747,10 @@ describe("SubagentTool", () => {
           })
           expect(before.model).toMatchObject(childModel)
           expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
-          expect(
-            (yield* sessions.inbox(childID)).flatMap((message) =>
-              message.type === "user" ? [message.payload.text] : [],
-            ),
-          ).toEqual(["You are a subagent spawned by another session.\nreview this", "continue this"])
+          expect(yield* userTexts(childID)).toEqual([
+            "You are a subagent spawned by another session.\nreview this",
+            "continue this",
+          ])
         }),
       ),
     ),
@@ -863,8 +828,6 @@ describe("SubagentTool", () => {
             },
           })
           const childID = outputSessionID(first.metadata)
-          // The test runner answers without delivering the prompt, so deliver it here.
-          yield* InboxPromotion.promote((yield* Database.Service).db, bus, childID, "input")
           // A later step that ran a Code Mode execution whose metadata carries private data.
           const assistantMessageID = SessionMessage.ID.create()
           const base = { sessionID: childID, assistantMessageID, id: "call-child-execute" }
@@ -908,10 +871,11 @@ describe("SubagentTool", () => {
           const plain = yield* read("call-transcript-plain", { sessionID: childID })
           expect(plain.output).toMatchObject({ sessionID: childID, title: "review", agent: "reviewer" })
           expect(plain.output.cursor).toBeUndefined()
-          // Without include, the tool-only step has nothing to show.
+          // Without include, the tool-only step has nothing to show. The runtime delivered the prompt before the
+          // step that answered it.
           expect(plain.output.messages.map((message) => [message.role, message.text])).toEqual([
-            ["assistant", childText],
             ["user", "You are a subagent spawned by another session.\nreview this"],
+            ["assistant", childText],
           ])
           expect(JSON.stringify(plain.content)).toContain("BEGIN_UNTRUSTED_EXECUTION_DATA")
 
@@ -1075,10 +1039,7 @@ describe("SubagentTool", () => {
             content: [{ type: "text", text: completedOutput(childID) }],
             metadata: { sessionID: childID, status: "completed" },
           })
-          const prompts = () =>
-            sessions
-              .inbox(childID)
-              .pipe(Effect.map((items) => items.flatMap((item) => (item.type === "user" ? [item.payload.text] : []))))
+          const prompts = () => userTexts(childID)
           expect(yield* prompts()).toEqual([
             [
               "You are a subagent spawned by another session.",
@@ -1196,9 +1157,7 @@ describe("SubagentTool", () => {
           const childID = outputSessionID(notebook.review)
           expect(notebook.review).toEqual({ sessionID: childID, status: "completed", message: childText, output: null })
           expect((yield* sessions.get(childID)).parentID).toBe(parent.id)
-          expect(
-            (yield* sessions.inbox(childID)).flatMap((item) => (item.type === "user" ? [item.payload.text] : [])),
-          ).toEqual([
+          expect(yield* userTexts(childID)).toEqual([
             [
               "You are a subagent spawned by another session.",
               inputNotice({ dataset: [1, 2, 3], note: secret }, "a record with keys dataset, note"),
@@ -1327,9 +1286,9 @@ describe("SubagentTool", () => {
             reason: "no-submission",
           })
           const childID = Schema.decodeUnknownSync(Schema.Struct({ sessionID: Session.ID }))(silent.metadata).sessionID
-          // The stubbed runner never delivers, so both prompts remain admitted in the child's inbox.
-          const prompts = (yield* sessions.inbox(childID)).flatMap((item) =>
-            item.type === "user" ? [item.payload.text] : [],
+          // The runtime delivered both prompts, each before the step that answered it in text.
+          const prompts = (yield* sessions.messages({ sessionID: childID, order: "asc" })).flatMap((message) =>
+            message.type === "user" ? [message.text] : [],
           )
           expect(prompts).toHaveLength(2)
           expect(prompts[1]).toBe(
@@ -1413,10 +1372,7 @@ describe("SubagentTool", () => {
                 recovered: { sessionID, status: "starting" },
               },
             )
-          const prompts = (sessionID: Session.ID) =>
-            sessions
-              .inbox(sessionID)
-              .pipe(Effect.map((items) => items.flatMap((item) => (item.type === "user" ? [item.payload.text] : []))))
+          const prompts = userTexts
 
           // Created before the restart but never given its task: this call gives it the task as a new child.
           const empty = yield* sessions.create({
@@ -1438,7 +1394,7 @@ describe("SubagentTool", () => {
           const rejoined = yield* recover("call-subagent-rejoin", held.id)
           expect(rejoined.metadata).toMatchObject({ sessionID: held.id, status: "completed" })
           expect(yield* prompts(held.id)).toEqual([prompt])
-          expect(JSON.stringify(yield* sessions.inbox(held.id))).toContain(
+          expect(JSON.stringify(yield* sessions.messages({ sessionID: held.id }))).toContain(
             "The server restarted while you were working",
           )
 
@@ -1482,7 +1438,6 @@ describe("SubagentTool", () => {
             },
           })
           const childID = outputSessionID(first.metadata)
-          yield* InboxPromotion.promote((yield* Database.Service).db, bus, childID, "input")
           // Twelve newer steps with nothing to show.
           for (let step = 0; step < 12; step++) {
             const assistantMessageID = SessionMessage.ID.create()
@@ -1519,8 +1474,8 @@ describe("SubagentTool", () => {
           // limit counts returned entries: the empty steps are read past to find two.
           const counted = yield* read("call-transcript-counted", { sessionID: childID, limit: 2 })
           expect(shown(counted)).toEqual([
-            ["assistant", childText],
             ["user", "You are a subagent spawned by another session.\nreview this"],
+            ["assistant", childText],
           ])
 
           // At most ten records per entry asked for are scanned; the cursor resumes after the last one scanned.
@@ -1532,7 +1487,7 @@ describe("SubagentTool", () => {
             limit: 1,
             cursor: bounded.cursor,
           })
-          expect(shown(resumed)).toEqual([["user", "You are a subagent spawned by another session.\nreview this"]])
+          expect(shown(resumed)).toEqual([["assistant", childText]])
           expect(resumed.cursor).toBeDefined()
 
           // A grandchild's transcript is readable from here, but only a direct child can be continued.

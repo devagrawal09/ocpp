@@ -13,21 +13,19 @@ import { Project } from "@ocpp/core/project"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionStore } from "@ocpp/core/session/store"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
+import { TestStepHost } from "./fixture/step-host"
 
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [
-      [Project.node, globalProjectNode],
-      [SessionExecution.node, SessionExecution.noopLayer],
-    ],
+    [[Project.node, globalProjectNode], steps.replacement],
   ),
 )
 const unavailableLocations = Layer.effect(
@@ -39,11 +37,7 @@ const unavailableLocations = Layer.effect(
 const itWithUnavailableDestination = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [
-      [Project.node, globalProjectNode],
-      [SessionExecution.node, SessionExecution.noopLayer],
-      [LocationServiceMap.node, unavailableLocations],
-    ],
+    [[Project.node, globalProjectNode], steps.replacement, [LocationServiceMap.node, unavailableLocations]],
   ),
 )
 
@@ -79,6 +73,8 @@ describe("Session.move", () => {
           const created = yield* session.create({
             location: Location.Ref.make({ directory: AbsolutePath.make(source) }),
           })
+          // Steps in flight keep the moves pending until their boundaries.
+          const busy = yield* steps.busy(created.id)
 
           yield* session.move({ sessionID: created.id, directory: destination })
           expect((yield* session.get(created.id)).location.directory).toBe(AbsolutePath.make(source))
@@ -97,8 +93,18 @@ describe("Session.move", () => {
           const steered = yield* session.create({
             location: Location.Ref.make({ directory: AbsolutePath.make(path.join(tmp.path, "other")) }),
           })
+          const other = yield* steps.busy(steered.id)
           yield* session.move({ sessionID: steered.id, directory: destination, delivery: "queue" })
           expect(yield* session.inbox(steered.id)).toMatchObject([{ type: "move", delivery: "queue" }])
+
+          // At their boundaries the runtime delivers the moves that waited.
+          yield* busy.release
+          yield* other.release
+          yield* session.wait(created.id)
+          yield* session.wait(steered.id)
+          expect(yield* session.inbox(created.id)).toEqual([])
+          expect(yield* session.inbox(steered.id)).toEqual([])
+          expect((yield* session.get(steered.id)).location.directory).toBe(destination)
         }),
       ),
     ),
@@ -114,8 +120,8 @@ describe("Session.move", () => {
           const destination = AbsolutePath.make(tmp.path)
           const created = yield* session.create({ location: Location.Ref.make({ directory: previous }) })
 
-          // Moves are admitted through the inbox and applied by the drain;
-          // publish the applied move directly since execution is a no-op here.
+          // Moves are admitted through the inbox and applied by the runtime; publish the applied move
+          // directly.
           yield* bus.publish(SessionEvent.Moved, {
             sessionID: created.id,
             location: Location.Ref.make({ directory: destination }),

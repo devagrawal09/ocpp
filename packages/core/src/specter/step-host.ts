@@ -3,7 +3,7 @@ export * as SpecterStepHost from "./step-host.js"
 import { Cause, Clock, Context, Effect, Exit, Fiber, FiberMap, Layer } from "effect"
 import { LLMClient, Message } from "@ocpp/ai"
 import { Event } from "@ocpp/schema/event"
-import { makeLocationNode } from "@ocpp/util/effect/app-node"
+import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import type { SessionError } from "@ocpp/schema/session-error"
 import {
   StepHost,
@@ -608,6 +608,13 @@ export const make = Effect.gen(function* () {
 })
 
 export const layer = Layer.effect(StepHost, make)
+
+/** The runtime's step I/O. A test composition that does not exercise OC++'s requests replaces this node. */
+export const node = makeGlobalNode({
+  service: StepHost,
+  layer,
+  deps: [SessionStore.node, Bus.node, LocationServiceMap.node],
+})
 
 /** How an OC++ attempt ended, as the runtime records it. */
 const outcomeOf = (

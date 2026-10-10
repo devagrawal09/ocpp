@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
-import { Cause, Context, Deferred, Effect, Exit, Fiber, Layer, Option, Schedule, Stream } from "effect"
+import { Cause, Effect, Exit, Fiber, Option, Schedule, Stream } from "effect"
 import { Bus } from "@ocpp/core/bus"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { Location } from "@ocpp/core/location"
@@ -10,53 +10,20 @@ import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionExecution } from "@ocpp/core/session/execution"
-import { SessionRunCoordinator } from "./fixture/run-coordinator"
 import { Shell } from "@ocpp/core/shell"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { location } from "./fixture/location"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
+import { TestStepHost } from "./fixture/step-host"
 
-class ExecutionControl extends Context.Service<
-  ExecutionControl,
-  {
-    started: Deferred.Deferred<void>
-    release: Deferred.Deferred<void>
-    wakes: Session.ID[]
-  }
->()("test/SessionShell/ExecutionControl") {}
-
-const controlLayer = Layer.effect(
-  ExecutionControl,
-  Effect.gen(function* () {
-    return { started: yield* Deferred.make<void>(), release: yield* Deferred.make<void>(), wakes: [] }
-  }),
-)
-
-const executionLayer = Layer.effect(
-  SessionExecution.Service,
-  Effect.gen(function* () {
-    const control = yield* ExecutionControl
-    const coordinator = yield* SessionRunCoordinator.make<Session.ID, never>({
-      drain: () => Deferred.succeed(control.started, undefined).pipe(Effect.andThen(Deferred.await(control.release))),
-    })
-    return SessionExecution.Service.of({
-      active: coordinator.active,
-      isActive: coordinator.isActive,
-      resume: coordinator.run,
-      interrupt: (sessionID) => coordinator.interrupt(sessionID),
-      awaitIdle: coordinator.awaitIdle,
-      wake: (sessionID) =>
-        Effect.sync(() => control.wakes.push(sessionID)).pipe(Effect.andThen(coordinator.wake(sessionID))),
-    })
-  }),
-)
-
+// The runtime runs every Session; a step produces nothing unless a test scripts one.
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Bus.node, Session.node, SessionExecution.node, LocationServiceMap.node]), [
     [Bus.node, Bus.configured()],
-    [SessionExecution.node, executionLayer],
-  ]).pipe(Layer.provideMerge(controlLayer)),
+    steps.replacement,
+  ]),
 )
 
 const setup = Effect.gen(function* () {
@@ -65,13 +32,19 @@ const setup = Effect.gen(function* () {
   const created = yield* session.create({ location: Location.Ref.make({ directory: AbsolutePath.make(tmp.path) }) })
   const locations = yield* LocationServiceMap.Service
   const shell = yield* Shell.Service.pipe(Effect.provide(locations.get(created.location)))
-  const control = yield* ExecutionControl
   const execution = yield* SessionExecution.Service
-  return { tmp, session, created, shell, control, execution }
+  return { tmp, session, created, shell, execution }
 })
 
 const log = (session: Session.Interface, sessionID: Session.ID, follow = false) =>
   session.log({ sessionID, follow }).pipe(Stream.filter((event) => !Bus.isSynced(event)))
+
+/** Executions the runtime started for the fixture's Session: what woke the model. */
+const executions = (fixture: Effect.Success<typeof setup>) =>
+  log(fixture.session, fixture.created.id).pipe(
+    Stream.filter((event) => event.type === "session.execution.started"),
+    Stream.runCount,
+  )
 
 // File gates prove the child process is running without relying on elapsed-time assertions.
 const launch = Effect.fn(function* (fixture: Effect.Success<typeof setup>, name: string) {
@@ -104,8 +77,9 @@ describe("Session.shell", () => {
   it.live("runs shells concurrently with an active model and waits for each shell's own completion", () =>
     Effect.gen(function* () {
       const fixture = yield* setup
+      const step = steps.hold(fixture.created.id)
       const model = yield* fixture.execution.resume(fixture.created.id).pipe(Effect.forkScoped)
-      yield* Deferred.await(fixture.control.started).pipe(Effect.timeout("5 seconds"))
+      yield* step.started.pipe(Effect.timeout("5 seconds"))
       const first = yield* launch(fixture, "first")
       const second = yield* launch(fixture, "second")
 
@@ -113,6 +87,7 @@ describe("Session.shell", () => {
       expect(first.caller.pollUnsafe()).toBeUndefined()
       expect(second.caller.pollUnsafe()).toBeUndefined()
       expect(yield* fixture.session.messages({ sessionID: fixture.created.id, order: "asc" })).toMatchObject([
+        { type: "assistant" },
         { type: "shell", shellID: first.shellID, status: "running", metadata: { background: true } },
         { type: "shell", shellID: second.shellID, status: "running", metadata: { background: true } },
       ])
@@ -137,8 +112,9 @@ describe("Session.shell", () => {
           .map((item) => item.payload.metadata?.shellID),
       ).toEqual([second.shellID, first.shellID])
       expect(yield* fixture.execution.active).toContain(fixture.created.id)
-      expect(fixture.control.wakes).toEqual([])
-      yield* Deferred.succeed(fixture.control.release, undefined)
+      // The completions did not start another execution.
+      expect(yield* executions(fixture)).toBe(1)
+      yield* step.release
       yield* Fiber.join(model).pipe(Effect.timeout("5 seconds"))
     }),
   )
@@ -159,7 +135,7 @@ describe("Session.shell", () => {
           Effect.forkScoped({ startImmediately: true }),
         ),
       )
-      // This fixture's runner does not drain move requests; project the actual move event instead.
+      // Project the move itself rather than run it through the inbox.
       yield* bus.publish(SessionEvent.Moved, {
         sessionID: fixture.created.id,
         location: destination,
@@ -195,19 +171,22 @@ describe("Session.shell", () => {
       const fixture = yield* setup
       const command = yield* launch(fixture, "prompt")
 
+      const step = steps.hold(fixture.created.id)
       const prompt = yield* fixture.session.prompt({ sessionID: fixture.created.id, text: "Continue while this runs" })
-      yield* Deferred.await(fixture.control.started).pipe(Effect.timeout("5 seconds"))
-      expect(fixture.control.wakes).toEqual([fixture.created.id])
+      yield* step.started.pipe(Effect.timeout("5 seconds"))
+      expect(yield* executions(fixture)).toBe(1)
       expect(command.caller.pollUnsafe()).toBeUndefined()
-      yield* Deferred.succeed(fixture.control.release, undefined)
+      yield* step.release
       yield* fixture.execution.awaitIdle(fixture.created.id)
 
       yield* command.release
       yield* Fiber.join(command.caller).pipe(Effect.timeout("5 seconds"))
-      expect(fixture.control.wakes).toEqual([fixture.created.id])
+      expect(yield* executions(fixture)).toBe(1)
       expect(yield* fixture.execution.active).toEqual(new Set())
+      expect(
+        (yield* fixture.session.messages({ sessionID: fixture.created.id })).map((message) => message.id),
+      ).toContain(prompt.id)
       expect(yield* fixture.session.inbox(fixture.created.id)).toMatchObject([
-        { id: prompt.id, type: "user" },
         { type: "synthetic", payload: { metadata: { source: "shell" } } },
       ])
     }),
@@ -267,7 +246,7 @@ describe("Session.shell", () => {
         expect(completion.payload.text).toContain("user output")
         expect(completion.payload.text).toContain("user error")
         expect(completion.payload.text).toContain(`exited with code ${exit}`)
-        expect(fixture.control.wakes).toEqual([])
+        expect(yield* executions(fixture)).toBe(0)
       }),
     )
   }
@@ -310,7 +289,7 @@ describe("Session.shell", () => {
           },
         ])
         expect(inbox[0]).not.toHaveProperty("payload.metadata.exit")
-        expect(fixture.control.wakes).toEqual([])
+        expect(yield* executions(fixture)).toBe(0)
       }),
     )
   }
@@ -331,7 +310,7 @@ describe("Session.shell", () => {
         type: "synthetic",
         payload: { text: expect.stringContaining(command), metadata: { source: "shell", state: "error" } },
       })
-      expect(fixture.control.wakes).toEqual([])
+      expect(yield* executions(fixture)).toBe(0)
     }),
   )
 
@@ -370,7 +349,7 @@ describe("Session.shell", () => {
           },
         },
       ])
-      expect(fixture.control.wakes).toEqual([])
+      expect(yield* executions(fixture)).toBe(0)
     }),
   )
 })

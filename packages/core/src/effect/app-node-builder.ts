@@ -5,10 +5,9 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { SpecterSessions } from "../specter/index.js"
 
 export function build<A, E>(root: LayerNode.Node<A, E, any>, input: LayerNode.Replacements = []) {
-  // The embedded Specter runtime runs Sessions, unless the caller composes their inbox or execution itself.
-  const replacements = SpecterSessions.replacements.some(([node]) => hasReplacement(input, node))
-    ? input
-    : [...input, ...SpecterSessions.replacements]
+  const bound = SpecterSessions.bindings.find(([node]) => hasReplacement(input, node))
+  if (bound) throw new Error(`${bound[0].name} runs on the Specter runtime; replace SpecterStepHost.node instead`)
+  const replacements = [...input, ...SpecterSessions.bindings]
   // Only build the location service map if it's actually needed
   if (
     !LayerNode.hasUnbound(root, LocationServiceMap.node, replacements) ||

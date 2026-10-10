@@ -26,7 +26,6 @@ import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEnvironment } from "@ocpp/core/session/environment"
 import { SessionEvent } from "@ocpp/core/session/event"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionModelTransport } from "@ocpp/core/session/model-transport"
@@ -36,25 +35,17 @@ import { SessionTable } from "@ocpp/core/session/sql"
 import { Tool } from "@ocpp/core/tool"
 import { ToolLists } from "@ocpp/core/tool/lists"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
-import { eq } from "drizzle-orm"
+import { Money } from "@ocpp/schema/money"
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { withEnv } from "./fixture/env"
 import { tmpdirScoped } from "./fixture/tmpdir"
-import * as InboxPromotion from "./fixture/inbox-promotion"
+import { TestStepHost } from "./fixture/step-host"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 
-const wakes: Session.ID[] = []
-const execution = Layer.succeed(
-  SessionExecution.Service,
-  SessionExecution.Service.of({
-    active: Effect.succeed(new Set()),
-    isActive: () => Effect.succeed(false),
-    resume: () => Effect.void,
-    wake: (sessionID) => Effect.sync(() => void wakes.push(sessionID)),
-    interrupt: () => Effect.succeed(false),
-    awaitIdle: () => Effect.void,
-  }),
-)
+// The runtime runs every Session; its executions wait before delivering input while a test parks them.
+const steps = TestStepHost.make()
 const transport = Layer.succeed(
   SessionModelTransport.Service,
   SessionModelTransport.Service.of({
@@ -80,7 +71,7 @@ const nodes = [
 ] as const
 const replacements = [
   [Project.node, globalProjectNode],
-  [SessionExecution.node, execution],
+  steps.replacement,
   [SessionModelTransport.node, transport],
 ] as const
 const it = testEffect(AppNodeBuilder.build(LayerNode.group(nodes), [...replacements]))
@@ -119,6 +110,9 @@ const configured = (config?: unknown, init?: string) =>
     const session = yield* sessions.create({
       location: Location.Ref.make({ directory: AbsolutePath.make(directory.path) }),
     })
+    // Its input stays pending, as for a model that has not seen it yet.
+    const parked = steps.park(session.id)
+    yield* Effect.addFinalizer(() => parked.release)
     const locations = yield* LocationServiceMap.Service
     const within = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       Effect.gen(function* () {
@@ -126,7 +120,7 @@ const configured = (config?: unknown, init?: string) =>
         yield* plugins.flush
         return yield* effect
       }).pipe(Effect.provide(locations.get(session.location)))
-    return { session, within }
+    return { session, within, parked }
   })
 
 const setup = configured()
@@ -172,6 +166,14 @@ const execute = Effect.fnUntraced(function* (context: Setup, code: string) {
     ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
     executed: false,
   })
+  // As the runner's step ends once its tools settle.
+  yield* bus.publish(SessionEvent.Step.Ended, {
+    sessionID,
+    assistantMessageID,
+    finish: "tool-calls",
+    cost: Money.USD.zero,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
   const executionID = decodeStarted(result.output).executionID
   const settled = yield* jobs.wait({ id: executionID })
   yield* notification(sessionID, executionID)
@@ -208,6 +210,51 @@ const eventually = <A, E, R>(check: Effect.Effect<A | undefined, E, R>) =>
     }
     return yield* Effect.die(new Error("condition never held"))
   })
+
+/** The Specter log's latest position, from which `woken` reads. */
+const position = Database.Service.use(({ db }) =>
+  db
+    .select({ order: SpecterEventTable.order })
+    .from(SpecterEventTable)
+    .orderBy(desc(SpecterEventTable.order))
+    .limit(1)
+    .get()
+    .pipe(
+      Effect.orDie,
+      Effect.map((row) => row?.order ?? 0),
+    ),
+)
+
+/** The Sessions that input admitted after `since` woke: each admission not held wakes its Session. */
+const woken = (since: number) =>
+  Database.Service.use(({ db }) =>
+    db
+      .select()
+      .from(SpecterEventTable)
+      .where(
+        and(
+          gt(SpecterEventTable.order, since),
+          inArray(SpecterEventTable.type, ["session-inbox-enqueued", "session-inbox-held"]),
+        ),
+      )
+      .orderBy(asc(SpecterEventTable.order))
+      .all()
+      .pipe(
+        Effect.orDie,
+        Effect.map((rows) => {
+          const facts = rows.map((row) => ({
+            type: row.type,
+            payload: row.payload as { readonly sessionID: Session.ID; readonly inboxID: string },
+          }))
+          const held = new Set(
+            facts.flatMap((fact) => (fact.type === "session-inbox-held" ? [fact.payload.inboxID] : [])),
+          )
+          return facts.flatMap((fact) =>
+            fact.type === "session-inbox-enqueued" && !held.has(fact.payload.inboxID) ? [fact.payload.sessionID] : [],
+          )
+        }),
+      ),
+  )
 
 const invocations = (sessionID: Session.ID) =>
   Effect.gen(function* () {
@@ -379,7 +426,7 @@ describe("Code Mode commands", () => {
       )
       expect(defined?.status).toBe("completed")
 
-      wakes.length = 0
+      const since = yield* position
       const bus = yield* Bus.Service
       const started: Array<unknown> = []
       yield* bus.listen((event) =>
@@ -399,7 +446,7 @@ describe("Code Mode commands", () => {
       expect(outcome.text).toContain('The user ran the command /triage with the text "login fails".')
       expect(outcome.text).toContain("triaged triage: login fails")
       expect(outcome.description).toBe("/triage")
-      expect(wakes).toEqual([])
+      expect(yield* woken(since)).toEqual([])
       // The durable event keeps only what cannot be derived; the program comes from handler and input.
       expect(started).toEqual([
         {
@@ -657,7 +704,7 @@ describe("Code Mode events", () => {
           'tools.event.define({ name: "watch", schedule: { every: "1h" }, handler: "watch", input: { repo: "ocpp" } })',
         ].join("\n"),
       )
-      wakes.length = 0
+      const since = yield* position
       const triggered = yield* execute(context, 'return tools.event.trigger({ name: "watch" })')
       expect(triggered?.output).toContain('"status":"started"')
       const [invocation] = yield* settled(context.session.id, 1)
@@ -667,7 +714,7 @@ describe("Code Mode events", () => {
       expect(outcome.text).toContain("The event watch fired.")
       expect(outcome.text).toContain("watch saw ocpp")
       // Only the program that triggered the event woke the model; the firing did not.
-      expect(wakes).toEqual([context.session.id])
+      expect(yield* woken(since)).toEqual([context.session.id])
 
       const manual = yield* execute(context, 'return tools.event.trigger({ name: "watch", input: { repo: "other" } })')
       expect(manual?.status).toBe("completed")
@@ -697,7 +744,7 @@ describe("Code Mode events", () => {
           'tools.command.define({ name: "alert", handler: "alert" })',
         ].join("\n"),
       )
-      wakes.length = 0
+      const since = yield* position
       yield* sessions.command({ sessionID: context.session.id, command: "alert", text: "" })
       const [invocation] = yield* settled(context.session.id, 1)
       const [notice] = yield* eventually(
@@ -723,7 +770,7 @@ describe("Code Mode events", () => {
         executionID: invocation?.executionID,
         count: 1,
       })
-      expect(wakes).toContain(context.session.id)
+      expect(yield* woken(since)).toContain(context.session.id)
 
       // A notification from a program the model ran names that execution.
       const own = yield* execute(context, 'tools.session.notify({ text: "halfway there" })')
@@ -749,7 +796,7 @@ describe("Code Mode events", () => {
           'tools.command.define({ name: "report", handler: "report" })',
         ].join("\n"),
       )
-      wakes.length = 0
+      const since = yield* position
       yield* sessions.command({ sessionID: context.session.id, command: "report", text: "x" })
       const [invocation] = yield* settled(context.session.id, 1)
       expect(invocation?.status).toBe("error")
@@ -762,7 +809,7 @@ describe("Code Mode events", () => {
       expect(messages.findIndex((message) => message.id === shown[0]?.id)).toBeGreaterThan(
         messages.findIndex((message) => message.id === invocation?.id),
       )
-      expect(wakes).toEqual([])
+      expect(yield* woken(since)).toEqual([])
 
       // A program the model runs gets only a receipt back.
       const own = yield* execute(context, 'return tools.display_result({ blocks: [{ type: "code", text: "ok" }] })')
@@ -786,8 +833,6 @@ describe("Code Mode events", () => {
   it.live("leaves one pending outcome and one notification however often an event fires", () =>
     Effect.gen(function* () {
       const context = yield* setup
-      const database = yield* Database.Service
-      const bus = yield* Bus.Service
       yield* execute(
         context,
         [
@@ -826,8 +871,11 @@ describe("Code Mode events", () => {
       expect(notices[0]?.text.match(/BEGIN_UNTRUSTED_EXECUTION_DATA/g)).toHaveLength(5)
 
       // Once the model has seen them, the next firing starts a fresh count.
-      yield* InboxPromotion.promote(database.db, bus, context.session.id, "steer")
+      yield* context.parked.release
+      const sessions = yield* Session.Service
+      yield* sessions.wait(context.session.id)
       expect(yield* outcomes(context.session.id)).toEqual([])
+      steps.park(context.session.id)
       yield* fire(context, "poll", { n: 12 })
       const [fresh] = yield* outcomes(context.session.id)
       expect(fresh?.text).toStartWith("The event poll fired.\nExecution")

@@ -5,14 +5,16 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { Watcher } from "@ocpp/core/filesystem/watcher"
 import { PersistentPty } from "@ocpp/core/persistent-pty"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { Session } from "@ocpp/schema/session"
 import { Global } from "@ocpp/util/global"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { tempGlobalLayer } from "../fixture/global"
 import { testEffect } from "../lib/effect"
+import { TestStepHost } from "../fixture/step-host"
 
 const cell = PluginRuntime.makeCell()
+
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([
@@ -25,7 +27,7 @@ const it = testEffect(
     [
       [Global.node, tempGlobalLayer],
       [Watcher.node, Watcher.configured({ enabled: false })],
-      [SessionExecution.node, SessionExecution.noopLayer],
+      steps.replacement,
       [PluginRuntime.node, PluginRuntime.layerWithCell(cell)],
       [PersistentPty.node, PersistentPty.configured()],
     ],

@@ -95,7 +95,6 @@ import { agentHost, catalogHost, host } from "./plugin/host"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { definition, effectiveName, execute } from "@ocpp/core/tool/runtime"
-import * as InboxPromotion from "./fixture/inbox-promotion"
 
 type ToolBarrier = {
   readonly count: number
@@ -512,6 +511,10 @@ const layer = Layer.unwrap(
 const it = testEffect(layer)
 const sessionID = Session.ID.make("ses_runner_test")
 const otherSessionID = Session.ID.make("ses_runner_other")
+
+/** Whether the runner's Session has pending input delivered this way. */
+const hasPending = (db: Database.Interface["db"], delivery: SessionInbox.Delivery) =>
+  SessionInbox.list(db, sessionID).pipe(Effect.map((items) => items.some((item) => item.delivery === delivery)))
 
 const insertSession = (id: Session.ID) =>
   Effect.gen(function* () {
@@ -1542,7 +1545,7 @@ describe("SessionRunnerLLM", () => {
         stepFailure(new Instructions.InitializationBlocked({ keys: [Instructions.Key.make("test/context")] })),
       )
     expect(s.requests).toHaveLength(0)
-    expect(yield* SessionInbox.has(s.db, sessionID, "steer")).toBe(true)
+    expect(yield* hasPending(s.db, "steer")).toBe(true)
     expect(
       yield* s.db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, sessionID)).get(),
     ).toBeUndefined()
@@ -2245,7 +2248,7 @@ describe("SessionRunnerLLM", () => {
       delivery: "queue",
       resume: false,
     })
-    expect(yield* SessionInbox.has(s.db, sessionID, "steer")).toBe(true)
+    expect(yield* hasPending(s.db, "steer")).toBe(true)
 
     yield* active.finish
 
@@ -3408,7 +3411,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.session.interrupt(sessionID)
     expect(yield* Fiber.await(run)).toMatchObject({ _tag: "Failure" })
     expect(s.requests).toHaveLength(1)
-    expect(yield* SessionInbox.has(s.db, sessionID, "queue")).toBe(true)
+    expect(yield* hasPending(s.db, "queue")).toBe(true)
     const resumed = yield* s.resume.pipe(Effect.forkChild)
     yield* stream.started
     yield* stream.release
@@ -3434,7 +3437,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.session.interrupt(sessionID)
     expect(yield* Fiber.await(run)).toMatchObject({ _tag: "Failure" })
     expect(s.requests).toHaveLength(1)
-    expect(yield* SessionInbox.has(s.db, sessionID, "steer")).toBe(true)
+    expect(yield* hasPending(s.db, "steer")).toBe(true)
 
     const resumed = yield* s.resume.pipe(Effect.forkChild)
     yield* stream.started
@@ -3470,8 +3473,8 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests).toHaveLength(1)
     expect(userTexts(s.requests[0])).toEqual(["Steer now"])
-    expect(yield* SessionInbox.has(s.db, sessionID, "steer")).toBe(false)
-    expect(yield* SessionInbox.has(s.db, sessionID, "queue")).toBe(true)
+    expect(yield* hasPending(s.db, "steer")).toBe(false)
+    expect(yield* hasPending(s.db, "queue")).toBe(true)
   })
 
   scenario("a steer-scoped drain runs a queued manual compaction next in line", function* (s) {
@@ -3504,7 +3507,7 @@ describe("SessionRunnerLLM", () => {
 
     // Enqueue order holds: the queued prompt is next in line, so nothing runs.
     expect(s.requests).toHaveLength(0)
-    expect(yield* SessionInbox.has(s.db, sessionID, "queue")).toBe(true)
+    expect(yield* hasPending(s.db, "queue")).toBe(true)
     expect(yield* SessionInbox.find(s.db, compaction.id)).toMatchObject({ id: compaction.id })
   })
 
@@ -3605,8 +3608,9 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("durably fails local tools left running by a prior process before continuing", function* (s) {
-    yield* s.admit("Recover interrupted tool")
-    yield* InboxPromotion.promote(s.db, s.bus, sessionID, "steer")
+    // The prompt a prior process delivered before its step died.
+    const prompt = yield* s.admit("Recover interrupted tool")
+    yield* s.bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
     const assistantMessageID = SessionMessage.ID.create()
     yield* s.bus.publish(SessionEvent.Step.Started, {
       sessionID,
@@ -3651,8 +3655,9 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("preserves a stale subagent child session in its model-visible failure", function* (s) {
-    yield* s.admit("Recover interrupted subagent")
-    yield* InboxPromotion.promote(s.db, s.bus, sessionID, "steer")
+    // The prompt a prior process delivered before its step died.
+    const prompt = yield* s.admit("Recover interrupted subagent")
+    yield* s.bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
     const assistantMessageID = SessionMessage.ID.create()
     yield* s.bus.publish(SessionEvent.Step.Started, {
       sessionID,
@@ -3716,8 +3721,9 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("durably fails hosted tools left running by a prior process before continuing inline", function* (s) {
-    yield* s.admit("Recover interrupted hosted tool")
-    yield* InboxPromotion.promote(s.db, s.bus, sessionID, "steer")
+    // The prompt a prior process delivered before its step died.
+    const prompt = yield* s.admit("Recover interrupted hosted tool")
+    yield* s.bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
     const assistantMessageID = SessionMessage.ID.create()
     yield* s.bus.publish(SessionEvent.Step.Started, {
       sessionID,
@@ -3763,8 +3769,9 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("durably fails pending tool input left by a prior process before continuing", function* (s) {
-    yield* s.admit("Recover interrupted tool input")
-    yield* InboxPromotion.promote(s.db, s.bus, sessionID, "steer")
+    // The prompt a prior process delivered before its step died.
+    const prompt = yield* s.admit("Recover interrupted tool input")
+    yield* s.bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
     const assistantMessageID = SessionMessage.ID.create()
     yield* s.bus.publish(SessionEvent.Step.Started, {
       sessionID,

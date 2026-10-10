@@ -14,7 +14,6 @@ import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionProjector } from "@ocpp/core/session/projector"
@@ -26,16 +25,13 @@ import { Global } from "@ocpp/util/global"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
-import * as InboxPromotion from "./fixture/inbox-promotion"
+import { TestStepHost } from "./fixture/step-host"
 
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, Session.node, LocationServiceMap.node]),
-    [
-      [Bus.node, Bus.configured()],
-      [Global.node, tempGlobalLayer],
-      [SessionExecution.node, SessionExecution.noopLayer],
-    ],
+    [[Bus.node, Bus.configured()], [Global.node, tempGlobalLayer], steps.replacement],
   ),
 )
 
@@ -57,11 +53,10 @@ describe("Session.revert files", () => {
         })
 
         const session = yield* Session.Service
-        const database = yield* Database.Service
         const bus = yield* Bus.Service
         const created = yield* session.create({ location: { directory: AbsolutePath.make(directory) } })
         const prompt = yield* session.prompt({ sessionID: created.id, text: "Rename the file", resume: false })
-        yield* InboxPromotion.promote(database.db, bus, created.id, "steer")
+        yield* session.resume(created.id)
         const services = LocationServiceMap.Service.get(created.location)
         const revert = yield* SessionRevert.Service.pipe(Effect.provide(services))
         expect(yield* SessionRevert.Service.pipe(Effect.provide(services))).toBe(revert)

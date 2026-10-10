@@ -6,9 +6,9 @@ import type { SessionRunner } from "./runner/index.js"
 import type { SessionSchema } from "./schema.js"
 
 export interface Interface {
-  /** Snapshots active execution owned by this process. */
+  /** The Sessions with an active execution. */
   readonly active: Effect.Effect<ReadonlySet<SessionSchema.ID>>
-  /** Checks process-local ownership, including interruption cleanup and terminal settlement. */
+  /** Whether the Session has an active execution. */
   readonly isActive: (sessionID: SessionSchema.ID) => Effect.Effect<boolean>
   /** Starts execution while idle or joins the active execution. */
   readonly resume: (sessionID: SessionSchema.ID) => Effect.Effect<void, SessionRunner.RunError>
@@ -25,32 +25,18 @@ export interface Interface {
   readonly awaitIdle: (sessionID: SessionSchema.ID) => Effect.Effect<void>
 }
 
-/** Runs Sessions: wakes them for recorded work, resumes, interrupts and awaits their executions. */
+/**
+ * Runs Sessions: wakes them for recorded work, resumes, interrupts and awaits their executions. The embedded
+ * Specter runtime is the only implementation (`SpecterSessionExecution`).
+ */
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionExecution") {}
 
 /**
- * Every Session runs on the embedded Specter runtime, which AppNodeBuilder supplies in place of this node
- * (`SpecterSessions.replacements`). A composition without the runtime supplies its own execution, such as
- * `noopLayer`.
+ * Bound to the runtime's (`SpecterSessionExecution.node`) by AppNodeBuilder. It is a node of its own so
+ * that the modules depending on it stay out of the runtime's import graph.
  */
 export const node = makeGlobalNode({
   service: Service,
-  layer: Layer.effect(
-    Service,
-    Effect.die(new Error("SessionExecution runs on the Specter runtime: build the app with AppNodeBuilder")),
-  ),
+  layer: Layer.effect(Service, Effect.die(new Error("Sessions run on the Specter runtime: build with AppNodeBuilder"))),
   deps: [],
 })
-
-/** Low-level compatibility layer for callers that only need durable Session recording. */
-export const noopLayer = Layer.succeed(
-  Service,
-  Service.of({
-    active: Effect.succeed(new Set()),
-    isActive: () => Effect.succeed(false),
-    resume: () => Effect.void,
-    wake: () => Effect.void,
-    interrupt: () => Effect.succeed(false),
-    awaitIdle: () => Effect.void,
-  }),
-)

@@ -11,7 +11,6 @@ import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionMessage } from "@ocpp/core/session/message"
@@ -22,12 +21,14 @@ import { Global } from "@ocpp/util/global"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
-import * as InboxPromotion from "./fixture/inbox-promotion"
+import { TestStepHost } from "./fixture/step-host"
 
 // These tests include real Location and plugin startup, not just hook callbacks.
 setDefaultTimeout(15_000)
 
 const runtime = PluginRuntime.makeCell()
+
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([
@@ -42,7 +43,7 @@ const it = testEffect(
       [Bus.node, Bus.configured()],
       [Global.node, tempGlobalLayer],
       [Watcher.node, Watcher.configured({ enabled: false })],
-      [SessionExecution.node, SessionExecution.noopLayer],
+      steps.replacement,
       [PluginRuntime.node, PluginRuntime.layerWithCell(runtime)],
     ],
   ),
@@ -163,11 +164,10 @@ describe("Session prompt hooks", () => {
       ])
       expect(input.metadata).toEqual({ source: "api" })
       const database = yield* Database.Service
-      const bus = yield* Bus.Service
       expect(yield* SessionInbox.find(database.db, input.id)).toEqual(admitted)
       const log = yield* fixture.sessions.log({ sessionID: input.sessionID }).pipe(Stream.runCollect)
       expect(JSON.stringify(log)).not.toContain("secret")
-      yield* InboxPromotion.promote(database.db, bus, input.sessionID, "input")
+      yield* fixture.sessions.resume(input.sessionID)
       expect(yield* fixture.sessions.messages({ sessionID: input.sessionID })).toMatchObject([
         { id: input.id, type: "user", text: "Redacted with policy", metadata: { source: "plugin" } },
       ])
@@ -188,9 +188,7 @@ describe("Session prompt hooks", () => {
       const first = yield* fixture.sessions.prompt(input)
       const retry = { ...input, text: "Ignored", files: [{ uri: "file:///missing-retry-file" }] }
       expect(yield* fixture.sessions.prompt(retry)).toEqual(first)
-      const database = yield* Database.Service
-      const bus = yield* Bus.Service
-      yield* InboxPromotion.promote(database.db, bus, input.sessionID, "steer")
+      yield* fixture.sessions.resume(input.sessionID)
       expect((yield* fixture.sessions.prompt(retry)).payload).toEqual(first.payload)
       const other = yield* fixture.sessions.create({ location: fixture.session.location })
       expect((yield* fixture.sessions.prompt({ ...retry, sessionID: other.id }).pipe(Effect.flip))._tag).toBe(
@@ -211,10 +209,9 @@ describe("Session prompt hooks", () => {
   it.live("leaves a staged revert untouched on retries and failed preparation", () =>
     Effect.gen(function* () {
       const fixture = yield* setup
-      const database = yield* Database.Service
       const bus = yield* Bus.Service
       const first = yield* fixture.sessions.prompt({ sessionID: fixture.session.id, text: "Boundary", resume: false })
-      yield* InboxPromotion.promote(database.db, bus, fixture.session.id, "steer")
+      yield* fixture.sessions.resume(fixture.session.id)
       yield* bus.publish(SessionEvent.RevertEvent.Staged, {
         sessionID: fixture.session.id,
         revert: { messageID: first.id, files: [] },

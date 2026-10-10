@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Effect, Layer, Stream } from "effect"
+import { Effect, Stream } from "effect"
 import { eq } from "drizzle-orm"
 import { Agent } from "@ocpp/core/agent"
 import { Bus } from "@ocpp/core/bus"
@@ -13,7 +13,6 @@ import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionTable } from "@ocpp/core/session/sql"
@@ -23,29 +22,13 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { testEffect } from "./lib/effect"
 import { Recorded } from "./lib/recorded"
 import { globalProjectNode } from "./lib/project"
+import { TestStepHost } from "./fixture/step-host"
 
-const active = new Set<Session.ID>()
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [
-      [Bus.node, Bus.configured()],
-      [Project.node, globalProjectNode],
-      [
-        SessionExecution.node,
-        Layer.succeed(
-          SessionExecution.Service,
-          SessionExecution.Service.of({
-            active: Effect.sync(() => active),
-            isActive: (sessionID) => Effect.sync(() => active.has(sessionID)),
-            resume: () => Effect.void,
-            wake: () => Effect.void,
-            interrupt: () => Effect.succeed(false),
-            awaitIdle: () => Effect.void,
-          }),
-        ),
-      ],
-    ],
+    [[Bus.node, Bus.configured()], [Project.node, globalProjectNode], steps.replacement],
   ),
 )
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
@@ -238,9 +221,9 @@ describe("Session.updateMessage", () => {
       const messageID = SessionMessage.ID.create()
       yield* start(bus, created.id, messageID)
       yield* complete(bus, created.id, messageID)
-      active.add(created.id)
+      const busy = yield* steps.busy(created.id)
       const failure = yield* Effect.flip(session.updateMessage({ sessionID: created.id, messageID, content: [] }))
-      active.delete(created.id)
+      yield* busy.release
 
       expect(failure).toEqual(new Session.BusyError({ sessionID: created.id }))
     }),

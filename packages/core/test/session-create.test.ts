@@ -23,7 +23,6 @@ import { AbsolutePath, RelativePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionProjector } from "@ocpp/core/session/projector"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { InstructionEntry } from "@ocpp/core/session/instruction-entry"
 import { SessionEvent } from "@ocpp/core/session/event"
@@ -39,8 +38,9 @@ import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { promptLocationNode } from "./fixture/prompt-location"
 import { globalProjectNode } from "./lib/project"
 import { tmpdirScoped } from "./fixture/tmpdir"
-import * as InboxPromotion from "./fixture/inbox-promotion"
+import { TestStepHost } from "./fixture/step-host"
 
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([
@@ -56,17 +56,14 @@ const it = testEffect(
       [Bus.node, Bus.configured()],
       [Project.node, globalProjectNode],
       [LocationServiceMap.node, promptLocationNode],
-      [SessionExecution.node, SessionExecution.noopLayer],
+      steps.replacement,
     ],
   ),
 )
 const liveIt = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, Project.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [
-      [Bus.node, Bus.configured()],
-      [SessionExecution.node, SessionExecution.noopLayer],
-    ],
+    [[Bus.node, Bus.configured()], steps.replacement],
   ),
 )
 const projectIt = testEffect(
@@ -76,7 +73,7 @@ const projectIt = testEffect(
       [Bus.node, Bus.configured()],
       // Project adoption needs plain-prompt admission, not live plugin/provider startup.
       [LocationServiceMap.node, promptLocationNode],
-      [SessionExecution.node, SessionExecution.noopLayer],
+      steps.replacement,
     ],
   ),
 )
@@ -143,9 +140,8 @@ describe("Session.create", () => {
         const created = yield* session.create({ location: ref, title: "Before git" })
         const child = yield* session.create({ location: nested, title: "Nested before git" })
         const alias = yield* session.create({ location: aliased, title: "Aliased before git" })
-        const bus = yield* Bus.Service
         yield* session.prompt({ sessionID: created.id, text: "Preserved history", resume: false })
-        yield* InboxPromotion.promote(db, bus, created.id, "steer")
+        yield* session.resume(created.id)
         const pending = yield* session.prompt({ sessionID: created.id, text: "Preserved inbox", resume: false })
         const before = yield* db
           .select()
@@ -211,11 +207,14 @@ describe("Session.create", () => {
           location: aliased,
           subpath: RelativePath.make("packages/app"),
         })
-        // Adoption is a project-domain fact; the session log records nothing new.
+        // Adoption is a project-domain fact; the session log records nothing new. The runtime records the
+        // execution that delivered the first prompt around its delivery.
         expect(log.map((event) => event.type)).toEqual([
           "session.created",
           "session.inbox.enqueued",
+          "session.execution.started",
           "session.inbox.delivered",
+          "session.execution.succeeded",
           "session.inbox.enqueued",
         ])
         expect(yield* session.messages({ sessionID: created.id })).toMatchObject([
@@ -360,8 +359,6 @@ describe("Session.create", () => {
   it.effect("stores creation metadata and inherits it through children and forks", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
       const metadata = { thread: "C123/1699999999.123", labels: ["support", 2] }
 
       const created = yield* session.create({ location, metadata })
@@ -377,7 +374,7 @@ describe("Session.create", () => {
       expect(overridden.metadata).toEqual({ thread: "other" })
 
       yield* session.prompt({ sessionID: created.id, text: "Fork context", resume: false })
-      yield* InboxPromotion.promote(db, bus, created.id, "steer")
+      yield* session.resume(created.id)
       const forked = yield* session.fork({ sessionID: created.id, boundary: { type: "through" } })
       expect(forked.metadata).toEqual(metadata)
 
@@ -501,7 +498,6 @@ describe("Session.create", () => {
   it.effect("forks a session by replaying a durable fork event into copied projected rows", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const parent = yield* session.create({ location, title: "Parent" })
       const admitted = yield* session.prompt({
@@ -509,9 +505,9 @@ describe("Session.create", () => {
         text: "First",
         resume: false,
       })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       yield* session.synthetic({ sessionID: parent.id, text: "parent note", resume: false })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
 
       const forked = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
       const parentContext = yield* session.context(parent.id)
@@ -539,22 +535,24 @@ describe("Session.create", () => {
         text: "Parent changed",
         resume: false,
       })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       yield* session.prompt({
         sessionID: forked.id,
         text: "Child continues",
         resume: false,
       })
-      yield* InboxPromotion.promote(db, bus, forked.id, "steer")
+      yield* session.resume(forked.id)
 
       expect((yield* session.context(parent.id)).map((message) => message.type)).toEqual(["user", "synthetic", "user"])
       expect((yield* session.context(forked.id)).map((message) => message.type)).toEqual(["user", "synthetic", "user"])
       expect((yield* session.context(forked.id)).at(-1)).toMatchObject({ text: "Child continues" })
+      // The fork reserves the parent's sequence through its boundary; the child's own events follow: its
+      // prompt, and the execution that delivered it.
       expect(
         Array.from(yield* Stream.runCollect(logEvents(session, forked.id))).map(
           (event): number | undefined => event.durable?.seq,
         ),
-      ).toEqual([0, 5, 6])
+      ).toEqual([0, 8, 9, 10, 11])
       expect(yield* SessionInbox.find(db, admitted.id)).toBeUndefined()
     }),
   )
@@ -562,11 +560,10 @@ describe("Session.create", () => {
   it.effect("keeps a fork untitled when its parent is untitled", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const parent = yield* session.create({ location })
       yield* session.prompt({ sessionID: parent.id, text: "First", resume: false })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
 
       const forked = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
       const row = yield* db.select().from(SessionTable).where(eq(SessionTable.id, forked.id)).get().pipe(Effect.orDie)
@@ -583,9 +580,9 @@ describe("Session.create", () => {
       const { db } = yield* Database.Service
       const parent = yield* session.create({ location, title: "Parent" })
       yield* session.prompt({ sessionID: parent.id, text: "First", resume: false })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       yield* session.synthetic({ sessionID: parent.id, text: "Second", resume: false })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       const forked = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
       const original = (yield* session.context(forked.id)).map((message) => message.id)
 
@@ -604,7 +601,7 @@ describe("Session.create", () => {
       const { db } = yield* Database.Service
       const parent = yield* session.create({ location })
       yield* session.prompt({ sessionID: parent.id, text: "Fork context", resume: false })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       yield* entries.put({ sessionID: parent.id, key: "deploy-target", value: "production" })
       yield* entries.put({ sessionID: parent.id, key: "retired", value: true })
       yield* entries.remove({ sessionID: parent.id, key: "retired" })
@@ -639,10 +636,9 @@ describe("Session.create", () => {
     Effect.gen(function* () {
       const session = yield* Session.Service
       const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
       const parent = yield* session.create({ location })
       yield* session.prompt({ sessionID: parent.id, text: "Run both tools", resume: false })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       const assistantMessageID = SessionMessage.ID.create()
       const model = Model.Ref.make({ id: Model.ID.make("model"), providerID: Provider.ID.make("provider") })
 
@@ -686,10 +682,9 @@ describe("Session.create", () => {
     Effect.gen(function* () {
       const session = yield* Session.Service
       const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
       const parent = yield* session.create({ location })
       yield* session.prompt({ sessionID: parent.id, text: "Run a shell", resume: false })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       const shell = Shell.Info.make({
         id: Shell.ID.make("sh_fork_running"),
         status: "running",
@@ -740,20 +735,19 @@ describe("Session.create", () => {
     Effect.gen(function* () {
       const session = yield* Session.Service
       const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
       const parent = yield* session.create({ location })
       const first = yield* session.prompt({
         sessionID: parent.id,
         text: "First",
         resume: false,
       })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       const second = yield* session.prompt({
         sessionID: parent.id,
         text: "Second",
         resume: false,
       })
-      yield* InboxPromotion.promote(db, bus, parent.id, "steer")
+      yield* session.resume(parent.id)
       const assistantMessageID = SessionMessage.ID.create()
       const model = Model.Ref.make({ id: Model.ID.make("model"), providerID: Provider.ID.make("provider") })
       yield* bus.publish(SessionEvent.Step.Started, {
@@ -878,18 +872,16 @@ describe("Session.create", () => {
   it.effect("includes current creation rows in the Session event stream", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
       const created = yield* session.create({ location })
       yield* session.prompt({
         sessionID: created.id,
         text: "Hello",
         resume: false,
       })
-      yield* InboxPromotion.promote(db, bus, created.id, "steer")
+      yield* session.resume(created.id)
 
       expect(
-        Array.from(yield* logEvents(session, created.id, true).pipe(Stream.take(3), Stream.runCollect)),
+        Array.from(yield* logEvents(session, created.id, true).pipe(Stream.take(4), Stream.runCollect)),
       ).toMatchObject([
         { durable: { seq: 0 }, type: "session.created" },
         {
@@ -900,7 +892,8 @@ describe("Session.create", () => {
             item: { type: "user", payload: { text: "Hello" }, delivery: "steer" },
           },
         },
-        { durable: { seq: 2 }, type: "session.inbox.delivered" },
+        { durable: { seq: 2 }, type: "session.execution.started" },
+        { durable: { seq: 3 }, type: "session.inbox.delivered" },
       ])
     }),
   )
@@ -1081,10 +1074,9 @@ describe("SessionTransfer", () => {
       const session = yield* Session.Service
       const transfer = yield* SessionTransfer.Service
       const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
       const source = yield* session.create({ location })
       yield* session.prompt({ sessionID: source.id, text: "Settled", resume: false })
-      yield* InboxPromotion.promote(db, bus, source.id, "steer")
+      yield* session.resume(source.id)
       yield* bus.publish(SessionEvent.Step.Started, {
         sessionID: source.id,
         assistantMessageID: SessionMessage.ID.create(),
@@ -1267,7 +1259,6 @@ describe("SessionTransfer", () => {
     Effect.gen(function* () {
       const session = yield* Session.Service
       const transfer = yield* SessionTransfer.Service
-      const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const template = yield* session.create({ location, title: "Exported", metadata: { channel: "C123" } })
       const sessionID = Session.ID.create()
@@ -1336,14 +1327,15 @@ describe("SessionTransfer", () => {
       ])
 
       yield* session.prompt({ sessionID, text: "Continue", resume: false })
-      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
 
       expect((yield* session.messages({ sessionID, order: "asc" })).map((message) => message.type)).toEqual([
         "user",
         "compaction",
         "user",
       ])
-      expect(yield* Bus.latestSequence(db, sessionID)).toBe(4)
+      // The prompt, and the execution that delivered it.
+      expect(yield* Bus.latestSequence(db, sessionID)).toBe(6)
     }),
   )
 

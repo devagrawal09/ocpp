@@ -19,7 +19,6 @@ import { Provider } from "@ocpp/core/provider"
 import { ReadTool } from "@ocpp/core/tool/plugin/read"
 import { ReadToolFileSystem } from "@ocpp/core/tool/read-filesystem"
 import { SessionEvent } from "@ocpp/core/session/event"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionInstructions } from "@ocpp/core/session/instructions"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionProjector } from "@ocpp/core/session/projector"
@@ -33,6 +32,7 @@ import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { executeTool, registerToolPlugin } from "./lib/tool"
+import { TestStepHost } from "./fixture/step-host"
 
 const readToolNode = makeLocationNode({
   name: "test/read-tool-plugin",
@@ -51,6 +51,7 @@ const readToolNode = makeLocationNode({
 const config = Config.testLayer()
 const imageLayer = AppNodeBuilder.build(Image.node, [[Config.node, config]])
 
+const steps = TestStepHost.make()
 const testLayer = AppNodeBuilder.build(
   LayerNode.group([
     Database.node,
@@ -71,7 +72,7 @@ const testLayer = AppNodeBuilder.build(
   ]),
   [
     [Project.node, globalProjectNode],
-    [SessionExecution.node, SessionExecution.noopLayer],
+    steps.replacement,
     [Location.node, tempLocationLayer],
     [Config.node, config],
     [Image.node, imageLayer],

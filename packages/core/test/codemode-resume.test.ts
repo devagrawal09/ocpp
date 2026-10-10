@@ -2,7 +2,6 @@ import { afterAll, describe, expect, test } from "bun:test"
 import path from "path"
 import { CodeMode } from "@ocpp/codemode"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
-import { Money } from "@ocpp/schema/money"
 import { Deferred, Effect, Layer, Schema, type Scope } from "effect"
 import { Agent } from "@ocpp/core/agent"
 import { Bus } from "@ocpp/core/bus"
@@ -11,7 +10,7 @@ import { CodeModeCommand } from "@ocpp/core/codemode/command"
 import { CodeModeResume } from "@ocpp/core/codemode/resume"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { CodeModeExecutionTable } from "@ocpp/core/codemode/sql"
-import { eq } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm"
 import { CodeModeInstructions } from "@ocpp/core/codemode/instructions"
 import { Config } from "@ocpp/core/config"
 import { Database } from "@ocpp/core/database/database"
@@ -20,11 +19,9 @@ import { Job } from "@ocpp/core/job"
 import { KV } from "@ocpp/core/kv"
 import { Location } from "@ocpp/core/location"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
-import { Model } from "@ocpp/core/model"
 import { OpenApi } from "@ocpp/core/openapi/index"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { PluginSupervisor } from "@ocpp/core/plugin/supervisor"
-import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
@@ -38,7 +35,7 @@ import { SubagentTool } from "@ocpp/core/tool/plugin/subagent"
 import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
 import { ExternalAgentSession } from "@ocpp/core/external-agent/session"
 import { noVendorDrivers } from "./lib/drivers"
-import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
+import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Global } from "@ocpp/util/global"
@@ -48,6 +45,8 @@ import { SessionHistory } from "@ocpp/core/session/history"
 import { tempGlobalLayer } from "./fixture/global"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
+import { TestStepHost } from "./fixture/step-host"
+import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import {
   activateCodeMode,
   readCodeModeNotebook,
@@ -59,46 +58,26 @@ import {
 } from "./lib/tool"
 
 const childText = "child review done"
-const tokens = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
-/** Sessions whose model a notification woke. */
-const wakes: Array<Session.ID> = []
-
-// Drains complete in one scripted step, so a rejoined child answers without a model.
-const executionNode = makeGlobalNode({
-  service: SessionExecution.Service,
-  layer: Layer.effect(
-    SessionExecution.Service,
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const answer = Effect.fn("CodeModeResumeTest.answer")(function* (sessionID: Session.ID) {
-        const assistantMessageID = SessionMessage.ID.create()
-        yield* bus.publish(SessionEvent.Step.Started, {
-          sessionID,
-          assistantMessageID,
-          agent: Agent.ID.make("reviewer"),
-          model: { id: Model.ID.make("child"), providerID: Provider.ID.make("test") },
-        })
-        yield* bus.publish(SessionEvent.Text.Started, { sessionID, assistantMessageID, ordinal: 0 })
-        yield* bus.publish(SessionEvent.Text.Ended, { sessionID, assistantMessageID, ordinal: 0, text: childText })
-        yield* bus.publish(SessionEvent.Step.Ended, {
-          sessionID,
-          assistantMessageID,
-          finish: "stop",
-          cost: Money.USD.zero,
-          tokens,
-        })
-      })
-      return SessionExecution.Service.of({
-        active: Effect.succeed(new Set()),
-        isActive: () => Effect.succeed(false),
-        resume: answer,
-        wake: (sessionID) => Effect.sync(() => void wakes.push(sessionID)),
-        interrupt: () => Effect.succeed(false),
-        awaitIdle: () => Effect.void,
-      })
-    }),
-  ),
-  deps: [Bus.node],
+// A child answers in one step, so a rejoined child answers without a model. A top-level Session's input
+// waits for a model these tests never run.
+const steps = TestStepHost.make({
+  step: (sessionID) =>
+    SessionStore.Service.use((store) => store.get(sessionID)).pipe(
+      Effect.map((session) =>
+        session?.parentID
+          ? ({
+              finish: "stop",
+              text: childText,
+              agent: "reviewer",
+              model: { id: "child", providerID: "test" },
+            } as const)
+          : undefined,
+      ),
+    ),
+  prepare: (sessionID) =>
+    SessionStore.Service.use((store) => store.get(sessionID)).pipe(
+      Effect.flatMap((session) => (session?.parentID ? Effect.void : Effect.never)),
+    ),
 })
 
 const supervisor = makeLocationNode({
@@ -137,7 +116,7 @@ const nodes = LayerNode.group([
 ])
 
 const replacements = [
-  [SessionExecution.node, executionNode],
+  steps.replacement,
   [Global.node, tempGlobalLayer],
   [PluginSupervisor.node, supervisor],
   [ExternalAgentDrivers.node, noVendorDrivers],
@@ -542,11 +521,11 @@ describe("Code Mode resume", () => {
           review: { sessionID: child.id, status: "completed", message: childText, output: null },
         })
         // The child is told to continue instead of receiving its task a second time.
-        const database = yield* Database.Service
-        expect(yield* SessionInbox.list(database.db, child.id)).toMatchObject([
+        const context = yield* SessionStore.Service.use((store) => store.context(child.id))
+        expect(context.filter((message) => message.type !== "assistant")).toMatchObject([
           {
             type: "synthetic",
-            payload: { text: expect.stringContaining("The server restarted while you were working on this task.") },
+            text: expect.stringContaining("The server restarted while you were working on this task."),
           },
         ])
       }),
@@ -600,6 +579,51 @@ const restart = Effect.gen(function* () {
   const recovery = yield* SessionRestart.Service
   yield* recovery.resumeSuspendedSessions
 })
+
+/** The Specter log's latest position, from which `woken` reads. */
+const position = Database.Service.use(({ db }) =>
+  db
+    .select({ order: SpecterEventTable.order })
+    .from(SpecterEventTable)
+    .orderBy(desc(SpecterEventTable.order))
+    .limit(1)
+    .get()
+    .pipe(
+      Effect.orDie,
+      Effect.map((row) => row?.order ?? 0),
+    ),
+)
+
+/** The Sessions that input admitted after `since` woke: each admission not held wakes its Session. */
+const woken = (since: number) =>
+  Database.Service.use(({ db }) =>
+    db
+      .select()
+      .from(SpecterEventTable)
+      .where(
+        and(
+          gt(SpecterEventTable.order, since),
+          inArray(SpecterEventTable.type, ["session-inbox-enqueued", "session-inbox-held"]),
+        ),
+      )
+      .orderBy(asc(SpecterEventTable.order))
+      .all()
+      .pipe(
+        Effect.orDie,
+        Effect.map((rows) => {
+          const facts = rows.map((row) => ({
+            type: row.type,
+            payload: row.payload as { readonly sessionID: Session.ID; readonly inboxID: string },
+          }))
+          const held = new Set(
+            facts.flatMap((fact) => (fact.type === "session-inbox-held" ? [fact.payload.inboxID] : [])),
+          )
+          return facts.flatMap((fact) =>
+            fact.type === "session-inbox-enqueued" && !held.has(fact.payload.inboxID) ? [fact.payload.sessionID] : [],
+          )
+        }),
+      ),
+  )
 
 const inbox = (sessionID: Session.ID) =>
   Effect.gen(function* () {
@@ -849,10 +873,10 @@ describe("Code Mode crash recovery", () => {
     expect(before).toEqual(["lookup:go", "wait:2"])
 
     const after: Array<string> = []
-    wakes.length = 0
     const recovered = await run(
       Effect.gen(function* () {
         yield* register(location, testTools(after))
+        const since = yield* position
         yield* restart
         const info = yield* waitForCodeModeExecution(started.executionID)
         yield* waitForCodeModeNotification(started.executionID)
@@ -865,6 +889,7 @@ describe("Code Mode crash recovery", () => {
             (message) => message.type === "invocation",
           ),
           inbox: yield* inbox(started.sessionID),
+          woken: yield* woken(since),
         }
       }),
     )
@@ -889,7 +914,7 @@ describe("Code Mode crash recovery", () => {
         metadata: { source: "codemode", state: "completed" },
       },
     })
-    expect(wakes).not.toContain(started.sessionID)
+    expect(recovered.woken).not.toContain(started.sessionID)
   })
 
   test("stops resuming a run after three restarts that each stopped it again", async () => {

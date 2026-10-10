@@ -169,7 +169,8 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
         const session = yield* get(sessionID)
         const messageID = input.id ?? SessionMessage.ID.create()
         const admitted = yield* Effect.gen(function* () {
-          const existing = yield* admission.reconcile({
+          // A retried ID returns its first admission without preparing a payload the runtime would refuse.
+          const existing = yield* admission.admitted({
             id: messageID,
             sessionID: session.id,
             type: "user",
@@ -318,12 +319,12 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
           const inputID = input.id ?? SessionMessage.ID.create()
           const admit = (
             payload: Pick<SessionInbox.SyntheticPayload, "text" | "description" | "metadata">,
-            replaces?: ReadonlyArray<SessionMessage.ID>,
+            coalesce?: { readonly key: string; readonly replaces: ReadonlyArray<SessionMessage.ID> },
           ) =>
             admission.admit({
               id: inputID,
               sessionID,
-              replaces,
+              ...(coalesce === undefined ? {} : { coalesce }),
               ...(resume ? {} : { resume: false }),
               item: {
                 type: "synthetic",
@@ -340,30 +341,17 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
           const admitted = yield* (
             coalesce === undefined
               ? admit(input)
-              : // Serialized among coalescing admissions; the runtime refuses to replace an item it delivered meanwhile.
-                SessionInbox.serialized(
-                  sessionID,
-                  Effect.gen(function* () {
-                    const existing = yield* admission.reconcile({
-                      id: inputID,
-                      sessionID,
-                      type: "synthetic",
-                      delivery: input.delivery ?? "steer",
-                    })
-                    if (existing) return existing
-                    const replaced = (yield* admission.list(sessionID)).filter(
-                      (item): item is SessionInbox.Synthetic =>
-                        item.type === "synthetic" && item.payload.metadata?.coalesce === coalesce.key,
-                    )
-                    const merged = replaced.length === 0 ? input : coalesce.merge(replaced.map((item) => item.payload))
-                    // The replaced items are cancelled in the admission's own commit.
-                    return yield* admit(
-                      { ...merged, metadata: { ...merged.metadata, coalesce: coalesce.key } },
-                      replaced.map((item) => item.id),
-                    )
-                  }),
-                ).pipe(
-                  // A runtime that delivers on its own can take a replaced item first: read the inbox again.
+              : Effect.gen(function* () {
+                  const replaced = (yield* admission.list(sessionID)).filter(
+                    (item): item is SessionInbox.Synthetic =>
+                      item.type === "synthetic" && item.payload.metadata?.coalesce === coalesce.key,
+                  )
+                  const merged = replaced.length === 0 ? input : coalesce.merge(replaced.map((item) => item.payload))
+                  // The runtime cancels the replaced items in the admission's own commit and marks it with the key.
+                  return yield* admit(merged, { key: coalesce.key, replaces: replaced.map((item) => item.id) })
+                }).pipe(
+                  // The runtime refuses the replacement when the items under the key changed meanwhile (one was
+                  // delivered, or another notice coalesced): read the inbox again.
                   Effect.retry({ times: 3, while: (error) => error._tag === "SessionInbox.LifecycleConflict" }),
                 )
           ).pipe(

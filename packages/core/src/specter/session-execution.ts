@@ -58,7 +58,8 @@ export const layer = Layer.effect(
         sessionID: SessionSchema.ID,
         options?: { readonly continue?: boolean },
       ) {
-        yield* specter.register(sessionID)
+        // Interrupting a Session OC++ does not know is a no-op, as for an idle one.
+        if (!(yield* specter.register(sessionID))) return false
         // The running attempt records what it produced before the interruption settles its step.
         yield* specter.stop(sessionID)
         const interrupted = yield* specter.runtime.command({ type: "interruptExecution", payload: { sessionID } }).pipe(

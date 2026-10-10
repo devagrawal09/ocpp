@@ -1,6 +1,6 @@
 export * as SpecterSessionRuntime from "./session-runtime.js"
 
-import { Context, Deferred, Duration, Effect, Layer, Stream, SubscriptionRef } from "effect"
+import { Context, Deferred, Duration, Effect, Layer, Stream } from "effect"
 import { eq } from "drizzle-orm"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import {
@@ -14,14 +14,11 @@ import {
   type DriveOutcome,
   type EmbeddedSessionRuntime,
   type RecordFailure,
-  type EventLogService,
-  type PersistedEvent,
   type ReactionOutboxStore,
   type RunStepOutboxStore,
 } from "@ocpp/session-runtime"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
-import { LocationServiceMap } from "../location-service-map.js"
 import { SessionEvent } from "../session/event.js"
 import { SessionSchema } from "../session/schema.js"
 import { SessionTable } from "../session/sql.js"
@@ -43,9 +40,12 @@ const CONTINUE_AFTER_RESTART =
  */
 export interface Interface {
   readonly runtime: EmbeddedSessionRuntime
-  /** Records a Session the log predates with the runtime, once, before its first runtime Command. */
-  readonly register: (sessionID: SessionSchema.ID) => Effect.Effect<void>
-  /** Sessions with an execution the runtime has started and not yet settled. */
+  /**
+   * Records a Session the log predates with the runtime, once, before its first runtime Command. Answers
+   * whether OC++ knows the Session.
+   */
+  readonly register: (sessionID: SessionSchema.ID) => Effect.Effect<boolean>
+  /** Sessions with an execution the runtime has started and not yet settled, in any process. */
   readonly active: Effect.Effect<ReadonlySet<SessionSchema.ID>>
   /** Resolves once the runtime has no active execution for the Session, nor input about to start one. */
   readonly awaitIdle: (sessionID: SessionSchema.ID) => Effect.Effect<void>
@@ -74,32 +74,9 @@ const layer = Layer.effect(
     const bus = yield* Bus.Service
     const store = yield* SessionStore.Service
     const db = (yield* Database.Service).db
-    const active = yield* SubscriptionRef.make<ReadonlySet<SessionSchema.ID>>(new Set())
-    const shared = yield* bus.specterLog
-
-    const track = (events: readonly PersistedEvent[]) =>
-      SubscriptionRef.update(active, (current) => {
-        let next = current
-        for (const event of events) {
-          const sessionID = (event.payload as { readonly sessionID: SessionSchema.ID }).sessionID
-          if (event.type === "session-execution-started") next = new Set(next).add(sessionID)
-          if (event.type === "session-execution-settled" && next.has(sessionID)) {
-            const settled = new Set(next)
-            settled.delete(sessionID)
-            next = settled
-          }
-        }
-        return next
-      })
-    // The runtime's own commits are the only ones that start or settle an execution. Tracking them as
-    // the append returns keeps `active` current before the Command that recorded them returns.
-    const log: EventLogService = {
-      ...shared,
-      append: (drafts, options) =>
-        shared
-          .append(drafts, options)
-          .pipe(Effect.tap((result) => (result.duplicate ? Effect.void : track(result.events)))),
-    }
+    const log = yield* bus.specterLog
+    // The executions a stopped process left running, as the runtime found them at boot.
+    const left = yield* Deferred.make<Set<SessionSchema.ID>>()
 
     // Resolves once the runtime's state says so: no execution is active (settled), and also none is about
     // to start from input that wakes the Session (idle; OC++'s runner coalesced that into the busy period).
@@ -120,7 +97,7 @@ const layer = Layer.effect(
     // An attempt stops when it is told to, before an interrupt is recorded, or once its execution
     // settles: either cancels the model stream and the tools it started, as in OC++'s own runner, and
     // the attempt records what it produced on the way out.
-    const host = yield* SpecterStepHost.make
+    const host = yield* StepHost
     const running = new Map<
       SessionSchema.ID,
       { readonly stop: Deferred.Deferred<void>; readonly done: Deferred.Deferred<void> }
@@ -173,9 +150,11 @@ const layer = Layer.effect(
             drive: (input: Parameters<NonNullable<typeof host.drive>>[0]) =>
               Effect.gen(function* () {
                 const sessionID = SessionSchema.ID.make(input.sessionID)
-                // This process did not start the execution: a process that stopped left it running, and the
-                // agent hears why its turn goes on before it continues.
-                if (!(yield* SubscriptionRef.get(active)).has(sessionID))
+                // A process that stopped left the execution running, and the agent hears why its turn goes on
+                // before it continues. An execution the boot itself started from input recorded just before the
+                // stop counts as left running too.
+                const resumed = yield* Deferred.await(left)
+                if (resumed.delete(sessionID))
                   yield* bus.publish(SessionEvent.Synthetic, {
                     sessionID,
                     text: CONTINUE_AFTER_RESTART,
@@ -209,6 +188,11 @@ const layer = Layer.effect(
       Effect.orDie,
     )
     started = runtime
+    const active = runtime.query({ type: "activeSessions", payload: {} }).pipe(
+      Effect.orDie,
+      Effect.map((result) => new Set(result.sessionIDs.map((id) => SessionSchema.ID.make(id)))),
+    )
+    yield* Deferred.succeed(left, yield* active)
 
     const register = Effect.fn("SpecterSessionRuntime.register")(function* (sessionID: SessionSchema.ID) {
       const session = yield* store.get(sessionID)
@@ -218,7 +202,7 @@ const layer = Layer.effect(
         .where(eq(SessionTable.id, sessionID))
         .get()
         .pipe(Effect.orDie)
-      if (!session || !row) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
+      if (!session || !row) return false
       yield* runtime
         .command(
           {
@@ -251,6 +235,7 @@ const layer = Layer.effect(
           ),
           Effect.orDie,
         )
+      return true
     })
     const registered = new Set<SessionSchema.ID>()
 
@@ -258,9 +243,15 @@ const layer = Layer.effect(
       runtime,
       register: (sessionID) =>
         registered.has(sessionID)
-          ? Effect.void
-          : register(sessionID).pipe(Effect.tap(() => Effect.sync(() => registered.add(sessionID)))),
-      active: SubscriptionRef.get(active),
+          ? Effect.succeed(true)
+          : register(sessionID).pipe(
+              Effect.tap((known) =>
+                Effect.sync(() => {
+                  if (known) registered.add(sessionID)
+                }),
+              ),
+            ),
+      active,
       awaitIdle,
       awaitSettled: (sessionID) => awaitStatus(sessionID, false),
       stop,
@@ -271,5 +262,5 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
-  deps: [Bus.node, Database.node, SessionStore.node, LocationServiceMap.node],
+  deps: [Bus.node, Database.node, SessionStore.node, SpecterStepHost.node],
 })

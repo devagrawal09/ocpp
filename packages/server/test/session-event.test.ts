@@ -10,12 +10,12 @@ import { Provider } from "@ocpp/core/provider"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { SessionEvent } from "@ocpp/core/session/event"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { Tool } from "@ocpp/core/tool"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
-import { makeGlobalNode } from "@ocpp/util/effect/app-node"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Money } from "@ocpp/schema/money"
+import { type Context, Effect, Schema } from "effect"
+import { TestStepHost } from "../../core/test/fixture/step-host"
 import { tmpdirScoped } from "../../core/test/fixture/tmpdir"
 import { it } from "../../core/test/lib/effect"
 import { ServerFetch } from "../src/fetch"
@@ -133,28 +133,12 @@ it.live("cancels only a running execution of the session", () =>
  * the server's own services: it runs the model's program the way the runner does.
  */
 const serve = Effect.fnUntraced(function* () {
-  const captured: { context?: Context.Context<Services> } = {}
-  const execution = makeGlobalNode({
-    service: SessionExecution.Service,
-    layer: Layer.effect(
-      SessionExecution.Service,
-      Effect.gen(function* () {
-        captured.context = yield* Effect.context<Services>()
-        return SessionExecution.Service.of({
-          active: Effect.succeed(new Set()),
-          isActive: () => Effect.succeed(false),
-          resume: () => Effect.void,
-          wake: () => Effect.void,
-          interrupt: () => Effect.succeed(false),
-          awaitIdle: () => Effect.void,
-        })
-      }),
-    ),
-    deps: [Bus.node, Job.node, LocationServiceMap.node],
-  })
+  // The test step host is the harness's handle on the server's own services: it runs no model.
+  const captured: { current?: Context.Context<Services> } = {}
+  const steps = TestStepHost.make({ capture: captured })
   const handler = yield* ServerFetch.make(
     { app: { version: "test-version" }, database: { path: ":memory:" }, fs: { filewatcher: false } },
-    { overrides: [[SessionExecution.node, execution]] },
+    { overrides: [steps.replacement] },
   )
   const directory = yield* tmpdirScoped()
   const create = () =>
@@ -169,7 +153,7 @@ const serve = Effect.fnUntraced(function* () {
     ).pipe(Effect.map((created) => Session.ID.make(created.data.id)))
   const sessionID = yield* create()
   const location = Location.Ref.make({ directory: AbsolutePath.make(directory.path) })
-  const context = captured.context ?? (yield* Effect.die(new Error("The execution layer was not built")))
+  const context = captured.current ?? (yield* Effect.die(new Error("The step host was not built")))
   const request = (path: string, init?: { method?: string; body?: unknown }) =>
     Effect.promise(() =>
       handler(
@@ -227,6 +211,14 @@ const run = Effect.fnUntraced(function* (sessionID: Session.ID, location: Locati
     id,
     content: [{ type: "text", text: "started" }],
     executed: false,
+  })
+  // As the runner's step ends once its tools settle.
+  yield* bus.publish(SessionEvent.Step.Ended, {
+    sessionID,
+    assistantMessageID,
+    finish: "tool-calls",
+    cost: Money.USD.zero,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   })
   const settled = yield* jobs.wait({ id: decodeStarted(result.output).executionID })
   expect(settled.info?.status).toBe("completed")

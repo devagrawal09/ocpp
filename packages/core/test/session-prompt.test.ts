@@ -24,7 +24,6 @@ import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionPrompt } from "@ocpp/core/session/prompt"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionRevert } from "@ocpp/core/session/revert"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionInboxTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
 import { SessionStore } from "@ocpp/core/session/store"
@@ -43,35 +42,10 @@ import { Global } from "@ocpp/util/global"
 import { EffectFlock } from "@ocpp/util/effect-flock"
 import { Cache } from "@ocpp/core/cache"
 import { gitRemote, git, commit, read } from "./fixture/git"
-import * as InboxPromotion from "./fixture/inbox-promotion"
+import { TestStepHost } from "./fixture/step-host"
 
-const executionCalls: Session.ID[] = []
-const interruptCalls: Session.ID[] = []
-const interruptContinuations: Array<boolean | undefined> = []
-const wakeCalls: Session.ID[] = []
-const activeSessions = new Set<Session.ID>()
-const execution = Layer.succeed(
-  SessionExecution.Service,
-  SessionExecution.Service.of({
-    active: Effect.sync(() => new Set(activeSessions)),
-    isActive: (sessionID) => Effect.sync(() => activeSessions.has(sessionID)),
-    resume: (sessionID) =>
-      Effect.sync(() => {
-        executionCalls.push(sessionID)
-      }),
-    interrupt: (sessionID, options) =>
-      Effect.sync(() => {
-        interruptCalls.push(sessionID)
-        interruptContinuations.push(options?.continue)
-        return activeSessions.delete(sessionID)
-      }),
-    wake: (sessionID) =>
-      Effect.sync(() => {
-        wakeCalls.push(sessionID)
-      }),
-    awaitIdle: () => Effect.void,
-  }),
-)
+// The runtime runs every Session; a step produces nothing unless a test scripts one.
+const steps = TestStepHost.make()
 const locations = (references: Layer.Layer<Reference.Service>) =>
   makeGlobalNode({
     service: LocationServiceMap.Service,
@@ -131,11 +105,7 @@ const locations = (references: Layer.Layer<Reference.Service>) =>
 const sessionLayer = (references = Layer.mock(Reference.Service, { refresh: () => Effect.void })) =>
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [
-      [Bus.node, Bus.configured()],
-      [SessionExecution.node, execution],
-      [LocationServiceMap.node, locations(references)],
-    ],
+    [[Bus.node, Bus.configured()], steps.replacement, [LocationServiceMap.node, locations(references)]],
   )
 const it = testEffect(sessionLayer())
 const sessionID = Session.ID.make("ses_prompt_test")
@@ -187,6 +157,8 @@ const eventCount = (type: string) =>
         Effect.map((rows) => rows.length),
       ),
   )
+
+const executionsStarted = eventCount(Bus.versionedType(SessionEvent.Execution.Started.type, 1))
 
 const encodeMessage = Schema.encodeSync(SessionMessage.Info)
 const assistantRow = (id: SessionMessage.ID, seq: number) => {
@@ -322,61 +294,59 @@ describe("Session.prompt", () => {
 
   it.effect("exposes the execution registry", () =>
     Effect.gen(function* () {
-      const session = yield* Session.Service
-      activeSessions.add(sessionID)
-      expect(Array.from(yield* session.active)).toEqual([sessionID])
-    }).pipe(Effect.ensuring(Effect.sync(() => activeSessions.clear()))),
-  )
-
-  it.effect("delegates execution continuation through SessionExecution", () =>
-    Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      executionCalls.length = 0
-      wakeCalls.length = 0
-      yield* session.resume(sessionID)
-      expect(executionCalls).toEqual([sessionID])
-      expect(wakeCalls).toEqual([])
+      const busy = yield* steps.busy(sessionID)
+      expect(Array.from(yield* session.active)).toEqual([sessionID])
+      yield* busy.release
+      yield* session.wait(sessionID)
+      expect(Array.from(yield* session.active)).toEqual([])
     }),
   )
 
-  it.effect("delegates process-local interruption through SessionExecution", () =>
+  it.effect("continues execution through the runtime without input", () =>
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      interruptCalls.length = 0
-      wakeCalls.length = 0
-
-      expect(yield* session.interrupt(sessionID)).toBeFalse()
-      expect(interruptCalls).toEqual([sessionID])
-      expect(wakeCalls).toEqual([])
+      yield* session.resume(sessionID)
+      expect(yield* executionsStarted).toBe(1)
       expect(yield* session.messages({ sessionID })).toEqual([])
     }),
   )
 
-  it.effect("forwards interrupt continuation policy", () =>
+  it.effect("treats interrupting an idle Session as a no-op", () =>
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      interruptCalls.length = 0
-      interruptContinuations.length = 0
-      wakeCalls.length = 0
 
-      yield* session.interrupt(sessionID, { continue: true })
-
-      expect(interruptCalls).toEqual([sessionID])
-      expect(interruptContinuations).toEqual([true])
-      expect(wakeCalls).toEqual([])
+      expect(yield* session.interrupt(sessionID)).toBeFalse()
+      expect(yield* executionsStarted).toBe(0)
+      expect(yield* session.messages({ sessionID })).toEqual([])
     }),
   )
 
-  it.effect("delegates interruption without requiring a recorded Session", () =>
+  it.effect("continues an interrupted execution with the input that steers it", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const session = yield* Session.Service
+      const busy = yield* steps.busy(sessionID)
+      const steer = yield* session.prompt({ sessionID, text: "Steer after the interrupt" })
+      expect(yield* session.inbox(sessionID)).toMatchObject([{ id: steer.id }])
+
+      expect(yield* session.interrupt(sessionID, { continue: true })).toBeTrue()
+      yield* busy.release
+      yield* session.wait(sessionID)
+
+      expect(yield* session.inbox(sessionID)).toEqual([])
+      expect(yield* session.messages({ sessionID })).toContainEqual(expect.objectContaining({ id: steer.id }))
+      expect(yield* executionsStarted).toBe(2)
+    }),
+  )
+
+  it.effect("treats interrupting an unknown Session as a no-op", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
-      interruptCalls.length = 0
-
-      yield* session.interrupt(Session.ID.make("ses_missing"))
-      expect(interruptCalls).toEqual([Session.ID.make("ses_missing")])
+      expect(yield* session.interrupt(Session.ID.make("ses_missing"))).toBeFalse()
     }),
   )
 
@@ -415,7 +385,7 @@ describe("Session.prompt", () => {
         text: "boundary",
         resume: false,
       })
-      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
       const stale = SessionMessage.ID.make("msg_stale_assistant")
       yield* db.insert(SessionMessageTable).values(assistantRow(stale, 100)).run().pipe(Effect.orDie)
       yield* bus.publish(SessionEvent.RevertEvent.Staged, {
@@ -447,16 +417,17 @@ describe("Session.prompt", () => {
         text: "boundary",
         resume: false,
       })
-      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
       yield* bus.publish(SessionEvent.RevertEvent.Staged, {
         sessionID,
         revert: { messageID: boundary.id, files: [] },
       })
-      wakeCalls.length = 0
 
       const completion = yield* session.synthetic({ sessionID, text: "stale completion" })
 
-      expect(wakeCalls).toEqual([])
+      // Held: nothing wakes the Session for it.
+      yield* session.wait(sessionID)
+      expect(yield* executionsStarted).toBe(1)
       expect(yield* SessionInbox.find(db, completion.id)).toMatchObject({ type: "synthetic" })
 
       yield* session.revert.commit(sessionID)
@@ -662,25 +633,25 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
       const publicEvents = (input: { sessionID: Session.ID; after?: number }) =>
         session
           .log({ ...input, follow: true })
           .pipe(Stream.filter((item): item is SessionEvent.DurableEvent => !Bus.isSynced(item)))
-      const fiber = yield* publicEvents({ sessionID }).pipe(Stream.take(4), Stream.runCollect, Effect.forkScoped)
+      const fiber = yield* publicEvents({ sessionID }).pipe(Stream.take(6), Stream.runCollect, Effect.forkScoped)
       yield* Effect.yieldNow
 
       yield* session.prompt({ sessionID, text: "First", resume: false })
       yield* session.prompt({ sessionID, text: "Second", resume: false })
-      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
       const streamed = Array.from(yield* Fiber.join(fiber))
 
       expect(streamed.map((event): [number | undefined, string] => [event.durable?.seq, event.type])).toEqual([
         [0, "session.inbox.enqueued"],
         [1, "session.inbox.enqueued"],
-        [2, "session.inbox.delivered"],
+        [2, "session.execution.started"],
         [3, "session.inbox.delivered"],
+        [4, "session.inbox.delivered"],
+        [5, "session.execution.succeeded"],
       ])
       expect(
         Array.from(
@@ -700,14 +671,12 @@ describe("Session.prompt", () => {
         resume: false,
       })
 
-      executionCalls.length = 0
-      wakeCalls.length = 0
       yield* session.resume(sessionID)
 
-      expect(yield* session.messages({ sessionID })).toEqual([])
-      expect((yield* session.inbox(sessionID)).map((item) => item.id)).toEqual([message.id])
-      expect(executionCalls).toEqual([sessionID])
-      expect(wakeCalls).toEqual([])
+      // The execution delivers the recorded message; no other prompt appears.
+      expect((yield* session.messages({ sessionID })).map((item) => item.id)).toEqual([message.id])
+      expect(yield* session.inbox(sessionID)).toEqual([])
+      expect(yield* executionsStarted).toBe(1)
     }),
   )
 
@@ -750,11 +719,10 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const input = { sessionID, id: messageID, text: "Fix the failing tests", resume: false }
       const first = yield* session.prompt(input)
-      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
       yield* db.delete(EventTable).where(eq(EventTable.aggregate_id, sessionID)).run().pipe(Effect.orDie)
 
       const retried = yield* session.prompt(input)
@@ -770,11 +738,9 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
       const input = { sessionID, id: messageID, text: "Fix the failing tests", resume: false }
       yield* session.prompt(input)
-      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
 
       const retried = yield* session.prompt({ ...input, delivery: "queue" })
 
@@ -794,12 +760,13 @@ describe("Session.prompt", () => {
         resume: false,
       }
       const first = yield* session.prompt(input)
-      wakeCalls.length = 0
 
       const retried = yield* session.prompt({ ...input, resume: true })
 
       expect(retried).toEqual(first)
-      expect(wakeCalls).toEqual([sessionID])
+      // The retry woke the Session, which delivered the message.
+      yield* session.wait(sessionID)
+      expect((yield* session.messages({ sessionID })).map((message) => message.id)).toEqual([first.id])
     }),
   )
 
@@ -875,9 +842,7 @@ describe("Session.prompt", () => {
   it.effect("promotes one message once under concurrent promotion attempts", () =>
     Effect.gen(function* () {
       yield* setup
-      const { db } = yield* Database.Service
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
       yield* session.prompt({
         id: messageID,
         sessionID,
@@ -885,10 +850,7 @@ describe("Session.prompt", () => {
         resume: false,
       })
 
-      yield* Effect.all(
-        [InboxPromotion.promote(db, bus, sessionID, "steer"), InboxPromotion.promote(db, bus, sessionID, "steer")],
-        { concurrency: "unbounded" },
-      )
+      yield* Effect.all([session.resume(sessionID), session.resume(sessionID)], { concurrency: "unbounded" })
 
       expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxDelivered.type, 1))).toBe(1)
       expect(yield* admitted(messageID)).toBeUndefined()
@@ -904,7 +866,6 @@ describe("Session.prompt", () => {
       const { db } = yield* Database.Service
       const session = yield* Session.Service
       const bus = yield* Bus.Service
-      wakeCalls.length = 0
       yield* session.prompt({
         id: messageID,
         sessionID,
@@ -933,7 +894,8 @@ describe("Session.prompt", () => {
         payload: { text: "Replay synthetic" },
       })
       expect(yield* session.messages({ sessionID })).toEqual([])
-      expect(wakeCalls).toEqual([])
+      yield* session.wait(sessionID)
+      expect(yield* executionsStarted).toBe(0)
     }),
   )
 
@@ -1004,13 +966,11 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      executionCalls.length = 0
-      wakeCalls.length = 0
+      const message = yield* session.prompt({ sessionID, text: "Run by default" })
 
-      yield* session.prompt({ sessionID, text: "Run by default" })
-
-      expect(executionCalls).toEqual([])
-      expect(wakeCalls).toEqual([sessionID])
+      yield* session.wait(sessionID)
+      expect(yield* executionsStarted).toBe(1)
+      expect((yield* session.messages({ sessionID })).map((item) => item.id)).toEqual([message.id])
     }),
   )
 
@@ -1018,17 +978,15 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      executionCalls.length = 0
-      wakeCalls.length = 0
-
-      yield* session.prompt({
+      const message = yield* session.prompt({
         sessionID,
         text: "Run explicitly",
         resume: true,
       })
 
-      expect(executionCalls).toEqual([])
-      expect(wakeCalls).toEqual([sessionID])
+      yield* session.wait(sessionID)
+      expect(yield* executionsStarted).toBe(1)
+      expect((yield* session.messages({ sessionID })).map((item) => item.id)).toEqual([message.id])
     }),
   )
 
@@ -1036,13 +994,11 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      executionCalls.length = 0
-      wakeCalls.length = 0
+      const message = yield* session.prompt({ sessionID, text: "Do not run", resume: false })
 
-      yield* session.prompt({ sessionID, text: "Do not run", resume: false })
-
-      expect(executionCalls).toEqual([])
-      expect(wakeCalls).toEqual([])
+      yield* session.wait(sessionID)
+      expect(yield* executionsStarted).toBe(0)
+      expect((yield* session.inbox(sessionID)).map((item) => item.id)).toEqual([message.id])
     }),
   )
 
@@ -1073,8 +1029,6 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
 
       const input = yield* session.synthetic({
         id: messageID,
@@ -1097,7 +1051,7 @@ describe("Session.prompt", () => {
         },
       })
 
-      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
 
       expect(yield* session.messages({ sessionID })).toMatchObject([
         {
@@ -1115,14 +1069,12 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const database = yield* Database.Service
       const input = { id: messageID, sessionID, text: "Completed", resume: false }
 
       const entries = yield* Effect.all([session.synthetic(input), session.synthetic(input)], {
         concurrency: "unbounded",
       })
-      yield* InboxPromotion.promote(database.db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
       const promotedRetry = yield* session.synthetic(input)
       const differing = yield* session.synthetic({ ...input, text: "Different completion" })
 
@@ -1138,23 +1090,23 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
 
+      const busy = yield* steps.busy(sessionID)
       const input = yield* session.synthetic({
         sessionID,
         text: "Queued completion",
         delivery: "queue",
-        resume: false,
       })
 
       expect(input.delivery).toBe("queue")
-      expect(yield* SessionInbox.has(db, sessionID, "input")).toBe(true)
-      expect(yield* InboxPromotion.promote(db, bus, sessionID, "steer")).toBe(0)
-      expect(yield* session.messages({ sessionID })).toEqual([])
-      expect(yield* InboxPromotion.promote(db, bus, sessionID, "input")).toBe(1)
-      expect(yield* SessionInbox.has(db, sessionID, "input")).toBe(false)
-      expect(yield* session.messages({ sessionID })).toMatchObject([
+      expect(yield* session.inbox(sessionID)).toMatchObject([{ id: input.id }])
+      expect(yield* session.messages({ sessionID })).toMatchObject([{ type: "assistant" }])
+      // The step settles with nothing to continue: the idle boundary takes the queued input.
+      yield* busy.release
+      yield* session.wait(sessionID)
+      expect(yield* session.inbox(sessionID)).toEqual([])
+      expect(yield* session.messages({ sessionID, order: "asc" })).toMatchObject([
+        { type: "assistant" },
         { id: input.id, type: "synthetic", text: "Queued completion" },
       ])
     }),
@@ -1164,8 +1116,6 @@ describe("Session.prompt", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
 
       yield* session.prompt({
         sessionID,
@@ -1179,7 +1129,7 @@ describe("Session.prompt", () => {
         resume: false,
       })
 
-      yield* InboxPromotion.promote(db, bus, sessionID, "steer")
+      yield* session.resume(sessionID)
 
       expect(
         (yield* session.messages({ sessionID, order: "asc" })).map((message) =>
@@ -1229,8 +1179,6 @@ describe("Session.inbox", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const bus = yield* Bus.Service
-      const { db } = yield* Database.Service
 
       const first = yield* session.prompt({ sessionID, text: "First steer", resume: false })
       const queued = yield* session.synthetic({
@@ -1247,10 +1195,14 @@ describe("Session.inbox", () => {
         { id: second.id, type: "user", delivery: "steer" },
       ])
 
-      expect(yield* InboxPromotion.promote(db, bus, sessionID, "input")).toBe(2)
+      // The idle boundary takes the steers; the queued input waits for the next one.
+      const step = steps.hold(sessionID)
+      const running = yield* session.resume(sessionID).pipe(Effect.forkChild)
+      yield* step.started
       expect(yield* session.inbox(sessionID)).toMatchObject([{ id: queued.id, type: "synthetic" }])
 
-      expect(yield* InboxPromotion.promote(db, bus, sessionID, "input")).toBe(1)
+      yield* step.release
+      yield* Fiber.join(running)
       expect(yield* session.inbox(sessionID)).toEqual([])
     }),
   )
@@ -1259,19 +1211,19 @@ describe("Session.inbox", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
-      const { db } = yield* Database.Service
 
+      // A step in flight keeps the compaction pending.
+      const busy = yield* steps.busy(sessionID)
       const barrier = yield* session.compact({ sessionID })
-      expect(yield* SessionInbox.has(db, sessionID, "input")).toBe(true)
       expect(yield* session.inbox(sessionID)).toMatchObject([{ id: barrier.id, type: "compaction" }])
 
       yield* session.cancelInbox({ sessionID, inboxID: barrier.id })
-      expect(yield* SessionInbox.has(db, sessionID, "input")).toBe(false)
       expect(yield* session.inbox(sessionID)).toEqual([])
+      yield* busy.release
     }),
   )
 
-  it.effect("cancels pending input and allows its ID to be admitted again", () =>
+  it.effect("cancels pending input and keeps its ID admitted once", () =>
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
@@ -1295,14 +1247,12 @@ describe("Session.inbox", () => {
       })
       expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxCancelled.type, 1))).toBe(1)
 
-      const retried = yield* session.prompt({
-        id: inputID,
-        sessionID,
-        text: "Queue this",
-        delivery: "queue",
-        resume: false,
-      })
-      expect(retried).toMatchObject({ id: inputID, delivery: "queue" })
+      // The runtime admits an ID once: a cancelled one is not admitted again.
+      expect(
+        yield* session
+          .prompt({ id: inputID, sessionID, text: "Queue this", delivery: "queue", resume: false })
+          .pipe(Effect.flip),
+      ).toMatchObject({ _tag: "Session.PromptConflictError", sessionID, messageID: inputID })
     }),
   )
 
@@ -1310,6 +1260,8 @@ describe("Session.inbox", () => {
     Effect.gen(function* () {
       yield* setup
       const session = yield* Session.Service
+      // A step in flight keeps the input pending until its boundary.
+      const busy = yield* steps.busy(sessionID)
       const queued = yield* session.synthetic({
         sessionID,
         text: "Steer this",
@@ -1317,7 +1269,6 @@ describe("Session.inbox", () => {
         resume: false,
       })
       const alreadySteered = yield* session.prompt({ sessionID, text: "Already steer", resume: false })
-      wakeCalls.length = 0
 
       yield* session.steerInbox({ sessionID, inboxID: queued.id })
 
@@ -1325,16 +1276,13 @@ describe("Session.inbox", () => {
         { id: queued.id, delivery: "steer" },
         { id: alreadySteered.id, delivery: "steer" },
       ])
-      expect(wakeCalls).toEqual([sessionID])
       expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxDeliveryChanged.type, 1))).toBe(1)
 
-      wakeCalls.length = 0
       yield* session.queueInbox({ sessionID, inboxID: queued.id })
       expect(yield* session.inbox(sessionID)).toMatchObject([
         { id: queued.id, delivery: "queue" },
         { id: alreadySteered.id, delivery: "steer" },
       ])
-      expect(wakeCalls).toEqual([])
       expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxDeliveryChanged.type, 1))).toBe(2)
 
       expect(yield* session.steerInbox({ sessionID, inboxID: alreadySteered.id }).pipe(Effect.flip)).toMatchObject({
@@ -1343,9 +1291,15 @@ describe("Session.inbox", () => {
         inboxID: alreadySteered.id,
       })
       yield* session.cancelInbox({ sessionID, inboxID: alreadySteered.id })
-      expect(wakeCalls).toEqual([])
       expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxDeliveryChanged.type, 1))).toBe(2)
       expect(yield* eventCount(Bus.versionedType(SessionEvent.InboxCancelled.type, 1))).toBe(1)
+
+      // Steering the queued input again wakes the Session: the input enters at the next boundary.
+      yield* session.steerInbox({ sessionID, inboxID: queued.id })
+      yield* busy.release
+      yield* session.wait(sessionID)
+      expect(yield* session.inbox(sessionID)).toEqual([])
+      expect(yield* session.messages({ sessionID })).toContainEqual(expect.objectContaining({ id: queued.id }))
     }),
   )
 })

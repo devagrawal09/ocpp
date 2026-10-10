@@ -19,7 +19,6 @@ import { SessionMessage } from "@ocpp/core/session/message"
 import { Money } from "@ocpp/schema/money"
 import { Base64, FileAttachment } from "@ocpp/schema/prompt"
 import { SessionProjector } from "@ocpp/core/session/projector"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { fromRow } from "@ocpp/core/session/info"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { Shell } from "@ocpp/schema/shell"
@@ -27,13 +26,17 @@ import { InstructionStateTable, SessionInboxTable, SessionMessageTable, SessionT
 import { testEffect } from "./lib/effect"
 import { Snapshot } from "@ocpp/core/snapshot"
 import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
+import { TestStepHost } from "./fixture/step-host"
 
+const steps = TestStepHost.make()
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionInbox.node]), [
-    [Bus.node, Bus.configured()],
-  ]),
+  AppNodeBuilder.build(
+    LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionInbox.node, Session.node]),
+    [[Bus.node, Bus.configured()], steps.replacement],
+  ),
 )
-const sessionsLayer = AppNodeBuilder.build(Session.node, [[SessionExecution.node, SessionExecution.noopLayer]])
+
+const sessionsLayer = AppNodeBuilder.build(Session.node, [steps.replacement])
 const sessionID = Session.ID.make("ses_projector_test")
 const created = DateTime.makeUnsafe(0)
 const model = { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }
@@ -94,6 +97,8 @@ describe("SessionProjector", () => {
       const bus = yield* Bus.Service
       const inbox = yield* SessionInbox.Service
       const inputID = SessionMessage.ID.make("msg_manual_compaction")
+      // A step in flight keeps the compaction pending.
+      const busy = yield* steps.busy(sessionID)
       yield* inbox.admitCompaction({ id: inputID, sessionID, delivery: "queue" })
 
       yield* bus.publish(SessionEvent.Compaction.Failed, {
@@ -103,6 +108,7 @@ describe("SessionProjector", () => {
       })
 
       expect(yield* SessionInbox.find(db, inputID)).toMatchObject({ id: inputID })
+      yield* busy.release
     }),
   )
 
@@ -336,32 +342,37 @@ describe("SessionProjector", () => {
       yield* seedSession()
       const bus = yield* Bus.Service
 
-      yield* bus.publish(SessionEvent.InboxEnqueued, {
-        sessionID,
-        inboxID: SessionMessage.ID.make("msg_first"),
-        item: { type: "user", payload: { text: "first" }, delivery: "steer" },
-      })
-      yield* bus.publish(
-        SessionEvent.InboxDelivered,
-        {
-          sessionID,
-          inboxID: SessionMessage.ID.make("msg_first"),
-        },
-        { id: Event.ID.make("evt_z") },
-      )
-      yield* bus.publish(SessionEvent.InboxEnqueued, {
-        sessionID,
-        inboxID: SessionMessage.ID.make("msg_second"),
-        item: { type: "user", payload: { text: "second" }, delivery: "steer" },
-      })
-      yield* bus.publish(
-        SessionEvent.InboxDelivered,
-        {
-          sessionID,
-          inboxID: SessionMessage.ID.make("msg_second"),
-        },
-        { id: Event.ID.make("evt_a") },
-      )
+      // Each prompt is delivered in the commit that admits it, so it never waits in the inbox.
+      yield* bus.publishAll([
+        [
+          SessionEvent.InboxEnqueued,
+          {
+            sessionID,
+            inboxID: SessionMessage.ID.make("msg_first"),
+            item: { type: "user", payload: { text: "first" }, delivery: "steer" },
+          },
+        ],
+        [
+          SessionEvent.InboxDelivered,
+          { sessionID, inboxID: SessionMessage.ID.make("msg_first") },
+          { id: Event.ID.make("evt_z") },
+        ],
+      ])
+      yield* bus.publishAll([
+        [
+          SessionEvent.InboxEnqueued,
+          {
+            sessionID,
+            inboxID: SessionMessage.ID.make("msg_second"),
+            item: { type: "user", payload: { text: "second" }, delivery: "steer" },
+          },
+        ],
+        [
+          SessionEvent.InboxDelivered,
+          { sessionID, inboxID: SessionMessage.ID.make("msg_second") },
+          { id: Event.ID.make("evt_a") },
+        ],
+      ])
 
       const sessions = yield* Session.Service
       const firstPage = yield* sessions.messages({ sessionID, limit: 1, order: "asc" })
@@ -426,9 +437,11 @@ describe("SessionProjector", () => {
         source: { type: "inline" },
         name: "frame.png",
       })
+      // Held, so it waits for the delivery below.
       const admitted = yield* inbox.admit({
         id,
         sessionID,
+        resume: false,
         item: {
           type: "synthetic",
           payload: { text: "Execution completed.", files: [file], metadata: { source: "codemode" } },
@@ -457,9 +470,11 @@ describe("SessionProjector", () => {
       const bus = yield* Bus.Service
       const inbox = yield* SessionInbox.Service
       const id = SessionMessage.ID.make("msg_admitted")
+      // Held, so it waits for the delivery below.
       const admitted = yield* inbox.admit({
         id,
         sessionID,
+        resume: false,
         item: { type: "user", payload: { text: "promote me" }, delivery: "steer" },
       })
       if (!admitted) return yield* Effect.die("Prompt admission failed")

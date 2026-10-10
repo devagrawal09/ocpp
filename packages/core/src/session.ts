@@ -656,29 +656,24 @@ const layer = Layer.effect(
           payload,
           delivery: input.delivery ?? "steer",
         })
-        yield* SessionInbox.serialized(
-          input.sessionID,
-          Effect.gen(function* () {
-            const latest = yield* result.get(input.sessionID)
-            const source = yield* fs.stat(latest.location.directory).pipe(Effect.orElseSucceed(() => undefined))
-            if (!source || source.type !== "Directory") {
-              const cancellations = (yield* SessionInbox.moveIDs(db, input.sessionID)).map(
-                (item) => [SessionEvent.InboxCancelled, { sessionID: input.sessionID, inboxID: item.id }] as const,
-              )
-              const moved = [SessionEvent.Moved, { sessionID: input.sessionID, ...payload }] as const
-              const first = cancellations[0]
-              if (!first) return yield* bus.publish(...moved).pipe(Effect.asVoid)
-              return yield* bus.publishAll([first, ...cancellations.slice(1), moved])
-            }
-            yield* admission
-              .admit({
-                id: SessionMessage.ID.create(),
-                sessionID: input.sessionID,
-                item,
-              })
-              .pipe(Effect.orDie)
-          }),
-        )
+        const latest = yield* result.get(input.sessionID)
+        const source = yield* fs.stat(latest.location.directory).pipe(Effect.orElseSucceed(() => undefined))
+        if (!source || source.type !== "Directory") {
+          // The Session cannot run where it is, so it moves now, and the moves waiting in its inbox are
+          // superseded. One the runtime delivered meanwhile is no longer pending.
+          const pending = (yield* admission.list(input.sessionID)).filter((item) => item.type === "move")
+          yield* Effect.forEach(
+            pending,
+            (item) =>
+              admission
+                .cancel({ id: item.id, sessionID: input.sessionID })
+                .pipe(Effect.catchTag("SessionInbox.LifecycleConflict", () => Effect.void)),
+            { discard: true },
+          )
+          yield* bus.publish(SessionEvent.Moved, { sessionID: input.sessionID, ...payload })
+          return
+        }
+        yield* admission.admit({ id: SessionMessage.ID.create(), sessionID: input.sessionID, item }).pipe(Effect.orDie)
         yield* execution.wake(input.sessionID)
       }),
       compact: (input) => sessions.forSession(input.sessionID).compact(input),

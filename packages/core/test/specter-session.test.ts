@@ -48,7 +48,6 @@ import { SessionStore } from "@ocpp/core/session/store"
 import { SkillInstructions } from "@ocpp/core/skill/instructions"
 import { Snapshot } from "@ocpp/core/snapshot"
 import { Tool } from "@ocpp/core/tool"
-import { SpecterSessions } from "@ocpp/core/specter/index"
 import { SpecterStepHost } from "@ocpp/core/specter/step-host"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -174,7 +173,6 @@ const app = (database?: LayerNode.Node<Database.Service, never, any>) =>
       ],
       [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntime)],
       [Reference.node, Layer.mock(Reference.Service, { refresh: () => Effect.void })],
-      ...SpecterSessions.replacements,
       ...(database ? ([[Database.node, database]] as const) : []),
     ],
   ).pipe(Layer.provideMerge(TestLLM.layer({ fallback: [] })))

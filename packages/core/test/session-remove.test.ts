@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { and, eq } from "drizzle-orm"
 import { Deferred, Effect, Fiber, Layer } from "effect"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -9,7 +10,8 @@ import { Location } from "@ocpp/core/location"
 import { Project } from "@ocpp/core/project"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
-import { SessionExecution } from "@ocpp/core/session/execution"
+import { EventTable } from "@ocpp/core/event/sql"
+import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { SessionProjector } from "@ocpp/core/session/projector"
@@ -19,9 +21,10 @@ import { LocationServiceMap } from "@ocpp/core/location-services"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { tmpdirScoped } from "./fixture/tmpdir"
+import { TestStepHost } from "./fixture/step-host"
 
+const steps = TestStepHost.make()
 const closed: Session.ID[] = []
-const wakes: Session.ID[] = []
 let closeStarted: Deferred.Deferred<void> | undefined
 let closeGate: Deferred.Deferred<void> | undefined
 const transport = Layer.succeed(
@@ -36,17 +39,6 @@ const transport = Layer.succeed(
     closeAll: Effect.void,
   }),
 )
-const execution = Layer.succeed(
-  SessionExecution.Service,
-  SessionExecution.Service.of({
-    active: Effect.succeed(new Set()),
-    isActive: () => Effect.succeed(false),
-    resume: () => Effect.void,
-    wake: (sessionID) => Effect.sync(() => wakes.push(sessionID)),
-    interrupt: () => Effect.succeed(false),
-    awaitIdle: () => Effect.void,
-  }),
-)
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([
@@ -59,11 +51,7 @@ const it = testEffect(
       Session.node,
       LocationServiceMap.node,
     ]),
-    [
-      [Project.node, globalProjectNode],
-      [SessionExecution.node, execution],
-      [SessionModelTransport.node, transport],
-    ],
+    [[Project.node, globalProjectNode], steps.replacement, [SessionModelTransport.node, transport]],
   ),
 )
 
@@ -81,7 +69,6 @@ describe("Session.remove", () => {
       const locations = yield* LocationServiceMap.Service
       yield* Effect.acquireRelease(locations.contextEffect(location), () => locations.invalidate(location))
       closed.length = 0
-      wakes.length = 0
       const notificationID = SessionMessage.ID.create()
       yield* jobs.startLimited({
         id: "exe_removed_session",
@@ -131,7 +118,20 @@ describe("Session.remove", () => {
       const removing = yield* session.remove(parent.id).pipe(Effect.forkScoped)
       yield* Deferred.await(closeStarted)
       yield* session.synthetic({ sessionID: parent.id, text: "Terminal notification during removal" })
-      expect(wakes).toEqual([])
+      // A Session being removed is not woken for it.
+      const { db } = yield* Database.Service
+      expect(
+        yield* db
+          .select({ id: EventTable.id })
+          .from(EventTable)
+          .where(
+            and(
+              eq(EventTable.aggregate_id, parent.id),
+              eq(EventTable.type, Bus.versionedType(SessionEvent.Execution.Started.type, 1)),
+            ),
+          )
+          .all(),
+      ).toEqual([])
       yield* Deferred.succeed(closeGate, undefined)
       yield* Fiber.join(removing)
       closeStarted = undefined

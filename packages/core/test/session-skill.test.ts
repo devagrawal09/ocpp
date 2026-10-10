@@ -16,7 +16,6 @@ import { PluginSupervisor } from "@ocpp/core/plugin/supervisor-service"
 import { PluginHooks } from "@ocpp/core/plugin/hooks"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
-import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionMessage } from "@ocpp/core/session/message"
 import { SessionPrompt } from "@ocpp/core/session/prompt"
 import { SessionProjector } from "@ocpp/core/session/projector"
@@ -26,7 +25,7 @@ import { Skill } from "@ocpp/core/skill"
 import { Reference } from "@ocpp/core/reference"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
-import * as InboxPromotion from "./fixture/inbox-promotion"
+import { TestStepHost } from "./fixture/step-host"
 
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
 const info = Skill.Info.make({
@@ -66,14 +65,12 @@ const locations = makeGlobalNode({
   ),
   deps: [FSUtil.node],
 })
+
+const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [
-      [LocationServiceMap.node, locations],
-      [Project.node, globalProjectNode],
-      [SessionExecution.node, SessionExecution.noopLayer],
-    ],
+    [[LocationServiceMap.node, locations], [Project.node, globalProjectNode], steps.replacement],
   ),
 )
 
@@ -81,8 +78,6 @@ describe("Session.skill", () => {
   it.effect("materializes mentioned skills on their owning prompt", () =>
     Effect.gen(function* () {
       const sessions = yield* Session.Service
-      const database = yield* Database.Service
-      const bus = yield* Bus.Service
       const session = yield* sessions.create({ location })
       const id = SessionMessage.ID.make("msg_skill_attachment")
 
@@ -97,7 +92,7 @@ describe("Session.skill", () => {
         resume: false,
       })
       expect(yield* sessions.messages({ sessionID: session.id })).toEqual([])
-      yield* InboxPromotion.promote(database.db, bus, session.id, "steer")
+      yield* sessions.resume(session.id)
 
       expect(yield* sessions.messages({ sessionID: session.id })).toEqual([
         expect.objectContaining({
@@ -125,14 +120,12 @@ describe("Session.skill", () => {
   it.effect("excludes mentioned skills when forking before their prompt", () =>
     Effect.gen(function* () {
       const sessions = yield* Session.Service
-      const database = yield* Database.Service
-      const bus = yield* Bus.Service
       const session = yield* sessions.create({ location })
       const initial = SessionMessage.ID.make("msg_before_skill_attachment")
       const selected = SessionMessage.ID.make("msg_fork_skill_attachment")
 
       yield* sessions.prompt({ id: initial, sessionID: session.id, text: "Before the skill", resume: false })
-      yield* InboxPromotion.promote(database.db, bus, session.id, "steer")
+      yield* sessions.resume(session.id)
       yield* sessions.prompt({
         id: selected,
         sessionID: session.id,
@@ -140,7 +133,7 @@ describe("Session.skill", () => {
         skills: [{ id: info.id, mention: { start: 6, end: 13, text: "@effect" } }],
         resume: false,
       })
-      yield* InboxPromotion.promote(database.db, bus, session.id, "steer")
+      yield* sessions.resume(session.id)
       const forked = yield* sessions.fork({ sessionID: session.id, boundary: { type: "before", messageID: selected } })
 
       expect(yield* sessions.messages({ sessionID: forked.id })).toEqual([

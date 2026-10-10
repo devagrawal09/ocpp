@@ -1224,7 +1224,7 @@ describe("subagent drivers", () => {
     options: {
       readonly source?: { readonly messageID: SessionMessage.ID; readonly id: Tool.CallID }
       // What a restarted call reports it had attached, so it rejoins that child.
-      readonly recovered?: { readonly sessionID: string }
+      readonly recovered?: { readonly sessionID: string; readonly status: "running" | "starting" }
       // The caller's tool list, such as plan mode's; every registered tool when absent.
       readonly paths?: ReadonlyArray<string>
     } = {},
@@ -1943,7 +1943,7 @@ describe("subagent drivers", () => {
         vendor.turn = say("Done")
         const first = yield* call(env, { root: root.directory })
         const sessionID = sessionOf(first)!
-        const rejoined = yield* call(env, { root: root.directory }, { recovered: { sessionID } })
+        const rejoined = yield* call(env, { root: root.directory }, { recovered: { sessionID, status: "running" } })
         expect(rejoined._tag).toBe("Success")
         expect(vendor.runs.at(-1)?.directory).toBe(root.directory)
         expect(vendor.runs.at(-1)?.message).toContain("The server restarted")

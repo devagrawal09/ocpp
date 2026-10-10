@@ -13,7 +13,6 @@ import { Timestamps } from "../database/schema.sql.js"
 import type { Instruction } from "@ocpp/schema/instruction"
 import type { Session } from "@ocpp/schema/session"
 import type { CompactionPayload, MovePayload, SyntheticPayload, UserPayload } from "@ocpp/schema/session-inbox"
-import type { RevertV1 } from "@ocpp/schema/session-revert"
 import type { Schema } from "effect"
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
@@ -48,7 +47,7 @@ export const SessionTable = sqliteTable(
     tokens_reasoning: integer().notNull().default(0),
     tokens_cache_read: integer().notNull().default(0),
     tokens_cache_write: integer().notNull().default(0),
-    revert: text({ mode: "json" }).$type<Session.Revert | RevertV1>(),
+    revert: text({ mode: "json" }).$type<Session.Revert>(),
     permission: text({ mode: "json" }).$type<PermissionV1.Ruleset>(),
     agent: text(),
     /** The Code Mode paths a subagent may call, projected from `session.tools.selected` and copied into a fork. */

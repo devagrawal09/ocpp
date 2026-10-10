@@ -19,7 +19,6 @@ import { SessionMessage } from "@ocpp/core/session/message"
 import { Money } from "@ocpp/schema/money"
 import { Base64, FileAttachment } from "@ocpp/schema/prompt"
 import { SessionProjector } from "@ocpp/core/session/projector"
-import { fromRow } from "@ocpp/core/session/info"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { Shell } from "@ocpp/schema/shell"
 import { InstructionStateTable, SessionInboxTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
@@ -109,27 +108,6 @@ describe("SessionProjector", () => {
 
       expect(yield* SessionInbox.find(db, inputID)).toMatchObject({ id: inputID })
       yield* busy.release
-    }),
-  )
-
-  it.effect("loads legacy revert storage into canonical state", () =>
-    Effect.gen(function* () {
-      const db = yield* seedSession()
-      const legacy = JSON.stringify({
-        messageID: "msg_boundary",
-        snapshot: "tree",
-        diff: "legacy patch",
-        files: [{ path: "src/old.ts", status: "modified", additions: 1, deletions: 0, patch: "@@" }],
-      })
-      yield* db.run(sql`update session_v2 set revert = ${legacy} where id = ${sessionID}`)
-      const stored = yield* db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get()
-      if (!stored) return yield* Effect.die("Session row missing")
-      const storedRevert = fromRow(stored).revert
-      expect(String(storedRevert?.messageID)).toBe("msg_boundary")
-      expect(String(storedRevert?.snapshot)).toBe("tree")
-      expect(storedRevert?.files).toEqual([
-        { file: "src/old.ts", status: "modified", additions: 1, deletions: 0, patch: "@@" },
-      ])
     }),
   )
 

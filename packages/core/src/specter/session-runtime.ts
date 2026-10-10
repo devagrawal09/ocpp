@@ -41,8 +41,8 @@ const CONTINUE_AFTER_RESTART =
 export interface Interface {
   readonly runtime: EmbeddedSessionRuntime
   /**
-   * Records a Session the log predates with the runtime, once, before its first runtime Command. Answers
-   * whether OC++ knows the Session.
+   * Records a Session with no session.created fact (a fork) with the runtime, once, before its first runtime
+   * Command. Answers whether OC++ knows the Session.
    */
   readonly register: (sessionID: SessionSchema.ID) => Effect.Effect<boolean>
   /** Sessions with an execution the runtime has started and not yet settled, in any process. */
@@ -224,11 +224,11 @@ const layer = Layer.effect(
               ...(session.metadata === undefined ? {} : { metadata: session.metadata }),
             },
           },
-          // The Bus does not project this commit: OC++ recorded the Session's creation long ago.
+          // The Bus does not project this commit: OC++ projected the Session from its own fact.
           { idempotencyKey: `${Bus.registrationKeyPrefix}${sessionID}` },
         )
         .pipe(
-          // A Session created since the log exists is already known from its session.created fact.
+          // A Session OC++ created is already known from its session.created fact.
           Effect.catchIf(
             (error) => rejection(error) === "Session already registered",
             () => Effect.void,

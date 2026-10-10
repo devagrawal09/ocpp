@@ -20,7 +20,6 @@ import { Skill } from "../src/skill.js"
 import { Shell } from "../src/shell.js"
 import { Vcs } from "../src/vcs.js"
 import { Worktree } from "../src/worktree.js"
-import { PersistedRevert } from "../src/session-revert.js"
 import { AbsolutePath, optional } from "../src/schema.js"
 
 describe("contract hygiene", () => {
@@ -334,32 +333,5 @@ describe("contract hygiene", () => {
         time: { created: DateTime.makeUnsafe(0) },
       }),
     ).not.toHaveProperty("summary")
-  })
-
-  test("keeps shared persisted revert compatibility", () => {
-    expect(
-      Schema.decodeUnknownSync(Session.Revert)({
-        messageID: "msg_legacy",
-        snapshot: "tree",
-        diff: "legacy patch",
-      }),
-    ).not.toHaveProperty("diff")
-
-    const revert = Schema.decodeUnknownSync(PersistedRevert)({
-      messageID: "msg_legacy",
-      snapshot: "tree",
-      diff: "legacy patch",
-      files: [{ path: "src/index.ts", status: "modified", additions: 1, deletions: 0, patch: "@@" }],
-    })
-    expect(String(revert.messageID)).toBe("msg_legacy")
-    expect(String(revert.snapshot)).toBe("tree")
-    expect(revert.files).toEqual([
-      { file: "src/index.ts", status: "modified", additions: 1, deletions: 0, patch: "@@" },
-    ])
-    expect(Schema.encodeSync(PersistedRevert)(revert)).toEqual({
-      messageID: "msg_legacy",
-      snapshot: "tree",
-      files: [{ file: "src/index.ts", status: "modified", additions: 1, deletions: 0, patch: "@@" }],
-    })
   })
 })

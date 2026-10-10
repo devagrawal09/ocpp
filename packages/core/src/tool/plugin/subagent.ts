@@ -41,11 +41,7 @@ const CONTINUE_AFTER_RESTART =
  * Progress a subagent call records once its child holds the task, so a restart can rejoin that child. Only a
  * "running" record rejoins: "starting" names a child that exists but may not hold its task yet.
  */
-const Attached = Schema.Struct({
-  sessionID: SessionSchema.ID,
-  // A record without a status predates "starting" and always meant "running".
-  status: Schema.optionalKey(Schema.Literal("running")),
-})
+const Attached = Schema.Struct({ sessionID: SessionSchema.ID, status: Schema.Literal("running") })
 /**
  * Progress a subagent call records as soon as its child exists (created, or resolved for a continuation), so the
  * child's ID is never lost to a failure or an interruption before it holds its task. It also makes the call resumable
@@ -290,7 +286,7 @@ export const Plugin = {
           options: { namespace: name, readOnly: true },
           description: [
             "Reads the recent messages of a subagent you started, or of any subagent below it, by its sessionID, without prompting it. Returns up to limit of the newest messages oldest first, and a cursor for older ones.",
-            "Assistant messages carry their text; pass include: [\"reasoning\"] or [\"tools\"] for reasoning and tool calls. Long texts are clipped.",
+            'Assistant messages carry their text; pass include: ["reasoning"] or ["tools"] for reasoning and tool calls. Long texts are clipped.',
           ].join("\n"),
           input: TranscriptInput,
           output: TranscriptOutput,
@@ -957,18 +953,16 @@ export const Plugin = {
                           }),
                       ),
                       Effect.andThen(
-                        runtime.session
-                          .wait(child.id)
-                          .pipe(
-                            Effect.mapError(
-                              (error) =>
-                                new ToolFailure({
-                                  message: `Subagent session not found: ${child.id}`,
-                                  error,
-                                  metadata: failure(child.id, "setup-failed"),
-                                }),
-                            ),
+                        runtime.session.wait(child.id).pipe(
+                          Effect.mapError(
+                            (error) =>
+                              new ToolFailure({
+                                message: `Subagent session not found: ${child.id}`,
+                                error,
+                                metadata: failure(child.id, "setup-failed"),
+                              }),
                           ),
+                        ),
                       ),
                     )
                   : Effect.void
@@ -1190,7 +1184,9 @@ type TranscriptEntry = typeof TranscriptMessage.Type
 type TranscriptCall = typeof TranscriptToolCall.Type
 
 function clip(text: string) {
-  return text.length > TRANSCRIPT_TEXT ? { text: text.slice(0, TRANSCRIPT_TEXT) + "…", clipped: true } : { text, clipped: false }
+  return text.length > TRANSCRIPT_TEXT
+    ? { text: text.slice(0, TRANSCRIPT_TEXT) + "…", clipped: true }
+    : { text, clipped: false }
 }
 
 /**

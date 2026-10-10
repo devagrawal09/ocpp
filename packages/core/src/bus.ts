@@ -25,7 +25,7 @@ import { SpecterEventLog } from "./specter/event-log.js"
 import { SpecterSnapshots } from "./specter/snapshots.js"
 import { SpecterTranslate } from "./specter/translate.js"
 
-/** Idempotency keys of the commits that register a Session the log predates with the runtime. */
+/** Idempotency keys of the commits that register with the runtime a Session with no session.created fact: a fork. */
 export const registrationKeyPrefix = "register:"
 
 export type Subscriber<D extends Event.Definition = Event.Definition> = (event: Event.Payload<D>) => Effect.Effect<void>
@@ -521,7 +521,7 @@ export function configured(options?: Options) {
                 )
                 return Effect.void
               }
-              // Registering a Session the log predates repeats OC++'s own session.created: nothing to project.
+              // Registering a fork records a session.created for the runtime only: OC++ projected session.forked.
               if (key?.startsWith(registrationKeyPrefix)) return Effect.void
               // A fact a runtime Command recorded directly: project its OC++ events here and notify
               // after the transaction commits.

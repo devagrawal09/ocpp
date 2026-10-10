@@ -42,8 +42,7 @@ export const absoluteColumn = customType<{
   },
 })
 
-// Legacy sessions may persist an empty directory. Keep that existing value
-// readable while normalizing and validating every real directory.
+// An absolute directory, typed as a plain string for the tables that store one.
 export const directoryColumn = customType<{
   data: string
   driverData: string
@@ -53,10 +52,10 @@ export const directoryColumn = customType<{
     return "text"
   },
   toDriver(input) {
-    return input ? absolute(input) : input
+    return absolute(input)
   },
   fromDriver(input) {
-    return input ? toPlatform(absolute(input)) : input
+    return toPlatform(absolute(input))
   },
 })
 

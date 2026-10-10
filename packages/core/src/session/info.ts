@@ -8,10 +8,10 @@ import { AbsolutePath, RelativePath } from "../schema.js"
 import { Workspace } from "@ocpp/schema/workspace"
 import { SessionSchema } from "./schema.js"
 import type { SessionTable } from "./sql.js"
-import { PersistedRevert } from "@ocpp/schema/session-revert"
+import { Revert } from "@ocpp/schema/session-revert"
 import { Money } from "@ocpp/schema/money"
 
-const decodeRevert = Schema.decodeUnknownSync(PersistedRevert)
+const decodeRevert = Schema.decodeUnknownSync(Revert)
 
 export function fromRow(row: typeof SessionTable.$inferSelect): SessionSchema.Info {
   return SessionSchema.Info.make({

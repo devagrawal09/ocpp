@@ -218,20 +218,13 @@ export const sessionFacts = {
     id: "call-hooks",
     executionID: "exe_120d6eb7a0018Juxs09pbN2YD1",
   },
-  "session-codemode-completed": {
-    sessionID: "ses_1",
-    assistantMessageID: "msg_tool_test",
-    id: "call_notebook_later",
-    executionID: "exe_120d4a070001OEFUsw9FIwUf9g",
-    events: [],
-  },
-  "session-codemode-failed": {
+  "session-codemode-settled": {
     sessionID: "ses_1",
     assistantMessageID: "msg_registry",
     id: "detached-0",
     executionID: "exe_120d6e54d001jZKD3tFeHCH1qz",
     events: [],
-    status: "cancelled",
+    outcome: "cancelled",
     error: "Execution failed",
   },
   "session-invocation-started": {

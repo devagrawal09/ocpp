@@ -85,9 +85,9 @@ test("refreshes an event's latest outcome when its firing settles", async () => 
     setup.publish({
       id: "evt_other",
       created: 1,
-      type: "session-codemode-completed",
+      type: "session-codemode-settled",
       durable: { aggregateID: "ses_firing", seq: 1 },
-      data: { ...base, assistantMessageID: "msg_other" },
+      data: { ...base, assistantMessageID: "msg_other", outcome: "completed" },
     })
     await Bun.sleep(20)
     expect(server.state.reads).toBe(1)
@@ -95,14 +95,14 @@ test("refreshes an event's latest outcome when its firing settles", async () => 
     setup.publish({
       id: "evt_failed",
       created: 2,
-      type: "session-codemode-failed",
+      type: "session-codemode-settled",
       durable: { aggregateID: "ses_firing", seq: 2 },
       data: {
         ...base,
         assistantMessageID: "msg_firing",
         id: "msg_firing",
         executionID: "exe_firing",
-        status: "error",
+        outcome: "error",
         error: "boom",
       },
     })
@@ -140,7 +140,7 @@ test("refreshes the events when a firing settles before the list names it", asyn
     setup.publish({
       id: "evt_done",
       created: 2,
-      type: "session-codemode-completed",
+      type: "session-codemode-settled",
       durable: { aggregateID: "ses_quick", seq: 2 },
       data: {
         sessionID: "ses_quick",
@@ -148,6 +148,7 @@ test("refreshes the events when a firing settles before the list names it", asyn
         id: "msg_quick",
         executionID: "exe_quick",
         events: [],
+        outcome: "completed",
       },
     })
     await wait(() => setup.data.session.event.list("ses_quick")?.[0]?.lastStatus === "completed")

@@ -60,9 +60,14 @@ test("projects an invocation and its Code Mode run", async () => {
     setup.publish({
       id: "evt_completed",
       created: 3,
-      type: "session-codemode-completed",
+      type: "session-codemode-settled",
       durable: { aggregateID: "ses_invocation", seq: 2 },
-      data: { ...base, executionID: "exe_invocation", events: [{ type: "trace", kind: "return", value: "done" }] },
+      data: {
+        ...base,
+        executionID: "exe_invocation",
+        events: [{ type: "trace", kind: "return", value: "done" }],
+        outcome: "completed",
+      },
     })
     expect(setup.data.session.message.get("ses_invocation", "msg_invocation")).toMatchObject({
       type: "invocation",

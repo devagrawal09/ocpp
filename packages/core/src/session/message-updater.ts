@@ -46,15 +46,15 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
 
   // An execution belongs to either a model tool call or an invocation message; only one of them matches.
   // Restart recovery settles an execution without a trace, so an empty trace keeps the projected one.
-  const settleInvocation = (event: SessionEvent.CodeMode.Completed | SessionEvent.CodeMode.Failed) =>
+  const settleInvocation = (event: SessionEvent.CodeMode.Settled) =>
     Effect.gen(function* () {
       const invocation = yield* adapter.getInvocation(event.data.assistantMessageID)
       if (invocation?.executionID !== event.data.executionID) return
       yield* adapter.updateInvocation(
         produce(invocation, (draft) => {
-          draft.status = event.type === "session-codemode-completed" ? "completed" : event.data.status
+          draft.status = event.data.outcome
           if (event.data.events.length > 0) draft.events = castDraft(event.data.events)
-          if (event.type === "session-codemode-failed") draft.error = event.data.error
+          if (event.data.outcome !== "completed") draft.error = event.data.error
           draft.time.completed = created
         }),
       )
@@ -372,29 +372,16 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             time: { created },
           }),
         ),
-      "session-codemode-completed": (event) => {
+      "session-codemode-settled": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
           const match = latestTool(draft, event.data.id)
           if (!match || match.state.status === "streaming") return
           match.state.metadata = castDraft({
             ...match.state.metadata,
             executionID: event.data.executionID,
-            executionStatus: "completed",
+            executionStatus: event.data.outcome,
             events: event.data.events,
-            ...(event.data.resumed === true ? { resumed: true } : {}),
-          })
-        }).pipe(Effect.andThen(settleInvocation(event)))
-      },
-      "session-codemode-failed": (event) => {
-        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
-          const match = latestTool(draft, event.data.id)
-          if (!match || match.state.status === "streaming") return
-          match.state.metadata = castDraft({
-            ...match.state.metadata,
-            executionID: event.data.executionID,
-            executionStatus: event.data.status,
-            events: event.data.events,
-            error: event.data.error,
+            ...(event.data.outcome === "completed" ? {} : { error: event.data.error }),
             ...(event.data.resumed === true ? { resumed: true } : {}),
           })
         }).pipe(Effect.andThen(settleInvocation(event)))

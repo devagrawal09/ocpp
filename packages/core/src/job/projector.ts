@@ -53,8 +53,7 @@ const layer = Layer.effectDiscard(
         .pipe(Effect.orDie, Effect.asVoid),
     )
     // A Code Mode run's outcome reaching its Session is what makes its background job terminal.
-    yield* bus.project(SessionEvent.CodeMode.Completed, (event) => terminal(event.data.executionID))
-    yield* bus.project(SessionEvent.CodeMode.Failed, (event) => terminal(event.data.executionID))
+    yield* bus.project(SessionEvent.CodeMode.Settled, (event) => terminal(event.data.executionID))
   }),
 )
 

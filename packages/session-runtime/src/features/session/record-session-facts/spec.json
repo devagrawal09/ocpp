@@ -971,49 +971,18 @@
       }
     },
     {
-      "description": "Records session-codemode-completed as the host published it.",
+      "description": "Records session-codemode-settled as the host published it.",
       "expect": [
         {
-          "eventType": "session-codemode-completed",
-          "examplePayload": {
-            "assistantMessageID": "msg_tool_test",
-            "events": [],
-            "executionID": "exe_120d4a070001OEFUsw9FIwUf9g",
-            "id": "call_notebook_later",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_tool_test",
-              "events": [],
-              "executionID": "exe_120d4a070001OEFUsw9FIwUf9g",
-              "id": "call_notebook_later",
-              "sessionID": "ses_1"
-            },
-            "type": "session-codemode-completed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-codemode-failed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-codemode-failed",
+          "eventType": "session-codemode-settled",
           "examplePayload": {
             "assistantMessageID": "msg_registry",
             "error": "Execution failed",
             "events": [],
             "executionID": "exe_120d6e54d001jZKD3tFeHCH1qz",
             "id": "detached-0",
-            "sessionID": "ses_1",
-            "status": "cancelled"
+            "outcome": "cancelled",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -1028,10 +997,10 @@
               "events": [],
               "executionID": "exe_120d6e54d001jZKD3tFeHCH1qz",
               "id": "detached-0",
-              "sessionID": "ses_1",
-              "status": "cancelled"
+              "outcome": "cancelled",
+              "sessionID": "ses_1"
             },
-            "type": "session-codemode-failed"
+            "type": "session-codemode-settled"
           }
         ]
       }

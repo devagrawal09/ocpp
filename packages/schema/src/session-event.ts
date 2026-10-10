@@ -563,6 +563,7 @@ export namespace CodeMode {
     executionID: CodeModeExecution.ID,
   }
 
+  /** A Code Mode execution started in the background, for the call (or the invocation) that owns it. */
   export const Started = Event.durable({
     type: "session-codemode-started",
     ...options,
@@ -583,35 +584,37 @@ export namespace CodeMode {
   })
   export type Progress = typeof Progress.Type
 
-  export const Completed = Event.durable({
-    type: "session-codemode-completed",
+  /**
+   * The one terminal of an execution, with the trace it ended with: `completed`, or `error` or `cancelled` with
+   * the error. An execution that restart recovery settles carries no trace.
+   */
+  export const Settled = Event.durable({
+    type: "session-codemode-settled",
     ...options,
-    schema: {
-      ...CodeModeBase,
-      events: CodeModeExecution.Entries,
-      ...Resumed,
-    },
+    schema: Schema.Union([
+      Schema.Struct({
+        ...CodeModeBase,
+        events: CodeModeExecution.Entries,
+        ...Resumed,
+        outcome: Schema.Literal("completed"),
+      }),
+      Schema.Struct({
+        ...CodeModeBase,
+        events: CodeModeExecution.Entries,
+        ...Resumed,
+        outcome: Schema.Literals(["error", "cancelled"]),
+        error: Schema.String,
+      }),
+    ]),
   })
-  export type Completed = typeof Completed.Type
-
-  export const Failed = Event.durable({
-    type: "session-codemode-failed",
-    ...options,
-    schema: {
-      ...CodeModeBase,
-      events: CodeModeExecution.Entries,
-      status: Schema.Literals(["error", "cancelled"]),
-      error: Schema.String,
-      ...Resumed,
-    },
-  })
-  export type Failed = typeof Failed.Type
+  export type Settled = typeof Settled.Type
 }
 
 export namespace Invocation {
   /**
    * A command or an event started a Code Mode execution outside the model. The message ID derives from
    * this event ID, and the program it ran derives from the handler and input (`SessionMessage.invocationCode`).
+   * Its execution's `session-codemode-settled`, for this message, settles it.
    */
   export const Started = Event.durable({
     type: "session-invocation-started",
@@ -729,8 +732,7 @@ export const Definitions = Event.inventory(
   Tool.Settled,
   CodeMode.Started,
   CodeMode.Progress,
-  CodeMode.Completed,
-  CodeMode.Failed,
+  CodeMode.Settled,
   Invocation.Started,
   Compaction.Started,
   Compaction.Delta,

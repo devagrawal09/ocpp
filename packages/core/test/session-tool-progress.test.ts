@@ -126,12 +126,13 @@ describe("Session tool progress", () => {
         executionID,
         events: [{ type: "trace", kind: "return", value: "1" }],
       })
-      const codeCompleted = yield* service.publish(SessionEvent.CodeMode.Completed, {
+      const codeCompleted = yield* service.publish(SessionEvent.CodeMode.Settled, {
         sessionID,
         assistantMessageID,
         id: "call-codemode",
         executionID,
         events: [{ type: "trace", kind: "return", value: "1" }],
+        outcome: "completed",
       })
       yield* service.publish(SessionEvent.Tool.Settled, {
         sessionID,

@@ -1280,12 +1280,8 @@ function renderTranscript(messages: ReadonlyArray<TranscriptEntry>) {
 /** Narrows a log item to a child execution lifecycle event that carries a Session ID. */
 function isCodeModeLifecycle(
   event: Bus.LogItem,
-): event is SessionEvent.CodeMode.Started | SessionEvent.CodeMode.Completed | SessionEvent.CodeMode.Failed {
-  return (
-    event.type === SessionEvent.CodeMode.Started.type ||
-    event.type === SessionEvent.CodeMode.Completed.type ||
-    event.type === SessionEvent.CodeMode.Failed.type
-  )
+): event is SessionEvent.CodeMode.Started | SessionEvent.CodeMode.Settled {
+  return event.type === SessionEvent.CodeMode.Started.type || event.type === SessionEvent.CodeMode.Settled.type
 }
 
 /** Shape and size of a machine value, never its contents, for model-visible metadata and prompts. */

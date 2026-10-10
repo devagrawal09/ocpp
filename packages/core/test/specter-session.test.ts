@@ -404,7 +404,7 @@ describe("Sessions on the Specter runtime", () => {
         "session-tool-settled",
       ])
       expect(types.indexOf("session-codemode-started")).toBeLessThan(types.indexOf("session-tool-settled"))
-      expect(types).toContain("session-codemode-completed")
+      expect(types).toContain("session-codemode-settled")
       expect(types.slice(-2)).toEqual(["session-step-settled", "session-execution-settled"])
     }),
   )

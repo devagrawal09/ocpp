@@ -186,8 +186,8 @@ describe("SessionRestart background recovery", () => {
       })
       yield* jobs.background(executionID)
 
-      const failed: SessionEvent.CodeMode.Failed[] = []
-      yield* bus.project(SessionEvent.CodeMode.Failed, (event) => Effect.sync(() => void failed.push(event)))
+      const settled: SessionEvent.CodeMode.Settled[] = []
+      yield* bus.project(SessionEvent.CodeMode.Settled, (event) => Effect.sync(() => void settled.push(event)))
       const scope = yield* Scope.make()
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
       const restarted = yield* Job.make.pipe(Scope.provide(scope))
@@ -197,7 +197,7 @@ describe("SessionRestart background recovery", () => {
       yield* restart.resumeSuspendedSessions
       yield* execution.awaitIdle(sessionID)
 
-      expect(failed).toMatchObject([
+      expect(settled).toMatchObject([
         {
           data: {
             sessionID,
@@ -205,7 +205,7 @@ describe("SessionRestart background recovery", () => {
             id: "call-codemode-recovery",
             executionID,
             events: [],
-            status: "error",
+            outcome: "error",
             error: "Execution failed because the server restarted.",
           },
         },
@@ -220,7 +220,7 @@ describe("SessionRestart background recovery", () => {
       expect(yield* restarted.pendingBackground).toEqual([])
 
       yield* restart.resumeSuspendedSessions
-      expect(failed).toHaveLength(1)
+      expect(settled).toHaveLength(1)
       expect(yield* executions(sessionID)).toBe(1)
 
       const interruptedID = CodeModeExecution.ID.make("exe_codemode_interrupted_recovery")
@@ -244,10 +244,10 @@ describe("SessionRestart background recovery", () => {
 
       yield* restart.resumeSuspendedSessions
       yield* execution.awaitIdle(sessionID)
-      expect(failed.at(-1)).toMatchObject({
+      expect(settled.at(-1)).toMatchObject({
         data: {
           executionID: interruptedID,
-          status: "error",
+          outcome: "error",
           error: "Execution failed because the server restarted.",
         },
       })
@@ -280,8 +280,8 @@ describe("SessionRestart background recovery", () => {
       const background = (yield* jobs.pendingBackground)[0]
       if (!background) return yield* Effect.die("Code Mode background marker is unavailable")
       yield* jobs.markBackgroundTerminal(background.notificationID)
-      const failed: SessionEvent.CodeMode.Failed[] = []
-      yield* bus.project(SessionEvent.CodeMode.Failed, (event) => Effect.sync(() => void failed.push(event)))
+      const settled: SessionEvent.CodeMode.Settled[] = []
+      yield* bus.project(SessionEvent.CodeMode.Settled, (event) => Effect.sync(() => void settled.push(event)))
       yield* sessions.synthetic({
         id: background.notificationID,
         sessionID,
@@ -300,7 +300,7 @@ describe("SessionRestart background recovery", () => {
 
       // Only the execution that delivered it: recovery woke nothing.
       expect(yield* executions(sessionID)).toBe(1)
-      expect(failed).toEqual([])
+      expect(settled).toEqual([])
       expect(yield* sessions.messages({ sessionID })).toMatchObject([
         { id: background.notificationID, type: "synthetic", text: "Execution already delivered" },
       ])
@@ -332,8 +332,8 @@ describe("SessionRestart background recovery", () => {
       if (!background) return yield* Effect.die("Code Mode background marker is unavailable")
       yield* jobs.markBackgroundTerminal(background.notificationID)
 
-      const failed: SessionEvent.CodeMode.Failed[] = []
-      yield* bus.project(SessionEvent.CodeMode.Failed, (event) => Effect.sync(() => void failed.push(event)))
+      const settled: SessionEvent.CodeMode.Settled[] = []
+      yield* bus.project(SessionEvent.CodeMode.Settled, (event) => Effect.sync(() => void settled.push(event)))
       const scope = yield* Scope.make()
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
       const restarted = yield* Job.make.pipe(Scope.provide(scope))
@@ -343,7 +343,7 @@ describe("SessionRestart background recovery", () => {
       yield* restart.resumeSuspendedSessions
       yield* execution.awaitIdle(sessionID)
 
-      expect(failed).toEqual([])
+      expect(settled).toEqual([])
       expect(yield* executions(sessionID)).toBe(1)
       expect(yield* syntheticMessages(sessionID)).toMatchObject([
         {
@@ -355,7 +355,7 @@ describe("SessionRestart background recovery", () => {
       expect(yield* restarted.pendingBackground).toEqual([])
 
       yield* restart.resumeSuspendedSessions
-      expect(failed).toEqual([])
+      expect(settled).toEqual([])
       expect(yield* executions(sessionID)).toBe(1)
     }),
   )

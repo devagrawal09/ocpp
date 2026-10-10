@@ -2055,40 +2055,33 @@ export type SessionMessageInvocation = {
   error?: string
 }
 
-export type SessionCodemodeCompleted = {
+export type SessionCodemodeSettled = {
   id: string
   created: number
   metadata?: { [x: string]: any }
-  type: "session-codemode-completed"
+  type: "session-codemode-settled"
   durable: { aggregateID: string; seq: number }
   location?: LocationRef
-  data: {
-    sessionID: string
-    assistantMessageID: string
-    id: string
-    executionID: string
-    events: CodeModeExecutionEntries
-    resumed?: boolean
-  }
-}
-
-export type SessionCodemodeFailed = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session-codemode-failed"
-  durable: { aggregateID: string; seq: number }
-  location?: LocationRef
-  data: {
-    sessionID: string
-    assistantMessageID: string
-    id: string
-    executionID: string
-    events: CodeModeExecutionEntries
-    status: "error" | "cancelled"
-    error: string
-    resumed?: boolean
-  }
+  data:
+    | {
+        sessionID: string
+        assistantMessageID: string
+        id: string
+        executionID: string
+        events: CodeModeExecutionEntries
+        resumed?: boolean
+        outcome: "completed"
+      }
+    | {
+        sessionID: string
+        assistantMessageID: string
+        id: string
+        executionID: string
+        events: CodeModeExecutionEntries
+        resumed?: boolean
+        outcome: "error" | "cancelled"
+        error: string
+      }
 }
 
 export type SessionCodemodeProgress = {
@@ -2281,8 +2274,7 @@ export type SessionEventDurable =
   | SessionToolRequested
   | SessionToolSettled
   | SessionCodemodeStarted
-  | SessionCodemodeCompleted
-  | SessionCodemodeFailed
+  | SessionCodemodeSettled
   | SessionInvocationStarted
   | SessionCompactionStarted
   | SessionCompactionEnded
@@ -2346,8 +2338,7 @@ export type V2Event =
   | SessionToolSettled
   | SessionCodemodeStarted
   | SessionCodemodeProgress
-  | SessionCodemodeCompleted
-  | SessionCodemodeFailed
+  | SessionCodemodeSettled
   | SessionInvocationStarted
   | SessionCompactionStarted
   | SessionCompactionDelta

@@ -1029,15 +1029,16 @@ export function createData(config: CreateDataInput) {
         })
         return
       case "session-codemode-progress":
-      case "session-codemode-completed":
-      case "session-codemode-failed":
+      case "session-codemode-settled":
         message.update(event.data.sessionID, (draft, index) => {
+          const settled = event.type === "session-codemode-settled" ? event.data : undefined
+          const error = settled?.outcome === "completed" ? undefined : settled?.error
           const invocation = message.invocation(draft, index, event.data.assistantMessageID)
           if (invocation?.executionID === event.data.executionID) {
             if (event.data.events.length > 0) invocation.events = [...event.data.events]
-            if (event.type === "session-codemode-progress") return
-            invocation.status = event.type === "session-codemode-completed" ? "completed" : event.data.status
-            if (event.type === "session-codemode-failed") invocation.error = event.data.error
+            if (!settled) return
+            invocation.status = settled.outcome
+            if (error !== undefined) invocation.error = error
             invocation.time.completed = event.created
             return
           }
@@ -1049,14 +1050,9 @@ export function createData(config: CreateDataInput) {
           match.state.metadata = {
             ...match.state.metadata,
             executionID: event.data.executionID,
-            executionStatus:
-              event.type === "session-codemode-progress"
-                ? "running"
-                : event.type === "session-codemode-completed"
-                  ? "completed"
-                  : event.data.status,
+            executionStatus: settled?.outcome ?? "running",
             events: [...event.data.events],
-            ...(event.type === "session-codemode-failed" ? { error: event.data.error } : {}),
+            ...(error === undefined ? {} : { error }),
             ...(event.data.resumed === true ? { resumed: true } : {}),
           }
         })

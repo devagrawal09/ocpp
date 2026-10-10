@@ -596,13 +596,16 @@ const launch = (
             ...resumed,
           }
           // Recording the outcome makes the background job terminal (JobProjector).
-          if (info.status === "completed") yield* services.bus.publish(SessionEvent.CodeMode.Completed, base)
-          if (info.status === "error" || info.status === "cancelled")
-            yield* services.bus.publish(SessionEvent.CodeMode.Failed, {
-              ...base,
-              status: info.status,
-              error: info.error ?? "Execution failed",
-            })
+          yield* services.bus.publish(
+            SessionEvent.CodeMode.Settled,
+            info.status === "completed"
+              ? { ...base, outcome: "completed" }
+              : {
+                  ...base,
+                  outcome: info.status === "cancelled" ? "cancelled" : "error",
+                  error: info.error ?? "Execution failed",
+                },
+          )
           const kind =
             info.status === "cancelled"
               ? "Cancelled"

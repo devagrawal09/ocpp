@@ -247,9 +247,8 @@ const resume = (executionID: string) =>
 
 const terminals = Effect.gen(function* () {
   const bus = yield* Bus.Service
-  const seen: Array<SessionEvent.CodeMode.Completed | SessionEvent.CodeMode.Failed> = []
-  yield* bus.project(SessionEvent.CodeMode.Completed, (event) => Effect.sync(() => void seen.push(event)))
-  yield* bus.project(SessionEvent.CodeMode.Failed, (event) => Effect.sync(() => void seen.push(event)))
+  const seen: Array<SessionEvent.CodeMode.Settled> = []
+  yield* bus.project(SessionEvent.CodeMode.Settled, (event) => Effect.sync(() => void seen.push(event)))
   return seen
 })
 
@@ -283,7 +282,9 @@ describe("Code Mode resume", () => {
           saved: { id: "w-x3" },
           after: { id: "w-after" },
         })
-        expect(seen).toMatchObject([{ type: "session-codemode-completed", data: { resumed: true } }])
+        expect(seen).toMatchObject([
+          { type: "session-codemode-settled", data: { outcome: "completed", resumed: true } },
+        ])
         // Replayed calls stay visible in the trace, marked so they read as recovered rather than rerun.
         expect(seen[0]?.data.events.flatMap((event) => (event.type === "tool" ? [event] : []))).toMatchObject([
           { tool: "test.lookup", status: "completed", replayed: true, output: expect.stringContaining("3") },
@@ -424,8 +425,8 @@ describe("Code Mode resume", () => {
         expect(yield* readCodeModeNotebook(session.id)).toEqual({})
         expect(seen).toMatchObject([
           {
-            type: "session-codemode-failed",
-            data: { resumed: true, status: "error", error: expect.stringContaining("diverged") },
+            type: "session-codemode-settled",
+            data: { resumed: true, outcome: "error", error: expect.stringContaining("diverged") },
           },
         ])
       }),

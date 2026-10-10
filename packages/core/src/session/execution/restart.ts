@@ -115,25 +115,18 @@ export const layer = Layer.effect(
             : (background.error ?? "Execution failed")
       // Recording the outcome makes the background job terminal (JobProjector).
       const terminal = background.terminal === true
-      if (!terminal && status === "completed") {
-        yield* bus.publish(SessionEvent.CodeMode.Completed, {
+      if (!terminal) {
+        const base = {
           sessionID: recovery.parentSessionID,
           assistantMessageID: recovery.assistantMessageID,
           id: recovery.toolCallID,
           executionID: CodeModeExecution.ID.make(background.id),
           events: [],
-        })
-      }
-      if (!terminal && (status === "error" || status === "cancelled")) {
-        yield* bus.publish(SessionEvent.CodeMode.Failed, {
-          sessionID: recovery.parentSessionID,
-          assistantMessageID: recovery.assistantMessageID,
-          id: recovery.toolCallID,
-          executionID: CodeModeExecution.ID.make(background.id),
-          events: [],
-          status,
-          error,
-        })
+        }
+        yield* bus.publish(
+          SessionEvent.CodeMode.Settled,
+          status === "completed" ? { ...base, outcome: status } : { ...base, outcome: status, error },
+        )
       }
       // The journal outlives the execution's settlement, so the child sessions its calls named are
       // listed here as the live run would have, with calls that never settled as interrupted.

@@ -469,7 +469,7 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
     publish({
       id: "evt_codemode_completed",
       created: 2,
-      type: "session-codemode-completed",
+      type: "session-codemode-settled",
       durable: { aggregateID: "ses_codemode", seq: 1 },
       data: {
         sessionID: "ses_codemode",
@@ -477,6 +477,7 @@ test("preserves a fast Code Mode terminal across outer tool success", async () =
         id: "call_codemode",
         executionID: "exe_codemode",
         events: [{ type: "trace", kind: "return", value: "1" }],
+        outcome: "completed",
       },
     })
     publish({

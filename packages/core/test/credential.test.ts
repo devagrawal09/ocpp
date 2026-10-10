@@ -1,12 +1,12 @@
 import { describe, expect } from "bun:test"
 import { EventManifest } from "@ocpp/schema/event-manifest"
-import { eq, like } from "drizzle-orm"
+import { like } from "drizzle-orm"
 import { Effect } from "effect"
 import { Bus } from "@ocpp/core/bus"
 import { Credential } from "@ocpp/core/credential"
 import { CredentialFact } from "@ocpp/schema/credential-fact"
 import { CredentialSeal } from "@ocpp/core/credential/seal"
-import { CredentialKeyTable, CredentialSecretTable, CredentialTable } from "@ocpp/core/credential/sql"
+import { CredentialKeyTable, CredentialSecretTable } from "@ocpp/core/credential/sql"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { Database } from "@ocpp/core/database/database"
 import { Location } from "@ocpp/core/location"
@@ -159,55 +159,6 @@ describe("Credential", () => {
         { type: Credential.Event.Switched.type, data: { integrationID, credentialID: null } },
       ])
       expect(events.every((event) => !("location" in event))).toBeTrue()
-    }),
-  )
-
-  it.effect("promotes the newest remaining legacy credential when the effective selection is removed", () =>
-    Effect.gen(function* () {
-      const credentials = yield* Credential.Service
-      const bus = yield* Bus.Service
-      const database = yield* Database.Service
-      const integrationID = Integration.ID.make("openai")
-      const oldest = yield* credentials.create({
-        integrationID,
-        value: Credential.Key.make({ type: "key", key: "oldest" }),
-      })
-      const newer = yield* credentials.create({
-        integrationID,
-        value: Credential.Key.make({ type: "key", key: "newer" }),
-      })
-      const newest = yield* credentials.create({
-        integrationID,
-        value: Credential.Key.make({ type: "key", key: "newest" }),
-      })
-      yield* database.db
-        .update(CredentialTable)
-        .set({ active: null })
-        .where(eq(CredentialTable.integration_id, integrationID))
-        .run()
-        .pipe(Effect.orDie)
-
-      const events = new Array<Event.Payload>()
-      // What clients see: credentials' own facts stay internal.
-      yield* bus.listen((event) => Effect.sync(() => EventManifest.isServer(event) && events.push(event)))
-      yield* credentials.activate(newest.id)
-      yield* credentials.remove(oldest.id)
-      yield* credentials.remove(newest.id)
-
-      expect(yield* credentials.list(integrationID)).toEqual([newer])
-      expect(
-        yield* database.db
-          .select({ active: CredentialTable.active })
-          .from(CredentialTable)
-          .where(eq(CredentialTable.id, newer.id))
-          .get()
-          .pipe(Effect.orDie),
-      ).toEqual({ active: true })
-      expect(events.map((event) => ({ type: event.type, data: event.data }))).toEqual([
-        { type: Credential.Event.Updated.type, data: {} },
-        { type: Credential.Event.Updated.type, data: {} },
-        { type: Credential.Event.Switched.type, data: { integrationID, credentialID: newer.id } },
-      ])
     }),
   )
 

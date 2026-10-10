@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "e23c0b73-b5da-47b4-a8da-686d86aa61ee",
-  "prevIds": ["efbb62d1-8be0-4d96-bc6b-f03fff7aab8e"],
+  "id": "c5697698-88ba-4ca1-b2c1-859edcd88d5b",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
       "name": "codemode_command",
@@ -818,7 +818,7 @@
     },
     {
       "type": "text",
-      "notNull": false,
+      "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -837,28 +837,8 @@
       "table": "credential"
     },
     {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "connector_id",
-      "entityType": "columns",
-      "table": "credential"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "method_id",
-      "entityType": "columns",
-      "table": "credential"
-    },
-    {
       "type": "integer",
-      "notNull": false,
+      "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -940,7 +920,7 @@
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
-      "default": "0",
+      "default": null,
       "generated": null,
       "name": "created",
       "entityType": "columns",
@@ -1682,56 +1662,6 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "share_url",
-      "entityType": "columns",
-      "table": "session_v2"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "summary_additions",
-      "entityType": "columns",
-      "table": "session_v2"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "summary_deletions",
-      "entityType": "columns",
-      "table": "session_v2"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "summary_files",
-      "entityType": "columns",
-      "table": "session_v2"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "summary_diffs",
-      "entityType": "columns",
-      "table": "session_v2"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
       "name": "metadata",
       "entityType": "columns",
       "table": "session_v2"
@@ -1803,16 +1733,6 @@
       "default": null,
       "generated": null,
       "name": "revert",
-      "entityType": "columns",
-      "table": "session_v2"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "permission",
       "entityType": "columns",
       "table": "session_v2"
     },
@@ -1933,26 +1853,6 @@
       "default": null,
       "generated": null,
       "name": "time_archived",
-      "entityType": "columns",
-      "table": "session_v2"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_suspended",
-      "entityType": "columns",
-      "table": "session_v2"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "0",
-      "generated": null,
-      "name": "resume_attempts",
       "entityType": "columns",
       "table": "session_v2"
     },
@@ -2958,20 +2858,6 @@
       "where": null,
       "origin": "manual",
       "name": "session_v2_parent_idx",
-      "entityType": "indexes",
-      "table": "session_v2"
-    },
-    {
-      "columns": [
-        {
-          "value": "time_suspended",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": "\"session_v2\".\"time_suspended\" is not null",
-      "origin": "manual",
-      "name": "session_v2_time_suspended_idx",
       "entityType": "indexes",
       "table": "session_v2"
     },

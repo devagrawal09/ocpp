@@ -5,7 +5,6 @@ import { Effect, Semaphore } from "effect"
 import { supportsForeignKeyToggle } from "#sqlite"
 import type { EffectDrizzleSqlite } from "./drizzle.js"
 import { migrations } from "./migration.gen.js"
-import schema from "./schema.gen.js"
 import { Global } from "@ocpp/util/global"
 
 type Database = EffectDrizzleSqlite.EffectSQLiteDatabase
@@ -18,36 +17,28 @@ export type Migration = {
   up: (tx: Transaction) => Effect.Effect<void, unknown, Global.Service>
 }
 
+/**
+ * Brings the database to the current schema: an empty one runs every migration from the baseline, and one
+ * OC++ created runs those it has not. OC++ does not upgrade a database created before its baseline, nor one
+ * it did not create.
+ */
 export function apply(db: Database) {
   return lock.withPermit(
     Effect.gen(function* () {
       // OC++ owns the unprefixed table namespace. Embedders sharing this
-      // database may own underscore-prefixed tables, which bootstrap ignores.
+      // database may own underscore-prefixed tables, which it ignores.
       const tables = yield* db.all<{ name: string }>(
         sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND substr(name, 1, 1) <> '_'`,
       )
-      if (tables.some((table) => table.name === "session" || table.name === "session_v2"))
-        return yield* applyOnly(db, migrations)
-      if (tables.length > 0) return yield* Effect.die(new Error("Database is not empty and has no session table"))
-      const started = Date.now()
-      yield* Effect.logInfo("database schema bootstrap started", { migrations: migrations.length })
-      yield* db.transaction((tx) =>
-        Effect.gen(function* () {
-          yield* schema.up(tx)
-          yield* tx.run(
-            sql`CREATE TABLE ${sql.identifier("migration")} (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)`,
-          )
-          yield* Effect.forEach(migrations, (migration) =>
-            tx.run(
-              sql`INSERT INTO ${sql.identifier("migration")} (id, time_completed) VALUES (${migration.id}, ${Date.now()})`,
-            ),
-          )
-        }),
-      )
-      yield* Effect.logInfo("database schema bootstrap completed", {
-        migrations: migrations.length,
-        durationMs: Date.now() - started,
-      })
+      const baseline = migrations[0]!
+      const created =
+        tables.some((table) => table.name === "migration") &&
+        (yield* db.get(sql`SELECT id FROM ${sql.identifier("migration")} WHERE id = ${baseline.id}`)) !== undefined
+      if (tables.length > 0 && !created)
+        return yield* Effect.die(
+          new Error(`Database has tables but not OC++'s baseline schema (${baseline.id}), so OC++ cannot upgrade it`),
+        )
+      yield* applyOnly(db, migrations)
     }),
   )
 }
@@ -57,53 +48,9 @@ export function applyOnly(db: Database, input: Migration[]) {
     yield* db.run(
       sql`CREATE TABLE IF NOT EXISTS ${sql.identifier("migration")} (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)`,
     )
-    let completed = new Set(
+    const completed = new Set(
       (yield* db.all<{ id: string }>(sql`SELECT id FROM ${sql.identifier("migration")}`)).map((row) => row.id),
     )
-    if (completed.size === 0) {
-      // Existing installs used Drizzle's migration journal. Seed the new
-      // journal once so TypeScript migrations don't replay old SQL.
-      if (
-        yield* db.get(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${"__drizzle_migrations"}`)
-      ) {
-        const named = (yield* db.all<{ name: string }>(
-          sql`SELECT name FROM pragma_table_info('__drizzle_migrations')`,
-        )).some((column) => column.name === "name")
-
-        if (named) {
-          yield* db.run(sql`
-            INSERT OR IGNORE INTO ${sql.identifier("migration")} (id, time_completed)
-            SELECT name, ${Date.now()}
-            FROM ${sql.identifier("__drizzle_migrations")}
-            WHERE name IS NOT NULL
-          `)
-        }
-
-        if (!named) {
-          const entries = yield* db.all<{ created_at: number; prefix: string | null }>(sql`
-            SELECT created_at, strftime('%Y%m%d%H%M%S', created_at / 1000, 'unixepoch') AS prefix
-            FROM ${sql.identifier("__drizzle_migrations")}
-            WHERE created_at IS NOT NULL
-          `)
-
-          for (const entry of entries) {
-            const migration = input.find((item) => item.id.startsWith(`${entry.prefix}_`))
-            if (!migration) {
-              return yield* Effect.die(
-                new Error(`Legacy migration timestamp ${entry.created_at} does not match any known migration`),
-              )
-            }
-            yield* db.run(sql`
-              INSERT OR IGNORE INTO ${sql.identifier("migration")} (id, time_completed)
-              VALUES (${migration.id}, ${Date.now()})
-            `)
-          }
-        }
-        completed = new Set(
-          (yield* db.all<{ id: string }>(sql`SELECT id FROM ${sql.identifier("migration")}`)).map((row) => row.id),
-        )
-      }
-    }
 
     for (const migration of input) {
       if (completed.has(migration.id)) continue

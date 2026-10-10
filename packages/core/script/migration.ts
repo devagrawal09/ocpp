@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { Database } from "bun:sqlite"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -10,7 +11,6 @@ const root = path.resolve(import.meta.dirname, "../../..")
 const snapshot = path.join(root, "packages/core/schema.json")
 const tsDir = path.join(root, "packages/core/src/database/migration")
 const registry = path.join(root, "packages/core/src/database/migration.gen.ts")
-const schema = path.join(root, "packages/core/src/database/schema.gen.ts")
 const args = parseArgs({
   args: process.argv.slice(2),
   options: {
@@ -31,11 +31,13 @@ await generate()
 async function generate() {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "ocpp-core-migration-"))
   const incremental = path.join(temporary, "incremental")
-  const full = path.join(temporary, "full")
   try {
     await fs.mkdir(incremental)
-    await fs.mkdir(path.join(incremental, "baseline"))
-    await fs.copyFile(snapshot, path.join(incremental, "baseline/snapshot.json"))
+    // Without a snapshot the migration creates the whole declared schema: a new baseline.
+    if (await Bun.file(snapshot).exists()) {
+      await fs.mkdir(path.join(incremental, "baseline"))
+      await fs.copyFile(snapshot, path.join(incremental, "baseline/snapshot.json"))
+    }
     await drizzle(temporary, incremental, args.values.name, args.values.hints)
 
     const generated = await generatedMigrations(incremental)
@@ -53,9 +55,6 @@ async function generate() {
       await Bun.write(snapshot, await formatJson(await Bun.file(path.join(incremental, name, "snapshot.json")).text()))
     }
 
-    await fs.mkdir(full)
-    await drizzle(temporary, full, "schema")
-    await Bun.write(schema, await formatTypescript(renderSchema(await generatedSql(full))))
     await Bun.write(registry, await formatTypescript(renderRegistry(await typescriptMigrations())))
   } finally {
     await fs.rm(temporary, { recursive: true, force: true })
@@ -77,16 +76,28 @@ async function check() {
       )
     }
 
-    await fs.mkdir(full)
-    await drizzle(temporary, full, "schema")
-    if ((await Bun.file(schema).text()) !== (await formatTypescript(renderSchema(await generatedSql(full))))) {
-      throw new Error("Current database schema is stale. Run `bun script/migration.ts` from packages/core.")
-    }
-
     const migrations = await typescriptMigrations()
     if ((await Bun.file(registry).text()) !== (await formatTypescript(renderRegistry(migrations)))) {
       throw new Error("Database migration registry is stale. Run `bun script/migration.ts` from packages/core.")
     }
+
+    // A database the migrations build has the schema the tables declare.
+    await fs.mkdir(full)
+    await drizzle(temporary, full, "schema")
+    const declared = path.join(temporary, "declared.sqlite")
+    const database = new Database(declared)
+    for (const statement of statements(await generatedSql(full))) database.run(statement)
+    database.close()
+    const migrated = path.join(temporary, "migrated.sqlite")
+    await migrate(migrated, temporary)
+    const expected = new Set(structure(declared))
+    const actual = new Set(structure(migrated))
+    const differences = [
+      ...[...expected].filter((entry) => !actual.has(entry)).map((entry) => `  declared, not migrated: ${entry}`),
+      ...[...actual].filter((entry) => !expected.has(entry)).map((entry) => `  migrated, not declared: ${entry}`),
+    ]
+    if (differences.length > 0)
+      throw new Error(`The migrations do not build the declared schema:\n${differences.join("\n")}`)
   } finally {
     await fs.rm(temporary, { recursive: true, force: true })
   }
@@ -158,29 +169,66 @@ export default migration
 `
 }
 
-function renderSchema(sql: string) {
-  return `import { Effect } from "effect"
-import type { DatabaseMigration } from "./migration.js"
-
-const schema: Omit<DatabaseMigration.Migration, "id"> = {
-  up(tx) {
-    return Effect.gen(function* () {
-${renderStatements(sql)}
-    })
-  },
-}
-
-export default schema
-`
-}
-
-function renderStatements(sql: string) {
+function statements(sql: string) {
   return sql
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0)
-    .map(renderRun)
-    .join("\n")
+}
+
+function renderStatements(sql: string) {
+  return statements(sql).map(renderRun).join("\n")
+}
+
+// Builds a database with OC++'s own migrator, as a boot does.
+async function migrate(file: string, data: string) {
+  const { Effect } = await import("effect")
+  const { SqliteClient } = await import("@effect/sql-sqlite-bun")
+  const { Global } = await import("@ocpp/util/global")
+  const { EffectDrizzleSqlite } = await import("../src/database/drizzle.ts")
+  const { DatabaseMigration } = await import("../src/database/migration.ts")
+  await Effect.runPromise(
+    EffectDrizzleSqlite.makeWithDefaults().pipe(
+      Effect.flatMap(DatabaseMigration.apply),
+      Effect.provideService(Global.Service, Global.make({ data })),
+      Effect.provide(SqliteClient.layer({ filename: file, disableWAL: true })),
+      Effect.scoped,
+    ),
+  )
+}
+
+// What each table is to SQLite, one line per fact about it. Columns are named, not numbered: a migration adds
+// a column after the others, where the declaration may list it earlier.
+function structure(file: string) {
+  const database = new Database(file, { readonly: true })
+  const all = (query: string) => database.query(query).all() as Record<string, unknown>[]
+  const definition = (name: unknown) =>
+    String((database.query("SELECT sql FROM sqlite_master WHERE name = ?").get(String(name)) as { sql: unknown })?.sql)
+      .replaceAll(/[`"]/g, "")
+      .replaceAll(/\s+/g, " ")
+  const tables = all(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'migration'",
+  ).map((table) => String(table.name))
+  const facts = tables.flatMap((table) => [
+    `${table} table${/\bAUTOINCREMENT\b/i.test(definition(table)) ? " autoincrement" : ""}`,
+    ...all(`PRAGMA table_xinfo("${table}")`).map(
+      ({ cid: _, ...column }) => `${table} column ${JSON.stringify(column)}`,
+    ),
+    ...all(`PRAGMA index_list("${table}")`).map(({ seq: _, ...index }) => {
+      const implicit = String(index.name).startsWith("sqlite_autoindex_")
+      return `${table} index ${JSON.stringify({
+        ...index,
+        name: implicit ? undefined : index.name,
+        columns: all(`PRAGMA index_info("${index.name}")`).map((column) => column.name),
+        sql: implicit ? undefined : definition(index.name),
+      })}`
+    }),
+    ...all(`PRAGMA foreign_key_list("${table}")`).map(
+      ({ id: _, ...key }) => `${table} foreign key ${JSON.stringify(key)}`,
+    ),
+  ])
+  database.close()
+  return facts
 }
 
 function renderRun(statement: string) {

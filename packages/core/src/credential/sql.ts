@@ -6,11 +6,10 @@ import type { Credential } from "../credential.js"
 /** Credentials, the projection of their facts in Specter's Event Log. */
 export const CredentialTable = sqliteTable("credential", {
   id: text().$type<Credential.ID>().primaryKey(),
-  integration_id: text().$type<Credential.Info["integrationID"]>(),
+  integration_id: text().$type<Credential.Info["integrationID"]>().notNull(),
   label: text().notNull(),
-  connector_id: text(),
-  method_id: text(),
-  active: integer({ mode: "boolean" }),
+  /** Whether the integration uses this credential: exactly one of an integration's credentials is active. */
+  active: integer({ mode: "boolean" }).notNull(),
   ...Timestamps,
 })
 

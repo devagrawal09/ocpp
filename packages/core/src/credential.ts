@@ -138,8 +138,7 @@ const layer = Layer.effect(
           .where(eq(CredentialTable.id, event.data.credentialID))
           .run()
           .pipe(Effect.orDie)
-        if (event.data.integrationID && event.data.replacement)
-          yield* activate(event.data.integrationID, event.data.replacement, event.created)
+        if (event.data.replacement) yield* activate(event.data.integrationID, event.data.replacement, event.created)
       }),
     )
     const keyed = (credentialID: ID, key: string) => ({
@@ -172,14 +171,13 @@ const layer = Layer.effect(
     }
     type Row = {
       id: ID
-      integration_id: Integration.ID | null
+      integration_id: Integration.ID
       label: string
       sealed: CredentialFact.Sealed
       key: string
     }
     const stored = (row: Row) =>
       Effect.gen(function* () {
-        if (!row.integration_id) return undefined
         return new Info({
           id: row.id,
           integrationID: row.integration_id,
@@ -187,23 +185,19 @@ const layer = Layer.effect(
           value: decode(yield* CredentialSeal.open(row.key, row.sealed)),
         })
       })
-    const storedRows = (rows: ReadonlyArray<Row>) =>
-      Effect.forEach(rows, stored).pipe(
-        Effect.map((credentials) => credentials.flatMap((credential) => (credential ? [credential] : []))),
-      )
+    const storedRows = (rows: ReadonlyArray<Row>) => Effect.forEach(rows, stored)
     const select = () =>
       db
         .select(columns)
         .from(CredentialTable)
         .innerJoin(CredentialSecretTable, eq(CredentialSecretTable.credential_id, CredentialTable.id))
         .innerJoin(CredentialKeyTable, eq(CredentialKeyTable.credential_id, CredentialTable.id))
-    // The credential an integration uses: the active one, else the newest.
+    // The credential an integration uses.
     const current = (integrationID: Integration.ID) =>
       db
         .select({ id: CredentialTable.id })
         .from(CredentialTable)
-        .where(eq(CredentialTable.integration_id, integrationID))
-        .orderBy(desc(CredentialTable.active), desc(CredentialTable.time_created), desc(CredentialTable.id))
+        .where(and(eq(CredentialTable.integration_id, integrationID), eq(CredentialTable.active, true)))
         .get()
         .pipe(Effect.orDie)
     const find = (id: ID) =>
@@ -258,8 +252,8 @@ const layer = Layer.effect(
       }),
       activate: Effect.fn("Credential.activate")(function* (id) {
         const credential = yield* find(id)
-        const integrationID = credential?.integration_id
-        if (!integrationID) return
+        if (!credential) return
+        const integrationID = credential.integration_id
         const switched = yield* locks.withLock(integrationID)(
           Effect.gen(function* () {
             if ((yield* current(integrationID))?.id === id) return false
@@ -272,8 +266,8 @@ const layer = Layer.effect(
       update: Effect.fn("Credential.update")(function* (id, updates) {
         if (updates.label === undefined && updates.value === undefined) return
         const credential = yield* find(id)
-        const integrationID = credential?.integration_id
-        if (!credential || !integrationID) return
+        if (!credential) return
+        const integrationID = credential.integration_id
         const relabeled = updates.label !== undefined && updates.label !== credential.label
         if (relabeled)
           yield* bus.publish(CredentialFact.Relabeled, { credentialID: id, integrationID, label: updates.label! })
@@ -288,38 +282,31 @@ const layer = Layer.effect(
       remove: Effect.fn("Credential.remove")(function* (id) {
         const credential = yield* find(id)
         if (!credential) return
-        const integrationID = credential.integration_id ?? undefined
-        const removed = yield* (integrationID ? locks.withLock(integrationID) : <A>(effect: A) => effect)(
+        const integrationID = credential.integration_id
+        const switched = yield* locks.withLock(integrationID)(
           Effect.gen(function* () {
-            const active = integrationID ? yield* current(integrationID) : undefined
+            const active = (yield* current(integrationID))?.id === id
             // When the removed credential was in use, the newest remaining one replaces it.
-            const replacement =
-              integrationID && active?.id === id
-                ? yield* db
-                    .select({ id: CredentialTable.id })
-                    .from(CredentialTable)
-                    .where(and(eq(CredentialTable.integration_id, integrationID), ne(CredentialTable.id, id)))
-                    .orderBy(desc(CredentialTable.time_created), desc(CredentialTable.id))
-                    .get()
-                    .pipe(Effect.orDie)
-                : undefined
+            const replacement = active
+              ? yield* db
+                  .select({ id: CredentialTable.id })
+                  .from(CredentialTable)
+                  .where(and(eq(CredentialTable.integration_id, integrationID), ne(CredentialTable.id, id)))
+                  .orderBy(desc(CredentialTable.time_created), desc(CredentialTable.id))
+                  .get()
+                  .pipe(Effect.orDie)
+              : undefined
             yield* bus.publish(CredentialFact.Removed, {
               credentialID: id,
-              ...(integrationID === undefined ? {} : { integrationID }),
+              integrationID,
               ...(replacement === undefined ? {} : { replacement: replacement.id }),
             })
-            return integrationID && active?.id === id
-              ? { switched: true as const, integrationID, credentialID: replacement?.id ?? null }
-              : { switched: false as const }
+            return active ? { credentialID: replacement?.id ?? null } : undefined
           }),
         )
         yield* bus.publish(Event.Updated, {}, { global: true })
-        if (removed.switched)
-          yield* bus.publish(
-            Event.Switched,
-            { integrationID: removed.integrationID, credentialID: removed.credentialID },
-            { global: true },
-          )
+        if (switched)
+          yield* bus.publish(Event.Switched, { integrationID, credentialID: switched.credentialID }, { global: true })
       }),
     })
   }),

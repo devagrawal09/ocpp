@@ -6,7 +6,6 @@ import { Event } from "./event.js"
 import { IntegrationID } from "./integration-id.js"
 import { optional } from "./schema.js"
 
-// Keyed by credential: a credential stored before integrations has none.
 const byCredential = { aggregate: "credentialID", version: 1 } as const
 const credential = { credentialID: Credential.ID, integrationID: IntegrationID }
 
@@ -45,11 +44,7 @@ export const Rotated = Event.durable({
 export const Removed = Event.durable({
   type: "credential.removed",
   durable: byCredential,
-  schema: {
-    credentialID: Credential.ID,
-    integrationID: optional(IntegrationID),
-    replacement: optional(Credential.ID),
-  },
+  schema: { ...credential, replacement: optional(Credential.ID) },
 })
 
 /** Internal persistence facts of credentials; clients see `credential.updated` and `credential.switched`. */

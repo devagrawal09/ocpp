@@ -226,8 +226,6 @@ describe("Session.create", () => {
         ).toMatchObject({
           time_created: before.time_created,
           time_updated: before.time_updated,
-          time_suspended: before.time_suspended,
-          resume_attempts: before.resume_attempts,
         })
         // Repeated resolution records the project and its directory's identity exactly once.
         const announced = yield* db

@@ -676,26 +676,6 @@ describe("SessionProjector", () => {
     }),
   )
 
-  it.effect("does not infer restart continuation from lifecycle history", () =>
-    Effect.gen(function* () {
-      const db = yield* seedSession()
-      const bus = yield* Bus.Service
-      const suspended = () =>
-        db
-          .select({ timeSuspended: SessionTable.time_suspended })
-          .from(SessionTable)
-          .where(eq(SessionTable.id, sessionID))
-          .get()
-          .pipe(Effect.orDie)
-
-      yield* bus.publish(SessionEvent.Execution.Interrupted, { sessionID, reason: "shutdown" })
-      expect((yield* suspended())?.timeSuspended).toBeNull()
-
-      yield* bus.publish(SessionEvent.Execution.Started, { sessionID })
-      expect((yield* suspended())?.timeSuspended).toBeNull()
-    }),
-  )
-
   it.effect("updates only the newest incomplete assistant projection", () =>
     Effect.gen(function* () {
       const db = yield* seedSession()

@@ -1,7 +1,8 @@
 import { Effect } from "effect"
-import type { DatabaseMigration } from "./migration.js"
+import type { DatabaseMigration } from "../migration.js"
 
-const schema: Omit<DatabaseMigration.Migration, "id"> = {
+const migration: DatabaseMigration.Migration = {
+  id: "20261010175350_baseline",
   up(tx) {
     return Effect.gen(function* () {
       yield* tx.run(`
@@ -125,11 +126,9 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
       yield* tx.run(`
         CREATE TABLE \`credential\` (
           \`id\` text PRIMARY KEY,
-          \`integration_id\` text,
+          \`integration_id\` text NOT NULL,
           \`label\` text NOT NULL,
-          \`connector_id\` text,
-          \`method_id\` text,
-          \`active\` integer,
+          \`active\` integer NOT NULL,
           \`time_created\` integer NOT NULL,
           \`time_updated\` integer NOT NULL
         );
@@ -145,7 +144,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`id\` text PRIMARY KEY,
           \`aggregate_id\` text NOT NULL,
           \`seq\` integer NOT NULL,
-          \`created\` integer DEFAULT 0 NOT NULL,
+          \`created\` integer NOT NULL,
           \`type\` text NOT NULL,
           \`log_order\` integer NOT NULL,
           CONSTRAINT \`fk_event_aggregate_id_event_sequence_aggregate_id_fk\` FOREIGN KEY (\`aggregate_id\`) REFERENCES \`event_sequence\`(\`aggregate_id\`) ON DELETE CASCADE,
@@ -267,11 +266,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`path\` text,
           \`title\` text,
           \`version\` text NOT NULL,
-          \`share_url\` text,
-          \`summary_additions\` integer,
-          \`summary_deletions\` integer,
-          \`summary_files\` integer,
-          \`summary_diffs\` text,
           \`metadata\` text,
           \`cost\` real DEFAULT 0 NOT NULL,
           \`tokens_input\` integer DEFAULT 0 NOT NULL,
@@ -280,7 +274,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`tokens_cache_read\` integer DEFAULT 0 NOT NULL,
           \`tokens_cache_write\` integer DEFAULT 0 NOT NULL,
           \`revert\` text,
-          \`permission\` text,
           \`agent\` text,
           \`tools\` text,
           \`model\` text,
@@ -293,8 +286,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`idle_error_message\` text,
           \`time_compacting\` integer,
           \`time_archived\` integer,
-          \`time_suspended\` integer,
-          \`resume_attempts\` integer DEFAULT 0 NOT NULL,
           CONSTRAINT \`fk_session_v2_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
         );
       `)
@@ -391,9 +382,6 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
       yield* tx.run(`CREATE INDEX \`session_v2_project_idx\` ON \`session_v2\` (\`project_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_v2_workspace_idx\` ON \`session_v2\` (\`workspace_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_v2_parent_idx\` ON \`session_v2\` (\`parent_id\`);`)
-      yield* tx.run(
-        `CREATE INDEX \`session_v2_time_suspended_idx\` ON \`session_v2\` (\`time_suspended\`) WHERE "session_v2"."time_suspended" is not null;`,
-      )
       yield* tx.run(`CREATE INDEX \`specter_event_type_order_idx\` ON \`specter_event\` (\`type\`,\`order\`);`)
       yield* tx.run(
         `CREATE UNIQUE INDEX \`specter_outbox_job_key_idx\` ON \`specter_outbox_job\` (\`reaction\`,\`idempotency_key\`);`,
@@ -405,4 +393,4 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
   },
 }
 
-export default schema
+export default migration

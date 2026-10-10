@@ -192,7 +192,7 @@ describe("SessionProjector", () => {
       // A committed revert resets the fold cache so the next boundary establishes a new epoch.
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toBeUndefined()
       // That new epoch checkpoints the notebook left after the revert.
-      yield* bus.publish(SessionEvent.InstructionsUpdated, { sessionID, delta: {} })
+      yield* bus.command({ type: "updateInstructions", payload: { sessionID, delta: {} } }).pipe(Effect.orDie)
       expect((yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie))?.notebook).toEqual(["early"])
     }),
   )

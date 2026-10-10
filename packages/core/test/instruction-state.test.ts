@@ -18,6 +18,7 @@ import { SessionSchema } from "@ocpp/core/session/schema"
 import { InstructionBlobTable, InstructionStateTable, SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
 import { testEffect } from "./lib/effect"
 import { Recorded } from "./lib/recorded"
+import { recordSession } from "./fixture/session"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
@@ -46,18 +47,12 @@ const setup = (sessionID: SessionSchema.ID) =>
       .onConflictDoNothing()
       .run()
       .pipe(Effect.orDie)
-    yield* db
-      .insert(SessionTable)
-      .values({
-        id: sessionID,
-        project_id: Project.ID.global,
-        slug: "instruction-state-test",
-        directory: "/project",
-        title: "Instruction state test",
-        version: "test",
-      })
-      .run()
-      .pipe(Effect.orDie)
+    yield* recordSession({
+      id: sessionID,
+      directory: "/project",
+      slug: "instruction-state-test",
+      title: "Instruction state test",
+    })
     return { db, events: yield* Bus.Service }
   })
 
@@ -483,16 +478,17 @@ describe("InstructionState", () => {
           current_values: state.current_values,
         })),
       ).toEqual([
-        // Each update that stores new values records them first, which takes a sequence number.
+        // The Session's creation takes the first sequence number, and each update that stores new values
+        // records them first, which takes one more.
         {
-          epoch_start: 1,
-          through_seq: 4,
+          epoch_start: 2,
+          through_seq: 5,
           initial_values: { "test/context": Instructions.hash("initial") },
           current_values: {},
         },
         {
-          epoch_start: 1,
-          through_seq: 4,
+          epoch_start: 2,
+          through_seq: 5,
           initial_values: { "test/context": Instructions.hash("initial") },
           current_values: {},
         },

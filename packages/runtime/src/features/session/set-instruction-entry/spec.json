@@ -1,0 +1,385 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Attaches a JSON value to a live Session's instructions under a key, or changes it. Setting the value an entry already holds records nothing. A fork starts with its parent's entries.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "setInstructionEntry",
+  "scenarios": [
+    {
+      "description": "A new key attaches its value.",
+      "expect": [
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1",
+        "value": {
+          "id": 42
+        }
+      }
+    },
+    {
+      "description": "Another value replaces the entry's.",
+      "expect": [
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 43
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1",
+        "value": {
+          "id": 43
+        }
+      }
+    },
+    {
+      "description": "The value the entry already holds is refused: there is nothing to change.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Instruction entry unchanged"
+      },
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1",
+        "value": {
+          "id": 42
+        }
+      }
+    },
+    {
+      "description": "A removed entry takes its value again.",
+      "expect": [
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-entry-removed",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1",
+        "value": {
+          "id": 42
+        }
+      }
+    },
+    {
+      "description": "A fork holds its parent's entries, so setting one of them to the same value changes nothing.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_0",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_1",
+              "type": "through"
+            },
+            "instructionEntries": [
+              {
+                "key": "ticket",
+                "removed": false,
+                "value": {
+                  "id": 42
+                }
+              },
+              {
+                "key": "owner",
+                "removed": true,
+                "value": null
+              }
+            ],
+            "parentID": "ses_0",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Instruction entry unchanged"
+      },
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1",
+        "value": {
+          "id": 42
+        }
+      }
+    },
+    {
+      "description": "An entry the parent had removed is set on the fork.",
+      "expect": [
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "owner",
+            "sessionID": "ses_1",
+            "value": "dev"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_0",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_1",
+              "type": "through"
+            },
+            "instructionEntries": [
+              {
+                "key": "ticket",
+                "removed": false,
+                "value": {
+                  "id": 42
+                }
+              },
+              {
+                "key": "owner",
+                "removed": true,
+                "value": null
+              }
+            ],
+            "parentID": "ses_0",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "key": "owner",
+        "sessionID": "ses_1",
+        "value": "dev"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1",
+        "value": {
+          "id": 42
+        }
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1",
+        "value": {
+          "id": 42
+        }
+      }
+    }
+  ]
+}

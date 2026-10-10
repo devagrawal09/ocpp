@@ -20,6 +20,21 @@ import { createDeleteSessionState, deleteSession, deleteSessionStore } from "./f
 import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
+import {
+  createUpdateInstructionsState,
+  updateInstructions,
+  updateInstructionsStore,
+} from "./features/session/update-instructions/impl.ts"
+import {
+  createSetInstructionEntryState,
+  setInstructionEntry,
+  setInstructionEntryStore,
+} from "./features/session/set-instruction-entry/impl.ts"
+import {
+  createRemoveInstructionEntryState,
+  removeInstructionEntry,
+  removeInstructionEntryStore,
+} from "./features/session/remove-instruction-entry/impl.ts"
 import { createRenameSessionState, renameSession, renameSessionStore } from "./features/session/rename-session/impl.ts"
 import { createSelectAgentState, selectAgent, selectAgentStore } from "./features/session/select-agent/impl.ts"
 import { createSelectModelState, selectModel, selectModelStore } from "./features/session/select-model/impl.ts"
@@ -169,6 +184,9 @@ export const createRuntimeConfig = (options: {
       editMessage,
       activateSkill,
       appendSynthetic,
+      updateInstructions,
+      setInstructionEntry,
+      removeInstructionEntry,
       enqueueInput,
       cancelInboxItem,
       changeDelivery,
@@ -248,6 +266,9 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(editMessageStore, createEditMessageState),
     provide(activateSkillStore, createActivateSkillState),
     provide(appendSyntheticStore, createAppendSyntheticState),
+    provide(updateInstructionsStore, createUpdateInstructionsState),
+    provide(setInstructionEntryStore, createSetInstructionEntryState),
+    provide(removeInstructionEntryStore, createRemoveInstructionEntryState),
     provide(enqueueInputStore, createEnqueueInputState),
     provide(cancelInboxItemStore, createCancelInboxItemState),
     provide(changeDeliveryStore, createChangeDeliveryState),

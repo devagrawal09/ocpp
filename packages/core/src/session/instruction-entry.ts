@@ -3,7 +3,6 @@ export * as InstructionEntry from "./instruction-entry.js"
 import { and, asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { InstructionEntry } from "@ocpp/schema/instruction-entry"
-import { SessionFact } from "@ocpp/schema/session-fact"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
@@ -11,6 +10,8 @@ import { Instructions } from "../instructions/index.js"
 import { SessionSchema } from "./schema.js"
 import { SessionProjector } from "./projector.js"
 import { InstructionEntryTable } from "./sql.js"
+import { NotFoundError } from "./error.js"
+import { SpecterRejection } from "../specter/rejection.js"
 
 export const Key = InstructionEntry.Key
 export type Key = typeof Key.Type
@@ -22,6 +23,10 @@ export const MaxValueBytes = InstructionEntry.MaxValueBytes
 export const ValueTooLargeError = InstructionEntry.ValueTooLargeError
 
 type DatabaseService = Database.Interface["db"]
+
+/** A Command refused for a Session that is gone; any other rejection is a defect. */
+const missing = (sessionID: SessionSchema.ID, error: unknown) =>
+  SpecterRejection.isMissingSession(error) ? Effect.fail(new NotFoundError({ sessionID })) : Effect.die(error)
 
 export const snapshot = Effect.fn("InstructionEntry.snapshot")(function* (
   db: DatabaseService,
@@ -46,8 +51,11 @@ export interface Interface {
     readonly sessionID: SessionSchema.ID
     readonly key: Key
     readonly value: Schema.Json
-  }) => Effect.Effect<void, InstructionEntry.ValueTooLargeError>
-  readonly remove: (input: { readonly sessionID: SessionSchema.ID; readonly key: Key }) => Effect.Effect<void>
+  }) => Effect.Effect<void, InstructionEntry.ValueTooLargeError | NotFoundError>
+  readonly remove: (input: {
+    readonly sessionID: SessionSchema.ID
+    readonly key: Key
+  }) => Effect.Effect<void, NotFoundError>
   /** Produces one Instructions source per stored entry, keyed `api/<key>`. */
   readonly load: (sessionID: SessionSchema.ID) => Effect.Effect<Instructions.List>
 }
@@ -114,26 +122,29 @@ const layer = Layer.effect(
           maxBytes: MaxValueBytes,
           message: `Instruction entry value is ${actualBytes} bytes; the limit is ${MaxValueBytes} bytes`,
         })
-      // The entry's row is the projection of its facts in Specter's Event Log.
-      const stored = yield* db
-        .select({ value: InstructionEntryTable.value, removed: InstructionEntryTable.removed })
-        .from(InstructionEntryTable)
-        .where(and(eq(InstructionEntryTable.session_id, input.sessionID), eq(InstructionEntryTable.key, input.key)))
-        .get()
-        .pipe(Effect.orDie)
-      if (stored && !stored.removed && JSON.stringify(stored.value) === JSON.stringify(input.value)) return
-      yield* bus.publish(SessionFact.InstructionEntrySet, input)
+      // The runtime records nothing for the value the entry already holds.
+      yield* bus
+        .command({ type: "setInstructionEntry", payload: input })
+        .pipe(
+          Effect.catch((error) =>
+            SpecterRejection.reason(error) === "Instruction entry unchanged"
+              ? Effect.void
+              : missing(input.sessionID, error),
+          ),
+        )
     })
 
+    // Removing an entry the Session does not hold changes nothing.
     const remove = Effect.fn("InstructionEntry.remove")(function* (input: Parameters<Interface["remove"]>[0]) {
-      const stored = yield* db
-        .select({ removed: InstructionEntryTable.removed })
-        .from(InstructionEntryTable)
-        .where(and(eq(InstructionEntryTable.session_id, input.sessionID), eq(InstructionEntryTable.key, input.key)))
-        .get()
-        .pipe(Effect.orDie)
-      if (!stored || stored.removed) return
-      yield* bus.publish(SessionFact.InstructionEntryRemoved, input)
+      yield* bus
+        .command({ type: "removeInstructionEntry", payload: input })
+        .pipe(
+          Effect.catch((error) =>
+            SpecterRejection.reason(error) === "Instruction entry not found"
+              ? Effect.void
+              : missing(input.sessionID, error),
+          ),
+        )
     })
 
     const load = Effect.fn("InstructionEntry.load")(function* (sessionID: SessionSchema.ID) {

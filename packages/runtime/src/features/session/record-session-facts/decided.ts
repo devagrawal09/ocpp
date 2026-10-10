@@ -19,6 +19,10 @@ export const decided = {
   "session-message-content-updated": "editMessage",
   "session-skill-activated": "activateSkill",
   "session-synthetic": "appendSynthetic",
+  "session-instructions-updated": "updateInstructions",
+  "session-instruction-blobs-stored": "updateInstructions",
+  "session-instruction-entry-set": "setInstructionEntry",
+  "session-instruction-entry-removed": "removeInstructionEntry",
 } as const
 
 export const refusal = (type: string) =>

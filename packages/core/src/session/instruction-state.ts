@@ -1,6 +1,5 @@
 export * as InstructionState from "./instruction-state.js"
 
-import { SessionFact } from "@ocpp/schema/session-fact"
 import { eq, inArray, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import type { Database } from "../database/database.js"
@@ -12,6 +11,8 @@ import { SessionSchema } from "./schema.js"
 import { InstructionBlobTable, InstructionStateTable } from "./sql.js"
 
 type DatabaseService = Database.Interface["db"]
+
+const encodeUpdate = Schema.encodeSync(SessionEvent.InstructionsUpdated.data)
 
 export interface Observation extends Instructions.Admission {
   readonly sessionID: SessionSchema.ID
@@ -47,23 +48,27 @@ export const commit = Effect.fn("InstructionState.commit")(function* (
   // The rendered text is frozen into the durable event because re-rendering it
   // later would require the original Location-scoped instruction sources.
   const text = observation.initial ? "" : yield* renderUpdateText(db, instructions, observation)
-  const update = [
-    SessionEvent.InstructionsUpdated,
-    {
-      sessionID: observation.sessionID,
-      delta: observation.delta,
-      ...(text.length > 0 ? { text } : {}),
-    },
-    // Initial sync establishes the baseline; unlike later deltas it is not chronological history.
-    observation.initial ? { metadata: { instructions: { initial: true } } } : {},
-  ] as const
+  const blobs = Object.keys(observation.blobs).length > 0
   // The values the update refers to by hash are recorded in the same commit, before it.
-  if (Object.keys(observation.blobs).length === 0) yield* bus.publish(...update)
-  else
-    yield* bus.publishAll([
-      [SessionFact.InstructionBlobsStored, { sessionID: observation.sessionID, blobs: observation.blobs }],
-      update,
-    ])
+  yield* bus
+    .command(
+      {
+        type: "updateInstructions",
+        payload: {
+          ...encodeUpdate({
+            sessionID: observation.sessionID,
+            delta: observation.delta,
+            ...(text.length > 0 ? { text } : {}),
+          }),
+          ...(blobs ? { blobs: observation.blobs } : {}),
+        },
+      },
+      // Initial sync establishes the baseline; unlike later deltas it is not chronological history.
+      observation.initial
+        ? { facts: [...(blobs ? [undefined] : []), { metadata: { instructions: { initial: true } } }] }
+        : undefined,
+    )
+    .pipe(Effect.orDie)
 })
 
 const renderUpdateText = Effect.fnUntraced(function* (

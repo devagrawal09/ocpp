@@ -226,31 +226,6 @@
       }
     },
     {
-      "description": "Records session-instructions-updated as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-instructions-updated",
-          "examplePayload": {
-            "delta": {},
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "delta": {},
-              "sessionID": "ses_1"
-            },
-            "type": "session-instructions-updated"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records session-shell-started as the host published it.",
       "expect": [
         {
@@ -1142,91 +1117,6 @@
               "workspaceID": "wrk_1"
             },
             "type": "workspace-destroyed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-instruction-blobs-stored as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-instruction-blobs-stored",
-          "examplePayload": {
-            "blobs": {
-              "sha_1": "Follow the style guide."
-            },
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "blobs": {
-                "sha_1": "Follow the style guide."
-              },
-              "sessionID": "ses_1"
-            },
-            "type": "session-instruction-blobs-stored"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-instruction-entry-set as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-instruction-entry-set",
-          "examplePayload": {
-            "key": "ticket",
-            "sessionID": "ses_1",
-            "value": {
-              "id": 42
-            }
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "key": "ticket",
-              "sessionID": "ses_1",
-              "value": {
-                "id": 42
-              }
-            },
-            "type": "session-instruction-entry-set"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-instruction-entry-removed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-instruction-entry-removed",
-          "examplePayload": {
-            "key": "ticket",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "key": "ticket",
-              "sessionID": "ses_1"
-            },
-            "type": "session-instruction-entry-removed"
           }
         ]
       }
@@ -2546,6 +2436,115 @@
               "text": "Fork boundary"
             },
             "type": "session-synthetic"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-instructions-updated: updateInstructions decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-instructions-updated is recorded by updateInstructions"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "delta": {},
+              "sessionID": "ses_1"
+            },
+            "type": "session-instructions-updated"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-instruction-blobs-stored: updateInstructions decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-instruction-blobs-stored is recorded by updateInstructions"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "blobs": {
+                "sha_1": "Follow the style guide."
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-instruction-blobs-stored"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-instruction-entry-set: setInstructionEntry decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-instruction-entry-set is recorded by setInstructionEntry"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "key": "ticket",
+              "sessionID": "ses_1",
+              "value": {
+                "id": 42
+              }
+            },
+            "type": "session-instruction-entry-set"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-instruction-entry-removed: removeInstructionEntry decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-instruction-entry-removed is recorded by removeInstructionEntry"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "key": "ticket",
+              "sessionID": "ses_1"
+            },
+            "type": "session-instruction-entry-removed"
           }
         ]
       }

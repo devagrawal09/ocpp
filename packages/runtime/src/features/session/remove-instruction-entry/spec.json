@@ -1,0 +1,315 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Removes an entry from a live Session's instructions. Only an entry the Session holds can be removed; a fork holds its parent's entries.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "removeInstructionEntry",
+  "scenarios": [
+    {
+      "description": "An entry the Session holds is removed.",
+      "expect": [
+        {
+          "eventType": "session-instruction-entry-removed",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A key the Session never held is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Instruction entry not found"
+      },
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An entry already removed is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-entry-removed",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Instruction entry not found"
+      },
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A fork removes an entry its parent held.",
+      "expect": [
+        {
+          "eventType": "session-instruction-entry-removed",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_0",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_1",
+              "type": "through"
+            },
+            "instructionEntries": [
+              {
+                "key": "ticket",
+                "removed": false,
+                "value": {
+                  "id": 42
+                }
+              },
+              {
+                "key": "owner",
+                "removed": true,
+                "value": null
+              }
+            ],
+            "parentID": "ses_0",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A fork does not hold an entry its parent had removed.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_0",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_1",
+              "type": "through"
+            },
+            "instructionEntries": [
+              {
+                "key": "ticket",
+                "removed": false,
+                "value": {
+                  "id": 42
+                }
+              },
+              {
+                "key": "owner",
+                "removed": true,
+                "value": null
+              }
+            ],
+            "parentID": "ses_0",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Instruction entry not found"
+      },
+      "when": {
+        "key": "owner",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-entry-set",
+          "examplePayload": {
+            "key": "ticket",
+            "sessionID": "ses_1",
+            "value": {
+              "id": 42
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "key": "ticket",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

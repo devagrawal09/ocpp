@@ -43,6 +43,7 @@ import { Tool } from "@ocpp/core/tool"
 import { asc, eq } from "drizzle-orm"
 import { Effect, Layer, Schema, Stream } from "effect"
 import { testEffect } from "./lib/effect"
+import { recordSession } from "./fixture/session"
 
 const requests: LLMRequest[] = []
 const options: Array<StreamOptions | undefined> = []
@@ -204,19 +205,14 @@ const setup = Effect.gen(function* () {
       agent.mode = "primary"
     }),
   )
-  yield* db
-    .insert(SessionTable)
-    .values({
-      id: sessionID,
-      project_id: (yield* projects.resolve(AbsolutePath.make("/project"))).id,
-      slug: "generate-test",
-      directory: "/project",
-      title: "Generate test",
-      version: "test",
-      agent: Agent.ID.make("build"),
-    })
-    .run()
-    .pipe(Effect.orDie)
+  yield* recordSession({
+    id: sessionID,
+    projectID: (yield* projects.resolve(AbsolutePath.make("/project"))).id,
+    slug: "generate-test",
+    directory: "/project",
+    title: "Generate test",
+    agent: Agent.ID.make("build"),
+  })
   return { db, bus, instructions: yield* instructionBuiltIns.load(sessionID) }
 })
 

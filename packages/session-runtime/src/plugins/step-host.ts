@@ -6,8 +6,6 @@ import type { TokenUsage } from "@ocpp/schema/token-usage"
 import type { SpecterEffectError } from "@specter-ts/core"
 import { Context, type Effect, type Schema } from "effect"
 
-import type { ModelMessage } from "../features/session/model-transcript-query/impl.ts"
-
 // A runtime failure while recording or reading (not a rejection). The host
 // lets it fail the attempt, so the outbox retries the step's job.
 export type RecordFailure = SpecterEffectError
@@ -174,8 +172,6 @@ export class StepHost extends Context.Service<
       readonly step: number
       // Which attempt of that step this is, from 1.
       readonly attempt: number
-      // The runtime's model transcript at the moment the attempt runs.
-      readonly transcript: Effect.Effect<{ readonly messages: ModelMessage[] }, RecordFailure>
     }) => Effect.Effect<StepPlan | CompactFirst>
     // Called before input is delivered, so what the host records about the
     // Session's context (OC++'s instruction changes) precedes that input in

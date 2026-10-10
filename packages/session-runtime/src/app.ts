@@ -47,17 +47,6 @@ import {
 } from "./features/session/settle-tool-call/impl.ts"
 import { createFailToolInputState, failToolInput, failToolInputStore } from "./features/session/fail-tool-input/impl.ts"
 import { createSettleStepState, settleStep, settleStepStore } from "./features/session/settle-step/impl.ts"
-import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
-import {
-  createSessionHistoryState,
-  sessionHistory,
-  sessionHistoryStore,
-} from "./features/session/session-history-query/impl.ts"
-import {
-  createModelTranscriptState,
-  modelTranscript,
-  modelTranscriptStore,
-} from "./features/session/model-transcript-query/impl.ts"
 import {
   createRunStep,
   createRunStepState,
@@ -110,14 +99,6 @@ import {
   startExecution,
   startExecutionStore,
 } from "./features/session/start-execution/impl.ts"
-import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
-import { createClearRevertState, clearRevert, clearRevertStore } from "./features/session/clear-revert/impl.ts"
-import { createCommitRevertState, commitRevert, commitRevertStore } from "./features/session/commit-revert/impl.ts"
-import {
-  createRevertStatusState,
-  revertStatus,
-  revertStatusStore,
-} from "./features/session/revert-status-query/impl.ts"
 import {
   createWakeExecutionState,
   wakeExecution,
@@ -164,13 +145,6 @@ export const createSessionAppConfig = (
       failToolInput,
       finishExecution,
       failExecution,
-      forkSession,
-      sessionHistory,
-      modelTranscript,
-      stageRevert,
-      clearRevert,
-      commitRevert,
-      revertStatus,
       runStep: createRunStep(
         withReactionOutbox(runStepPlugin, {
           // A step can run for minutes: shutdown stops it instead of waiting,
@@ -230,13 +204,6 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(failToolInputStore, createFailToolInputState),
     provide(finishExecutionStore, createFinishExecutionState),
     provide(failExecutionStore, createFailExecutionState),
-    provide(forkSessionStore, createForkSessionState),
-    provide(sessionHistoryStore, createSessionHistoryState),
-    provide(modelTranscriptStore, createModelTranscriptState),
-    provide(stageRevertStore, createStageRevertState),
-    provide(clearRevertStore, createClearRevertState),
-    provide(commitRevertStore, createCommitRevertState),
-    provide(revertStatusStore, createRevertStatusState),
     provide(runStepStore, createRunStepState),
     provide(driveExecutionStore, createDriveExecutionState),
   )

@@ -5,7 +5,6 @@ import { Clock, Effect } from "effect"
 import { nextDeliverable } from "../features/session/next-deliverable-query/impl.ts"
 import type { RunStepRequest } from "../features/session/run-step-reaction/impl.ts"
 import { sessionStatus } from "../features/session/session-status-query/impl.ts"
-import { modelTranscript } from "../features/session/model-transcript-query/impl.ts"
 import { type RecordFailure, StepHost } from "./step-host.ts"
 
 // A rejected Command means the world moved on (execution interrupted, step
@@ -255,7 +254,6 @@ export const runStepPlugin: ReactionPlugin<RunStepRequest, StepHost> = ({ comman
           ordinal,
           step,
           attempt,
-          transcript: query(modelTranscript, { sessionID }),
         })
         for (let compactions = 1; "compact" in plan; compactions++) {
           if (compactions > 2) {
@@ -279,7 +277,6 @@ export const runStepPlugin: ReactionPlugin<RunStepRequest, StepHost> = ({ comman
             ordinal,
             step,
             attempt,
-            transcript: query(modelTranscript, { sessionID }),
           })
         }
         const key = delivery.deliveryId

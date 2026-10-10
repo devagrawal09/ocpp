@@ -271,7 +271,7 @@ export const layer = Layer.effect(
       readonly error: SessionError.Error
       readonly inputID?: SessionMessage.ID
     }) {
-      yield* bus.publish(SessionEvent.Compaction.Failed, input)
+      yield* bus.publish(SessionEvent.Compaction.Settled, { ...input, outcome: "failed" })
       return { status: "failed" as const, error: input.error }
     })
     const execute = Effect.fn("SessionCompaction.execute")(function* (plan: Plan) {
@@ -367,9 +367,10 @@ export const layer = Layer.effect(
           inputID: plan.inputID,
         })
       }
-      yield* bus.publish(SessionEvent.Compaction.Ended, {
+      yield* bus.publish(SessionEvent.Compaction.Settled, {
         sessionID: plan.session.id,
         reason: plan.reason,
+        outcome: "completed",
         text: summary,
         recent: plan.recent,
       })

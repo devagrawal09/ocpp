@@ -84,11 +84,12 @@ test.each(["started", "cancelled", "failed"])(
     if (kind === "failed")
       fixture.emit({
         ...event,
-        type: "session-compaction-failed",
+        type: "session-compaction-settled",
         data: {
           sessionID,
           inputID: "msg_canonical",
           reason: "manual",
+          outcome: "failed",
           error: { type: "aborted", message: "Cancelled" },
         },
       })
@@ -100,8 +101,8 @@ test.each(["started", "cancelled", "failed"])(
       expect(fixture.data.session.message.list(sessionID)).toMatchObject([{ type: "compaction", status: "running" }])
       fixture.emit({
         ...event,
-        type: "session-compaction-ended",
-        data: { sessionID, reason: "manual", text: "Summary", recent: "Recent" },
+        type: "session-compaction-settled",
+        data: { sessionID, reason: "manual", outcome: "completed", text: "Summary", recent: "Recent" },
       })
       expect(fixture.data.session.message.list(sessionID)).toMatchObject([
         { type: "compaction", status: "completed", summary: "Summary" },

@@ -2,8 +2,7 @@ import { expect, test } from "@playwright/test"
 import type { SessionMessageAssistant, SessionMessageInfo } from "@ocpp/client/promise"
 import {
   compactionDelta,
-  compactionEnded,
-  compactionFailed,
+  compactionSettled,
   compactionStarted,
   directory,
   event,
@@ -107,9 +106,10 @@ test("renders a compaction summary while it streams and after completion", async
   await expect(compaction).toContainText("Streamed implementation details.")
 
   await timeline.send(
-    compactionEnded({
+    compactionSettled({
       sessionID,
       reason: "manual",
+      outcome: "completed",
       text: "## Checkpoint\n\nFinal implementation details.",
       recent: "",
     }),
@@ -125,9 +125,10 @@ test("updates running compactions to failed and cancelled boundaries", async ({ 
   await timeline.send(compactionDelta({ sessionID, text: "Partial summary that should be discarded." }))
   await expect(page.getByText("Partial summary that should be discarded.", { exact: true })).toBeVisible()
   await timeline.send(
-    compactionFailed({
+    compactionSettled({
       sessionID,
       reason: "auto",
+      outcome: "failed",
       error: {
         type: "compaction.failed",
         message: 'Error: {"error":{"type":"ProviderError","message":"The provider rejected the summary."}}',
@@ -146,9 +147,10 @@ test("updates running compactions to failed and cancelled boundaries", async ({ 
   await timeline.send(compactionDelta({ sessionID, text: "Summary before cancellation." }))
   await expect(page.getByText("Summary before cancellation.", { exact: true })).toBeVisible()
   await timeline.send(
-    compactionFailed({
+    compactionSettled({
       sessionID,
       reason: "manual",
+      outcome: "failed",
       error: { type: "aborted", message: "Cancellation detail should stay hidden." },
     }),
   )

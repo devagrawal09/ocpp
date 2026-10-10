@@ -695,16 +695,6 @@ export type SessionCompactionStarted = {
   data: { sessionID: string; reason: "auto" | "manual"; recent: string; inputID?: string }
 }
 
-export type SessionCompactionEnded = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session-compaction-ended"
-  durable: { aggregateID: string; seq: number }
-  location?: LocationRef
-  data: { sessionID: string; reason: "auto" | "manual"; text: string; recent: string }
-}
-
 export type SessionRevertCleared = {
   id: string
   created: number
@@ -1166,14 +1156,22 @@ export type SessionExecutionSettled = {
     | { sessionID: string; outcome: "interrupted"; reason: "user" | "shutdown" | "superseded" }
 }
 
-export type SessionCompactionFailed = {
+export type SessionCompactionSettled = {
   id: string
   created: number
   metadata?: { [x: string]: any }
-  type: "session-compaction-failed"
+  type: "session-compaction-settled"
   durable: { aggregateID: string; seq: number }
   location?: LocationRef
-  data: { sessionID: string; reason: "auto" | "manual"; error: SessionStructuredError; inputID?: string }
+  data:
+    | { sessionID: string; reason: "auto" | "manual"; outcome: "completed"; text: string; recent: string }
+    | {
+        sessionID: string
+        reason: "auto" | "manual"
+        outcome: "failed"
+        error: SessionStructuredError
+        inputID?: string
+      }
 }
 
 export type SessionInboxDeliveryChanged = {
@@ -2277,8 +2275,7 @@ export type SessionEventDurable =
   | SessionCodemodeSettled
   | SessionInvocationStarted
   | SessionCompactionStarted
-  | SessionCompactionEnded
-  | SessionCompactionFailed
+  | SessionCompactionSettled
   | SessionRevertStaged
   | SessionRevertCleared
   | SessionRevertCommitted
@@ -2342,8 +2339,7 @@ export type V2Event =
   | SessionInvocationStarted
   | SessionCompactionStarted
   | SessionCompactionDelta
-  | SessionCompactionEnded
-  | SessionCompactionFailed
+  | SessionCompactionSettled
   | SessionRevertStaged
   | SessionRevertCleared
   | SessionRevertCommitted

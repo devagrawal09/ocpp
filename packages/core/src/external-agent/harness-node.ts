@@ -97,9 +97,10 @@ const layer = Layer.effect(
           message.type === "compaction" && message.status === "running",
       )
       yield* Effect.forEach(stale, (message) =>
-        bus.publish(SessionEvent.Compaction.Failed, {
+        bus.publish(SessionEvent.Compaction.Settled, {
           sessionID,
           reason: message.reason,
+          outcome: "failed",
           inputID: message.id,
           error: { type: "compaction.interrupted", message: "Compaction was interrupted" },
         }),
@@ -356,9 +357,10 @@ const layer = Layer.effect(
             if (requested === undefined) return
             yield* restore(compact("manual", requested)).pipe(
               Effect.onInterrupt(() =>
-                bus.publish(SessionEvent.Compaction.Failed, {
+                bus.publish(SessionEvent.Compaction.Settled, {
                   sessionID,
                   reason: "manual",
+                  outcome: "failed",
                   inputID: requested,
                   error: { type: "aborted", message: "Compaction cancelled" },
                 }),

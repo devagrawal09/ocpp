@@ -1177,44 +1177,43 @@ export function createData(config: CreateDataInput) {
           if (current?.status === "running") current.summary += event.data.text
         })
         return
-      case "session-compaction-ended":
-        message.update(event.data.sessionID, (draft, index) => {
-          const position = draft.findLastIndex((item) => item.type === "compaction" && item.status === "running")
-          const current = draft[position]
-          if (current?.type === "compaction") {
-            Object.assign(current, {
+      case "session-compaction-settled": {
+        const data = event.data
+        if (data.outcome === "completed") {
+          message.update(data.sessionID, (draft, index) => {
+            const position = draft.findLastIndex((item) => item.type === "compaction" && item.status === "running")
+            const current = draft[position]
+            if (current?.type === "compaction") {
+              Object.assign(current, {
+                status: "completed",
+                reason: data.reason,
+                summary: data.text,
+                recent: data.recent,
+              })
+              return
+            }
+            message.append(draft, index, {
+              id: messageIDFromEvent(event.id),
+              type: "compaction",
               status: "completed",
-              reason: event.data.reason,
-              summary: event.data.text,
-              recent: event.data.recent,
+              reason: data.reason,
+              summary: data.text,
+              recent: data.recent,
+              time: { created: event.created },
             })
-            return
-          }
-          message.append(draft, index, {
-            id: messageIDFromEvent(event.id),
-            type: "compaction",
-            status: "completed",
-            reason: event.data.reason,
-            summary: event.data.text,
-            recent: event.data.recent,
-            time: { created: event.created },
           })
-        })
-        return
-      case "session-compaction-failed":
-        if (event.data.inputID) removePending(event.data.sessionID, event.data.inputID)
-        message.update(event.data.sessionID, (draft, index) => {
+          return
+        }
+        if (data.inputID) removePending(data.sessionID, data.inputID)
+        message.update(data.sessionID, (draft, index) => {
           const position = draft.findLastIndex((item) => item.type === "compaction" && item.status === "running")
           const current = draft[position]
           const failed: Extract<SessionMessageInfo, { type: "compaction"; status: "failed" }> = {
-            id: current?.id ?? event.data.inputID ?? messageIDFromEvent(event.id),
+            id: current?.id ?? data.inputID ?? messageIDFromEvent(event.id),
             type: "compaction",
             status: "failed",
-            reason: event.data.reason ?? "manual",
-            error: event.data.error ?? {
-              type: "compaction.failed",
-              message: "Compaction failed before recording an error",
-            },
+            reason: data.reason,
+            error: data.error,
             metadata: current?.type === "compaction" ? current.metadata : event.metadata,
             time: current?.type === "compaction" ? current.time : { created: event.created },
           }
@@ -1224,8 +1223,9 @@ export function createData(config: CreateDataInput) {
           }
           message.append(draft, index, failed)
         })
-        if (event.data.inputID) compacting.get(event.data.sessionID)?.observed.add(event.data.inputID)
+        if (data.inputID) compacting.get(data.sessionID)?.observed.add(data.inputID)
         return
+      }
       case "form-created":
         if (event.data.form.sessionID === "global") break
         if (store.session.form[event.data.form.sessionID]?.some((form) => form.id === event.data.form.id)) return

@@ -265,12 +265,8 @@ export function compactionDelta(data: Extract<OcppEvent, { type: "session-compac
   return makeEvent("session-compaction-delta", data)
 }
 
-export function compactionEnded(data: Extract<OcppEvent, { type: "session-compaction-ended" }>["data"]) {
-  return makeEvent("session-compaction-ended", data)
-}
-
-export function compactionFailed(data: Extract<OcppEvent, { type: "session-compaction-failed" }>["data"]) {
-  return makeEvent("session-compaction-failed", data)
+export function compactionSettled(data: Extract<OcppEvent, { type: "session-compaction-settled" }>["data"]) {
+  return makeEvent("session-compaction-settled", data)
 }
 
 export function toolInputStarted(data: Extract<OcppEvent, { type: "session-tool-input-started" }>["data"]) {

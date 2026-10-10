@@ -871,13 +871,14 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.CodeMode.Settled, (event) => run(db, event))
     yield* bus.project(SessionEvent.Invocation.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Compaction.Started, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Compaction.Ended, (event) =>
+    yield* bus.project(SessionEvent.Compaction.Settled, (event) =>
       Effect.gen(function* () {
         yield* run(db, event)
-        yield* InstructionState.advanceEpoch(db, event.data.sessionID, event.durable.seq)
+        // A completed compaction starts a new instruction epoch.
+        if (event.data.outcome === "completed")
+          yield* InstructionState.advanceEpoch(db, event.data.sessionID, event.durable.seq)
       }),
     )
-    yield* bus.project(SessionEvent.Compaction.Failed, (event) => run(db, event))
     yield* bus.project(SessionEvent.RevertEvent.Staged, (event) =>
       Effect.gen(function* () {
         const revert = event.data.revert

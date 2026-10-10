@@ -1078,44 +1078,16 @@
       }
     },
     {
-      "description": "Records session-compaction-ended as the host published it.",
+      "description": "Records session-compaction-settled as the host published it.",
       "expect": [
         {
-          "eventType": "session-compaction-ended",
-          "examplePayload": {
-            "reason": "manual",
-            "recent": "",
-            "sessionID": "ses_1",
-            "text": "summary"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "reason": "manual",
-              "recent": "",
-              "sessionID": "ses_1",
-              "text": "summary"
-            },
-            "type": "session-compaction-ended"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-compaction-failed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-compaction-failed",
+          "eventType": "session-compaction-settled",
           "examplePayload": {
             "error": {
               "message": "summary unavailable",
               "type": "provider.error"
             },
+            "outcome": "failed",
             "reason": "auto",
             "sessionID": "ses_1"
           },
@@ -1131,10 +1103,11 @@
                 "message": "summary unavailable",
                 "type": "provider.error"
               },
+              "outcome": "failed",
               "reason": "auto",
               "sessionID": "ses_1"
             },
-            "type": "session-compaction-failed"
+            "type": "session-compaction-settled"
           }
         ]
       }

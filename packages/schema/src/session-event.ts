@@ -633,6 +633,7 @@ export namespace Invocation {
 }
 
 export namespace Compaction {
+  /** A compaction starts: why, and the recent context it keeps. A manual one names its inbox input. */
   export const Started = Event.durable({
     type: "session-compaction-started",
     ...options,
@@ -654,29 +655,31 @@ export namespace Compaction {
   })
   export type Delta = typeof Delta.Type
 
-  export const Ended = Event.durable({
-    type: "session-compaction-ended",
+  /**
+   * The one terminal of a compaction: `completed` with its summary and the recent context it keeps, or `failed`
+   * with the error. A compaction that could not start fails without a start, so the failure names its input.
+   */
+  export const Settled = Event.durable({
+    type: "session-compaction-settled",
     ...options,
-    schema: {
-      ...Base,
-      reason: Started.data.fields.reason,
-      text: Schema.String,
-      recent: Schema.String,
-    },
+    schema: Schema.Union([
+      Schema.Struct({
+        ...Base,
+        reason: Started.data.fields.reason,
+        outcome: Schema.Literal("completed"),
+        text: Schema.String,
+        recent: Schema.String,
+      }),
+      Schema.Struct({
+        ...Base,
+        reason: Started.data.fields.reason,
+        outcome: Schema.Literal("failed"),
+        error: SessionError.Error,
+        inputID: SessionMessage.ID.pipe(optional),
+      }),
+    ]),
   })
-  export type Ended = typeof Ended.Type
-
-  export const Failed = Event.durable({
-    type: "session-compaction-failed",
-    ...options,
-    schema: {
-      ...Base,
-      reason: Started.data.fields.reason,
-      error: SessionError.Error,
-      inputID: SessionMessage.ID.pipe(optional),
-    },
-  })
-  export type Failed = typeof Failed.Type
+  export type Settled = typeof Settled.Type
 }
 
 export namespace RevertEvent {
@@ -736,8 +739,7 @@ export const Definitions = Event.inventory(
   Invocation.Started,
   Compaction.Started,
   Compaction.Delta,
-  Compaction.Ended,
-  Compaction.Failed,
+  Compaction.Settled,
   RevertEvent.Staged,
   RevertEvent.Cleared,
   RevertEvent.Committed,

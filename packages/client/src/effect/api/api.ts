@@ -1072,29 +1072,28 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-compaction-ended"
+          readonly type: "session-compaction-settled"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
           readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly reason: "auto" | "manual"
-            readonly text: string
-            readonly recent: string
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session-compaction-failed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly reason: "auto" | "manual"
-            readonly error: { readonly type: string; readonly message: string; readonly status?: number | undefined }
-            readonly inputID?: SessionMessage.ID | undefined
-          }
+          readonly data:
+            | {
+                readonly sessionID: Session.ID
+                readonly reason: "auto" | "manual"
+                readonly outcome: "completed"
+                readonly text: string
+                readonly recent: string
+              }
+            | {
+                readonly sessionID: Session.ID
+                readonly reason: "auto" | "manual"
+                readonly outcome: "failed"
+                readonly error: {
+                  readonly type: string
+                  readonly message: string
+                  readonly status?: number | undefined
+                }
+                readonly inputID?: SessionMessage.ID | undefined
+              }
         }
       | {
           readonly id: Event.ID

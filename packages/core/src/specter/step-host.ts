@@ -351,7 +351,7 @@ const stepIOLayer = Layer.effect(
       } satisfies StepPlan
     })
 
-    // OC++'s own compaction, publishing its facts (started, ended or failed, usage) as it always has.
+    // OC++'s own compaction, publishing its facts (started, settled, usage).
     const compact = Effect.fn("SpecterStepIO.compact")(function* (input: {
       readonly sessionID: SessionSchema.ID
       readonly reason: "auto" | "manual"
@@ -381,9 +381,10 @@ const stepIOLayer = Layer.effect(
           // OC++'s runner records a manual compaction that was cancelled or broke; an automatic one records its own.
           input.reason === "manual"
             ? bus
-                .publish(SessionEvent.Compaction.Failed, {
+                .publish(SessionEvent.Compaction.Settled, {
                   sessionID: input.sessionID,
                   reason: "manual",
+                  outcome: "failed",
                   error: Cause.hasInterruptsOnly(cause)
                     ? { type: "aborted", message: "Compaction cancelled" }
                     : { type: "compaction.failed", message: Cause.pretty(cause) },

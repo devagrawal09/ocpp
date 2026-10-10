@@ -2201,9 +2201,10 @@ describe("SessionRunnerLLM", () => {
       reason: "manual",
       recent: "",
     })
-    yield* s.bus.publish(SessionEvent.Compaction.Ended, {
+    yield* s.bus.publish(SessionEvent.Compaction.Settled, {
       sessionID,
       reason: "manual",
+      outcome: "completed",
       text: "summary",
       recent: "",
     })
@@ -2289,7 +2290,7 @@ describe("SessionRunnerLLM", () => {
       status: "failed",
     })
     expect(
-      (yield* recordedEventTypes(sessionID)).filter((type) => type === SessionEvent.Compaction.Failed.type),
+      (yield* recordedEventTypes(sessionID)).filter((type) => type === SessionEvent.Compaction.Settled.type),
     ).toHaveLength(1)
   })
 
@@ -2307,7 +2308,7 @@ describe("SessionRunnerLLM", () => {
       error: { type: "compaction.unavailable", message: "Nothing to compact yet" },
     })
     expect(
-      (yield* recordedEventTypes(sessionID)).filter((type) => type === SessionEvent.Compaction.Failed.type),
+      (yield* recordedEventTypes(sessionID)).filter((type) => type === SessionEvent.Compaction.Settled.type),
     ).toHaveLength(1)
   })
 
@@ -2453,7 +2454,7 @@ describe("SessionRunnerLLM", () => {
       reason: "manual",
     })
     expect(
-      (yield* recordedEventTypes(sessionID)).filter((type) => type === SessionEvent.Compaction.Failed.type),
+      (yield* recordedEventTypes(sessionID)).filter((type) => type === SessionEvent.Compaction.Settled.type),
     ).toHaveLength(1)
   })
 
@@ -2793,9 +2794,10 @@ describe("SessionRunnerLLM", () => {
       reason: "manual",
       recent: "",
     })
-    yield* s.bus.publish(SessionEvent.Compaction.Ended, {
+    yield* s.bus.publish(SessionEvent.Compaction.Settled, {
       sessionID,
       reason: "manual",
+      outcome: "completed",
       text: "summary",
       recent: "",
     })

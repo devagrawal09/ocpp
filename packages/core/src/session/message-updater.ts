@@ -437,16 +437,30 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
             time: { created },
           }),
         ),
-      "session-compaction-ended": (event) =>
+      "session-compaction-settled": (event) =>
         Effect.gen(function* () {
+          const data = event.data
           const current = yield* adapter.getCompaction()
+          if (data.outcome === "failed") {
+            const failed = SessionMessage.CompactionFailed.make({
+              id: current?.id ?? data.inputID ?? SessionMessage.ID.fromEvent(event.id),
+              type: "compaction",
+              status: "failed",
+              metadata: current?.metadata ?? event.metadata,
+              reason: data.reason,
+              error: data.error,
+              time: current?.time ?? { created },
+            })
+            if (current?.status === "running") return yield* adapter.updateCompaction(failed)
+            return yield* adapter.appendMessage(failed)
+          }
           if (current?.status === "running") {
             yield* adapter.updateCompaction({
               ...current,
               status: "completed",
-              reason: event.data.reason,
-              summary: event.data.text,
-              recent: event.data.recent,
+              reason: data.reason,
+              summary: data.text,
+              recent: data.recent,
             })
             return
           }
@@ -456,27 +470,12 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
               type: "compaction",
               status: "completed",
               metadata: event.metadata,
-              reason: event.data.reason,
-              summary: event.data.text,
-              recent: event.data.recent,
+              reason: data.reason,
+              summary: data.text,
+              recent: data.recent,
               time: { created },
             }),
           )
-        }),
-      "session-compaction-failed": (event) =>
-        Effect.gen(function* () {
-          const current = yield* adapter.getCompaction()
-          const failed = SessionMessage.CompactionFailed.make({
-            id: current?.id ?? event.data.inputID ?? SessionMessage.ID.fromEvent(event.id),
-            type: "compaction",
-            status: "failed",
-            metadata: current?.metadata ?? event.metadata,
-            reason: event.data.reason,
-            error: event.data.error,
-            time: current?.time ?? { created },
-          })
-          if (current?.status === "running") return yield* adapter.updateCompaction(failed)
-          yield* adapter.appendMessage(failed)
         }),
       "session-revert-staged": () => Effect.void,
       "session-revert-cleared": () => Effect.void,

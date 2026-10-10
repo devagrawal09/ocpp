@@ -102,9 +102,10 @@ describe("SessionProjector", () => {
       const busy = yield* steps.busy(sessionID)
       yield* inbox.admitCompaction({ id: inputID, sessionID, delivery: "queue" })
 
-      yield* bus.publish(SessionEvent.Compaction.Failed, {
+      yield* bus.publish(SessionEvent.Compaction.Settled, {
         sessionID,
         reason: "auto",
+        outcome: "failed",
         error: { type: "compaction.failed", message: "Auto compaction failed" },
       })
 
@@ -530,9 +531,10 @@ describe("SessionProjector", () => {
           .all()
           .pipe(Effect.orDie),
       ).toEqual([{ data: expect.objectContaining({ status: "running", summary: "", recent: "recent context" }) }])
-      yield* bus.publish(SessionEvent.Compaction.Ended, {
+      yield* bus.publish(SessionEvent.Compaction.Settled, {
         sessionID,
         reason: "manual",
+        outcome: "completed",
         text: "summary",
         recent: "recent context",
       })

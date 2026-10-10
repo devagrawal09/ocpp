@@ -289,6 +289,12 @@ const failedStep = (event: Bus.LogItem) =>
   event.data.outcome === "failed" &&
   (!event.data.retry || event.data.retry.fresh === true)
 
+const compacted = (event: Bus.LogItem): event is SessionEvent.Compaction.Settled =>
+  Schema.is(SessionEvent.Compaction.Settled)(event) && event.data.outcome === "completed"
+
+const compactionFailed = (event: Bus.LogItem): event is SessionEvent.Compaction.Settled =>
+  Schema.is(SessionEvent.Compaction.Settled)(event) && event.data.outcome === "failed"
+
 describe("vendor-driven sessions", () => {
   it.live("keeps a vendor session's notebook checkpoint until the vendor session is rebuilt", () =>
     Effect.gen(function* () {
@@ -858,8 +864,12 @@ describe("vendor-driven session control", () => {
       yield* env.sessions.compact({ sessionID: env.session.id })
       yield* env.sessions.wait(env.session.id)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      const completed = log.find((event) => event.type === SessionEvent.Compaction.Ended.type)
-      expect(completed?.type === SessionEvent.Compaction.Ended.type && completed.data.text).toBe("OC++ summary")
+      const completed = log.find(compacted)
+      expect(
+        completed?.type === SessionEvent.Compaction.Settled.type &&
+          completed.data.outcome === "completed" &&
+          completed.data.text,
+      ).toBe("OC++ summary")
       expect(log.filter((event) => event.type === SessionEvent.InboxDelivered.type)).toHaveLength(2)
       expect(vendor.runs).toHaveLength(2)
       expect(vendor.runs[1].vendorSessionID).toBeUndefined()
@@ -891,10 +901,8 @@ describe("vendor-driven session control", () => {
       expect(vendor.runs[2].history.map((item) => item.text).join("\n")).toContain("Overflow summary")
       expect(vendor.runs[2].message).toContain("Continue from the restored OC++ history")
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
-      expect(log.find((event) => event.type === SessionEvent.Compaction.Ended.type)?.data).toMatchObject({
-        reason: "auto",
-      })
+      expect(log.filter(compacted)).toHaveLength(1)
+      expect(log.find(compacted)?.data).toMatchObject({ reason: "auto" })
     }),
   )
 
@@ -909,7 +917,7 @@ describe("vendor-driven session control", () => {
       yield* env.sessions.wait(env.session.id)
       expect(vendor.runs).toHaveLength(3)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
+      expect(log.filter(compacted)).toHaveLength(1)
       expect(log.filter(failedStep)).toHaveLength(2)
     }),
   )
@@ -924,8 +932,8 @@ describe("vendor-driven session control", () => {
       yield* bus.publishAll([
         [SessionEvent.Compaction.Started, { sessionID: env.session.id, reason: "auto", recent: "" }],
         [
-          SessionEvent.Compaction.Ended,
-          { sessionID: env.session.id, reason: "auto", recent: "", text: "Durable summary" },
+          SessionEvent.Compaction.Settled,
+          { sessionID: env.session.id, reason: "auto", outcome: "completed", recent: "", text: "Durable summary" },
         ],
       ])
       vendor.turn = async () => {
@@ -937,7 +945,7 @@ describe("vendor-driven session control", () => {
       expect(vendor.runs[1].history.map((item) => item.text).join("\n")).toContain("Durable summary")
       expect(vendor.runs[1].message).toContain("Continue from the restored OC++ history")
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
+      expect(log.filter(compacted)).toHaveLength(1)
     }),
   )
 
@@ -955,8 +963,8 @@ describe("vendor-driven session control", () => {
       yield* env.sessions.compact({ sessionID: env.session.id })
       yield* env.sessions.wait(env.session.id)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      expect(log.filter((event) => event.type === SessionEvent.Compaction.Failed.type)).toHaveLength(1)
-      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(0)
+      expect(log.filter(compactionFailed)).toHaveLength(1)
+      expect(log.filter(compacted)).toHaveLength(0)
       vendor.turn = say("Continued")
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Next prompt" })
       yield* env.sessions.wait(env.session.id)
@@ -983,7 +991,7 @@ describe("vendor-driven session control", () => {
       yield* env.sessions.interrupt(env.session.id)
       yield* env.sessions.wait(env.session.id)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      const failures = log.filter((event) => event.type === SessionEvent.Compaction.Failed.type)
+      const failures = log.filter(compactionFailed)
       expect(failures).toHaveLength(1)
       expect(failures[0]?.data).toMatchObject({ reason: "manual", error: { type: "aborted" } })
     }),
@@ -999,7 +1007,7 @@ describe("vendor-driven session control", () => {
       yield* bus.publish(SessionEvent.Compaction.Started, { sessionID: env.session.id, reason: "manual", recent: "" })
       yield* env.sessions.resume(env.session.id)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      const failures = log.filter((event) => event.type === SessionEvent.Compaction.Failed.type)
+      const failures = log.filter(compactionFailed)
       expect(failures).toHaveLength(1)
       expect(failures[0]?.data).toMatchObject({ error: { type: "compaction.interrupted" } })
       expect(vendor.runs).toHaveLength(1)
@@ -1025,7 +1033,7 @@ describe("vendor-driven session control", () => {
       expect(vendor.runs[2].vendorSessionID).toBeUndefined()
       expect(vendor.runs[2].history.map((item) => item.text).join("\n")).toContain("Codex summary")
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(1)
+      expect(log.filter(compacted)).toHaveLength(1)
       expect(log.filter(failedStep)).toHaveLength(0)
     }),
   )
@@ -1040,7 +1048,7 @@ describe("vendor-driven session control", () => {
       yield* env.sessions.wait(env.session.id)
       expect(vendor.runs).toHaveLength(1)
       const log = Array.from(yield* Stream.runCollect(env.sessions.log({ sessionID: env.session.id })))
-      expect(log.filter((event) => event.type === SessionEvent.Compaction.Ended.type)).toHaveLength(0)
+      expect(log.filter(compacted)).toHaveLength(0)
       const failure = log.find(failedStep)
       expect(
         failure?.type === SessionEvent.Step.Settled.type &&

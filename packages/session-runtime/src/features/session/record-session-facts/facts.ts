@@ -246,15 +246,10 @@ export const sessionFacts = {
     reason: "manual",
     recent: "",
   },
-  "session-compaction-ended": {
-    sessionID: "ses_1",
-    reason: "manual",
-    text: "summary",
-    recent: "",
-  },
-  "session-compaction-failed": {
+  "session-compaction-settled": {
     sessionID: "ses_1",
     reason: "auto",
+    outcome: "failed",
     error: {
       type: "provider.error",
       message: "summary unavailable",

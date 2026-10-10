@@ -712,7 +712,7 @@ describe("Sessions on the Specter runtime", () => {
         "session-inbox-delivered",
         "session-compaction-started",
         "session-usage-recorded",
-        "session-compaction-ended",
+        "session-compaction-settled",
         "session-execution-settled",
       ])
       const last = (yield* session.messages({ sessionID, order: "asc" })).at(-1)

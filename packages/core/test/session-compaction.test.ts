@@ -463,7 +463,7 @@ it.effect("manual compaction summarizes short context instead of no-op", () =>
     expect(yield* Recorded.types(sessionID)).toEqual([
       SessionEvent.Compaction.Started.type,
       SessionEvent.UsageRecorded.type,
-      SessionEvent.Compaction.Ended.type,
+      SessionEvent.Compaction.Settled.type,
     ])
   }),
 )

@@ -210,7 +210,7 @@ Rules: one fact, one owner. The Event Log owns what happened; slice cursors own 
     - **What Phase 6 left outside the log:** credential secrets, the key-value store, the runtime's outbox and Slice snapshots, and legacy tables. Phase 7 settled each of them.
 
   - **Phase 7 done: nothing OC++ stores is kept off the log by design.**
-    - **Credential secrets are on the log, sealed.** A credential's created and rotated facts carry its secret, encrypted with AES-GCM under a key of that credential. The key is the one thing kept beside the log. The publish of the creation writes it, in the same transaction, and it is deleted with the credential. That leaves every sealed copy of the secret unreadable, in the log or any copy of it (crypto-shredding). A migration seals the secrets already stored.
+    - **Credential secrets are on the log, sealed.** A credential's created and rotated facts carry its secret, encrypted with AES-GCM under a key of that credential. The key is the one thing kept beside the log. The publish of the creation writes it, in the same transaction, and it is deleted with the credential. That leaves every sealed copy of the secret unreadable, in the log or any copy of it (crypto-shredding). A migration seals the secrets already stored. (S2b removed that migration with the rest of the chain.)
     - **The key-value store is facts.** Plugin storage, the web search provider and the known well-known origins publish `kv.stored` and `kv.removed`; `kv` is their projection.
     - **Caches are not state.** The models.dev catalog and repository refresh times moved to a `cache` table. Its entries can be dropped at any time and are refetched, so they are not facts.
     - **The runtime's own state is derived.** Its outbox and Slice snapshots only save work. A test deletes both between boots: the next boot rebuilds them from the log, and the Session carries on.
@@ -219,13 +219,13 @@ Rules: one fact, one owner. The Event Log owns what happened; slice cursors own 
     - **OC++'s event table is an index, not a store.** The Bus used to keep a second copy of every durable event, with its payload, when configured to persist (the workerd server was). `Bus.log`, and with it the Session log endpoint, read only that copy, so a server without it served an empty history. The `event` table now holds each event's aggregate sequence and the fact in Specter's log it is, written for every fact. Log reads translate the facts on the way out. The `persist` option is gone, and every server serves Session logs.
     - **Replaying events from another server is gone.** `Bus.replay`, `Bus.claim` and replay owners had no callers. `Bus.rebuild(aggregate)` projects an aggregate's events again from Specter's log; tests use it to show that read models are projections of the log.
     - **The Bus records only the inventory.** A durable event outside OC++'s inventory of recorded facts is refused, instead of taking the old path into OC++'s own table.
-    - **Stored history moved into the log.** A migration archives the events a persisting server kept, under their versioned OC++ type, one commit per aggregate. The runtime does not read those types, and log reads decode them as they were.
+    - **Stored history moved into the log.** A migration archives the events a persisting server kept, under their versioned OC++ type, one commit per aggregate. The runtime does not read those types, and log reads decode them as they were. (S2b removed both: no database holds such events.)
     - **Usage statistics read the log.** Compaction usage is counted from the facts. The old query compared an unversioned type with the stored versioned one, so it had never counted any.
 
   - **Phase 9 done: every row OC++ stores is a projection of Specter's log.**
     - **Rebuilding from the log alone reproduces every read model.** `Bus.rebuild()` projects the whole log again, in the order it was recorded. A test runs a Session through a Code Mode program, a credential and plugin state, wipes every table OC++ projects, rebuilds, and requires the same rows. The only tables it leaves out are Specter's own, the event index, the migration record, caches and credential keys.
     - **Projections no longer read the clock.** The test found updates that took `time_updated` from `Date.now()`, through the shared timestamp columns' update hook. Updates now change it only when they set it, and projections set it from their fact.
-    - **Rows without a fact are adopted.** `rows.adopted` records an aggregate's rows in one projected table as they are stored, and its projection makes the table hold exactly those rows.
+    - **Rows without a fact are adopted.** `rows.adopted` records an aggregate's rows in one projected table as they are stored, and its projection makes the table hold exactly those rows. (S2b removed adoption, with the importer and the migration chain.)
       - A migration adopts everything a database holds when it upgrades, which is the state the log predates.
       - The v1 importer adopts each Session it converts, and its own progress, before moving on.
       - A test upgrades a database that held its project, Session, messages and plugin state as rows, rebuilds every projection from the log, and the Session carries on.
@@ -275,6 +275,28 @@ The owner's goal: Specter's repository holds only library code, consumed through
     - A committed revert deletes pending `session_inbox` rows the runtime still holds as pending. S4 should cancel them through the runtime.
     - The step Reaction requests one Session per commit, the lowest needing a step. A Session that stays active without recording a step (a long `prepare`, `begin` or compaction) holds back other Sessions' requests until it records one. This is a candidate for S5's per-stream concurrency.
     - Tests still record inbox facts directly through the Bus to set up history; `recordSessionFacts` accepts them.
+- **S2b done: nothing carries old databases forward.**
+  - **One baseline migration.** The 65 migrations, and the bootstrap that created a new database from a separate schema file, are one baseline that drizzle-kit generated from the declared tables, Specter's `specter_event`, `specter_commit`, `specter_slice_snapshot` and `specter_outbox_job` included. Every database runs the same migrations from it, and a schema change is still generated as a migration on top of it.
+    - The migrator refuses a database without the baseline, one from before it included.
+    - `script/migration.ts --check` builds a database with the migrations and compares it with the declared schema: tables, columns by name, indexes and foreign keys.
+  - **The baseline is the old chain's schema, less what only old data used.** A database built by the 65 migrations and one built by the baseline differ only in:
+    - the v1 tables the importer read (`session`, `message`, `part`, `session_share`, `todo`), which the chain left behind and the old bootstrap never created;
+    - Session columns nothing wrote (`share_url`, `summary_*`, `permission`, and the execution claim's `time_suspended`, its index and `resume_attempts`), the credential columns `connector_id` and `method_id`, and `event.created`'s default;
+    - credentials' `integration_id` and `active`, which are now required;
+    - column order, since the chain appended columns with `ALTER TABLE`.
+  - **Deleted with it:**
+    - the v1 importer, its boot-time layer, the `migration.v1.status` endpoint and its client methods;
+    - row adoption (`rows.adopted`);
+    - archived events: the Bus reads every index entry as the translation of its fact, and one that does not translate is an error;
+    - the data migrations: legacy credential import, the moves out of the key-value store, credential sealing, legacy table drops, event archiving and row adoption;
+    - readers of shapes only older code wrote: the V1 revert storage decoder, legacy credentials without an active flag or integration, subagent progress records without a status, and empty Session directories.
+  - **Session registration stays.** A fork's child has no `session.created` fact, so core registers it with the runtime (`register:` idempotency keys) before its first Command. S4's fork Command should record the child's creation itself.
+  - **Compatibility left for the owner to decide:**
+    - wire protocol and schema: `Session.Revert.partID`, the V1 public events `command.executed` and `file.edited` in the event manifest, which nothing publishes, `QuestionV1` (only its tests use it), and `SessionV1`, `PermissionV1` and `FileDiff.LegacyInfo`, which the hosted share backend (`packages/enterprise`) still reads;
+    - the CLI's V1 run bridge (`cli/src/run/v1.ts`, `compatibility: "v1"`) and its legacy service config and registration files (`cli/src/services/service-config.ts`);
+    - configuration: V1 config, agent and command formats (`core/src/v1/config`, `core/src/config/normalize.ts`);
+    - the models.dev cache entry's optional `digest`, for entries written before it existed (a cache, not state);
+    - the hosted site's copies of the OpenAPI document (`packages/www/openapi.json`, `packages/www/public/openapi.json`), which still list `migration.v1.status`.
 
 ## Specter work this will force (own it as Specter features, not app workarounds)
 

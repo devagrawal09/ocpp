@@ -88,7 +88,7 @@ const layer = Layer.effect(
 
     return Service.of({
       select: Effect.fn("ToolLists.select")(function* (session, agent) {
-        // A child without a stored list predates stored lists, and has no tools rather than init.ts's.
+        // A child without a stored list has no tools rather than init.ts's.
         if (session.tools !== undefined || session.parentID !== undefined) return { paths: session.tools ?? [] }
         return yield* discover(agent)
       }),

@@ -52,6 +52,7 @@ import { testEffect } from "./lib/effect"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
 import { makeSharedLocation } from "./fixture/shared-location"
 import { agentHost, catalogHost, host } from "./plugin/host"
+import { recordSession } from "./fixture/session"
 
 const cassetteName = "session-runner/openai-chat-streams-text"
 const cassetteDirectory = path.resolve(import.meta.dir, "fixtures/recordings")
@@ -188,19 +189,7 @@ describe("Sessions on the Specter runtime, recorded", () => {
         .onConflictDoNothing()
         .run()
         .pipe(Effect.orDie)
-      yield* db
-        .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
-        .onConflictDoNothing()
-        .run()
-        .pipe(Effect.orDie)
+      yield* recordSession({ id: sessionID, slug: "test", directory: "/project", title: "test", version: "test" })
       const session = yield* Session.Service
       const prompt = yield* session.prompt({
         sessionID,
@@ -218,6 +207,7 @@ describe("Sessions on the Specter runtime, recorded", () => {
         { type: "text", text: "Hello!" },
       ])
       expect(yield* Recorded.types(sessionID)).toEqual([
+        "session-created",
         "session-inbox-enqueued",
         "session-inbox-held",
         "session-execution-started",
@@ -306,18 +296,7 @@ describe("SessionModelRequest HTTP bridge", () => {
         .run()
         .pipe(Effect.orDie)
       const sessionID = Session.ID.make("ses_model_request_http")
-      yield* db
-        .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
-        .run()
-        .pipe(Effect.orDie)
+      yield* recordSession({ id: sessionID, slug: "test", directory: "/project", title: "test" })
       const session = yield* Session.Service
       yield* session.prompt({ sessionID, text: "Say hello.", resume: false })
 

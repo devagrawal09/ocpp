@@ -45,6 +45,7 @@ import { EffectFlock } from "@ocpp/util/effect-flock"
 import { Cache } from "@ocpp/core/cache"
 import { gitRemote, git, commit, read } from "./fixture/git"
 import { TestStepHost } from "./fixture/step-host"
+import { recordSession, stageRevert } from "./fixture/session"
 
 // The runtime runs every Session; a step produces nothing unless a test scripts one.
 const steps = TestStepHost.make()
@@ -121,19 +122,7 @@ const setup = Effect.gen(function* () {
     .onConflictDoNothing()
     .run()
     .pipe(Effect.orDie)
-  yield* db
-    .insert(SessionTable)
-    .values({
-      id: sessionID,
-      project_id: Project.ID.global,
-      slug: "test",
-      directory: "/project",
-      title: "test",
-      version: "test",
-    })
-    .onConflictDoNothing()
-    .run()
-    .pipe(Effect.orDie)
+  yield* recordSession({ id: sessionID, slug: "test", directory: "/project", title: "test", version: "test" })
 })
 
 const admitted = (id: SessionMessage.ID) => Database.Service.use(({ db }) => SessionInbox.find(db, id))
@@ -380,7 +369,7 @@ describe("Session.prompt", () => {
       yield* session.resume(sessionID)
       const stale = SessionMessage.ID.make("msg_stale_assistant")
       yield* db.insert(SessionMessageTable).values(assistantRow(stale, 100)).run().pipe(Effect.orDie)
-      yield* bus.publish(SessionEvent.RevertEvent.Staged, {
+      yield* stageRevert({
         sessionID,
         revert: { messageID: boundary.id, files: [] },
       })
@@ -410,7 +399,7 @@ describe("Session.prompt", () => {
         resume: false,
       })
       yield* session.resume(sessionID)
-      yield* bus.publish(SessionEvent.RevertEvent.Staged, {
+      yield* stageRevert({
         sessionID,
         revert: { messageID: boundary.id, files: [] },
       })
@@ -629,7 +618,7 @@ describe("Session.prompt", () => {
         session
           .log({ ...input, follow: true })
           .pipe(Stream.filter((item): item is SessionEvent.DurableEvent => !Bus.isSynced(item)))
-      const fiber = yield* publicEvents({ sessionID }).pipe(Stream.take(8), Stream.runCollect, Effect.forkScoped)
+      const fiber = yield* publicEvents({ sessionID }).pipe(Stream.take(9), Stream.runCollect, Effect.forkScoped)
       yield* Effect.yieldNow
 
       yield* session.prompt({ sessionID, text: "First", resume: false })
@@ -638,20 +627,21 @@ describe("Session.prompt", () => {
       const streamed = Array.from(yield* Fiber.join(fiber))
 
       expect(streamed.map((event): [number | undefined, string] => [event.durable?.seq, event.type])).toEqual([
-        [0, "session-inbox-enqueued"],
-        [1, "session-inbox-held"],
-        [2, "session-inbox-enqueued"],
-        [3, "session-inbox-held"],
-        [4, "session-execution-started"],
-        [5, "session-inbox-delivered"],
+        [0, "session-created"],
+        [1, "session-inbox-enqueued"],
+        [2, "session-inbox-held"],
+        [3, "session-inbox-enqueued"],
+        [4, "session-inbox-held"],
+        [5, "session-execution-started"],
         [6, "session-inbox-delivered"],
-        [7, "session-execution-settled"],
+        [7, "session-inbox-delivered"],
+        [8, "session-execution-settled"],
       ])
       expect(
         Array.from(
-          yield* publicEvents({ sessionID, after: streamed[0].durable?.seq }).pipe(Stream.take(1), Stream.runCollect),
+          yield* publicEvents({ sessionID, after: streamed[1].durable?.seq }).pipe(Stream.take(1), Stream.runCollect),
         ).map((event): [number | undefined, string] => [event.durable?.seq, event.type]),
-      ).toEqual([[1, "session-inbox-held"]])
+      ).toEqual([[2, "session-inbox-held"]])
     }),
   )
 
@@ -875,6 +865,8 @@ describe("Session.prompt", () => {
         .where(eq(SessionMessageTable.session_id, sessionID))
         .run()
         .pipe(Effect.orDie)
+      // The Session's row is projected from its creation too.
+      yield* db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run().pipe(Effect.orDie)
       yield* bus.rebuild(sessionID)
 
       expect(yield* admitted(messageID)).toMatchObject({
@@ -899,19 +891,7 @@ describe("Session.prompt", () => {
       const { db } = yield* Database.Service
       const session = yield* Session.Service
       const other = Session.ID.make("ses_prompt_other")
-      yield* db
-        .insert(SessionTable)
-        .values({
-          id: other,
-          project_id: Project.ID.global,
-          slug: "other",
-          directory: "/project",
-          title: "other",
-          version: "test",
-        })
-        .onConflictDoNothing()
-        .run()
-        .pipe(Effect.orDie)
+      yield* recordSession({ id: other, slug: "other", directory: "/project", title: "other", version: "test" })
       yield* session.prompt({ id: messageID, sessionID, text: "Fix the failing tests", resume: false })
       const failure = yield* session
         .prompt({ id: messageID, sessionID: other, text: "Fix the failing tests", resume: false })
@@ -1150,7 +1130,7 @@ describe("Session.revert", () => {
       yield* setup
       const session = yield* Session.Service
       const bus = yield* Bus.Service
-      yield* bus.publish(SessionEvent.RevertEvent.Staged, {
+      yield* stageRevert({
         sessionID,
         revert: { messageID, snapshot: Snapshot.ID.make("tree"), files: [] },
       })

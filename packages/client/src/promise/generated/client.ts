@@ -523,7 +523,7 @@ export function make(options: ClientOptions) {
               metadata: input?.["metadata"],
             },
             successStatus: 200,
-            declaredStatuses: [400],
+            declaredStatuses: [409, 400],
             empty: false,
           },
           requestOptions,

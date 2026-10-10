@@ -49,6 +49,7 @@ import { Database } from "../src/database/database"
 import { Bus } from "../src/bus"
 import { Reference } from "../src/reference"
 import { Tool } from "../src/tool"
+import { recordSession } from "./fixture/session"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, LocationServiceMap.node]), [
@@ -90,13 +91,7 @@ describe("LocationServiceMap", () => {
       const ref = Location.Ref.make({ directory: AbsolutePath.make("/project") })
       const sessionID = Session.ID.make("ses_routing_activity")
       yield* Location.Service.pipe(Effect.provide(locations.get(ref)), Effect.scoped)
-      yield* bus.publish(SessionEvent.Created, {
-        sessionID,
-        location: ref,
-        projectID: Project.ID.global,
-        slug: "routing",
-        version: "test",
-      })
+      yield* recordSession({ id: sessionID, directory: ref.directory, slug: "routing" })
       yield* TestClock.adjust("59 minutes")
       const event = yield* bus.publish(SessionEvent.Execution.Settled, { sessionID, outcome: "succeeded" })
       expect(event).not.toHaveProperty("location")

@@ -48,6 +48,7 @@ import { SessionStore } from "@ocpp/core/session/store"
 import { SkillInstructions } from "@ocpp/core/skill/instructions"
 import { Snapshot } from "@ocpp/core/snapshot"
 import { Tool } from "@ocpp/core/tool"
+import { SpecterRejection } from "@ocpp/core/specter/rejection"
 import { SpecterStepHost } from "@ocpp/core/specter/step-host"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -219,19 +220,27 @@ const setup = Effect.gen(function* () {
     .onConflictDoNothing()
     .run()
     .pipe(Effect.orDie)
-  yield* db
-    .insert(SessionTable)
-    .values({
-      id: sessionID,
-      project_id: Project.ID.global,
-      slug: "test",
-      directory: "/project",
-      title: "test",
-      version: "test",
+  // The Session is created once; a later boot over the same database finds it.
+  yield* (yield* Bus.Service).runtime
+    .command({
+      type: "createSession",
+      payload: {
+        session: {
+          sessionID,
+          projectID: Project.ID.global,
+          slug: "test",
+          location: { directory: "/project" },
+          title: "test",
+          version: "test",
+        },
+      },
     })
-    .onConflictDoNothing()
-    .run()
-    .pipe(Effect.orDie)
+    .pipe(
+      Effect.catchIf(
+        (error) => SpecterRejection.reason(error) === "Session already exists",
+        () => Effect.void,
+      ),
+    )
 })
 
 // The Session's public events, as its log serves them: internal facts share its sequence.
@@ -291,6 +300,7 @@ describe("Sessions on the Specter runtime", () => {
       expect(yield* session.inbox(sessionID)).toEqual([])
       expect(yield* session.active).toEqual(new Set())
       expect(yield* eventTypes).toEqual([
+        "session-created",
         "session-inbox-enqueued",
         "session-execution-started",
         "session-instructions-updated",
@@ -326,6 +336,7 @@ describe("Sessions on the Specter runtime", () => {
       ).toEqual(["Second try"])
       expect(llm.requests).toHaveLength(2)
       expect(yield* eventTypes).toEqual([
+        "session-created",
         "session-inbox-enqueued",
         "session-execution-started",
         "session-instructions-updated",
@@ -388,7 +399,7 @@ describe("Sessions on the Specter runtime", () => {
       })
       expect(messages.slice(notice + 1).map((message) => message.type)).toEqual(["assistant"])
       const types = yield* eventTypes
-      expect(types.slice(0, 6)).toEqual([
+      expect(types.slice(1, 7)).toEqual([
         "session-inbox-enqueued",
         "session-execution-started",
         "session-instructions-updated",
@@ -398,7 +409,7 @@ describe("Sessions on the Specter runtime", () => {
       ])
       // The end of the provider stream races the program, which starts and returns its result on the
       // tool call's own fiber.
-      expect(types.slice(6, 9).toSorted()).toEqual([
+      expect(types.slice(7, 10).toSorted()).toEqual([
         "session-codemode-started",
         "session-step-streamed",
         "session-tool-settled",
@@ -706,7 +717,7 @@ describe("Sessions on the Specter runtime", () => {
       yield* session.wait(sessionID)
 
       // The runtime delivers the compaction item; OC++ compacts and records its own facts.
-      expect((yield* eventTypes).slice(9)).toEqual([
+      expect((yield* eventTypes).slice(10)).toEqual([
         "session-inbox-enqueued",
         "session-execution-started",
         "session-inbox-delivered",

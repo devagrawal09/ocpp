@@ -22,6 +22,7 @@ import { Effect, Layer, LayerMap, Stream } from "effect"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { TestStepHost } from "./fixture/step-host"
+import { stageRevert } from "./fixture/session"
 
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
 const model = LanguageModel.make({
@@ -159,7 +160,7 @@ describe("Session.compact", () => {
         ],
         [SessionEvent.InboxDelivered, { sessionID: created.id, inboxID: messageID }],
       ])
-      yield* bus.publish(SessionEvent.RevertEvent.Staged, {
+      yield* stageRevert({
         sessionID: created.id,
         revert: { messageID, files: [] },
       })

@@ -41,6 +41,7 @@ import { Shell } from "../src/shell.js"
 import { Skill } from "../src/skill.js"
 import { Snapshot } from "../src/snapshot.js"
 import { tempGlobalLayer } from "./fixture/global"
+import { moveSession, recordSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
 import { TestStepHost } from "./fixture/step-host"
 import { AppNodeBuilder } from "../src/effect/app-node-builder.js"
@@ -79,13 +80,12 @@ const setup = Effect.fnUntraced(function* (options?: {
     .run()
     .pipe(Effect.orDie)
   yield* Effect.forEach([sessionID, otherID], (id) =>
-    bus.publish(SessionEvent.Created, {
-      sessionID: id,
-      projectID: Project.ID.global,
-      location: source,
+    recordSession({
+      id,
+      directory: source.directory,
+      workspaceID: source.workspaceID,
       slug: "owned",
       title: "Owned session",
-      version: "test",
     }),
   )
   const hooks = yield* PluginHooks.Service.pipe(Effect.provide(LayerNode.compile(PluginHooks.node)))
@@ -331,7 +331,7 @@ describe("Session-owned handles", () => {
       const prompt = handle.prompt({ text: "After move", resume: false })
       const destination = Location.Ref.make({ directory: AbsolutePath.make("/project/moved") })
 
-      yield* fixture.bus.publish(SessionEvent.Moved, {
+      yield* moveSession({
         sessionID,
         location: destination,
         projectID: Project.ID.global,
@@ -684,7 +684,7 @@ describe("Session-owned handles", () => {
       yield* handle.resume()
       yield* handle.revert.stage({ messageID: boundary.id, files: false })
       const destination = Location.Ref.make({ directory: AbsolutePath.make("/project/moved") })
-      yield* fixture.bus.publish(SessionEvent.Moved, {
+      yield* moveSession({
         sessionID,
         location: destination,
         projectID: Project.ID.global,

@@ -21,6 +21,7 @@ import { Project } from "@ocpp/core/project"
 import { ProjectTable } from "@ocpp/core/project/sql"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
+import { recordSession } from "../fixture/session"
 
 export const toolIdentity = {
   agent: Agent.ID.make("build"),
@@ -196,6 +197,14 @@ export const seedToolSession = Effect.fnUntraced(function* (
     .onConflictDoNothing()
     .run()
     .pipe(Effect.orDie)
+  // With a Bus, the Session is recorded through the runtime as Session.create records it. A composition
+  // without the Session projection, or without a Bus, never reaches the runtime's Session state, so the
+  // row stands in; with the projection, it already holds it.
+  const bus = Option.getOrUndefined(yield* Effect.serviceOption(Bus.Service))
+  if (bus)
+    yield* recordSession({ id: sessionID, directory: "/project", title: sessionID }).pipe(
+      Effect.provideService(Bus.Service, bus),
+    )
   yield* database.db
     .insert(SessionTable)
     .values({

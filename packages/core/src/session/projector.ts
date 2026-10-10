@@ -14,10 +14,9 @@ import { SessionMessageUpdater } from "./message-updater.js"
 import { SessionInbox } from "./inbox.js"
 import { Workspace } from "@ocpp/schema/workspace"
 import { InstructionState } from "./instruction-state.js"
-import { InstructionEntryTable, SessionInboxTable, SessionMessageTable, SessionTable } from "./sql.js"
+import { InstructionEntryTable, SessionMessageTable, SessionTable } from "./sql.js"
 import type { InstructionEntry } from "@ocpp/schema/instruction-entry"
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { Slug } from "../util/slug.js"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Money } from "@ocpp/schema/money"
 import { Worktree } from "@ocpp/schema/worktree"
@@ -56,13 +55,6 @@ const stepUsage = (step: typeof SessionEvent.Step.Settled.Type.data): Usage | un
   if (step.outcome === "failed" && step.retry && !step.retry.fresh) return
   if (step.cost === undefined || step.tokens === undefined) return
   return { cost: step.cost, tokens: step.tokens }
-}
-
-const forkTitle = (value?: string) => {
-  if (value === undefined) return
-  const match = value.match(/^(.+) \(fork #(\d+)\)$/)
-  if (match) return `${match[1]} (fork #${Number.parseInt(match[2], 10) + 1})`
-  return `${value} (fork #1)`
 }
 
 function applyUsage(db: DatabaseService, sessionID: SessionSchema.ID, value: Usage) {
@@ -155,39 +147,16 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
     .pipe(Effect.orDie)
   const copiedSeq = copied?.seq
 
+  // session-created, earlier in the fork's commit, stored the child; the fork records where it came from,
+  // and it keeps its parent's stored tool list, so a fork of a subagent keeps the tools it was given.
   const stored = yield* db
-    .insert(SessionTable)
-    .values({
-      id: event.data.sessionID,
-      parent_id: null,
-      fork_session_id: event.data.parentID,
-      fork_boundary: event.data.boundary,
-      project_id: parent.project_id,
-      workspace_id: parent.workspace_id,
-      slug: Slug.create(),
-      directory: parent.directory,
-      path: parent.path,
-      title: forkTitle(parent.title ?? undefined),
-      agent: parent.agent,
-      // A fork keeps its parent's stored tool list, so a fork of a subagent keeps the tools it was given.
-      tools: parent.tools,
-      model: parent.model,
-      metadata: parent.metadata,
-      version: parent.version,
-      cost: 0,
-      tokens_input: 0,
-      tokens_output: 0,
-      tokens_reasoning: 0,
-      tokens_cache_read: 0,
-      tokens_cache_write: 0,
-      time_created: event.created,
-      time_updated: event.created,
-    })
-    .onConflictDoNothing()
+    .update(SessionTable)
+    .set({ fork_session_id: event.data.parentID, fork_boundary: event.data.boundary, tools: parent.tools })
+    .where(eq(SessionTable.id, event.data.sessionID))
     .returning({ sessionID: SessionTable.id })
     .get()
     .pipe(Effect.orDie)
-  if (!stored) return yield* Effect.die(new SessionAlreadyProjected())
+  if (!stored) return yield* Effect.die(new Error(`Forked session not created: ${event.data.sessionID}`))
 
   if (event.data.instructionEntries)
     yield* initializeInstructionEntries(db, event.data.sessionID, event.data.instructionEntries, event.created)
@@ -916,16 +885,6 @@ const layer = Layer.effectDiscard(
           .delete(SessionMessageTable)
           .where(
             and(eq(SessionMessageTable.session_id, event.data.sessionID), gte(SessionMessageTable.seq, boundary.seq)),
-          )
-          .run()
-          .pipe(Effect.orDie)
-        yield* db
-          .delete(SessionInboxTable)
-          .where(
-            and(
-              eq(SessionInboxTable.session_id, event.data.sessionID),
-              gte(SessionInboxTable.enqueued_seq, boundary.seq),
-            ),
           )
           .run()
           .pipe(Effect.orDie)

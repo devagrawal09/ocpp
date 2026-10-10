@@ -14,6 +14,7 @@ import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { SessionProjector } from "./session/projector.js"
 import { SessionMessageTable, SessionTable } from "./session/sql.js"
+import { SpecterRejection } from "./specter/rejection.js"
 import { SessionSchema } from "./session/schema.js"
 import { AbsolutePath, PositiveInt, RelativePath } from "./schema.js"
 import { Agent } from "@ocpp/schema/agent"
@@ -29,6 +30,7 @@ import {
   AttachmentError,
   BusyError,
   CompactionConflictError,
+  DeletedError,
   DisplayConflictError,
   DisplayInvalidError,
   ForkEmptyError,
@@ -122,6 +124,7 @@ export {
   AttachmentError,
   BusyError,
   CompactionConflictError,
+  DeletedError,
   DisplayConflictError,
   DisplayInvalidError,
   InboxConflictError,
@@ -163,7 +166,7 @@ export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<{
     readonly data: SessionSchema.Info[]
   }>
-  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info, NotFoundError>
+  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info, NotFoundError | DeletedError>
   readonly fork: (
     input: ForkInput,
   ) => Effect.Effect<SessionSchema.Info, NotFoundError | MessageNotFoundError | ForkEmptyError>
@@ -331,49 +334,44 @@ const layer = Layer.effect(
         if (location === undefined)
           return yield* Effect.die(new Error("Session.create requires either location or an existing parentID"))
         const project = yield* projects.resolve(location.directory)
-        const projected = yield* bus
-          .publish(
-            SessionEvent.Created,
-            {
-              sessionID,
-              slug: Slug.create(),
-              version: app.version,
-              projectID: project.id,
-              parentID: input.parentID,
-              location,
-              subpath: RelativePath.make(path.relative(project.directory, location.directory).replaceAll("\\", "/")),
-              title: input.title,
-              agent: input.agent,
-              // Children inherit metadata the way they inherit location, so
-              // host policies that read it treat the family uniformly.
-              metadata: input.metadata ?? parent?.metadata,
-              model: input.model
-                ? {
-                    id: Model.ID.make(input.model.id),
-                    providerID: input.model.providerID,
-                    variant: input.model.variant,
-                  }
-                : undefined,
+        yield* bus.runtime
+          .command({
+            type: "createSession",
+            payload: {
+              session: encodeCreated({
+                sessionID,
+                slug: Slug.create(),
+                version: app.version,
+                projectID: project.id,
+                parentID: input.parentID,
+                location,
+                subpath: RelativePath.make(path.relative(project.directory, location.directory).replaceAll("\\", "/")),
+                title: input.title,
+                agent: input.agent,
+                // Children inherit metadata the way they inherit location, so
+                // host policies that read it treat the family uniformly.
+                metadata: input.metadata ?? parent?.metadata,
+                model: input.model
+                  ? {
+                      id: Model.ID.make(input.model.id),
+                      providerID: input.model.providerID,
+                      variant: input.model.variant,
+                    }
+                  : undefined,
+              }),
             },
-            { location },
-          )
+          })
           .pipe(
-            Effect.as({ type: "created" } as const),
-            Effect.catchDefect((defect) => {
-              if (!(defect instanceof SessionProjector.SessionAlreadyProjected)) {
-                return Effect.die(defect)
-              }
-              // Concurrent creation lost the projection race. The existing Session identity wins.
-              return store
-                .get(sessionID)
-                .pipe(
-                  Effect.flatMap((session) =>
-                    session ? Effect.succeed({ type: "existing", session } as const) : Effect.die(defect),
-                  ),
-                )
+            Effect.catch((error): Effect.Effect<void, NotFoundError | DeletedError> => {
+              const reason = SpecterRejection.reason(error)
+              // Created meanwhile under the same ID: the existing Session wins.
+              if (reason === "Session already exists") return Effect.void
+              if (reason === "Session deleted") return Effect.fail(new DeletedError({ sessionID }))
+              if (input.parentID && (reason === "Parent session not found" || reason === "Parent session deleted"))
+                return Effect.fail(new NotFoundError({ sessionID: input.parentID }))
+              return Effect.die(error)
             }),
           )
-        if (projected.type === "existing") return projected.session
         // TODO: Restore recorded sessions onto replacement synchronized workspaces in a future API slice.
         return yield* result.get(sessionID).pipe(Effect.orDie)
       }),
@@ -404,18 +402,43 @@ const layer = Layer.effect(
             Effect.all({
               instructions: InstructionState.current(db, parent.id),
               instructionEntries: InstructionEntry.snapshot(db, parent.id),
+              // The parent as stored: the fork keeps its version and selections exactly.
+              row: db.select().from(SessionTable).where(eq(SessionTable.id, parent.id)).get(),
             }),
           )
           .pipe(Effect.orDie)
-        // The fork adopts the parent's newest instruction values rather than the
-        // values in effect at the boundary; copied history may contain frozen
-        // instruction-update text the initial baseline already reflects.
-        yield* bus.publish(SessionEvent.Forked, {
+        if (!inherited.row) return yield* new NotFoundError({ sessionID: input.sessionID })
+        // The fork is a Session of its own in the parent's place, with its selections and a fork title. It
+        // adopts the parent's newest instruction values rather than the values in effect at the boundary;
+        // copied history may contain frozen instruction-update text the initial baseline already reflects.
+        const { parentID: _, ...child } = encodeCreated({
+          sessionID,
+          slug: Slug.create(),
+          version: inherited.row.version,
+          projectID: parent.projectID,
+          location: parent.location,
+          subpath: parent.subpath,
+          title: forkTitle(parent.title),
+          agent: parent.agent,
+          model: inherited.row.model ? decodeModel(inherited.row.model) : undefined,
+          metadata: parent.metadata,
+        })
+        const { sessionID: __, ...fork } = encodeForked({
           sessionID,
           parentID: parent.id,
           boundary: { ...input.boundary, messageID: boundary.id },
-          ...inherited,
+          instructions: inherited.instructions,
+          instructionEntries: inherited.instructionEntries,
         })
+        yield* bus.runtime
+          .command({ type: "forkSession", payload: { session: child, ...fork } })
+          .pipe(
+            Effect.catch((error) =>
+              SpecterRejection.isMissingSession(error)
+                ? Effect.fail(new NotFoundError({ sessionID: input.sessionID }))
+                : Effect.die(error),
+            ),
+          )
         return yield* result.get(sessionID).pipe(Effect.orDie)
       }),
       get: (sessionID) => sessions.forSession(sessionID).get(),
@@ -436,7 +459,17 @@ const layer = Layer.effect(
           const children = yield* result.list({ parentID: sessionID })
           yield* Effect.forEach(children.data, (child) => result.remove(child.id), { concurrency: 1, discard: true })
           yield* environments.clear(sessionID)
-          yield* bus.publish(SessionEvent.Deleted, { sessionID })
+          // The runtime deletes it with whatever still runs or waits: an execution started meanwhile is
+          // interrupted, and pending input cancelled, in the same commit.
+          yield* bus.runtime
+            .command({ type: "deleteSession", payload: { sessionID } })
+            .pipe(
+              Effect.catch((error) =>
+                SpecterRejection.isMissingSession(error)
+                  ? Effect.fail(new NotFoundError({ sessionID }))
+                  : Effect.die(error),
+              ),
+            )
           yield* bus.remove(sessionID)
         }).pipe(Effect.ensuring(Effect.sync(() => removing.delete(sessionID))))
       }),
@@ -659,18 +692,17 @@ const layer = Layer.effect(
         const latest = yield* result.get(input.sessionID)
         const source = yield* fs.stat(latest.location.directory).pipe(Effect.orElseSucceed(() => undefined))
         if (!source || source.type !== "Directory") {
-          // The Session cannot run where it is, so it moves now, and the moves waiting in its inbox are
-          // superseded. One the runtime delivered meanwhile is no longer pending.
-          const pending = (yield* admission.list(input.sessionID)).filter((item) => item.type === "move")
-          yield* Effect.forEach(
-            pending,
-            (item) =>
-              admission
-                .cancel({ id: item.id, sessionID: input.sessionID })
-                .pipe(Effect.catchTag("SessionInbox.LifecycleConflict", () => Effect.void)),
-            { discard: true },
-          )
-          yield* bus.publish(SessionEvent.Moved, { sessionID: input.sessionID, ...payload })
+          // The Session cannot run where it is, so it moves now; the runtime cancels the moves waiting in
+          // its inbox in the same commit.
+          yield* bus.runtime
+            .command({ type: "moveSession", payload: encodeMoved({ sessionID: input.sessionID, ...payload }) })
+            .pipe(
+              Effect.catch((error) =>
+                SpecterRejection.isMissingSession(error)
+                  ? Effect.fail(new NotFoundError({ sessionID: input.sessionID }))
+                  : Effect.die(error),
+              ),
+            )
           return
         }
         yield* admission.admit({ id: SessionMessage.ID.create(), sessionID: input.sessionID, item }).pipe(Effect.orDie)
@@ -713,6 +745,18 @@ const layer = Layer.effect(
     return result
   }),
 )
+
+const encodeCreated = Schema.encodeSync(SessionEvent.Created.data)
+const encodeForked = Schema.encodeSync(SessionEvent.Forked.data)
+const encodeMoved = Schema.encodeSync(SessionEvent.Moved.data)
+const decodeModel = Schema.decodeUnknownSync(Model.Ref)
+
+const forkTitle = (value?: string) => {
+  if (value === undefined) return
+  const match = value.match(/^(.+) \(fork #(\d+)\)$/)
+  if (match) return `${match[1]} (fork #${Number.parseInt(match[2], 10) + 1})`
+  return `${value} (fork #1)`
+}
 
 export const node = makeGlobalNode({
   service: Service,

@@ -1,12 +1,13 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+import { decided, refusal } from "./decided.ts"
 import { sessionFacts } from "./facts.ts"
 
-// The embedding host (OC++) decides Session facts and records them here: the
-// runtime is its Event Log. Facts are stored as the host published them, in
-// order, one commit per publication. The host's projections run in the same
-// transaction as the append and still hold the invariants; dedicated Slices
-// take them over family by family.
+// The embedding host (OC++) decides some Session facts itself and records
+// them here: they are stored as the host published them, in order, one commit
+// per publication, and the host's projections run in the same transaction as
+// the append. Dedicated Commands take them over family by family; a fact one
+// of them decides is refused here.
 type Fact = keyof typeof sessionFacts
 const recordOne = (type: Fact) => ({
   description: `Records ${type} as the host published it.`,
@@ -14,13 +15,28 @@ const recordOne = (type: Fact) => ({
   when: { facts: [{ type, payload: sessionFacts[type] }] },
   expect: [event(type, sessionFacts[type])] as const,
 })
-const [first, ...rest] = (Object.keys(sessionFacts) as Fact[]).map(recordOne)
+const refuseOne = (type: keyof typeof decided) => ({
+  description: `Refuses ${type}: ${decided[type]} decides it.`,
+  given: [],
+  when: {
+    facts: [
+      { type: "session-renamed", payload: sessionFacts["session-renamed"] },
+      { type, payload: sessionFacts[type] },
+    ],
+  },
+  expect: [] as const,
+  reject: { reason: refusal(type)! },
+})
+const [first, ...rest] = (Object.keys(sessionFacts) as Fact[]).filter((type) => !(type in decided)).map(recordOne)
 // A tuple, so the builder can take one scenario per fact as rest arguments.
 const recorded = [first, ...rest] as [ReturnType<typeof recordOne>, ...ReturnType<typeof recordOne>[]]
+const refused = (Object.keys(decided) as (keyof typeof decided)[]).map(refuseOne)
 
 export const recordSessionFactsSpec = createCommandSlice("recordSessionFacts")
-  .description("Records the facts an embedding host published, in order and as given.")
-  .scenarios(...recorded, {
+  .description(
+    "Records the facts an embedding host published, in order and as given, except those a Command of their own decides.",
+  )
+  .scenarios(...recorded, ...refused, {
     description: "A publication of several facts is one commit, in the order the host published them.",
     given: [],
     when: {
@@ -29,12 +45,12 @@ export const recordSessionFactsSpec = createCommandSlice("recordSessionFacts")
           type: "session-inbox-delivered",
           payload: sessionFacts["session-inbox-delivered"],
         },
-        { type: "session-moved", payload: sessionFacts["session-moved"] },
+        { type: "session-renamed", payload: sessionFacts["session-renamed"] },
       ],
     },
     expect: [
       event("session-inbox-delivered", sessionFacts["session-inbox-delivered"]),
-      event("session-moved", sessionFacts["session-moved"]),
+      event("session-renamed", sessionFacts["session-renamed"]),
     ],
   })
 

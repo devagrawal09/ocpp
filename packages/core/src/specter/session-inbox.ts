@@ -55,7 +55,6 @@ export const layer = Layer.effect(
       request: Admission<Type>,
     ) {
       const item: SessionInbox.Item = request.item
-      yield* specter.register(request.sessionID)
       const base = {
         sessionID: request.sessionID,
         inboxID: request.id,
@@ -129,7 +128,6 @@ export const layer = Layer.effect(
         readonly id: SessionMessage.ID
         readonly sessionID: SessionSchema.ID
       }) {
-        yield* specter.register(input.sessionID)
         yield* specter.runtime
           .command({
             type: "changeDelivery",
@@ -148,7 +146,6 @@ export const layer = Layer.effect(
       readonly id: SessionMessage.ID
       readonly sessionID: SessionSchema.ID
     }) {
-      yield* specter.register(input.sessionID)
       yield* specter.runtime
         .command({ type: "cancelInboxItem", payload: { sessionID: input.sessionID, inboxID: input.id } })
         .pipe(

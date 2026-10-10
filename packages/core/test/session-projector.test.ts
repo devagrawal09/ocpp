@@ -28,6 +28,7 @@ import { testEffect } from "./lib/effect"
 import { Snapshot } from "@ocpp/core/snapshot"
 import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
 import { TestStepHost } from "./fixture/step-host"
+import { forkSession, recordSession, revert, stageRevert } from "./fixture/session"
 
 const steps = TestStepHost.make()
 const it = testEffect(
@@ -76,18 +77,9 @@ const seedSession = (overrides?: Partial<typeof SessionTable.$inferInsert>) =>
       .insert(ProjectTable)
       .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
       .run()
-    yield* db
-      .insert(SessionTable)
-      .values({
-        id: sessionID,
-        project_id: Project.ID.global,
-        slug: "test",
-        directory: "/project",
-        title: "test",
-        version: "test",
-        ...overrides,
-      })
-      .run()
+    yield* recordSession({ id: sessionID, directory: "/project", title: "test", slug: "test" })
+    // Columns a creation does not record (accounting, selections) are set as a test needs them.
+    if (overrides) yield* db.update(SessionTable).set(overrides).where(eq(SessionTable.id, sessionID)).run()
     return db
   })
 
@@ -168,7 +160,7 @@ describe("SessionProjector", () => {
         ])
         .run()
       const bus = yield* Bus.Service
-      yield* bus.publish(SessionEvent.RevertEvent.Staged, {
+      yield* stageRevert({
         sessionID,
         revert: { messageID: boundary, snapshot: Snapshot.ID.make("tree"), files: [] },
       })
@@ -177,16 +169,13 @@ describe("SessionProjector", () => {
         snapshot: "tree",
         files: [],
       })
-      yield* bus.publish(SessionEvent.RevertEvent.Cleared, { sessionID })
+      yield* revert("clearRevert", sessionID)
       expect((yield* db.select({ revert: SessionTable.revert }).from(SessionTable).get())?.revert).toBeNull()
-      yield* bus.publish(SessionEvent.RevertEvent.Staged, {
+      yield* stageRevert({
         sessionID,
         revert: { messageID: boundary, files: [] },
       })
-      yield* bus.publish(SessionEvent.RevertEvent.Committed, {
-        sessionID,
-        to: boundary,
-      })
+      yield* revert("commitRevert", sessionID)
       expect(
         (yield* db.select({ id: SessionMessageTable.id }).from(SessionMessageTable).all()).map((row) => row.id),
       ).toEqual([earlier])
@@ -230,7 +219,7 @@ describe("SessionProjector", () => {
         ])
         .run()
 
-      yield* bus.publish(SessionEvent.Forked, {
+      yield* forkSession({
         sessionID: child,
         parentID: sessionID,
         boundary: { type: "through", messageID: boundary },
@@ -295,7 +284,7 @@ describe("SessionProjector", () => {
         .values([{ id: boundary, session_id: sessionID, type, seq: 0, time_created: 0, data }])
         .run()
 
-      yield* bus.publish(SessionEvent.Forked, {
+      yield* forkSession({
         sessionID: child,
         parentID: sessionID,
         boundary: { type: "through", messageID: boundary },

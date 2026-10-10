@@ -22,6 +22,7 @@ import { tempGlobalLayer } from "./fixture/global"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 import { TestStepHost } from "./fixture/step-host"
+import { stageRevert } from "./fixture/session"
 
 // These tests include real Location and plugin startup, not just hook callbacks.
 setDefaultTimeout(15_000)
@@ -212,7 +213,7 @@ describe("Session prompt hooks", () => {
       const bus = yield* Bus.Service
       const first = yield* fixture.sessions.prompt({ sessionID: fixture.session.id, text: "Boundary", resume: false })
       yield* fixture.sessions.resume(fixture.session.id)
-      yield* bus.publish(SessionEvent.RevertEvent.Staged, {
+      yield* stageRevert({
         sessionID: fixture.session.id,
         revert: { messageID: first.id, files: [] },
       })

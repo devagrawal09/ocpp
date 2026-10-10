@@ -509,10 +509,16 @@ describe("Session.create", () => {
       expect(forked.parentID).toBeUndefined()
       expect(forkContext).toMatchObject([Expected.user("First"), { type: "synthetic", text: "parent note" }])
       expect(forkContext.map((message) => message.id)).not.toEqual(parentContext.map((message) => message.id))
-      expect(history).toHaveLength(1)
+      // The child's creation and its fork are one commit.
+      expect(history).toHaveLength(2)
       expect(history[0]).toMatchObject({
-        type: "session-forked",
+        type: "session-created",
         durable: { seq: 0 },
+        data: { sessionID: forked.id, title: "Parent (fork #1)" },
+      })
+      expect(history[1]).toMatchObject({
+        type: "session-forked",
+        durable: { seq: 1 },
         data: { sessionID: forked.id, parentID: parent.id },
       })
       expect(yield* SessionInbox.find(db, forkContext[0].id)).toBeUndefined()
@@ -543,7 +549,7 @@ describe("Session.create", () => {
         Array.from(yield* Stream.runCollect(logEvents(session, forked.id))).map(
           (event): number | undefined => event.durable?.seq,
         ),
-      ).toEqual([0, 10, 11, 12, 13, 14])
+      ).toEqual([0, 1, 10, 11, 12, 13, 14])
       expect(yield* SessionInbox.find(db, admitted.id)).toBeUndefined()
     }),
   )
@@ -765,7 +771,8 @@ describe("Session.create", () => {
       })
       expect(context).toMatchObject([{ text: "First" }])
       expect(context[0]?.id).not.toBe(first.id)
-      expect(history[0]).toMatchObject({
+      expect(history[1]).toMatchObject({
+        type: "session-forked",
         data: { boundary: { type: "before", messageID: second.id } },
       })
       expect(forked).toMatchObject({ cost: 0, tokens: { input: 0, output: 0, reasoning: 0 } })
@@ -779,6 +786,19 @@ describe("Session.create", () => {
       expect(complete).toMatchObject({
         cost: 0,
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      })
+    }),
+  )
+
+  it.effect("refuses the ID of a deleted Session", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const created = yield* session.create({ id, location })
+      yield* session.remove(created.id)
+
+      expect(yield* session.create({ id, location }).pipe(Effect.flip)).toMatchObject({
+        _tag: "Session.DeletedError",
+        sessionID: id,
       })
     }),
   )

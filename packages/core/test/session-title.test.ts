@@ -28,6 +28,7 @@ import { AbsolutePath } from "@ocpp/core/schema"
 import { Money } from "@ocpp/schema/money"
 import { Deferred, Effect, Fiber, Layer, Stream } from "effect"
 import { testEffect } from "./lib/effect"
+import { recordSession } from "./fixture/session"
 
 let requests: LLMRequest[] = []
 let selectedSmall: Model.Info | undefined
@@ -367,19 +368,14 @@ it.effect("generates a title for an explicitly requested child session", () =>
       .onConflictDoNothing()
       .run()
       .pipe(Effect.orDie)
-    yield* db
-      .insert(SessionTable)
-      .values({
-        id: sessionID,
-        project_id: Project.ID.global,
-        parent_id: Session.ID.make("ses_title_parent"),
-        slug: sessionID,
-        directory: "/project",
-        version: "test",
-      })
-      .onConflictDoNothing()
-      .run()
-      .pipe(Effect.orDie)
+    yield* recordSession({ id: "ses_title_parent", directory: "/project" })
+    yield* recordSession({
+      id: sessionID,
+      parentID: Session.ID.make("ses_title_parent"),
+      slug: sessionID,
+      directory: "/project",
+      version: "test",
+    })
     yield* prompt(sessionID, "Do this subtask")
 
     const title = yield* SessionTitle.Service

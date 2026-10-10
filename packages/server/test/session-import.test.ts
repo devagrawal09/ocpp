@@ -70,3 +70,33 @@ it.live("preserves imported parentID through HTTP import, read, and parent filte
     }).pipe(Effect.scoped),
   )
 })
+
+it.live("refuses to create a Session under a deleted Session's ID", () =>
+  Effect.gen(function* () {
+    const handler = yield* ServerFetch.make({
+      app: { version: "test" },
+      database: { path: ":memory:" },
+      fs: { filewatcher: false },
+    })
+    const send = (method: string, path: string, body?: unknown) =>
+      Effect.promise(async () => {
+        const response = await handler(
+          new Request(`http://ocpp.local${path}`, {
+            method,
+            headers: { "content-type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+          }),
+        )
+        return { status: response.status, body: await response.text() }
+      })
+    const created = Schema.decodeUnknownSync(SessionResponse)(
+      JSON.parse((yield* send("POST", "/api/session", { title: "Deleted" })).body),
+    )
+    expect((yield* send("DELETE", `/api/session/${created.data.id}`)).status).toBe(204)
+    const again = yield* send("POST", "/api/session", { id: created.data.id })
+    expect({ status: again.status, body: JSON.parse(again.body) }).toMatchObject({
+      status: 409,
+      body: { _tag: "ConflictError", resource: created.data.id },
+    })
+  }).pipe(Effect.scoped),
+)

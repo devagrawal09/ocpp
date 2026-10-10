@@ -1,7 +1,6 @@
 export * as SpecterSessionRuntime from "./session-runtime.js"
 
 import { Context, Deferred, Effect, Layer, Stream } from "effect"
-import { eq } from "drizzle-orm"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import {
   StepHost,
@@ -16,10 +15,6 @@ import { ExternalAgentSession } from "../external-agent/session.js"
 import { SessionEvent } from "../session/event.js"
 import { SessionProjector } from "../session/projector.js"
 import { SessionSchema } from "../session/schema.js"
-import { SessionTable } from "../session/sql.js"
-import { SessionStore } from "../session/store.js"
-import { Database } from "../database/database.js"
-import { SpecterRejection } from "./rejection.js"
 import { SpecterStepHost } from "./step-host.js"
 
 const CONTINUE_AFTER_RESTART =
@@ -33,11 +28,6 @@ const CONTINUE_AFTER_RESTART =
  */
 export interface Interface {
   readonly runtime: Runtime
-  /**
-   * Records a Session with no session-created fact (a fork) with the runtime, once, before its first runtime
-   * Command. Answers whether OC++ knows the Session.
-   */
-  readonly register: (sessionID: SessionSchema.ID) => Effect.Effect<boolean>
   /** Sessions with an execution the runtime has started and not yet settled, in any process. */
   readonly active: Effect.Effect<ReadonlySet<SessionSchema.ID>>
   /** Resolves once the runtime has no active execution for the Session, nor input about to start one. */
@@ -57,8 +47,6 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    const store = yield* SessionStore.Service
-    const db = (yield* Database.Service).db
     const runtime = bus.runtime
     // The executions a stopped process left running, as the runtime found them at boot.
     const left = yield* Deferred.make<Set<SessionSchema.ID>>()
@@ -156,63 +144,8 @@ const layer = Layer.effect(
     )
     yield* Deferred.succeed(left, yield* active)
 
-    const register = Effect.fn("SpecterSessionRuntime.register")(function* (sessionID: SessionSchema.ID) {
-      const session = yield* store.get(sessionID)
-      const row = yield* db
-        .select({ slug: SessionTable.slug, version: SessionTable.version })
-        .from(SessionTable)
-        .where(eq(SessionTable.id, sessionID))
-        .get()
-        .pipe(Effect.orDie)
-      if (!session || !row) return false
-      yield* runtime
-        .command(
-          {
-            type: "registerSession",
-            payload: {
-              sessionID,
-              projectID: session.projectID,
-              location: {
-                directory: session.location.directory,
-                ...(session.location.workspaceID === undefined ? {} : { workspaceID: session.location.workspaceID }),
-              },
-              slug: row.slug,
-              version: row.version,
-              ...(session.subpath === undefined ? {} : { subpath: session.subpath }),
-              ...(session.parentID === undefined ? {} : { parentID: session.parentID }),
-              ...(session.title === undefined ? {} : { title: session.title }),
-              ...(session.agent === undefined ? {} : { agent: session.agent }),
-              ...(session.model === undefined ? {} : { model: session.model }),
-              ...(session.metadata === undefined ? {} : { metadata: session.metadata }),
-            },
-          },
-          // The Bus does not project this commit: OC++ projected the Session from its own fact.
-          { idempotencyKey: `${Bus.registrationKeyPrefix}${sessionID}` },
-        )
-        .pipe(
-          // A Session OC++ created is already known from its session.created fact.
-          Effect.catchIf(
-            (error) => SpecterRejection.reason(error) === "Session already registered",
-            () => Effect.void,
-          ),
-          Effect.orDie,
-        )
-      return true
-    })
-    const registered = new Set<SessionSchema.ID>()
-
     return Service.of({
       runtime,
-      register: (sessionID) =>
-        registered.has(sessionID)
-          ? Effect.succeed(true)
-          : register(sessionID).pipe(
-              Effect.tap((known) =>
-                Effect.sync(() => {
-                  if (known) registered.add(sessionID)
-                }),
-              ),
-            ),
       active,
       awaitIdle,
       awaitSettled: (sessionID) => awaitStatus(sessionID, false),
@@ -225,12 +158,5 @@ export const node = makeGlobalNode({
   service: Service,
   layer,
   // The runtime's Reactions record Session facts; their projections are registered before they start.
-  deps: [
-    Bus.node,
-    Database.node,
-    SessionStore.node,
-    SessionProjector.node,
-    ExternalAgentSession.node,
-    SpecterStepHost.node,
-  ],
+  deps: [Bus.node, SessionProjector.node, ExternalAgentSession.node, SpecterStepHost.node],
 })

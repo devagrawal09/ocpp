@@ -1,10 +1,11 @@
 import { implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
+import { refusal } from "./decided.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Records facts as the host gives them: the Command decides nothing, so it
-// folds nothing.
+// Records facts as the host gives them, except those a Command of their own
+// decides: it folds nothing.
 export type RecordSessionFactsState = Record<string, never>
 
 export const recordSessionFactsStore = Context.Service<
@@ -24,4 +25,8 @@ const input = Schema.toStandardSchemaV1(
 export const recordSessionFacts = implementCommand(specification)
   .inputSchema(input)
   .store(recordSessionFactsStore)
-  .handle(async (command) => command.facts)
+  .handle(async (command) => {
+    const refused = command.facts.map((fact) => refusal(fact.type)).find((reason) => reason !== undefined)
+    if (refused) throw new Error(refused)
+    return command.facts
+  })

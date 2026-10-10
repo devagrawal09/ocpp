@@ -140,7 +140,18 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 metadata: ctx.payload.metadata,
                 location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
               })
-              .pipe(Effect.orDie),
+              .pipe(
+                Effect.catchTag("Session.DeletedError", (error) =>
+                  Effect.fail(
+                    new ConflictError({
+                      message: `Session ID belongs to a deleted session: ${error.sessionID}`,
+                      resource: error.sessionID,
+                    }),
+                  ),
+                ),
+                // Only a child's missing parent is not found, and this endpoint creates no children.
+                Effect.catchTag("Session.NotFoundError", Effect.die),
+              ),
           }
         }),
       )

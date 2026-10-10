@@ -30,6 +30,7 @@ import { EventTable } from "@ocpp/core/event/sql"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { Recorded } from "./lib/recorded"
 import { TestStepHost } from "./fixture/step-host"
+import { recordSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
 
 // The runtime runs every Session; a step produces nothing unless a test scripts one.
@@ -740,21 +741,11 @@ function seedSessions(
       .onConflictDoNothing()
       .run()
       .pipe(Effect.orDie)
-    yield* database.db
-      .insert(SessionTable)
-      .values(
-        sessionIDs.map((id) => ({
-          id,
-          project_id: Project.ID.global,
-          slug: id,
-          directory: "/project",
-          title: id,
-          version: "test",
-          ...values,
-        })),
-      )
-      .run()
-      .pipe(Effect.orDie)
+    yield* Effect.forEach(
+      sessionIDs,
+      (id) => recordSession({ id, directory: "/project", title: id, parentID: values.parent_id ?? undefined }),
+      { discard: true },
+    )
   })
 }
 

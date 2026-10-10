@@ -17,6 +17,7 @@ import { SessionMessage } from "@ocpp/schema/session-message"
 import { WorkspaceID } from "@ocpp/schema/workspace-id"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { location } from "./fixture/location"
+import { recordSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(
@@ -34,18 +35,31 @@ const Global = Bus.ephemeral({ type: "test.routing.global", schema: { sessionID:
 const seed = Effect.fn(function* (ref: Location.Ref = a) {
   const database = yield* Database.Service
   yield* database.db.insert(ProjectTable).values({ id: Project.ID.global, worktree: a.directory, sandboxes: [] }).run()
-  yield* database.db
-    .insert(SessionTable)
-    .values({
-      id,
-      project_id: Project.ID.global,
-      directory: ref.directory,
-      workspace_id: ref.workspaceID,
-      slug: "routing",
-      version: "test",
-    })
-    .run()
+  yield* recordSession({ id, directory: ref.directory, workspaceID: ref.workspaceID, slug: "routing" })
 })
+
+// The ID of the fact of a type that a Command recorded: the event the Bus projected from it.
+const recorded = (
+  execution: { readonly events: readonly { readonly id: string; readonly type: string }[] },
+  type: string,
+) => execution.events.find((event) => event.type === type)!.id
+
+const move = (bus: Bus.Interface, ref: Location.Ref) =>
+  bus.runtime
+    .command({
+      type: "moveSession",
+      payload: {
+        sessionID: id,
+        location: ref.workspaceID === undefined ? { directory: ref.directory } : ref,
+        projectID: "global",
+      },
+    })
+    .pipe(
+      Effect.orDie,
+      Effect.map((execution) => recorded(execution, "session-moved")),
+    )
+
+const ids = (events: Iterable<{ readonly id: string }>) => Array.from(events, (event) => event.id)
 
 const watch = (bus: Bus.Interface, ref?: Location.Ref, gate?: Deferred.Deferred<void>) => {
   const collect = bus.subscribe().pipe(
@@ -74,21 +88,12 @@ describe("Bus Session routing", () => {
       const bus = yield* Bus.Service
       const first = yield* watch(bus, a)
       const second = yield* watch(bus, otherWorkspace)
-      const moved = yield* bus.publish(
-        SessionEvent.Moved,
-        { sessionID: id, location: otherWorkspace, projectID: Project.ID.global },
-        { location: a },
-      )
+      const moved = yield* move(bus, otherWorkspace)
       const after = yield* delta(bus)
-      const same = yield* bus.publish(SessionEvent.Moved, {
-        sessionID: id,
-        location: otherWorkspace,
-        projectID: Project.ID.global,
-      })
+      const same = yield* move(bus, otherWorkspace)
       const done = yield* bus.publish(Done, {})
-      expect(yield* Fiber.join(first)).toEqual([moved, done])
-      expect(yield* Fiber.join(second)).toEqual([moved, after, same, done])
-      expect(moved.location).toEqual(a)
+      expect(ids(yield* Fiber.join(first))).toEqual([moved, done.id])
+      expect(ids(yield* Fiber.join(second))).toEqual([moved, after.id, same, done.id])
     }),
   )
 
@@ -105,25 +110,30 @@ describe("Bus Session routing", () => {
         .get()
       if (!boundary) return yield* Effect.die("Missing fork boundary")
 
-      yield* Effect.forEach(["publish", "batch"] as const, (mode) =>
-        Effect.gen(function* () {
-          const child = SessionID.create()
-          const first = yield* watch(bus, a)
-          const second = yield* watch(bus, b)
-          const payload = {
-            sessionID: child,
+      const child = SessionID.create()
+      const first = yield* watch(bus, a)
+      const second = yield* watch(bus, b)
+      // The child's creation and its fork are one commit, delivered where the parent is.
+      const forked = yield* bus.runtime
+        .command({
+          type: "forkSession",
+          payload: {
+            session: {
+              sessionID: child,
+              projectID: "global",
+              location: { directory: a.directory },
+              slug: "fork",
+              version: "test",
+            },
             parentID: id,
-            boundary: { type: "before" as const, messageID: boundary.id },
-          }
-          const eventID = Event.ID.create()
-          if (mode === "publish") yield* bus.publish(SessionEvent.Forked, payload, { id: eventID })
-          if (mode === "batch") yield* bus.publishAll([[SessionEvent.Forked, payload, { id: eventID }]])
-          const after = yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: child, outcome: "succeeded" })
-          const done = yield* bus.publish(Done, {})
-          expect((yield* Fiber.join(first)).map((event) => event.id)).toEqual([eventID, after.id, done.id])
-          expect(yield* Fiber.join(second)).toEqual([done])
-        }),
-      )
+            boundary: { type: "before", messageID: boundary.id },
+          },
+        })
+        .pipe(Effect.orDie)
+      const after = yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: child, outcome: "succeeded" })
+      const done = yield* bus.publish(Done, {})
+      expect(ids(yield* Fiber.join(first))).toEqual([...ids(forked.events), after.id, done.id])
+      expect(yield* Fiber.join(second)).toEqual([done])
     }),
   )
 
@@ -186,7 +196,7 @@ describe("Bus Session routing", () => {
         Effect.forkScoped({ startImmediately: true }),
       )
       yield* bus.publish(SessionEvent.Renamed, { sessionID: id, title: "wrong location" })
-      yield* bus.publish(SessionEvent.Moved, { sessionID: id, location: b, projectID: Project.ID.global })
+      yield* move(bus, b)
       const expected = yield* bus.publish(SessionEvent.Renamed, { sessionID: id, title: "destination" })
       const done = yield* bus.publish(Done, {})
       expect(yield* Fiber.join(typed)).toEqual([expected])
@@ -205,88 +215,68 @@ describe("Bus Session routing", () => {
       const gate = yield* Deferred.make<void>()
       const first = yield* watch(bus, a, gate)
       const second = yield* watch(bus, b, gate)
-      const created = yield* bus.publish(SessionEvent.Created, {
-        sessionID: id,
-        location: a,
-        projectID: Project.ID.global,
-        slug: "routing",
-        version: "test",
-      })
+      const created = yield* bus.runtime
+        .command({
+          type: "createSession",
+          payload: {
+            session: {
+              sessionID: id,
+              location: { directory: a.directory },
+              projectID: "global",
+              slug: "routing",
+              version: "test",
+            },
+          },
+        })
+        .pipe(Effect.orDie)
       const before = yield* bus.publish(SessionEvent.Renamed, { sessionID: id, title: "before" })
-      const moved = yield* bus.publish(SessionEvent.Moved, { sessionID: id, location: b, projectID: Project.ID.global })
+      const moved = yield* move(bus, b)
       const after = yield* delta(bus)
       const done = yield* bus.publish(Done, {})
       yield* Deferred.succeed(gate, undefined)
 
-      expect(yield* Fiber.join(first)).toEqual([created, before, moved, done])
-      expect(yield* Fiber.join(second)).toEqual([moved, after, done])
-      expect(moved).not.toHaveProperty("location")
+      expect(ids(yield* Fiber.join(first))).toEqual([recorded(created, "session-created"), before.id, moved, done.id])
+      expect(ids(yield* Fiber.join(second))).toEqual([moved, after.id, done.id])
     }),
   )
 
-  it.effect("routes a cold Session deletion before its projector removes ownership", () =>
+  it.effect("routes a Session's deletion before its projector removes ownership, and nothing after it", () =>
     Effect.gen(function* () {
       yield* seed()
       const bus = yield* Bus.Service
       const first = yield* watch(bus, a)
       const second = yield* watch(bus, b)
       const global = yield* watch(bus)
-      const deleted = yield* bus.publish(SessionEvent.Deleted, { sessionID: id })
+      const deleted = yield* bus.runtime.command({ type: "deleteSession", payload: { sessionID: id } }).pipe(
+        Effect.orDie,
+        Effect.map((execution) => recorded(execution, "session-deleted")),
+      )
       const missing = yield* delta(bus)
       const done = yield* bus.publish(Done, {})
 
       const database = yield* Database.Service
       expect(yield* database.db.select().from(SessionTable).where(eq(SessionTable.id, id)).get()).toBeUndefined()
-      expect(yield* Fiber.join(first)).toEqual([deleted, done])
+      expect(ids(yield* Fiber.join(first))).toEqual([deleted, done.id])
       expect(yield* Fiber.join(second)).toEqual([done])
-      expect(yield* Fiber.join(global)).toEqual([deleted, missing, done])
+      expect(ids(yield* Fiber.join(global))).toEqual([deleted, missing.id, done.id])
     }),
   )
 
-  it.effect("preserves routing through a batch that moves and deletes a Session", () =>
+  it.effect("does not change ownership when a move rolls back", () =>
     Effect.gen(function* () {
       yield* seed()
       const bus = yield* Bus.Service
-      const gate = yield* Deferred.make<void>()
-      const first = yield* watch(bus, a, gate)
-      const second = yield* watch(bus, b, gate)
-      const events = yield* bus.publishAll([
-        [SessionEvent.Renamed, { sessionID: id, title: "before" }],
-        [SessionEvent.Moved, { sessionID: id, location: b, projectID: Project.ID.global }],
-        [SessionEvent.Renamed, { sessionID: id, title: "after" }],
-        [SessionEvent.Deleted, { sessionID: id }],
-      ])
-      const done = yield* bus.publish(Done, {})
-      yield* Deferred.succeed(gate, undefined)
-      expect(yield* Fiber.join(first)).toEqual([events[0], events[1], done])
-      expect(yield* Fiber.join(second)).toEqual([events[1], events[2], events[3], done])
-    }),
-  )
-
-  it.effect("does not change ownership when single or batched moves roll back", () =>
-    Effect.gen(function* () {
-      yield* seed()
-      const bus = yield* Bus.Service
+      // A projection that fails the next move's commit.
+      let fail = true
+      yield* bus.project(SessionEvent.Moved, () => (fail ? Effect.die("rollback") : Effect.void))
       const first = yield* watch(bus, a)
       const second = yield* watch(bus, b)
       const before = yield* delta(bus)
-      const single = yield* bus
-        .publish(
-          SessionEvent.Moved,
-          { sessionID: id, location: b, projectID: Project.ID.global },
-          { commit: () => Effect.die("rollback") },
-        )
-        .pipe(Effect.exit)
-      const batch = yield* bus
-        .publishAll([
-          [SessionEvent.Moved, { sessionID: id, location: b, projectID: Project.ID.global }],
-          [SessionEvent.Renamed, { sessionID: id, title: "rollback" }, { commit: () => Effect.die("rollback") }],
-        ])
-        .pipe(Effect.exit)
+      const moved = yield* move(bus, b).pipe(Effect.exit)
+      fail = false
       const after = yield* delta(bus)
       const done = yield* bus.publish(Done, {})
-      expect(Exit.isFailure(single)).toBe(true)
-      expect(Exit.isFailure(batch)).toBe(true)
+      expect(Exit.isFailure(moved)).toBe(true)
       expect(yield* Fiber.join(first)).toEqual([before, after, done])
       expect(yield* Fiber.join(second)).toEqual([done])
     }),

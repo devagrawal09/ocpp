@@ -30,9 +30,6 @@ import { SpecterSnapshots } from "./specter/snapshots.js"
 
 type OutboxPayload<S> = S extends ReactionOutboxStore<infer T> ? T : never
 
-/** Idempotency keys of the commits that register with the runtime a Session with no session-created fact: a fork. */
-export const registrationKeyPrefix = "register:"
-
 export type Subscriber<D extends Event.Definition = Event.Definition> = (event: Event.Payload<D>) => Effect.Effect<void>
 export type Unsubscribe = Effect.Effect<void>
 
@@ -528,8 +525,6 @@ export function configured(options?: Options) {
                 )
                 return Effect.void
               }
-              // Registering a fork records a session-created for the runtime only: OC++ projected session-forked.
-              if (key?.startsWith(registrationKeyPrefix)) return Effect.void
               // Facts a runtime Command recorded directly: project each as the event it is here, and notify
               // after the transaction commits.
               const created = Date.parse(events[0]?.recordedAt ?? "") || (yield* Clock.currentTimeMillis)

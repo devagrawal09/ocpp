@@ -19,11 +19,14 @@ import { Slug } from "../util/slug.js"
 import { SessionFact } from "@ocpp/schema/session-fact"
 import { SessionEvent } from "./event.js"
 import { SessionMessage } from "./message.js"
-import { SessionProjector } from "./projector.js"
+import { SpecterRejection } from "../specter/rejection.js"
 import { SessionTable } from "./sql.js"
 
 export const Data = SessionTransfer.Data
 export type Data = SessionTransfer.Data
+
+const encodeCreated = Schema.encodeSync(SessionEvent.Created.data)
+const encodeImported = Schema.encodeSync(SessionFact.Imported.data)
 
 export class ImportConflictError extends Schema.TaggedError<ImportConflictError>()(
   "SessionTransfer.ImportConflictError",
@@ -86,11 +89,33 @@ const layer = Layer.effect(
         const time = input.data.info.time
         const idle = time.idle ? DateTime.toEpochMillis(time.idle) : undefined
         // The imported history and accounting are recorded with the Session's creation, in one commit.
-        yield* bus
-          .publishAll([
-            [
-              SessionEvent.Created,
-              {
+        const { sessionID: _, ...imported } = encodeImported({
+          sessionID,
+          messages,
+          cost: input.data.info.cost,
+          tokens: {
+            input: input.data.info.tokens.input,
+            output: input.data.info.tokens.output,
+            reasoning: input.data.info.tokens.reasoning,
+            cacheRead: input.data.info.tokens.cache.read,
+            cacheWrite: input.data.info.tokens.cache.write,
+          },
+          time: {
+            created: DateTime.toEpochMillis(time.created),
+            updated: DateTime.toEpochMillis(time.updated),
+            ...(idle === undefined ? {} : { idle }),
+            ...(idle !== undefined && time.viewed
+              ? { viewed: Math.min(idle, DateTime.toEpochMillis(time.viewed)) }
+              : {}),
+            ...(time.archived ? { archived: DateTime.toEpochMillis(time.archived) } : {}),
+          },
+          ...(idle !== undefined && input.data.info.outcome ? { outcome: input.data.info.outcome } : {}),
+        })
+        yield* bus.runtime
+          .command({
+            type: "createSession",
+            payload: {
+              session: encodeCreated({
                 sessionID,
                 parentID: input.data.info.parentID,
                 slug: Slug.create(),
@@ -104,42 +129,23 @@ const layer = Layer.effect(
                 agent: input.data.info.agent,
                 model: input.data.info.model,
                 metadata: input.data.info.metadata,
-              },
-              { location: input.location },
-            ],
-            [
-              SessionFact.Imported,
-              {
-                sessionID,
-                messages,
-                cost: input.data.info.cost,
-                tokens: {
-                  input: input.data.info.tokens.input,
-                  output: input.data.info.tokens.output,
-                  reasoning: input.data.info.tokens.reasoning,
-                  cacheRead: input.data.info.tokens.cache.read,
-                  cacheWrite: input.data.info.tokens.cache.write,
-                },
-                time: {
-                  created: DateTime.toEpochMillis(time.created),
-                  updated: DateTime.toEpochMillis(time.updated),
-                  ...(idle === undefined ? {} : { idle }),
-                  ...(idle !== undefined && time.viewed
-                    ? { viewed: Math.min(idle, DateTime.toEpochMillis(time.viewed)) }
-                    : {}),
-                  ...(time.archived ? { archived: DateTime.toEpochMillis(time.archived) } : {}),
-                },
-                ...(idle !== undefined && input.data.info.outcome ? { outcome: input.data.info.outcome } : {}),
-              },
-              { location: input.location },
-            ],
-          ])
+              }),
+              imported,
+            },
+          })
           .pipe(
-            Effect.catchDefect((defect) =>
-              defect instanceof SessionProjector.SessionAlreadyProjected
-                ? Effect.fail(new ImportConflictError({ sessionID }))
-                : Effect.die(defect),
-            ),
+            Effect.catch((error): Effect.Effect<never, ImportConflictError | Session.NotFoundError> => {
+              const reason = SpecterRejection.reason(error)
+              // The ID names a Session, live or deleted.
+              if (reason === "Session already exists" || reason === "Session deleted")
+                return Effect.fail(new ImportConflictError({ sessionID }))
+              if (
+                input.data.info.parentID &&
+                (reason === "Parent session not found" || reason === "Parent session deleted")
+              )
+                return Effect.fail(new Session.NotFoundError({ sessionID: input.data.info.parentID }))
+              return Effect.die(error)
+            }),
           )
         return yield* sessions.get(sessionID).pipe(Effect.orDie)
       }),

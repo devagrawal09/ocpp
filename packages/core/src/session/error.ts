@@ -11,6 +11,11 @@ export class NotFoundError extends Schema.TaggedError<NotFoundError>()("Session.
   sessionID: SessionSchema.ID,
 }) {}
 
+/** An ID names one Session for good: one a deleted Session had is not given to another. */
+export class DeletedError extends Schema.TaggedError<DeletedError>()("Session.DeletedError", {
+  sessionID: SessionSchema.ID,
+}) {}
+
 export class MessageNotFoundError extends Schema.TaggedError<MessageNotFoundError>()("Session.MessageNotFoundError", {
   sessionID: SessionSchema.ID,
   messageID: SessionMessage.ID,

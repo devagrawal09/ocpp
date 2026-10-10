@@ -147,9 +147,9 @@ describe("Bus", () => {
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const sessionID = Session.ID.create()
-      const event = yield* bus.publish(SessionEvent.Deleted, { sessionID })
+      const event = yield* bus.publish(SessionEvent.Renamed, { sessionID, title: "Placed" })
 
-      expect(event.type).toBe("session-deleted")
+      expect(event.type).toBe("session-renamed")
       expect(event.durable).toEqual({ aggregateID: sessionID, seq: Event.Seq.make(0) })
     }),
   )

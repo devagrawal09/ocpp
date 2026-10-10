@@ -183,6 +183,8 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           metadata: Session.Metadata.pipe(Schema.optional),
         }),
         success: Schema.Struct({ data: Session.Info }),
+        // The ID named a Session that was deleted: an ID names one Session for good.
+        error: [ConflictError],
       }).annotateMerge(
         OpenApi.annotations({
           identifier: "v2.session.create",

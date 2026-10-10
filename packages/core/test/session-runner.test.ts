@@ -86,6 +86,7 @@ import { TestClock } from "effect/testing"
 import { HttpClientRequest, HttpClientResponse } from "effect/http"
 import { and, asc, desc, eq, sql } from "drizzle-orm"
 import { makeSharedLocation } from "./fixture/shared-location"
+import { recordSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
 import { Recorded } from "./lib/recorded"
 import { LocationServiceMap } from "@ocpp/core/location-service-map"
@@ -517,23 +518,7 @@ const otherSessionID = Session.ID.make("ses_runner_other")
 const hasPending = (db: Database.Interface["db"], delivery: SessionInbox.Delivery) =>
   SessionInbox.list(db, sessionID).pipe(Effect.map((items) => items.some((item) => item.delivery === delivery)))
 
-const insertSession = (id: Session.ID) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database.Service
-    yield* db
-      .insert(SessionTable)
-      .values({
-        id,
-        project_id: Project.ID.global,
-        slug: id,
-        directory: "/project",
-        title: "test",
-        version: "test",
-      })
-      .onConflictDoNothing()
-      .run()
-      .pipe(Effect.orDie)
-  })
+const insertSession = (id: Session.ID) => recordSession({ id, directory: "/project", title: "test" })
 
 const setup = Effect.gen(function* () {
   yield* sharedLocation.bind
@@ -744,6 +729,8 @@ const replaySessionProjection = (id: Session.ID) =>
     yield* db.delete(InstructionStateTable).where(eq(InstructionStateTable.session_id, id)).run().pipe(Effect.orDie)
     yield* db.delete(SessionInboxTable).where(eq(SessionInboxTable.session_id, id)).run().pipe(Effect.orDie)
     yield* db.delete(SessionMessageTable).where(eq(SessionMessageTable.session_id, id)).run().pipe(Effect.orDie)
+    // The Session's own row is projected from its session-created fact too.
+    yield* db.delete(SessionTable).where(eq(SessionTable.id, id)).run().pipe(Effect.orDie)
     yield* bus.rebuild(id)
   })
 
@@ -1566,11 +1553,12 @@ describe("SessionRunnerLLM", () => {
       .where(eq(InstructionStateTable.session_id, sessionID))
       .get()
 
-    yield* s.bus.publish(SessionEvent.Moved, {
-      sessionID,
-      location: Location.Ref.make({ directory: AbsolutePath.make("/moved") }),
-      projectID: Project.ID.global,
-    })
+    yield* s.bus.runtime
+      .command({
+        type: "moveSession",
+        payload: { sessionID, location: { directory: "/moved" }, projectID: Project.ID.global },
+      })
+      .pipe(Effect.orDie)
     expect(
       yield* s.db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, sessionID)).get(),
     ).toEqual(instructionState)

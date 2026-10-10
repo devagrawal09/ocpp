@@ -34,7 +34,6 @@ export const layer = Layer.effect(
       active: specter.active,
       isActive: (sessionID) => specter.active.pipe(Effect.map((active) => active.has(sessionID))),
       wake: Effect.fn("SpecterSessionExecution.wake")(function* (sessionID: SessionSchema.ID) {
-        yield* specter.register(sessionID)
         // Nothing to deliver: no execution, as in OC++'s runner.
         const next = yield* specter.runtime
           .query({ type: "nextDeliverable", payload: { sessionID, boundary: "idle" } })
@@ -43,7 +42,6 @@ export const layer = Layer.effect(
       }),
       // Runs the Session until it is idle and fails as its execution did, as OC++'s runner's resume does.
       resume: Effect.fn("SpecterSessionExecution.resume")(function* (sessionID: SessionSchema.ID) {
-        yield* specter.register(sessionID)
         yield* start(sessionID)
         // The execution this call started or joined; a follow-up its input wakes is a busy period of its own.
         yield* specter.awaitSettled(sessionID)
@@ -59,13 +57,11 @@ export const layer = Layer.effect(
         sessionID: SessionSchema.ID,
         options?: { readonly continue?: boolean },
       ) {
-        // Interrupting a Session OC++ does not know is a no-op, as for an idle one.
-        if (!(yield* specter.register(sessionID))) return false
         // The running attempt records what it produced before the interruption settles its step.
         yield* specter.stop(sessionID)
         const interrupted = yield* specter.runtime.command({ type: "interruptExecution", payload: { sessionID } }).pipe(
           Effect.as(true),
-          // Interrupting an idle Session is a no-op.
+          // Interrupting an idle, unknown or deleted Session is a no-op.
           Effect.catch((error) =>
             SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.succeed(false),
           ),

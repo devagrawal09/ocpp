@@ -43,6 +43,7 @@ import { withEnv } from "./fixture/env"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { TestStepHost } from "./fixture/step-host"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { revert, stageRevert } from "./fixture/session"
 
 // The runtime runs every Session; its executions wait before delivering input while a test parks them.
 const steps = TestStepHost.make()
@@ -641,10 +642,10 @@ describe("Code Mode commands", () => {
       const assistants = (yield* sessions.messages({ sessionID: context.session.id, order: "asc" })).filter(
         (message) => message.type === "assistant",
       )
-      yield* bus.publish(SessionEvent.RevertEvent.Committed, {
-        sessionID: context.session.id,
-        to: assistants[1].id,
-      })
+      // A revert changes an idle Session: the program's notice woke this one, whose steps are parked.
+      yield* sessions.interrupt(context.session.id)
+      yield* stageRevert({ sessionID: context.session.id, revert: { messageID: assistants[1].id } })
+      yield* revert("commitRevert", context.session.id)
       expect(yield* commands.list(context.session.id)).toEqual([{ name: "early", description: "", handler: "early" }])
       expect(yield* events.list(context.session.id)).toEqual([])
       // The name is free again, and a new function under it does not revive the removed command.

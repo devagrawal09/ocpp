@@ -14,6 +14,7 @@ import { Shell } from "@ocpp/core/shell"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { location } from "./fixture/location"
 import { tmpdirScoped } from "./fixture/tmpdir"
+import { moveSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
 import { TestStepHost } from "./fixture/step-host"
 
@@ -136,7 +137,7 @@ describe("Session.shell", () => {
         ),
       )
       // Project the move itself rather than run it through the inbox.
-      yield* bus.publish(SessionEvent.Moved, {
+      yield* moveSession({
         sessionID: fixture.created.id,
         location: destination,
         projectID: fixture.created.projectID,

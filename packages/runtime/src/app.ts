@@ -103,11 +103,6 @@ import {
   recordSessionFactsStore,
 } from "./features/session/record-session-facts/impl.ts"
 import {
-  createRegisterSessionState,
-  registerSession,
-  registerSessionStore,
-} from "./features/session/register-session/impl.ts"
-import {
   createStartExecutionState,
   startExecution,
   startExecutionStore,
@@ -143,7 +138,6 @@ export const createRuntimeConfig = (options: {
     events: sessionEventDefinitions,
     slices: {
       recordSessionFacts,
-      registerSession,
       createSession,
       forkSession,
       moveSession,
@@ -213,7 +207,6 @@ export type ProvideSliceStore = <TIdentifier, TWriteState, TReadState>(
 export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
   Layer.mergeAll(
     provide(recordSessionFactsStore, createRecordSessionFactsState),
-    provide(registerSessionStore, createRegisterSessionState),
     provide(createSessionStore, createCreateSessionState),
     provide(forkSessionStore, createForkSessionState),
     provide(moveSessionStore, createMoveSessionState),

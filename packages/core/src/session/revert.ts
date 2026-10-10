@@ -7,13 +7,29 @@ import { Bus } from "../bus.js"
 import { PluginSupervisor } from "../plugin/supervisor-service.js"
 import { RelativePath } from "../schema.js"
 import { Snapshot } from "../snapshot.js"
-import { SessionEvent } from "./event.js"
-import { MessageNotFoundError } from "./error.js"
+import { SpecterRejection } from "../specter/rejection.js"
+import { BusyError, MessageNotFoundError, NotFoundError } from "./error.js"
 import { SessionMessage } from "./message.js"
 import { SessionSchema } from "./schema.js"
 import { SessionMessageTable } from "./sql.js"
 
 export { MessageNotFoundError }
+
+const encodeRevert = Schema.encodeSync(SessionSchema.Revert)
+
+/**
+ * The public error for a revert Command's rejection: the Session is gone, or runs (a revert changes only
+ * an idle Session). "No revert staged" answers as if done.
+ */
+const refused =
+  (sessionID: SessionSchema.ID) =>
+  (error: unknown): Effect.Effect<void, BusyError | NotFoundError> => {
+    const reason = SpecterRejection.reason(error)
+    if (reason === "No revert staged") return Effect.void
+    if (reason === "Session is busy") return Effect.fail(new BusyError({ sessionID }))
+    if (SpecterRejection.isMissingSession(error)) return Effect.fail(new NotFoundError({ sessionID }))
+    return Effect.die(error)
+  }
 
 interface BoundaryInput {
   readonly sessionID: SessionSchema.ID
@@ -25,8 +41,8 @@ export interface Interface {
     readonly session: SessionSchema.Info
     readonly messageID: SessionMessage.ID
     readonly files?: boolean
-  }) => Effect.Effect<SessionSchema.Revert, MessageNotFoundError | Snapshot.Error>
-  readonly clear: (session: SessionSchema.Info) => Effect.Effect<void, Snapshot.Error>
+  }) => Effect.Effect<SessionSchema.Revert, MessageNotFoundError | BusyError | NotFoundError | Snapshot.Error>
+  readonly clear: (session: SessionSchema.Info) => Effect.Effect<void, BusyError | NotFoundError | Snapshot.Error>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionRevert") {}
@@ -58,10 +74,9 @@ export const make = Effect.fn("SessionRevert.make")(function* () {
       snapshot: original,
       files,
     } satisfies SessionSchema.Info["revert"]
-    yield* bus.publish(SessionEvent.RevertEvent.Staged, {
-      sessionID: input.session.id,
-      revert,
-    })
+    yield* bus.runtime
+      .command({ type: "stageRevert", payload: { sessionID: input.session.id, revert: encodeRevert(revert) } })
+      .pipe(Effect.catch(refused(input.session.id)))
     return revert
   })
 
@@ -73,9 +88,9 @@ export const make = Effect.fn("SessionRevert.make")(function* () {
       yield* snapshot.restore({
         files: new Map((session.revert.files ?? []).map((file) => [RelativePath.make(file.file), original])),
       })
-    yield* bus.publish(SessionEvent.RevertEvent.Cleared, {
-      sessionID: session.id,
-    })
+    yield* bus.runtime
+      .command({ type: "clearRevert", payload: { sessionID: session.id } })
+      .pipe(Effect.catch(refused(session.id)), Effect.asVoid)
   })
 
   return { stage, clear }
@@ -83,12 +98,15 @@ export const make = Effect.fn("SessionRevert.make")(function* () {
 
 export const layer = Layer.effect(Service, make())
 
+/**
+ * Commits the Session's staged revert: the runtime cuts its history at the staged message and cancels the
+ * input still pending, in one commit. Nothing staged is a no-op.
+ */
 export const commit = Effect.fn("SessionRevert.commit")(function* (bus: Bus.Interface, session: SessionSchema.Info) {
   if (!session.revert) return
-  yield* bus.publish(SessionEvent.RevertEvent.Committed, {
-    sessionID: session.id,
-    to: session.revert.messageID,
-  })
+  yield* bus.runtime
+    .command({ type: "commitRevert", payload: { sessionID: session.id } })
+    .pipe(Effect.catch(refused(session.id)), Effect.asVoid)
 })
 
 const plan = Effect.fn("SessionRevert.plan")(function* (db: Database.Interface["db"], input: BoundaryInput) {

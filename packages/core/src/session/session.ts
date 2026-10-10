@@ -184,8 +184,11 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
               return { item: yield* preparation.prepare({ sessionID, messageID, input }), references }
             }).pipe(Effect.provide(servicesFor(session.location))),
           )
-          // Commit a staged revert only after preparation succeeds, before admitting new work.
-          if (session.revert) yield* SessionRevert.commit(bus, session)
+          // Commit a staged revert only after preparation succeeds, before admitting new work. A Session
+          // that runs (input steered while the revert was staged) keeps it staged: the prompt steers into
+          // the running execution, and the next idle prompt commits it.
+          if (session.revert)
+            yield* SessionRevert.commit(bus, session).pipe(Effect.catchTag("Session.BusyError", () => Effect.void))
           const admitted = yield* admission.admit({
             id: messageID,
             sessionID: session.id,
@@ -269,7 +272,8 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     input: { id?: SessionMessage.ID; delivery?: SessionInbox.Delivery },
   ) {
     const session = yield* get(sessionID)
-    if (session.revert) yield* SessionRevert.commit(bus, session)
+    if (session.revert)
+      yield* SessionRevert.commit(bus, session).pipe(Effect.catchTag("Session.BusyError", () => Effect.void))
     const inputID = input.id ?? SessionMessage.ID.create()
     const admitted = yield* admission
       .admitCompaction({

@@ -1,45 +1,10 @@
 {
   "$schema": "https://specter.dev/specification/v1/slice.schema.json",
-  "description": "Records the facts an embedding host published, in order and as given.",
+  "description": "Records the facts an embedding host published, in order and as given, except those a Command of their own decides.",
   "formatVersion": 1,
   "kind": "command",
   "name": "recordSessionFacts",
   "scenarios": [
-    {
-      "description": "Records session-created as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-created",
-          "examplePayload": {
-            "location": {
-              "directory": "/a"
-            },
-            "projectID": "global",
-            "sessionID": "ses_1",
-            "slug": "routing",
-            "version": "test"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "location": {
-                "directory": "/a"
-              },
-              "projectID": "global",
-              "sessionID": "ses_1",
-              "slug": "routing",
-              "version": "test"
-            },
-            "type": "session-created"
-          }
-        ]
-      }
-    },
     {
       "description": "Records session-agent-selected as the host published it.",
       "expect": [
@@ -122,37 +87,6 @@
       }
     },
     {
-      "description": "Records session-moved as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-moved",
-          "examplePayload": {
-            "location": {
-              "directory": "/b"
-            },
-            "projectID": "global",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "location": {
-                "directory": "/b"
-              },
-              "projectID": "global",
-              "sessionID": "ses_1"
-            },
-            "type": "session-moved"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records session-renamed as the host published it.",
       "expect": [
         {
@@ -198,62 +132,6 @@
               "sessionID": "ses_1"
             },
             "type": "session-viewed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-deleted as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-deleted",
-          "examplePayload": {
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1"
-            },
-            "type": "session-deleted"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-forked as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-forked",
-          "examplePayload": {
-            "boundary": {
-              "messageID": "msg_fork_codemode",
-              "type": "through"
-            },
-            "parentID": "ses_0",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "boundary": {
-                "messageID": "msg_fork_codemode",
-                "type": "through"
-              },
-              "parentID": "ses_0",
-              "sessionID": "ses_1"
-            },
-            "type": "session-forked"
           }
         ]
       }
@@ -1113,85 +991,6 @@
       }
     },
     {
-      "description": "Records session-revert-staged as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-revert-staged",
-          "examplePayload": {
-            "revert": {
-              "files": [],
-              "messageID": "msg_boundary"
-            },
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "revert": {
-                "files": [],
-                "messageID": "msg_boundary"
-              },
-              "sessionID": "ses_1"
-            },
-            "type": "session-revert-staged"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-revert-cleared as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-revert-cleared",
-          "examplePayload": {
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1"
-            },
-            "type": "session-revert-cleared"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-revert-committed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-revert-committed",
-          "examplePayload": {
-            "sessionID": "ses_1",
-            "to": "msg_boundary"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1",
-              "to": "msg_boundary"
-            },
-            "type": "session-revert-committed"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records session-message-content-updated as the host published it.",
       "expect": [
         {
@@ -1635,79 +1434,6 @@
               "workspaceID": "wrk_1"
             },
             "type": "workspace-destroyed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-imported as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-imported",
-          "examplePayload": {
-            "cost": 0.25,
-            "messages": [
-              {
-                "created": 1,
-                "data": {
-                  "text": "Hello"
-                },
-                "id": "msg_1",
-                "seq": 1,
-                "type": "user"
-              }
-            ],
-            "outcome": "succeeded",
-            "sessionID": "ses_1",
-            "time": {
-              "created": 1,
-              "idle": 2,
-              "updated": 2
-            },
-            "tokens": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "input": 10,
-              "output": 5,
-              "reasoning": 0
-            }
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "cost": 0.25,
-              "messages": [
-                {
-                  "created": 1,
-                  "data": {
-                    "text": "Hello"
-                  },
-                  "id": "msg_1",
-                  "seq": 1,
-                  "type": "user"
-                }
-              ],
-              "outcome": "succeeded",
-              "sessionID": "ses_1",
-              "time": {
-                "created": 1,
-                "idle": 2,
-                "updated": 2
-              },
-              "tokens": {
-                "cacheRead": 0,
-                "cacheWrite": 0,
-                "input": 10,
-                "output": 5,
-                "reasoning": 0
-              }
-            },
-            "type": "session-imported"
           }
         ]
       }
@@ -2591,6 +2317,251 @@
       }
     },
     {
+      "description": "Refuses session-created: createSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-created is recorded by createSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          },
+          {
+            "payload": {
+              "location": {
+                "directory": "/a"
+              },
+              "projectID": "global",
+              "sessionID": "ses_1",
+              "slug": "routing",
+              "version": "test"
+            },
+            "type": "session-created"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-imported: createSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-imported is recorded by createSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          },
+          {
+            "payload": {
+              "cost": 0.25,
+              "messages": [
+                {
+                  "created": 1,
+                  "data": {
+                    "text": "Hello"
+                  },
+                  "id": "msg_1",
+                  "seq": 1,
+                  "type": "user"
+                }
+              ],
+              "outcome": "succeeded",
+              "sessionID": "ses_1",
+              "time": {
+                "created": 1,
+                "idle": 2,
+                "updated": 2
+              },
+              "tokens": {
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "input": 10,
+                "output": 5,
+                "reasoning": 0
+              }
+            },
+            "type": "session-imported"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-forked: forkSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-forked is recorded by forkSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          },
+          {
+            "payload": {
+              "boundary": {
+                "messageID": "msg_fork_codemode",
+                "type": "through"
+              },
+              "parentID": "ses_0",
+              "sessionID": "ses_1"
+            },
+            "type": "session-forked"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-moved: moveSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-moved is recorded by moveSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          },
+          {
+            "payload": {
+              "location": {
+                "directory": "/b"
+              },
+              "projectID": "global",
+              "sessionID": "ses_1"
+            },
+            "type": "session-moved"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-deleted: deleteSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-deleted is recorded by deleteSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1"
+            },
+            "type": "session-deleted"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-revert-staged: stageRevert decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-revert-staged is recorded by stageRevert"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          },
+          {
+            "payload": {
+              "revert": {
+                "files": [],
+                "messageID": "msg_boundary"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-revert-staged"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-revert-cleared: clearRevert decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-revert-cleared is recorded by clearRevert"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1"
+            },
+            "type": "session-revert-cleared"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-revert-committed: commitRevert decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-revert-committed is recorded by commitRevert"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "title": "Renamed"
+            },
+            "type": "session-renamed"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "to": "msg_boundary"
+            },
+            "type": "session-revert-committed"
+          }
+        ]
+      }
+    },
+    {
       "description": "A publication of several facts is one commit, in the order the host published them.",
       "expect": [
         {
@@ -2602,13 +2573,10 @@
           "kind": "scenario-event"
         },
         {
-          "eventType": "session-moved",
+          "eventType": "session-renamed",
           "examplePayload": {
-            "location": {
-              "directory": "/b"
-            },
-            "projectID": "global",
-            "sessionID": "ses_1"
+            "sessionID": "ses_1",
+            "title": "Renamed"
           },
           "kind": "scenario-event"
         }
@@ -2625,13 +2593,10 @@
           },
           {
             "payload": {
-              "location": {
-                "directory": "/b"
-              },
-              "projectID": "global",
-              "sessionID": "ses_1"
+              "sessionID": "ses_1",
+              "title": "Renamed"
             },
-            "type": "session-moved"
+            "type": "session-renamed"
           }
         ]
       }

@@ -12,11 +12,11 @@ import type { LocationServices } from "@ocpp/core/location-services"
 import { Project } from "@ocpp/core/project"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
-import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionStore } from "@ocpp/core/session/store"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { tmpdirScoped } from "./fixture/tmpdir"
+import { Recorded } from "./lib/recorded"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { TestStepHost } from "./fixture/step-host"
@@ -85,6 +85,8 @@ describe("Session.move", () => {
 
           expect((yield* session.get(created.id)).location.directory).toBe(destination)
           expect(yield* session.inbox(created.id)).toEqual([])
+          // Moving now superseded the move that waited, in the same commit.
+          expect((yield* Recorded.types(created.id)).slice(-2)).toEqual(["session-inbox-cancelled", "session-moved"])
 
           yield* session.move({ sessionID: created.id, directory: destination })
           expect(yield* session.inbox(created.id)).toHaveLength(1)
@@ -120,13 +122,8 @@ describe("Session.move", () => {
           const destination = AbsolutePath.make(tmp.path)
           const created = yield* session.create({ location: Location.Ref.make({ directory: previous }) })
 
-          // Moves are admitted through the inbox and applied by the runtime; publish the applied move
-          // directly.
-          yield* bus.publish(SessionEvent.Moved, {
-            sessionID: created.id,
-            location: Location.Ref.make({ directory: destination }),
-            projectID: Project.ID.global,
-          })
+          // Its directory never existed, so the Session moves at once.
+          yield* session.move({ sessionID: created.id, directory: destination })
           // The former directory becomes a project after the session left it.
           yield* bus.publish(Worktree.Event.Resolved, {
             projectID: Project.ID.make("adopting"),

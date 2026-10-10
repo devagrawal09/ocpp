@@ -22,7 +22,7 @@ const save = (db: DatabaseService, snapshots: readonly SliceSnapshot[]) =>
             .onConflictDoUpdate({
               target: table.slice,
               set: { state: snapshot.state, cursor: snapshot.cursor, saved_at: Date.now() },
-              // Two runtimes fold some Slices alike (the Bus's facts); the later cursor wins.
+              // A save never moves a Slice back: the later cursor wins.
               setWhere: lt(table.cursor, snapshot.cursor),
             })
             .run(),
@@ -32,7 +32,7 @@ const save = (db: DatabaseService, snapshots: readonly SliceSnapshot[]) =>
   )
 
 /**
- * Slice Stores for a runtime, kept in memory, that start from the snapshots in OC++'s database and save
+ * Slice Stores for OC++'s runtime, kept in memory, that start from the snapshots in OC++'s database and save
  * theirs back every minute and once the runtime has closed, so a boot catches each Slice up after its
  * cursor instead of folding the log. Build the runtime after this, in the same scope: the last save then
  * runs after the runtime closes.

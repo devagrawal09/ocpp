@@ -6,7 +6,7 @@ Status: **Current semantic overview.** Protocol owns public operations, Schema o
 
 `Session.prompt(...)` publishes one durable `session-inbox-enqueued` fact whose projection inserts one `session_inbox` row before advisory execution begins. An inbox item remains outside model-visible Session History until delivery. The `session-inbox-delivered` projection consumes the row and inserts a visible user or synthetic message atomically; compaction and move control items are consumed without becoming transcript messages.
 
-Reusing a Session ID adopts the existing Session. Reusing a user or synthetic inbox item ID is idempotent when Session and type match: the first admission wins, and retried payload, metadata, and delivery are ignored. After delivery, retry reconciliation uses the projected message and does not require enqueue history. Cross-Session and cross-type reuse fail. Compaction and move controls retain operation-specific conflict behavior.
+Reusing a Session ID adopts the existing Session; a deleted Session's ID is never reused. Reusing a user or synthetic inbox item ID is idempotent when Session and type match: the first admission wins, and retried payload, metadata, and delivery are ignored. After delivery, retry reconciliation uses the projected message and does not require enqueue history. Cross-Session and cross-type reuse fail. Compaction and move controls retain operation-specific conflict behavior.
 
 `resume` controls scheduling, not durability:
 
@@ -44,7 +44,16 @@ Location services are acquired only when an operation needs them. In particular,
 
 `servicesFor` selects instance services from the saved placement. Each instance constructs `SessionPrompt.Service`, whose `prepare` method turns submitted input into a user inbox item without admitting it, committing a revert, or waking execution. It captures FSUtil, PluginSupervisor, PluginHooks, Image, and Skill; readiness is checked before hooks on every call. Prompt keeps early retry reconciliation outside preparation and invokes preparation interruptibly in the current instance. Lower Session does not depend directly on Database or FSUtil; its Location requirements are SessionPrompt, SessionRevert, Shell, and the PluginSupervisor still used by manual shell startup.
 
-Each instance constructs its `SessionRevert.Service` through `SessionRevert.make`, capturing Database, Bus, PluginSupervisor, and Snapshot. Stage and clear check plugin readiness on each invocation and require no service provisioning inside their implementations. Session methods select the current instance for each operation, so an ID-bound Session does not retain a previous instance's snapshots after movement. Commit uses only the host's captured Bus and does not acquire an instance.
+Each instance constructs its `SessionRevert.Service` through `SessionRevert.make`, capturing Database, Bus, PluginSupervisor, and Snapshot. Stage and clear check plugin readiness on each invocation and require no service provisioning inside their implementations. Session methods select the current instance for each operation, so an ID-bound Session does not retain a previous instance's snapshots after movement. Commit uses only the host's captured Bus and does not acquire an instance. Stage, clear and commit are runtime Commands (`stageRevert`, `clearRevert`, `commitRevert`) and change only an idle Session; a busy one is refused (`BusyError`). A commit cancels the input still pending in the same commit that cuts the history: the Session is idle and a staged revert holds new notices, so what waits belongs to the history it cuts. A prompt or compaction commits a staged revert first, unless the Session runs (input steered while it was staged), which keeps it staged.
+
+The Session lifecycle is decided by runtime Commands too, from the runtime's own state:
+
+- `createSession` records `session-created` with the identity the facade chose (its ID, slug, project and Location), and an imported Session's history with it. A child's parent must exist.
+- `forkSession` records the child's `session-created` and `session-forked` in one commit, so a fork's child exists exactly when its fork does. The facade resolves the boundary and the child's identity from the parent.
+- `moveSession` moves a Session whose directory is gone at once and cancels the moves waiting in its inbox in the same commit. A move that can wait is admitted as a move control item.
+- `deleteSession` settles an active execution as the user's interruption does, cancels every pending input, and records `session-deleted`, in one commit, so nothing runs or wakes afterwards. The facade deletes children first.
+
+Every Session Command refuses an unknown or deleted Session with an exact reason ("Session not found", "Session deleted"), which the facade reports as `NotFoundError`.
 
 `SessionInbox.Service` is host-scoped and is the embedded session runtime's inbox (`SpecterSessionInbox`). Admission, cancellation, and delivery changes are runtime Commands (`enqueueInput`, `cancelInboxItem`, `changeDelivery`); the runtime decides each, including a retried item ID, which it rejects with an exact reason that the inbox answers with the first admission, the coalescing of repeated notices, and a pending compaction absorbing another. Its `list` method reads the `session_inbox` projection, which the runtime's facts build in the transaction that records them, without exposing Database to Session. `Session.make` and the facade's move admission consume the registered service. The service is not Session-ID scoped and does not own execution. Transaction-facing projectors keep their explicit database inputs.
 
@@ -61,7 +70,7 @@ The runtime provides the ownership rules:
 - Each Session runs one outboxed step job at a time; different Sessions run concurrently.
 - Interruption stops the Session's running attempt, which records what it produced, then settles the in-flight step as aborted, without deleting pending input.
 
-Interrupting a Session that is unknown, idle, or settled is a no-op.
+Interrupting a Session that is unknown, deleted, idle, or settled is a no-op.
 
 `sessions.active()` reads the runtime's `activeSessions` Query: the Sessions with an active execution, including one a stopped process left running.
 

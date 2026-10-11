@@ -72,21 +72,19 @@ const boot = async (
   let compactFirst = options.compactFirst ?? 0
   const outbox = options.outbox ?? createMemoryReactionOutboxStore<OutboxedReaction<RunStepRequest>>()
 
+  const stepHost = StepHost.of({
+    ...(options.moving ? { moving: options.moving } : {}),
+    ...(options.recover ? { recover: options.recover } : {}),
+    ...(options.drive ? { drive: options.drive } : {}),
+    compact: options.compact ?? host.compact,
+    begin: (input) =>
+      compactFirst-- > 0
+        ? Effect.succeed({ compact: true } as const)
+        : options.begin
+          ? options.begin(input, host.begin)
+          : host.begin(input),
+  })
   const full = createRuntimeConfig({
-    host: Effect.succeed(
-      StepHost.of({
-        ...(options.moving ? { moving: options.moving } : {}),
-        ...(options.recover ? { recover: options.recover } : {}),
-        ...(options.drive ? { drive: options.drive } : {}),
-        compact: options.compact ?? host.compact,
-        begin: (input) =>
-          compactFirst-- > 0
-            ? Effect.succeed({ compact: true } as const)
-            : options.begin
-              ? options.begin(input, host.begin)
-              : host.begin(input),
-      }),
-    ),
     runStep: outbox,
     outbox: {
       worker: {
@@ -131,6 +129,7 @@ const boot = async (
       Layer.succeed(EventLog, log),
       options.slices ? createSliceStoreLayer(options.slices) : memorySliceStoreLayer,
       Layer.succeed(ReactionScheduler, scheduler),
+      Layer.succeed(StepHost, stepHost),
     ),
   )
 

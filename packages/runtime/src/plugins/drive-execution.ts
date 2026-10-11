@@ -4,7 +4,7 @@ import { Effect } from "effect"
 import type { DriveExecutionRequest } from "../features/session/drive-execution-reaction/impl.ts"
 import { nextDeliverable } from "../features/session/next-deliverable-query/impl.ts"
 import { sessionStatus } from "../features/session/session-status-query/impl.ts"
-import type { StepHost } from "./step-host.ts"
+import { StepHost } from "./step-host.ts"
 
 // A rejected Command means the world moved on (the execution was interrupted
 // meanwhile): stop quietly.
@@ -16,14 +16,13 @@ const unlessRejected = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 
 // One job = one execution of a Session an external agent runs: the host
 // drives it whole (delivery included, through the facts it records), and the
-// runtime settles the execution from the outcome. A job resolves the host's
-// step I/O first, as the step Plugin's do.
-export const makeDriveExecutionPlugin =
-  (stepHost: Effect.Effect<StepHost["Service"]>): ReactionPlugin<DriveExecutionRequest> =>
-  ({ command, query }) =>
-    Effect.succeed((request, delivery) =>
+// runtime settles the execution from the outcome. The host's step I/O is read
+// when the Reactions start, as the step Plugin's is.
+export const driveExecutionPlugin: ReactionPlugin<DriveExecutionRequest, StepHost> = ({ command, query }) =>
+  Effect.gen(function* () {
+    const host = yield* StepHost
+    return (request, delivery) =>
       Effect.gen(function* () {
-        const host = yield* stepHost
         const { sessionID, execution } = request.payload
         // A duplicate request, or one for an execution that has settled.
         const status = yield* query(sessionStatus, { sessionID })
@@ -66,5 +65,5 @@ export const makeDriveExecutionPlugin =
           case "stopped":
             return
         }
-      }),
-    )
+      })
+  })

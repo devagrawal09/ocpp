@@ -1,7 +1,7 @@
-import { eventsFor, ReactionScheduler, type ReactionExecutor, type ReactionSchedulerService } from "@specter-ts/core"
+import { eventsFor } from "@specter-ts/core"
 import { makeSpecterRuntime } from "@specter-ts/core/effect"
 import { createMemoryReactionOutboxStore, type OutboxedReaction } from "@specter-ts/reaction-outbox"
-import { Deferred, Effect, Layer, Semaphore } from "effect"
+import { Effect } from "effect"
 
 import {
   createRuntimeConfig,
@@ -14,7 +14,7 @@ import {
 } from "./app.ts"
 import type { RunStepRequest } from "./features/session/run-step-reaction/impl.ts"
 import { recordHistory } from "./features/testing/record-history/impl.ts"
-import type { StepHost } from "./plugins/step-host.ts"
+import { StepHost } from "./plugins/step-host.ts"
 
 // OC++'s one runtime, embedded in its host process: every Command, Query and
 // Reaction over the Event Log the host provides (OC++ keeps it in its own
@@ -51,10 +51,7 @@ export type RuntimeOptions = {
 // runtime first, composes the rest, and then starts it.
 export const makeRuntime = (options: RuntimeOptions = {}) =>
   Effect.gen(function* () {
-    const host = yield* Deferred.make<StepHost["Service"]>()
-    const reactions = gatedReactions()
     const config = createRuntimeConfig({
-      host: Deferred.await(host),
       runStep: options.stores?.runStep ?? createMemoryReactionOutboxStore<OutboxedReaction<RunStepRequest>>(),
       ...(options.outbox === undefined ? {} : { outbox: options.outbox }),
       ...(options.stores?.drive === undefined ? {} : { drive: options.stores.drive }),
@@ -71,65 +68,24 @@ export const makeRuntime = (options: RuntimeOptions = {}) =>
           .map((definition) => [definition.type, definition]),
       ).values(),
     ]
+    // Reactions are held until the host starts them: until then a Command's
+    // `reactions` completes at once, and no step job runs, those the last
+    // process left unfinished included.
     const app = yield* makeSpecterRuntime(
       { ...config, slices, events },
-      options.catchUp ? { catchUp: "all" } : {},
+      { reactions: "deferred", ...(options.catchUp ? { catchUp: "all" } : {}) },
     ).pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          options.stores?.slices ? createSliceStoreLayer(options.stores.slices) : memorySliceStoreLayer,
-          Layer.succeed(ReactionScheduler, reactions.scheduler),
-        ),
-      ),
+      Effect.provide(options.stores?.slices ? createSliceStoreLayer(options.stores.slices) : memorySliceStoreLayer),
     )
     return {
       command: app.command,
       query: app.query,
       subscribe: app.subscribe,
-      // Binds the host's step I/O and starts the Reactions: they catch up
-      // with the log, as at a boot, and run for every commit after. Outboxed
-      // jobs wait for it, those the last process left unfinished included.
-      start: (stepHost: StepHost["Service"]) => Deferred.succeed(host, stepHost).pipe(Effect.andThen(reactions.start)),
+      // Starts the Reactions with the host's step I/O: their Plugins read it,
+      // they catch up with the log, as at a boot, and run for every commit
+      // after.
+      start: (stepHost: StepHost["Service"]) => app.start.pipe(Effect.provideService(StepHost, stepHost)),
     }
   })
 
 export type Runtime = Effect.Success<ReturnType<typeof makeRuntime>>
-
-// The immediate scheduler, held until the host starts the Reactions. Until
-// then it only remembers how far the log has gone, and a Command's
-// `reactions` completes at once. Starting runs every Reaction through that
-// point; later commits each run when they land, one run at a time.
-const gatedReactions = () => {
-  const permit = Semaphore.makeUnsafe(1)
-  const state: { execute?: ReactionExecutor<unknown>; through: number; started: boolean } = {
-    through: 0,
-    started: false,
-  }
-  const run = (throughOrder: number) =>
-    Effect.suspend(() =>
-      state.execute
-        ? permit.withPermit(state.execute({ throughOrder, scheduledAt: new Date().toISOString() }))
-        : Effect.void,
-    )
-  const scheduler: ReactionSchedulerService = {
-    bind: <E>(binding: { readonly execute: ReactionExecutor<E> }) =>
-      Effect.sync(() => {
-        state.execute = binding.execute
-        return {
-          schedule: (throughOrder: number) =>
-            Effect.sync(() => {
-              // The executor run is the one bound here, so it fails as E does.
-              if (state.started) return run(throughOrder) as Effect.Effect<void, E>
-              state.through = Math.max(state.through, throughOrder)
-              return Effect.void
-            }),
-        }
-      }),
-  }
-  const start = Effect.suspend(() => {
-    if (state.started) return Effect.void
-    state.started = true
-    return run(state.through)
-  })
-  return { scheduler, start }
-}

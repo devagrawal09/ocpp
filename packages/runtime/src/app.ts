@@ -10,9 +10,8 @@ import type { SliceStoreService, SliceStoreTag } from "@specter-ts/core"
 import { Effect, Layer } from "effect"
 
 import { sessionEventDefinitions } from "./events.ts"
-import { makeDriveExecutionPlugin } from "./plugins/drive-execution.ts"
-import { makeRunStepPlugin } from "./plugins/run-step.ts"
-import type { StepHost } from "./plugins/step-host.ts"
+import { driveExecutionPlugin } from "./plugins/drive-execution.ts"
+import { runStepPlugin } from "./plugins/run-step.ts"
 import { clearRevert, clearRevertStore, createClearRevertState } from "./features/session/clear-revert/impl.ts"
 import { commitRevert, commitRevertStore, createCommitRevertState } from "./features/session/commit-revert/impl.ts"
 import { createCreateSessionState, createSession, createSessionStore } from "./features/session/create-session/impl.ts"
@@ -358,10 +357,9 @@ export type RunStepOutboxOptions = Omit<ReactionOutboxPluginOptions<RunStepReque
 // Every OC++ Command, Query and Reaction, in one config over one Event Log.
 // The step and drive Reactions' Plugins are outboxed, so the composing app
 // supplies their outbox stores (memory in tests; a persistent store when the
-// Event Log is). `host` is the host's step I/O, which each of their jobs
-// resolves before it starts.
+// Event Log is). Their Plugins read the host's step I/O (StepHost) when the
+// runtime's Reactions start.
 export const createRuntimeConfig = (options: {
-  readonly host: Effect.Effect<StepHost["Service"]>
   readonly runStep: RunStepOutboxStore
   readonly outbox?: RunStepOutboxOptions
   // An external agent's executions, which the host drives whole.
@@ -458,7 +456,7 @@ export const createRuntimeConfig = (options: {
       startAgentStep,
       finishAgentStep,
       runStep: createRunStep(
-        withReactionOutbox(makeRunStepPlugin(options.host), {
+        withReactionOutbox(runStepPlugin, {
           // A step can run for minutes: shutdown stops it instead of waiting,
           // and the next run settles the step it left started.
           interruptOnShutdown: true,
@@ -468,7 +466,7 @@ export const createRuntimeConfig = (options: {
         }),
       ),
       driveExecution: createDriveExecution(
-        withReactionOutbox(makeDriveExecutionPlugin(options.host), {
+        withReactionOutbox(driveExecutionPlugin, {
           // An agent's turn can run for minutes too.
           interruptOnShutdown: true,
           // As many Sessions at once as the step outbox runs.
@@ -485,7 +483,6 @@ export const createRuntimeConfig = (options: {
 // Used by the per-Slice scenario tests, which never run Plugins; the
 // integration test builds its own config around an outbox store it inspects.
 export const runtimeConfig = createRuntimeConfig({
-  host: Effect.die(new Error("Scenario tests run no step")),
   runStep: createMemoryReactionOutboxStore(),
 })
 

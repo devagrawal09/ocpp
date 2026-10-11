@@ -535,6 +535,8 @@ export function configured(options?: Options) {
                 readonly created: number
                 readonly location?: Location.Ref
                 readonly facts: ReadonlyArray<PublishOptions | undefined>
+                // Notifies as interruptibly as the dispatcher is: a dispatch from a finalizer notifies whole.
+                readonly restore: <A>(effect: Effect.Effect<A>) => Effect.Effect<A>
               }
               recorded?: readonly Event.Payload[]
             }
@@ -618,7 +620,7 @@ export function configured(options?: Options) {
                     },
                   )
                 }
-                yield* Effect.interruptible(
+                yield* (dispatch?.restore ?? Effect.interruptible)(
                   Effect.forEach(
                     committed.flatMap((batch) => batch.events),
                     (event) => notify(event, true),
@@ -698,31 +700,36 @@ export function configured(options?: Options) {
           )
         }
 
+        // Recording is uninterruptible, as for a publication; notifying listeners is as interruptible as the
+        // dispatcher.
         const command: Interface["command"] = (envelope, options) =>
-          Effect.gen(function* () {
-            const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
-            const key = `bus:${crypto.randomUUID()}`
-            const entry: Extract<Pending, { readonly dispatch: unknown }> = {
-              dispatch: {
-                created: yield* Clock.currentTimeMillis,
-                ...(serviceLocation
-                  ? { location: { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID } }
-                  : {}),
-                facts: options?.facts ?? [],
-              },
-            }
-            return yield* Effect.acquireUseRelease(
-              Effect.sync(() => pending.set(key, entry)),
-              () =>
-                runtime.command(envelope, { idempotencyKey: key }).pipe(
-                  Effect.catch((error) =>
-                    error instanceof SpecterCommandRejectedError ? Effect.fail(error) : Effect.die(error),
+          Effect.uninterruptibleMask((restore) =>
+            Effect.gen(function* () {
+              const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
+              const key = `bus:${crypto.randomUUID()}`
+              const entry: Extract<Pending, { readonly dispatch: unknown }> = {
+                dispatch: {
+                  created: yield* Clock.currentTimeMillis,
+                  ...(serviceLocation
+                    ? { location: { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID } }
+                    : {}),
+                  facts: options?.facts ?? [],
+                  restore,
+                },
+              }
+              return yield* Effect.acquireUseRelease(
+                Effect.sync(() => pending.set(key, entry)),
+                () =>
+                  runtime.command(envelope, { idempotencyKey: key }).pipe(
+                    Effect.catch((error) =>
+                      error instanceof SpecterCommandRejectedError ? Effect.fail(error) : Effect.die(error),
+                    ),
+                    Effect.map(() => entry.recorded ?? []),
                   ),
-                  Effect.map(() => entry.recorded ?? []),
-                ),
-              () => Effect.sync(() => pending.delete(key)),
-            )
-          })
+                () => Effect.sync(() => pending.delete(key)),
+              )
+            }),
+          )
 
         function publishAll<const I extends readonly [PublishInput, ...PublishInput[]]>(events: I) {
           return Effect.gen(function* () {

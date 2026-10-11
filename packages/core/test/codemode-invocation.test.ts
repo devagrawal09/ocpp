@@ -11,6 +11,8 @@ import { CodeModeCommand } from "@ocpp/core/codemode/command"
 import { CodeModeEvent } from "@ocpp/core/codemode/event"
 import { CodeModeScheduler } from "@ocpp/core/codemode/scheduler"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
+import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
+import { SessionFact } from "@ocpp/schema/session-fact"
 import { CodeModeInvocation } from "@ocpp/core/codemode/invocation"
 import { Command } from "@ocpp/core/command"
 import { Job } from "@ocpp/core/job"
@@ -43,7 +45,7 @@ import { withEnv } from "./fixture/env"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { TestStepHost } from "./fixture/step-host"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
-import { revert, stageRevert } from "./fixture/session"
+import { stageRevert } from "./fixture/session"
 import { TestHistory } from "./fixture/history"
 
 // The runtime runs every Session; its executions wait before delivering input while a test parks them.
@@ -127,6 +129,22 @@ const configured = (config?: unknown, init?: string) =>
   })
 
 const setup = configured()
+
+/** Removes every value the Session's notebook holds, as a committed revert to its first message would. */
+const revertNotebook = (sessionID: Session.ID) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database.Service
+    const saved = yield* db
+      .selectDistinct({ id: CodeModeBindingTable.execution_id })
+      .from(CodeModeBindingTable)
+      .where(eq(CodeModeBindingTable.session_id, sessionID))
+      .all()
+      .pipe(Effect.orDie)
+    yield* TestHistory.of(yield* Bus.Service).publish(SessionFact.NotebookReverted, {
+      sessionID,
+      executions: saved.map((row) => row.id),
+    })
+  })
 
 type Setup = Effect.Success<typeof setup>
 
@@ -647,7 +665,8 @@ describe("Code Mode commands", () => {
       // A revert changes an idle Session: the program's notice woke this one, whose steps are parked.
       yield* sessions.interrupt(context.session.id)
       yield* stageRevert({ sessionID: context.session.id, revert: { messageID: assistants[1].id } })
-      yield* revert("commitRevert", context.session.id)
+      // The Session commits it, resolving the Code Mode values its cut removes.
+      yield* sessions.revert.commit(context.session.id)
       expect(yield* commands.list(context.session.id)).toEqual([{ name: "early", description: "", handler: "early" }])
       expect(yield* events.list(context.session.id)).toEqual([])
       // The name is free again, and a new function under it does not revive the removed command.
@@ -682,7 +701,6 @@ describe("Code Mode commands", () => {
     Effect.gen(function* () {
       const context = yield* setup
       const sessions = yield* Session.Service
-      const store = yield* CodeModeStore.Service
       yield* execute(
         context,
         [
@@ -691,7 +709,7 @@ describe("Code Mode commands", () => {
         ].join("\n"),
       )
       // A committed revert removes notebook values saved from its boundary onward.
-      yield* store.revert({ sessionID: context.session.id, beforeSeq: 0 })
+      yield* revertNotebook(context.session.id)
       const error = yield* sessions
         .command({ sessionID: context.session.id, command: "triage", text: "x" })
         .pipe(Effect.flip)
@@ -1018,7 +1036,6 @@ describe("Code Mode events", () => {
     Effect.gen(function* () {
       const context = yield* setup
       const events = yield* CodeModeEvent.Service
-      const store = yield* CodeModeStore.Service
       const missing = yield* execute(
         context,
         'tools.event.define({ name: "watch", schedule: { every: "1h" }, handler: "watch" })',
@@ -1031,7 +1048,7 @@ describe("Code Mode events", () => {
           'tools.event.define({ name: "watch", schedule: { every: "1h" }, handler: "watch" })',
         ].join("\n"),
       )
-      yield* store.revert({ sessionID: context.session.id, beforeSeq: 0 })
+      yield* revertNotebook(context.session.id)
       const fired = yield* execute(context, 'return tools.event.trigger({ name: "watch" })')
       expect(fired?.error).toContain("The notebook has no function named watch")
       expect(yield* events.list(context.session.id)).toMatchObject([

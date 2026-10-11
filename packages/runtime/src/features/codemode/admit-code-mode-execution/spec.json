@@ -1,0 +1,925 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Admits a Code Mode program in a live Session: it reserves every name the program declares, so the execution alone may save them, and it sees the notebook as it is now. A program whose names the notebook holds, or another running execution reserved, is refused, and so is one that would grow the notebook past its limits.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "admitCodeModeExecution",
+  "scenarios": [
+    {
+      "description": "A program is admitted with the notebook it sees and the names it reserves.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [
+              "a"
+            ],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": 1
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "b"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_2"
+      }
+    },
+    {
+      "description": "A name the notebook holds is refused: notebook names are immutable.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": 1
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Name already defined"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "a"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_2"
+      }
+    },
+    {
+      "description": "A name another execution reserved is refused until it settles.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Name reserved"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "a"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_2"
+      }
+    },
+    {
+      "description": "An execution that settled without saving releases its names.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Boom",
+            "executionID": "exe_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "a"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_2"
+      }
+    },
+    {
+      "description": "A discarded execution releases its names.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-discarded",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "a"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_2"
+      }
+    },
+    {
+      "description": "A program that would grow the notebook past its number of values is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a",
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": 1,
+              "b": 2
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Notebook full"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "c",
+          "d"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_2"
+      }
+    },
+    {
+      "description": "A notebook past its bytes admits nothing more.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Notebook full"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "b"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_2"
+      }
+    },
+    {
+      "description": "Values a revert removed free their names and their room.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a",
+              "c"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a",
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": 1,
+              "b": 2
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-reverted",
+          "examplePayload": {
+            "executions": [
+              "exe_1"
+            ],
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "a",
+          "c"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_2"
+      }
+    },
+    {
+      "description": "A fork holds the values its parent's notebook saved through the boundary, and nothing reserved.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_4",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b",
+              "c"
+            ],
+            "sessionID": "ses_2",
+            "snapshot": [
+              "a"
+            ],
+            "toolCallID": "call_exe_4"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": 1
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_2",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "b": 2
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_3",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "c"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_3"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "ses_2",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "executions": [
+              "exe_1"
+            ],
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_4",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "b",
+          "c"
+        ],
+        "sessionID": "ses_2",
+        "toolCallID": "call_exe_4"
+      }
+    },
+    {
+      "description": "An execution ID names one execution, settled or not.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Boom",
+            "executionID": "exe_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution already admitted"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_1",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "b"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_1",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "a"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_1",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "a"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_1"
+      }
+    }
+  ]
+}

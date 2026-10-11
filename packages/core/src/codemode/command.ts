@@ -8,6 +8,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { SessionFact } from "@ocpp/schema/session-fact"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
+import { SpecterRejection } from "../specter/rejection.js"
 import type { SessionSchema } from "../session/schema.js"
 import { CodeModeCommandTable } from "./command.sql.js"
 import { CodeModeHandler } from "./handler.js"
@@ -80,12 +81,18 @@ const layer = Layer.effect(
             : undefined) ??
           (yield* CodeModeHandler.problem(db, sessionID, input.handler, true))
         if (problem) return yield* new DefinitionError({ message: problem })
-        yield* bus.publish(SessionFact.CommandDefined, {
-          sessionID,
-          name: input.name,
-          description: input.description,
-          handler: input.handler,
-        })
+        yield* bus
+          .command({
+            type: "defineCodeModeCommand",
+            payload: { sessionID, name: input.name, description: input.description, handler: input.handler },
+          })
+          .pipe(
+            Effect.catch((error) =>
+              SpecterRejection.isMissingSession(error)
+                ? Effect.fail(new DefinitionError({ message: `Session not found: ${sessionID}` }))
+                : Effect.die(error),
+            ),
+          )
         return Info.make(input)
       }),
       list: Effect.fn("CodeModeCommand.list")((sessionID) =>
@@ -106,6 +113,7 @@ const layer = Layer.effect(
           .pipe(Effect.orDie),
       ),
       remove: Effect.fn("CodeModeCommand.remove")(function* (sessionID, name) {
+        // The Session's commands as stored: a fork drops those whose handler its notebook lacks.
         const stored = yield* db
           .select({ name: CodeModeCommandTable.name })
           .from(CodeModeCommandTable)
@@ -113,8 +121,14 @@ const layer = Layer.effect(
           .get()
           .pipe(Effect.orDie)
         if (!stored) return false
-        yield* bus.publish(SessionFact.CommandRemoved, { sessionID, name })
-        return true
+        return yield* bus.command({ type: "removeCodeModeCommand", payload: { sessionID, name } }).pipe(
+          Effect.as(true),
+          Effect.catchIf(
+            (error) => SpecterRejection.reason(error) !== undefined,
+            () => Effect.succeed(false),
+          ),
+          Effect.orDie,
+        )
       }),
     })
   }),

@@ -1,0 +1,248 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Journals a tool call a running Code Mode execution makes, before the tool runs, so a resumed run can replay it. A resumed run reaches calls that are journaled already: the first record of a call wins.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "scheduleCodeModeCall",
+  "scenarios": [
+    {
+      "description": "A running execution's call is journaled.",
+      "expect": [
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "input": {
+          "path": "a.txt"
+        },
+        "omitted": false,
+        "tool": "read"
+      }
+    },
+    {
+      "description": "The impure helper values the program read before the call are journaled with it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "impure": [
+              0.5
+            ],
+            "index": 1,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_1",
+        "impure": [
+          0.5
+        ],
+        "index": 1,
+        "input": {
+          "path": "a.txt"
+        },
+        "omitted": false,
+        "tool": "read"
+      }
+    },
+    {
+      "description": "A call journaled already is refused, and the host answers as done.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Call already scheduled"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "input": {
+          "path": "a.txt"
+        },
+        "omitted": false,
+        "tool": "read"
+      }
+    },
+    {
+      "description": "An execution that has not started, or has settled, journals nothing.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Boom",
+            "executionID": "exe_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not running"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "input": {
+          "path": "a.txt"
+        },
+        "omitted": false,
+        "tool": "read"
+      }
+    },
+    {
+      "description": "An unknown execution is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Execution not found"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "input": {
+          "path": "a.txt"
+        },
+        "omitted": false,
+        "tool": "read"
+      }
+    }
+  ]
+}

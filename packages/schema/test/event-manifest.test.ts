@@ -179,6 +179,8 @@ describe("public event manifest", () => {
         "session-codemode-call-scheduled",
         "session-codemode-call-progressed",
         "session-codemode-call-settled",
+        "session-codemode-notebook-copied",
+        "session-codemode-notebook-reverted",
         "session-codemode-command-defined",
         "session-codemode-command-removed",
         "session-codemode-event-defined",

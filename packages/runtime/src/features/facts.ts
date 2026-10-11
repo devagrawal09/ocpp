@@ -429,6 +429,15 @@ export const sessionFacts = {
     output: "text",
     omitted: false,
   },
+  "session-codemode-notebook-copied": {
+    sessionID: "ses_2",
+    parentID: "ses_1",
+    executions: ["exe_1"],
+  },
+  "session-codemode-notebook-reverted": {
+    sessionID: "ses_1",
+    executions: ["exe_1"],
+  },
   "session-codemode-command-defined": {
     sessionID: "ses_1",
     name: "deploy",

@@ -11,10 +11,10 @@ import { Database } from "../database/database.js"
 import { KeyedMutex } from "../effect/keyed-mutex.js"
 import { Job } from "../job.js"
 import { OpenApi } from "../openapi/index.js"
-import { SessionEvent } from "../session/event.js"
 import { SessionMessage } from "../session/message.js"
 import { SessionStore } from "../session/store.js"
 import { McpTool } from "../tool/mcp.js"
+import { SpecterRejection } from "../specter/rejection.js"
 import { Tool } from "../tool.js"
 import { ToolLists } from "../tool/lists.js"
 import { CodeModeCommand } from "./command.js"
@@ -70,19 +70,28 @@ const layer = Layer.effect(
             })
             .pipe(Effect.mapError((error) => new InvocationError({ message: error.message })))
           const executionID = decodeStarted(result.output).executionID
+          // The invocation message derives its ID from the fact's.
           yield* bus
-            .publish(
-              SessionEvent.Invocation.Started,
+            .command(
               {
-                sessionID: input.sessionID,
-                executionID,
-                trigger: input.trigger,
-                handler: input.handler,
-                input: input.input,
+                type: "startInvocation",
+                payload: {
+                  sessionID: input.sessionID,
+                  executionID,
+                  trigger: input.trigger,
+                  handler: input.handler,
+                  input: input.input,
+                },
               },
-              { id: eventID },
+              { facts: [{ id: eventID }] },
             )
-            .pipe(Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : jobs.cancel(executionID))))
+            .pipe(
+              Effect.catch((error) => {
+                const reason = SpecterRejection.reason(error)
+                return reason === undefined ? Effect.die(error) : Effect.fail(new InvocationError({ message: reason }))
+              }),
+              Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : jobs.cancel(executionID))),
+            )
           return { executionID, messageID }
         }),
       )

@@ -1,0 +1,187 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records in a live Session how a Code Mode execution ended, with the trace it ended with: completed, or error or cancelled with the error. It settles the call or the invocation message that owns the execution, once. Restart recovery settles an execution without a trace, even one whose start a stopped process never recorded.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "settleCodeMode",
+  "scenarios": [
+    {
+      "description": "An execution completes with its trace.",
+      "expect": [
+        {
+          "eventType": "session-codemode-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "events": [],
+            "executionID": "exe_1",
+            "id": "call_1",
+            "outcome": "completed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "events": [],
+        "executionID": "exe_1",
+        "id": "call_1",
+        "outcome": "completed",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A cancelled execution settles with its error.",
+      "expect": [
+        {
+          "eventType": "session-codemode-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "error": "Cancelled",
+            "events": [],
+            "executionID": "exe_1",
+            "id": "call_1",
+            "outcome": "cancelled",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": "Cancelled",
+        "events": [],
+        "executionID": "exe_1",
+        "id": "call_1",
+        "outcome": "cancelled",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An execution that settled is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "events": [],
+            "executionID": "exe_1",
+            "id": "call_1",
+            "outcome": "completed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Code Mode already settled"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "error": "Cancelled",
+        "events": [],
+        "executionID": "exe_1",
+        "id": "call_1",
+        "outcome": "cancelled",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "events": [],
+        "executionID": "exe_1",
+        "id": "call_1",
+        "outcome": "completed",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "events": [],
+        "executionID": "exe_1",
+        "id": "call_1",
+        "outcome": "completed",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

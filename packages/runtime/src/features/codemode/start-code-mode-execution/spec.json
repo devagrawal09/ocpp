@@ -1,0 +1,161 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records that an admitted Code Mode execution started running, once its tool result committed: from here its calls are journaled, and a restart resumes it. An execution starts once.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "startCodeModeExecution",
+  "scenarios": [
+    {
+      "description": "An admitted execution starts.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_1"
+      }
+    },
+    {
+      "description": "A running execution is refused, and the host answers as done.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution already started"
+      },
+      "when": {
+        "executionID": "exe_1"
+      }
+    },
+    {
+      "description": "A settled execution is refused too.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Boom",
+            "executionID": "exe_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution already started"
+      },
+      "when": {
+        "executionID": "exe_1"
+      }
+    },
+    {
+      "description": "An execution never admitted, or discarded, is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-discarded",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not found"
+      },
+      "when": {
+        "executionID": "exe_1"
+      }
+    }
+  ]
+}

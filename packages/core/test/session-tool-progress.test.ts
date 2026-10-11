@@ -112,7 +112,7 @@ describe("Session tool progress", () => {
 
       yield* start("call-codemode", "execute")
       const executionID = CodeModeExecution.ID.create()
-      yield* service.publish(SessionEvent.CodeMode.Started, {
+      yield* TestHistory.of(service).publish(SessionEvent.CodeMode.Started, {
         sessionID,
         assistantMessageID,
         id: "call-codemode",
@@ -125,7 +125,7 @@ describe("Session tool progress", () => {
         executionID,
         events: [{ type: "trace", kind: "return", value: "1" }],
       })
-      const codeCompleted = yield* service.publish(SessionEvent.CodeMode.Settled, {
+      const codeCompleted = yield* TestHistory.of(service).publish(SessionEvent.CodeMode.Settled, {
         sessionID,
         assistantMessageID,
         id: "call-codemode",

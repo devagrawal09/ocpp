@@ -3,7 +3,7 @@ export * from "./session/schema.js"
 
 import { Cause, Effect, Layer, Schema, Context, RcMap, Stream, Scope } from "effect"
 import { ListAnchor } from "@ocpp/schema/session"
-import { and, asc, desc, eq, gt, isNull, like, lt, or, type SQL } from "drizzle-orm"
+import { and, asc, desc, eq, gt, isNull, like, lt, lte, or, type SQL } from "drizzle-orm"
 import { Project } from "./project.js"
 import { Workspace } from "@ocpp/schema/workspace"
 import { Model } from "@ocpp/schema/model"
@@ -61,6 +61,7 @@ import { Skill } from "./skill.js"
 import { Job } from "./job.js"
 import { Command } from "./command.js"
 import { CodeModeCommand } from "./codemode/command.js"
+import { CodeModeBindingTable } from "./codemode/sql.js"
 import { CodeModeInvocation } from "./codemode/invocation-service.js"
 import { Global } from "@ocpp/util/global"
 import { SessionEnvironment } from "./session/environment.js"
@@ -378,7 +379,7 @@ const layer = Layer.effect(
       fork: Effect.fn("Session.fork")(function* (input) {
         const parent = yield* result.get(input.sessionID)
         const boundary = yield* db
-          .select({ id: SessionMessageTable.id })
+          .select({ id: SessionMessageTable.id, seq: SessionMessageTable.seq })
           .from(SessionMessageTable)
           .where(
             and(
@@ -404,6 +405,19 @@ const layer = Layer.effect(
               instructionEntries: InstructionEntry.snapshot(db, parent.id),
               // The parent as stored: the fork keeps its version and selections exactly.
               row: db.select().from(SessionTable).where(eq(SessionTable.id, parent.id)).get(),
+              // The executions whose saved values belong to the history the fork copies.
+              notebook: db
+                .selectDistinct({ executionID: CodeModeBindingTable.execution_id })
+                .from(CodeModeBindingTable)
+                .where(
+                  and(
+                    eq(CodeModeBindingTable.session_id, parent.id),
+                    input.boundary.type === "before"
+                      ? lt(CodeModeBindingTable.message_seq, boundary.seq)
+                      : lte(CodeModeBindingTable.message_seq, boundary.seq),
+                  ),
+                )
+                .all(),
             }),
           )
           .pipe(Effect.orDie)
@@ -430,8 +444,15 @@ const layer = Layer.effect(
           instructions: inherited.instructions,
           instructionEntries: inherited.instructionEntries,
         })
-        yield* bus.runtime
-          .command({ type: "forkSession", payload: { session: child, ...fork } })
+        yield* bus
+          .command({
+            type: "forkSession",
+            payload: {
+              session: child,
+              ...fork,
+              notebook: inherited.notebook.map((row) => row.executionID),
+            },
+          })
           .pipe(
             Effect.catch((error) =>
               SpecterRejection.isMissingSession(error)

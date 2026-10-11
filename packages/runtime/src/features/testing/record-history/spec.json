@@ -2056,6 +2056,66 @@
       }
     },
     {
+      "description": "Records session-codemode-notebook-copied as the test gave it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "executions": [
+              "exe_1"
+            ],
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executions": [
+                "exe_1"
+              ],
+              "parentID": "ses_1",
+              "sessionID": "ses_2"
+            },
+            "type": "session-codemode-notebook-copied"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Records session-codemode-notebook-reverted as the test gave it.",
+      "expect": [
+        {
+          "eventType": "session-codemode-notebook-reverted",
+          "examplePayload": {
+            "executions": [
+              "exe_1"
+            ],
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "executions": [
+                "exe_1"
+              ],
+              "sessionID": "ses_1"
+            },
+            "type": "session-codemode-notebook-reverted"
+          }
+        ]
+      }
+    },
+    {
       "description": "Records session-codemode-command-defined as the test gave it.",
       "expect": [
         {

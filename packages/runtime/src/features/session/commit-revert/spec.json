@@ -1,6 +1,6 @@
 {
   "$schema": "https://specter.dev/specification/v1/slice.schema.json",
-  "description": "Commits the revert staged in an idle Session: its history is cut at the staged message. Input still pending belongs to the history it cuts away (a revert holds new notices while it is staged), so the commit cancels it in the same commit; the next input starts the new history.",
+  "description": "Commits the revert staged in an idle Session: its history is cut at the staged message. Input still pending belongs to the history it cuts away (a revert holds new notices while it is staged), so the commit cancels it in the same commit; the next input starts the new history. The cut takes the Code Mode notebook with it: the executions whose message it removes (the host resolves where each message sits, and every execution admitted since the stage started after it) lose their saved values, and those still running settle failed.",
   "formatVersion": 1,
   "kind": "command",
   "name": "commitRevert",
@@ -172,6 +172,220 @@
           "eventType": "session-inbox-cancelled",
           "examplePayload": {
             "inboxID": "msg_5",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The Code Mode executions whose message the cut removes lose their saved values, and one still running settles failed, before the history is cut, in the same commit.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "The message that started this execution was reverted; nothing was saved.",
+            "executionID": "exe_2",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-reverted",
+          "examplePayload": {
+            "executions": [
+              "exe_1",
+              "exe_2"
+            ],
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-committed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "to": "msg_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_3",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": 1
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_3",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "files": [],
+              "messageID": "msg_2"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executions": [
+          "exe_1",
+          "exe_2"
+        ],
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An execution admitted since the revert was staged started after the message it cuts at, so it is cut whatever the host found; a discarded one has nothing left to settle.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "The message that started this execution was reverted; nothing was saved.",
+            "executionID": "exe_3",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-reverted",
+          "examplePayload": {
+            "executions": [
+              "exe_3",
+              "exe_4"
+            ],
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-committed",
+          "examplePayload": {
+            "sessionID": "ses_1",
+            "to": "msg_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-revert-staged",
+          "examplePayload": {
+            "revert": {
+              "files": [],
+              "messageID": "msg_2"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_3",
+            "executionID": "exe_3",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_3"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_3",
+            "executionID": "exe_4",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_4"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-discarded",
+          "examplePayload": {
+            "executionID": "exe_4",
             "sessionID": "ses_1"
           },
           "kind": "scenario-event"

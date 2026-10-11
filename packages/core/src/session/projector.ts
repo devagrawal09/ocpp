@@ -107,7 +107,6 @@ const publishSessionUsage = Effect.fn("SessionProjector.publishUsage")(function*
 
 const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
   db: DatabaseService,
-  codemode: CodeModeStore.Interface,
   event: typeof SessionEvent.Forked.Type,
 ) {
   const parent = yield* db
@@ -203,12 +202,8 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
     cursor = rows.at(-1)!.seq
   }
   if (copiedSeq !== undefined) yield* Bus.reserveSequence(db, event.data.sessionID, copiedSeq)
-  yield* codemode.fork({
-    from: event.data.parentID,
-    to: event.data.sessionID,
-    throughSeq: copiedSeq ?? -1,
-  })
-  yield* CodeModeHandler.fork(db, { from: event.data.parentID, to: event.data.sessionID })
+  // The fork's Code Mode notebook, commands and events were copied by its session-codemode-notebook-copied,
+  // earlier in the commit, so the instruction baseline below checkpoints the notebook.
   if (event.data.instructions)
     yield* InstructionState.initialize(db, event.data.sessionID, event.durable.seq, event.data.instructions)
 })
@@ -511,7 +506,6 @@ const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
-    const codemode = yield* CodeModeStore.Service
     yield* bus.project(SessionFact.InstructionBlobsStored, (event) => InstructionState.storeBlobs(db, event.data.blobs))
     yield* bus.project(SessionFact.Imported, (event) =>
       Effect.gen(function* () {
@@ -747,7 +741,7 @@ const layer = Layer.effectDiscard(
     })
     yield* bus.project(SessionEvent.MessageContentUpdated, (event) => run(db, event))
     yield* bus.project(SessionEvent.UsageRecorded, (event) => applyUsage(db, event.data.sessionID, event.data))
-    yield* bus.project(SessionEvent.Forked, (event) => projectFork(db, codemode, event))
+    yield* bus.project(SessionEvent.Forked, (event) => projectFork(db, event))
     yield* bus.project(SessionEvent.InboxDelivered, (event) =>
       Effect.gen(function* () {
         const input = yield* SessionInbox.projectDelivered(db, {
@@ -894,7 +888,7 @@ const layer = Layer.effectDiscard(
           .where(eq(SessionTable.id, event.data.sessionID))
           .run()
           .pipe(Effect.orDie)
-        yield* codemode.revert({ sessionID: event.data.sessionID, beforeSeq: boundary.seq })
+        // The values the cut removed went with its session-codemode-notebook-reverted, earlier in the commit.
         yield* CodeModeHandler.prune(db, event.data.sessionID)
         yield* InstructionState.reset(db, event.data.sessionID)
       }),
@@ -912,5 +906,6 @@ const layer = Layer.effectDiscard(
 export const node = makeGlobalNode({
   name: "session-projector",
   layer,
+  // Code Mode's store projects the notebook facts a fork or a revert records with the Session's.
   deps: [Bus.node, Database.node, CodeModeStore.node],
 })

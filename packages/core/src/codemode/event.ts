@@ -9,6 +9,7 @@ import { Clock, Context, Cron, Effect, Layer, PubSub, Result, Schema, Scope } fr
 import { SessionFact } from "@ocpp/schema/session-fact"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
+import { SpecterRejection } from "../specter/rejection.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
 import { SessionStore } from "../session/store.js"
@@ -91,10 +92,21 @@ const layer = Layer.effect(
         .where(where(key))
         .run()
         .pipe(Effect.orDie, Effect.asVoid)
-    // Records a fact about an event that exists, then announces the change.
-    const record = (key: Key, fact: Effect.Effect<unknown>) =>
+    // Records a fact about an event through its Command, then announces the change. The runtime refuses one
+    // about an event the Session does not have, or a Session that is gone, which records nothing.
+    const record = (key: Key, command: Bus.RuntimeCommand) =>
       get(key).pipe(
-        Effect.flatMap((row) => (row ? fact : Effect.void)),
+        Effect.flatMap((row) =>
+          row
+            ? bus.command(command).pipe(
+                Effect.catchIf(
+                  (error) => SpecterRejection.reason(error) !== undefined,
+                  () => Effect.void,
+                ),
+                Effect.orDie,
+              )
+            : Effect.void,
+        ),
         Effect.andThen(updated(key)),
       )
 
@@ -202,16 +214,27 @@ const layer = Layer.effect(
         const now = yield* Clock.currentTimeMillis
         const key = { sessionID, name: input.name }
         const firstFire = next(input.schedule, { now, anchor: now })
-        yield* bus.publish(SessionFact.EventDefined, {
-          sessionID,
-          name: input.name,
-          description: input.description,
-          schedule: input.schedule,
-          handler: input.handler,
-          ...(input.input === undefined ? {} : { input: input.input }),
-          time: now,
-          ...(firstFire === undefined ? {} : { next: firstFire }),
-        })
+        yield* bus
+          .command({
+            type: "defineCodeModeEvent",
+            payload: {
+              sessionID,
+              name: input.name,
+              description: input.description,
+              schedule: input.schedule,
+              handler: input.handler,
+              ...(input.input === undefined ? {} : { input: input.input }),
+              time: now,
+              ...(firstFire === undefined ? {} : { next: firstFire }),
+            },
+          })
+          .pipe(
+            Effect.catch((error) =>
+              SpecterRejection.isMissingSession(error)
+                ? Effect.fail(new DefinitionError({ message: `Session not found: ${sessionID}` }))
+                : Effect.die(error),
+            ),
+          )
         const row = yield* get(key)
         if (!row) return yield* Effect.die(new Error(`Event ${input.name} was not recorded`))
         yield* PubSub.publish(pubsub, key)
@@ -233,37 +256,50 @@ const layer = Layer.effect(
         const row = yield* get(key)
         if (!row) return undefined
         // A disabled event has no next firing; the scheduler records one again when it is enabled.
-        yield* record(key, bus.publish(SessionFact.EventToggled, { ...key, enabled }))
+        yield* record(key, { type: "toggleCodeModeEvent", payload: { ...key, enabled } })
         yield* PubSub.publish(pubsub, key)
         return yield* info({ ...row, enabled, time_next: enabled ? row.time_next : null })
       }),
       remove: Effect.fn("CodeModeEvent.remove")(function* (key) {
-        const removed = yield* get(key)
-        if (removed) yield* bus.publish(SessionFact.EventRemoved, key)
+        // The Session's events as stored: a fork drops those whose handler its notebook lacks.
+        const stored = yield* get(key)
+        const removed =
+          stored !== undefined &&
+          (yield* bus.command({ type: "removeCodeModeEvent", payload: key }).pipe(
+            Effect.as(true),
+            Effect.catchIf(
+              (error) => SpecterRejection.reason(error) !== undefined,
+              () => Effect.succeed(false),
+            ),
+            Effect.orDie,
+          ))
         yield* PubSub.publish(pubsub, key)
         if (removed) yield* updated(key)
-        return removed !== undefined
+        return removed
       }),
       enabled: Effect.fn("CodeModeEvent.enabled")(() =>
         db.select().from(CodeModeEventTable).where(eq(CodeModeEventTable.enabled, true)).all().pipe(Effect.orDie),
       ),
       scheduled: Effect.fn("CodeModeEvent.scheduled")((key, time) =>
-        record(key, bus.publish(SessionFact.EventPlanned, { ...key, ...(time === undefined ? {} : { next: time }) })),
+        record(key, {
+          type: "planCodeModeEvent",
+          payload: { ...key, ...(time === undefined ? {} : { next: time }) },
+        }),
       ),
       fired: Effect.fn("CodeModeEvent.fired")((key, firing) =>
-        record(
-          key,
-          bus.publish(SessionFact.EventFired, {
+        record(key, {
+          type: "fireCodeModeEvent",
+          payload: {
             ...key,
             at: firing.at,
             ...("error" in firing
               ? { error: firing.error }
               : { executionID: firing.executionID, messageID: firing.messageID }),
-          }),
-        ),
+          },
+        }),
       ),
       skipped: Effect.fn("CodeModeEvent.skipped")((key, at) =>
-        record(key, bus.publish(SessionFact.EventSkipped, { ...key, at })),
+        record(key, { type: "skipCodeModeEvent", payload: { ...key, at } }),
       ),
       changes: PubSub.subscribe(pubsub),
     })

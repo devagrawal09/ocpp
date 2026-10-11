@@ -74,6 +74,101 @@ import {
   removeCredential,
   removeCredentialStore,
 } from "./features/credential/remove-credential/impl.ts"
+import {
+  createAdmitCodeModeExecutionState,
+  admitCodeModeExecution,
+  admitCodeModeExecutionStore,
+} from "./features/codemode/admit-code-mode-execution/impl.ts"
+import {
+  createStartCodeModeExecutionState,
+  startCodeModeExecution,
+  startCodeModeExecutionStore,
+} from "./features/codemode/start-code-mode-execution/impl.ts"
+import {
+  createResumeCodeModeExecutionState,
+  resumeCodeModeExecution,
+  resumeCodeModeExecutionStore,
+} from "./features/codemode/resume-code-mode-execution/impl.ts"
+import {
+  createSettleCodeModeExecutionState,
+  settleCodeModeExecution,
+  settleCodeModeExecutionStore,
+} from "./features/codemode/settle-code-mode-execution/impl.ts"
+import {
+  createDiscardCodeModeExecutionState,
+  discardCodeModeExecution,
+  discardCodeModeExecutionStore,
+} from "./features/codemode/discard-code-mode-execution/impl.ts"
+import {
+  createScheduleCodeModeCallState,
+  scheduleCodeModeCall,
+  scheduleCodeModeCallStore,
+} from "./features/codemode/schedule-code-mode-call/impl.ts"
+import {
+  createProgressCodeModeCallState,
+  progressCodeModeCall,
+  progressCodeModeCallStore,
+} from "./features/codemode/progress-code-mode-call/impl.ts"
+import {
+  createSettleCodeModeCallState,
+  settleCodeModeCall,
+  settleCodeModeCallStore,
+} from "./features/codemode/settle-code-mode-call/impl.ts"
+import {
+  createStartCodeModeState,
+  startCodeMode,
+  startCodeModeStore,
+} from "./features/codemode/start-code-mode/impl.ts"
+import {
+  createSettleCodeModeState,
+  settleCodeMode,
+  settleCodeModeStore,
+} from "./features/codemode/settle-code-mode/impl.ts"
+import {
+  createStartInvocationState,
+  startInvocation,
+  startInvocationStore,
+} from "./features/codemode/start-invocation/impl.ts"
+import {
+  createDefineCodeModeCommandState,
+  defineCodeModeCommand,
+  defineCodeModeCommandStore,
+} from "./features/codemode/define-code-mode-command/impl.ts"
+import {
+  createRemoveCodeModeCommandState,
+  removeCodeModeCommand,
+  removeCodeModeCommandStore,
+} from "./features/codemode/remove-code-mode-command/impl.ts"
+import {
+  createDefineCodeModeEventState,
+  defineCodeModeEvent,
+  defineCodeModeEventStore,
+} from "./features/codemode/define-code-mode-event/impl.ts"
+import {
+  createToggleCodeModeEventState,
+  toggleCodeModeEvent,
+  toggleCodeModeEventStore,
+} from "./features/codemode/toggle-code-mode-event/impl.ts"
+import {
+  createRemoveCodeModeEventState,
+  removeCodeModeEvent,
+  removeCodeModeEventStore,
+} from "./features/codemode/remove-code-mode-event/impl.ts"
+import {
+  createPlanCodeModeEventState,
+  planCodeModeEvent,
+  planCodeModeEventStore,
+} from "./features/codemode/plan-code-mode-event/impl.ts"
+import {
+  createFireCodeModeEventState,
+  fireCodeModeEvent,
+  fireCodeModeEventStore,
+} from "./features/codemode/fire-code-mode-event/impl.ts"
+import {
+  createSkipCodeModeEventState,
+  skipCodeModeEvent,
+  skipCodeModeEventStore,
+} from "./features/codemode/skip-code-mode-event/impl.ts"
 import { createStoreValueState, storeValue, storeValueStore } from "./features/kv/store-value/impl.ts"
 import { createRemoveValueState, removeValue, removeValueStore } from "./features/kv/remove-value/impl.ts"
 import {
@@ -326,6 +421,25 @@ export const createRuntimeConfig = (options: {
       activateCredential,
       updateCredential,
       removeCredential,
+      admitCodeModeExecution,
+      startCodeModeExecution,
+      resumeCodeModeExecution,
+      settleCodeModeExecution,
+      discardCodeModeExecution,
+      scheduleCodeModeCall,
+      progressCodeModeCall,
+      settleCodeModeCall,
+      startCodeMode,
+      settleCodeMode,
+      startInvocation,
+      defineCodeModeCommand,
+      removeCodeModeCommand,
+      defineCodeModeEvent,
+      toggleCodeModeEvent,
+      removeCodeModeEvent,
+      planCodeModeEvent,
+      fireCodeModeEvent,
+      skipCodeModeEvent,
       storeValue,
       removeValue,
       enqueueInput,
@@ -437,6 +551,25 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(activateCredentialStore, createActivateCredentialState),
     provide(updateCredentialStore, createUpdateCredentialState),
     provide(removeCredentialStore, createRemoveCredentialState),
+    provide(admitCodeModeExecutionStore, createAdmitCodeModeExecutionState),
+    provide(startCodeModeExecutionStore, createStartCodeModeExecutionState),
+    provide(resumeCodeModeExecutionStore, createResumeCodeModeExecutionState),
+    provide(settleCodeModeExecutionStore, createSettleCodeModeExecutionState),
+    provide(discardCodeModeExecutionStore, createDiscardCodeModeExecutionState),
+    provide(scheduleCodeModeCallStore, createScheduleCodeModeCallState),
+    provide(progressCodeModeCallStore, createProgressCodeModeCallState),
+    provide(settleCodeModeCallStore, createSettleCodeModeCallState),
+    provide(startCodeModeStore, createStartCodeModeState),
+    provide(settleCodeModeStore, createSettleCodeModeState),
+    provide(startInvocationStore, createStartInvocationState),
+    provide(defineCodeModeCommandStore, createDefineCodeModeCommandState),
+    provide(removeCodeModeCommandStore, createRemoveCodeModeCommandState),
+    provide(defineCodeModeEventStore, createDefineCodeModeEventState),
+    provide(toggleCodeModeEventStore, createToggleCodeModeEventState),
+    provide(removeCodeModeEventStore, createRemoveCodeModeEventState),
+    provide(planCodeModeEventStore, createPlanCodeModeEventState),
+    provide(fireCodeModeEventStore, createFireCodeModeEventState),
+    provide(skipCodeModeEventStore, createSkipCodeModeEventState),
     provide(storeValueStore, createStoreValueState),
     provide(removeValueStore, createRemoveValueState),
     provide(enqueueInputStore, createEnqueueInputState),

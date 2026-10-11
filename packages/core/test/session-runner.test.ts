@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { CodeMode } from "@ocpp/codemode"
-import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
+import { SessionFact } from "@ocpp/schema/session-fact"
 import {
   AIError,
   LLMEvent,
@@ -930,23 +930,33 @@ const watchRename = Effect.fnUntraced(function* (sessionID: Session.ID) {
 describe("SessionRunnerLLM", () => {
   scenario("renders one notebook checkpoint across steps, retries and later prompts", function* (s) {
     s.directTools = false
-    const seeded = yield* CodeMode.execute({
-      code: "const durableData = { answer: 42 }; function durableHelper(x) { return durableData.answer + x }",
-    })
+    const code = "const durableData = { answer: 42 }; function durableHelper(x) { return durableData.answer + x }"
+    const seeded = yield* CodeMode.execute({ code })
     if (!seeded.ok) throw new Error(seeded.error.message)
-    yield* s.db
-      .insert(CodeModeBindingTable)
-      .values(
-        Object.entries(seeded.declarations).map(([name, value]) => ({
-          session_id: sessionID,
-          name,
-          value,
-          message_seq: 0,
-          execution_id: "exe_notebook_awareness",
-        })),
-      )
-      .run()
-      .pipe(Effect.orDie)
+    // The notebook an earlier execution saved, as its facts recorded it.
+    yield* TestHistory.of(s.bus).publishAll([
+      [
+        SessionFact.ExecutionAdmitted,
+        {
+          sessionID,
+          executionID: "exe_notebook_awareness",
+          assistantMessageID: SessionMessage.ID.make("msg_notebook_awareness"),
+          toolCallID: "call_notebook_awareness",
+          program: JSON.parse(JSON.stringify(CodeMode.compile(code))),
+          snapshot: [],
+          reserved: Object.keys(seeded.declarations),
+        },
+      ],
+      [
+        SessionFact.ExecutionSettled,
+        {
+          sessionID,
+          executionID: "exe_notebook_awareness",
+          outcome: "finished",
+          values: JSON.parse(JSON.stringify(seeded.declarations)),
+        },
+      ],
+    ])
     yield* s.hooks.register("session", "retry", (event) =>
       Effect.sync(() => {
         event.decision = { retry: true, delay: 0 }

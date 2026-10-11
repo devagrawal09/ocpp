@@ -98,9 +98,10 @@ export const ExecutionResumed = Event.durable({
   schema: execution,
 })
 /**
- * An execution ended. A `finished` program offers the values of its declarations, which the notebook
- * saves when the execution still holds their names, its message was not reverted and they fit; a
- * `failed` or `indeterminate` one ended without finishing, which settles its calls still scheduled.
+ * An execution ended. A `finished` program saved the values of its declarations into its Session's notebook;
+ * one that finished but could not save them (its names were not its own, or they did not fit) is `failed`
+ * with why, as is one whose message a revert cut. A `failed` or `indeterminate` execution saved nothing, and
+ * its calls still scheduled settle with it.
  */
 export const ExecutionSettled = Event.durable({
   type: "session-codemode-execution-settled",
@@ -147,6 +148,25 @@ export const CallSettled = Event.durable({
     error: optional(Schema.String),
     omitted: Schema.Boolean,
   },
+})
+
+/**
+ * A fork's notebook: the parent's executions whose saved values the fork copies, those its history copies
+ * through the boundary. The fork's commands and events are copied with it.
+ */
+export const NotebookCopied = Event.durable({
+  type: "session-codemode-notebook-copied",
+  durable: bySession,
+  schema: { sessionID: SessionID, parentID: SessionID, executions: Schema.Array(Schema.String) },
+})
+/**
+ * A committed revert's cut of the notebook: the executions whose message it removed, so their saved values go
+ * with it. One still running settled failed in the same commit.
+ */
+export const NotebookReverted = Event.durable({
+  type: "session-codemode-notebook-reverted",
+  durable: bySession,
+  schema: { sessionID: SessionID, executions: Schema.Array(Schema.String) },
 })
 
 const named = { sessionID: SessionID, name: Schema.String }
@@ -296,6 +316,8 @@ export const Definitions = Event.inventory(
   CallScheduled,
   CallProgressed,
   CallSettled,
+  NotebookCopied,
+  NotebookReverted,
   CommandDefined,
   CommandRemoved,
   EventDefined,

@@ -181,7 +181,8 @@ describe("SessionProjector", () => {
         sessionID,
         revert: { messageID: boundary, files: [] },
       })
-      yield* revert("commitRevert", sessionID)
+      // The host names the Code Mode executions whose message the cut removes.
+      yield* revert("commitRevert", sessionID, ["exe_late"])
       expect(
         (yield* db.select({ id: SessionMessageTable.id }).from(SessionMessageTable).all()).map((row) => row.id),
       ).toEqual([earlier])
@@ -193,7 +194,7 @@ describe("SessionProjector", () => {
         tokens_cache_read: 3,
         tokens_cache_write: 1,
       })
-      // A committed revert removes the notebook values saved from its boundary onward.
+      // A committed revert removes the notebook values of the executions its cut removed.
       expect((yield* db.select().from(CodeModeBindingTable).all()).map((row) => row.name)).toEqual(["early"])
       // A committed revert resets the fold cache so the next boundary establishes a new epoch.
       expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toBeUndefined()
@@ -225,12 +226,16 @@ describe("SessionProjector", () => {
         ])
         .run()
 
-      yield* forkSession({
-        sessionID: child,
-        parentID: sessionID,
-        boundary: { type: "through", messageID: boundary },
-        instructions: {},
-      })
+      // The host names the executions whose values the history it copies holds.
+      yield* forkSession(
+        {
+          sessionID: child,
+          parentID: sessionID,
+          boundary: { type: "through", messageID: boundary },
+          instructions: {},
+        },
+        ["exe_early"],
+      )
 
       expect(
         (yield* db.select().from(CodeModeBindingTable).where(eq(CodeModeBindingTable.session_id, child)).all()).map(

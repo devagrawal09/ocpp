@@ -1,0 +1,288 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records in a live Session that a command or an event ran a notebook function outside the model, as the invocation message that owns its admitted Code Mode execution. The host names the message's ID through the fact's. An execution has one invocation.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "startInvocation",
+  "scenarios": [
+    {
+      "description": "An admitted execution of the Session starts its invocation.",
+      "expect": [
+        {
+          "eventType": "session-invocation-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "handler": "deploy",
+            "input": {
+              "command": "deploy",
+              "text": "now"
+            },
+            "sessionID": "ses_1",
+            "trigger": {
+              "name": "deploy",
+              "text": "now",
+              "type": "command"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_inv",
+            "executionID": "exe_1",
+            "program": {
+              "source": "return deploy(input)",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [
+              "deploy"
+            ],
+            "toolCallID": "msg_inv"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_1",
+        "handler": "deploy",
+        "input": {
+          "command": "deploy",
+          "text": "now"
+        },
+        "sessionID": "ses_1",
+        "trigger": {
+          "name": "deploy",
+          "text": "now",
+          "type": "command"
+        }
+      }
+    },
+    {
+      "description": "An execution that has its invocation is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_inv",
+            "executionID": "exe_1",
+            "program": {
+              "source": "return deploy(input)",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [
+              "deploy"
+            ],
+            "toolCallID": "msg_inv"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-invocation-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "handler": "deploy",
+            "input": {
+              "command": "deploy",
+              "text": "now"
+            },
+            "sessionID": "ses_1",
+            "trigger": {
+              "name": "deploy",
+              "text": "now",
+              "type": "command"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Invocation already started"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "handler": "deploy",
+        "input": {
+          "command": "deploy",
+          "text": "now"
+        },
+        "sessionID": "ses_1",
+        "trigger": {
+          "name": "deploy",
+          "text": "now",
+          "type": "command"
+        }
+      }
+    },
+    {
+      "description": "An execution another Session admitted is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_inv",
+            "executionID": "exe_1",
+            "program": {
+              "source": "return deploy(input)",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_2",
+            "snapshot": [
+              "deploy"
+            ],
+            "toolCallID": "msg_inv"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not found"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "handler": "deploy",
+        "input": {
+          "command": "deploy",
+          "text": "now"
+        },
+        "sessionID": "ses_1",
+        "trigger": {
+          "name": "deploy",
+          "text": "now",
+          "type": "command"
+        }
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "handler": "deploy",
+        "input": {
+          "command": "deploy",
+          "text": "now"
+        },
+        "sessionID": "ses_1",
+        "trigger": {
+          "name": "deploy",
+          "text": "now",
+          "type": "command"
+        }
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_inv",
+            "executionID": "exe_1",
+            "program": {
+              "source": "return deploy(input)",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [
+              "deploy"
+            ],
+            "toolCallID": "msg_inv"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "handler": "deploy",
+        "input": {
+          "command": "deploy",
+          "text": "now"
+        },
+        "sessionID": "ses_1",
+        "trigger": {
+          "name": "deploy",
+          "text": "now",
+          "type": "command"
+        }
+      }
+    }
+  ]
+}

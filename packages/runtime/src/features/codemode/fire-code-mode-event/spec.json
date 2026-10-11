@@ -1,0 +1,257 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records a firing of a live Session's event: the execution it started and its invocation message, or why it could not start.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "fireCodeModeEvent",
+  "scenarios": [
+    {
+      "description": "An event the Session defined records its firing, with the execution it started.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-fired",
+          "examplePayload": {
+            "at": 86400001,
+            "executionID": "exe_9",
+            "messageID": "msg_inv",
+            "name": "nightly",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-event-defined",
+          "examplePayload": {
+            "description": "Nightly report",
+            "handler": "report",
+            "name": "nightly",
+            "next": 86400001,
+            "schedule": {
+              "every": "1d"
+            },
+            "sessionID": "ses_1",
+            "time": 1
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "at": 86400001,
+        "executionID": "exe_9",
+        "messageID": "msg_inv",
+        "name": "nightly",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A fork's event, copied with its notebook, is the fork's own.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-fired",
+          "examplePayload": {
+            "at": 86400001,
+            "executionID": "exe_9",
+            "messageID": "msg_inv",
+            "name": "nightly",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-event-defined",
+          "examplePayload": {
+            "description": "Nightly report",
+            "handler": "report",
+            "name": "nightly",
+            "next": 86400001,
+            "schedule": {
+              "every": "1d"
+            },
+            "sessionID": "ses_1",
+            "time": 1
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "ses_2",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "executions": [
+              "exe_1"
+            ],
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "at": 86400001,
+        "executionID": "exe_9",
+        "messageID": "msg_inv",
+        "name": "nightly",
+        "sessionID": "ses_2"
+      }
+    },
+    {
+      "description": "An event the Session does not have is refused, and the host answers as done.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-event-defined",
+          "examplePayload": {
+            "description": "Nightly report",
+            "handler": "report",
+            "name": "nightly",
+            "next": 86400001,
+            "schedule": {
+              "every": "1d"
+            },
+            "sessionID": "ses_1",
+            "time": 1
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-event-removed",
+          "examplePayload": {
+            "name": "nightly",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Event not found"
+      },
+      "when": {
+        "at": 86400001,
+        "executionID": "exe_9",
+        "messageID": "msg_inv",
+        "name": "nightly",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "at": 86400001,
+        "executionID": "exe_9",
+        "messageID": "msg_inv",
+        "name": "nightly",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-event-defined",
+          "examplePayload": {
+            "description": "Nightly report",
+            "handler": "report",
+            "name": "nightly",
+            "next": 86400001,
+            "schedule": {
+              "every": "1d"
+            },
+            "sessionID": "ses_1",
+            "time": 1
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "at": 86400001,
+        "executionID": "exe_9",
+        "messageID": "msg_inv",
+        "name": "nightly",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

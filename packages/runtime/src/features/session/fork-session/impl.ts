@@ -1,4 +1,5 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
+import { optional } from "@ocpp/schema/schema"
 import { SessionID } from "@ocpp/schema/session-id"
 import { implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
@@ -21,6 +22,7 @@ export const createForkSessionState = (): ForkSessionState => ({ sessions: {} })
 const sessionCreated = sessionEvent("session-created")
 const sessionDeleted = sessionEvent("session-deleted")
 const sessionForked = sessionEvent("session-forked")
+const notebookCopied = sessionEvent("session-codemode-notebook-copied")
 
 // A fork is a Session of its own, not a child: it records where it came from
 // in session-forked instead of a parent.
@@ -32,6 +34,9 @@ const input = Schema.toStandardSchemaV1(
     session: Schema.Struct(child),
     ...fork,
     parentID: SessionID,
+    // The parent's Code Mode executions whose saved values the fork copies: those its history copies through
+    // the boundary, as the host resolves them.
+    notebook: optional(Schema.Array(Schema.String)),
   }),
 )
 
@@ -49,8 +54,12 @@ export const forkSession = implementCommand(specification)
     if (state.sessions[command.parentID] === "deleted") throw new Error("Session deleted")
     const sessionID = command.session.sessionID
     if (state.sessions[sessionID]) throw new Error("Session already exists")
+    // The child's notebook comes before the fork, whose projection checkpoints it in the child's instructions.
     return [
       sessionCreated.create(command.session),
+      ...(command.notebook === undefined || command.notebook.length === 0
+        ? []
+        : [notebookCopied.create({ sessionID, parentID: command.parentID, executions: command.notebook })]),
       sessionForked.create({
         sessionID,
         parentID: command.parentID,

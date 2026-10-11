@@ -28,7 +28,7 @@ export const recordSession = (input: {
 }) =>
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    yield* bus.runtime
+    yield* bus
       .command({
         type: "createSession",
         payload: {
@@ -61,20 +61,21 @@ const encodeRevert = Schema.encodeSync(SessionEvent.RevertEvent.Staged.data)
 export const stageRevert = (input: typeof SessionEvent.RevertEvent.Staged.Type.data) =>
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    yield* bus.runtime.command({ type: "stageRevert", payload: encodeRevert(input) }).pipe(Effect.orDie)
+    yield* bus.command({ type: "stageRevert", payload: encodeRevert(input) }).pipe(Effect.orDie)
   })
 
 const encodeForked = Schema.encodeSync(SessionEvent.Forked.data)
 
 /**
  * Forks a Session through the runtime's forkSession: the child is created in /project, as the parent of a
- * test is, and the fork projects the parent's history into it.
+ * test is, and the fork projects the parent's history into it, with the values of the Code Mode executions
+ * its notebook copies.
  */
-export const forkSession = (input: typeof SessionEvent.Forked.Type.data) =>
+export const forkSession = (input: typeof SessionEvent.Forked.Type.data, notebook?: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const { sessionID, ...fork } = encodeForked(input)
-    yield* bus.runtime
+    yield* bus
       .command({
         type: "forkSession",
         payload: {
@@ -86,16 +87,26 @@ export const forkSession = (input: typeof SessionEvent.Forked.Type.data) =>
             version: "test",
           },
           ...fork,
+          ...(notebook === undefined ? {} : { notebook }),
         },
       })
       .pipe(Effect.orDie)
   })
 
-/** Clears or commits a Session's staged revert through the runtime's Command. */
-export const revert = (type: "clearRevert" | "commitRevert", sessionID: string) =>
+/**
+ * Clears or commits a Session's staged revert through the runtime's Command. A commit cuts the Code Mode
+ * executions named, as the host resolves them from where their messages sit.
+ */
+export const revert = (type: "clearRevert" | "commitRevert", sessionID: string, executions?: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    yield* bus.runtime.command({ type, payload: { sessionID } }).pipe(Effect.orDie)
+    yield* bus
+      .command(
+        type === "commitRevert" && executions !== undefined
+          ? { type, payload: { sessionID: SessionID.make(sessionID), executions } }
+          : { type, payload: { sessionID: SessionID.make(sessionID) } },
+      )
+      .pipe(Effect.orDie)
   })
 
 const encodeMoved = Schema.encodeSync(SessionEvent.Moved.data)
@@ -104,5 +115,5 @@ const encodeMoved = Schema.encodeSync(SessionEvent.Moved.data)
 export const moveSession = (input: typeof SessionEvent.Moved.Type.data) =>
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    yield* bus.runtime.command({ type: "moveSession", payload: encodeMoved(input) }).pipe(Effect.orDie)
+    yield* bus.command({ type: "moveSession", payload: encodeMoved(input) }).pipe(Effect.orDie)
   })

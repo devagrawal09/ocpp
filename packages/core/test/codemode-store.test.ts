@@ -20,8 +20,14 @@ import { eq } from "drizzle-orm"
 import { DateTime, Effect, Schema } from "effect"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { testEffect } from "./lib/effect"
+import { Bus } from "@ocpp/core/bus"
+import { SessionFact } from "@ocpp/schema/session-fact"
+import { TestHistory } from "./fixture/history"
+import { forkSession, recordSession, revert, stageRevert } from "./fixture/session"
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([CodeModeStore.node, Database.node, Job.node])))
+const it = testEffect(
+  AppNodeBuilder.build(LayerNode.group([CodeModeStore.node, Database.node, Job.node, Bus.node]), [TestHistory.bus]),
+)
 const parent = Session.ID.make("ses_codemode_store_parent")
 const child = Session.ID.make("ses_codemode_store_child")
 const emptyChild = Session.ID.make("ses_codemode_store_empty_child")
@@ -68,7 +74,43 @@ const seed = Effect.fnUntraced(function* () {
     .insert(SessionMessageTable)
     .values([message(firstMessage, parent, 1), message(secondMessage, parent, 2)])
     .run()
+  // The runtime's Commands decide for a Session its log created; the forks are created by forking it.
+  yield* recordSession({ id: parent, directory: "/project" })
   return db
+})
+
+/** Saves `count` values in the parent's notebook, as one execution would have, through recorded history. */
+const fill = Effect.fnUntraced(function* (executionID: string, count: number) {
+  const names = Array.from({ length: count }, (_, index) => "stored" + index)
+  yield* TestHistory.of(yield* Bus.Service).publishAll([
+    [
+      SessionFact.ExecutionAdmitted,
+      {
+        sessionID: parent,
+        executionID,
+        assistantMessageID: firstMessage,
+        toolCallID: "call_" + executionID,
+        program: JSON.parse(JSON.stringify(CodeMode.compile("const stored = 1"))),
+        snapshot: [],
+        reserved: names,
+      },
+    ],
+    [
+      SessionFact.ExecutionSettled,
+      {
+        sessionID: parent,
+        executionID,
+        outcome: "finished",
+        values: Object.fromEntries(names.map((name, index) => [name, index])),
+      },
+    ],
+  ])
+})
+
+/** Commits a revert of the parent to its second message, which cuts the executions named. */
+const revertTo = Effect.fnUntraced(function* (executions: ReadonlyArray<string>) {
+  yield* stageRevert({ sessionID: parent, revert: { messageID: secondMessage } })
+  yield* revert("commitRevert", parent, executions)
 })
 
 function admit(
@@ -178,16 +220,17 @@ describe("CodeModeStore", () => {
     }),
   )
 
-  it.effect("saves nothing when the execution no longer owns its names or its history", () =>
+  it.effect("saves nothing once the execution has settled, or a revert cut its message", () =>
     Effect.gen(function* () {
-      const db = yield* seed()
+      yield* seed()
       const store = yield* CodeModeStore.Service
       const released = yield* admitted(store, { id: "exe_released", source: "const released = 1" })
       yield* store.fail(released, "released early")
-      expect(yield* store.commit(released, { released: 1 })).toMatchObject({
+      // The execution settled once; a later commit reports how.
+      expect(yield* store.commit(released, { released: 1 })).toEqual({
         status: "failed",
         saved: [],
-        error: expect.stringContaining("no longer reserved"),
+        error: "released early",
       })
       expect(yield* store.bindings(parent)).toEqual({})
 
@@ -196,7 +239,7 @@ describe("CodeModeStore", () => {
         messageID: secondMessage,
         source: "const reverted = 1",
       })
-      yield* db.delete(SessionMessageTable).where(eq(SessionMessageTable.id, secondMessage)).run()
+      yield* revertTo([reverted.id])
       expect(yield* store.commit(reverted, { reverted: 1 })).toMatchObject({
         status: "failed",
         error: expect.stringContaining("reverted"),
@@ -231,30 +274,23 @@ describe("CodeModeStore", () => {
 
   it.effect("refuses growth past the cumulative notebook limits at admission and at commit", () =>
     Effect.gen(function* () {
-      const db = yield* seed()
+      yield* seed()
       const store = yield* CodeModeStore.Service
-      const filler = Array.from({ length: limits.maxNotebookValues }, (_, index) => ({
-        session_id: parent,
-        name: "stored" + index,
-        value: index as CodeMode.NotebookValue,
-        message_seq: 1,
-        execution_id: "exe_seeded",
-      }))
-      yield* db.insert(CodeModeBindingTable).values(filler).run()
+      yield* fill("exe_seeded", limits.maxNotebookValues)
 
       const refused = yield* admit(store, { id: "exe_over_count", source: "const overflow = 1" })
       expect(refused).toMatchObject({ ok: false, kind: "NotebookLimitExceeded" })
       if (!refused.ok) expect(refused.message).toContain(String(limits.maxNotebookValues))
 
-      // Two executions can both pass admission and only collide when they save, so the commit
-      // transaction is the one that has to refuse.
-      yield* db.delete(CodeModeBindingTable).where(eq(CodeModeBindingTable.session_id, parent)).run()
+      // Two executions can both pass admission and only collide when they save, so the settlement is the
+      // one that has to refuse.
+      yield* TestHistory.of(yield* Bus.Service).publish(SessionFact.NotebookReverted, {
+        sessionID: parent,
+        executions: ["exe_seeded"],
+      })
       const first = yield* admitted(store, { id: "exe_race_first", source: "const first = 1" })
       const second = yield* admitted(store, { id: "exe_race_second", source: "const second = 2" })
-      yield* db
-        .insert(CodeModeBindingTable)
-        .values(filler.slice(0, limits.maxNotebookValues - 1))
-        .run()
+      yield* fill("exe_seeded_again", limits.maxNotebookValues - 1)
 
       expect(yield* store.commit(first, { first: 1 })).toMatchObject({ status: "saved" })
       const late = yield* store.commit(second, { second: 2 })
@@ -278,9 +314,17 @@ describe("CodeModeStore", () => {
       yield* store.commit(second, { late: 2 })
       yield* admitted(store, { id: "exe_fork_pending", source: "const pending = 3" })
 
-      yield* store.fork({ from: parent, to: emptyChild, throughSeq: -1 })
+      // The host names the executions whose values the fork's history copies through its boundary.
+      yield* forkSession({
+        sessionID: emptyChild,
+        parentID: parent,
+        boundary: { type: "before", messageID: firstMessage },
+      })
       expect(yield* store.bindings(emptyChild)).toEqual({})
-      yield* store.fork({ from: parent, to: child, throughSeq: 1 })
+      yield* forkSession(
+        { sessionID: child, parentID: parent, boundary: { type: "through", messageID: firstMessage } },
+        [first.id],
+      )
       expect(yield* store.bindings(child)).toEqual({ early: 1 })
       expect(yield* store.reservations(child)).toEqual([])
       // The forked Session may declare a name its parent is still holding.
@@ -302,13 +346,22 @@ describe("CodeModeStore", () => {
         source: "const removed = 2",
       })
       yield* store.commit(removed, { removed: 2 })
-      yield* admitted(store, { id: "exe_revert_inflight", messageID: secondMessage, source: "const inflight = 3" })
+      const inflight = yield* admitted(store, {
+        id: "exe_revert_inflight",
+        messageID: secondMessage,
+        source: "const inflight = 3",
+      })
 
-      yield* db.delete(SessionMessageTable).where(eq(SessionMessageTable.id, secondMessage)).run()
-      yield* store.revert({ sessionID: parent, beforeSeq: 2 })
+      // The host names the executions whose message the cut removes: their values go, and one still
+      // running settles, releasing its names.
+      yield* revertTo([removed.id, inflight.id])
 
       expect(yield* store.bindings(parent)).toEqual({ retained: 1 })
       expect(yield* store.reservations(parent)).toEqual([])
+      expect(yield* store.get(inflight.id)).toMatchObject({
+        status: "failed",
+        error: expect.stringContaining("reverted"),
+      })
       // A reverted name is free again because its binding is gone.
       expect(yield* admit(store, { id: "exe_revert_replacement", source: "const removed = 5" })).toMatchObject({
         ok: true,
@@ -444,6 +497,7 @@ describe("CodeModeStore", () => {
       const db = yield* seed()
       const store = yield* CodeModeStore.Service
       const execution = yield* admitted(store, { id: "exe_journal", source: "return null" })
+      yield* store.running(execution.id)
       const large = "🙂".repeat(300_000)
       yield* store.scheduleCall({ executionID: execution.id, index: 0, tool: "large", input: large })
       yield* store.settleCall({

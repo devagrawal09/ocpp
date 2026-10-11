@@ -1,0 +1,94 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Defines a slash command of a live Session that calls a notebook function; defining an existing one replaces it. The host checks that the handler names a function the notebook holds, or one a running execution will save.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "defineCodeModeCommand",
+  "scenarios": [
+    {
+      "description": "A live Session's command is defined.",
+      "expect": [
+        {
+          "eventType": "session-codemode-command-defined",
+          "examplePayload": {
+            "description": "Deploy the app",
+            "handler": "deploy",
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "description": "Deploy the app",
+        "handler": "deploy",
+        "name": "deploy",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "description": "Deploy the app",
+        "handler": "deploy",
+        "name": "deploy",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "description": "Deploy the app",
+        "handler": "deploy",
+        "name": "deploy",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

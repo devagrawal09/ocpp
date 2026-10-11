@@ -1,0 +1,578 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Settles a Code Mode execution once. A finished program saves the values of its declarations into its Session's notebook when the execution still holds their names and they fit the notebook; otherwise it fails and saves nothing, with why. A program that failed, or whose outcome is indeterminate, releases its names and saves nothing. A revert that cuts an execution's message settles it as it commits.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "settleCodeModeExecution",
+  "scenarios": [
+    {
+      "description": "A finished program saves its declarations.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_2",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "b": 2
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "finished",
+        "values": {
+          "b": 2
+        }
+      }
+    },
+    {
+      "description": "A program that failed settles with its error.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Boom",
+            "executionID": "exe_2",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "error": "Boom",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "failed"
+      }
+    },
+    {
+      "description": "An execution whose outcome is unknown settles as indeterminate.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Host restarted",
+            "executionID": "exe_2",
+            "outcome": "indeterminate",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "error": "Host restarted",
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "indeterminate"
+      }
+    },
+    {
+      "description": "A value whose name the execution does not hold fails it, saving nothing.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Notebook names c are no longer reserved by this execution; nothing was saved.",
+            "executionID": "exe_2",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "finished",
+        "values": {
+          "b": 2,
+          "c": 3
+        }
+      }
+    },
+    {
+      "description": "Values that would hold more than the notebook's number of values fail it, saving nothing.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "This Session's notebook would hold 4 values, above the limit of 3. Notebook names are permanent, so free space by reverting messages that saved values you no longer need. Nothing was saved.",
+            "executionID": "exe_2",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a",
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": 1,
+              "b": 2
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "c",
+              "d"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "finished",
+        "values": {
+          "c": 3,
+          "d": 4
+        }
+      }
+    },
+    {
+      "description": "Values that would hold more than the notebook's bytes fail it, saving nothing.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "This Session's notebook would hold 101 bytes, above the limit of 100. Publish smaller summaries and keep large artifacts in files through host tools. Nothing was saved.",
+            "executionID": "exe_2",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "finished",
+        "values": {
+          "b": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      }
+    },
+    {
+      "description": "A fork holds only the values it copied, and values a revert removed leave room.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_2",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "c": 3,
+              "d": 4
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_3",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "x",
+              "y"
+            ],
+            "sessionID": "ses_0",
+            "snapshot": [],
+            "toolCallID": "call_exe_3"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_3",
+            "outcome": "finished",
+            "sessionID": "ses_0",
+            "values": {
+              "x": 1,
+              "y": 2
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_4",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "z"
+            ],
+            "sessionID": "ses_0",
+            "snapshot": [],
+            "toolCallID": "call_exe_4"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_4",
+            "outcome": "finished",
+            "sessionID": "ses_0",
+            "values": {
+              "z": 3
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "executions": [
+              "exe_4"
+            ],
+            "parentID": "ses_0",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a",
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "a": 1,
+              "b": 2
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-reverted",
+          "examplePayload": {
+            "executions": [
+              "exe_1"
+            ],
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "c",
+              "d"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "finished",
+        "values": {
+          "c": 3,
+          "d": 4
+        }
+      }
+    },
+    {
+      "description": "An execution that settled is refused, and the host reports how it settled.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Boom",
+            "executionID": "exe_2",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution already settled"
+      },
+      "when": {
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "finished",
+        "values": {
+          "b": 2
+        }
+      }
+    },
+    {
+      "description": "An execution never admitted, or discarded, is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-discarded",
+          "examplePayload": {
+            "executionID": "exe_2",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not found"
+      },
+      "when": {
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "finished",
+        "values": {
+          "b": 2
+        }
+      }
+    }
+  ]
+}

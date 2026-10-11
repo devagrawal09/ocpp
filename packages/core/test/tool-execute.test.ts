@@ -25,6 +25,7 @@ const createCodeMode = (tools: ReadonlyMap<string, Info>) =>
       bus: {
         publish: () => Effect.die("Unavailable in catalog-only tests"),
         listen: () => Effect.die("Unavailable in catalog-only tests"),
+        command: () => Effect.die("Unavailable in catalog-only tests"),
       },
       jobs: {
         startLimited: () => Effect.die("Unavailable in catalog-only tests"),
@@ -100,6 +101,7 @@ test("a refused execution names the running executions instead of only the cap",
       bus: {
         publish: () => Effect.succeed(undefined as never),
         listen: () => Effect.succeed(Effect.void),
+        command: () => Effect.succeed([]),
       },
       jobs: {
         // The Session already holds every slot, so admission is refused.
@@ -166,6 +168,7 @@ test("a failed execution's completion carries a stable failure kind in its metad
       bus: {
         publish: () => Effect.succeed(undefined as never),
         listen: () => Effect.succeed(Effect.void),
+        command: () => Effect.succeed([]),
       },
       jobs: {
         startLimited: (input) =>
@@ -301,6 +304,7 @@ test("a Session deleted mid-execution still finishes the background notification
       bus: {
         publish: () => Effect.succeed(undefined as never),
         listen: () => Effect.succeed(Effect.void),
+        command: () => Effect.succeed([]),
       },
       jobs: {
         startLimited: (input) =>

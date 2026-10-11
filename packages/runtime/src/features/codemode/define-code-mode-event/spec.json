@@ -1,0 +1,114 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Defines a scheduled event of a live Session that calls a notebook function; defining an existing one replaces it and starts it over. The host checks the name, the schedule and the handler, and that the Session is not a subagent's.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "defineCodeModeEvent",
+  "scenarios": [
+    {
+      "description": "A live Session's event is defined.",
+      "expect": [
+        {
+          "eventType": "session-codemode-event-defined",
+          "examplePayload": {
+            "description": "Nightly report",
+            "handler": "report",
+            "name": "nightly",
+            "next": 86400001,
+            "schedule": {
+              "every": "1d"
+            },
+            "sessionID": "ses_1",
+            "time": 1
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "description": "Nightly report",
+        "handler": "report",
+        "name": "nightly",
+        "next": 86400001,
+        "schedule": {
+          "every": "1d"
+        },
+        "sessionID": "ses_1",
+        "time": 1
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "description": "Nightly report",
+        "handler": "report",
+        "name": "nightly",
+        "next": 86400001,
+        "schedule": {
+          "every": "1d"
+        },
+        "sessionID": "ses_1",
+        "time": 1
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "description": "Nightly report",
+        "handler": "report",
+        "name": "nightly",
+        "next": 86400001,
+        "schedule": {
+          "every": "1d"
+        },
+        "sessionID": "ses_1",
+        "time": 1
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://specter.dev/specification/v1/slice.schema.json",
-  "description": "Forks a live Session: the child's creation and the fork are recorded in one commit, so the child exists exactly when its fork does. The host resolves the boundary to a message of the parent's history and chooses the child's identity; the fork's projection copies the history.",
+  "description": "Forks a live Session: the child's creation and the fork are recorded in one commit, so the child exists exactly when its fork does. The host resolves the boundary to a message of the parent's history and chooses the child's identity; the fork's projection copies the history. The child's Code Mode notebook copies the values of the parent's executions the host found through the boundary, recorded in the same commit before the fork, whose projection checkpoints it.",
   "formatVersion": 1,
   "kind": "command",
   "name": "forkSession",
@@ -56,6 +56,86 @@
           "messageID": "msg_3",
           "type": "through"
         },
+        "parentID": "ses_1",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "The child's notebook copies the values of the parent's executions the host found through the boundary.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "calm-heron",
+            "title": "Plan (fork #1)",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "executions": [
+              "exe_1",
+              "exe_2"
+            ],
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_3",
+              "type": "through"
+            },
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "title": "Plan",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "through"
+        },
+        "notebook": [
+          "exe_1",
+          "exe_2"
+        ],
         "parentID": "ses_1",
         "session": {
           "location": {

@@ -8,6 +8,7 @@ import { Tool } from "@ocpp/schema/tool"
 import { Hash } from "@ocpp/util/hash"
 import { Deferred, Effect, Exit, Ref, Schema, Scope, Semaphore } from "effect"
 import type { Bus } from "../bus.js"
+import { SpecterRejection } from "../specter/rejection.js"
 import type { Image } from "../image.js"
 import type { Job } from "../job.js"
 import type { Session } from "../session.js"
@@ -39,6 +40,7 @@ const ExecuteOutput = Schema.Struct({
 
 const decodeExecuteEvents = Schema.decodeUnknownSync(CodeModeExecution.Entries)
 const decodeExecutionID = Schema.decodeUnknownSync(CodeModeExecution.ID)
+const encodeSettled = Schema.encodeSync(SessionEvent.CodeMode.Settled.data)
 const isJson = Schema.is(Schema.Json)
 const MAX_TRACE_EVENTS = 100
 const MAX_TOOL_EVENTS = 100
@@ -47,7 +49,7 @@ const MAX_CONCURRENT_EXECUTIONS = 10
 const MAX_ATTACHMENTS = 8
 
 type ExecutionServices = {
-  readonly bus: Pick<Bus.Interface, "publish" | "listen">
+  readonly bus: Pick<Bus.Interface, "publish" | "listen" | "command">
   readonly jobs: Pick<
     Job.Interface,
     "startLimited" | "active" | "wait" | "background" | "cancel" | "completeBackground"
@@ -191,12 +193,17 @@ export const create = (
           }
           return yield* Effect.gen(function* () {
             yield* services.jobs.background(executionID)
-            yield* services.bus.publish(SessionEvent.CodeMode.Started, {
-              sessionID: context.sessionID,
-              assistantMessageID: context.messageID,
-              id: context.id,
-              executionID,
-            })
+            yield* services.bus
+              .command({
+                type: "startCodeMode",
+                payload: {
+                  sessionID: context.sessionID,
+                  assistantMessageID: context.messageID,
+                  id: context.id,
+                  executionID,
+                },
+              })
+              .pipe(Effect.orDie)
             // Work starts only after this tool result commits, so the execution ID is durably
             // visible before anything it does can settle.
             const unsubscribe = yield* services.bus.listen((event) => {
@@ -595,17 +602,28 @@ const launch = (
             events: trace,
             ...resumed,
           }
-          // Recording the outcome makes the background job terminal (JobProjector).
-          yield* services.bus.publish(
-            SessionEvent.CodeMode.Settled,
-            info.status === "completed"
-              ? { ...base, outcome: "completed" }
-              : {
-                  ...base,
-                  outcome: info.status === "cancelled" ? "cancelled" : "error",
-                  error: info.error ?? "Execution failed",
-                },
-          )
+          // Recording the outcome makes the background job terminal (JobProjector). A Session deleted
+          // meanwhile records nothing.
+          yield* services.bus
+            .command({
+              type: "settleCodeMode",
+              payload: encodeSettled(
+                info.status === "completed"
+                  ? { ...base, outcome: "completed" }
+                  : {
+                      ...base,
+                      outcome: info.status === "cancelled" ? "cancelled" : "error",
+                      error: info.error ?? "Execution failed",
+                    },
+              ),
+            })
+            .pipe(
+              Effect.catchIf(
+                (error) => SpecterRejection.reason(error) !== undefined,
+                () => Effect.void,
+              ),
+              Effect.orDie,
+            )
           const kind =
             info.status === "cancelled"
               ? "Cancelled"

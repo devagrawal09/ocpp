@@ -34,6 +34,7 @@ const setup = (tools: ReadonlyArray<Info>) => {
       bus: {
         publish: () => Effect.succeed(undefined as never),
         listen: () => Effect.succeed(Effect.void),
+        command: () => Effect.succeed([]),
       },
       jobs: {
         startLimited: (input) =>

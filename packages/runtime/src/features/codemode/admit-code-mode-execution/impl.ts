@@ -1,0 +1,115 @@
+import type { SessionID } from "@ocpp/schema/session-id"
+import { SessionFact } from "@ocpp/schema/session-fact"
+import { NonNegativeInt } from "@ocpp/schema/schema"
+import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { Context, Schema } from "effect"
+
+import { sessionEvent } from "../../../events.ts"
+import specification from "./spec.json" with { type: "json" }
+
+// Rebuildable projection: every Session ID the log has named, live or
+// deleted; each execution the log admitted, with its Session and the names it
+// holds until it settles; each Session's notebook, the names its executions
+// saved with the size of each value; and each Session's reserved names. A
+// revert's and a fork's facts name the executions whose values they remove or
+// copy. Duplicated from settle-code-mode-execution on purpose.
+export type AdmitCodeModeExecutionState = {
+  sessions: Record<string, "live" | "deleted">
+  executions: Record<string, { sessionID: SessionID; reserved: string[] }>
+  notebooks: Record<string, Record<string, { execution: string; bytes: number }>>
+  reservations: Record<string, Record<string, string>>
+}
+
+export const admitCodeModeExecutionStore = Context.Service<
+  SliceStoreService<AdmitCodeModeExecutionState, AdmitCodeModeExecutionState, unknown>
+>("@ocpp/runtime/AdmitCodeModeExecutionStore")
+
+export const createAdmitCodeModeExecutionState = (): AdmitCodeModeExecutionState => ({
+  sessions: {},
+  executions: {},
+  notebooks: {},
+  reservations: {},
+})
+
+const sessionCreated = sessionEvent("session-created")
+const sessionDeleted = sessionEvent("session-deleted")
+const admitted = sessionEvent("session-codemode-execution-admitted")
+const settled = sessionEvent("session-codemode-execution-settled")
+const discarded = sessionEvent("session-codemode-execution-discarded")
+const notebookCopied = sessionEvent("session-codemode-notebook-copied")
+const notebookReverted = sessionEvent("session-codemode-notebook-reverted")
+
+const { snapshot: _snapshot, ...admission } = SessionFact.ExecutionAdmitted.data.fields
+
+const input = Schema.toStandardSchemaV1(
+  Schema.Struct({
+    ...admission,
+    // How many values, and how many bytes of them, the Session's notebook may hold.
+    limits: Schema.Struct({ values: NonNegativeInt, bytes: NonNegativeInt }),
+  }),
+)
+
+const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value) ?? "null").byteLength
+
+const release = (state: AdmitCodeModeExecutionState, executionID: string) => {
+  const execution = state.executions[executionID]
+  const reservations = execution ? state.reservations[execution.sessionID] : undefined
+  if (!execution || !reservations) return
+  for (const name of execution.reserved) if (reservations[name] === executionID) delete reservations[name]
+  execution.reserved = []
+}
+
+export const admitCodeModeExecution = implementCommand(specification)
+  .inputSchema(input)
+  .store(admitCodeModeExecutionStore)
+  .apply(sessionCreated, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "live"
+  })
+  .apply(sessionDeleted, async (event, state) => {
+    state.sessions[event.payload.sessionID] = "deleted"
+  })
+  .apply(admitted, async (event, state) => {
+    const { sessionID, executionID, reserved } = event.payload
+    state.executions[executionID] = { sessionID, reserved: [...reserved] }
+    const reservations = (state.reservations[sessionID] ??= {})
+    for (const name of reserved) reservations[name] = executionID
+  })
+  .apply(settled, async (event, state) => {
+    const { sessionID, executionID } = event.payload
+    release(state, executionID)
+    if (event.payload.outcome !== "finished") return
+    const notebook = (state.notebooks[sessionID] ??= {})
+    for (const [name, value] of Object.entries(event.payload.values ?? {}))
+      notebook[name] = { execution: executionID, bytes: bytes(value) }
+  })
+  .apply(discarded, async (event, state) => {
+    release(state, event.payload.executionID)
+    delete state.executions[event.payload.executionID]
+  })
+  .apply(notebookCopied, async (event, state) => {
+    const { sessionID, parentID, executions } = event.payload
+    const notebook = (state.notebooks[sessionID] ??= {})
+    for (const [name, entry] of Object.entries(state.notebooks[parentID] ?? {}))
+      if (executions.includes(entry.execution)) notebook[name] = entry
+  })
+  .apply(notebookReverted, async (event, state) => {
+    const notebook = state.notebooks[event.payload.sessionID] ?? {}
+    for (const [name, entry] of Object.entries(notebook))
+      if (event.payload.executions.includes(entry.execution)) delete notebook[name]
+  })
+  .handle(async (command, state) => {
+    const { limits, ...admission } = command
+    const session = state.sessions[admission.sessionID]
+    if (!session) throw new Error("Session not found")
+    if (session === "deleted") throw new Error("Session deleted")
+    if (state.executions[admission.executionID]) throw new Error("Execution already admitted")
+    const notebook = state.notebooks[admission.sessionID] ?? {}
+    const names = Object.keys(notebook)
+    const size = Object.values(notebook).reduce((total, entry) => total + entry.bytes, 0)
+    if (names.length + admission.reserved.length > limits.values || size > limits.bytes)
+      throw new Error("Notebook full")
+    if (admission.reserved.some((name) => notebook[name])) throw new Error("Name already defined")
+    if (admission.reserved.some((name) => state.reservations[admission.sessionID]?.[name]))
+      throw new Error("Name reserved")
+    return [admitted.create({ ...admission, snapshot: names })]
+  })

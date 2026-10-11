@@ -1,6 +1,6 @@
 export * as SessionRestart from "./restart.js"
 
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Bus } from "../../bus.js"
 import { Job } from "../../job.js"
@@ -15,8 +15,10 @@ import { CodeModeCompletion } from "../codemode-completion.js"
 import { CodeModeResume } from "../../codemode/resume.js"
 import { CodeModeStore } from "../../codemode/store.js"
 import { CodeModeExecution } from "@ocpp/schema/codemode-execution"
+import { SpecterRejection } from "../../specter/rejection.js"
 
 const INTERRUPTED_WITHOUT_ERROR = "All fibers interrupted without error"
+const encodeSettled = Schema.encodeSync(SessionEvent.CodeMode.Settled.data)
 
 export interface Interface {
   /**
@@ -123,10 +125,21 @@ export const layer = Layer.effect(
           executionID: CodeModeExecution.ID.make(background.id),
           events: [],
         }
-        yield* bus.publish(
-          SessionEvent.CodeMode.Settled,
-          status === "completed" ? { ...base, outcome: status } : { ...base, outcome: status, error },
-        )
+        // A Session deleted meanwhile, or an execution settled already, records nothing.
+        yield* bus
+          .command({
+            type: "settleCodeMode",
+            payload: encodeSettled(
+              status === "completed" ? { ...base, outcome: status } : { ...base, outcome: status, error },
+            ),
+          })
+          .pipe(
+            Effect.catchIf(
+              (error) => SpecterRejection.reason(error) !== undefined,
+              () => Effect.void,
+            ),
+            Effect.orDie,
+          )
       }
       // The journal outlives the execution's settlement, so the child sessions its calls named are
       // listed here as the live run would have, with calls that never settled as interrupted.

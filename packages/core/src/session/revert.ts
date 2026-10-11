@@ -1,9 +1,10 @@
 export * as SessionRevert from "./revert.js"
 
-import { and, asc, eq, gt } from "drizzle-orm"
+import { and, asc, eq, gt, gte, inArray } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database } from "../database/database.js"
 import { Bus } from "../bus.js"
+import { CodeModeBindingTable, CodeModeExecutionTable } from "../codemode/sql.js"
 import { PluginSupervisor } from "../plugin/supervisor-service.js"
 import { RelativePath } from "../schema.js"
 import { Snapshot } from "../snapshot.js"
@@ -74,7 +75,7 @@ export const make = Effect.fn("SessionRevert.make")(function* () {
       snapshot: original,
       files,
     } satisfies SessionSchema.Info["revert"]
-    yield* bus.runtime
+    yield* bus
       .command({ type: "stageRevert", payload: { sessionID: input.session.id, revert: encodeRevert(revert) } })
       .pipe(Effect.catch(refused(input.session.id)))
     return revert
@@ -88,7 +89,7 @@ export const make = Effect.fn("SessionRevert.make")(function* () {
       yield* snapshot.restore({
         files: new Map((session.revert.files ?? []).map((file) => [RelativePath.make(file.file), original])),
       })
-    yield* bus.runtime
+    yield* bus
       .command({ type: "clearRevert", payload: { sessionID: session.id } })
       .pipe(Effect.catch(refused(session.id)), Effect.asVoid)
   })
@@ -100,13 +101,66 @@ export const layer = Layer.effect(Service, make())
 
 /**
  * Commits the Session's staged revert: the runtime cuts its history at the staged message and cancels the
- * input still pending, in one commit. Nothing staged is a no-op.
+ * input still pending, in one commit. The cut takes the Code Mode values of the executions whose message it
+ * removes, and settles those still running; where each message sits is the host's to resolve. Nothing staged
+ * is a no-op.
  */
-export const commit = Effect.fn("SessionRevert.commit")(function* (bus: Bus.Interface, session: SessionSchema.Info) {
+export const commit = Effect.fn("SessionRevert.commit")(function* (
+  bus: Bus.Interface,
+  db: Database.Interface["db"],
+  session: SessionSchema.Info,
+) {
   if (!session.revert) return
-  yield* bus.runtime
-    .command({ type: "commitRevert", payload: { sessionID: session.id } })
+  const executions = yield* cut(db, { sessionID: session.id, messageID: session.revert.messageID })
+  yield* bus
+    .command({ type: "commitRevert", payload: { sessionID: session.id, executions } })
     .pipe(Effect.catch(refused(session.id)), Effect.asVoid)
+})
+
+/**
+ * The Code Mode executions a revert to the message cuts: those still running whose message it removes or that
+ * have none yet, and those whose saved values belong to the history it removes, a fork's copies included.
+ */
+const cut = Effect.fnUntraced(function* (db: Database.Interface["db"], input: BoundaryInput) {
+  const boundary = yield* db
+    .select({ seq: SessionMessageTable.seq })
+    .from(SessionMessageTable)
+    .where(and(eq(SessionMessageTable.session_id, input.sessionID), eq(SessionMessageTable.id, input.messageID)))
+    .get()
+    .pipe(Effect.orDie)
+  if (!boundary) return []
+  const running = yield* db
+    .select({ id: CodeModeExecutionTable.id, seq: SessionMessageTable.seq })
+    .from(CodeModeExecutionTable)
+    .leftJoin(
+      SessionMessageTable,
+      and(
+        eq(SessionMessageTable.session_id, CodeModeExecutionTable.session_id),
+        eq(SessionMessageTable.id, CodeModeExecutionTable.assistant_message_id),
+      ),
+    )
+    .where(
+      and(
+        eq(CodeModeExecutionTable.session_id, input.sessionID),
+        inArray(CodeModeExecutionTable.status, ["scheduled", "running"]),
+      ),
+    )
+    .all()
+    .pipe(Effect.orDie)
+  const saved = yield* db
+    .selectDistinct({ id: CodeModeBindingTable.execution_id })
+    .from(CodeModeBindingTable)
+    .where(
+      and(eq(CodeModeBindingTable.session_id, input.sessionID), gte(CodeModeBindingTable.message_seq, boundary.seq)),
+    )
+    .all()
+    .pipe(Effect.orDie)
+  return [
+    ...new Set([
+      ...running.filter((row) => row.seq === null || row.seq >= boundary.seq).map((row) => row.id),
+      ...saved.map((row) => row.id),
+    ]),
+  ]
 })
 
 const plan = Effect.fn("SessionRevert.plan")(function* (db: Database.Interface["db"], input: BoundaryInput) {

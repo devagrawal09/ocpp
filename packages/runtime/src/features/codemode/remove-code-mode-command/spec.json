@@ -1,0 +1,216 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Removes a slash command a live Session defined, or that its fork copied. A command the Session does not have records nothing.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "removeCodeModeCommand",
+  "scenarios": [
+    {
+      "description": "A command the Session defined is removed.",
+      "expect": [
+        {
+          "eventType": "session-codemode-command-removed",
+          "examplePayload": {
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-command-defined",
+          "examplePayload": {
+            "description": "Deploy the app",
+            "handler": "deploy",
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "name": "deploy",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A fork's command, copied with its notebook, is the fork's own.",
+      "expect": [
+        {
+          "eventType": "session-codemode-command-removed",
+          "examplePayload": {
+            "name": "deploy",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-command-defined",
+          "examplePayload": {
+            "description": "Deploy the app",
+            "handler": "deploy",
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "ses_2",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "executions": [
+              "exe_1"
+            ],
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "name": "deploy",
+        "sessionID": "ses_2"
+      }
+    },
+    {
+      "description": "A command the Session does not have is refused, and the host answers as done.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-command-defined",
+          "examplePayload": {
+            "description": "Deploy the app",
+            "handler": "deploy",
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-command-removed",
+          "examplePayload": {
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Command not found"
+      },
+      "when": {
+        "name": "deploy",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "name": "deploy",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-command-defined",
+          "examplePayload": {
+            "description": "Deploy the app",
+            "handler": "deploy",
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "name": "deploy",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

@@ -1,0 +1,334 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Settles a journaled call of a running Code Mode execution: completed with its output, failed with its error, or indeterminate when a shutdown interrupted it. An indeterminate call settles again when a resumed run reaches it; a call that completed or failed settles once.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "settleCodeModeCall",
+  "scenarios": [
+    {
+      "description": "A journaled call completes with its output.",
+      "expect": [
+        {
+          "eventType": "session-codemode-call-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "omitted": false,
+            "outcome": "completed",
+            "output": "text",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "omitted": false,
+        "outcome": "completed",
+        "output": "text"
+      }
+    },
+    {
+      "description": "A call a shutdown interrupted is indeterminate until a resumed run settles it again.",
+      "expect": [
+        {
+          "eventType": "session-codemode-call-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "omitted": false,
+            "outcome": "completed",
+            "output": "text",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-call-settled",
+          "examplePayload": {
+            "error": "Interrupted by shutdown",
+            "executionID": "exe_1",
+            "index": 0,
+            "omitted": false,
+            "outcome": "indeterminate",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "omitted": false,
+        "outcome": "completed",
+        "output": "text"
+      }
+    },
+    {
+      "description": "A call that completed is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-call-settled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "omitted": false,
+            "outcome": "completed",
+            "output": "text",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Call already settled"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "omitted": false,
+        "outcome": "completed",
+        "output": "text"
+      }
+    },
+    {
+      "description": "A call never journaled is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Call not scheduled"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "omitted": false,
+        "outcome": "completed",
+        "output": "text"
+      }
+    },
+    {
+      "description": "A settled execution's call is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "Boom",
+            "executionID": "exe_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not running"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "omitted": false,
+        "outcome": "completed",
+        "output": "text"
+      }
+    },
+    {
+      "description": "An unknown execution is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Execution not found"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "omitted": false,
+        "outcome": "completed",
+        "output": "text"
+      }
+    }
+  ]
+}

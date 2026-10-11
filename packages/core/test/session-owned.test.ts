@@ -147,7 +147,12 @@ const setup = Effect.fnUntraced(function* (options?: {
   }
   const sessions = yield* Session.make(servicesFor).pipe(
     Effect.satisfiesServicesType<
-      Bus.Service | SessionStore.Service | SessionExecution.Service | SessionInbox.Service | Scope.Scope
+      | Bus.Service
+      | Database.Service
+      | SessionStore.Service
+      | SessionExecution.Service
+      | SessionInbox.Service
+      | Scope.Scope
     >(),
     Effect.provideService(SessionExecution.Service, execution),
   )

@@ -20,7 +20,7 @@ const instructions = { "builtin/agents": "a".repeat(64) }
 
 export const forkSessionSpec = createCommandSlice("forkSession")
   .description(
-    "Forks a live Session: the child's creation and the fork are recorded in one commit, so the child exists exactly when its fork does. The host resolves the boundary to a message of the parent's history and chooses the child's identity; the fork's projection copies the history.",
+    "Forks a live Session: the child's creation and the fork are recorded in one commit, so the child exists exactly when its fork does. The host resolves the boundary to a message of the parent's history and chooses the child's identity; the fork's projection copies the history. The child's Code Mode notebook copies the values of the parent's executions the host found through the boundary, recorded in the same commit before the fork, whose projection checkpoints it.",
   )
   .scenarios(
     {
@@ -34,6 +34,21 @@ export const forkSessionSpec = createCommandSlice("forkSession")
           parentID: "ses_1",
           boundary,
         }),
+      ],
+    },
+    {
+      description:
+        "The child's notebook copies the values of the parent's executions the host found through the boundary.",
+      given: [created("ses_1", { title: "Plan" })],
+      when: { session: child, parentID: "ses_1", boundary, notebook: ["exe_1", "exe_2"] },
+      expect: [
+        created("ses_2", { slug: "calm-heron", title: "Plan (fork #1)" }),
+        event("session-codemode-notebook-copied", {
+          sessionID: "ses_2",
+          parentID: "ses_1",
+          executions: ["exe_1", "exe_2"],
+        }),
+        event("session-forked", { sessionID: "ses_2", parentID: "ses_1", boundary }),
       ],
     },
     {

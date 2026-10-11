@@ -191,7 +191,13 @@ export const makeRunStepPlugin =
           // A retried step waits until it is due: backoff is recorded with the
           // failure and honored here, one Session's job at a time.
           const now = yield* Clock.currentTimeMillis
-          if (retryAt !== undefined && retryAt > now) yield* Effect.sleep(retryAt - now)
+          if (retryAt !== undefined && retryAt > now) {
+            yield* Effect.sleep(retryAt - now)
+            // An execution interrupted, or settled, while its step waited runs no step: the job that waits
+            // must not start an attempt for an execution that has moved on.
+            const after = yield* query(sessionStatus, { sessionID })
+            if (after.status !== "active" || after.step.started !== steps.started) return
+          }
           let scope = boundary
           let delivered = 0
           // A delivered control item (compaction, move) is not input for a step.

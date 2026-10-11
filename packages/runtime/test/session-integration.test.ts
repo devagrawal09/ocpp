@@ -874,6 +874,38 @@ describe("step loop with a scripted host", () => {
       })
     })
 
+    it("runs no attempt for a retry whose execution was interrupted while it waited", async () => {
+      let begun = 0
+      const t = await start({
+        begin: (input, begin) => {
+          begun++
+          return begin(input)
+        },
+      })
+      t.host.script("ses_1", [
+        { ...retryable(), retryDelay: 300 },
+        { finish: "stop", text: "must not run" },
+      ])
+
+      await t.app.command(enqueue("msg_a"))
+      await t.waitFor(() => payloads(t, "session-step-settled").length === 1)
+      // The retry's job has started and waits out its backoff when the user interrupts.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await t.app.command({ type: "interruptExecution", payload: { sessionID: "ses_1" } })
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      await t.outboxSettled()
+
+      expect(begun).toBe(1)
+      expect(t.types()).toEqual([
+        "session-inbox-enqueued",
+        "session-execution-started",
+        "session-inbox-delivered",
+        "session-step-started",
+        "session-step-settled",
+        "session-execution-settled",
+      ])
+    })
+
     it("fails the execution on a non-retryable failure, with no retry event", async () => {
       const t = await start()
       const error = { type: "auth", message: "bad key" }

@@ -19,6 +19,8 @@ export type ScriptedStep = {
       readonly finish: "error"
       readonly retryable: boolean
       readonly error: SessionError.Error
+      // How long the retry waits, when the host asks it to.
+      readonly retryDelay?: number
     }
 )
 
@@ -50,7 +52,12 @@ export const makeScriptedStepHost = (options: { readonly agent?: string } = {}) 
             const { gate, ...step }: ScriptedStep = queues.get(sessionID)?.shift() ?? { finish: "stop" }
             if (gate) yield* Effect.promise(() => gate)
             if (step.finish === "error")
-              return { outcome: "failed", error: step.error, retryable: step.retryable } satisfies AttemptOutcome
+              return {
+                outcome: "failed",
+                error: step.error,
+                retryable: step.retryable,
+                ...(step.retryDelay === undefined ? {} : { retryDelay: step.retryDelay }),
+              } satisfies AttemptOutcome
             if (step.text && !(yield* record.block({ kind: "text", ordinal: 0, text: step.text }))) return stopped
             const calls = step.toolCalls ?? []
             for (const call of calls)

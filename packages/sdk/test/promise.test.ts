@@ -81,11 +81,11 @@ test("closing cancels active Promise event streams", async () => {
   const ocpp = await Ocpp.create({ config: { directory: config, project: false, content: "{}" } })
   const events = ocpp.events.subscribe()[Symbol.asyncIterator]()
   expect(await events.next()).toMatchObject({ value: { type: "server-connected" }, done: false })
-  const pending = events.next()
+  // Closing ends the stream while it closes, so the read's rejection is observed from the start.
+  const pending = events.next().catch((error: unknown) => error)
 
   await ocpp.close()
-  const error = await pending.catch((error: unknown) => error)
-  expect(error).toMatchObject({ name: "ClientError", reason: "Transport" })
+  expect(await pending).toMatchObject({ name: "ClientError", reason: "Transport" })
 })
 
 test("closing waits for pending Promise plugin setup and runs its cleanup", async () => {

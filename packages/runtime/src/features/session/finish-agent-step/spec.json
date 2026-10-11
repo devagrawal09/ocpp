@@ -1,0 +1,699 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Finishes the step an external agent produced, in one commit: its finished blocks, a failure for each call the agent left without a result, and the step's settlement with what it spent. The agent's own failure settles only the step: the host decides whether its execution goes on. Only the step in flight in a running execution finishes.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "finishAgentStep",
+  "scenarios": [
+    {
+      "description": "The step's blocks are recorded, then the step settles.",
+      "expect": [
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "kind": "reasoning",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "Thinking"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-block-recorded",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "kind": "text",
+            "ordinal": 0,
+            "sessionID": "ses_1",
+            "text": "Done"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "cost": 0.01,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 10,
+              "output": 4,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a1",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [
+          {
+            "kind": "reasoning",
+            "ordinal": 0,
+            "text": "Thinking"
+          },
+          {
+            "kind": "text",
+            "ordinal": 0,
+            "text": "Done"
+          }
+        ],
+        "calls": [],
+        "cost": 0.01,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "A call left without a result fails with the step, in the same commit.",
+      "expect": [
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "error": {
+              "message": "External tool ended without a result",
+              "type": "unknown"
+            },
+            "executed": true,
+            "id": "call_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "cost": 0.01,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 10,
+              "output": 4,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a1",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "executed": true,
+            "id": "call_1",
+            "input": {
+              "path": "a.txt"
+            },
+            "name": "Read",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [],
+        "calls": [
+          {
+            "error": {
+              "message": "External tool ended without a result",
+              "type": "unknown"
+            },
+            "executed": true,
+            "id": "call_1"
+          }
+        ],
+        "cost": 0.01,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "A call that settled meanwhile is not settled again.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "cost": 0.01,
+            "finish": "stop",
+            "outcome": "succeeded",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 10,
+              "output": 4,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a1",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-requested",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "executed": true,
+            "id": "call_1",
+            "input": {
+              "path": "a.txt"
+            },
+            "name": "Read",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-tool-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "content": [
+              {
+                "text": "contents",
+                "type": "text"
+              }
+            ],
+            "executed": true,
+            "id": "call_1",
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [],
+        "calls": [
+          {
+            "error": {
+              "message": "External tool ended without a result",
+              "type": "unknown"
+            },
+            "executed": true,
+            "id": "call_1"
+          }
+        ],
+        "cost": 0.01,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "The agent's failure settles the step as failed, with what it spent.",
+      "expect": [
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "cost": 0.01,
+            "error": {
+              "message": "Overloaded",
+              "type": "provider.error"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 10,
+              "output": 4,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a1",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [],
+        "calls": [],
+        "cost": 0.01,
+        "error": {
+          "message": "Overloaded",
+          "type": "provider.error"
+        },
+        "outcome": "failed",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "A step that never started is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [],
+        "calls": [],
+        "cost": 0.01,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "A step that settled (an interrupt aborted it) is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a1",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_a1",
+            "error": {
+              "message": "Interrupted",
+              "type": "aborted"
+            },
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Step not in flight"
+      },
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [],
+        "calls": [],
+        "cost": 0.01,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "A step whose execution has settled is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a1",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [],
+        "calls": [],
+        "cost": 0.01,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [],
+        "calls": [],
+        "cost": 0.01,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "assistantMessageID": "msg_a1",
+        "blocks": [],
+        "calls": [],
+        "cost": 0.01,
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1",
+        "tokens": {
+          "cache": {
+            "read": 0,
+            "write": 0
+          },
+          "input": 10,
+          "output": 4,
+          "reasoning": 0
+        }
+      }
+    }
+  ]
+}

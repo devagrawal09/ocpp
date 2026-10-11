@@ -16,12 +16,13 @@ import { eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { TestStepHost } from "./fixture/step-host"
+import { TestHistory } from "./fixture/history"
 
 const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [[Bus.node, Bus.configured()], [Project.node, globalProjectNode], steps.replacement],
+    [TestHistory.bus, [Project.node, globalProjectNode], steps.replacement],
   ),
 )
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
@@ -44,7 +45,7 @@ describe("session idle error projection", () => {
           .where(eq(SessionTable.id, created.id))
           .get()
 
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "provider.transport", message: "socket closed" },
         outcome: "failed",
@@ -52,23 +53,26 @@ describe("session idle error projection", () => {
       expect(yield* row()).toEqual({ outcome: "failed", type: "provider.transport", message: "socket closed" })
 
       // A later success describes the outcome recorded at time_idle, so the stale error goes away.
-      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: created.id, outcome: "succeeded" })
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
+        sessionID: created.id,
+        outcome: "succeeded",
+      })
       expect(yield* row()).toEqual({ outcome: "succeeded", type: null, message: null })
 
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "unknown", message: "again" },
         outcome: "failed",
       })
       // Shutdown interruption is not a terminal outcome, so it leaves the recorded failure alone.
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         reason: "shutdown",
         outcome: "interrupted",
       })
       expect(yield* row()).toEqual({ outcome: "failed", type: "unknown", message: "again" })
 
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         reason: "user",
         outcome: "interrupted",

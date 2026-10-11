@@ -38,6 +38,7 @@ import { Deferred, Effect, Exit, Fiber, Layer, Logger, Schema, SchemaGetter, Sch
 import { TestClock } from "effect/testing"
 import { z } from "zod"
 import { testEffect } from "./lib/effect"
+import { TestHistory } from "./fixture/history"
 
 const imageStore = Layer.mock(Image.Service, {
   normalize: (resource, content) => {
@@ -65,7 +66,8 @@ const imageStore = Layer.mock(Image.Service, {
 /** Completion notifications, recorded before delivery parks so tests can read what the model would see. */
 const deliveries: Array<{ text: string; files?: ReadonlyArray<unknown>; metadata?: Record<string, unknown> }> = []
 let testJobs: Job.Interface | undefined
-const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
+// Shares the history Bus of the composition it joins.
+const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]), [TestHistory.bus])
 const runtimeLayer = Layer.unwrap(
   Effect.gen(function* () {
     const jobs = yield* Job.Service
@@ -115,10 +117,7 @@ const runtimeLayer = Layer.unwrap(
 ).pipe(Layer.provide(jobLayer))
 const registryLayer = AppNodeBuilder.build(
   LayerNode.group([Tool.node, PluginHooks.node, SessionModelRequest.node, Bus.node, Database.node, CodeModeStore.node]),
-  [
-    [Image.node, imageStore],
-    [PluginRuntime.node, runtimeLayer],
-  ],
+  [TestHistory.bus, [Image.node, imageStore], [PluginRuntime.node, runtimeLayer]],
 )
 const it = testEffect(registryLayer)
 const identity = {
@@ -143,7 +142,7 @@ const waitCodeMode = (output: unknown, id: string) =>
     expect(value.executionID).toStartWith("exe_")
     expect((yield* jobs.get(value.executionID))?.status).toBe("running")
     const bus = yield* Bus.Service
-    yield* bus.publish(SessionEvent.Tool.Settled, {
+    yield* TestHistory.of(bus).publish(SessionEvent.Tool.Settled, {
       sessionID,
       assistantMessageID: identity.messageID,
       id,
@@ -1736,7 +1735,7 @@ describe("Tool", () => {
         .pipe(Effect.forkIn(scope, { startImmediately: true }))
       const executionID = yield* Deferred.await(started)
       // Release the outer tool result so the execution starts, then cancel it while a tool blocks.
-      yield* bus.publish(SessionEvent.Tool.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID: identity.messageID,
         id: "call-interrupted",

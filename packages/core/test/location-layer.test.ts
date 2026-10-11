@@ -50,6 +50,7 @@ import { Bus } from "../src/bus"
 import { Reference } from "../src/reference"
 import { Tool } from "../src/tool"
 import { recordSession } from "./fixture/session"
+import { TestHistory } from "./fixture/history"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, LocationServiceMap.node]), [
@@ -79,6 +80,7 @@ const activityLocations = Layer.effect(
 )
 const itWithActivity = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, LocationServiceMap.node, LocationActivity.node]), [
+    TestHistory.bus,
     [LocationServiceMap.node, activityLocations],
   ]),
 )
@@ -93,7 +95,10 @@ describe("LocationServiceMap", () => {
       yield* Location.Service.pipe(Effect.provide(locations.get(ref)), Effect.scoped)
       yield* recordSession({ id: sessionID, directory: ref.directory, slug: "routing" })
       yield* TestClock.adjust("59 minutes")
-      const event = yield* bus.publish(SessionEvent.Execution.Settled, { sessionID, outcome: "succeeded" })
+      const event = yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
+        sessionID,
+        outcome: "succeeded",
+      })
       expect(event).not.toHaveProperty("location")
       yield* TestClock.adjust("2 minutes")
       expect(Array.from(yield* RcMap.keys(locations.rcMap))).toEqual([])
@@ -115,9 +120,13 @@ describe("LocationServiceMap", () => {
       expect(Array.from(yield* RcMap.keys(locations.rcMap))).toEqual([])
 
       yield* read
-      yield* bus.publish(SessionEvent.Execution.Started, { sessionID }, { location: ref })
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Started, { sessionID }, { location: ref })
       yield* TestClock.adjust("59 minutes")
-      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID, outcome: "succeeded" }, { location: ref })
+      yield* TestHistory.of(bus).publish(
+        SessionEvent.Execution.Settled,
+        { sessionID, outcome: "succeeded" },
+        { location: ref },
+      )
       yield* TestClock.adjust("1 minute")
       expect(Array.from(yield* RcMap.keys(locations.rcMap))).toEqual([ref])
       yield* TestClock.adjust("59 minutes")

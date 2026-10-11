@@ -36,6 +36,7 @@ import {
   toolIdentity,
   waitForCodeMode,
 } from "./lib/tool"
+import { TestHistory } from "./fixture/history"
 
 // Each test boots real config discovery, a local HTTP server, and Code Mode storage.
 setDefaultTimeout(15_000)
@@ -84,7 +85,8 @@ const server = Bun.serve({
 afterAll(() => server.stop(true))
 const baseURL = `http://127.0.0.1:${server.port}`
 
-const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
+// Shares the history Bus of the composition it joins.
+const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]), [TestHistory.bus])
 const runtimeLayer = Layer.unwrap(
   Effect.gen(function* () {
     const jobs = yield* Job.Service
@@ -148,6 +150,7 @@ const project = <A, E, R>(config: unknown, body: Effect.Effect<A, E, R>) =>
               CodeModeStore.node,
             ]),
             [
+              TestHistory.bus,
               [Config.node, Config.configured({ global: false })],
               [
                 Location.node,

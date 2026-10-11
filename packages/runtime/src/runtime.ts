@@ -13,6 +13,7 @@ import {
   type RunStepOutboxStore,
 } from "./app.ts"
 import type { RunStepRequest } from "./features/session/run-step-reaction/impl.ts"
+import { recordHistory } from "./features/testing/record-history/impl.ts"
 import type { StepHost } from "./plugins/step-host.ts"
 
 // OC++'s one runtime, embedded in its host process: every Command, Query and
@@ -36,6 +37,11 @@ export type RuntimeOptions = {
   // Query Slice when it is first used. Slices then hold the log's state as soon as the runtime is
   // up, which a host that saves them can check against a fold of the log.
   readonly catchUp?: boolean
+  // Tests only: registers recordHistory, which records facts as given, so a
+  // test can set up the history Commands would have recorded. Production
+  // never makes the runtime with it, so nothing there can record a fact
+  // without its Command.
+  readonly history?: boolean
 }
 
 // Requires the EventLog service and a Scope. Commands and Queries work as soon
@@ -56,14 +62,19 @@ export const makeRuntime = (options: RuntimeOptions = {}) =>
     // Conformance wants every registered Event covered by a scenario, and
     // some of the catalog is not decided by any Slice: register the events the
     // Slices use.
+    // Typed as the production Slices: only a test's fixture dispatches recordHistory.
+    const slices = (options.history ? { ...config.slices, recordHistory } : config.slices) as typeof config.slices
     const events = [
       ...new Map(
-        Object.values(config.slices)
+        Object.values(slices)
           .flatMap((slice) => eventsFor(slice, config.events))
           .map((definition) => [definition.type, definition]),
       ).values(),
     ]
-    const app = yield* makeSpecterRuntime({ ...config, events }, options.catchUp ? { catchUp: "all" } : {}).pipe(
+    const app = yield* makeSpecterRuntime(
+      { ...config, slices, events },
+      options.catchUp ? { catchUp: "all" } : {},
+    ).pipe(
       Effect.provide(
         Layer.mergeAll(
           options.stores?.slices ? createSliceStoreLayer(options.stores.slices) : memorySliceStoreLayer,

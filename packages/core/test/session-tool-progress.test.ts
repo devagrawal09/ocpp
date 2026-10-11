@@ -20,11 +20,10 @@ import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionTable, SessionMessageTable } from "@ocpp/core/session/sql"
 import { testEffect } from "./lib/effect"
 import { Recorded } from "./lib/recorded"
+import { TestHistory } from "./fixture/history"
 
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
-    [Bus.node, Bus.configured()],
-  ]),
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [TestHistory.bus]),
 )
 const model = { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }
 
@@ -55,7 +54,7 @@ describe("Session tool progress", () => {
         .run()
         .pipe(Effect.orDie)
       const assistantMessageID = SessionMessage.ID.create()
-      yield* service.publish(SessionEvent.Step.Started, {
+      yield* TestHistory.of(service).publish(SessionEvent.Step.Started, {
         sessionID,
         assistantMessageID,
         agent: Agent.ID.make("build"),
@@ -73,7 +72,7 @@ describe("Session tool progress", () => {
       })
       const start = (id: string, name = "bash") =>
         Effect.gen(function* () {
-          yield* service.publish(SessionEvent.Tool.Requested, {
+          yield* TestHistory.of(service).publish(SessionEvent.Tool.Requested, {
             sessionID,
             assistantMessageID,
             id,
@@ -98,7 +97,7 @@ describe("Session tool progress", () => {
         state: { status: "running", metadata: {} },
       })
 
-      const success = yield* service.publish(SessionEvent.Tool.Settled, {
+      const success = yield* TestHistory.of(service).publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID,
         id: "call-success",
@@ -134,7 +133,7 @@ describe("Session tool progress", () => {
         events: [{ type: "trace", kind: "return", value: "1" }],
         outcome: "completed",
       })
-      yield* service.publish(SessionEvent.Tool.Settled, {
+      yield* TestHistory.of(service).publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID,
         id: "call-codemode",
@@ -163,7 +162,7 @@ describe("Session tool progress", () => {
         id: "call-failed",
         metadata: { phase: "checkpoint" },
       })
-      const failed = yield* service.publish(SessionEvent.Tool.Settled, {
+      const failed = yield* TestHistory.of(service).publish(SessionEvent.Tool.Settled, {
         sessionID,
         assistantMessageID,
         id: "call-failed",

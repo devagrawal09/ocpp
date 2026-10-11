@@ -47,6 +47,7 @@ import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 import { TestStepHost } from "./fixture/step-host"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { TestHistory } from "./fixture/history"
 import {
   activateCodeMode,
   readCodeModeNotebook,
@@ -117,6 +118,7 @@ const nodes = LayerNode.group([
 
 const replacements = [
   steps.replacement,
+  TestHistory.bus,
   [Global.node, tempGlobalLayer],
   [PluginSupervisor.node, supervisor],
   [ExternalAgentDrivers.node, noVendorDrivers],

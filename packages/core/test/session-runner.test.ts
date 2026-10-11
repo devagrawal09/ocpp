@@ -97,6 +97,7 @@ import { agentHost, catalogHost, host } from "./plugin/host"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { PluginRuntime } from "@ocpp/core/plugin/runtime"
 import { definition, effectiveName, execute } from "@ocpp/core/tool/runtime"
+import { TestHistory } from "./fixture/history"
 
 type ToolBarrier = {
   readonly count: number
@@ -500,7 +501,7 @@ const layer = Layer.unwrap(
       ]),
       [
         ...replacements,
-        [Bus.node, Bus.configured()],
+        TestHistory.bus,
         [LocationServiceMap.node, sharedLocation.node],
         [Catalog.node, promptCatalog],
         [McpInstructions.node, mcpInstructions],
@@ -3662,15 +3663,15 @@ describe("SessionRunnerLLM", () => {
   scenario("durably fails local tools left running by a prior process before continuing", function* (s) {
     // The prompt a prior process delivered before its step died.
     const prompt = yield* s.admit("Recover interrupted tool")
-    yield* s.bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
+    yield* TestHistory.of(s.bus).publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
     const assistantMessageID = SessionMessage.ID.create()
-    yield* s.bus.publish(SessionEvent.Step.Started, {
+    yield* TestHistory.of(s.bus).publish(SessionEvent.Step.Started, {
       sessionID,
       assistantMessageID,
       agent: Agent.ID.make("build"),
       model: { id: ID.make("fake-model"), providerID: Provider.ID.make("fake") },
     })
-    yield* s.bus.publish(SessionEvent.Tool.Requested, {
+    yield* TestHistory.of(s.bus).publish(SessionEvent.Tool.Requested, {
       sessionID,
       assistantMessageID,
       id: "call-interrupted",
@@ -3698,15 +3699,15 @@ describe("SessionRunnerLLM", () => {
   scenario("preserves a stale subagent child session in its model-visible failure", function* (s) {
     // The prompt a prior process delivered before its step died.
     const prompt = yield* s.admit("Recover interrupted subagent")
-    yield* s.bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
+    yield* TestHistory.of(s.bus).publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
     const assistantMessageID = SessionMessage.ID.create()
-    yield* s.bus.publish(SessionEvent.Step.Started, {
+    yield* TestHistory.of(s.bus).publish(SessionEvent.Step.Started, {
       sessionID,
       assistantMessageID,
       agent: Agent.ID.make("build"),
       model: { id: ID.make("fake-model"), providerID: Provider.ID.make("fake") },
     })
-    yield* s.bus.publish(SessionEvent.Tool.Requested, {
+    yield* TestHistory.of(s.bus).publish(SessionEvent.Tool.Requested, {
       sessionID,
       assistantMessageID,
       id: "call-interrupted-subagent",
@@ -3753,15 +3754,15 @@ describe("SessionRunnerLLM", () => {
   scenario("durably fails hosted tools left running by a prior process before continuing inline", function* (s) {
     // The prompt a prior process delivered before its step died.
     const prompt = yield* s.admit("Recover interrupted hosted tool")
-    yield* s.bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
+    yield* TestHistory.of(s.bus).publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
     const assistantMessageID = SessionMessage.ID.create()
-    yield* s.bus.publish(SessionEvent.Step.Started, {
+    yield* TestHistory.of(s.bus).publish(SessionEvent.Step.Started, {
       sessionID,
       assistantMessageID,
       agent: Agent.ID.make("build"),
       model: { id: ID.make("fake-model"), providerID: Provider.ID.make("fake") },
     })
-    yield* s.bus.publish(SessionEvent.Tool.Requested, {
+    yield* TestHistory.of(s.bus).publish(SessionEvent.Tool.Requested, {
       sessionID,
       assistantMessageID,
       id: "call-hosted-interrupted",
@@ -3790,9 +3791,9 @@ describe("SessionRunnerLLM", () => {
   scenario("leaves no call to settle for tool input a prior process only streamed", function* (s) {
     // The prompt a prior process delivered before its step died.
     const prompt = yield* s.admit("Recover interrupted tool input")
-    yield* s.bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
+    yield* TestHistory.of(s.bus).publish(SessionEvent.InboxDelivered, { sessionID, inboxID: prompt.id })
     const assistantMessageID = SessionMessage.ID.create()
-    yield* s.bus.publish(SessionEvent.Step.Started, {
+    yield* TestHistory.of(s.bus).publish(SessionEvent.Step.Started, {
       sessionID,
       assistantMessageID,
       agent: Agent.ID.make("build"),

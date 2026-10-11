@@ -12,6 +12,7 @@ import { type Context, Effect } from "effect"
 import { TestStepHost } from "../../core/test/fixture/step-host"
 import { it } from "../../core/test/lib/effect"
 import { ServerFetch } from "../src/fetch"
+import { TestHistory } from "../../core/test/fixture/history"
 
 it.live("updates completed assistant message content through the session HTTP API", () =>
   Effect.gen(function* () {
@@ -21,7 +22,7 @@ it.live("updates completed assistant message content through the session HTTP AP
     const steps = TestStepHost.make({ capture: captured })
     const handler = yield* ServerFetch.make(
       { app: { version: "test-version" }, database: { path: ":memory:" }, fs: { filewatcher: false } },
-      { overrides: [steps.replacement] },
+      { overrides: [steps.replacement, TestHistory.bus] },
     )
     const created = yield* Effect.promise(() =>
       handler(
@@ -127,7 +128,7 @@ it.live("updates completed assistant message content through the session HTTP AP
     const context = captured.current ?? (yield* Effect.die(new Error("The step host was not built")))
     const incompleteID = SessionMessage.ID.create()
     yield* Bus.Service.use((bus) =>
-      bus.publish(SessionEvent.Step.Started, {
+      TestHistory.of(bus).publish(SessionEvent.Step.Started, {
         sessionID,
         assistantMessageID: incompleteID,
         agent: Agent.defaultID,

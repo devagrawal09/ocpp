@@ -24,19 +24,20 @@ import { testEffect } from "./lib/effect"
 import { Recorded } from "./lib/recorded"
 import { globalProjectNode } from "./lib/project"
 import { TestStepHost } from "./fixture/step-host"
+import { TestHistory } from "./fixture/history"
 
 const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [[Bus.node, Bus.configured()], [Project.node, globalProjectNode], steps.replacement],
+    [TestHistory.bus, [Project.node, globalProjectNode], steps.replacement],
   ),
 )
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
 const model = { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }
 
 const start = (bus: Bus.Interface, sessionID: Session.ID, messageID: SessionMessage.ID) =>
-  bus.publish(SessionEvent.Step.Started, {
+  TestHistory.of(bus).publish(SessionEvent.Step.Started, {
     sessionID,
     assistantMessageID: messageID,
     agent: Agent.defaultID,
@@ -44,7 +45,7 @@ const start = (bus: Bus.Interface, sessionID: Session.ID, messageID: SessionMess
   })
 
 const complete = (bus: Bus.Interface, sessionID: Session.ID, messageID: SessionMessage.ID) =>
-  bus.publish(SessionEvent.Step.Settled, {
+  TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
     sessionID,
     assistantMessageID: messageID,
     finish: "stop",

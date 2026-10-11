@@ -53,6 +53,7 @@ import {
   toolIdentity,
   waitForCodeMode,
 } from "./lib/tool"
+import { TestHistory } from "./fixture/history"
 
 const sessionID = Session.ID.make("ses_shell_tool_test")
 const sessionModel = Model.Ref.make({ id: Model.ID.make("test"), providerID: Provider.ID.make("test") })
@@ -91,7 +92,11 @@ const nodes = LayerNode.group([
   FSUtil.node,
   Global.node,
 ])
-const replacements = [steps.replacement, [Global.node, tempGlobalLayer]] satisfies LayerNode.Replacements
+const replacements = [
+  steps.replacement,
+  TestHistory.bus,
+  [Global.node, tempGlobalLayer],
+] satisfies LayerNode.Replacements
 const productionIt = testEffect(AppNodeBuilder.build(nodes, replacements))
 const it = testEffect(AppNodeBuilder.build(nodes, [...replacements, [PluginSupervisor.node, shellPluginSupervisor]]))
 

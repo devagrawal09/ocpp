@@ -24,11 +24,12 @@ import { asc, eq } from "drizzle-orm"
 import { Effect, Exit, Layer } from "effect"
 import { testEffect } from "./lib/effect"
 import { Recorded } from "./lib/recorded"
+import { TestHistory } from "./fixture/history"
 
 const it = testEffect(
   Layer.merge(
     AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node, ToolOutput.node]), [
-      [Bus.node, Bus.configured()],
+      TestHistory.bus,
     ]),
     TestLLM.testLayer(),
   ),
@@ -51,6 +52,8 @@ for (const fixture of [
       let captures = 0
       let executions = 0
       const steps = yield* SessionStep.make.pipe(
+        // The attempt publishes its step's facts itself; the runtime's recorder takes them in production.
+        Effect.provideService(Bus.Service, TestHistory.recording(yield* Bus.Service)),
         Effect.provide(
           Layer.mock(Snapshot.Service)({
             capture: () => Effect.sync(() => (captures++ === 0 ? start : end)),

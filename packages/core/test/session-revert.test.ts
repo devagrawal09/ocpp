@@ -26,12 +26,13 @@ import { tempGlobalLayer } from "./fixture/global"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 import { TestStepHost } from "./fixture/step-host"
+import { TestHistory } from "./fixture/history"
 
 const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, Session.node, LocationServiceMap.node]),
-    [[Bus.node, Bus.configured()], [Global.node, tempGlobalLayer], steps.replacement],
+    [TestHistory.bus, [Global.node, tempGlobalLayer], steps.replacement],
   ),
 )
 
@@ -68,7 +69,7 @@ describe("Session.revert files", () => {
           const before = yield* snapshot.capture()
           if (!before) throw new Error("Initial snapshot missing")
           const assistantMessageID = SessionMessage.ID.create()
-          yield* bus.publish(SessionEvent.Step.Started, {
+          yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
             sessionID: created.id,
             assistantMessageID,
             agent: Agent.defaultID,
@@ -78,7 +79,7 @@ describe("Session.revert files", () => {
           yield* Effect.promise(() => fs.rename(original, renamed))
           const after = yield* snapshot.capture()
           if (!after) throw new Error("Renamed snapshot missing")
-          yield* bus.publish(SessionEvent.Step.Settled, {
+          yield* TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
             sessionID: created.id,
             assistantMessageID,
             finish: "stop",

@@ -20,6 +20,17 @@ import { createDeleteSessionState, deleteSession, deleteSessionStore } from "./f
 import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
+import { createRecordHistoryState, recordHistoryStore } from "./features/testing/record-history/impl.ts"
+import {
+  createStartAgentStepState,
+  startAgentStep,
+  startAgentStepStore,
+} from "./features/session/start-agent-step/impl.ts"
+import {
+  createFinishAgentStepState,
+  finishAgentStep,
+  finishAgentStepStore,
+} from "./features/session/finish-agent-step/impl.ts"
 import { createBackgroundJobState, backgroundJob, backgroundJobStore } from "./features/job/background-job/impl.ts"
 import {
   createSettleBackgroundJobState,
@@ -266,6 +277,8 @@ export const createRuntimeConfig = (options: {
       failToolInput,
       finishExecution,
       failExecution,
+      startAgentStep,
+      finishAgentStep,
       runStep: createRunStep(
         withReactionOutbox(makeRunStepPlugin(options.host), {
           // A step can run for minutes: shutdown stops it instead of waiting,
@@ -360,6 +373,10 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(failToolInputStore, createFailToolInputState),
     provide(finishExecutionStore, createFinishExecutionState),
     provide(failExecutionStore, createFailExecutionState),
+    provide(startAgentStepStore, createStartAgentStepState),
+    provide(finishAgentStepStore, createFinishAgentStepState),
+    // Used only by a runtime made for tests (recordHistory).
+    provide(recordHistoryStore, createRecordHistoryState),
     provide(runStepStore, createRunStepState),
     provide(driveExecutionStore, createDriveExecutionState),
   )

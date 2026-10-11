@@ -57,6 +57,7 @@ import {
   waitForCodeModeExecution,
   waitForTool,
 } from "./lib/tool"
+import { TestHistory } from "./fixture/history"
 
 let calls = 0
 let invocations: Array<Parameters<Mcp.Interface["callTool"]>[0]> = []
@@ -374,7 +375,8 @@ const mcp = Layer.mock(Mcp.Service, {
       })
     }),
 })
-const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]))
+// Shares the history Bus of the composition it joins.
+const jobLayer = AppNodeBuilder.build(LayerNode.group([Job.node]), [TestHistory.bus])
 const runtimeLayer = Layer.unwrap(
   Effect.gen(function* () {
     const jobs = yield* Job.Service
@@ -413,6 +415,7 @@ const runtimeLayer = Layer.unwrap(
 const it = testEffect(
   Layer.merge(
     AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node, Bus.node, Database.node, CodeModeStore.node]), [
+      TestHistory.bus,
       [Mcp.node, mcp],
       [PluginRuntime.node, runtimeLayer],
     ]),

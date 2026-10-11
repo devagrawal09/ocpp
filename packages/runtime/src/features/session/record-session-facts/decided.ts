@@ -1,6 +1,23 @@
 // The facts a Command of their own decides, by that Command: recording one as
 // a host fact would skip its decision, so recordSessionFacts refuses it.
 export const decided = {
+  // The runtime's own inbox, execution and step facts.
+  "session-inbox-enqueued": "enqueueInput",
+  "session-inbox-held": "enqueueInput",
+  "session-inbox-delivered": "deliverInboxItem",
+  "session-inbox-cancelled": "cancelInboxItem",
+  "session-inbox-delivery-changed": "changeDelivery",
+  "session-execution-started": "startExecution",
+  "session-execution-continued": "startExecution",
+  "session-execution-settled": "finishExecution",
+  "session-step-started": "recordStepStarted",
+  "session-step-streamed": "recordStepStreamed",
+  "session-step-settled": "settleStep",
+  "session-block-recorded": "recordBlock",
+  "session-tool-requested": "recordToolCall",
+  "session-tool-input-failed": "failToolInput",
+  "session-tool-settled": "settleToolCall",
+  // The facts OC++'s Session operations record through Commands of their own.
   "session-created": "createSession",
   "session-imported": "createSession",
   "session-forked": "forkSession",

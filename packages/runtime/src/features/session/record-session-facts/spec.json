@@ -6,483 +6,6 @@
   "name": "recordSessionFacts",
   "scenarios": [
     {
-      "description": "Records session-inbox-delivered as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-inbox-delivered",
-          "examplePayload": {
-            "inboxID": "msg_first",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "inboxID": "msg_first",
-              "sessionID": "ses_1"
-            },
-            "type": "session-inbox-delivered"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-inbox-enqueued as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-inbox-enqueued",
-          "examplePayload": {
-            "inboxID": "msg_first",
-            "item": {
-              "delivery": "steer",
-              "payload": {
-                "text": "first"
-              },
-              "type": "user"
-            },
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "inboxID": "msg_first",
-              "item": {
-                "delivery": "steer",
-                "payload": {
-                  "text": "first"
-                },
-                "type": "user"
-              },
-              "sessionID": "ses_1"
-            },
-            "type": "session-inbox-enqueued"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-inbox-cancelled as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-inbox-cancelled",
-          "examplePayload": {
-            "inboxID": "msg_cancelled_queue",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "inboxID": "msg_cancelled_queue",
-              "sessionID": "ses_1"
-            },
-            "type": "session-inbox-cancelled"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-inbox-delivery-changed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-inbox-delivery-changed",
-          "examplePayload": {
-            "delivery": "steer",
-            "inboxID": "msg_120d4f1eb0014acSbWw4y75Onf",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "delivery": "steer",
-              "inboxID": "msg_120d4f1eb0014acSbWw4y75Onf",
-              "sessionID": "ses_1"
-            },
-            "type": "session-inbox-delivery-changed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-inbox-held as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-inbox-held",
-          "examplePayload": {
-            "inboxID": "msg_held",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "inboxID": "msg_held",
-              "sessionID": "ses_1"
-            },
-            "type": "session-inbox-held"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-execution-started as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-execution-started",
-          "examplePayload": {
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1"
-            },
-            "type": "session-execution-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-execution-continued as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-execution-continued",
-          "examplePayload": {
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1"
-            },
-            "type": "session-execution-continued"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-execution-settled as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-execution-settled",
-          "examplePayload": {
-            "error": {
-              "message": "failed",
-              "type": "unknown"
-            },
-            "outcome": "failed",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "error": {
-                "message": "failed",
-                "type": "unknown"
-              },
-              "outcome": "failed",
-              "sessionID": "ses_1"
-            },
-            "type": "session-execution-settled"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-step-started as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-step-started",
-          "examplePayload": {
-            "agent": "build",
-            "assistantMessageID": "msg_retry_first",
-            "model": {
-              "id": "model",
-              "providerID": "provider"
-            },
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "agent": "build",
-              "assistantMessageID": "msg_retry_first",
-              "model": {
-                "id": "model",
-                "providerID": "provider"
-              },
-              "sessionID": "ses_1"
-            },
-            "type": "session-step-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-step-streamed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-step-streamed",
-          "examplePayload": {
-            "assistantMessageID": "msg_ended",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_ended",
-              "sessionID": "ses_1"
-            },
-            "type": "session-step-streamed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-step-settled as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-step-settled",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_2",
-            "cost": 1.25,
-            "finish": "stop",
-            "outcome": "succeeded",
-            "sessionID": "ses_1",
-            "tokens": {
-              "cache": {
-                "read": 3,
-                "write": 1
-              },
-              "input": 10,
-              "output": 4,
-              "reasoning": 2
-            }
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_assistant_2",
-              "cost": 1.25,
-              "finish": "stop",
-              "outcome": "succeeded",
-              "sessionID": "ses_1",
-              "tokens": {
-                "cache": {
-                  "read": 3,
-                  "write": 1
-                },
-                "input": 10,
-                "output": 4,
-                "reasoning": 2
-              }
-            },
-            "type": "session-step-settled"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-block-recorded as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-block-recorded",
-          "examplePayload": {
-            "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
-            "kind": "reasoning",
-            "ordinal": 0,
-            "sessionID": "ses_1",
-            "text": "Think"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
-              "kind": "reasoning",
-              "ordinal": 0,
-              "sessionID": "ses_1",
-              "text": "Think"
-            },
-            "type": "session-block-recorded"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-tool-requested as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-tool-requested",
-          "examplePayload": {
-            "assistantMessageID": "msg_120d47b2b001BrE1aLIUaQE9Iu",
-            "executed": false,
-            "id": "call-defect",
-            "input": {},
-            "name": "echo",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_120d47b2b001BrE1aLIUaQE9Iu",
-              "executed": false,
-              "id": "call-defect",
-              "input": {},
-              "name": "echo",
-              "sessionID": "ses_1"
-            },
-            "type": "session-tool-requested"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-tool-input-failed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-tool-input-failed",
-          "examplePayload": {
-            "assistantMessageID": "msg_assistant_1",
-            "error": {
-              "message": "malformed",
-              "type": "tool.input-json"
-            },
-            "executed": false,
-            "id": "call_1",
-            "name": "echo",
-            "sessionID": "ses_1",
-            "text": "{\"text\":"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_assistant_1",
-              "error": {
-                "message": "malformed",
-                "type": "tool.input-json"
-              },
-              "executed": false,
-              "id": "call_1",
-              "name": "echo",
-              "sessionID": "ses_1",
-              "text": "{\"text\":"
-            },
-            "type": "session-tool-input-failed"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-tool-settled as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-tool-settled",
-          "examplePayload": {
-            "assistantMessageID": "msg_hooks",
-            "content": [
-              {
-                "text": "Execution started",
-                "type": "text"
-              }
-            ],
-            "executed": false,
-            "id": "call-hooks",
-            "outcome": "succeeded",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "assistantMessageID": "msg_hooks",
-              "content": [
-                {
-                  "text": "Execution started",
-                  "type": "text"
-                }
-              ],
-              "executed": false,
-              "id": "call-hooks",
-              "outcome": "succeeded",
-              "sessionID": "ses_1"
-            },
-            "type": "session-tool-settled"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records session-codemode-started as the host published it.",
       "expect": [
         {
@@ -1540,6 +1063,447 @@
               "replacement": "cred_2"
             },
             "type": "credential-removed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-inbox-enqueued: enqueueInput decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-inbox-enqueued is recorded by enqueueInput"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "inboxID": "msg_first",
+              "item": {
+                "delivery": "steer",
+                "payload": {
+                  "text": "first"
+                },
+                "type": "user"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-enqueued"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-inbox-held: enqueueInput decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-inbox-held is recorded by enqueueInput"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "inboxID": "msg_held",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-held"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-inbox-delivered: deliverInboxItem decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-inbox-delivered is recorded by deliverInboxItem"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "inboxID": "msg_first",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-delivered"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-inbox-cancelled: cancelInboxItem decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-inbox-cancelled is recorded by cancelInboxItem"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "inboxID": "msg_cancelled_queue",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-inbox-delivery-changed: changeDelivery decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-inbox-delivery-changed is recorded by changeDelivery"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "delivery": "steer",
+              "inboxID": "msg_120d4f1eb0014acSbWw4y75Onf",
+              "sessionID": "ses_1"
+            },
+            "type": "session-inbox-delivery-changed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-execution-started: startExecution decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-execution-started is recorded by startExecution"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1"
+            },
+            "type": "session-execution-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-execution-continued: startExecution decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-execution-continued is recorded by startExecution"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1"
+            },
+            "type": "session-execution-continued"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-execution-settled: finishExecution decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-execution-settled is recorded by finishExecution"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "error": {
+                "message": "failed",
+                "type": "unknown"
+              },
+              "outcome": "failed",
+              "sessionID": "ses_1"
+            },
+            "type": "session-execution-settled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-step-started: recordStepStarted decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-step-started is recorded by recordStepStarted"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "agent": "build",
+              "assistantMessageID": "msg_retry_first",
+              "model": {
+                "id": "model",
+                "providerID": "provider"
+              },
+              "sessionID": "ses_1"
+            },
+            "type": "session-step-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-step-streamed: recordStepStreamed decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-step-streamed is recorded by recordStepStreamed"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "assistantMessageID": "msg_ended",
+              "sessionID": "ses_1"
+            },
+            "type": "session-step-streamed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-step-settled: settleStep decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-step-settled is recorded by settleStep"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "assistantMessageID": "msg_assistant_2",
+              "cost": 1.25,
+              "finish": "stop",
+              "outcome": "succeeded",
+              "sessionID": "ses_1",
+              "tokens": {
+                "cache": {
+                  "read": 3,
+                  "write": 1
+                },
+                "input": 10,
+                "output": 4,
+                "reasoning": 2
+              }
+            },
+            "type": "session-step-settled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-block-recorded: recordBlock decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-block-recorded is recorded by recordBlock"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d4673b001gb4MwJTgG2BW7R",
+              "kind": "reasoning",
+              "ordinal": 0,
+              "sessionID": "ses_1",
+              "text": "Think"
+            },
+            "type": "session-block-recorded"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-tool-requested: recordToolCall decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-tool-requested is recorded by recordToolCall"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "assistantMessageID": "msg_120d47b2b001BrE1aLIUaQE9Iu",
+              "executed": false,
+              "id": "call-defect",
+              "input": {},
+              "name": "echo",
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-requested"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-tool-input-failed: failToolInput decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-tool-input-failed is recorded by failToolInput"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "assistantMessageID": "msg_assistant_1",
+              "error": {
+                "message": "malformed",
+                "type": "tool.input-json"
+              },
+              "executed": false,
+              "id": "call_1",
+              "name": "echo",
+              "sessionID": "ses_1",
+              "text": "{\"text\":"
+            },
+            "type": "session-tool-input-failed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-tool-settled: settleToolCall decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-tool-settled is recorded by settleToolCall"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "assistantMessageID": "msg_hooks",
+              "content": [
+                {
+                  "text": "Execution started",
+                  "type": "text"
+                }
+              ],
+              "executed": false,
+              "id": "call-hooks",
+              "outcome": "succeeded",
+              "sessionID": "ses_1"
+            },
+            "type": "session-tool-settled"
           }
         ]
       }

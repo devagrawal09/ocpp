@@ -23,6 +23,7 @@ import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { TestStepHost } from "./fixture/step-host"
 import { stageRevert } from "./fixture/session"
+import { TestHistory } from "./fixture/history"
 
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
 const model = LanguageModel.make({
@@ -67,7 +68,7 @@ const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [[LocationServiceMap.node, locations], [Project.node, globalProjectNode], steps.replacement],
+    [[LocationServiceMap.node, locations], [Project.node, globalProjectNode], steps.replacement, TestHistory.bus],
   ),
 )
 
@@ -81,7 +82,7 @@ describe("Session.compact", () => {
 
       const messageID = SessionMessage.ID.create()
       // A delivered prompt, in one commit so it never waits in the inbox.
-      yield* bus.publishAll([
+      yield* TestHistory.of(bus).publishAll([
         [
           SessionEvent.InboxEnqueued,
           {
@@ -145,7 +146,7 @@ describe("Session.compact", () => {
       const created = yield* session.create({ location })
       const messageID = SessionMessage.ID.create()
 
-      yield* bus.publishAll([
+      yield* TestHistory.of(bus).publishAll([
         [
           SessionEvent.InboxEnqueued,
           {

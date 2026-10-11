@@ -19,6 +19,7 @@ import { TestStepHost } from "../../core/test/fixture/step-host"
 import { tmpdirScoped } from "../../core/test/fixture/tmpdir"
 import { it } from "../../core/test/lib/effect"
 import { ServerFetch } from "../src/fetch"
+import { TestHistory } from "../../core/test/fixture/history"
 
 type Services = Bus.Service | Job.Service | LocationServiceMap.Service
 
@@ -138,7 +139,7 @@ const serve = Effect.fnUntraced(function* () {
   const steps = TestStepHost.make({ capture: captured })
   const handler = yield* ServerFetch.make(
     { app: { version: "test-version" }, database: { path: ":memory:" }, fs: { filewatcher: false } },
-    { overrides: [steps.replacement] },
+    { overrides: [steps.replacement, TestHistory.bus] },
   )
   const directory = yield* tmpdirScoped()
   const create = () =>
@@ -183,13 +184,13 @@ const run = Effect.fnUntraced(function* (sessionID: Session.ID, location: Locati
   const locations = yield* LocationServiceMap.Service
   const assistantMessageID = SessionMessage.ID.create()
   const id = "call_" + assistantMessageID
-  yield* bus.publish(SessionEvent.Step.Started, {
+  yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
     sessionID,
     assistantMessageID,
     agent: Agent.ID.make("build"),
     model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
   })
-  yield* bus.publish(SessionEvent.Tool.Requested, {
+  yield* TestHistory.of(bus).publish(SessionEvent.Tool.Requested, {
     sessionID,
     assistantMessageID,
     id,
@@ -211,7 +212,7 @@ const run = Effect.fnUntraced(function* (sessionID: Session.ID, location: Locati
       call: { type: "tool-call", id, name: "execute", input: { code } },
     })
   }).pipe(Effect.provide(locations.get(location)))
-  yield* bus.publish(SessionEvent.Tool.Settled, {
+  yield* TestHistory.of(bus).publish(SessionEvent.Tool.Settled, {
     sessionID,
     assistantMessageID,
     id,
@@ -220,7 +221,7 @@ const run = Effect.fnUntraced(function* (sessionID: Session.ID, location: Locati
     outcome: "succeeded",
   })
   // As the runner's step ends once its tools settle.
-  yield* bus.publish(SessionEvent.Step.Settled, {
+  yield* TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
     sessionID,
     assistantMessageID,
     finish: "tool-calls",

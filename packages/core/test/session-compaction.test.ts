@@ -39,6 +39,7 @@ import { DateTime, Effect, Fiber, Layer, Schema, Stream } from "effect"
 import { asc, eq } from "drizzle-orm"
 import { recordSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
+import { TestHistory } from "./fixture/history"
 
 let requests: LLMRequest[] = []
 const model = LanguageModel.make({
@@ -97,10 +98,7 @@ const it = testEffect(
       SessionCompaction.node,
       SessionModelRequest.node,
     ]),
-    [
-      [Bus.node, Bus.configured()],
-      [llmClient, client],
-    ],
+    [TestHistory.bus, [llmClient, client]],
   ),
 )
 
@@ -260,7 +258,7 @@ it.effect("refreshes the notebook checkpoint only at successful compaction witho
     const modelRequests = yield* SessionModelRequest.Service
     const store = yield* SessionStore.Service
     const assistantMessageID = SessionMessage.ID.create()
-    yield* bus.publish(SessionEvent.Step.Started, {
+    yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
       sessionID: session.id,
       assistantMessageID,
       agent: Agent.defaultID,
@@ -474,7 +472,7 @@ it.effect("manual compaction records model resolution failures without calling t
     const modelRequests = yield* SessionModelRequest.Service
     const inputID = SessionMessage.ID.make("msg_manual_resolution_failure")
     const assistantMessageID = SessionMessage.ID.create()
-    yield* bus.publish(SessionEvent.Step.Started, {
+    yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
       sessionID,
       assistantMessageID,
       agent: Agent.defaultID,

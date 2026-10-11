@@ -29,12 +29,13 @@ import { Snapshot } from "@ocpp/core/snapshot"
 import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
 import { TestStepHost } from "./fixture/step-host"
 import { forkSession, recordSession, revert, stageRevert } from "./fixture/session"
+import { TestHistory } from "./fixture/history"
 
 const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionInbox.node, Session.node]),
-    [[Bus.node, Bus.configured()], steps.replacement],
+    [TestHistory.bus, steps.replacement],
   ),
 )
 
@@ -318,7 +319,7 @@ describe("SessionProjector", () => {
       const bus = yield* Bus.Service
 
       // Each prompt is delivered in the commit that admits it, so it never waits in the inbox.
-      yield* bus.publishAll([
+      yield* TestHistory.of(bus).publishAll([
         [
           SessionEvent.InboxEnqueued,
           {
@@ -333,7 +334,7 @@ describe("SessionProjector", () => {
           { id: Event.ID.make("evt_z") },
         ],
       ])
-      yield* bus.publishAll([
+      yield* TestHistory.of(bus).publishAll([
         [
           SessionEvent.InboxEnqueued,
           {
@@ -425,7 +426,7 @@ describe("SessionProjector", () => {
       })
       if (!admitted) return yield* Effect.die("Synthetic admission failed")
 
-      yield* bus.publish(SessionEvent.InboxDelivered, { sessionID, inboxID: id })
+      yield* TestHistory.of(bus).publish(SessionEvent.InboxDelivered, { sessionID, inboxID: id })
 
       const row = yield* db
         .select()
@@ -454,7 +455,7 @@ describe("SessionProjector", () => {
       })
       if (!admitted) return yield* Effect.die("Prompt admission failed")
 
-      const event = yield* bus.publish(SessionEvent.InboxDelivered, {
+      const event = yield* TestHistory.of(bus).publish(SessionEvent.InboxDelivered, {
         sessionID,
         inboxID: id,
       })
@@ -628,7 +629,7 @@ describe("SessionProjector", () => {
         .values({ id, session_id: sessionID, type, seq: 0, time_created: 0, data })
         .run()
 
-      const exit = yield* bus
+      const exit = yield* TestHistory.of(bus)
         .publish(SessionEvent.Step.Started, {
           sessionID,
           assistantMessageID: id,
@@ -650,9 +651,14 @@ describe("SessionProjector", () => {
       const bus = yield* Bus.Service
       const first = SessionMessage.ID.make("msg_retry_first")
       const second = SessionMessage.ID.make("msg_retry_second")
-      yield* bus.publish(SessionEvent.Step.Started, { sessionID, assistantMessageID: first, agent: build, model })
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
+        sessionID,
+        assistantMessageID: first,
+        agent: build,
+        model,
+      })
       // The fact counts the retries so far; the assistant shows the attempt about to run.
-      yield* bus.publish(SessionEvent.Step.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: first,
         outcome: "failed",
@@ -673,15 +679,24 @@ describe("SessionProjector", () => {
         retry: { attempt: 2, at: DateTime.makeUnsafe(2_000), error: { type: "provider.transport" } },
       })
 
-      yield* bus.publish(SessionEvent.Step.Started, { sessionID, assistantMessageID: second, agent: build, model })
-      yield* bus.publish(SessionEvent.Step.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
+        sessionID,
+        assistantMessageID: second,
+        agent: build,
+        model,
+      })
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: second,
         outcome: "failed",
         error: { type: "provider.internal", message: "Unavailable" },
         retry: { attempt: 2, at: 6_000 },
       })
-      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID, reason: "shutdown", outcome: "interrupted" })
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
+        sessionID,
+        reason: "shutdown",
+        outcome: "interrupted",
+      })
 
       const rows = yield* db
         .select()
@@ -711,7 +726,7 @@ describe("SessionProjector", () => {
       const usageUpdated = yield* service
         .subscribe(SessionEvent.UsageUpdated)
         .pipe(Stream.runHead, Effect.forkScoped({ startImmediately: true }))
-      yield* service.publish(SessionEvent.Step.Settled, {
+      yield* TestHistory.of(service).publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: SessionMessage.ID.make("msg_assistant_2"),
         finish: "stop",
@@ -768,11 +783,11 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
 
       const service = yield* Bus.Service
-      yield* service.publish(SessionEvent.Step.Streamed, {
+      yield* TestHistory.of(service).publish(SessionEvent.Step.Streamed, {
         sessionID,
         assistantMessageID: endedID,
       })
-      yield* service.publish(SessionEvent.Step.Settled, {
+      yield* TestHistory.of(service).publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: endedID,
         finish: "stop",
@@ -784,7 +799,7 @@ describe("SessionProjector", () => {
         files: [RelativePath.make("src/ended.ts")],
         outcome: "succeeded",
       })
-      yield* service.publish(SessionEvent.Step.Settled, {
+      yield* TestHistory.of(service).publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: failedID,
         finish: "content-filter",
@@ -844,7 +859,7 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
 
       const service = yield* Bus.Service
-      yield* service.publish(SessionEvent.Block.Recorded, {
+      yield* TestHistory.of(service).publish(SessionEvent.Block.Recorded, {
         sessionID,
         assistantMessageID: SessionMessage.ID.make("msg_assistant_completed"),
         kind: "text",

@@ -240,6 +240,11 @@ interface Options {
   readonly beforeAggregateRead?: (aggregateID: string) => Effect.Effect<void>
   /** Maximum durable rows read per page while replaying or tailing an aggregate log. */
   readonly logReadPageSize?: number
+  /**
+   * Tests only: the runtime registers `recordHistory`, which records facts as given, so a test can set up the
+   * history Commands would have recorded. Production never makes the runtime with it.
+   */
+  readonly history?: boolean
 }
 
 export function configured(options?: Options) {
@@ -672,6 +677,7 @@ export function configured(options?: Options) {
           // Every Slice holds the log's state once the runtime is up; from saved snapshots that is only the
           // log's tail.
           catchUp: true,
+          ...(options?.history ? { history: true } : {}),
         }).pipe(Effect.provideService(SpecterEventLogService, runtimeLog), Effect.orDie)
         const recordFacts = (items: readonly [BatchItem, ...BatchItem[]]) => {
           const key = `bus:${crypto.randomUUID()}`

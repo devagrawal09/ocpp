@@ -1,0 +1,221 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Starts a step an external agent produces in the execution the host drives: the agent's output and calls are recorded under it until finishAgentStep. The agent decides its own steps, so a step its stopped process left in flight does not hold the next one back.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "startAgentStep",
+  "scenarios": [
+    {
+      "description": "A step starts in the Session's running execution.",
+      "expect": [
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a1",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "agent": "build",
+        "assistantMessageID": "msg_a1",
+        "model": {
+          "id": "sonnet",
+          "providerID": "claude"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A step a stopped process left in flight does not hold the next one back.",
+      "expect": [
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a2",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_a1",
+            "model": {
+              "id": "sonnet",
+              "providerID": "claude"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "agent": "build",
+        "assistantMessageID": "msg_a2",
+        "model": {
+          "id": "sonnet",
+          "providerID": "claude"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Session with no running execution is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Execution not active"
+      },
+      "when": {
+        "agent": "build",
+        "assistantMessageID": "msg_a1",
+        "model": {
+          "id": "sonnet",
+          "providerID": "claude"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "agent": "build",
+        "assistantMessageID": "msg_a1",
+        "model": {
+          "id": "sonnet",
+          "providerID": "claude"
+        },
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "agent": "build",
+        "assistantMessageID": "msg_a1",
+        "model": {
+          "id": "sonnet",
+          "providerID": "claude"
+        },
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

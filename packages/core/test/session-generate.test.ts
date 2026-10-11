@@ -44,6 +44,7 @@ import { asc, eq } from "drizzle-orm"
 import { Effect, Layer, Schema, Stream } from "effect"
 import { testEffect } from "./lib/effect"
 import { recordSession } from "./fixture/session"
+import { TestHistory } from "./fixture/history"
 
 const requests: LLMRequest[] = []
 const options: Array<StreamOptions | undefined> = []
@@ -137,7 +138,7 @@ const it = testEffect(
       SessionGenerateNode.node,
     ]),
     [
-      [Bus.node, Bus.configured()],
+      TestHistory.bus,
       [llmClient, client],
       [SessionRunnerModel.node, models],
       [InstructionBuiltIns.node, builtins],
@@ -226,23 +227,23 @@ it.effect(
       const { db, bus, instructions } = yield* setup
       yield* InstructionState.prepare(db, bus, instructions, sessionID)
       const existing = SessionMessage.ID.create()
-      yield* bus.publish(SessionEvent.InboxEnqueued, {
+      yield* TestHistory.of(bus).publish(SessionEvent.InboxEnqueued, {
         sessionID,
         inboxID: existing,
         item: { type: "user", payload: { text: "Existing durable context" }, delivery: "steer" },
       })
-      yield* bus.publish(SessionEvent.InboxDelivered, {
+      yield* TestHistory.of(bus).publish(SessionEvent.InboxDelivered, {
         sessionID,
         inboxID: existing,
       })
       const settledAssistant = SessionMessage.ID.create()
-      yield* bus.publish(SessionEvent.Step.Started, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
         sessionID,
         assistantMessageID: settledAssistant,
         agent: Agent.ID.make("build"),
         model: { id: ID.make("generate-model"), providerID: Provider.ID.make("test") },
       })
-      yield* bus.publish(SessionEvent.Block.Recorded, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Block.Recorded, {
         sessionID,
         assistantMessageID: settledAssistant,
         kind: "text",
@@ -250,13 +251,13 @@ it.effect(
         text: "Settled partial answer",
       })
       const activeAssistant = SessionMessage.ID.create()
-      yield* bus.publish(SessionEvent.Step.Started, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
         sessionID,
         assistantMessageID: activeAssistant,
         agent: Agent.ID.make("build"),
         model: { id: ID.make("generate-model"), providerID: Provider.ID.make("test") },
       })
-      yield* bus.publish(SessionEvent.Tool.Requested, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Tool.Requested, {
         sessionID,
         assistantMessageID: activeAssistant,
         id: "active-call",
@@ -264,7 +265,7 @@ it.effect(
         input: {},
         executed: false,
       })
-      yield* bus.publish(SessionEvent.InboxEnqueued, {
+      yield* TestHistory.of(bus).publish(SessionEvent.InboxEnqueued, {
         sessionID,
         inboxID: SessionMessage.ID.create(),
         item: { type: "user", payload: { text: "Queued input must remain invisible" }, delivery: "queue" },

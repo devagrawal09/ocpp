@@ -5,13 +5,17 @@ import type { Agent } from "@ocpp/schema/agent"
 import type { Model } from "@ocpp/schema/model"
 import type { Session } from "@ocpp/schema/session"
 import type { SessionError } from "@ocpp/schema/session-error"
-import type { Tool } from "@ocpp/schema/tool"
-import { Deferred, Effect, Semaphore } from "effect"
+import { Tool } from "@ocpp/schema/tool"
+import { Deferred, Effect, Schema, Semaphore } from "effect"
 import { Bus } from "../bus.js"
 import { SessionEvent } from "../session/event.js"
 import { SessionMessage } from "../session/message.js"
 import { toSessionError } from "../session/to-session-error.js"
 import type { ExternalAgentDriver } from "./driver.js"
+
+const encodeStarted = Schema.encodeSync(SessionEvent.Step.Started.data)
+const encodeContent = Schema.encodeSync(Schema.NonEmptyArray(Tool.Content))
+const encodeMetadata = Schema.encodeSync(Schema.Record(Schema.String, Schema.Json))
 
 /** Vendor names for OC++'s own `execute`: an MCP tool for Claude and Codex, a custom tool for Pi. */
 const EXECUTE = new Set(["execute", "mcp__ocpp__execute"])
@@ -48,6 +52,9 @@ export function make(
   }
   // Vendor events and OC++ `execute` calls arrive on different fibers; each publication sequence is atomic.
   const lock = Semaphore.makeUnsafe(1)
+  // The agent's step facts go through the runtime's Commands. One the runtime refuses (the execution moved on: it
+  // was interrupted, or the step settled) is dropped.
+  const record = (command: Bus.RuntimeCommand) => bus.command(command).pipe(Effect.ignore)
   const begin = Effect.fn("ExternalAgentStream.begin")(function* () {
     if (state.messageID !== undefined) return state.messageID
     const messageID = SessionMessage.ID.create()
@@ -56,7 +63,10 @@ export function make(
     state.message = ""
     state.tokens = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
     state.cost = 0
-    yield* bus.publish(SessionEvent.Step.Started, { sessionID, assistantMessageID: messageID, agent, model })
+    yield* record({
+      type: "startAgentStep",
+      payload: encodeStarted({ sessionID, assistantMessageID: messageID, agent, model }),
+    })
     return messageID
   })
   const finish = Effect.fn("ExternalAgentStream.finish")(function* (error?: unknown) {
@@ -64,43 +74,29 @@ export function make(
     // timeline as a provider error does. A turn interrupted before any output leaves no step behind.
     if (state.messageID === undefined && (error === undefined || toSessionError(error).type === "aborted")) return
     const base = { sessionID, assistantMessageID: yield* begin() }
-    for (const block of state.blocks.values()) {
-      yield* bus.publish(SessionEvent.Block.Recorded, {
-        ...base,
+    // The step's blocks, the calls it left without a result and its settlement are one commit.
+    const unanswered = toSessionError(error ?? new Error("External tool ended without a result"))
+    const finished = {
+      ...base,
+      blocks: [...state.blocks.values()].map((block) => ({
         kind: block.type,
         ordinal: block.ordinal,
         text: block.text,
-      })
+      })),
+      calls: [...state.tools].map(([id, tool]) => ({ id, executed: !tool.claimed, error: unanswered })),
+      tokens: state.tokens,
+      cost: Money.USD.make(state.cost),
     }
-    for (const [id, tool] of state.tools) {
-      state.settled.add(id)
-      yield* bus.publish(SessionEvent.Tool.Settled, {
-        sessionID,
-        assistantMessageID: tool.messageID,
-        id,
-        outcome: "failed",
-        executed: !tool.claimed,
-        error: toSessionError(error ?? new Error("External tool ended without a result")),
-      })
-    }
+    for (const id of state.tools.keys()) state.settled.add(id)
     state.blocks.clear()
     state.tools.clear()
-    if (error !== undefined)
-      yield* bus.publish(SessionEvent.Step.Settled, {
-        ...base,
-        outcome: "failed",
-        error: toSessionError(error),
-        tokens: state.tokens,
-        cost: Money.USD.make(state.cost),
-      })
-    if (error === undefined)
-      yield* bus.publish(SessionEvent.Step.Settled, {
-        ...base,
-        outcome: "succeeded",
-        finish: "stop",
-        tokens: state.tokens,
-        cost: Money.USD.make(state.cost),
-      })
+    yield* record({
+      type: "finishAgentStep",
+      payload:
+        error === undefined
+          ? { ...finished, outcome: "succeeded", finish: "stop" }
+          : { ...finished, outcome: "failed", error: toSessionError(error) },
+    })
     state.messageID = undefined
   })
   const announce = Effect.fn("ExternalAgentStream.announce")(function* (
@@ -115,13 +111,16 @@ export function make(
     // A structured submission's output is deliberately absent from the canonical transcript.
     const recorded = ["submit_result", "mcp__ocpp__submit_result"].includes(name) ? { message: input.message } : input
     // OC++ runs `execute` itself, so it is recorded like a runner-owned call rather than a vendor-hosted one.
-    yield* bus.publish(SessionEvent.Tool.Requested, {
-      sessionID,
-      assistantMessageID: messageID,
-      id,
-      name: execute ? "execute" : name,
-      input: recorded,
-      executed: !execute,
+    yield* record({
+      type: "recordToolCall",
+      payload: {
+        sessionID,
+        assistantMessageID: messageID,
+        id,
+        name: execute ? "execute" : name,
+        input: recorded,
+        executed: !execute,
+      },
     })
     if (!execute) return
     const waiter = state.waiting.findIndex((item) => item.input === text)
@@ -190,17 +189,13 @@ export function make(
     state.tools.delete(event.id)
     state.settled.add(event.id)
     if (event.error)
-      return yield* bus.publish(SessionEvent.Tool.Settled, {
-        ...call,
-        outcome: "failed",
-        executed: true,
-        error: { type: "tool.execution", message: event.output },
+      return yield* record({
+        type: "settleToolCall",
+        payload: { ...call, executed: true, error: { type: "tool.execution", message: event.output } },
       })
-    yield* bus.publish(SessionEvent.Tool.Settled, {
-      ...call,
-      outcome: "succeeded",
-      executed: true,
-      content: [{ type: "text", text: event.output || "Completed." }],
+    yield* record({
+      type: "settleToolCall",
+      payload: { ...call, executed: true, content: [{ type: "text", text: event.output || "Completed." }] },
     })
   })
   /**
@@ -243,21 +238,27 @@ export function make(
     state.settled.add(call.id)
     const base = { sessionID, assistantMessageID: call.messageID, id: call.id, executed: false }
     if (outcome._tag === "Failure")
-      return yield* bus.publish(SessionEvent.Tool.Settled, {
-        ...base,
-        outcome: "failed",
-        error: outcome.error,
-        ...(outcome.metadata === undefined ? {} : { metadata: outcome.metadata }),
+      return yield* record({
+        type: "settleToolCall",
+        payload: {
+          ...base,
+          error: outcome.error,
+          ...(outcome.metadata === undefined ? {} : { metadata: encodeMetadata(outcome.metadata) }),
+        },
       })
     const content =
       typeof outcome.result.content === "string"
         ? [{ type: "text" as const, text: outcome.result.content }]
         : [...(outcome.result.content ?? [])]
-    yield* bus.publish(SessionEvent.Tool.Settled, {
-      ...base,
-      outcome: "succeeded",
-      content: content.length === 0 ? [{ type: "text", text: "Completed." }] : [content[0], ...content.slice(1)],
-      ...(outcome.result.metadata === undefined ? {} : { metadata: outcome.result.metadata }),
+    yield* record({
+      type: "settleToolCall",
+      payload: {
+        ...base,
+        content: encodeContent(
+          content.length === 0 ? [{ type: "text", text: "Completed." }] : [content[0], ...content.slice(1)],
+        ),
+        ...(outcome.result.metadata === undefined ? {} : { metadata: encodeMetadata(outcome.result.metadata) }),
+      },
     })
   })
   return {

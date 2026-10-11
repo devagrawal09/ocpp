@@ -1,11 +1,16 @@
 import { Delegation } from "@ocpp/schema/delegation"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import type { Bus } from "../../bus.js"
-import { SessionEvent } from "../event.js"
 import type { SessionSchema } from "../schema.js"
 import type { SessionStore } from "../store.js"
 
-/** Fails tool calls a previous process left streaming or running, before a drain continues the Session. */
+const encodeMetadata = Schema.encodeSync(Schema.Record(Schema.String, Schema.Json))
+
+/**
+ * Fails tool calls a previous process left streaming or running, before a drain continues the Session. Each goes
+ * through the runtime's Command for the step the dead attempt left in flight; one the runtime refuses has been
+ * settled already (by its own orphan reconciliation) or belongs to no step in flight.
+ */
 export const settleStaleToolCalls = Effect.fn("SessionRunner.settleStaleToolCalls")(function* (
   store: SessionStore.Interface,
   bus: Bus.Interface,
@@ -26,13 +31,17 @@ export const settleStaleToolCalls = Effect.fn("SessionRunner.settleStaleToolCall
           type: "aborted",
           message: `Tool execution interrupted: ${tool.name}${childID ? ` (sessionID: ${childID})` : ""}`,
         },
-        ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
+        ...(metadata && Object.keys(metadata).length > 0 ? { metadata: encodeMetadata(metadata) } : {}),
         executed: tool.executed === true,
       }
       // A call still streaming its input was never requested: its input fails.
-      if (tool.state.status === "streaming")
-        yield* bus.publish(SessionEvent.Tool.Input.Failed, { ...failure, name: tool.name })
-      else yield* bus.publish(SessionEvent.Tool.Settled, { ...failure, outcome: "failed" })
+      yield* bus
+        .command(
+          tool.state.status === "streaming"
+            ? { type: "failToolInput", payload: { ...failure, name: tool.name } }
+            : { type: "settleToolCall", payload: failure },
+        )
+        .pipe(Effect.ignore)
     }
   }
 })

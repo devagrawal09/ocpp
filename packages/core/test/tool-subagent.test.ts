@@ -54,6 +54,7 @@ import {
   waitForCodeMode,
 } from "./lib/tool"
 import { TestStepHost } from "./fixture/step-host"
+import { TestHistory } from "./fixture/history"
 
 const childText = "child final response"
 const completedOutput = (sessionID: Session.ID, message = childText) =>
@@ -124,6 +125,7 @@ const nodes = LayerNode.group([
 ])
 const replacements = [
   steps.replacement,
+  TestHistory.bus,
   [Global.node, tempGlobalLayer],
   [ExternalAgentDrivers.node, noVendorDrivers],
 ] satisfies LayerNode.Replacements
@@ -141,6 +143,7 @@ const resolvedChildModel = Layer.succeed(SessionRunnerModel.Service, {
 })
 const completionIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([nodes, SessionRestart.node, KV.node]), [
+    TestHistory.bus,
     [Global.node, tempGlobalLayer],
     [PluginSupervisor.node, subagentPluginSupervisor],
     [ExternalAgentDrivers.node, noVendorDrivers],
@@ -831,26 +834,26 @@ describe("SubagentTool", () => {
           // A later step that ran a Code Mode execution whose metadata carries private data.
           const assistantMessageID = SessionMessage.ID.create()
           const base = { sessionID: childID, assistantMessageID, id: "call-child-execute" }
-          yield* bus.publish(SessionEvent.Step.Started, {
+          yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
             sessionID: childID,
             assistantMessageID,
             agent: Agent.ID.make("reviewer"),
             model: childModel,
           })
-          yield* bus.publish(SessionEvent.Tool.Requested, {
+          yield* TestHistory.of(bus).publish(SessionEvent.Tool.Requested, {
             ...base,
             name: "execute",
             input: { code: "return 1" },
             executed: true,
           })
-          yield* bus.publish(SessionEvent.Tool.Settled, {
+          yield* TestHistory.of(bus).publish(SessionEvent.Tool.Settled, {
             ...base,
             content: [{ type: "text", text: "Preview: 1" }],
             metadata: { executionID: "exe_secret", events: [{ input: secret }] },
             executed: true,
             outcome: "succeeded",
           })
-          yield* bus.publish(SessionEvent.Step.Settled, {
+          yield* TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
             sessionID: childID,
             assistantMessageID,
             finish: "stop",
@@ -1446,13 +1449,13 @@ describe("SubagentTool", () => {
           // Twelve newer steps with nothing to show.
           for (let step = 0; step < 12; step++) {
             const assistantMessageID = SessionMessage.ID.create()
-            yield* bus.publish(SessionEvent.Step.Started, {
+            yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
               sessionID: childID,
               assistantMessageID,
               agent: Agent.ID.make("reviewer"),
               model: childModel,
             })
-            yield* bus.publish(SessionEvent.Step.Settled, {
+            yield* TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
               sessionID: childID,
               assistantMessageID,
               finish: "stop",

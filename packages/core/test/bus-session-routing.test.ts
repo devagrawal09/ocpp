@@ -19,11 +19,10 @@ import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { location } from "./fixture/location"
 import { recordSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
+import { TestHistory } from "./fixture/history"
 
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
-    [Bus.node, Bus.configured()],
-  ]),
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [TestHistory.bus]),
 )
 const a = Location.Ref.make({ directory: AbsolutePath.make("/a") })
 const b = Location.Ref.make({ directory: AbsolutePath.make("/b") })
@@ -133,7 +132,10 @@ describe("Bus Session routing", () => {
           },
         })
         .pipe(Effect.orDie)
-      const after = yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: child, outcome: "succeeded" })
+      const after = yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
+        sessionID: child,
+        outcome: "succeeded",
+      })
       const done = yield* bus.publish(Done, {})
       expect(ids(yield* Fiber.join(first))).toEqual([...ids(forked.events), after.id, done.id])
       expect(yield* Fiber.join(second)).toEqual([done])
@@ -161,7 +163,7 @@ describe("Bus Session routing", () => {
       )
       const text = yield* delta(bus)
       const broadcast = yield* bus.publish(Global, { sessionID: id })
-      const explicit = yield* bus.publish(
+      const explicit = yield* TestHistory.of(bus).publish(
         SessionEvent.Execution.Settled,
         { sessionID: id, outcome: "succeeded" },
         { location: b },

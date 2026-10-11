@@ -18,6 +18,7 @@ import { Workspace } from "@ocpp/core/workspace"
 import { eq } from "drizzle-orm"
 import { location } from "./fixture/location"
 import { testEffect } from "./lib/effect"
+import { recordSession } from "./fixture/session"
 
 const locationLayer = Layer.succeed(
   Location.Service,
@@ -137,6 +138,68 @@ describe("Bus", () => {
 
       expect(event).not.toHaveProperty("location")
       expect(event.type).toBe("test.global")
+    }),
+  )
+
+  it.effect("dispatches a runtime Command as a publication, each fact with the options at its position", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const sessionID = Session.ID.create()
+      yield* recordSession({ id: sessionID, directory: "/project" })
+      const id = Event.ID.create()
+      const committed: number[] = []
+      const [renamed] = yield* bus.command(
+        { type: "renameSession", payload: { sessionID, title: "Dispatched" } },
+        {
+          facts: [
+            {
+              id,
+              metadata: { source: "test" },
+              commit: (seq) =>
+                Effect.sync(() => {
+                  committed.push(seq)
+                }),
+            },
+          ],
+        },
+      )
+
+      // The dispatch's time, from the test clock, and the ambient Location, as for a publication.
+      expect(renamed).toMatchObject({
+        id,
+        created: 0,
+        type: "session-renamed",
+        metadata: { source: "test" },
+        location: { directory: "project", workspaceID: "wrk_test" },
+        durable: { aggregateID: sessionID, seq: 1 },
+        data: { sessionID, title: "Dispatched" },
+      })
+      expect(committed).toEqual([1])
+    }),
+  )
+
+  it.effect("fails a dispatch with the Command's rejection", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const error = yield* Effect.flip(
+        bus.command({ type: "renameSession", payload: { sessionID: Session.ID.create(), title: "Missing" } }),
+      )
+
+      expect(error.cause).toEqual(new Error("Session not found"))
+    }),
+  )
+
+  it.effect("records no test history through a production Bus", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const exit = yield* bus
+        .command({
+          type: "recordHistory",
+          payload: { facts: [{ type: "kv-stored", payload: { key: "history", value: "refused" } }] },
+        } as unknown as Bus.RuntimeCommand)
+        .pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true)
     }),
   )
 

@@ -18,12 +18,13 @@ import { eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 import { TestStepHost } from "./fixture/step-host"
+import { TestHistory } from "./fixture/history"
 
 const steps = TestStepHost.make()
 const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [[Bus.node, Bus.configured()], [Project.node, globalProjectNode], steps.replacement],
+    [TestHistory.bus, [Project.node, globalProjectNode], steps.replacement],
   ),
 )
 const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
@@ -43,7 +44,10 @@ describe("Session.view", () => {
       yield* session.view({ sessionID: created.id, idle: 0 })
       expect((yield* session.get(created.id)).time.viewed).toBeUndefined()
 
-      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: created.id, outcome: "succeeded" })
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
+        sessionID: created.id,
+        outcome: "succeeded",
+      })
       const idle = yield* session.get(created.id)
       expect(idle.time.idle).toBeDefined()
       expect(idle.time.viewed).toBeUndefined()
@@ -71,7 +75,7 @@ describe("Session.view", () => {
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(viewed.time.idle) })
       expect((yield* session.get(created.id)).time).toEqual(viewed.time)
 
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "unknown", message: "failed" },
         outcome: "failed",
@@ -84,7 +88,7 @@ describe("Session.view", () => {
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(unread.time.idle) })
       expect((yield* session.get(created.id)).time.viewed).toEqual(unread.time.idle)
 
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         reason: "shutdown",
         outcome: "interrupted",
@@ -92,7 +96,7 @@ describe("Session.view", () => {
       expect((yield* session.get(created.id)).time.idle).toEqual(unread.time.idle)
       expect((yield* session.get(created.id)).outcome).toBe("failed")
 
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         reason: "user",
         outcome: "interrupted",
@@ -113,12 +117,15 @@ describe("Session.view", () => {
       const session = yield* Session.Service
       const bus = yield* Bus.Service
       const created = yield* session.create({ location })
-      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: created.id, outcome: "succeeded" })
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
+        sessionID: created.id,
+        outcome: "succeeded",
+      })
       const observed = (yield* session.get(created.id)).time.idle
       if (!observed) return yield* Effect.die(new Error("Expected idle time"))
 
       // A failure commits between the viewer's observation and the viewed event.
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "unknown", message: "failed" },
         outcome: "failed",
@@ -158,11 +165,14 @@ describe("Session.view", () => {
       const store = yield* SessionStore.Service
       const { db } = yield* Database.Service
       const created = yield* session.create({ id: Session.ID.make("ses_view_replay"), location })
-      yield* bus.publish(SessionEvent.Execution.Settled, { sessionID: created.id, outcome: "succeeded" })
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
+        sessionID: created.id,
+        outcome: "succeeded",
+      })
       const idle = (yield* session.get(created.id)).time.idle
       if (!idle) return yield* Effect.die(new Error("Expected idle time"))
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(idle) })
-      yield* bus.publish(SessionEvent.Execution.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Execution.Settled, {
         sessionID: created.id,
         error: { type: "unknown", message: "failed" },
         outcome: "failed",

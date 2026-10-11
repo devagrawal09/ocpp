@@ -22,6 +22,7 @@ import { ProjectTable } from "@ocpp/core/project/sql"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
 import { recordSession } from "../fixture/session"
+import { TestHistory } from "../fixture/history"
 
 export const toolIdentity = {
   agent: Agent.ID.make("build"),
@@ -65,7 +66,7 @@ export const activateCodeMode = (output: unknown, context: CodeModeContext) =>
   Effect.gen(function* () {
     const value = Schema.decodeUnknownSync(CodeModeOutput)(output)
     const bus = yield* Bus.Service
-    yield* bus.publish(SessionEvent.Tool.Settled, {
+    yield* TestHistory.of(bus).publish(SessionEvent.Tool.Settled, {
       sessionID: context.sessionID,
       assistantMessageID: context.assistantMessageID,
       id: context.id,

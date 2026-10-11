@@ -44,6 +44,7 @@ import { tmpdirScoped } from "./fixture/tmpdir"
 import { TestStepHost } from "./fixture/step-host"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
 import { revert, stageRevert } from "./fixture/session"
+import { TestHistory } from "./fixture/history"
 
 // The runtime runs every Session; its executions wait before delivering input while a test parks them.
 const steps = TestStepHost.make()
@@ -73,6 +74,7 @@ const nodes = [
 const replacements = [
   [Project.node, globalProjectNode],
   steps.replacement,
+  TestHistory.bus,
   [SessionModelTransport.node, transport],
 ] as const
 const it = testEffect(AppNodeBuilder.build(LayerNode.group(nodes), [...replacements]))
@@ -135,13 +137,13 @@ const execute = Effect.fnUntraced(function* (context: Setup, code: string) {
   const jobs = yield* Job.Service
   const assistantMessageID = SessionMessage.ID.create()
   const id = "call_" + assistantMessageID
-  yield* bus.publish(SessionEvent.Step.Started, {
+  yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
     sessionID,
     assistantMessageID,
     agent: Agent.ID.make("build"),
     model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
   })
-  yield* bus.publish(SessionEvent.Tool.Requested, {
+  yield* TestHistory.of(bus).publish(SessionEvent.Tool.Requested, {
     sessionID,
     assistantMessageID,
     id,
@@ -165,7 +167,7 @@ const execute = Effect.fnUntraced(function* (context: Setup, code: string) {
     }),
   )
   // Like the runner, the tool result keeps the execution ID in its metadata.
-  yield* bus.publish(SessionEvent.Tool.Settled, {
+  yield* TestHistory.of(bus).publish(SessionEvent.Tool.Settled, {
     sessionID,
     assistantMessageID,
     id,
@@ -175,7 +177,7 @@ const execute = Effect.fnUntraced(function* (context: Setup, code: string) {
     outcome: "succeeded",
   })
   // As the runner's step ends once its tools settle.
-  yield* bus.publish(SessionEvent.Step.Settled, {
+  yield* TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
     sessionID,
     assistantMessageID,
     finish: "tool-calls",

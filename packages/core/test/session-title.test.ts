@@ -30,6 +30,7 @@ import { Money } from "@ocpp/schema/money"
 import { Deferred, Effect, Fiber, Layer, Stream } from "effect"
 import { testEffect } from "./lib/effect"
 import { recordSession } from "./fixture/session"
+import { TestHistory } from "./fixture/history"
 
 let requests: LLMRequest[] = []
 let selectedSmall: Model.Info | undefined
@@ -128,6 +129,7 @@ const it = testEffect(
       SessionTitle.node,
     ]),
     [
+      TestHistory.bus,
       [llmClient, client],
       [Catalog.node, catalog],
       [SessionRunnerModel.node, models],
@@ -161,12 +163,12 @@ const prompt = (sessionID: Session.ID, text: string) =>
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const messageID = SessionMessage.ID.create()
-    yield* bus.publish(SessionEvent.InboxEnqueued, {
+    yield* TestHistory.of(bus).publish(SessionEvent.InboxEnqueued, {
       sessionID,
       inboxID: messageID,
       item: { type: "user", payload: { text }, delivery: "steer" },
     })
-    yield* bus.publish(SessionEvent.InboxDelivered, {
+    yield* TestHistory.of(bus).publish(SessionEvent.InboxDelivered, {
       sessionID,
       inboxID: messageID,
     })
@@ -405,20 +407,20 @@ it.effect("regenerates an existing title using the title agent", () =>
     yield* prompt(sessionID, "Investigate the login failure")
     const events = yield* Bus.Service
     const assistantMessageID = SessionMessage.ID.create()
-    yield* events.publish(SessionEvent.Step.Started, {
+    yield* TestHistory.of(events).publish(SessionEvent.Step.Started, {
       sessionID,
       assistantMessageID,
       agent: Agent.ID.make("build"),
       model: Model.Ref.make({ id: Model.ID.make("title-model"), providerID: Provider.ID.make("test") }),
     })
-    yield* events.publish(SessionEvent.Block.Recorded, {
+    yield* TestHistory.of(events).publish(SessionEvent.Block.Recorded, {
       sessionID,
       assistantMessageID,
       kind: "reasoning",
       ordinal: 0,
       text: "Private reasoning that should not appear",
     })
-    yield* events.publish(SessionEvent.Block.Recorded, {
+    yield* TestHistory.of(events).publish(SessionEvent.Block.Recorded, {
       sessionID,
       assistantMessageID,
       kind: "text",

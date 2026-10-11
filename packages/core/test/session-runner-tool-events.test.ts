@@ -23,6 +23,7 @@ import { createLLMEventPublisher } from "@ocpp/core/session/runner/publish-llm-e
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Recorded } from "./lib/recorded"
 import { recordSession } from "./fixture/session"
+import { TestHistory } from "./fixture/history"
 import { it, testEffect } from "./lib/effect"
 import { TestClock } from "effect/testing"
 
@@ -133,9 +134,7 @@ test("provider-executed success derives content and retains provider result stat
 })
 
 testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
-    [Bus.node, Bus.configured()],
-  ]),
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [TestHistory.bus]),
 ).effect("commits a hosted tool result when cancellation races with the aggregate lock", () =>
   Effect.gen(function* () {
     const database = yield* Database.Service
@@ -151,9 +150,10 @@ testEffect(
     yield* recordSession({ id: sessionID, directory: "/project", slug: "publish" })
     const publisher = createLLMEventPublisher(
       {
+        // The step's facts are history the runtime would have recorded; live events go to the Bus.
         publish: (definition, data, options) =>
           (definition.type === SessionEvent.Tool.Settled.type ? Deferred.succeed(queued, undefined) : Effect.void).pipe(
-            Effect.andThen(bus.publish(definition, data, options)),
+            Effect.andThen(TestHistory.recording(bus).publish(definition, data, options)),
           ),
       },
       {

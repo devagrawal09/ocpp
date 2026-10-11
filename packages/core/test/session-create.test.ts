@@ -39,6 +39,7 @@ import { promptLocationNode } from "./fixture/prompt-location"
 import { globalProjectNode } from "./lib/project"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { TestStepHost } from "./fixture/step-host"
+import { TestHistory } from "./fixture/history"
 
 const steps = TestStepHost.make()
 const it = testEffect(
@@ -53,7 +54,7 @@ const it = testEffect(
       InstructionEntry.node,
     ]),
     [
-      [Bus.node, Bus.configured()],
+      TestHistory.bus,
       [Project.node, globalProjectNode],
       [LocationServiceMap.node, promptLocationNode],
       steps.replacement,
@@ -63,14 +64,14 @@ const it = testEffect(
 const liveIt = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, Project.node, SessionProjector.node, SessionStore.node, Session.node]),
-    [[Bus.node, Bus.configured()], steps.replacement],
+    [TestHistory.bus, steps.replacement],
   ),
 )
 const projectIt = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, Project.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
-      [Bus.node, Bus.configured()],
+      TestHistory.bus,
       // Project adoption needs plain-prompt admission, not live plugin/provider startup.
       [LocationServiceMap.node, promptLocationNode],
       steps.replacement,
@@ -639,13 +640,13 @@ describe("Session.create", () => {
       const assistantMessageID = SessionMessage.ID.create()
       const model = Model.Ref.make({ id: Model.ID.make("model"), providerID: Provider.ID.make("provider") })
 
-      yield* bus.publish(SessionEvent.Step.Started, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
         sessionID: parent.id,
         assistantMessageID,
         agent: Agent.ID.make("build"),
         model,
       })
-      yield* bus.publish(SessionEvent.Tool.Requested, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Tool.Requested, {
         sessionID: parent.id,
         assistantMessageID,
         id: "call_running",
@@ -743,13 +744,13 @@ describe("Session.create", () => {
       yield* session.resume(parent.id)
       const assistantMessageID = SessionMessage.ID.create()
       const model = Model.Ref.make({ id: Model.ID.make("model"), providerID: Provider.ID.make("provider") })
-      yield* bus.publish(SessionEvent.Step.Started, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
         sessionID: parent.id,
         assistantMessageID,
         agent: Agent.ID.make("build"),
         model,
       })
-      yield* bus.publish(SessionEvent.Step.Settled, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Settled, {
         sessionID: parent.id,
         assistantMessageID,
         finish: "stop",
@@ -1080,7 +1081,7 @@ describe("SessionTransfer", () => {
       const source = yield* session.create({ location })
       yield* session.prompt({ sessionID: source.id, text: "Settled", resume: false })
       yield* session.resume(source.id)
-      yield* bus.publish(SessionEvent.Step.Started, {
+      yield* TestHistory.of(bus).publish(SessionEvent.Step.Started, {
         sessionID: source.id,
         assistantMessageID: SessionMessage.ID.create(),
         agent: Agent.ID.make("build"),

@@ -45,6 +45,7 @@ import { moveSession, recordSession } from "./fixture/session"
 import { testEffect } from "./lib/effect"
 import { TestStepHost } from "./fixture/step-host"
 import { AppNodeBuilder } from "../src/effect/app-node-builder.js"
+import { TestHistory } from "./fixture/history"
 
 // The runtime runs every Session; a step produces nothing unless a test scripts one.
 const steps = TestStepHost.make()
@@ -59,7 +60,7 @@ const it = testEffect(
       SessionExecution.node,
       FSUtil.node,
     ]),
-    [[Bus.node, Bus.configured()], [Global.node, tempGlobalLayer], steps.replacement],
+    [TestHistory.bus, [Global.node, tempGlobalLayer], steps.replacement],
   ),
 )
 const sessionID = SessionSchema.ID.make("ses_owned")
@@ -160,13 +161,13 @@ describe("Session-owned handles", () => {
       const handle = fixture.sessions.forSession(sessionID)
       const model = { id: Model.ID.make("test-model"), providerID: Provider.ID.make("test-provider") }
       const messageID = SessionMessage.ID.create()
-      yield* fixture.bus.publish(SessionEvent.Step.Started, {
+      yield* TestHistory.of(fixture.bus).publish(SessionEvent.Step.Started, {
         sessionID,
         assistantMessageID: messageID,
         agent: Agent.ID.make("build"),
         model: { ...model, id: Model.ID.make("initial-model") },
       })
-      yield* fixture.bus.publish(SessionEvent.Step.Settled, {
+      yield* TestHistory.of(fixture.bus).publish(SessionEvent.Step.Settled, {
         sessionID,
         assistantMessageID: messageID,
         finish: "stop",

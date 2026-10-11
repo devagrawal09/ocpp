@@ -35,6 +35,7 @@ import { tempLocationLayer } from "../fixture/location"
 import { emptyMcpLayer } from "../fixture/mcp"
 import { noVendorDrivers } from "../lib/drivers"
 import { ExternalAgentDrivers } from "@ocpp/core/external-agent/drivers"
+import { TestHistory } from "../fixture/history"
 
 const npmLayer = Layer.succeed(
   Npm.Service,
@@ -46,7 +47,8 @@ const npmLayer = Layer.succeed(
 
 const generateLayer = Layer.succeed(Generate.Service, Generate.Service.of({ text: () => Effect.succeed("") }))
 
-const jobLayer = LayerNode.compile(LayerNode.group([Job.node]))
+// Shares the history Bus of the composition it joins.
+const jobLayer = LayerNode.compile(LayerNode.group([Job.node]), [TestHistory.bus])
 const runtimeLayer = Layer.unwrap(
   Effect.gen(function* () {
     const jobs = yield* Job.Service
@@ -118,6 +120,8 @@ export const PluginTestLayer = Layer.merge(
       WebSearch.node,
     ]),
     [
+      // Code Mode tests settle a call's step history through the test-only recordHistory.
+      TestHistory.bus,
       [Location.node, tempLocationLayer],
       [Npm.node, npmLayer],
       [Config.node, Config.testLayer()],

@@ -92,7 +92,7 @@ describe("crash and restart (JSONL)", () => {
     // Opening took over A's locks and released the attempt A left running.
     expect(b.log.recoveredStaleLock?.pid).toBe(a.pid)
     expect(b.outbox.recoveredStaleLock?.pid).toBe(a.pid)
-    expect(b.outbox.releasedOnOpen).toEqual(["runStep:3"])
+    expect(b.outbox.releasedOnOpen).toEqual(["runStep:3:ses_1"])
 
     expect(types()).toEqual([
       "session-created",

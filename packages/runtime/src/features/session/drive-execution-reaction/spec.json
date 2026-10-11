@@ -206,12 +206,19 @@
       ]
     },
     {
-      "description": "Different Sessions are independent: the Session whose execution started last is the one requested.",
+      "description": "Different Sessions are independent: each driven execution is requested.",
       "expect": [
         {
           "payload": {
             "execution": 1,
             "sessionID": "ses_1"
+          },
+          "type": "driveExecution"
+        },
+        {
+          "payload": {
+            "execution": 1,
+            "sessionID": "ses_2"
           },
           "type": "driveExecution"
         }

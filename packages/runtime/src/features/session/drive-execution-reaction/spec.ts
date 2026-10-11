@@ -54,9 +54,9 @@ export const driveExecutionSpec = createReactionSlice("driveExecution")
       expect: [drive("ses_1", 1)],
     },
     {
-      description: "Different Sessions are independent: the Session whose execution started last is the one requested.",
+      description: "Different Sessions are independent: each driven execution is requested.",
       given: [created("ses_1", vendor), created("ses_2", vendor), started("ses_2"), started("ses_1")],
-      expect: [drive("ses_1", 1)],
+      expect: [drive("ses_1", 1), drive("ses_2", 1)],
     },
   )
 

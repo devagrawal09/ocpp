@@ -109,18 +109,10 @@ export const wakeExecution = implementReaction(specification)
     session.active = false
     if (event.payload.outcome === "interrupted") session.waking = {}
   })
-  .handle(async (state) => {
-    // A Reaction commit yields zero or one output (docs/architecture/
-    // plugins.md, Invariants), so request the lowest waking Session. The
-    // resulting execution-started commit re-runs this Reaction, which then
-    // requests the next Session: every Session needing a wake is woken in
-    // sessionID order across commits.
-    const sessionID = Object.keys(state.sessions)
-      .sort()
-      .find((id) => {
-        const session = state.sessions[id]
-        return session !== undefined && Object.keys(session.waking).length > 0 && !session.active
-      })
-    if (sessionID === undefined) return
+  // Keyed by Session: each commit wakes every Session it records for that
+  // has waking input and no active execution.
+  .handleEachKey(async (state, sessionID) => {
+    const session = state.sessions[sessionID]
+    if (session === undefined || Object.keys(session.waking).length === 0 || session.active) return
     return { type: "startExecution" as const, payload: { sessionID } }
   })

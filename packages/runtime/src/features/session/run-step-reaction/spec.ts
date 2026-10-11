@@ -123,6 +123,12 @@ export const runStepSpec = createReactionSlice("runStep")
       expect: [run("ses_1", 1)],
     },
     {
+      description:
+        "Every Session that needs a step is requested, each its own delivery: a Session busy before its step holds back no other.",
+      given: [started("ses_1"), started("ses_2")],
+      expect: [run("ses_1", 0), run("ses_2", 0)],
+    },
+    {
       description: "Sessions are independent: ses_1 in flight does not hide the active ses_2.",
       given: [started("ses_1"), started("ses_2"), stepStarted("ses_1", "msg_1")],
       expect: [run("ses_2", 0)],

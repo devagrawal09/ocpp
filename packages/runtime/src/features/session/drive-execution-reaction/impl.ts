@@ -7,9 +7,8 @@ import { sessionEvent } from "../../../events.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Per-Session projection: whether an external agent drives the Session, and
-// its executions. The latest execution started is the one a commit can need
-// driven: this Reaction applies only execution starts and settlements and the
-// driver's changes, so each start re-runs it once for that Session.
+// its executions. Keyed by Session: a commit that records for a Session whose
+// active execution the agent drives requests that execution.
 export type DriveExecutionState = {
   sessions: Record<
     string,
@@ -21,7 +20,6 @@ export type DriveExecutionState = {
       executions: number
     }
   >
-  latest?: string
 }
 
 export const driveExecutionStore = Context.Service<
@@ -71,17 +69,15 @@ export const createDriveExecution = <R>(plugin: ReactionPlugin<DriveExecutionReq
       session.executions += 1
       if (session.driven) session.driving = true
       else delete session.driving
-      state.latest = event.payload.sessionID
     })
     .apply(executionSettled, async (event, state) => {
       const session = entry(state, event.payload.sessionID)
       session.active = false
       delete session.driving
     })
-    .handle(async (state) => {
-      const sessionID = state.latest
-      const session = sessionID === undefined ? undefined : state.sessions[sessionID]
-      if (sessionID === undefined || !session?.active || !session.driving) return
+    .handleEachKey(async (state, sessionID) => {
+      const session = state.sessions[sessionID]
+      if (!session?.active || !session.driving) return
       return {
         type: "driveExecution" as const,
         payload: { sessionID, execution: session.executions },

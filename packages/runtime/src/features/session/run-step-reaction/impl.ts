@@ -6,8 +6,9 @@ import { Context, Schema } from "effect"
 import { sessionEvent } from "../../../events.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Per-Session projection; the handler derives its request from this state
-// alone (no trigger). Duplicated from session-status-query on purpose.
+// Per-Session projection; the handler derives each Session's request from
+// that Session's state alone (no trigger). Duplicated from
+// session-status-query on purpose.
 export type RunStepState = {
   sessions: Record<
     string,
@@ -118,18 +119,12 @@ export const createRunStep = <R>(plugin: ReactionPlugin<RunStepRequest, R>) =>
       if (!event.payload.retry) session.awaitingRetry = true
       else if (!event.payload.retry.fresh) session.retrying = true
     })
-    .handle(async (state) => {
-      // One output per commit: request the lowest Session needing a step; the
-      // commit that records its step re-runs this and reaches the next one.
-      const sessionID = Object.keys(state.sessions)
-        .sort()
-        .find((id) => {
-          const session = state.sessions[id]
-          return session?.active && !session.external && (!session.inFlight || session.stale) && !session.awaitingRetry
-        })
-      if (sessionID === undefined) return
+    // Keyed by Session: each commit requests a step for every Session it
+    // records for that needs one, so one Session busy outside its steps (a
+    // long begin, prepare or compaction) holds back no other.
+    .handleEachKey(async (state, sessionID) => {
       const session = state.sessions[sessionID]
-      if (!session) return
+      if (!session?.active || session.external || (session.inFlight && !session.stale) || session.awaitingRetry) return
       return {
         type: "runStep" as const,
         payload: {

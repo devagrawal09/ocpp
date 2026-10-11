@@ -1,8 +1,9 @@
 import { EventLog } from "@specter-ts/core"
 import { createMemoryEventLog } from "@specter-ts/memory"
-import { Effect, type Scope } from "effect"
+import { Deferred, Effect, type Scope } from "effect"
 import { describe, expect, it } from "bun:test"
 
+import { StepHost } from "../src/plugins/step-host.ts"
 import { makeRuntime, type RuntimeOptions } from "../src/runtime.ts"
 import { makeSnapshotSliceStores, type SliceSnapshot } from "../src/snapshots.ts"
 import { makeScriptedStepHost } from "./fixture/scripted-step-host.ts"
@@ -181,12 +182,76 @@ describe("embedded runtime", () => {
     ))
 })
 
-// S5a: Commands conflict only over what they decided on.
+// S5a: a Session busy outside its steps holds back no other, and Commands
+// conflict only over what they decided on.
 describe("concurrent Sessions", () => {
   const created = (sessionID: string) => ({
     type: "createSession" as const,
     payload: { session: { ...creation.payload.session, sessionID, slug: `slug-${sessionID}` } },
   })
+  const prompt = (sessionID: string) => ({
+    type: "enqueueInput" as const,
+    payload: { sessionID, inboxID: `msg_in_${sessionID}`, type: "user" as const, payload: { text: "Hi" } },
+  })
+
+  it("runs another Session's steps to completion while one is held in its begin", () =>
+    run(
+      Effect.gen(function* () {
+        const log = hostLog()
+        const scripted = makeScriptedStepHost({ agent: "plan" })
+        const released = yield* Deferred.make<void>()
+        // ses_1's begin takes as long as the test wants, as a long prepare or
+        // a compaction would.
+        const host = StepHost.of({
+          ...scripted.host,
+          begin: (input) =>
+            input.sessionID === "ses_1"
+              ? Deferred.await(released).pipe(Effect.andThen(scripted.host.begin(input)))
+              : scripted.host.begin(input),
+        })
+        scripted.script("ses_1", [{ finish: "stop", text: "Done" }])
+        scripted.script("ses_2", [
+          { finish: "tool-calls", text: "One", toolCalls: [{ id: "call_1", name: "read" }] },
+          { finish: "tool-calls", text: "Two", toolCalls: [{ id: "call_2", name: "read" }] },
+          { finish: "stop", text: "Three" },
+        ])
+        const runtime = yield* makeRuntime({ outbox: { worker: { concurrency: 4 } } }).pipe(
+          Effect.provideService(EventLog, log),
+        )
+        yield* runtime.start(host)
+        yield* runtime.command(created("ses_1"))
+        yield* runtime.command(created("ses_2"))
+        // ses_1 asks first: it was the one every commit requested before.
+        yield* runtime.command(prompt("ses_1"))
+        yield* runtime.command(prompt("ses_2"))
+
+        const facts = (sessionID: string) =>
+          log
+            .inspect()
+            .filter((event) => (event.payload as { readonly sessionID?: string }).sessionID === sessionID)
+            .map((event) => event.type)
+        yield* waitFor(() => facts("ses_2").includes("session-execution-settled"))
+        // ses_2 ran its three steps while ses_1 never got past its begin.
+        expect(facts("ses_2").filter((type) => type === "session-step-settled")).toHaveLength(3)
+        expect(log.inspect().at(-1)?.payload).toEqual({ sessionID: "ses_2", outcome: "succeeded" })
+        expect(facts("ses_1")).toEqual([
+          "session-created",
+          "session-inbox-enqueued",
+          "session-execution-started",
+          "session-inbox-delivered",
+        ])
+
+        yield* Deferred.succeed(released, undefined)
+        yield* waitFor(() => facts("ses_1").includes("session-execution-settled"))
+        expect(facts("ses_1").slice(4)).toEqual([
+          "session-step-started",
+          "session-block-recorded",
+          "session-step-settled",
+          "session-execution-settled",
+        ])
+      }),
+    ))
+
   it("records many Sessions at once without exhausting the retries of a stale append", () =>
     run(
       Effect.gen(function* () {

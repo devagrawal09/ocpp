@@ -107,17 +107,17 @@ export const wakeExecutionSpec = createReactionSlice("wakeExecution")
     },
     {
       description:
-        "Different Sessions run concurrently: two Sessions that enqueue before either starts both need a wake; the lowest Session ID is requested first (one output per commit).",
+        "Different Sessions run concurrently: two Sessions that enqueue before either starts are both woken, each its own request.",
       given: [enqueued("ses_2", "msg_1"), enqueued("ses_1", "msg_1")],
-      expect: [start("ses_1")],
+      expect: [start("ses_2"), start("ses_1")],
     },
     {
-      description: "The second Session is woken on the following commit: once ses_1 starts, the re-run requests ses_2.",
+      description: "Each Session is woken from its own state: ses_1 starting leaves the wake ses_2 needs.",
       given: [enqueued("ses_2", "msg_1"), enqueued("ses_1", "msg_1"), started("ses_1")],
       expect: [start("ses_2")],
     },
     {
-      description: "Both Sessions started: nothing is left to wake after the follow-up commit.",
+      description: "Both Sessions started: nothing is left to wake.",
       given: [enqueued("ses_1", "msg_1"), enqueued("ses_2", "msg_1"), started("ses_1"), started("ses_2")],
       expect: [],
     },

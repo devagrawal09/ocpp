@@ -21,6 +21,11 @@ import { createForkSessionState, forkSession, forkSessionStore } from "./feature
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
 import {
+  createResolveWorktreeState,
+  resolveWorktree,
+  resolveWorktreeStore,
+} from "./features/project/resolve-worktree/impl.ts"
+import {
   createBindExternalAgentState,
   bindExternalAgent,
   bindExternalAgentStore,
@@ -221,6 +226,7 @@ export const createRuntimeConfig = (options: {
       bindExternalAgent,
       linkVendorSession,
       checkpointVendorSession,
+      resolveWorktree,
       enqueueInput,
       cancelInboxItem,
       changeDelivery,
@@ -310,6 +316,7 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(bindExternalAgentStore, createBindExternalAgentState),
     provide(linkVendorSessionStore, createLinkVendorSessionState),
     provide(checkpointVendorSessionStore, createCheckpointVendorSessionState),
+    provide(resolveWorktreeStore, createResolveWorktreeState),
     provide(enqueueInputStore, createEnqueueInputState),
     provide(cancelInboxItemStore, createCancelInboxItemState),
     provide(changeDeliveryStore, createChangeDeliveryState),

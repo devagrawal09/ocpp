@@ -1,0 +1,197 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Resolves a directory to the project it belongs to, and records it as the project's directory. The resolution moves the Sessions the directory held, under the project it had before or the markerless projects it adopts, to this project. A directory the project holds is resolved already.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "resolveWorktree",
+  "scenarios": [
+    {
+      "description": "A new directory of a project is resolved and recorded, in one commit.",
+      "expect": [
+        {
+          "eventType": "worktree-resolved",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "previous": "global",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "directory": "/repo/feature",
+        "previous": "global",
+        "projectID": "prj_1",
+        "strategy": "git"
+      }
+    },
+    {
+      "description": "The projects the directory adopts are named, and a directory without a strategy records none.",
+      "expect": [
+        {
+          "eventType": "worktree-resolved",
+          "examplePayload": {
+            "adopted": [
+              "prj_markerless"
+            ],
+            "directory": "/repo",
+            "previous": "global",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "adopted": [
+          "prj_markerless"
+        ],
+        "directory": "/repo",
+        "previous": "global",
+        "projectID": "prj_1"
+      }
+    },
+    {
+      "description": "A directory the project holds is resolved already.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Worktree already resolved"
+      },
+      "when": {
+        "directory": "/repo/feature",
+        "previous": "global",
+        "projectID": "prj_1",
+        "strategy": "git"
+      }
+    },
+    {
+      "description": "A directory the project no longer holds is resolved again.",
+      "expect": [
+        {
+          "eventType": "worktree-resolved",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "previous": "global",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-removed",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "directory": "/repo/feature",
+        "previous": "global",
+        "projectID": "prj_1",
+        "strategy": "git"
+      }
+    },
+    {
+      "description": "A directory of an unknown project is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Project not found"
+      },
+      "when": {
+        "directory": "/repo/feature",
+        "previous": "global",
+        "projectID": "prj_1",
+        "strategy": "git"
+      }
+    }
+  ]
+}

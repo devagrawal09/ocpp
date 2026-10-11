@@ -10,6 +10,8 @@ import { Database } from "@ocpp/core/database/database"
 import { Project } from "@ocpp/core/project"
 import { ProjectSchema } from "@ocpp/core/project/schema"
 import { ProjectTable } from "@ocpp/core/project/sql"
+import { ProjectFact } from "@ocpp/schema/project-fact"
+import { eq } from "drizzle-orm"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Hash } from "@ocpp/util/hash"
 import { tmpdir } from "./fixture/tmpdir"
@@ -653,12 +655,15 @@ describe("Project.resolve", () => {
       const project = yield* Project.Service
       const db = (yield* Database.Service).db
       const id = remoteID("github.com/owner/repo")
+      // A project the log knows, with what an earlier server stored for it.
+      yield* (yield* Bus.Service).publish(ProjectFact.Created, {
+        projectID: id,
+        canonical: abs("/stale-worktree"),
+        vcs: "hg",
+      })
       yield* db
-        .insert(ProjectTable)
-        .values({
-          id,
-          worktree: abs("/stale-worktree"),
-          vcs: "hg",
+        .update(ProjectTable)
+        .set({
           name: "Preserved name",
           icon_color: "#123456",
           commands: { start: "bun dev" },
@@ -667,6 +672,7 @@ describe("Project.resolve", () => {
           time_updated: 1,
           time_initialized: 2,
         })
+        .where(eq(ProjectTable.id, id))
         .run()
 
       const result = yield* project.resolve(abs(worktree))

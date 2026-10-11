@@ -592,33 +592,6 @@
       }
     },
     {
-      "description": "Records worktree-resolved as the host published it.",
-      "expect": [
-        {
-          "eventType": "worktree-resolved",
-          "examplePayload": {
-            "directory": "/a",
-            "previous": "global",
-            "projectID": "prj_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "directory": "/a",
-              "previous": "global",
-              "projectID": "prj_1"
-            },
-            "type": "worktree-resolved"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records project-created as the host published it.",
       "expect": [
         {
@@ -2523,6 +2496,33 @@
               "sessionID": "ses_1"
             },
             "type": "session-external-checkpointed"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses worktree-resolved: resolveWorktree decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "worktree-resolved is recorded by resolveWorktree"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "directory": "/a",
+              "previous": "global",
+              "projectID": "prj_1"
+            },
+            "type": "worktree-resolved"
           }
         ]
       }

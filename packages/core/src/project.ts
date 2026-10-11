@@ -6,9 +6,9 @@ import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm"
 import path from "path"
 import { AbsolutePath } from "./schema.js"
 import { Bus } from "./bus.js"
+import { SpecterRejection } from "./specter/rejection.js"
 import { Database } from "./database/database.js"
 import { ProjectFact } from "@ocpp/schema/project-fact"
-import { Worktree } from "@ocpp/schema/worktree"
 import { FSUtil } from "@ocpp/util/fs-util"
 import { Git } from "./git.js"
 import { AppProcess } from "@ocpp/util/process"
@@ -152,11 +152,10 @@ const layer = Layer.effect(
           directory: project.directory,
           strategy: project.vcs.type === "git" ? "git" : undefined,
         })
-      // A missing directory row means this directory's resolution is a new durable
-      // fact. The row insert commits atomically with the event, so a crash between
-      // checks retries on the next resolve instead of stranding the announcement.
-      // The in-flight set keeps concurrent resolves from publishing the same fact
-      // twice.
+      // The runtime resolves a directory once while its project holds it: the
+      // directory's row is the projection of the same commit, so a crash before it
+      // retries on the next resolve. The stored row and the in-flight set only spare
+      // a resolve the work of finding what the directory adopts.
       for (const item of directories) {
         const key = item.projectID + "\u0000" + item.directory
         if (announcing.has(key)) continue
@@ -193,26 +192,25 @@ const layer = Layer.effect(
               return (yield* fs.resolve(path.dirname(found[0]))) === directory
             }),
           )
-          // The directory's row is stored by the fact recorded with its resolution.
-          yield* bus.publishAll([
-            [
-              Worktree.Event.Resolved,
-              {
+          // The directory's resolution and its row's fact are one commit.
+          yield* bus
+            .command({
+              type: "resolveWorktree",
+              payload: {
                 projectID: item.projectID,
                 directory: item.directory,
                 previous: project.previous ?? ID.global,
                 ...(adopted.length ? { adopted: adopted.map((candidate) => candidate.id) } : {}),
-              },
-            ],
-            [
-              ProjectFact.WorktreeRecorded,
-              {
-                projectID: item.projectID,
-                directory: item.directory,
                 ...(item.strategy === undefined ? {} : { strategy: item.strategy }),
               },
-            ],
-          ])
+            })
+            .pipe(
+              Effect.catchIf(
+                (error) => SpecterRejection.reason(error) === "Worktree already resolved",
+                () => Effect.succeed([]),
+              ),
+              Effect.orDie,
+            )
         }).pipe(Effect.ensuring(Effect.sync(() => announcing.delete(key))))
       }
       return project

@@ -30,6 +30,7 @@ export const decided = {
   "session-external-bound": "bindExternalAgent",
   "session-external-linked": "linkVendorSession",
   "session-external-checkpointed": "checkpointVendorSession",
+  "worktree-resolved": "resolveWorktree",
 } as const
 
 export const refusal = (type: string) =>

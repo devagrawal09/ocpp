@@ -44,6 +44,7 @@ const settle = (state: RecordStepStreamedState, sessionID: string) => {
 export const recordStepStreamed = implementCommand(specification)
   .inputSchema(input)
   .store(recordStepStreamedStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

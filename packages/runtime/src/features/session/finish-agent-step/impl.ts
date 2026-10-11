@@ -74,6 +74,7 @@ const settle = (state: FinishAgentStepState, sessionID: string) => {
 export const finishAgentStep = implementCommand(specification)
   .inputSchema(input)
   .store(finishAgentStepStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

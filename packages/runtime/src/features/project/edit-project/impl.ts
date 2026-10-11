@@ -24,6 +24,7 @@ const input = Schema.toStandardSchemaV1(ProjectFact.Edited.data)
 export const editProject = implementCommand(specification)
   .inputSchema(input)
   .store(editProjectStore)
+  .consistencyKeys((command) => [command.projectID])
   .apply(projectCreated, async (event, state) => {
     state.projects[event.payload.projectID] = true
   })

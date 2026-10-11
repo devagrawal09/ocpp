@@ -33,6 +33,7 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, in
 export const cancelInboxItem = implementCommand(specification)
   .inputSchema(input)
   .store(cancelInboxItemStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     const { sessionID } = event.payload
     state.sessions[sessionID] = "live"

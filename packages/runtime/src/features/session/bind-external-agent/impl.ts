@@ -28,6 +28,7 @@ const input = Schema.toStandardSchemaV1(ExternalSession.Bound.data)
 export const bindExternalAgent = implementCommand(specification)
   .inputSchema(input)
   .store(bindExternalAgentStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

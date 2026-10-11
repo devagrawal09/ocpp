@@ -27,6 +27,7 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, er
 export const failExecution = implementCommand(specification)
   .inputSchema(input)
   .store(failExecutionStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

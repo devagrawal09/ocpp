@@ -27,6 +27,7 @@ const input = Schema.toStandardSchemaV1(ProjectFact.WorktreeRemoved.data)
 export const removeWorktree = implementCommand(specification)
   .inputSchema(input)
   .store(removeWorktreeStore)
+  .consistencyKeys((command) => [command.projectID])
   .apply(projectCreated, async (event, state) => {
     state.projects[event.payload.projectID] ??= {}
   })

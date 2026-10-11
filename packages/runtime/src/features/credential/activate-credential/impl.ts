@@ -29,6 +29,11 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ credentialID: Credential
 export const activateCredential = implementCommand(specification)
   .inputSchema(input)
   .store(activateCredentialStore)
+  // The credential's integration, whose one active credential the decision reads.
+  .consistencyKeys((command, state) => {
+    const integrationID = state.credentials[command.credentialID]
+    return [command.credentialID, ...(integrationID === undefined ? [] : [integrationID])]
+  })
   .apply(credentialCreated, async (event, state) => {
     state.credentials[event.payload.credentialID] = event.payload.integrationID
     state.active[event.payload.integrationID] = event.payload.credentialID

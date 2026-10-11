@@ -28,6 +28,7 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ executionID: Schema.Stri
 export const startCodeModeExecution = implementCommand(specification)
   .inputSchema(input)
   .store(startCodeModeExecutionStore)
+  .consistencyKeys((command) => [command.executionID])
   .apply(admitted, async (event, state) => {
     state.executions[event.payload.executionID] = { sessionID: event.payload.sessionID, state: "admitted" }
   })

@@ -180,3 +180,43 @@ describe("embedded runtime", () => {
       }),
     ))
 })
+
+// S5a: Commands conflict only over what they decided on.
+describe("concurrent Sessions", () => {
+  const created = (sessionID: string) => ({
+    type: "createSession" as const,
+    payload: { session: { ...creation.payload.session, sessionID, slug: `slug-${sessionID}` } },
+  })
+  it("records many Sessions at once without exhausting the retries of a stale append", () =>
+    run(
+      Effect.gen(function* () {
+        const log = hostLog()
+        const runtime = yield* makeRuntime().pipe(Effect.provideService(EventLog, log))
+        const sessions = Array.from({ length: 120 }, (_, index) => `ses_${String(index).padStart(3, "0")}`)
+        yield* Effect.forEach(sessions, (sessionID) => runtime.command(created(sessionID)), {
+          concurrency: "unbounded",
+        })
+        // Every Session records at once, some twice: each Command reads its
+        // Session's folds, which every other Session's facts leave alone. A
+        // compare-and-swap over the whole log, or over every Session's
+        // renames, would make all but one of each round decide again, and
+        // most would run out of retries.
+        yield* Effect.forEach(
+          sessions.flatMap((sessionID) => [
+            { type: "renameSession" as const, payload: { sessionID, title: `${sessionID} first` } },
+            {
+              type: "appendSynthetic" as const,
+              payload: { sessionID, text: "A note", description: "Note" },
+            },
+            { type: "renameSession" as const, payload: { sessionID, title: `${sessionID} second` } },
+          ]),
+          (command) => runtime.command(command),
+          { concurrency: "unbounded" },
+        )
+        const count = (type: string) => log.inspect().filter((event) => event.type === type).length
+        expect(count("session-created")).toBe(120)
+        expect(count("session-renamed")).toBe(240)
+        expect(count("session-synthetic")).toBe(120)
+      }),
+    ))
+})

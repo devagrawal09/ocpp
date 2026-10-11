@@ -348,6 +348,40 @@ describe("Bus", () => {
       ).toEqual([{ aggregate_id: aggregateID, seq: 0 }])
     }),
   )
+  it.effect("records many Sessions at once without a stale append running out of retries", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const sessions = Array.from({ length: 64 }, (_, index) => `ses_concurrent_${String(index).padStart(2, "0")}`)
+      yield* Effect.forEach(sessions, (id) => recordSession({ id, directory: "/tmp/concurrent" }), {
+        concurrency: "unbounded",
+      })
+      // Over OC++'s own Event Log: each dispatch's append is checked only against facts of its Session, in
+      // the append transaction, and every one commits.
+      yield* Effect.forEach(
+        sessions.flatMap((sessionID) => [
+          { type: "renameSession" as const, payload: { sessionID, title: `${sessionID} renamed` } },
+          { type: "appendSynthetic" as const, payload: { sessionID, text: "A note", description: "Note" } },
+          { type: "selectTools" as const, payload: { sessionID, tools: ["read"] } },
+        ]),
+        (command) => bus.command(command).pipe(Effect.orDie),
+        { concurrency: "unbounded" },
+      )
+      const database = yield* Database.Service
+      const facts = yield* database.db
+        .select({ type: SpecterEventTable.type })
+        .from(SpecterEventTable)
+        .all()
+        .pipe(Effect.orDie)
+      const count = (type: string) => facts.filter((fact) => fact.type === type).length
+      expect([
+        count("session-created"),
+        count("session-renamed"),
+        count("session-synthetic"),
+        count("session-tools-selected"),
+      ]).toEqual([64, 64, 64, 64])
+    }),
+  )
+
   it.effect("refuses to publish a durable event: only a runtime Command records a fact", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service

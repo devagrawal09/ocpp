@@ -29,6 +29,7 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Shell.Settled.data)
 export const settleShell = implementCommand(specification)
   .inputSchema(input)
   .store(settleShellStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

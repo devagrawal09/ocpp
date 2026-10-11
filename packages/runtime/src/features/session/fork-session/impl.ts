@@ -43,6 +43,7 @@ const input = Schema.toStandardSchemaV1(
 export const forkSession = implementCommand(specification)
   .inputSchema(input)
   .store(forkSessionStore)
+  .consistencyKeys((command) => [command.session.sessionID, command.parentID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

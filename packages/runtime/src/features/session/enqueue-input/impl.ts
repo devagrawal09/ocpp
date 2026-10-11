@@ -113,6 +113,8 @@ const item = (command: Command) => {
 export const enqueueInput = implementCommand(specification)
   .inputSchema(input)
   .store(enqueueInputStore)
+  // An inbox item ID names one item across Sessions.
+  .consistencyKeys((command) => [command.sessionID, command.inboxID])
   .apply(sessionCreated, async (event, state) => {
     const { sessionID } = event.payload
     state.sessions[sessionID] = "live"

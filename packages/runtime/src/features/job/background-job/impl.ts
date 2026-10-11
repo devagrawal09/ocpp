@@ -31,6 +31,7 @@ const input = Schema.toStandardSchemaV1(
 export const backgroundJob = implementCommand(specification)
   .inputSchema(input)
   .store(backgroundJobStore)
+  .consistencyKeys((command) => [command.notificationID])
   .apply(backgroundStarted, async () => {})
   .apply(backgroundSettled, async () => {})
   .handle(async (command) => {

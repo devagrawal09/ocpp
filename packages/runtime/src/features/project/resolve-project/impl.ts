@@ -33,6 +33,7 @@ const input = Schema.toStandardSchemaV1(
 export const resolveProject = implementCommand(specification)
   .inputSchema(input)
   .store(resolveProjectStore)
+  .consistencyKeys((command) => [command.projectID])
   .apply(projectCreated, async (event, state) => {
     const { projectID, ...project } = event.payload
     state.projects[projectID] = project

@@ -37,6 +37,7 @@ const input = Schema.toStandardSchemaV1(
 export const updateCredential = implementCommand(specification)
   .inputSchema(input)
   .store(updateCredentialStore)
+  .consistencyKeys((command) => [command.credentialID])
   .apply(credentialCreated, async (event, state) => {
     state.credentials[event.payload.credentialID] = {
       integrationID: event.payload.integrationID,

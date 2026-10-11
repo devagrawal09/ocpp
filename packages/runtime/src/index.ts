@@ -7,6 +7,7 @@ export { SpecterCommandRejectedError } from "@specter-ts/core"
 export {
   type EventDraft,
   EventLog,
+  type EventLogAppendOptions,
   type EventLogCommit,
   EventLogFailure,
   type EventLogService,

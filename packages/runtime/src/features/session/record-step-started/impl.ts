@@ -53,6 +53,7 @@ const settle = (state: RecordStepStartedState, sessionID: string) => {
 export const recordStepStarted = implementCommand(specification)
   .inputSchema(input)
   .store(recordStepStartedStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

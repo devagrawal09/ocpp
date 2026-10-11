@@ -10,10 +10,36 @@ import { Schema } from "effect"
 // two shapes in the log.
 const definitions = DurableEventManifest.Definitions
 
-// One Specter event definition per durable fact: its name, and its payload
-// schema as a Standard Schema.
+// The identities a fact can be about. A fact carries its aggregate's and
+// every other one its payload names (a fork's parent, a Session's project, an
+// inbox item, a credential's integration, a Code Mode execution), so a
+// Command that decides on any of them conflicts with it.
+const identities = [
+  "sessionID",
+  "parentID",
+  "projectID",
+  "workspaceID",
+  "inboxID",
+  "executionID",
+  "notificationID",
+  "credentialID",
+  "integrationID",
+] as const
+
+const keys = (aggregate: string) => (payload: unknown) => {
+  const fields = payload as Record<string, unknown>
+  return [...new Set([aggregate, ...identities])].flatMap((field) => {
+    const value = fields[field]
+    return typeof value === "string" ? [value] : []
+  })
+}
+
+// One Specter event definition per durable fact: its name, its payload
+// schema as a Standard Schema, and its keys.
 export const sessionEventDefinitions = definitions.map((definition) =>
-  createEventDefinition(definition.type, Schema.toStandardSchemaV1(definition.data)),
+  createEventDefinition(definition.type, Schema.toStandardSchemaV1(definition.data), {
+    keys: keys(definition.durable.aggregate),
+  }),
 )
 
 type Definitions = (typeof definitions)[number]

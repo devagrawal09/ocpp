@@ -29,6 +29,7 @@ const input = Schema.toStandardSchemaV1(KeyValueFact.Stored.data)
 export const storeValue = implementCommand(specification)
   .inputSchema(input)
   .store(storeValueStore)
+  .consistencyKeys((command) => [command.key])
   .apply(kvStored, async (event, state) => {
     state.values[event.payload.key] = digest(event.payload.value)
   })

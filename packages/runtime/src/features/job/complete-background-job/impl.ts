@@ -25,6 +25,7 @@ const input = Schema.toStandardSchemaV1(SessionFact.BackgroundCompleted.data)
 export const completeBackgroundJob = implementCommand(specification)
   .inputSchema(input)
   .store(completeBackgroundJobStore)
+  .consistencyKeys((command) => [command.notificationID])
   .apply(backgroundStarted, async (event, state) => {
     state.markers[event.payload.notificationID] = true
   })

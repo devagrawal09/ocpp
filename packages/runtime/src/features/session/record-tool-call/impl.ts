@@ -54,6 +54,7 @@ const closeStep = (state: RecordToolCallState, sessionID: string, assistantMessa
 export const recordToolCall = implementCommand(specification)
   .inputSchema(input)
   .store(recordToolCallStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

@@ -30,6 +30,7 @@ const input = Schema.toStandardSchemaV1(SessionEvent.MessageContentUpdated.data)
 export const editMessage = implementCommand(specification)
   .inputSchema(input)
   .store(editMessageStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

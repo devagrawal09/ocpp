@@ -26,6 +26,7 @@ const input = Schema.toStandardSchemaV1(ProjectFact.WorkspaceDestroyed.data)
 export const destroyWorkspace = implementCommand(specification)
   .inputSchema(input)
   .store(destroyWorkspaceStore)
+  .consistencyKeys((command) => [command.workspaceID])
   .apply(workspaceCreated, async (event, state) => {
     state.workspaces[event.payload.workspaceID] = "live"
   })

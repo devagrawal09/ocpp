@@ -26,6 +26,7 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Displayed.data)
 export const displayResult = implementCommand(specification)
   .inputSchema(input)
   .store(displayResultStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

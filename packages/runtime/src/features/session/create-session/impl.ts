@@ -38,6 +38,10 @@ const input = Schema.toStandardSchemaV1(
 export const createSession = implementCommand(specification)
   .inputSchema(input)
   .store(createSessionStore)
+  .consistencyKeys((command) => [
+    command.session.sessionID,
+    ...(command.session.parentID === undefined ? [] : [command.session.parentID]),
+  ])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

@@ -26,6 +26,7 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Synthetic.data)
 export const appendSynthetic = implementCommand(specification)
   .inputSchema(input)
   .store(appendSyntheticStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

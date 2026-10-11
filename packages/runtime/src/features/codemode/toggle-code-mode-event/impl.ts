@@ -31,6 +31,7 @@ const input = Schema.toStandardSchemaV1(SessionFact.EventToggled.data)
 export const toggleCodeModeEvent = implementCommand(specification)
   .inputSchema(input)
   .store(toggleCodeModeEventStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

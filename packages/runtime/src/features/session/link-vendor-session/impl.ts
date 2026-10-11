@@ -29,6 +29,7 @@ const input = Schema.toStandardSchemaV1(ExternalSession.Linked.data)
 export const linkVendorSession = implementCommand(specification)
   .inputSchema(input)
   .store(linkVendorSessionStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

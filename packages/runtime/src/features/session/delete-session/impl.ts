@@ -58,6 +58,7 @@ const settle = (state: DeleteSessionState, payload: { readonly sessionID: string
 export const deleteSession = implementCommand(specification)
   .inputSchema(input)
   .store(deleteSessionStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

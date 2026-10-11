@@ -31,6 +31,7 @@ const input = Schema.toStandardSchemaV1(SessionFact.EventFired.data)
 export const fireCodeModeEvent = implementCommand(specification)
   .inputSchema(input)
   .store(fireCodeModeEventStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

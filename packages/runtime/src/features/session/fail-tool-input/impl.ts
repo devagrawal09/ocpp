@@ -55,6 +55,7 @@ const record = (state: FailToolInputState, payload: { sessionID: string; assista
 export const failToolInput = implementCommand(specification)
   .inputSchema(input)
   .store(failToolInputStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

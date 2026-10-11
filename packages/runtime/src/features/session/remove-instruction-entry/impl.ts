@@ -30,6 +30,7 @@ const input = Schema.toStandardSchemaV1(SessionFact.InstructionEntryRemoved.data
 export const removeInstructionEntry = implementCommand(specification)
   .inputSchema(input)
   .store(removeInstructionEntryStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

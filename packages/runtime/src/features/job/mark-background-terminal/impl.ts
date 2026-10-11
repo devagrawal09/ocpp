@@ -30,6 +30,11 @@ const input = Schema.toStandardSchemaV1(SessionFact.BackgroundTerminal.data)
 export const markBackgroundTerminal = implementCommand(specification)
   .inputSchema(input)
   .store(markBackgroundTerminalStore)
+  // The marker's job, whose Code Mode settlement makes it terminal.
+  .consistencyKeys((command, state) => {
+    const marker = state.markers[command.notificationID]
+    return [command.notificationID, ...(marker ? [marker.jobID] : [])]
+  })
   // A resumed job keeps its marker terminal.
   .apply(backgroundStarted, async (event, state) => {
     const { notificationID, jobID } = event.payload

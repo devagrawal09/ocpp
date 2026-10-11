@@ -31,6 +31,7 @@ const input = Schema.toStandardSchemaV1(SessionFact.InstructionEntrySet.data)
 export const setInstructionEntry = implementCommand(specification)
   .inputSchema(input)
   .store(setInstructionEntryStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

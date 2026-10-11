@@ -6,6 +6,7 @@ import {
   EventLogFailure,
   SpecterVersionConflictError,
   type EventDraft,
+  type EventLogAppendOptions,
   type EventLogCommit,
   type EventLogService,
   type PersistedEvent,
@@ -85,10 +86,18 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
       .get()
       .pipe(Effect.flatMap((row) => (row ? withEvents(row) : Effect.succeed(undefined))))
 
-  const append = (
-    drafts: readonly EventDraft[],
-    options: { expectedVersion?: number; idempotencyKey?: string; fingerprint?: string } = {},
-  ) =>
+  const query = (afterOrder: number, eventTypes: readonly string[]) =>
+    eventTypes.length === 0
+      ? Effect.succeed([])
+      : db
+          .select()
+          .from(SpecterEventTable)
+          .where(and(gt(SpecterEventTable.order, afterOrder), inArray(SpecterEventTable.type, [...eventTypes])))
+          .orderBy(asc(SpecterEventTable.order))
+          .all()
+          .pipe(Effect.map((rows) => rows.map(toEvent)))
+
+  const append = (drafts: readonly EventDraft[], options: EventLogAppendOptions = {}) =>
     db
       .transaction(
         () =>
@@ -100,6 +109,16 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
             const version = yield* currentVersion
             if (options.expectedVersion !== undefined && options.expectedVersion !== version)
               return yield* fail("append")(new SpecterVersionConflictError(options.expectedVersion, version))
+            // Stale when an event the decision read landed after it read: one of its types, after its order,
+            // that it matches (one carrying a key it decided on, or none).
+            const unchanged = options.expectedUnchanged
+            const stale = unchanged
+              ? (yield* query(unchanged.afterOrder, unchanged.eventTypes)).find(
+                  (event) => unchanged.matches?.(event) ?? true,
+                )
+              : undefined
+            if (unchanged && stale)
+              return yield* fail("append")(new SpecterVersionConflictError(unchanged.afterOrder, stale.order))
             const recordedAt = new Date().toISOString()
             const identities = hooks.drafts(options.idempotencyKey, drafts.length).map((identity) => ({
               id: identity.id,
@@ -153,19 +172,7 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
       )
 
   return {
-    query: (afterOrder, eventTypes) =>
-      eventTypes.length === 0
-        ? Effect.succeed([])
-        : db
-            .select()
-            .from(SpecterEventTable)
-            .where(and(gt(SpecterEventTable.order, afterOrder), inArray(SpecterEventTable.type, [...eventTypes])))
-            .orderBy(asc(SpecterEventTable.order))
-            .all()
-            .pipe(
-              Effect.map((rows) => rows.map(toEvent)),
-              Effect.catch(fail("query")),
-            ),
+    query: (afterOrder, eventTypes) => query(afterOrder, eventTypes).pipe(Effect.catch(fail("query"))),
     currentVersion: currentVersion.pipe(Effect.catch(fail("currentVersion"))),
     commitsAfter: (afterVersion) =>
       db

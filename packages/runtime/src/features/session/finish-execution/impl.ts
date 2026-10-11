@@ -36,6 +36,7 @@ const settle = (state: FinishExecutionState, sessionID: string) => {
 export const finishExecution = implementCommand(specification)
   .inputSchema(input)
   .store(finishExecutionStore)
+  .consistencyKeys((command) => [command.sessionID])
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

@@ -25,6 +25,7 @@ const input = Schema.toStandardSchemaV1(KeyValueFact.Removed.data)
 export const removeValue = implementCommand(specification)
   .inputSchema(input)
   .store(removeValueStore)
+  .consistencyKeys((command) => [command.key])
   .apply(kvStored, async (event, state) => {
     state.keys[event.payload.key] = true
   })

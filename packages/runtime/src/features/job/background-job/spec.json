@@ -1,0 +1,136 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records that a recoverable job went to the background: until its notification is delivered, its marker tells a restart how to resume it. A job that ended before it went to the background records its outcome in the same commit, so its marker exists exactly when the job did. A resumed job goes to the background again under its notification.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "backgroundJob",
+  "scenarios": [
+    {
+      "description": "A running job goes to the background under its notification.",
+      "expect": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "jobID": "exe_1",
+        "notificationID": "msg_n1",
+        "recovery": {
+          "assistantMessageID": "msg_1",
+          "kind": "codemode",
+          "parentSessionID": "ses_1",
+          "toolCallID": "call_1"
+        }
+      }
+    },
+    {
+      "description": "A job that already ended records its start and its outcome, in one commit.",
+      "expect": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-settled",
+          "examplePayload": {
+            "notificationID": "msg_n1",
+            "outcome": "completed",
+            "output": "done"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "jobID": "exe_1",
+        "notificationID": "msg_n1",
+        "recovery": {
+          "assistantMessageID": "msg_1",
+          "kind": "codemode",
+          "parentSessionID": "ses_1",
+          "toolCallID": "call_1"
+        },
+        "settled": {
+          "outcome": "completed",
+          "output": "done"
+        }
+      }
+    },
+    {
+      "description": "A job a restart resumed goes to the background again under the same notification.",
+      "expect": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-settled",
+          "examplePayload": {
+            "error": "All fibers interrupted without error",
+            "notificationID": "msg_n1",
+            "outcome": "error"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "jobID": "exe_1",
+        "notificationID": "msg_n1",
+        "recovery": {
+          "assistantMessageID": "msg_1",
+          "kind": "codemode",
+          "parentSessionID": "ses_1",
+          "toolCallID": "call_1"
+        }
+      }
+    }
+  ]
+}

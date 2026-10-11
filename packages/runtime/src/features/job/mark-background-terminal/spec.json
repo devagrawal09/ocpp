@@ -1,0 +1,202 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Marks that a background job's outcome reached its Session: only its notification is left to deliver. A Code Mode run's settlement does this by itself. A marker is terminal once, and stays terminal when its job resumes.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "markBackgroundTerminal",
+  "scenarios": [
+    {
+      "description": "A marker whose job's outcome reached its Session becomes terminal.",
+      "expect": [
+        {
+          "eventType": "session-background-terminal",
+          "examplePayload": {
+            "notificationID": "msg_n1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    },
+    {
+      "description": "A terminal marker is refused: it is terminal already.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-terminal",
+          "examplePayload": {
+            "notificationID": "msg_n1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Background job already terminal"
+      },
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    },
+    {
+      "description": "A Code Mode run's settlement made its marker terminal.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-settled",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "events": [],
+            "executionID": "exe_1",
+            "id": "call_1",
+            "outcome": "completed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Background job already terminal"
+      },
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    },
+    {
+      "description": "A resumed job's marker stays terminal.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-terminal",
+          "examplePayload": {
+            "notificationID": "msg_n1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Background job already terminal"
+      },
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    },
+    {
+      "description": "A notification without a marker is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Background job not found"
+      },
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    },
+    {
+      "description": "A completed marker is gone.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Background job not found"
+      },
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    }
+  ]
+}

@@ -20,6 +20,22 @@ import { createDeleteSessionState, deleteSession, deleteSessionStore } from "./f
 import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
+import { createBackgroundJobState, backgroundJob, backgroundJobStore } from "./features/job/background-job/impl.ts"
+import {
+  createSettleBackgroundJobState,
+  settleBackgroundJob,
+  settleBackgroundJobStore,
+} from "./features/job/settle-background-job/impl.ts"
+import {
+  createMarkBackgroundTerminalState,
+  markBackgroundTerminal,
+  markBackgroundTerminalStore,
+} from "./features/job/mark-background-terminal/impl.ts"
+import {
+  createCompleteBackgroundJobState,
+  completeBackgroundJob,
+  completeBackgroundJobStore,
+} from "./features/job/complete-background-job/impl.ts"
 import {
   createResolveWorktreeState,
   resolveWorktree,
@@ -227,6 +243,10 @@ export const createRuntimeConfig = (options: {
       linkVendorSession,
       checkpointVendorSession,
       resolveWorktree,
+      backgroundJob,
+      settleBackgroundJob,
+      markBackgroundTerminal,
+      completeBackgroundJob,
       enqueueInput,
       cancelInboxItem,
       changeDelivery,
@@ -317,6 +337,10 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(linkVendorSessionStore, createLinkVendorSessionState),
     provide(checkpointVendorSessionStore, createCheckpointVendorSessionState),
     provide(resolveWorktreeStore, createResolveWorktreeState),
+    provide(backgroundJobStore, createBackgroundJobState),
+    provide(settleBackgroundJobStore, createSettleBackgroundJobState),
+    provide(markBackgroundTerminalStore, createMarkBackgroundTerminalState),
+    provide(completeBackgroundJobStore, createCompleteBackgroundJobState),
     provide(enqueueInputStore, createEnqueueInputState),
     provide(cancelInboxItemStore, createCancelInboxItemState),
     provide(changeDeliveryStore, createChangeDeliveryState),

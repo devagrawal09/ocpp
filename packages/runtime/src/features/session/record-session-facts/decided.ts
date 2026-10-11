@@ -31,6 +31,10 @@ export const decided = {
   "session-external-linked": "linkVendorSession",
   "session-external-checkpointed": "checkpointVendorSession",
   "worktree-resolved": "resolveWorktree",
+  "session-background-started": "backgroundJob",
+  "session-background-settled": "settleBackgroundJob",
+  "session-background-terminal": "markBackgroundTerminal",
+  "session-background-completed": "completeBackgroundJob",
 } as const
 
 export const refusal = (type: string) =>

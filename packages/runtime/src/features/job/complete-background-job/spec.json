@@ -1,0 +1,84 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Completes a background job's marker once its notification was delivered, or the job was discarded: nothing is left to recover, and the marker goes. Restart recovery completes the markers it settles.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "completeBackgroundJob",
+  "scenarios": [
+    {
+      "description": "A marker completes, whatever its job's state.",
+      "expect": [
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    },
+    {
+      "description": "A notification without a marker is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Background job not found"
+      },
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    },
+    {
+      "description": "A completed marker is gone.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Background job not found"
+      },
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    }
+  ]
+}

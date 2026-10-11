@@ -17,13 +17,13 @@ import {
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { Identifier } from "./id/id.js"
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { eq } from "drizzle-orm"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { JobBackgroundTable } from "./job/sql.js"
 import { JobProjector } from "./job/projector.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionSchema } from "./session/schema.js"
+import { SpecterRejection } from "./specter/rejection.js"
 
 const Background = Schema.Struct({
   id: Schema.String,
@@ -172,18 +172,16 @@ function errorText(error: unknown) {
   return String(error)
 }
 
-/** A finished job's settlement of its marker; none while it runs. */
-function settlement(notificationID: SessionMessage.ID, info: Info) {
+const encodeRecovery = Schema.encodeSync(SessionFact.BackgroundRecovery)
+
+/** How a finished job settles its marker; nothing while it runs. */
+function settlement(info: Info) {
   if (info.status === "running") return
-  return [
-    SessionFact.BackgroundSettled,
-    {
-      notificationID,
-      outcome: info.status,
-      ...(info.output !== undefined ? { output: info.output } : {}),
-      ...(info.error !== undefined ? { error: info.error } : {}),
-    },
-  ] as const
+  return {
+    outcome: info.status,
+    ...(info.output !== undefined ? { output: info.output } : {}),
+    ...(info.error !== undefined ? { error: info.error } : {}),
+  }
 }
 
 function incrementSession(input: Map<SessionSchema.ID, number>, sessionID: SessionSchema.ID) {
@@ -213,35 +211,41 @@ export const make = Effect.gen(function* () {
 
   // A recoverable job's marker is the projection of its facts in Specter's Event Log (JobProjector):
   // going to the background starts it, and the job's outcome settles it. A job that ends before its
-  // start was recorded records both at once.
+  // start was recorded records both at once. The runtime's Commands decide each.
   const recordBackground = Effect.fnUntraced(function* (job: Active, recorded: boolean) {
     if (!job.recovery || !job.info.notificationID) return
-    const settled = settlement(job.info.notificationID, job.info)
+    const notificationID = job.info.notificationID
+    const settled = settlement(job.info)
     if (recorded) {
-      if (settled) yield* bus.publish(...settled)
+      // A marker that is gone (its notification was delivered) has nothing left to settle.
+      if (settled)
+        yield* bus
+          .command({ type: "settleBackgroundJob", payload: { notificationID, ...settled } })
+          .pipe(Effect.catch(() => Effect.void))
       return
     }
-    const started = [
-      SessionFact.BackgroundStarted,
-      { notificationID: job.info.notificationID, jobID: job.info.id, recovery: job.recovery },
-    ] as const
-    if (!settled) {
-      yield* bus.publish(...started)
-      return
-    }
-    yield* bus.publishAll([started, settled])
-  })
-  const findBackground = (notificationID: SessionMessage.ID) =>
-    db
-      .select()
-      .from(JobBackgroundTable)
-      .where(eq(JobBackgroundTable.notification_id, notificationID))
-      .get()
+    yield* bus
+      .command({
+        type: "backgroundJob",
+        payload: {
+          notificationID,
+          jobID: job.info.id,
+          recovery: encodeRecovery(job.recovery),
+          ...(settled ? { settled } : {}),
+        },
+      })
       .pipe(Effect.orDie)
+  })
+  // A marker that is gone (completed already) has nothing left to complete.
   const completeBackground: Interface["completeBackground"] = Effect.fn("Job.completeBackground")(
     function* (notificationID) {
-      if (!(yield* findBackground(notificationID))) return
-      yield* bus.publish(SessionFact.BackgroundCompleted, { notificationID })
+      yield* bus.command({ type: "completeBackgroundJob", payload: { notificationID } }).pipe(
+        Effect.catchIf(
+          (error) => SpecterRejection.reason(error) === "Background job not found",
+          () => Effect.void,
+        ),
+        Effect.orDie,
+      )
     },
   )
 
@@ -557,15 +561,18 @@ export const make = Effect.gen(function* () {
       Effect.withSpan("Job.pendingBackground"),
     )
 
+  // A marker is terminal once; one that is gone is a defect of the caller.
   const markBackgroundTerminal: Interface["markBackgroundTerminal"] = Effect.fn("Job.markBackgroundTerminal")(
     function* (notificationID) {
-      const background = yield* findBackground(notificationID)
-      if (!background) {
-        yield* Effect.die(new Error(`Background notification ${notificationID} is unavailable`))
-        return
-      }
-      if (background.terminal) return
-      yield* bus.publish(SessionFact.BackgroundTerminal, { notificationID })
+      yield* bus.command({ type: "markBackgroundTerminal", payload: { notificationID } }).pipe(
+        Effect.catch((error) => {
+          const reason = SpecterRejection.reason(error)
+          if (reason === "Background job already terminal") return Effect.void
+          if (reason === "Background job not found")
+            return Effect.die(new Error(`Background notification ${notificationID} is unavailable`))
+          return Effect.die(error)
+        }),
+      )
     },
   )
 

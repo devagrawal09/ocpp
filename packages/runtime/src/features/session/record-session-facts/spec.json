@@ -1350,116 +1350,6 @@
       }
     },
     {
-      "description": "Records session-background-started as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-background-started",
-          "examplePayload": {
-            "jobID": "exe_2",
-            "notificationID": "msg_3",
-            "recovery": {
-              "assistantMessageID": "msg_1",
-              "kind": "codemode",
-              "parentSessionID": "ses_1",
-              "toolCallID": "call_1"
-            }
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "jobID": "exe_2",
-              "notificationID": "msg_3",
-              "recovery": {
-                "assistantMessageID": "msg_1",
-                "kind": "codemode",
-                "parentSessionID": "ses_1",
-                "toolCallID": "call_1"
-              }
-            },
-            "type": "session-background-started"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-background-settled as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-background-settled",
-          "examplePayload": {
-            "notificationID": "msg_3",
-            "outcome": "completed",
-            "output": "done"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "notificationID": "msg_3",
-              "outcome": "completed",
-              "output": "done"
-            },
-            "type": "session-background-settled"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-background-terminal as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-background-terminal",
-          "examplePayload": {
-            "notificationID": "msg_3"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "notificationID": "msg_3"
-            },
-            "type": "session-background-terminal"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-background-completed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-background-completed",
-          "examplePayload": {
-            "notificationID": "msg_3"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "notificationID": "msg_3"
-            },
-            "type": "session-background-completed"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records kv-stored as the host published it.",
       "expect": [
         {
@@ -2523,6 +2413,115 @@
               "projectID": "prj_1"
             },
             "type": "worktree-resolved"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-background-started: backgroundJob decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-background-started is recorded by backgroundJob"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "jobID": "exe_2",
+              "notificationID": "msg_3",
+              "recovery": {
+                "assistantMessageID": "msg_1",
+                "kind": "codemode",
+                "parentSessionID": "ses_1",
+                "toolCallID": "call_1"
+              }
+            },
+            "type": "session-background-started"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-background-settled: settleBackgroundJob decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-background-settled is recorded by settleBackgroundJob"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "notificationID": "msg_3",
+              "outcome": "completed",
+              "output": "done"
+            },
+            "type": "session-background-settled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-background-terminal: markBackgroundTerminal decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-background-terminal is recorded by markBackgroundTerminal"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "notificationID": "msg_3"
+            },
+            "type": "session-background-terminal"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-background-completed: completeBackgroundJob decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-background-completed is recorded by completeBackgroundJob"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "notificationID": "msg_3"
+            },
+            "type": "session-background-completed"
           }
         ]
       }

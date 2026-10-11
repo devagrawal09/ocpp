@@ -1,0 +1,187 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Settles a background job's marker with how the job ended: completed with its output, or error or cancelled. Only a marker whose job runs settles, once per run.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "settleBackgroundJob",
+  "scenarios": [
+    {
+      "description": "A running job's marker settles with its outcome.",
+      "expect": [
+        {
+          "eventType": "session-background-settled",
+          "examplePayload": {
+            "notificationID": "msg_n1",
+            "outcome": "completed",
+            "output": "done"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "notificationID": "msg_n1",
+        "outcome": "completed",
+        "output": "done"
+      }
+    },
+    {
+      "description": "A job a restart resumed settles again.",
+      "expect": [
+        {
+          "eventType": "session-background-settled",
+          "examplePayload": {
+            "notificationID": "msg_n1",
+            "outcome": "completed",
+            "output": "done"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-settled",
+          "examplePayload": {
+            "notificationID": "msg_n1",
+            "outcome": "completed",
+            "output": "done"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "notificationID": "msg_n1",
+        "outcome": "completed",
+        "output": "done"
+      }
+    },
+    {
+      "description": "A marker that settled is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-settled",
+          "examplePayload": {
+            "notificationID": "msg_n1",
+            "outcome": "completed",
+            "output": "done"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Background job not running"
+      },
+      "when": {
+        "notificationID": "msg_n1",
+        "outcome": "completed",
+        "output": "done"
+      }
+    },
+    {
+      "description": "A notification without a marker is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Background job not found"
+      },
+      "when": {
+        "notificationID": "msg_n1",
+        "outcome": "completed",
+        "output": "done"
+      }
+    },
+    {
+      "description": "A completed marker is gone.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Background job not found"
+      },
+      "when": {
+        "notificationID": "msg_n1",
+        "outcome": "completed",
+        "output": "done"
+      }
+    }
+  ]
+}

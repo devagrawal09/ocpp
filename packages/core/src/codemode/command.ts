@@ -35,7 +35,8 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const { db } = yield* Database.Service
     const bus = yield* Bus.Service
-    // A Session's commands are the projection of their facts in Specter's Event Log.
+    // A Session's commands are the projection of their facts in Specter's Event Log, which
+    // defineCodeModeCommand and removeCodeModeCommand record; a fork copies them with its notebook.
     yield* bus.project(SessionFact.CommandDefined, (event) =>
       db
         .insert(CodeModeCommandTable)

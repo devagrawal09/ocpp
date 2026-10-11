@@ -41,7 +41,8 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const db = (yield* Database.Service).db
     const bus = yield* Bus.Service
-    // Stored values are the projection of their facts in Specter's Event Log.
+    // Stored values are the projection of their facts in Specter's Event Log, which storeValue and removeValue
+    // record.
     yield* bus.project(KeyValueFact.Stored, (event) =>
       db
         .insert(KVTable)

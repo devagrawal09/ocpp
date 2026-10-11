@@ -110,7 +110,8 @@ const layer = Layer.effect(
         Effect.andThen(updated(key)),
       )
 
-    // A Session's events are the projection of their facts in Specter's Event Log.
+    // A Session's events are the projection of their facts in Specter's Event Log, which the runtime's Code
+    // Mode event Commands record; a fork copies them, disabled, with its notebook.
     yield* bus.project(SessionFact.EventDefined, (event) =>
       Effect.gen(function* () {
         const data = event.data

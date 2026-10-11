@@ -12,7 +12,8 @@ import { ProjectTable } from "./sql.js"
 
 /**
  * Projects, their worktrees and workspaces are projections of their facts in Specter's Event Log, written
- * in the transaction that records each fact.
+ * in the transaction that records each fact. The runtime's project, worktree and workspace Commands decide
+ * the facts; a projection only applies them.
  */
 const layer = Layer.effectDiscard(
   Effect.gen(function* () {

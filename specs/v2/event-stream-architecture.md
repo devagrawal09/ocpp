@@ -22,7 +22,7 @@ Server EventFeed
  HTTP A    HTTP B    HTTP C
 ```
 
-Core owns event meaning, publication, persistence, typed observation, durable logs, replay, and transactional projection.
+Core owns event meaning, publication, persistence, typed observation, durable logs, replay, and transactional projection. Durable events are recorded only by runtime Commands (`Bus.command`); `Bus.publish` carries ephemeral events.
 
 Server owns public event selection, wire encoding, bounded connection delivery, and subscriber lifecycle.
 

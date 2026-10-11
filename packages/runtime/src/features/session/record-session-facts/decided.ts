@@ -27,6 +27,9 @@ export const decided = {
   "session-shell-settled": "settleShell",
   "session-compaction-started": "startCompaction",
   "session-compaction-settled": "settleCompaction",
+  "session-external-bound": "bindExternalAgent",
+  "session-external-linked": "linkVendorSession",
+  "session-external-checkpointed": "checkpointVendorSession",
 } as const
 
 export const refusal = (type: string) =>

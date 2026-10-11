@@ -592,85 +592,6 @@
       }
     },
     {
-      "description": "Records session-external-bound as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-external-bound",
-          "examplePayload": {
-            "directory": "/a",
-            "provider": "claude",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "directory": "/a",
-              "provider": "claude",
-              "sessionID": "ses_1"
-            },
-            "type": "session-external-bound"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-external-linked as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-external-linked",
-          "examplePayload": {
-            "sessionID": "ses_1",
-            "vendorSessionID": "vendor_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "sessionID": "ses_1",
-              "vendorSessionID": "vendor_1"
-            },
-            "type": "session-external-linked"
-          }
-        ]
-      }
-    },
-    {
-      "description": "Records session-external-checkpointed as the host published it.",
-      "expect": [
-        {
-          "eventType": "session-external-checkpointed",
-          "examplePayload": {
-            "checkpoint": "checkpoint_1",
-            "historyHash": "hash_1",
-            "sessionID": "ses_1"
-          },
-          "kind": "scenario-event"
-        }
-      ],
-      "given": [],
-      "when": {
-        "facts": [
-          {
-            "payload": {
-              "checkpoint": "checkpoint_1",
-              "historyHash": "hash_1",
-              "sessionID": "ses_1"
-            },
-            "type": "session-external-checkpointed"
-          }
-        ]
-      }
-    },
-    {
       "description": "Records worktree-resolved as the host published it.",
       "expect": [
         {
@@ -2522,6 +2443,86 @@
               "sessionID": "ses_1"
             },
             "type": "session-compaction-settled"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-external-bound: bindExternalAgent decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-external-bound is recorded by bindExternalAgent"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "directory": "/a",
+              "provider": "claude",
+              "sessionID": "ses_1"
+            },
+            "type": "session-external-bound"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-external-linked: linkVendorSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-external-linked is recorded by linkVendorSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "sessionID": "ses_1",
+              "vendorSessionID": "vendor_1"
+            },
+            "type": "session-external-linked"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Refuses session-external-checkpointed: checkpointVendorSession decides it.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "session-external-checkpointed is recorded by checkpointVendorSession"
+      },
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "key": "websearch:provider",
+              "value": "exa"
+            },
+            "type": "kv-stored"
+          },
+          {
+            "payload": {
+              "checkpoint": "checkpoint_1",
+              "historyHash": "hash_1",
+              "sessionID": "ses_1"
+            },
+            "type": "session-external-checkpointed"
           }
         ]
       }

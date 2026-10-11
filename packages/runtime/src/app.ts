@@ -20,6 +20,21 @@ import { createDeleteSessionState, deleteSession, deleteSessionStore } from "./f
 import { createForkSessionState, forkSession, forkSessionStore } from "./features/session/fork-session/impl.ts"
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
+import {
+  createBindExternalAgentState,
+  bindExternalAgent,
+  bindExternalAgentStore,
+} from "./features/session/bind-external-agent/impl.ts"
+import {
+  createLinkVendorSessionState,
+  linkVendorSession,
+  linkVendorSessionStore,
+} from "./features/session/link-vendor-session/impl.ts"
+import {
+  createCheckpointVendorSessionState,
+  checkpointVendorSession,
+  checkpointVendorSessionStore,
+} from "./features/session/checkpoint-vendor-session/impl.ts"
 import { createRunShellState, runShell, runShellStore } from "./features/session/run-shell/impl.ts"
 import { createSettleShellState, settleShell, settleShellStore } from "./features/session/settle-shell/impl.ts"
 import {
@@ -203,6 +218,9 @@ export const createRuntimeConfig = (options: {
       settleShell,
       startCompaction,
       settleCompaction,
+      bindExternalAgent,
+      linkVendorSession,
+      checkpointVendorSession,
       enqueueInput,
       cancelInboxItem,
       changeDelivery,
@@ -289,6 +307,9 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(settleShellStore, createSettleShellState),
     provide(startCompactionStore, createStartCompactionState),
     provide(settleCompactionStore, createSettleCompactionState),
+    provide(bindExternalAgentStore, createBindExternalAgentState),
+    provide(linkVendorSessionStore, createLinkVendorSessionState),
+    provide(checkpointVendorSessionStore, createCheckpointVendorSessionState),
     provide(enqueueInputStore, createEnqueueInputState),
     provide(cancelInboxItemStore, createCancelInboxItemState),
     provide(changeDeliveryStore, createChangeDeliveryState),

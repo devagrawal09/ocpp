@@ -1,0 +1,212 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Binds a live Session to the external agent (vendor) that runs it, in a directory. Binding to another vendor or directory starts a new vendor session; binding to the same one changes nothing.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "bindExternalAgent",
+  "scenarios": [
+    {
+      "description": "A Session is bound to its vendor and directory.",
+      "expect": [
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/tmp/ws",
+            "provider": "claude",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "directory": "/tmp/ws",
+        "provider": "claude",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Another vendor binds again.",
+      "expect": [
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/tmp/ws",
+            "provider": "codex",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/tmp/ws",
+            "provider": "claude",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "directory": "/tmp/ws",
+        "provider": "codex",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "Another directory binds again.",
+      "expect": [
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/tmp/other",
+            "provider": "claude",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/tmp/ws",
+            "provider": "claude",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "directory": "/tmp/other",
+        "provider": "claude",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "The binding the Session has is refused: there is nothing to change.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/tmp/ws",
+            "provider": "claude",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "External agent already bound"
+      },
+      "when": {
+        "directory": "/tmp/ws",
+        "provider": "claude",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "directory": "/tmp/ws",
+        "provider": "claude",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "directory": "/tmp/ws",
+        "provider": "claude",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

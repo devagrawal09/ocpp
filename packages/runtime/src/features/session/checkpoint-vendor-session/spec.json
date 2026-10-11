@@ -1,0 +1,135 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records a bound Session's vendor checkpoint at a settled boundary: the fingerprint of the vendor's history and of the canonical history it answers, which decide whether the vendor session can continue.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "checkpointVendorSession",
+  "scenarios": [
+    {
+      "description": "A bound Session records its vendor checkpoint.",
+      "expect": [
+        {
+          "eventType": "session-external-checkpointed",
+          "examplePayload": {
+            "checkpoint": "checkpoint_1",
+            "historyHash": "hash_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/tmp/ws",
+            "provider": "claude",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "checkpoint": "checkpoint_1",
+        "historyHash": "hash_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Session that no external agent runs is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "External agent not bound"
+      },
+      "when": {
+        "checkpoint": "checkpoint_1",
+        "historyHash": "hash_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An unknown Session is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Session not found"
+      },
+      "when": {
+        "checkpoint": "checkpoint_1",
+        "historyHash": "hash_1",
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A deleted Session is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-external-bound",
+          "examplePayload": {
+            "directory": "/tmp/ws",
+            "provider": "claude",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Session deleted"
+      },
+      "when": {
+        "checkpoint": "checkpoint_1",
+        "historyHash": "hash_1",
+        "sessionID": "ses_1"
+      }
+    }
+  ]
+}

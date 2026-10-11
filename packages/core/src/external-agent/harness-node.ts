@@ -17,6 +17,7 @@ import { Database } from "../database/database.js"
 import { Instructions } from "../instructions/index.js"
 import { SessionContext } from "../session/context.js"
 import { SessionCompaction } from "../session/compaction.js"
+import { SpecterRejection } from "../specter/rejection.js"
 import { StepFailedError } from "../session/error.js"
 import { ExternalAgentHarness } from "./harness.js"
 import { SessionEvent } from "../session/event.js"
@@ -318,10 +319,15 @@ const layer = Layer.effect(
           ]
         }),
       ])
+      // The runtime binds the Session to this vendor and directory, and records nothing when it is bound already.
       const bind = Effect.fnUntraced(function* () {
-        const record = yield* external.get(sessionID)
-        if (record?.provider === provider && record.directory === directory) return record
-        yield* bus.publish(ExternalSession.Bound, { sessionID, provider, directory })
+        yield* bus.command({ type: "bindExternalAgent", payload: { sessionID, provider, directory } }).pipe(
+          Effect.catchIf(
+            (error) => SpecterRejection.reason(error) === "External agent already bound",
+            () => Effect.succeed([]),
+          ),
+          Effect.orDie,
+        )
         return (yield* external.get(sessionID))!
       })
       // A vendor session continues only when it holds exactly the canonical history OC++ last checkpointed.
@@ -438,13 +444,22 @@ const layer = Layer.effect(
               : { type: "native" },
           gateway,
           emit: (event) => Effect.runPromise(stream.emit(event).pipe(Effect.asVoid)),
+          // The runtime records nothing for the vendor session the Session is linked to already.
           linked: (id) => {
             checkpoint.vendor = id
-            return id === record.vendorSessionID
-              ? Promise.resolve()
-              : Effect.runPromise(
-                  bus.publish(ExternalSession.Linked, { sessionID, vendorSessionID: id }).pipe(Effect.asVoid),
-                )
+            return Effect.runPromise(
+              bus.command({ type: "linkVendorSession", payload: { sessionID, vendorSessionID: id } }).pipe(
+                // A Session deleted meanwhile links nothing.
+                Effect.catchIf(
+                  (error) =>
+                    SpecterRejection.reason(error) === "Vendor session already linked" ||
+                    SpecterRejection.isMissingSession(error),
+                  () => Effect.succeed([]),
+                ),
+                Effect.orDie,
+                Effect.asVoid,
+              ),
+            )
           },
           checkpointed: async (value) => {
             checkpoint.value = value
@@ -476,11 +491,21 @@ const layer = Layer.effect(
               if (checkpoint.value === undefined) return
               if (Exit.isFailure(exit) && Cause.squash(exit.cause) instanceof ExternalAgentDriver.CompactionError)
                 return
-              yield* bus.publish(ExternalSession.Checkpointed, {
-                sessionID,
-                checkpoint: checkpoint.value,
-                historyHash: Hash.sha256(JSON.stringify(answered(canonical(yield* store.context(sessionID), model)))),
-              })
+              yield* bus
+                .command({
+                  type: "checkpointVendorSession",
+                  payload: {
+                    sessionID,
+                    checkpoint: checkpoint.value,
+                    historyHash: Hash.sha256(
+                      JSON.stringify(answered(canonical(yield* store.context(sessionID), model))),
+                    ),
+                  },
+                })
+                .pipe(
+                  Effect.catchIf(SpecterRejection.isMissingSession, () => Effect.void),
+                  Effect.orDie,
+                )
             }),
           ),
           Effect.mapError((error) => new StepFailedError({ error: toSessionError(error) })),

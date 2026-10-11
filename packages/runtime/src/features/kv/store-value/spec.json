@@ -1,0 +1,129 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Stores a JSON value under a key of the key-value store: a plugin's own storage, the web search provider, the well-known origins. Storing the value a key holds already records nothing.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "storeValue",
+  "scenarios": [
+    {
+      "description": "A value is stored under a new key.",
+      "expect": [
+        {
+          "eventType": "kv-stored",
+          "examplePayload": {
+            "key": "plugin:theme",
+            "value": {
+              "mode": "dark"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "key": "plugin:theme",
+        "value": {
+          "mode": "dark"
+        }
+      }
+    },
+    {
+      "description": "A different value replaces the one the key holds.",
+      "expect": [
+        {
+          "eventType": "kv-stored",
+          "examplePayload": {
+            "key": "plugin:theme",
+            "value": {
+              "mode": "light"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "kv-stored",
+          "examplePayload": {
+            "key": "plugin:theme",
+            "value": {
+              "mode": "dark"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "key": "plugin:theme",
+        "value": {
+          "mode": "light"
+        }
+      }
+    },
+    {
+      "description": "The value the key holds already is refused, and the host answers as if it had stored it.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "kv-stored",
+          "examplePayload": {
+            "key": "plugin:theme",
+            "value": {
+              "mode": "dark"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Value unchanged"
+      },
+      "when": {
+        "key": "plugin:theme",
+        "value": {
+          "mode": "dark"
+        }
+      }
+    },
+    {
+      "description": "A removed key stores its value again.",
+      "expect": [
+        {
+          "eventType": "kv-stored",
+          "examplePayload": {
+            "key": "plugin:theme",
+            "value": {
+              "mode": "dark"
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "kv-stored",
+          "examplePayload": {
+            "key": "plugin:theme",
+            "value": {
+              "mode": "dark"
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "kv-removed",
+          "examplePayload": {
+            "key": "plugin:theme"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "key": "plugin:theme",
+        "value": {
+          "mode": "dark"
+        }
+      }
+    }
+  ]
+}

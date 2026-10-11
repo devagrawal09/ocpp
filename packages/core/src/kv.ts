@@ -5,6 +5,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { KeyValueFact } from "@ocpp/schema/key-value-fact"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
+import { SpecterRejection } from "./specter/rejection.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { KVTable } from "./kv/sql.js"
 
@@ -67,15 +68,15 @@ const layer = Layer.effect(
     })
     return Service.of({
       get,
+      // A value is stored as JSON. The runtime's storeValue and removeValue decide: storing the value a key holds,
+      // or removing a key without one, records nothing.
       set: Effect.fn("KV.set")(function* (key, value) {
-        // A value is stored as JSON; storing the same value again records nothing.
-        const stored = JSON.parse(JSON.stringify(value)) as Value
-        if (JSON.stringify(yield* get(key)) === JSON.stringify(stored)) return
-        yield* bus.publish(KeyValueFact.Stored, { key, value: stored })
+        yield* bus
+          .command({ type: "storeValue", payload: { key, value: JSON.parse(JSON.stringify(value)) as Value } })
+          .pipe(unless("Value unchanged"))
       }),
       remove: Effect.fn("KV.remove")(function* (key) {
-        if ((yield* get(key)) === undefined) return
-        yield* bus.publish(KeyValueFact.Removed, { key })
+        yield* bus.command({ type: "removeValue", payload: { key } }).pipe(unless("Value not found"))
       }),
       scan: Effect.fn("KV.scan")(function* (options) {
         const limit = Number.isNaN(options.limit) ? 100 : Math.min(Math.max(Math.floor(options.limit ?? 100), 1), 1000)
@@ -101,6 +102,19 @@ const layer = Layer.effect(
     })
   }),
 )
+
+/** A dispatch whose rejection for `reason` means there is nothing to record; any other failure is a defect. */
+const unless =
+  (reason: string) =>
+  <A, E>(effect: Effect.Effect<A, E>) =>
+    effect.pipe(
+      Effect.asVoid,
+      Effect.catchIf(
+        (error) => SpecterRejection.reason(error) === reason,
+        () => Effect.void,
+      ),
+      Effect.orDie,
+    )
 
 /** The smallest string after every string that starts with `prefix`, if there is one. */
 export function prefixEnd(prefix: string) {

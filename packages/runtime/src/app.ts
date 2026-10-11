@@ -21,6 +21,8 @@ import { createForkSessionState, forkSession, forkSessionStore } from "./feature
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
 import { createRecordHistoryState, recordHistoryStore } from "./features/testing/record-history/impl.ts"
+import { createStoreValueState, storeValue, storeValueStore } from "./features/kv/store-value/impl.ts"
+import { createRemoveValueState, removeValue, removeValueStore } from "./features/kv/remove-value/impl.ts"
 import {
   createStartAgentStepState,
   startAgentStep,
@@ -258,6 +260,8 @@ export const createRuntimeConfig = (options: {
       settleBackgroundJob,
       markBackgroundTerminal,
       completeBackgroundJob,
+      storeValue,
+      removeValue,
       enqueueInput,
       cancelInboxItem,
       changeDelivery,
@@ -354,6 +358,8 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(settleBackgroundJobStore, createSettleBackgroundJobState),
     provide(markBackgroundTerminalStore, createMarkBackgroundTerminalState),
     provide(completeBackgroundJobStore, createCompleteBackgroundJobState),
+    provide(storeValueStore, createStoreValueState),
+    provide(removeValueStore, createRemoveValueState),
     provide(enqueueInputStore, createEnqueueInputState),
     provide(cancelInboxItemStore, createCancelInboxItemState),
     provide(changeDeliveryStore, createChangeDeliveryState),

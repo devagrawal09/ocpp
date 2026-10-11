@@ -1,0 +1,216 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Brings a project's directories up to date with what the host found on disk, in one commit: each directory found that the project does not hold, or holds under another strategy, is recorded, and each one the host found gone is removed. A refresh that changes nothing records nothing.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "refreshWorktrees",
+  "scenarios": [
+    {
+      "description": "New and changed directories are recorded and gone ones removed, in one commit.",
+      "expect": [
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/a",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/d",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-removed",
+          "examplePayload": {
+            "directory": "/repo/c",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/a",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/b",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/c",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "found": [
+          {
+            "directory": "/repo"
+          },
+          {
+            "directory": "/repo/a",
+            "strategy": "git"
+          },
+          {
+            "directory": "/repo/b",
+            "strategy": "git"
+          },
+          {
+            "directory": "/repo/d",
+            "strategy": "git"
+          }
+        ],
+        "gone": [
+          "/repo/c"
+        ],
+        "projectID": "prj_1"
+      }
+    },
+    {
+      "description": "A directory found gone that the project does not hold is not removed.",
+      "expect": [
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/d",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/c",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-removed",
+          "examplePayload": {
+            "directory": "/repo/c",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "found": [
+          {
+            "directory": "/repo/d",
+            "strategy": "git"
+          }
+        ],
+        "gone": [
+          "/repo/c"
+        ],
+        "projectID": "prj_1"
+      }
+    },
+    {
+      "description": "A refresh that changes nothing is refused, and the host answers as done.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Worktrees unchanged"
+      },
+      "when": {
+        "found": [
+          {
+            "directory": "/repo"
+          }
+        ],
+        "gone": [
+          "/repo/c"
+        ],
+        "projectID": "prj_1"
+      }
+    },
+    {
+      "description": "An unknown project is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Project not found"
+      },
+      "when": {
+        "found": [
+          {
+            "directory": "/repo"
+          }
+        ],
+        "gone": [],
+        "projectID": "prj_1"
+      }
+    }
+  ]
+}

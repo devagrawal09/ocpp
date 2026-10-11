@@ -10,7 +10,6 @@ import { Database } from "@ocpp/core/database/database"
 import { Project } from "@ocpp/core/project"
 import { ProjectSchema } from "@ocpp/core/project/schema"
 import { ProjectTable } from "@ocpp/core/project/sql"
-import { ProjectFact } from "@ocpp/schema/project-fact"
 import { eq } from "drizzle-orm"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Hash } from "@ocpp/util/hash"
@@ -74,19 +73,11 @@ describe("Project.list", () => {
 describe("Project.update", () => {
   it.effect("updates and clears project metadata", () =>
     Effect.gen(function* () {
-      const db = (yield* Database.Service).db
       const project = yield* Project.Service
       const id = Project.ID.make("update")
-      yield* db
-        .insert(ProjectTable)
-        .values({
-          id,
-          worktree: abs("/update"),
-          sandboxes: [],
-          time_created: 1,
-          time_updated: 1,
-        })
-        .run()
+      yield* (yield* Bus.Service)
+        .command({ type: "resolveProject", payload: { projectID: id, canonical: abs("/update") } })
+        .pipe(Effect.orDie)
 
       expect(
         yield* project.update({
@@ -113,7 +104,7 @@ describe("Project.update", () => {
       expect((yield* project.list())[0]).toEqual({
         id,
         canonical: abs("/update"),
-        time: { created: 1, updated: expect.any(Number) },
+        time: { created: expect.any(Number), updated: expect.any(Number) },
         sandboxes: [],
       })
     }),
@@ -656,11 +647,9 @@ describe("Project.resolve", () => {
       const db = (yield* Database.Service).db
       const id = remoteID("github.com/owner/repo")
       // A project the log knows, with what an earlier server stored for it.
-      yield* (yield* Bus.Service).publish(ProjectFact.Created, {
-        projectID: id,
-        canonical: abs("/stale-worktree"),
-        vcs: "hg",
-      })
+      yield* (yield* Bus.Service)
+        .command({ type: "resolveProject", payload: { projectID: id, canonical: abs("/stale-worktree"), vcs: "hg" } })
+        .pipe(Effect.orDie)
       yield* db
         .update(ProjectTable)
         .set({

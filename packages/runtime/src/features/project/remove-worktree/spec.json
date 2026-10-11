@@ -1,0 +1,97 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records that a project no longer holds a worktree the host removed. A directory the project does not hold records nothing.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "removeWorktree",
+  "scenarios": [
+    {
+      "description": "A directory the project holds is removed.",
+      "expect": [
+        {
+          "eventType": "worktree-removed",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "directory": "/repo/feature",
+        "projectID": "prj_1"
+      }
+    },
+    {
+      "description": "A directory the project does not hold is refused, and the host answers as done.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-recorded",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1",
+            "strategy": "git"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "worktree-removed",
+          "examplePayload": {
+            "directory": "/repo/feature",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Worktree not found"
+      },
+      "when": {
+        "directory": "/repo/feature",
+        "projectID": "prj_1"
+      }
+    },
+    {
+      "description": "A directory of an unknown project is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Project not found"
+      },
+      "when": {
+        "directory": "/repo/feature",
+        "projectID": "prj_1"
+      }
+    }
+  ]
+}

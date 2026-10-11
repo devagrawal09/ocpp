@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
-import { and, eq, isNull } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { Effect, Fiber, Stream } from "effect"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
@@ -40,18 +40,24 @@ function setup() {
     const sourceDirectory = abs(yield* Effect.promise(() => fs.realpath(root.path)))
     const projectID = Project.ID.make("worktree-project")
     const { db } = yield* Database.Service
-    yield* db
-      .insert(ProjectTable)
-      .values({ id: projectID, worktree: sourceDirectory, sandboxes: [], time_created: 1, time_updated: 1 })
-      .run()
+    yield* (yield* Bus.Service)
+      .command({ type: "resolveProject", payload: { projectID, canonical: sourceDirectory } })
       .pipe(Effect.orDie)
-    yield* db
-      .insert(WorktreeTable)
-      .values({ project_id: projectID, directory: sourceDirectory })
-      .run()
-      .pipe(Effect.orDie)
+    yield* recordWorktree(projectID, sourceDirectory)
     return { root, sourceDirectory, projectID, db }
   })
+}
+
+/** Records a directory of the project as the host does when it creates a worktree. */
+function recordWorktree(projectID: Project.ID, directory: AbsolutePath, strategy?: string) {
+  return Bus.Service.use((bus) =>
+    bus
+      .command({
+        type: "addWorktree",
+        payload: { projectID, directory, ...(strategy === undefined ? {} : { strategy }) },
+      })
+      .pipe(Effect.orDie),
+  )
 }
 
 function stored(projectID: Project.ID) {
@@ -122,10 +128,8 @@ describe("Worktree", () => {
   it.live("requires a tracked project worktree", () =>
     Effect.gen(function* () {
       const input = yield* setup()
-      yield* input.db
-        .delete(WorktreeTable)
-        .where(eq(WorktreeTable.project_id, input.projectID))
-        .run()
+      yield* (yield* Bus.Service)
+        .command({ type: "removeWorktree", payload: { projectID: input.projectID, directory: input.sourceDirectory } })
         .pipe(Effect.orDie)
       const worktree = yield* Worktree.Service
 
@@ -353,10 +357,8 @@ describe("Worktree", () => {
         directory: sourceParent,
         name: "source",
       })
-      yield* input.db
-        .delete(WorktreeTable)
-        .where(and(eq(WorktreeTable.project_id, input.projectID), isNull(WorktreeTable.strategy)))
-        .run()
+      yield* (yield* Bus.Service)
+        .command({ type: "removeWorktree", payload: { projectID: input.projectID, directory: input.sourceDirectory } })
         .pipe(Effect.orDie)
 
       const created = yield* worktree.create({
@@ -413,11 +415,7 @@ describe("Worktree", () => {
       const unavailable = abs(`${input.root.path}-worktree-unavailable`)
       yield* Effect.promise(() => fs.mkdir(unavailable))
       yield* Effect.addFinalizer(() => Effect.promise(() => fs.rm(unavailable, { recursive: true, force: true })))
-      yield* input.db
-        .insert(WorktreeTable)
-        .values({ project_id: input.projectID, directory: unavailable, strategy: "acme/missing" })
-        .run()
-        .pipe(Effect.orDie)
+      yield* recordWorktree(input.projectID, unavailable, "acme/missing")
 
       const error = yield* worktree
         .remove({ projectID: input.projectID, directory: unavailable, force: false })
@@ -526,14 +524,8 @@ describe("Worktree", () => {
       )
       yield* Effect.promise(() => $`git worktree add --detach ${target} HEAD`.cwd(input.root.path).quiet())
       yield* Effect.promise(() => $`git worktree add --detach ${unchanged} HEAD`.cwd(input.root.path).quiet())
-      yield* input.db
-        .insert(WorktreeTable)
-        .values([
-          { project_id: input.projectID, directory: target },
-          { project_id: input.projectID, directory: unchanged, strategy: "git" },
-        ])
-        .run()
-        .pipe(Effect.orDie)
+      yield* recordWorktree(input.projectID, target)
+      yield* recordWorktree(input.projectID, unchanged, "git")
       const fiber = yield* bus
         .subscribe(Worktree.Event.Updated)
         .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
@@ -615,11 +607,7 @@ describe("Worktree", () => {
     Effect.gen(function* () {
       const input = yield* setup()
       const missing = abs(`${input.root.path}-missing-checkout`)
-      yield* input.db
-        .insert(WorktreeTable)
-        .values({ project_id: input.projectID, directory: missing })
-        .run()
-        .pipe(Effect.orDie)
+      yield* recordWorktree(input.projectID, missing)
       const worktree = yield* Worktree.Service
 
       expect(yield* worktree.refresh({ projectID: input.projectID })).toEqual({ updated: [], removed: [missing] })

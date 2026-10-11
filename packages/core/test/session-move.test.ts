@@ -2,7 +2,6 @@ import { describe, expect } from "bun:test"
 import path from "path"
 import { mkdir, rm } from "fs/promises"
 import { Effect, Layer, LayerMap } from "effect"
-import { ProjectFact } from "@ocpp/schema/project-fact"
 import { Bus } from "@ocpp/core/bus"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
@@ -125,7 +124,12 @@ describe("Session.move", () => {
           // Its directory never existed, so the Session moves at once.
           yield* session.move({ sessionID: created.id, directory: destination })
           // The former directory becomes a project after the session left it.
-          yield* bus.publish(ProjectFact.Created, { projectID: Project.ID.make("adopting"), canonical: previous })
+          yield* bus
+            .command({
+              type: "resolveProject",
+              payload: { projectID: Project.ID.make("adopting"), canonical: previous },
+            })
+            .pipe(Effect.orDie)
           yield* bus
             .command({
               type: "resolveWorktree",

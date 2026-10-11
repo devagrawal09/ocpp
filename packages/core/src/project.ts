@@ -19,7 +19,6 @@ import { ProjectSchema } from "./project/schema.js"
 import { ProjectProjector } from "./project/projector.js"
 import { ProjectTable } from "./project/sql.js"
 import { WorktreeTable } from "./worktree/sql.js"
-import { KeyedMutex } from "./effect/keyed-mutex.js"
 
 export const ID = ProjectSchema.ID
 export type ID = ProjectSchema.ID
@@ -107,41 +106,46 @@ const layer = Layer.effect(
     const db = (yield* Database.Service).db
 
     const announcing = new Set<string>()
-    // Facts about one project are decided one at a time, so concurrent resolves record each change once.
-    const locks = KeyedMutex.makeUnsafe<ID>()
+    // The runtime's resolveProject decides what a resolve changes: the project's creation, its version
+    // control, and a move away from a canonical directory that is gone. Clones share a project ID, so the
+    // host names the canonical directory it found gone, and the project moves only from that one.
     const record = Effect.fnUntraced(function* (project: Resolved) {
       const previous = yield* db
-        .select({ canonical: ProjectTable.worktree, vcs: ProjectTable.vcs })
+        .select({ canonical: ProjectTable.worktree })
         .from(ProjectTable)
         .where(eq(ProjectTable.id, project.id))
         .get()
         .pipe(Effect.orDie)
-      const vcs = project.vcs?.type
-      if (!previous)
-        return yield* bus.publish(ProjectFact.Created, {
-          projectID: project.id,
-          canonical: project.canonical,
-          ...(vcs === undefined ? {} : { vcs }),
-        })
-      if ((previous.vcs ?? undefined) !== vcs)
-        yield* bus.publish(ProjectFact.VcsChanged, { projectID: project.id, ...(vcs === undefined ? {} : { vcs }) })
-      // Clones share a project ID; only replace a canonical directory that is gone.
-      if (
+      const missing =
+        previous &&
         previous.canonical !== project.canonical &&
         !(yield* fs.exists(previous.canonical).pipe(Effect.orElseSucceed(() => true)))
-      ) {
-        yield* bus.publish(ProjectFact.Relocated, { projectID: project.id, canonical: project.canonical })
-        const row = yield* db
-          .select()
-          .from(ProjectTable)
-          .where(eq(ProjectTable.id, project.id))
-          .get()
-          .pipe(Effect.orDie)
-        if (row) yield* bus.publish(ProjectSchema.Event.Updated, fromRow(row))
-      }
+          ? previous.canonical
+          : undefined
+      const vcs = project.vcs?.type
+      const facts = yield* bus
+        .command({
+          type: "resolveProject",
+          payload: {
+            projectID: project.id,
+            canonical: project.canonical,
+            ...(vcs === undefined ? {} : { vcs }),
+            ...(missing === undefined ? {} : { missing }),
+          },
+        })
+        .pipe(
+          Effect.catchIf(
+            (error) => SpecterRejection.reason(error) === "Project unchanged",
+            () => Effect.succeed([]),
+          ),
+          Effect.orDie,
+        )
+      if (!facts.some((fact) => fact.type === ProjectFact.Relocated.type)) return
+      const row = yield* db.select().from(ProjectTable).where(eq(ProjectTable.id, project.id)).get().pipe(Effect.orDie)
+      if (row) yield* bus.publish(ProjectSchema.Event.Updated, fromRow(row))
     })
     const persist = Effect.fnUntraced(function* (project: Resolved) {
-      yield* locks.withLock(project.id)(record(project))
+      yield* record(project)
       if (!project.vcs) return project
       const directories: Array<{ projectID: ID; directory: AbsolutePath; strategy?: string }> = [
         { projectID: project.id, directory: project.canonical },
@@ -230,8 +234,15 @@ const layer = Layer.effect(
       db.select().from(ProjectTable).where(eq(ProjectTable.id, projectID)).get().pipe(Effect.orDie)
 
     const update = Effect.fn("Project.update")(function* (input: UpdateInput) {
-      if (!(yield* find(input.projectID))) return yield* new NotFoundError({ projectID: input.projectID })
-      yield* bus.publish(ProjectFact.Edited, input)
+      yield* bus
+        .command({ type: "editProject", payload: input })
+        .pipe(
+          Effect.catch((error) =>
+            SpecterRejection.reason(error) === "Project not found"
+              ? Effect.fail(new NotFoundError({ projectID: input.projectID }))
+              : Effect.die(error),
+          ),
+        )
       const row = yield* find(input.projectID)
       if (!row) return yield* new NotFoundError({ projectID: input.projectID })
       const project = fromRow(row)

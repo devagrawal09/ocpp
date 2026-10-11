@@ -21,6 +21,23 @@ import { createForkSessionState, forkSession, forkSessionStore } from "./feature
 import { createMoveSessionState, moveSession, moveSessionStore } from "./features/session/move-session/impl.ts"
 import { createStageRevertState, stageRevert, stageRevertStore } from "./features/session/stage-revert/impl.ts"
 import { createRecordHistoryState, recordHistoryStore } from "./features/testing/record-history/impl.ts"
+import {
+  createResolveProjectState,
+  resolveProject,
+  resolveProjectStore,
+} from "./features/project/resolve-project/impl.ts"
+import { createEditProjectState, editProject, editProjectStore } from "./features/project/edit-project/impl.ts"
+import { createAddWorktreeState, addWorktree, addWorktreeStore } from "./features/project/add-worktree/impl.ts"
+import {
+  createRemoveWorktreeState,
+  removeWorktree,
+  removeWorktreeStore,
+} from "./features/project/remove-worktree/impl.ts"
+import {
+  createRefreshWorktreesState,
+  refreshWorktrees,
+  refreshWorktreesStore,
+} from "./features/project/refresh-worktrees/impl.ts"
 import { createStoreValueState, storeValue, storeValueStore } from "./features/kv/store-value/impl.ts"
 import { createRemoveValueState, removeValue, removeValueStore } from "./features/kv/remove-value/impl.ts"
 import {
@@ -260,6 +277,11 @@ export const createRuntimeConfig = (options: {
       settleBackgroundJob,
       markBackgroundTerminal,
       completeBackgroundJob,
+      resolveProject,
+      editProject,
+      addWorktree,
+      removeWorktree,
+      refreshWorktrees,
       storeValue,
       removeValue,
       enqueueInput,
@@ -358,6 +380,11 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(settleBackgroundJobStore, createSettleBackgroundJobState),
     provide(markBackgroundTerminalStore, createMarkBackgroundTerminalState),
     provide(completeBackgroundJobStore, createCompleteBackgroundJobState),
+    provide(resolveProjectStore, createResolveProjectState),
+    provide(editProjectStore, createEditProjectState),
+    provide(addWorktreeStore, createAddWorktreeState),
+    provide(removeWorktreeStore, createRemoveWorktreeState),
+    provide(refreshWorktreesStore, createRefreshWorktreesState),
     provide(storeValueStore, createStoreValueState),
     provide(removeValueStore, createRemoveValueState),
     provide(enqueueInputStore, createEnqueueInputState),

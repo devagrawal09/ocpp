@@ -11,6 +11,7 @@ import { ProjectSchema } from "./project/schema.js"
 import { Slug } from "./util/slug.js"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
+import { SpecterRejection } from "./specter/rejection.js"
 import { Location } from "./location.js"
 import { ProjectFact } from "@ocpp/schema/project-fact"
 import { Worktree } from "@ocpp/schema/worktree"
@@ -185,29 +186,16 @@ const layer = Layer.effect(
           .get()
           .pipe(Effect.orDie)
       }),
-      // A directory's fact, when it changes what is stored: a new directory or another strategy.
-      recorded: Effect.fnUntraced(function* (input: StoredInput) {
-        const stored = yield* find(input.projectID, input.directory)
-        if (stored && stored.strategy === input.strategy) return undefined
-        return [
-          ProjectFact.WorktreeRecorded,
-          {
-            projectID: input.projectID,
-            directory: input.directory,
-            ...(input.strategy === undefined ? {} : { strategy: input.strategy }),
-          },
-        ] as const
-      }),
-      removed: Effect.fnUntraced(function* (projectID: ProjectSchema.ID, directory: AbsolutePath) {
-        if (!(yield* find(projectID, directory))) return undefined
-        return [ProjectFact.WorktreeRemoved, { projectID, directory }] as const
-      }),
     }
-    // Records the facts in one commit, and reports whether there were any.
-    const record = (facts: ReadonlyArray<Bus.PublishInput | undefined>) => {
-      const [first, ...rest] = facts.filter((fact) => fact !== undefined)
-      return first ? bus.publishAll([first, ...rest]).pipe(Effect.as(true)) : Effect.succeed(false)
-    }
+    // Records what an operation changed through its Command; a rejection for one of `unchanged` records nothing.
+    const record = (command: Bus.RuntimeCommand, unchanged: ReadonlyArray<string>) =>
+      bus.command(command).pipe(
+        Effect.catchIf(
+          (error) => unchanged.includes(SpecterRejection.reason(error) ?? ""),
+          () => Effect.succeed([]),
+        ),
+        Effect.orDie,
+      )
 
     const registry = new Map<StrategyID, Strategy>()
 
@@ -253,12 +241,14 @@ const layer = Layer.effect(
         sourceDirectory,
         branch: input.branch,
       })
-      yield* changed(
-        input.projectID,
-        yield* record([
-          yield* ops.recorded({ projectID: input.projectID, directory: result.directory, strategy: input.strategy }),
-        ]),
+      const recorded = yield* record(
+        {
+          type: "addWorktree",
+          payload: { projectID: input.projectID, directory: result.directory, strategy: input.strategy },
+        },
+        ["Worktree unchanged"],
       )
+      yield* changed(input.projectID, recorded.length > 0)
       const project = yield* db
         .select({ commands: ProjectTable.commands })
         .from(ProjectTable)
@@ -295,7 +285,11 @@ const layer = Layer.effect(
         directory: worktreeDirectory,
         force: input.force,
       })
-      yield* changed(input.projectID, yield* record([yield* ops.removed(input.projectID, worktreeDirectory)]))
+      const removed = yield* record(
+        { type: "removeWorktree", payload: { projectID: input.projectID, directory: worktreeDirectory } },
+        ["Worktree not found"],
+      )
+      yield* changed(input.projectID, removed.length > 0)
     })
 
     const refresh = Effect.fn("Worktree.refresh")(function* (input: RefreshInput) {
@@ -326,15 +320,30 @@ const layer = Layer.effect(
       ).pipe(
         Effect.map((sets) => new Map(sets.flat(2).map((item) => [item.directory, item] as const)).values().toArray()),
       )
-      const removed = checked.filter((item) => !item.exists).map((item) => item.directory)
-      const updated = yield* Effect.forEach(discovered, (item) =>
-        ops.recorded({ projectID: input.projectID, directory: item.directory, strategy: item.strategy }),
+      // The runtime's refreshWorktrees records what differs from the project's directories, in one commit.
+      const facts = yield* record(
+        {
+          type: "refreshWorktrees",
+          payload: {
+            projectID: input.projectID,
+            found: discovered.map((item) => ({
+              directory: item.directory,
+              ...(item.strategy === undefined ? {} : { strategy: item.strategy }),
+            })),
+            gone: checked.filter((item) => !item.exists).map((item) => item.directory),
+          },
+        },
+        // A project the log never created holds no directories.
+        ["Worktrees unchanged", "Project not found"],
       )
-      const gone = yield* Effect.forEach(removed, (directory) => ops.removed(input.projectID, directory))
-      yield* record([...updated, ...gone])
+      // Both facts name the directory they change.
+      const directories = (type: string) =>
+        facts.flatMap((fact) =>
+          fact.type === type ? [(fact.data as { readonly directory: AbsolutePath }).directory] : [],
+        )
       const changes = {
-        updated: discovered.filter((_, index) => updated[index] !== undefined).map((item) => item.directory),
-        removed: removed.filter((_, index) => gone[index] !== undefined),
+        updated: directories(ProjectFact.WorktreeRecorded.type),
+        removed: directories(ProjectFact.WorktreeRemoved.type),
       }
       yield* changed(input.projectID, changes.updated.length > 0 || changes.removed.length > 0)
       return changes

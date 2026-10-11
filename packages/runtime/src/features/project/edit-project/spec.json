@@ -1,0 +1,67 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records a user's edit of a project's name, icon or start command; an empty value clears one. Only a project the log created is edited.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "editProject",
+  "scenarios": [
+    {
+      "description": "A project's name, icon and commands are edited.",
+      "expect": [
+        {
+          "eventType": "project-edited",
+          "examplePayload": {
+            "commands": {
+              "start": "bun install"
+            },
+            "icon": {
+              "color": "blue"
+            },
+            "name": "Repo",
+            "projectID": "prj_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "project-created",
+          "examplePayload": {
+            "canonical": "/repo",
+            "projectID": "prj_1",
+            "vcs": "git"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "commands": {
+          "start": "bun install"
+        },
+        "icon": {
+          "color": "blue"
+        },
+        "name": "Repo",
+        "projectID": "prj_1"
+      }
+    },
+    {
+      "description": "An unknown project is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Project not found"
+      },
+      "when": {
+        "commands": {
+          "start": "bun install"
+        },
+        "icon": {
+          "color": "blue"
+        },
+        "name": "Repo",
+        "projectID": "prj_1"
+      }
+    }
+  ]
+}

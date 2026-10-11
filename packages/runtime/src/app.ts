@@ -54,6 +54,26 @@ import {
   destroyWorkspace,
   destroyWorkspaceStore,
 } from "./features/workspace/destroy-workspace/impl.ts"
+import {
+  createCreateCredentialState,
+  createCredential,
+  createCredentialStore,
+} from "./features/credential/create-credential/impl.ts"
+import {
+  createActivateCredentialState,
+  activateCredential,
+  activateCredentialStore,
+} from "./features/credential/activate-credential/impl.ts"
+import {
+  createUpdateCredentialState,
+  updateCredential,
+  updateCredentialStore,
+} from "./features/credential/update-credential/impl.ts"
+import {
+  createRemoveCredentialState,
+  removeCredential,
+  removeCredentialStore,
+} from "./features/credential/remove-credential/impl.ts"
 import { createStoreValueState, storeValue, storeValueStore } from "./features/kv/store-value/impl.ts"
 import { createRemoveValueState, removeValue, removeValueStore } from "./features/kv/remove-value/impl.ts"
 import {
@@ -302,6 +322,10 @@ export const createRuntimeConfig = (options: {
       bindWorkspace,
       useWorkspace,
       destroyWorkspace,
+      createCredential,
+      activateCredential,
+      updateCredential,
+      removeCredential,
       storeValue,
       removeValue,
       enqueueInput,
@@ -409,6 +433,10 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(bindWorkspaceStore, createBindWorkspaceState),
     provide(useWorkspaceStore, createUseWorkspaceState),
     provide(destroyWorkspaceStore, createDestroyWorkspaceState),
+    provide(createCredentialStore, createCreateCredentialState),
+    provide(activateCredentialStore, createActivateCredentialState),
+    provide(updateCredentialStore, createUpdateCredentialState),
+    provide(removeCredentialStore, createRemoveCredentialState),
     provide(storeValueStore, createStoreValueState),
     provide(removeValueStore, createRemoveValueState),
     provide(enqueueInputStore, createEnqueueInputState),

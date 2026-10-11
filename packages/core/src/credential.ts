@@ -1,6 +1,6 @@
 export * as Credential from "./credential.js"
 
-import { and, asc, desc, eq, ne } from "drizzle-orm"
+import { and, asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Credential } from "@ocpp/schema/credential"
 import { CredentialFact } from "@ocpp/schema/credential-fact"
@@ -10,7 +10,7 @@ import { Bus } from "./bus.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { CredentialSeal } from "./credential/seal.js"
 import { CredentialKeyTable, CredentialSecretTable, CredentialTable } from "./credential/sql.js"
-import { KeyedMutex } from "./effect/keyed-mutex.js"
+import { SpecterRejection } from "./specter/rejection.js"
 
 export const ID = Credential.ID
 export type ID = Credential.ID
@@ -62,12 +62,11 @@ const layer = Layer.effect(
     const db = (yield* Database.Service).db
     const bus = yield* Bus.Service
     const decode = Schema.decodeUnknownSync(Value)
-    // An integration's credentials are decided one at a time: which is active, which replaces it.
-    const locks = KeyedMutex.makeUnsafe<string>()
 
-    // Credentials are the projection of their facts in Specter's Event Log. A fact carries the secret
-    // sealed under the credential's key, which the publish of its creation stores beside the log, in the
-    // same transaction (`keyed`).
+    // Credentials are the projection of their facts in Specter's Event Log, which the runtime's credential
+    // Commands decide: which credential an integration uses, and which replaces a removed one. A fact carries
+    // the secret sealed under the credential's key, which the dispatch of its creation stores beside the log,
+    // in the same transaction (`keyed`).
     const activate = (integrationID: Integration.ID, credentialID: ID, time: number) =>
       Effect.gen(function* () {
         yield* db
@@ -157,9 +156,7 @@ const layer = Layer.effect(
         .get()
         .pipe(
           Effect.orDie,
-          Effect.flatMap((row) =>
-            row ? Effect.succeed(row.key) : Effect.die(new Error(`Credential ${credentialID} has no key`)),
-          ),
+          Effect.map((row) => row?.key),
         )
 
     const columns = {
@@ -200,9 +197,6 @@ const layer = Layer.effect(
         .where(and(eq(CredentialTable.integration_id, integrationID), eq(CredentialTable.active, true)))
         .get()
         .pipe(Effect.orDie)
-    const find = (id: ID) =>
-      db.select().from(CredentialTable).where(eq(CredentialTable.id, id)).get().pipe(Effect.orDie)
-
     return Service.of({
       all: Effect.fn("Credential.all")(() =>
         select()
@@ -229,19 +223,20 @@ const layer = Layer.effect(
           value: input.value,
         })
         const key = CredentialSeal.generateKey()
-        const sealed = yield* CredentialSeal.seal(key, credential.value)
-        yield* locks.withLock(credential.integrationID)(
-          bus.publish(
-            CredentialFact.Created,
+        yield* bus
+          .command(
             {
-              credentialID: credential.id,
-              integrationID: credential.integrationID,
-              label: credential.label,
-              secret: sealed,
+              type: "createCredential",
+              payload: {
+                credentialID: credential.id,
+                integrationID: credential.integrationID,
+                label: credential.label,
+                secret: yield* CredentialSeal.seal(key, credential.value),
+              },
             },
-            keyed(credential.id, key),
-          ),
-        )
+            { facts: [keyed(credential.id, key)] },
+          )
+          .pipe(Effect.orDie)
         yield* bus.publish(Event.Updated, {}, { global: true })
         yield* bus.publish(
           Event.Switched,
@@ -251,65 +246,65 @@ const layer = Layer.effect(
         return credential
       }),
       activate: Effect.fn("Credential.activate")(function* (id) {
-        const credential = yield* find(id)
-        if (!credential) return
-        const integrationID = credential.integration_id
-        const switched = yield* locks.withLock(integrationID)(
-          Effect.gen(function* () {
-            if ((yield* current(integrationID))?.id === id) return false
-            yield* bus.publish(CredentialFact.Activated, { credentialID: id, integrationID })
-            return true
-          }),
+        const activated = yield* bus
+          .command({ type: "activateCredential", payload: { credentialID: id } })
+          .pipe(unless("Credential not found", "Credential already active"))
+        yield* Effect.forEach(
+          activated,
+          (fact) => bus.publish(Event.Switched, fact.data as typeof Event.Switched.Type.data, { global: true }),
+          { discard: true },
         )
-        if (switched) yield* bus.publish(Event.Switched, { integrationID, credentialID: id }, { global: true })
       }),
       update: Effect.fn("Credential.update")(function* (id, updates) {
         if (updates.label === undefined && updates.value === undefined) return
-        const credential = yield* find(id)
-        if (!credential) return
-        const integrationID = credential.integration_id
-        const relabeled = updates.label !== undefined && updates.label !== credential.label
-        if (relabeled)
-          yield* bus.publish(CredentialFact.Relabeled, { credentialID: id, integrationID, label: updates.label! })
-        if (updates.value !== undefined)
-          yield* bus.publish(CredentialFact.Rotated, {
-            credentialID: id,
-            integrationID,
-            secret: yield* CredentialSeal.seal(yield* keyOf(id), updates.value),
+        // The new secret is sealed under the credential's own key. A credential removed meanwhile has none, and
+        // nothing to update.
+        const key = updates.value === undefined ? undefined : yield* keyOf(id)
+        if (updates.value !== undefined && key === undefined) return
+        const facts = yield* bus
+          .command({
+            type: "updateCredential",
+            payload: {
+              credentialID: id,
+              ...(updates.label === undefined ? {} : { label: updates.label }),
+              ...(updates.value === undefined || key === undefined
+                ? {}
+                : { secret: yield* CredentialSeal.seal(key, updates.value) }),
+            },
           })
-        if (relabeled) yield* bus.publish(Event.Updated, {}, { global: true })
+          .pipe(unless("Credential not found", "Credential unchanged"))
+        if (facts.some((fact) => fact.type === CredentialFact.Relabeled.type))
+          yield* bus.publish(Event.Updated, {}, { global: true })
       }),
       remove: Effect.fn("Credential.remove")(function* (id) {
-        const credential = yield* find(id)
-        if (!credential) return
-        const integrationID = credential.integration_id
-        const switched = yield* locks.withLock(integrationID)(
-          Effect.gen(function* () {
-            const active = (yield* current(integrationID))?.id === id
-            // When the removed credential was in use, the newest remaining one replaces it.
-            const replacement = active
-              ? yield* db
-                  .select({ id: CredentialTable.id })
-                  .from(CredentialTable)
-                  .where(and(eq(CredentialTable.integration_id, integrationID), ne(CredentialTable.id, id)))
-                  .orderBy(desc(CredentialTable.time_created), desc(CredentialTable.id))
-                  .get()
-                  .pipe(Effect.orDie)
-              : undefined
-            yield* bus.publish(CredentialFact.Removed, {
-              credentialID: id,
-              integrationID,
-              ...(replacement === undefined ? {} : { replacement: replacement.id }),
-            })
-            return active ? { credentialID: replacement?.id ?? null } : undefined
-          }),
-        )
+        const removed = yield* bus
+          .command({ type: "removeCredential", payload: { credentialID: id } })
+          .pipe(unless("Credential not found"))
+        if (removed.length === 0) return
         yield* bus.publish(Event.Updated, {}, { global: true })
-        if (switched)
-          yield* bus.publish(Event.Switched, { integrationID, credentialID: switched.credentialID }, { global: true })
+        const data = removed[0]!.data as typeof CredentialFact.Removed.Type.data
+        // When the removed credential was in use, the integration switches to its replacement, or to none.
+        if (data.replacement !== undefined || (yield* current(data.integrationID)) === undefined)
+          yield* bus.publish(
+            Event.Switched,
+            { integrationID: data.integrationID, credentialID: data.replacement ?? null },
+            { global: true },
+          )
       }),
     })
   }),
 )
+
+/** A dispatch whose rejection for one of `reasons` records nothing; any other failure is a defect. */
+const unless =
+  (...reasons: ReadonlyArray<string>) =>
+  <A, E>(effect: Effect.Effect<ReadonlyArray<A>, E>) =>
+    effect.pipe(
+      Effect.catchIf(
+        (error) => reasons.includes(SpecterRejection.reason(error) ?? ""),
+        () => Effect.succeed([]),
+      ),
+      Effect.orDie,
+    )
 
 export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node, Bus.node] })

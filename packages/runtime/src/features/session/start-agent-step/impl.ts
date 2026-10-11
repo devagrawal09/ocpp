@@ -30,7 +30,7 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Step.Started.data)
 export const startAgentStep = implementCommand(specification)
   .inputSchema(input)
   .store(startAgentStepStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

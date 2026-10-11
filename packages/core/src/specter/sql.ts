@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 
 /**
  * Specter's Event Log, kept in OC++'s database so a Specter commit and OC++'s projections share one
@@ -14,6 +14,25 @@ export const SpecterEventTable = sqliteTable(
     recorded_at: text().notNull(),
   },
   (table) => [index("specter_event_type_order_idx").on(table.type, table.order)],
+)
+
+/**
+ * Each fact's named keys (`session`, `project`, ...), as Specter derived them from its payload when it was appended:
+ * a Command's compare-and-swap reads them, and so does a read of the facts carrying one key.
+ */
+export const SpecterEventKeyTable = sqliteTable(
+  "specter_event_key",
+  {
+    order: integer()
+      .notNull()
+      .references(() => SpecterEventTable.order),
+    name: text().notNull(),
+    value: text().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.order, table.name] }),
+    index("specter_event_key_name_value_order_idx").on(table.name, table.value, table.order),
+  ],
 )
 
 export const SpecterCommitTable = sqliteTable("specter_commit", {

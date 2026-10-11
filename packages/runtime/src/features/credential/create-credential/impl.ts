@@ -24,7 +24,7 @@ const input = Schema.toStandardSchemaV1(CredentialFact.Created.data)
 export const createCredential = implementCommand(specification)
   .inputSchema(input)
   .store(createCredentialStore)
-  .consistencyKeys((command) => [command.credentialID])
+  .consistencyKeys({ credential: (command) => command.credentialID })
   .apply(credentialCreated, async (event, state) => {
     state.credentials[event.payload.credentialID] = true
   })

@@ -26,7 +26,7 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Skill.Activated.data)
 export const activateSkill = implementCommand(specification)
   .inputSchema(input)
   .store(activateSkillStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

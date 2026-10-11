@@ -27,7 +27,7 @@ const input = Schema.toStandardSchemaV1(ProjectFact.WorktreeRecorded.data)
 export const addWorktree = implementCommand(specification)
   .inputSchema(input)
   .store(addWorktreeStore)
-  .consistencyKeys((command) => [command.projectID])
+  .consistencyKeys({ project: (command) => command.projectID })
   .apply(projectCreated, async (event, state) => {
     state.projects[event.payload.projectID] ??= {}
   })

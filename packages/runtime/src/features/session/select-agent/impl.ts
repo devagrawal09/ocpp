@@ -28,7 +28,7 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, ag
 export const selectAgent = implementCommand(specification)
   .inputSchema(input)
   .store(selectAgentStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     const agent = event.payload.agent
     state.sessions[event.payload.sessionID] = { status: "live", ...(agent === undefined ? {} : { agent }) }

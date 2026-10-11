@@ -69,7 +69,7 @@ const settle = (state: CommitRevertState, payload: { readonly sessionID: string;
 export const commitRevert = implementCommand(specification)
   .inputSchema(input)
   .store(commitRevertStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

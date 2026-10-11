@@ -41,7 +41,7 @@ const input = Schema.toStandardSchemaV1(
 export const startExecution = implementCommand(specification)
   .inputSchema(input)
   .store(startExecutionStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

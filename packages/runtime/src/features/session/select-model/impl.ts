@@ -34,7 +34,7 @@ const same = (left: Model.Ref, right: Model.Ref) =>
 export const selectModel = implementCommand(specification)
   .inputSchema(input)
   .store(selectModelStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     const model = event.payload.model
     state.sessions[event.payload.sessionID] = { status: "live", ...(model === undefined ? {} : { model }) }

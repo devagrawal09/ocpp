@@ -33,7 +33,7 @@ const input = Schema.toStandardSchemaV1(
 export const renameSession = implementCommand(specification)
   .inputSchema(input)
   .store(renameSessionStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     const title = event.payload.title
     state.sessions[event.payload.sessionID] = { status: "live", ...(title === undefined ? {} : { title }) }

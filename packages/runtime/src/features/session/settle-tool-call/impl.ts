@@ -68,7 +68,7 @@ const settleCall = (
 export const settleToolCall = implementCommand(specification)
   .inputSchema(input)
   .store(settleToolCallStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

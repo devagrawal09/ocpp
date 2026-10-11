@@ -6,10 +6,15 @@ export { SpecterCommandRejectedError } from "@specter-ts/core"
 // The Event Log contract a host implements when it keeps the log itself.
 export {
   type EventDraft,
+  type EventKey,
   EventLog,
+  type EventLogAppendCondition,
   type EventLogAppendOptions,
+  type EventLogCapabilities,
   type EventLogCommit,
+  type EventLogDraft,
   EventLogFailure,
+  type EventLogKeyPage,
   type EventLogService,
   type PersistedEvent,
   SpecterVersionConflictError,

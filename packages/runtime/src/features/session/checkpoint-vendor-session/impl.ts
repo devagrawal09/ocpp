@@ -29,7 +29,7 @@ const input = Schema.toStandardSchemaV1(ExternalSession.Checkpointed.data)
 export const checkpointVendorSession = implementCommand(specification)
   .inputSchema(input)
   .store(checkpointVendorSessionStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

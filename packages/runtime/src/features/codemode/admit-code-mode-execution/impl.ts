@@ -62,7 +62,7 @@ const release = (state: AdmitCodeModeExecutionState, executionID: string) => {
 export const admitCodeModeExecution = implementCommand(specification)
   .inputSchema(input)
   .store(admitCodeModeExecutionStore)
-  .consistencyKeys((command) => [command.sessionID, command.executionID])
+  .consistencyKeys({ session: (command) => command.sessionID, execution: (command) => command.executionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

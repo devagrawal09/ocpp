@@ -26,7 +26,7 @@ const input = Schema.toStandardSchemaV1(ProjectFact.WorkspaceBound.data)
 export const bindWorkspace = implementCommand(specification)
   .inputSchema(input)
   .store(bindWorkspaceStore)
-  .consistencyKeys((command) => [command.workspaceID])
+  .consistencyKeys({ workspace: (command) => command.workspaceID })
   .apply(workspaceCreated, async (event, state) => {
     state.workspaces[event.payload.workspaceID] = "live"
   })

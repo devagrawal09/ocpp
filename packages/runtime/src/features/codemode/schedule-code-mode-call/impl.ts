@@ -35,7 +35,7 @@ const input = Schema.toStandardSchemaV1(Schema.Struct(call))
 export const scheduleCodeModeCall = implementCommand(specification)
   .inputSchema(input)
   .store(scheduleCodeModeCallStore)
-  .consistencyKeys((command) => [command.executionID])
+  .consistencyKeys({ execution: (command) => command.executionID })
   .apply(admitted, async (event, state) => {
     state.executions[event.payload.executionID] = { sessionID: event.payload.sessionID, state: "admitted" }
   })

@@ -305,6 +305,15 @@ const migration: DatabaseMigration.Migration = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`specter_event_key\` (
+          \`order\` integer NOT NULL,
+          \`name\` text NOT NULL,
+          \`value\` text NOT NULL,
+          CONSTRAINT \`specter_event_key_pk\` PRIMARY KEY(\`order\`, \`name\`),
+          CONSTRAINT \`fk_specter_event_key_order_specter_event_order_fk\` FOREIGN KEY (\`order\`) REFERENCES \`specter_event\`(\`order\`)
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`specter_outbox_job\` (
           \`id\` text PRIMARY KEY,
           \`reaction\` text NOT NULL,
@@ -378,6 +387,9 @@ const migration: DatabaseMigration.Migration = {
       yield* tx.run(`CREATE INDEX \`session_v2_project_idx\` ON \`session_v2\` (\`project_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_v2_workspace_idx\` ON \`session_v2\` (\`workspace_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_v2_parent_idx\` ON \`session_v2\` (\`parent_id\`);`)
+      yield* tx.run(
+        `CREATE INDEX \`specter_event_key_name_value_order_idx\` ON \`specter_event_key\` (\`name\`,\`value\`,\`order\`);`,
+      )
       yield* tx.run(`CREATE INDEX \`specter_event_type_order_idx\` ON \`specter_event\` (\`type\`,\`order\`);`)
       yield* tx.run(
         `CREATE UNIQUE INDEX \`specter_outbox_job_key_idx\` ON \`specter_outbox_job\` (\`reaction\`,\`idempotency_key\`);`,

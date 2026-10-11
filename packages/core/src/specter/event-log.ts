@@ -1,18 +1,19 @@
 export * as SpecterEventLog from "./event-log.js"
 
-import { and, asc, between, desc, eq, gt, inArray } from "drizzle-orm"
+import { and, asc, between, desc, eq, gt, inArray, or } from "drizzle-orm"
 import { Effect } from "effect"
 import {
   EventLogFailure,
   SpecterVersionConflictError,
-  type EventDraft,
+  type EventLogAppendCondition,
   type EventLogAppendOptions,
   type EventLogCommit,
+  type EventLogDraft,
   type EventLogService,
   type PersistedEvent,
 } from "@ocpp/runtime"
 import type { Database } from "../database/database.js"
-import { SpecterCommitTable, SpecterEventTable } from "./sql.js"
+import { SpecterCommitTable, SpecterEventKeyTable, SpecterEventTable } from "./sql.js"
 
 type DatabaseService = Database.Interface["db"]
 
@@ -97,7 +98,43 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
           .all()
           .pipe(Effect.map((rows) => rows.map(toEvent)))
 
-  const append = (drafts: readonly EventDraft[], options: EventLogAppendOptions = {}) =>
+  // The first fact appended after a decision read that it covers: one of its types, carrying one of its keys
+  // when it names any. Checked in SQL, from the stored keys.
+  const staleOrder = (condition: EventLogAppendCondition) => {
+    const pairs = Object.entries(condition.keys ?? {}).filter(([, values]) => values.length > 0)
+    if (condition.eventTypes.length === 0 || (condition.keys && pairs.length === 0)) return Effect.succeed(undefined)
+    const types = inArray(SpecterEventTable.type, [...condition.eventTypes])
+    if (!condition.keys)
+      return db
+        .select({ order: SpecterEventTable.order })
+        .from(SpecterEventTable)
+        .where(and(gt(SpecterEventTable.order, condition.afterOrder), types))
+        .orderBy(asc(SpecterEventTable.order))
+        .limit(1)
+        .get()
+        .pipe(Effect.map((row) => row?.order))
+    return db
+      .select({ order: SpecterEventKeyTable.order })
+      .from(SpecterEventKeyTable)
+      .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, SpecterEventKeyTable.order))
+      .where(
+        and(
+          gt(SpecterEventKeyTable.order, condition.afterOrder),
+          types,
+          or(
+            ...pairs.map(([name, values]) =>
+              and(eq(SpecterEventKeyTable.name, name), inArray(SpecterEventKeyTable.value, [...values])),
+            ),
+          ),
+        ),
+      )
+      .orderBy(asc(SpecterEventKeyTable.order))
+      .limit(1)
+      .get()
+      .pipe(Effect.map((row) => row?.order))
+  }
+
+  const append = (drafts: readonly EventLogDraft[], options: EventLogAppendOptions = {}) =>
     db
       .transaction(
         () =>
@@ -109,16 +146,12 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
             const version = yield* currentVersion
             if (options.expectedVersion !== undefined && options.expectedVersion !== version)
               return yield* fail("append")(new SpecterVersionConflictError(options.expectedVersion, version))
-            // Stale when an event the decision read landed after it read: one of its types, after its order,
-            // that it matches (one carrying a key it decided on, or none).
+            // Stale when a fact the decision read landed after it read: one of its types, after its order,
+            // carrying one of the keys it decided on when it names any.
             const unchanged = options.expectedUnchanged
-            const stale = unchanged
-              ? (yield* query(unchanged.afterOrder, unchanged.eventTypes)).find(
-                  (event) => unchanged.matches?.(event) ?? true,
-                )
-              : undefined
-            if (unchanged && stale)
-              return yield* fail("append")(new SpecterVersionConflictError(unchanged.afterOrder, stale.order))
+            const stale = unchanged ? yield* staleOrder(unchanged) : undefined
+            if (unchanged && stale !== undefined)
+              return yield* fail("append")(new SpecterVersionConflictError(unchanged.afterOrder, stale))
             const recordedAt = new Date().toISOString()
             const identities = hooks.drafts(options.idempotencyKey, drafts.length).map((identity) => ({
               id: identity.id,
@@ -137,8 +170,17 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
               .returning({ order: SpecterEventTable.order })
               .all()
             const events = drafts.map(
-              (draft, index): PersistedEvent => ({ ...draft, ...identities[index]!, order: rows[index]!.order }),
+              (draft, index): PersistedEvent => ({
+                type: draft.type,
+                payload: draft.payload,
+                ...identities[index]!,
+                order: rows[index]!.order,
+              }),
             )
+            const keys = drafts.flatMap((draft, index) =>
+              Object.entries(draft.keys).map(([name, value]) => ({ order: rows[index]!.order, name, value })),
+            )
+            if (keys.length > 0) yield* db.insert(SpecterEventKeyTable).values(keys).run()
             const committedVersion = events.at(-1)!.order
             yield* db
               .insert(SpecterCommitTable)
@@ -172,7 +214,27 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
       )
 
   return {
+    capabilities: { scopedAppend: true, keyedRead: true },
     query: (afterOrder, eventTypes) => query(afterOrder, eventTypes).pipe(Effect.catch(fail("query"))),
+    readKey: (key, page = {}) =>
+      db
+        .select({ event: SpecterEventTable })
+        .from(SpecterEventKeyTable)
+        .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, SpecterEventKeyTable.order))
+        .where(
+          and(
+            eq(SpecterEventKeyTable.name, key.name),
+            eq(SpecterEventKeyTable.value, key.value),
+            gt(SpecterEventKeyTable.order, page.afterOrder ?? 0),
+          ),
+        )
+        .orderBy(asc(SpecterEventKeyTable.order))
+        .limit(page.limit ?? -1)
+        .all()
+        .pipe(
+          Effect.map((rows) => rows.map((row) => toEvent(row.event))),
+          Effect.catch(fail("readKey")),
+        ),
     currentVersion: currentVersion.pipe(Effect.catch(fail("currentVersion"))),
     commitsAfter: (afterVersion) =>
       db

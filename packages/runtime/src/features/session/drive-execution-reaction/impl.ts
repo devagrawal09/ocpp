@@ -75,7 +75,7 @@ export const createDriveExecution = <R>(plugin: ReactionPlugin<DriveExecutionReq
       session.active = false
       delete session.driving
     })
-    .handleEachKey(async (state, sessionID) => {
+    .handleEachKey("session", async (state, sessionID) => {
       const session = state.sessions[sessionID]
       if (!session?.active || !session.driving) return
       return {

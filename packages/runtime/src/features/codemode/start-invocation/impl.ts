@@ -31,7 +31,7 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Invocation.Started.data)
 export const startInvocation = implementCommand(specification)
   .inputSchema(input)
   .store(startInvocationStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

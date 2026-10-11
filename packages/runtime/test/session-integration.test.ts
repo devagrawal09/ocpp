@@ -4,6 +4,7 @@ import { AbsolutePath } from "@ocpp/schema/schema"
 import {
   createSpecterApp,
   EventLog,
+  eventKeys,
   eventsFor,
   ReactionScheduler,
   type ReactionSchedulerService,
@@ -56,15 +57,16 @@ const boot = async (
   if (!options.log)
     await Effect.runPromise(
       log.append(
-        ["ses_1", "ses_2"].map((id) =>
-          sessionEvent("session-created").create({
+        ["ses_1", "ses_2"].map((id) => {
+          const created = sessionEvent("session-created").create({
             sessionID: SessionID.make(id),
             projectID: ProjectID.make("prj_1"),
             location: { directory: AbsolutePath.make("/tmp/ws") },
             slug: `slug-${id}`,
             version: "2",
-          }),
-        ),
+          })
+          return { ...created, keys: eventKeys(sessionEvent("session-created"), created.payload) }
+        }),
       ),
     )
   const scripted = makeScriptedStepHost()

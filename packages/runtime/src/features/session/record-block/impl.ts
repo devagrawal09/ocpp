@@ -56,7 +56,7 @@ const closeStep = (state: RecordBlockState, sessionID: string, assistantMessageI
 export const recordBlock = implementCommand(specification)
   .inputSchema(input)
   .store(recordBlockStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

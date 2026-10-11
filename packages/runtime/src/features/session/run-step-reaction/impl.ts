@@ -122,7 +122,7 @@ export const createRunStep = <R>(plugin: ReactionPlugin<RunStepRequest, R>) =>
     // Keyed by Session: each commit requests a step for every Session it
     // records for that needs one, so one Session busy outside its steps (a
     // long begin, prepare or compaction) holds back no other.
-    .handleEachKey(async (state, sessionID) => {
+    .handleEachKey("session", async (state, sessionID) => {
       const session = state.sessions[sessionID]
       if (!session?.active || session.external || (session.inFlight && !session.stale) || session.awaitingRetry) return
       return {

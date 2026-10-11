@@ -47,7 +47,7 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, in
 export const deliverInboxItem = implementCommand(specification)
   .inputSchema(input)
   .store(deliverInboxItemStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     const { sessionID } = event.payload
     state.sessions[sessionID] = "live"

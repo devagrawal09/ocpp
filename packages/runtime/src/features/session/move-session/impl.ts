@@ -38,7 +38,7 @@ const settle = (state: MoveSessionState, payload: { readonly sessionID: string; 
 export const moveSession = implementCommand(specification)
   .inputSchema(input)
   .store(moveSessionStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

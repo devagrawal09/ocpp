@@ -92,7 +92,7 @@ const zeroTokens = {
 export const settleStep = implementCommand(specification)
   .inputSchema(input)
   .store(settleStepStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(executionStarted, async (event, state) => {
     state.active[event.payload.sessionID] = true
   })

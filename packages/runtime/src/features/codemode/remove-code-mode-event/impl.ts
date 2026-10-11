@@ -30,7 +30,7 @@ const input = Schema.toStandardSchemaV1(SessionFact.EventRemoved.data)
 export const removeCodeModeEvent = implementCommand(specification)
   .inputSchema(input)
   .store(removeCodeModeEventStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

@@ -27,7 +27,7 @@ const input = Schema.toStandardSchemaV1(SessionFact.BackgroundSettled.data)
 export const settleBackgroundJob = implementCommand(specification)
   .inputSchema(input)
   .store(settleBackgroundJobStore)
-  .consistencyKeys((command) => [command.notificationID])
+  .consistencyKeys({ notification: (command) => command.notificationID })
   .apply(backgroundStarted, async (event, state) => {
     state.markers[event.payload.notificationID] = "running"
   })

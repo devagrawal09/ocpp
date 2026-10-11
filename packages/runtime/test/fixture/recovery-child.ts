@@ -5,6 +5,7 @@ import { ProjectID } from "@ocpp/schema/project-id"
 import { AbsolutePath } from "@ocpp/schema/schema"
 import { SessionID } from "@ocpp/schema/session-id"
 
+import { eventKeys } from "@specter-ts/core"
 import { Effect } from "effect"
 
 import { sessionEvent } from "../../src/events.ts"
@@ -38,16 +39,15 @@ const stepStarts = () =>
 // it reports only once a further step has started.
 const before = stepStarts()
 if (Effect.runSync(log.currentVersion) === 0) {
+  const created = sessionEvent("session-created").create({
+    sessionID: SessionID.make("ses_1"),
+    projectID: ProjectID.make("prj_1"),
+    location: { directory: AbsolutePath.make("/tmp/ws") },
+    slug: "brave-otter",
+    version: "2",
+  })
   await Effect.runPromise(
-    log.append([
-      sessionEvent("session-created").create({
-        sessionID: SessionID.make("ses_1"),
-        projectID: ProjectID.make("prj_1"),
-        location: { directory: AbsolutePath.make("/tmp/ws") },
-        slug: "brave-otter",
-        version: "2",
-      }),
-    ]),
+    log.append([{ ...created, keys: eventKeys(sessionEvent("session-created"), created.payload) }]),
   )
   await Effect.runPromise(
     runtime.command({

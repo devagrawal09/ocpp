@@ -111,7 +111,7 @@ export const wakeExecution = implementReaction(specification)
   })
   // Keyed by Session: each commit wakes every Session it records for that
   // has waking input and no active execution.
-  .handleEachKey(async (state, sessionID) => {
+  .handleEachKey("session", async (state, sessionID) => {
     const session = state.sessions[sessionID]
     if (session === undefined || Object.keys(session.waking).length === 0 || session.active) return
     return { type: "startExecution" as const, payload: { sessionID } }

@@ -10,35 +10,58 @@ import { Schema } from "effect"
 // two shapes in the log.
 const definitions = DurableEventManifest.Definitions
 
-// The identities a fact can be about. A fact carries its aggregate's and
-// every other one its payload names (a fork's parent, a Session's project, an
-// inbox item, a credential's integration, a Code Mode execution), so a
-// Command that decides on any of them conflicts with it.
-const identities = [
-  "sessionID",
-  "parentID",
-  "projectID",
-  "workspaceID",
-  "inboxID",
-  "executionID",
-  "notificationID",
-  "credentialID",
-  "integrationID",
-] as const
+// The identities a fact can be about, each under the name of its kind. A fact
+// declares a key for its aggregate and for every other identity its payload
+// names (a fork's parent, a Session's project, an inbox item, a credential's
+// integration, a Code Mode execution), so a Command that decides on one of
+// them conflicts with it. Names keep ID spaces apart: a Command keyed by a
+// Session never conflicts with a fact about a project of the same ID, and a
+// Reaction keyed by Session runs only for the Sessions a commit records for.
+const keyNames: Readonly<Record<string, string>> = {
+  sessionID: "session",
+  parentID: "parent",
+  projectID: "project",
+  workspaceID: "workspace",
+  inboxID: "inbox",
+  executionID: "execution",
+  notificationID: "notification",
+  credentialID: "credential",
+  integrationID: "integration",
+}
 
-const keys = (aggregate: string) => (payload: unknown) => {
-  const fields = payload as Record<string, unknown>
-  return [...new Set([aggregate, ...identities])].flatMap((field) => {
-    const value = fields[field]
-    return typeof value === "string" ? [value] : []
-  })
+// A key-value fact's aggregate is its key, which no other fact's `key` field
+// (an instruction entry's) names.
+const aggregateKeyNames: Readonly<Record<string, string>> = { ...keyNames, key: "kv" }
+
+// The fields a fact's payload can have: a struct's, or those of a union's members.
+const fieldsOf = (schema: Schema.Top): ReadonlyArray<string> =>
+  "fields" in schema && typeof schema.fields === "object" && schema.fields !== null
+    ? Object.keys(schema.fields)
+    : "members" in schema && Array.isArray(schema.members)
+      ? [...new Set(schema.members.flatMap((member: Schema.Top) => fieldsOf(member)))]
+      : []
+
+const keysOf = (definition: (typeof definitions)[number]) => {
+  const aggregate = definition.durable.aggregate
+  const aggregateName = aggregateKeyNames[aggregate]
+  if (aggregateName === undefined) throw new Error(`No key names the aggregate of ${definition.type}: ${aggregate}`)
+  const fields = fieldsOf(definition.data).filter((field) => keyNames[field] !== undefined)
+  return Object.fromEntries(
+    [...new Set([aggregate, ...fields])].map((field) => [
+      field === aggregate ? aggregateName : keyNames[field]!,
+      (payload: unknown) => {
+        const value = (payload as Record<string, unknown>)[field]
+        return typeof value === "string" ? value : undefined
+      },
+    ]),
+  )
 }
 
 // One Specter event definition per durable fact: its name, its payload
-// schema as a Standard Schema, and its keys.
+// schema as a Standard Schema, and its named keys.
 export const sessionEventDefinitions = definitions.map((definition) =>
   createEventDefinition(definition.type, Schema.toStandardSchemaV1(definition.data), {
-    keys: keys(definition.durable.aggregate),
+    keys: keysOf(definition),
   }),
 )
 

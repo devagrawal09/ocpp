@@ -31,7 +31,7 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, re
 export const stageRevert = implementCommand(specification)
   .inputSchema(input)
   .store(stageRevertStore)
-  .consistencyKeys((command) => [command.sessionID])
+  .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
     state.sessions[event.payload.sessionID] = "live"
   })

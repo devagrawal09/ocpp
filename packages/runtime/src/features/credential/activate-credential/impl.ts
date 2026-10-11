@@ -30,9 +30,9 @@ export const activateCredential = implementCommand(specification)
   .inputSchema(input)
   .store(activateCredentialStore)
   // The credential's integration, whose one active credential the decision reads.
-  .consistencyKeys((command, state) => {
-    const integrationID = state.credentials[command.credentialID]
-    return [command.credentialID, ...(integrationID === undefined ? [] : [integrationID])]
+  .consistencyKeys({
+    credential: (command) => command.credentialID,
+    integration: (command, state) => state.credentials[command.credentialID],
   })
   .apply(credentialCreated, async (event, state) => {
     state.credentials[event.payload.credentialID] = event.payload.integrationID

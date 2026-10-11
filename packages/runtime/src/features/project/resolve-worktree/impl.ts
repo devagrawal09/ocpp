@@ -34,7 +34,7 @@ const input = Schema.toStandardSchemaV1(
 export const resolveWorktree = implementCommand(specification)
   .inputSchema(input)
   .store(resolveWorktreeStore)
-  .consistencyKeys((command) => [command.projectID])
+  .consistencyKeys({ project: (command) => command.projectID })
   .apply(projectCreated, async (event, state) => {
     state.projects[event.payload.projectID] ??= {}
   })

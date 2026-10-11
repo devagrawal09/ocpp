@@ -57,9 +57,9 @@ export const settleCodeModeExecution = implementCommand(specification)
   .inputSchema(input)
   .store(settleCodeModeExecutionStore)
   // The execution's Session, whose notebook the settlement reads.
-  .consistencyKeys((command, state) => {
-    const execution = state.executions[command.executionID]
-    return [command.executionID, ...(execution ? [execution.sessionID] : [])]
+  .consistencyKeys({
+    execution: (command) => command.executionID,
+    session: (command, state) => state.executions[command.executionID]?.sessionID,
   })
   .apply(admitted, async (event, state) => {
     const { sessionID, executionID, reserved } = event.payload

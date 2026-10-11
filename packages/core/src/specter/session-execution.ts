@@ -2,6 +2,7 @@ export * as SpecterSessionExecution from "./session-execution.js"
 
 import { Effect, Layer } from "effect"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
+import { Bus } from "../bus.js"
 import { ExternalAgentSession } from "../external-agent/session.js"
 import { Job } from "../job.js"
 import { StepFailedError } from "../session/error.js"
@@ -21,14 +22,21 @@ export const layer = Layer.effect(
   SessionExecution.Service,
   Effect.gen(function* () {
     const specter = yield* SpecterSessionRuntime.Service
+    const bus = yield* Bus.Service
     const jobs = yield* Job.Service
 
-    // Starts an execution unless one is active. A rejection means it is already running.
-    const start = (sessionID: SessionSchema.ID) =>
-      specter.runtime.command({ type: "startExecution", payload: { sessionID } }).pipe(
-        Effect.flatMap((execution) => execution.reactions),
-        Effect.catch((error) => (SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.void)),
-      )
+    // Starts an execution unless one is active, once the Reactions it starts have run. A rejection means it is
+    // already running.
+    const start = (sessionID: SessionSchema.ID, continues?: boolean) =>
+      bus
+        .command(
+          { type: "startExecution", payload: { sessionID, ...(continues ? { continues: true } : {}) } },
+          { reactions: true },
+        )
+        .pipe(
+          Effect.asVoid,
+          Effect.catch((error) => (SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.void)),
+        )
 
     return SessionExecution.Service.of({
       active: specter.active,
@@ -59,7 +67,7 @@ export const layer = Layer.effect(
       ) {
         // The running attempt records what it produced before the interruption settles its step.
         yield* specter.stop(sessionID)
-        const interrupted = yield* specter.runtime.command({ type: "interruptExecution", payload: { sessionID } }).pipe(
+        const interrupted = yield* bus.command({ type: "interruptExecution", payload: { sessionID } }).pipe(
           Effect.as(true),
           // Interrupting an idle, unknown or deleted Session is a no-op.
           Effect.catch((error) =>
@@ -77,11 +85,7 @@ export const layer = Layer.effect(
         const next = yield* specter.runtime
           .query({ type: "nextDeliverable", payload: { sessionID, boundary: "entry" } })
           .pipe(Effect.orDie)
-        if (next.item !== null)
-          yield* specter.runtime.command({ type: "startExecution", payload: { sessionID, continues: true } }).pipe(
-            Effect.flatMap((execution) => execution.reactions),
-            Effect.catch((error) => (SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.void)),
-          )
+        if (next.item !== null) yield* start(sessionID, true)
         return interrupted
       }),
       awaitIdle: specter.awaitIdle,
@@ -93,5 +97,5 @@ export const node = makeGlobalNode({
   service: SessionExecution.Service,
   layer,
   // External agent Sessions keep their vendor bindings through ExternalAgentSession's projections.
-  deps: [SpecterSessionRuntime.node, ExternalAgentSession.node, Job.node],
+  deps: [Bus.node, SpecterSessionRuntime.node, ExternalAgentSession.node, Job.node],
 })

@@ -221,7 +221,7 @@ const setup = Effect.gen(function* () {
     .run()
     .pipe(Effect.orDie)
   // The Session is created once; a later boot over the same database finds it.
-  yield* (yield* Bus.Service).runtime
+  yield* (yield* Bus.Service)
     .command({
       type: "createSession",
       payload: {

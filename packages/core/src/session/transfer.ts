@@ -111,7 +111,7 @@ const layer = Layer.effect(
           },
           ...(idle !== undefined && input.data.info.outcome ? { outcome: input.data.info.outcome } : {}),
         })
-        yield* bus.runtime
+        yield* bus
           .command({
             type: "createSession",
             payload: {

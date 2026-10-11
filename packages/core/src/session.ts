@@ -335,7 +335,7 @@ const layer = Layer.effect(
         if (location === undefined)
           return yield* Effect.die(new Error("Session.create requires either location or an existing parentID"))
         const project = yield* projects.resolve(location.directory)
-        yield* bus.runtime
+        yield* bus
           .command({
             type: "createSession",
             payload: {
@@ -482,7 +482,7 @@ const layer = Layer.effect(
           yield* environments.clear(sessionID)
           // The runtime deletes it with whatever still runs or waits: an execution started meanwhile is
           // interrupted, and pending input cancelled, in the same commit.
-          yield* bus.runtime
+          yield* bus
             .command({ type: "deleteSession", payload: { sessionID } })
             .pipe(
               Effect.catch((error) =>
@@ -721,7 +721,7 @@ const layer = Layer.effect(
         if (!source || source.type !== "Directory") {
           // The Session cannot run where it is, so it moves now; the runtime cancels the moves waiting in
           // its inbox in the same commit.
-          yield* bus.runtime
+          yield* bus
             .command({ type: "moveSession", payload: encodeMoved({ sessionID: input.sessionID, ...payload }) })
             .pipe(
               Effect.catch((error) =>

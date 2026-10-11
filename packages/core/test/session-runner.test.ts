@@ -1584,7 +1584,7 @@ describe("SessionRunnerLLM", () => {
       .where(eq(InstructionStateTable.session_id, sessionID))
       .get()
 
-    yield* s.bus.runtime
+    yield* s.bus
       .command({
         type: "moveSession",
         payload: { sessionID, location: { directory: "/moved" }, projectID: Project.ID.global },

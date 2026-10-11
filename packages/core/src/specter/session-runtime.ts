@@ -8,7 +8,6 @@ import {
   type CompactionOutcome,
   type DriveOutcome,
   type RecordFailure,
-  type Runtime,
 } from "@ocpp/runtime"
 import { Bus } from "../bus.js"
 import { ExternalAgentSession } from "../external-agent/session.js"
@@ -27,7 +26,8 @@ const CONTINUE_AFTER_RESTART =
  * runtime's own Commands record.
  */
 export interface Interface {
-  readonly runtime: Runtime
+  /** The runtime's Queries; its Commands are dispatched through the Bus. */
+  readonly runtime: Bus.Interface["runtime"]
   /** Sessions with an execution the runtime has started and not yet settled, in any process. */
   readonly active: Effect.Effect<ReadonlySet<SessionSchema.ID>>
   /** Resolves once the runtime has no active execution for the Session, nor input about to start one. */

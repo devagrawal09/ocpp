@@ -7,12 +7,15 @@ import { SessionInbox } from "../session/inbox.js"
 import { SessionMessage } from "../session/message.js"
 import { SessionSchema } from "../session/schema.js"
 import { SpecterRejection } from "./rejection.js"
+import { Bus } from "../bus.js"
+import { SessionEvent } from "../session/event.js"
 import { SpecterSessionRuntime } from "./session-runtime.js"
 
 const encodeUser = Schema.encodeSync(SessionInbox.UserPayload)
 const encodeSynthetic = Schema.encodeSync(SessionInbox.SyntheticPayload)
 const encodeMove = Schema.encodeSync(SessionInbox.MovePayload)
 const decodeInfo = Schema.decodeUnknownSync(SessionInbox.Info)
+const encodeEnqueued = Schema.encodeSync(SessionEvent.InboxEnqueued.data)
 
 type Admission<Type extends SessionInbox.Item["type"]> = {
   readonly id: SessionMessage.ID
@@ -30,7 +33,7 @@ type Admission<Type extends SessionInbox.Item["type"]> = {
 export const layer = Layer.effect(
   SessionInbox.Service,
   Effect.gen(function* () {
-    const specter = yield* SpecterSessionRuntime.Service
+    const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
 
     const admitted = Effect.fn("SpecterSessionInbox.admitted")(function* <
@@ -62,25 +65,30 @@ export const layer = Layer.effect(
         // The runtime wakes on admission unless told the input waits.
         ...(request.resume === false ? { resume: false } : {}),
       }
-      const recorded = yield* specter.runtime
-        .command({
-          type: "enqueueInput",
-          payload:
-            item.type === "user"
-              ? { ...base, type: "user", payload: encodeUser(item.payload) }
-              : item.type === "synthetic"
-                ? {
-                    ...base,
-                    type: "synthetic",
-                    payload: encodeSynthetic(item.payload),
-                    ...(request.coalesce === undefined ? {} : { coalesce: request.coalesce }),
-                  }
-                : item.type === "compaction"
-                  ? { ...base, type: "compaction", payload: {} }
-                  : { ...base, type: "move", payload: encodeMove(item.payload) },
-        })
+      // The runtime starts execution from its own Reaction; the dispatch settles it before answering, so a
+      // caller that waits for the Session sees the execution this input started.
+      const recorded = yield* bus
+        .command(
+          {
+            type: "enqueueInput",
+            payload:
+              item.type === "user"
+                ? { ...base, type: "user", payload: encodeUser(item.payload) }
+                : item.type === "synthetic"
+                  ? {
+                      ...base,
+                      type: "synthetic",
+                      payload: encodeSynthetic(item.payload),
+                      ...(request.coalesce === undefined ? {} : { coalesce: request.coalesce }),
+                    }
+                  : item.type === "compaction"
+                    ? { ...base, type: "compaction", payload: {} }
+                    : { ...base, type: "move", payload: encodeMove(item.payload) },
+          },
+          { reactions: true },
+        )
         .pipe(
-          Effect.map((execution) => ({ execution })),
+          Effect.map((events) => ({ events })),
           Effect.catch((error) => {
             const reason = SpecterRejection.reason(error)
             return reason === undefined ? Effect.die(error) : Effect.succeed({ reason })
@@ -91,18 +99,17 @@ export const layer = Layer.effect(
           ),
         )
       if ("reason" in recorded) return recorded
-      // The runtime starts execution from its own Reaction; settle it before returning, so a caller that
-      // waits for the Session sees the execution this input started.
-      yield* recorded.execution.reactions.pipe(Effect.orDie)
       // The item as the runtime admitted it: the runtime may deliver it before a projection read.
-      const enqueued = recorded.execution.events.find((event) => event.type === "session-inbox-enqueued")
+      const enqueued = recorded.events.find(
+        (event): event is SessionEvent.InboxEnqueued => event.type === SessionEvent.InboxEnqueued.type,
+      )
       if (!enqueued) return yield* Effect.die(new Error(`Admission of ${request.id} recorded no input`))
       return {
         admitted: decodeInfo({
           id: request.id,
           sessionID: request.sessionID,
-          timeCreated: Date.parse(enqueued.recordedAt),
-          ...(enqueued.payload as { readonly item: object }).item,
+          timeCreated: enqueued.created,
+          ...encodeEnqueued(enqueued.data).item,
         }) as Extract<SessionInbox.Info, { readonly type: Type }>,
       }
     })
@@ -128,7 +135,7 @@ export const layer = Layer.effect(
         readonly id: SessionMessage.ID
         readonly sessionID: SessionSchema.ID
       }) {
-        yield* specter.runtime
+        yield* bus
           .command({
             type: "changeDelivery",
             payload: { sessionID: input.sessionID, inboxID: input.id, delivery },
@@ -146,7 +153,7 @@ export const layer = Layer.effect(
       readonly id: SessionMessage.ID
       readonly sessionID: SessionSchema.ID
     }) {
-      yield* specter.runtime
+      yield* bus
         .command({ type: "cancelInboxItem", payload: { sessionID: input.sessionID, inboxID: input.id } })
         .pipe(
           Effect.catch((error) =>
@@ -198,5 +205,6 @@ export const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: SessionInbox.Service,
   layer,
-  deps: [Database.node, SpecterSessionRuntime.node],
+  // The runtime this admits into starts its Reactions with the Session runtime.
+  deps: [Database.node, Bus.node, SpecterSessionRuntime.node],
 })

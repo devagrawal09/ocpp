@@ -218,12 +218,12 @@ export interface Interface {
     options?: CommandOptions,
   ) => Effect.Effect<readonly Event.Payload[], SpecterCommandRejectedError>
   /**
-   * OC++'s one Specter runtime, over Specter's Event Log in this database: every Command, Query and
-   * Reaction. `publish` records through its `recordSessionFacts`; Session operations dispatch their own
-   * Commands. Each commit is projected here as OC++ events in the append transaction and notified once it
-   * commits. Its Reactions start when the Session runtime binds the step I/O (`runtime.start`).
+   * OC++'s one Specter runtime, over Specter's Event Log in this database: its Queries, and the start of its
+   * Reactions once the Session runtime binds the step I/O. Its Commands are dispatched through `command`. Each
+   * commit is projected here as OC++ events in the append transaction and notified once it commits; a commit
+   * the Reactions' own Commands make takes the log's time and no Location.
    */
-  readonly runtime: Runtime
+  readonly runtime: Pick<Runtime, "query" | "subscribe" | "start">
 }
 
 /** A Command of the runtime, as `runtime.command` takes it. */
@@ -232,6 +232,11 @@ export type RuntimeCommand = Parameters<Runtime["command"]>[0]
 export interface CommandOptions {
   /** The publication options of the facts the Command records, by position. */
   readonly facts?: ReadonlyArray<PublishOptions | undefined>
+  /**
+   * Waits for the Reactions the commit starts before answering, as a dispatcher that must see what its input
+   * started does (input that wakes its Session).
+   */
+  readonly reactions?: boolean
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ocpp/Bus") {}
@@ -706,8 +711,8 @@ export function configured(options?: Options) {
           )
         }
 
-        // Recording is uninterruptible, as for a publication; notifying listeners is as interruptible as the
-        // dispatcher.
+        // Recording is uninterruptible, as for a publication; notifying listeners, and waiting for the
+        // Reactions, is as interruptible as the dispatcher.
         const command: Interface["command"] = (envelope, options) =>
           Effect.uninterruptibleMask((restore) =>
             Effect.gen(function* () {
@@ -723,17 +728,20 @@ export function configured(options?: Options) {
                   restore,
                 },
               }
-              return yield* Effect.acquireUseRelease(
+              const execution = yield* Effect.acquireUseRelease(
                 Effect.sync(() => pending.set(key, entry)),
                 () =>
-                  runtime.command(envelope, { idempotencyKey: key }).pipe(
-                    Effect.catch((error) =>
-                      error instanceof SpecterCommandRejectedError ? Effect.fail(error) : Effect.die(error),
+                  runtime
+                    .command(envelope, { idempotencyKey: key })
+                    .pipe(
+                      Effect.catch((error) =>
+                        error instanceof SpecterCommandRejectedError ? Effect.fail(error) : Effect.die(error),
+                      ),
                     ),
-                    Effect.map(() => entry.recorded ?? []),
-                  ),
                 () => Effect.sync(() => pending.delete(key)),
               )
+              if (options?.reactions) yield* restore(execution.reactions.pipe(Effect.orDie))
+              return entry.recorded ?? []
             }),
           )
 
@@ -1044,7 +1052,7 @@ export function configured(options?: Options) {
           project,
           rebuild,
           remove,
-          runtime,
+          runtime: { query: runtime.query, subscribe: runtime.subscribe, start: runtime.start },
         })
       }),
     ),

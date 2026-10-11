@@ -38,13 +38,11 @@ const seed = Effect.fn(function* (ref: Location.Ref = a) {
 })
 
 // The ID of the fact of a type that a Command recorded: the event the Bus projected from it.
-const recorded = (
-  execution: { readonly events: readonly { readonly id: string; readonly type: string }[] },
-  type: string,
-) => execution.events.find((event) => event.type === type)!.id
+const recorded = (events: readonly { readonly id: string; readonly type: string }[], type: string) =>
+  events.find((event) => event.type === type)!.id
 
 const move = (bus: Bus.Interface, ref: Location.Ref) =>
-  bus.runtime
+  bus
     .command({
       type: "moveSession",
       payload: {
@@ -55,7 +53,7 @@ const move = (bus: Bus.Interface, ref: Location.Ref) =>
     })
     .pipe(
       Effect.orDie,
-      Effect.map((execution) => recorded(execution, "session-moved")),
+      Effect.map((events) => recorded(events, "session-moved")),
     )
 
 const ids = (events: Iterable<{ readonly id: string }>) => Array.from(events, (event) => event.id)
@@ -116,7 +114,7 @@ describe("Bus Session routing", () => {
       const first = yield* watch(bus, a)
       const second = yield* watch(bus, b)
       // The child's creation and its fork are one commit, delivered where the parent is.
-      const forked = yield* bus.runtime
+      const forked = yield* bus
         .command({
           type: "forkSession",
           payload: {
@@ -137,7 +135,7 @@ describe("Bus Session routing", () => {
         outcome: "succeeded",
       })
       const done = yield* bus.publish(Done, {})
-      expect(ids(yield* Fiber.join(first))).toEqual([...ids(forked.events), after.id, done.id])
+      expect(ids(yield* Fiber.join(first))).toEqual([...ids(forked), after.id, done.id])
       expect(yield* Fiber.join(second)).toEqual([done])
     }),
   )
@@ -231,7 +229,7 @@ describe("Bus Session routing", () => {
       const gate = yield* Deferred.make<void>()
       const first = yield* watch(bus, a, gate)
       const second = yield* watch(bus, b, gate)
-      const created = yield* bus.runtime
+      const created = yield* bus
         .command({
           type: "createSession",
           payload: {
@@ -266,9 +264,9 @@ describe("Bus Session routing", () => {
       const first = yield* watch(bus, a)
       const second = yield* watch(bus, b)
       const global = yield* watch(bus)
-      const deleted = yield* bus.runtime.command({ type: "deleteSession", payload: { sessionID: id } }).pipe(
+      const deleted = yield* bus.command({ type: "deleteSession", payload: { sessionID: id } }).pipe(
         Effect.orDie,
-        Effect.map((execution) => recorded(execution, "session-deleted")),
+        Effect.map((events) => recorded(events, "session-deleted")),
       )
       const missing = yield* delta(bus)
       const done = yield* bus.publish(Done, {})

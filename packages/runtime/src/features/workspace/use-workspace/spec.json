@@ -1,0 +1,78 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records when a workspace was last used: when a connection to it opened, or the last activity before it was suspended. Only a workspace that exists is used.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "useWorkspace",
+  "scenarios": [
+    {
+      "description": "A workspace that exists records when it was used.",
+      "expect": [
+        {
+          "eventType": "workspace-used",
+          "examplePayload": {
+            "time": 5,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "workspace-created",
+          "examplePayload": {
+            "provider": "docker",
+            "time": 1,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "time": 5,
+        "workspaceID": "wrk_1"
+      }
+    },
+    {
+      "description": "An unknown workspace is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Workspace not found"
+      },
+      "when": {
+        "time": 5,
+        "workspaceID": "wrk_1"
+      }
+    },
+    {
+      "description": "A destroyed workspace is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "workspace-created",
+          "examplePayload": {
+            "provider": "docker",
+            "time": 1,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "workspace-destroyed",
+          "examplePayload": {
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Workspace destroyed"
+      },
+      "when": {
+        "time": 5,
+        "workspaceID": "wrk_1"
+      }
+    }
+  ]
+}

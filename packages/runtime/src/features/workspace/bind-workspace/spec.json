@@ -1,0 +1,86 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records the provider's binding to a workspace's backing resource, as the provider gave it, once it is provisioned or changes. Only a workspace that exists is bound.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "bindWorkspace",
+  "scenarios": [
+    {
+      "description": "A workspace that exists is bound to its resource.",
+      "expect": [
+        {
+          "eventType": "workspace-bound",
+          "examplePayload": {
+            "binding": {
+              "containerID": "c_1"
+            },
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "workspace-created",
+          "examplePayload": {
+            "provider": "docker",
+            "time": 1,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "binding": {
+          "containerID": "c_1"
+        },
+        "workspaceID": "wrk_1"
+      }
+    },
+    {
+      "description": "An unknown workspace is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Workspace not found"
+      },
+      "when": {
+        "binding": {
+          "containerID": "c_1"
+        },
+        "workspaceID": "wrk_1"
+      }
+    },
+    {
+      "description": "A destroyed workspace is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "workspace-created",
+          "examplePayload": {
+            "provider": "docker",
+            "time": 1,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "workspace-destroyed",
+          "examplePayload": {
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Workspace destroyed"
+      },
+      "when": {
+        "binding": {
+          "containerID": "c_1"
+        },
+        "workspaceID": "wrk_1"
+      }
+    }
+  ]
+}

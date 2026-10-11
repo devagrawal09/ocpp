@@ -1,0 +1,74 @@
+{
+  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "description": "Records that a workspace is gone, once the host has torn its backing resource down. Only a workspace that exists is destroyed, once.",
+  "formatVersion": 1,
+  "kind": "command",
+  "name": "destroyWorkspace",
+  "scenarios": [
+    {
+      "description": "A workspace that exists is destroyed.",
+      "expect": [
+        {
+          "eventType": "workspace-destroyed",
+          "examplePayload": {
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "workspace-created",
+          "examplePayload": {
+            "provider": "docker",
+            "time": 1,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "workspaceID": "wrk_1"
+      }
+    },
+    {
+      "description": "An unknown workspace is refused.",
+      "expect": [],
+      "given": [],
+      "reject": {
+        "reason": "Workspace not found"
+      },
+      "when": {
+        "workspaceID": "wrk_1"
+      }
+    },
+    {
+      "description": "A destroyed workspace is refused.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "workspace-created",
+          "examplePayload": {
+            "provider": "docker",
+            "time": 1,
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "workspace-destroyed",
+          "examplePayload": {
+            "workspaceID": "wrk_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "reason": "Workspace destroyed"
+      },
+      "when": {
+        "workspaceID": "wrk_1"
+      }
+    }
+  ]
+}

@@ -38,6 +38,22 @@ import {
   refreshWorktrees,
   refreshWorktreesStore,
 } from "./features/project/refresh-worktrees/impl.ts"
+import {
+  createCreateWorkspaceState,
+  createWorkspace,
+  createWorkspaceStore,
+} from "./features/workspace/create-workspace/impl.ts"
+import {
+  createBindWorkspaceState,
+  bindWorkspace,
+  bindWorkspaceStore,
+} from "./features/workspace/bind-workspace/impl.ts"
+import { createUseWorkspaceState, useWorkspace, useWorkspaceStore } from "./features/workspace/use-workspace/impl.ts"
+import {
+  createDestroyWorkspaceState,
+  destroyWorkspace,
+  destroyWorkspaceStore,
+} from "./features/workspace/destroy-workspace/impl.ts"
 import { createStoreValueState, storeValue, storeValueStore } from "./features/kv/store-value/impl.ts"
 import { createRemoveValueState, removeValue, removeValueStore } from "./features/kv/remove-value/impl.ts"
 import {
@@ -282,6 +298,10 @@ export const createRuntimeConfig = (options: {
       addWorktree,
       removeWorktree,
       refreshWorktrees,
+      createWorkspace,
+      bindWorkspace,
+      useWorkspace,
+      destroyWorkspace,
       storeValue,
       removeValue,
       enqueueInput,
@@ -385,6 +405,10 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(addWorktreeStore, createAddWorktreeState),
     provide(removeWorktreeStore, createRemoveWorktreeState),
     provide(refreshWorktreesStore, createRefreshWorktreesState),
+    provide(createWorkspaceStore, createCreateWorkspaceState),
+    provide(bindWorkspaceStore, createBindWorkspaceState),
+    provide(useWorkspaceStore, createUseWorkspaceState),
+    provide(destroyWorkspaceStore, createDestroyWorkspaceState),
     provide(storeValueStore, createStoreValueState),
     provide(removeValueStore, createRemoveValueState),
     provide(enqueueInputStore, createEnqueueInputState),

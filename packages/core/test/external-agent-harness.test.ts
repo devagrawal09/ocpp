@@ -673,7 +673,7 @@ describe("vendor-driven sessions", () => {
         .all()
       const head = saved.query<{ head: number }, []>('SELECT MAX("order") AS head FROM specter_event').get()!.head
       expect(slices.map((row) => row.slice)).toEqual(
-        expect.arrayContaining(["recordSessionFacts", "sessionStatus", "driveExecution"]),
+        expect.arrayContaining(["createSession", "sessionStatus", "driveExecution"]),
       )
       expect(Math.max(...slices.map((row) => row.cursor))).toBe(head)
       saved

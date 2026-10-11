@@ -1,6 +1,7 @@
-// One payload per durable fact OC++ records, as OC++ publishes it (captured
-// from OC++'s own test suite, identifiers normalized). Each is valid for its
-// schema and decodes unchanged, which Specter requires of every stored payload.
+// One payload per durable fact OC++ records (captured from OC++'s own test
+// suite, identifiers normalized), for recordHistory's scenarios. Each is valid
+// for its schema and decodes unchanged, which Specter requires of every stored
+// payload.
 export const sessionFacts = {
   "session-created": {
     sessionID: "ses_1",

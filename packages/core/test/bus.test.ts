@@ -8,7 +8,8 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { EventSequenceTable, EventTable } from "@ocpp/core/event/sql"
 import { SpecterEventTable } from "@ocpp/core/specter/sql"
-import { CredentialFact } from "@ocpp/schema/credential-fact"
+import { ProjectFact } from "@ocpp/schema/project-fact"
+import { Project } from "@ocpp/core/project"
 import { KeyValueFact } from "@ocpp/schema/key-value-fact"
 import { Credential } from "@ocpp/schema/credential"
 import { Integration } from "@ocpp/schema/integration"
@@ -33,9 +34,9 @@ const Message = Bus.ephemeral({
   },
 })
 
-// Durable events are facts OC++ records in Specter's log: the tests publish ones from its inventory.
+// Durable events are facts a runtime Command records in Specter's log; the tests store values through
+// storeValue, each in the aggregate of its key.
 const SyncMessage = KeyValueFact.Stored
-const SyncSent = CredentialFact.Relabeled
 
 /** Not in the inventory. */
 const Uninventoried = Bus.durable({
@@ -56,9 +57,36 @@ const CountMessage = Bus.ephemeral({
   },
 })
 
-// A fact the Bus still records as published, in an aggregate of its own.
 const DurableMessage = KeyValueFact.Stored
 const durableData = (key: string, text: string) => ({ key, value: text })
+
+/** Stores a value through the runtime's storeValue, with the options of its fact: the event it records. */
+const store = (bus: Bus.Interface, data: { readonly key: string; readonly value: string }, options?: Bus.FactOptions) =>
+  bus.command({ type: "storeValue", payload: data }, options ? { facts: [options] } : undefined).pipe(
+    Effect.orDie,
+    Effect.map((events) => events[0] as Event.Payload<typeof KeyValueFact.Stored>),
+  )
+
+/** Records a project's directories in one commit, as a refresh that found them does: one fact per directory. */
+const refresh = (bus: Bus.Interface, projectID: string, directories: ReadonlyArray<string>) =>
+  bus
+    .command({
+      type: "refreshWorktrees",
+      payload: {
+        projectID: Project.ID.make(projectID),
+        found: directories.map((directory) => ({ directory: AbsolutePath.make(directory) })),
+        gone: [],
+      },
+    })
+    .pipe(Effect.orDie)
+
+const createProject = (bus: Bus.Interface, projectID: string) =>
+  bus
+    .command({
+      type: "resolveProject",
+      payload: { projectID: Project.ID.make(projectID), canonical: AbsolutePath.make("/repo") },
+    })
+    .pipe(Effect.orDie)
 
 /** Followed log read without markers: the old `durable` stream shape. */
 const tail = (bus: Bus.Interface, input: { aggregateID: string; after?: number }) =>
@@ -141,7 +169,7 @@ describe("Bus", () => {
     }),
   )
 
-  it.effect("dispatches a runtime Command as a publication, each fact with the options at its position", () =>
+  it.effect("dispatches a runtime Command, each fact with the options at its position", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const sessionID = Session.ID.create()
@@ -164,7 +192,7 @@ describe("Bus", () => {
         },
       )
 
-      // The dispatch's time, from the test clock, and the ambient Location, as for a publication.
+      // The dispatch's time, from the test clock, and the ambient Location.
       expect(renamed).toMatchObject({
         id,
         created: 0,
@@ -207,7 +235,7 @@ describe("Bus", () => {
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const key = Session.ID.create()
-      const event = yield* bus.publish(KeyValueFact.Stored, { key, value: "Placed" })
+      const event = yield* store(bus, { key, value: "Placed" })
 
       expect(event.type).toBe("kv-stored")
       expect(event.durable).toEqual({ aggregateID: key, seq: Event.Seq.make(0) })
@@ -237,8 +265,8 @@ describe("Bus", () => {
         }),
       )
 
-      const event = yield* bus.publish(SyncMessage, { key: "one", value: "hello" })
-      yield* bus.publish(SyncMessage, { key: "one", value: "second event" })
+      const event = yield* store(bus, { key: "one", value: "hello" })
+      yield* store(bus, { key: "one", value: "second event" })
 
       expect(received[0]).toEqual(event)
       expect(received[1]?.data).toEqual({ key: "one", value: "second event" })
@@ -252,8 +280,8 @@ describe("Bus", () => {
       const aggregateID = Event.ID.create()
       yield* bus.project(SyncMessage, () => Effect.sync(() => received.push("projector")))
 
-      yield* bus.publish(
-        SyncMessage,
+      yield* store(
+        bus,
         { key: aggregateID, value: "hello" },
         { commit: (seq) => Effect.sync(() => received.push(`commit:${seq}`)) },
       )
@@ -273,9 +301,11 @@ describe("Bus", () => {
         db.run("INSERT INTO event_commit_probe (value) VALUES ('projected')").pipe(Effect.orDie, Effect.asVoid),
       )
 
-      const exit = yield* bus
-        .publish(SyncMessage, { key: aggregateID, value: "hello" }, { commit: () => Effect.die("commit failed") })
-        .pipe(Effect.exit)
+      const exit = yield* store(
+        bus,
+        { key: aggregateID, value: "hello" },
+        { commit: () => Effect.die("commit failed") },
+      ).pipe(Effect.exit)
 
       expect(String(exit)).toContain("commit failed")
       expect(yield* db.all("SELECT value FROM event_commit_probe")).toEqual([])
@@ -292,7 +322,7 @@ describe("Bus", () => {
       const { db } = yield* Database.Service
       const aggregateID = Event.ID.create()
 
-      const event = yield* bus.publish(SyncMessage, { key: aggregateID, value: "hello" })
+      const event = yield* store(bus, { key: aggregateID, value: "hello" })
 
       const indexed = yield* db
         .select({ seq: EventTable.seq, fact: SpecterEventTable })
@@ -318,12 +348,19 @@ describe("Bus", () => {
       ).toEqual([{ aggregate_id: aggregateID, seq: 0 }])
     }),
   )
-  it.effect("rejects local commit hooks on live-only events", () =>
+  it.effect("refuses to publish a durable event: only a runtime Command records a fact", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
-      const exit = yield* bus.publish(Message, { text: "hello" }, { commit: () => Effect.void }).pipe(Effect.exit)
+      const key = Session.ID.create()
 
-      expect(String(exit)).toContain("Local commit hooks require a durable event")
+      const stored = yield* bus.publish(KeyValueFact.Stored, { key, value: "Published" }).pipe(Effect.exit)
+      const uninventoried = yield* bus.publish(Uninventoried, { id: key }).pipe(Effect.exit)
+
+      expect(String(stored)).toContain("kv-stored is a durable fact, which only a runtime Command records")
+      expect(String(uninventoried)).toContain("test.uninventoried is a durable fact")
+      expect(yield* Stream.runCollect(bus.log({ aggregateID: key }))).toEqual([
+        { type: "log-synced", aggregateID: key },
+      ])
     }),
   )
 
@@ -343,7 +380,7 @@ describe("Bus", () => {
       )
 
       yield* Effect.yieldNow
-      yield* bus.publish(SyncMessage, { key: "one", value: "hello" })
+      yield* store(bus, { key: "one", value: "hello" })
       yield* Fiber.join(fiber)
 
       expect(received).toEqual([SyncMessage.type, "stream"])
@@ -365,9 +402,9 @@ describe("Bus", () => {
         }),
       )
 
-      yield* bus.publish(SyncMessage, { key: "one", value: "hello" })
+      yield* store(bus, { key: "one", value: "hello" })
       yield* unsubscribe
-      yield* bus.publish(SyncMessage, { key: "one", value: "after unsubscribe" })
+      yield* store(bus, { key: "one", value: "after unsubscribe" })
 
       expect(received).toEqual(["projector", "listener", "projector"])
     }),
@@ -386,7 +423,7 @@ describe("Bus", () => {
         }),
       )
 
-      const event = yield* bus.publish(SyncMessage, { key: "one", value: "hello" })
+      const event = yield* store(bus, { key: "one", value: "hello" })
 
       expect(received).toEqual([SyncMessage.type])
       expect(event.durable?.seq).toBeNumber()
@@ -419,7 +456,7 @@ describe("Bus", () => {
               ),
       )
 
-      const event = yield* bus.publish(SyncMessage, { key: aggregateID, value: "committed" })
+      const event = yield* store(bus, { key: aggregateID, value: "committed" })
       if (!event.durable) throw new Error("Expected durable event metadata")
 
       expect(observed).toEqual([{ id: event.id, seq: event.durable.seq }])
@@ -432,7 +469,7 @@ describe("Bus", () => {
       const { db } = yield* Database.Service
       yield* bus.listen(() => Effect.interrupt)
 
-      const exit = yield* bus.publish(SyncMessage, { key: "interrupted", value: "hello" }).pipe(Effect.exit)
+      const exit = yield* store(bus, { key: "interrupted", value: "hello" }).pipe(Effect.exit)
       const committed = yield* db
         .select({ order: EventTable.log_order })
         .from(EventTable)
@@ -455,13 +492,13 @@ describe("Bus", () => {
     }),
   )
 
-  it.effect("inserts durable event rows on publish", () =>
+  it.effect("inserts durable event rows on a dispatch", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const aggregateID = Event.ID.create()
 
-      const event = yield* bus.publish(SyncMessage, { key: aggregateID, value: "first" })
+      const event = yield* store(bus, { key: aggregateID, value: "first" })
       const rows = yield* db
         .select()
         .from(EventTable)
@@ -481,8 +518,8 @@ describe("Bus", () => {
       const { db } = yield* Database.Service
       const aggregateID = Event.ID.create()
 
-      yield* bus.publish(SyncMessage, { key: aggregateID, value: "first" })
-      yield* bus.publish(SyncMessage, { key: aggregateID, value: "second" })
+      yield* store(bus, { key: aggregateID, value: "first" })
+      yield* store(bus, { key: aggregateID, value: "second" })
       const rows = yield* db
         .select()
         .from(EventTable)
@@ -494,61 +531,65 @@ describe("Bus", () => {
     }),
   )
 
-  it.effect("publishes a durable batch atomically in provided order", () =>
+  it.effect("records a Command's facts of one aggregate atomically, in the order it records them", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const aggregateID = Event.ID.create()
+      yield* createProject(bus, aggregateID)
       const observed = new Array<string>()
-      yield* bus.project(SyncMessage, (event) =>
+      yield* bus.project(ProjectFact.WorktreeRecorded, (event) =>
         Effect.sync(() => {
-          observed.push(`project:${event.data.value}`)
+          observed.push(`project:${event.data.directory}`)
         }),
       )
       yield* bus.listen((event) =>
-        event.type === SyncMessage.type
+        event.type === ProjectFact.WorktreeRecorded.type
           ? Effect.gen(function* () {
-              const text = (event.data as { readonly value: string }).value
+              const directory = (event.data as { readonly directory: string }).directory
               const row = yield* db
                 .select({ seq: EventSequenceTable.seq })
                 .from(EventSequenceTable)
                 .where(eq(EventSequenceTable.aggregate_id, aggregateID))
                 .get()
                 .pipe(Effect.orDie)
-              observed.push(`notify:${text}:${row?.seq}`)
+              observed.push(`notify:${directory}:${row?.seq}`)
             })
           : Effect.void,
       )
 
-      const events = yield* bus.publishAll([
-        [SyncMessage, { key: aggregateID, value: "first" }],
-        [SyncMessage, { key: aggregateID, value: "second" }],
-      ])
+      const events = yield* refresh(bus, aggregateID, ["/repo/first", "/repo/second"])
 
-      expect(events.map((event) => event.durable.seq)).toEqual([Event.Seq.make(0), Event.Seq.make(1)])
-      expect(observed).toEqual(["project:first", "project:second", "notify:first:1", "notify:second:1"])
+      expect(events.map((event) => event.durable?.seq)).toEqual([Event.Seq.make(1), Event.Seq.make(2)])
+      expect(observed).toEqual([
+        "project:/repo/first",
+        "project:/repo/second",
+        "notify:/repo/first:2",
+        "notify:/repo/second:2",
+      ])
       expect(
         (yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).map(
           (row) => row.seq,
         ),
-      ).toEqual([0, 1])
+      ).toEqual([0, 1, 2])
     }),
   )
 
-  it.effect("rolls back every batch event when a projector fails", () =>
+  it.effect("rolls back every fact of a Command when a projector fails", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const aggregateID = Event.ID.create()
+      yield* createProject(bus, aggregateID)
       const notifications = new Array<string>()
       yield* db.run("CREATE TABLE IF NOT EXISTS event_batch_probe (value text NOT NULL)")
       yield* db.run("DELETE FROM event_batch_probe")
-      yield* bus.project(SyncMessage, (event) =>
+      yield* bus.project(ProjectFact.WorktreeRecorded, (event) =>
         db
-          .run(`INSERT INTO event_batch_probe (value) VALUES ('${event.data.value}')`)
+          .run(`INSERT INTO event_batch_probe (value) VALUES ('${event.data.directory}')`)
           .pipe(
             Effect.orDie,
-            Effect.andThen(event.data.value === "second" ? Effect.die("projector failed") : Effect.void),
+            Effect.andThen(event.data.directory === "/repo/second" ? Effect.die("projector failed") : Effect.void),
           ),
       )
       yield* bus.listen((event) =>
@@ -557,54 +598,49 @@ describe("Bus", () => {
         }),
       )
 
-      const exit = yield* bus
-        .publishAll([
-          [SyncMessage, { key: aggregateID, value: "first" }],
-          [SyncMessage, { key: aggregateID, value: "second" }],
-        ])
-        .pipe(Effect.exit)
+      const exit = yield* refresh(bus, aggregateID, ["/repo/first", "/repo/second"]).pipe(Effect.exit)
 
       expect(String(exit)).toContain("projector failed")
       expect(yield* db.all("SELECT value FROM event_batch_probe")).toEqual([])
-      expect(yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).toEqual([])
+      expect(
+        (yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).map(
+          (row) => row.seq,
+        ),
+      ).toEqual([0])
       expect(
         yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
-      ).toEqual([])
+      ).toEqual([{ aggregate_id: aggregateID, seq: 0 }])
       expect(notifications).toEqual([])
     }),
   )
 
-  it.effect("does not interleave a concurrent publish with batch notifications", () =>
+  it.effect("does not interleave a concurrent dispatch with a commit's notifications", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const aggregateID = Event.ID.create()
+      yield* createProject(bus, aggregateID)
       const firstObserved = yield* Deferred.make<void>()
       const continueNotifications = yield* Deferred.make<void>()
       const observed = new Array<string>()
       yield* bus.listen((event) => {
-        if (event.type !== SyncMessage.type) return Effect.void
-        const text = (event.data as { readonly value: string }).value
-        return Effect.sync(() => observed.push(text)).pipe(
-          Effect.andThen(text === "first" ? Deferred.succeed(firstObserved, undefined) : Effect.void),
-          Effect.andThen(text === "first" ? Deferred.await(continueNotifications) : Effect.void),
+        if (event.type !== ProjectFact.WorktreeRecorded.type) return Effect.void
+        const directory = (event.data as { readonly directory: string }).directory
+        return Effect.sync(() => observed.push(directory)).pipe(
+          Effect.andThen(directory === "/repo/first" ? Deferred.succeed(firstObserved, undefined) : Effect.void),
+          Effect.andThen(directory === "/repo/first" ? Deferred.await(continueNotifications) : Effect.void),
         )
       })
 
-      const batch = yield* bus
-        .publishAll([
-          [SyncMessage, { key: aggregateID, value: "first" }],
-          [SyncMessage, { key: aggregateID, value: "second" }],
-        ])
-        .pipe(Effect.forkScoped)
+      const batch = yield* refresh(bus, aggregateID, ["/repo/first", "/repo/second"]).pipe(Effect.forkScoped)
       yield* Deferred.await(firstObserved)
-      const single = yield* bus.publish(SyncMessage, { key: aggregateID, value: "third" }).pipe(Effect.forkScoped)
+      const single = yield* refresh(bus, aggregateID, ["/repo/third"]).pipe(Effect.forkScoped)
       yield* Effect.yieldNow
 
-      expect(observed).toEqual(["first"])
+      expect(observed).toEqual(["/repo/first"])
       yield* Deferred.succeed(continueNotifications, undefined)
       yield* Fiber.join(batch)
       yield* Fiber.join(single)
-      expect(observed).toEqual(["first", "second", "third"])
+      expect(observed).toEqual(["/repo/first", "/repo/second", "/repo/third"])
     }),
   )
 
@@ -612,8 +648,8 @@ describe("Bus", () => {
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const aggregateID = Session.ID.create()
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "zero"))
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "one"))
+      yield* store(bus, durableData(aggregateID, "zero"))
+      yield* store(bus, durableData(aggregateID, "one"))
       const fiber = yield* tail(bus, { aggregateID, after: 0 }).pipe(
         Stream.take(2),
         Stream.runCollect,
@@ -621,7 +657,7 @@ describe("Bus", () => {
       )
       yield* Effect.yieldNow
 
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "two"))
+      yield* store(bus, durableData(aggregateID, "two"))
 
       expect((yield* Fiber.join(fiber)).map((event) => [event.durable?.seq, event.data])).toEqual([
         [1, durableData(aggregateID, "one")],
@@ -634,10 +670,10 @@ describe("Bus", () => {
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const aggregateID = Session.ID.create()
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "zero"))
+      yield* store(bus, durableData(aggregateID, "zero"))
       const fiber = yield* tail(bus, { aggregateID }).pipe(Stream.take(2), Stream.runCollect, Effect.forkScoped)
 
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "one"))
+      yield* store(bus, durableData(aggregateID, "one"))
 
       expect((yield* Fiber.join(fiber)).map((event) => [event.durable?.seq, event.data])).toEqual([
         [0, durableData(aggregateID, "zero")],
@@ -670,7 +706,7 @@ describe("Bus", () => {
         yield* Deferred.await(readStarted)
 
         pause = false
-        yield* bus.publish(DurableMessage, durableData(aggregateID, "during handoff"))
+        yield* store(bus, durableData(aggregateID, "during handoff"))
         yield* Deferred.succeed(continueRead, undefined)
 
         expect((yield* Fiber.join(fiber)).map((event) => [event.durable?.seq, event.data])).toEqual([
@@ -689,7 +725,7 @@ describe("Bus", () => {
       yield* Effect.yieldNow
 
       for (let index = 0; index < count; index++) {
-        yield* bus.publish(DurableMessage, durableData(aggregateID, String(index)))
+        yield* store(bus, durableData(aggregateID, String(index)))
       }
 
       expect((yield* Fiber.join(fiber)).map((event) => [event.durable?.seq, event.data])).toEqual(
@@ -706,7 +742,7 @@ describe("Bus", () => {
       yield* Effect.yieldNow
 
       yield* bus.publish(Message, { text: "live only" })
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "durable"))
+      yield* store(bus, durableData(aggregateID, "durable"))
 
       expect((yield* Fiber.join(fiber)).map((event) => event.type)).toEqual([DurableMessage.type])
     }),
@@ -718,11 +754,17 @@ describe("Bus", () => {
       const { db } = yield* Database.Service
       const aggregateID = Credential.ID.create()
 
-      yield* bus.publish(SyncSent, {
-        credentialID: aggregateID,
-        integrationID: Integration.ID.make("openai"),
-        label: "sent",
-      })
+      yield* bus
+        .command({
+          type: "createCredential",
+          payload: {
+            credentialID: aggregateID,
+            integrationID: Integration.ID.make("openai"),
+            label: "sent",
+            secret: { iv: "aXY=", data: "c2VhbGVk" },
+          },
+        })
+        .pipe(Effect.orDie)
       const rows = yield* db
         .select()
         .from(EventTable)
@@ -741,10 +783,10 @@ describe("Bus", () => {
       const received = new Array<Event.Payload>()
       const committed = new Array<number>()
       const aggregateID = Session.ID.create()
-      const first = yield* bus.publish(DurableMessage, durableData(aggregateID, "first"), {
+      const first = yield* store(bus, durableData(aggregateID, "first"), {
         commit: (seq) => Effect.sync(() => committed.push(seq)),
       })
-      const second = yield* bus.publish(DurableMessage, durableData(aggregateID, "second"))
+      const second = yield* store(bus, durableData(aggregateID, "second"))
       yield* bus.project(DurableMessage, (event) =>
         Effect.sync(() => {
           received.push(event)
@@ -762,25 +804,14 @@ describe("Bus", () => {
       expect(notified).toEqual([])
     }),
   )
-  it.effect("refuses durable events outside OC++'s inventory of recorded facts", () =>
-    Effect.gen(function* () {
-      const bus = yield* Bus.Service
-      const aggregateID = Session.ID.create()
-
-      const exit = yield* bus.publish(Uninventoried, { id: aggregateID }).pipe(Effect.exit)
-
-      expect(String(exit)).toContain("not in OC++'s inventory of recorded facts")
-      expect(yield* Stream.runCollect(bus.log({ aggregateID }))).toEqual([{ type: "log-synced", aggregateID }])
-    }),
-  )
   it.effect("rejects an event ID already recorded", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const aggregateID = Session.ID.create()
       const id = Event.ID.create()
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "first"), { id })
+      yield* store(bus, durableData(aggregateID, "first"), { id })
 
-      const exit = yield* bus.publish(DurableMessage, durableData(aggregateID, "second"), { id }).pipe(Effect.exit)
+      const exit = yield* store(bus, durableData(aggregateID, "second"), { id }).pipe(Effect.exit)
 
       expect(Exit.isFailure(exit)).toBeTrue()
       expect(
@@ -793,7 +824,7 @@ describe("Bus", () => {
       const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const aggregateID = Session.ID.create()
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "seed"))
+      yield* store(bus, durableData(aggregateID, "seed"))
 
       yield* bus.remove(aggregateID)
 
@@ -808,8 +839,8 @@ describe("Bus", () => {
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const aggregateID = Session.ID.create()
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "zero"))
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "one"))
+      yield* store(bus, durableData(aggregateID, "zero"))
+      yield* store(bus, durableData(aggregateID, "one"))
 
       const items = yield* Stream.runCollect(bus.log({ aggregateID }))
 
@@ -828,7 +859,7 @@ describe("Bus", () => {
       const aggregateID = Session.ID.create()
 
       const empty = yield* Stream.runCollect(bus.log({ aggregateID }))
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "zero"))
+      yield* store(bus, durableData(aggregateID, "zero"))
       const drained = yield* Stream.runCollect(bus.log({ aggregateID, after: 0 }))
 
       expect(empty).toEqual([{ type: "log-synced", aggregateID }])
@@ -841,13 +872,13 @@ describe("Bus", () => {
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const aggregateID = Session.ID.create()
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "zero"))
+      yield* store(bus, durableData(aggregateID, "zero"))
       const fiber = yield* bus
         .log({ aggregateID, follow: true })
         .pipe(Stream.take(3), Stream.runCollect, Effect.forkScoped)
       yield* Effect.yieldNow
 
-      yield* bus.publish(DurableMessage, durableData(aggregateID, "one"))
+      yield* store(bus, durableData(aggregateID, "one"))
 
       const items = yield* Fiber.join(fiber)
       expect(items.map((item) => (Bus.isSynced(item) ? item : item.durable?.seq))).toEqual([
@@ -867,11 +898,11 @@ describe("Bus", () => {
       yield* Effect.gen(function* () {
         const bus = yield* Bus.Service
         const aggregateID = Session.ID.create()
-        yield* bus.publish(DurableMessage, durableData(aggregateID, "zero"))
-        yield* bus.publish(DurableMessage, durableData(aggregateID, "one"))
-        yield* bus.publish(DurableMessage, durableData(aggregateID, "two"))
-        yield* bus.publish(DurableMessage, durableData(aggregateID, "three"))
-        yield* bus.publish(DurableMessage, durableData(aggregateID, "four"))
+        yield* store(bus, durableData(aggregateID, "zero"))
+        yield* store(bus, durableData(aggregateID, "one"))
+        yield* store(bus, durableData(aggregateID, "two"))
+        yield* store(bus, durableData(aggregateID, "three"))
+        yield* store(bus, durableData(aggregateID, "four"))
 
         const items = yield* Stream.runCollect(bus.log({ aggregateID }))
 
@@ -911,13 +942,13 @@ describe("Bus", () => {
       yield* Effect.gen(function* () {
         const bus = yield* Bus.Service
         const aggregateID = Session.ID.create()
-        yield* bus.publish(DurableMessage, durableData(aggregateID, "zero"))
+        yield* store(bus, durableData(aggregateID, "zero"))
         const fiber = yield* bus
           .log({ aggregateID, follow: true })
           .pipe(Stream.take(3), Stream.runCollect, Effect.forkScoped)
 
         yield* Deferred.await(readStarted)
-        yield* bus.publish(DurableMessage, durableData(aggregateID, "one"))
+        yield* store(bus, durableData(aggregateID, "one"))
         yield* Deferred.succeed(releaseRead, undefined)
 
         const items = yield* Fiber.join(fiber)

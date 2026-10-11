@@ -127,29 +127,18 @@ export interface PublishOptions {
   readonly metadata?: Record<string, unknown>
   readonly location?: Location.Ref
   readonly global?: boolean
-  /** Local operational projection committed atomically with a new durable event. Not replayed or serialized. */
-  readonly commit?: (seq: number) => Effect.Effect<void>
 }
 
-export type PublishInput<D extends Event.DurableDefinition = Event.DurableDefinition> = readonly [
-  definition: D,
-  data: Event.Data<D>,
-  options?: PublishOptions,
-]
-
-export type PublishResult<I extends readonly PublishInput[]> = {
-  readonly [K in keyof I]: I[K] extends PublishInput<infer D> ? Event.Payload<D> : never
+/** How a fact a Command records is published: its envelope, and a write in its append transaction. */
+export interface FactOptions extends PublishOptions {
+  /** Local operational projection committed atomically with the fact. Not replayed or serialized. */
+  readonly commit?: (seq: number) => Effect.Effect<void>
 }
 
 /** Marker/event union emitted by `log`. */
 export type LogItem = Event.Payload | EventLog.Synced
 
 export const isSynced = (item: LogItem): item is EventLog.Synced => item.type === "log-synced"
-
-const mapNonEmpty = <A, B>(items: readonly [A, ...A[]], f: (item: A) => B): [B, ...B[]] => [
-  f(items[0]),
-  ...items.slice(1).map(f),
-]
 
 export type SubscribePayload<D extends readonly Event.Definition[]> = D[number] extends infer Item
   ? Item extends Event.Definition
@@ -176,14 +165,15 @@ const isDefinition = (input: Event.Definition | readonly Event.Definition[]): in
   !Array.isArray(input)
 
 export interface Interface {
+  /**
+   * Publishes an ephemeral event: notified, never recorded. A durable fact is recorded only by a runtime
+   * Command (`command`), so publishing one is a defect.
+   */
   readonly publish: <D extends Event.Definition>(
     definition: D,
     data: Event.Data<D>,
     options?: PublishOptions,
   ) => Effect.Effect<Event.Payload<D>>
-  readonly publishAll: <const I extends readonly [PublishInput, ...PublishInput[]]>(
-    events: I,
-  ) => Effect.Effect<PublishResult<I>>
   readonly subscribe: Subscribe
   /**
    * Durable, ordered per-aggregate log read. Forked aggregates may reserve an
@@ -208,10 +198,10 @@ export interface Interface {
   readonly rebuild: (aggregateID?: string) => Effect.Effect<void>
   readonly remove: (aggregateID: string) => Effect.Effect<void>
   /**
-   * Dispatches one of the runtime's Commands, whose facts are published as `publishAll` publishes events: each
-   * takes the options at its position (its ID, metadata, Location and commit hook), the ambient Location and the
-   * time of the dispatch, and is projected in the append transaction and notified once it commits. Answers the
-   * events the Command recorded, in order, or fails with its rejection.
+   * Dispatches one of the runtime's Commands, the only way a durable fact is recorded. Each fact it records
+   * takes the options at its position (its ID, metadata, Location and commit hook), the ambient Location and
+   * the time of the dispatch, and is projected in the append transaction and notified once it commits. Answers
+   * the events the Command recorded, in order, or fails with its rejection.
    */
   readonly command: (
     command: RuntimeCommand,
@@ -230,8 +220,8 @@ export interface Interface {
 export type RuntimeCommand = Parameters<Runtime["command"]>[0]
 
 export interface CommandOptions {
-  /** The publication options of the facts the Command records, by position. */
-  readonly facts?: ReadonlyArray<PublishOptions | undefined>
+  /** The options of the facts the Command records, by position. */
+  readonly facts?: ReadonlyArray<FactOptions | undefined>
   /**
    * Waits for the Reactions the commit starts before answering, as a dispatcher that must see what its input
    * started does (input that wakes its Session).
@@ -353,68 +343,16 @@ export function configured(options?: Options) {
           }),
         )
 
-        /** The aggregate of a durable event, which must be a fact OC++ records in Specter's log. */
-        const recordable = (definition: Event.DurableDefinition, data: unknown) => {
-          const aggregateID = (data as Record<string, unknown>)[definition.durable.aggregate]
-          if (typeof aggregateID !== "string")
-            return Effect.die(
-              new InvalidDurableEventError({
-                type: definition.type,
-                message: `Expected string aggregate field ${definition.durable.aggregate}`,
-              }),
-            )
-          if (!durableDefinitions.has(definition.type))
-            return Effect.die(
-              new InvalidDurableEventError({
-                type: definition.type,
-                message: `${definition.type} is not in OC++'s inventory of recorded facts`,
-              }),
-            )
-          return Effect.succeed(aggregateID)
-        }
-
-        function publishEvent<D extends Event.Definition>(
-          definition: D,
-          event: Event.Payload<D>,
-          commit?: PublishOptions["commit"],
-        ) {
+        // Only an ephemeral event is published; a durable fact is a Command's to record.
+        function publishEvent<D extends Event.Definition>(definition: D, event: Event.Payload<D>) {
           return Effect.gen(function* () {
-            if (!definition.durable && commit)
+            if (definition.durable)
               return yield* Effect.die(
                 new InvalidDurableEventError({
                   type: event.type,
-                  message: "Local commit hooks require a durable event",
+                  message: `${event.type} is a durable fact, which only a runtime Command records (Bus.command)`,
                 }),
               )
-            if (definition.durable) {
-              const aggregateID = yield* recordable(definition as Event.DurableDefinition, event.data)
-              return yield* durableLocks.withLock(aggregateID)(
-                Effect.gen(function* () {
-                  // Recording is uninterruptible, as a commit was before; notifying listeners is not.
-                  const recorded = yield* Effect.uninterruptible(
-                    Effect.gen(function* () {
-                      const committed = yield* recordFacts([
-                        {
-                          definition: definition as Event.DurableDefinition,
-                          aggregateID,
-                          commit,
-                          event: event as Event.Payload,
-                        },
-                      ])
-                      committed.route()
-                      yield* Effect.forEach(
-                        pubsub.durable.get(aggregateID) ?? [],
-                        (wake) => PubSub.publish(wake, undefined),
-                        { discard: true },
-                      )
-                      return committed.events[0] as Event.Payload<D>
-                    }),
-                  )
-                  yield* notify(recorded as Event.Payload, true)
-                  return recorded
-                }),
-              )
-            }
             const route = yield* prepareRoutes([event as Event.Payload])
             route()
             yield* notify(event as Event.Payload, false)
@@ -452,25 +390,21 @@ export function configured(options?: Options) {
                 (serviceLocation
                   ? { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID }
                   : undefined))
-            return yield* publishEvent(
-              definition,
-              {
-                id: options?.id ?? Event.ID.create(),
-                created: yield* Clock.currentTimeMillis,
-                ...(options?.metadata ? { metadata: options.metadata } : {}),
-                type: definition.type,
-                ...(location ? { location } : {}),
-                data,
-              } as Event.Payload<D>,
-              options?.commit,
-            )
+            return yield* publishEvent(definition, {
+              id: options?.id ?? Event.ID.create(),
+              created: yield* Clock.currentTimeMillis,
+              ...(options?.metadata ? { metadata: options.metadata } : {}),
+              type: definition.type,
+              ...(location ? { location } : {}),
+              data,
+            } as Event.Payload<D>)
           })
         }
 
         type BatchItem = {
           readonly definition: Event.DurableDefinition
           readonly aggregateID: string
-          readonly commit?: PublishOptions["commit"]
+          readonly commit?: FactOptions["commit"]
           readonly event: Event.Payload
         }
 
@@ -530,51 +464,31 @@ export function configured(options?: Options) {
 
         // Every fact is recorded by the Specter runtime into its Event Log, kept in this database. The
         // log's append runs projectBatch inside its own transaction, so a recorded fact and OC++'s read
-        // models change together or not at all.
-        type Pending =
-          // A publication through this Bus: its events, under the lock of their aggregate, which the publisher
-          // holds and notifies once the record returns.
-          | {
-              readonly items: readonly [BatchItem, ...BatchItem[]]
-              committed?: Effect.Success<ReturnType<typeof projectBatch>>
-            }
-          // A Command dispatched through this Bus: the options of the facts it records, by position, and when
-          // and where it was dispatched. Its facts are projected and notified as the Command records them.
-          | {
-              readonly dispatch: {
-                readonly created: number
-                readonly location?: Location.Ref
-                readonly facts: ReadonlyArray<PublishOptions | undefined>
-                // Notifies as interruptibly as the dispatcher is: a dispatch from a finalizer notifies whole.
-                readonly restore: <A>(effect: Effect.Effect<A>) => Effect.Effect<A>
-              }
-              recorded?: readonly Event.Payload[]
-            }
-        const pending = new Map<string, Pending>()
+        // models change together or not at all. A Command dispatched through this Bus carries the options of
+        // the facts it records, by position, and when and where it was dispatched; one a Reaction dispatches
+        // itself records its facts at the log's time, without a Location.
+        type Dispatch = {
+          readonly created: number
+          readonly location?: Location.Ref
+          readonly facts: ReadonlyArray<FactOptions | undefined>
+          // Notifies as interruptibly as the dispatcher is: a dispatch from a finalizer notifies whole.
+          readonly restore: <A>(effect: Effect.Effect<A>) => Effect.Effect<A>
+          recorded?: readonly Event.Payload[]
+        }
+        const pending = new Map<string, Dispatch>()
         const specterLog = SpecterEventLog.make(db, {
           drafts: (key, count) =>
             Array.from({ length: count }, (_, index) => {
-              const entry = key === undefined ? undefined : pending.get(key)
-              if (entry && "dispatch" in entry)
-                return { id: entry.dispatch.facts[index]?.id ?? Event.ID.create(), created: entry.dispatch.created }
-              const event = entry?.items[index]?.event
-              return event ? { id: event.id, created: event.created } : { id: Event.ID.create() }
+              const dispatch = key === undefined ? undefined : pending.get(key)
+              return dispatch
+                ? { id: dispatch.facts[index]?.id ?? Event.ID.create(), created: dispatch.created }
+                : { id: Event.ID.create() }
             }),
           appended: (key, events) =>
             Effect.gen(function* () {
-              const entry = key === undefined ? undefined : pending.get(key)
-              // A publication through this Bus: publish and publishAll notify once it returns.
-              if (entry && "items" in entry) {
-                entry.committed = yield* projectBatch(
-                  entry.items[0].aggregateID,
-                  entry.items,
-                  events.map((event) => event.order),
-                )
-                return Effect.void
-              }
-              // Facts a runtime Command recorded: project each as the event it is here, and notify after the
-              // transaction commits. A Command dispatched through this Bus publishes them with its options.
-              const dispatch = entry?.dispatch
+              // Project each fact as the event it is here, and notify after the transaction commits. A Command
+              // dispatched through this Bus publishes them with its options.
+              const dispatch = key === undefined ? undefined : pending.get(key)
               const created =
                 dispatch?.created ?? (Date.parse(events[0]?.recordedAt ?? "") || (yield* Clock.currentTimeMillis))
               type Placed = BatchItem & { readonly order: number }
@@ -611,14 +525,14 @@ export function configured(options?: Options) {
                   })),
                 ),
               )
-              if (entry)
-                entry.recorded = committed
+              if (dispatch)
+                dispatch.recorded = committed
                   .flatMap((batch) => batch.placed)
                   .toSorted((left, right) => left.order - right.order)
                   .map((placed) => placed.event)
               const aggregates = [...batches.keys()]
-              // The log runs this uninterruptibly once the append commits; as for a publish, only
-              // notifying listeners can be interrupted.
+              // The log runs this uninterruptibly once the append commits; only notifying listeners can be
+              // interrupted.
               return Effect.gen(function* () {
                 for (const [index, aggregateID] of aggregates.entries()) {
                   committed[index]!.route()
@@ -640,31 +554,27 @@ export function configured(options?: Options) {
               })
             }),
         })
-        // An append holds the locks of the aggregates it records for, as a publish does, so listeners see
-        // each aggregate's events in order. A publication through this Bus already holds its aggregate's.
+        // An append holds the locks of the aggregates it records for, so listeners see each aggregate's events
+        // in order, and an aggregate's rebuild sees none recorded meanwhile.
         const runtimeLog: SpecterEventLogContract = {
           ...specterLog,
-          append: (drafts, options) => {
-            const entry = options?.idempotencyKey === undefined ? undefined : pending.get(options.idempotencyKey)
-            return entry && "items" in entry
-              ? specterLog.append(drafts, options)
-              : [
-                  ...new Set(
-                    drafts.flatMap((draft) => {
-                      const definition = durableDefinitions.get(draft.type)
-                      const aggregateID = definition
-                        ? (draft.payload as Record<string, unknown> | undefined)?.[definition.durable.aggregate]
-                        : undefined
-                      return typeof aggregateID === "string" ? [aggregateID] : []
-                    }),
-                  ),
-                ]
-                  .sort()
-                  .reduce(
-                    (append, aggregateID) => durableLocks.withLock(aggregateID)(append),
-                    specterLog.append(drafts, options),
-                  )
-          },
+          append: (drafts, options) =>
+            [
+              ...new Set(
+                drafts.flatMap((draft) => {
+                  const definition = durableDefinitions.get(draft.type)
+                  const aggregateID = definition
+                    ? (draft.payload as Record<string, unknown> | undefined)?.[definition.durable.aggregate]
+                    : undefined
+                  return typeof aggregateID === "string" ? [aggregateID] : []
+                }),
+              ),
+            ]
+              .sort()
+              .reduce(
+                (append, aggregateID) => durableLocks.withLock(aggregateID)(append),
+                specterLog.append(drafts, options),
+              ),
         }
         // The runtime keeps its state in this database too, so a boot resumes from where the last one
         // stopped: its Slices from their snapshots, and its Reactions' jobs from the outbox, where a
@@ -684,49 +594,20 @@ export function configured(options?: Options) {
           catchUp: true,
           ...(options?.history ? { history: true } : {}),
         }).pipe(Effect.provideService(SpecterEventLogService, runtimeLog), Effect.orDie)
-        const recordFacts = (items: readonly [BatchItem, ...BatchItem[]]) => {
-          const key = `bus:${crypto.randomUUID()}`
-          const entry: Extract<Pending, { readonly items: unknown }> = { items }
-          return Effect.acquireUseRelease(
-            Effect.sync(() => pending.set(key, entry)),
-            () =>
-              runtime
-                .command(
-                  {
-                    type: "recordSessionFacts",
-                    payload: {
-                      facts: mapNonEmpty(items, (item) => ({
-                        type: item.definition.type,
-                        payload: Schema.encodeUnknownSync(item.definition.data)(item.event.data),
-                      })),
-                    },
-                  },
-                  { idempotencyKey: key },
-                )
-                .pipe(
-                  Effect.orDie,
-                  Effect.map(() => entry.committed!),
-                ),
-            () => Effect.sync(() => pending.delete(key)),
-          )
-        }
-
-        // Recording is uninterruptible, as for a publication; notifying listeners, and waiting for the
-        // Reactions, is as interruptible as the dispatcher.
+        // Recording is uninterruptible; notifying listeners, and waiting for the Reactions, is as interruptible
+        // as the dispatcher.
         const command: Interface["command"] = (envelope, options) =>
           Effect.uninterruptibleMask((restore) =>
             Effect.gen(function* () {
               const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
               const key = `bus:${crypto.randomUUID()}`
-              const entry: Extract<Pending, { readonly dispatch: unknown }> = {
-                dispatch: {
-                  created: yield* Clock.currentTimeMillis,
-                  ...(serviceLocation
-                    ? { location: { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID } }
-                    : {}),
-                  facts: options?.facts ?? [],
-                  restore,
-                },
+              const entry: Dispatch = {
+                created: yield* Clock.currentTimeMillis,
+                ...(serviceLocation
+                  ? { location: { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID } }
+                  : {}),
+                facts: options?.facts ?? [],
+                restore,
               }
               const execution = yield* Effect.acquireUseRelease(
                 Effect.sync(() => pending.set(key, entry)),
@@ -744,62 +625,6 @@ export function configured(options?: Options) {
               return entry.recorded ?? []
             }),
           )
-
-        function publishAll<const I extends readonly [PublishInput, ...PublishInput[]]>(events: I) {
-          return Effect.gen(function* () {
-            const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
-            const payloads = yield* Effect.forEach(events, ([definition, data, options]) =>
-              Effect.gen(function* () {
-                const aggregateID = yield* recordable(definition, data)
-                const location = options?.global
-                  ? undefined
-                  : (options?.location ??
-                    (serviceLocation
-                      ? { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID }
-                      : undefined))
-                return {
-                  definition,
-                  aggregateID,
-                  commit: options?.commit,
-                  event: {
-                    id: options?.id ?? Event.ID.create(),
-                    created: yield* Clock.currentTimeMillis,
-                    ...(options?.metadata ? { metadata: options.metadata } : {}),
-                    type: definition.type,
-                    ...(location ? { location } : {}),
-                    data,
-                  } as Event.Payload,
-                }
-              }),
-            )
-            const aggregateID = payloads[0].aggregateID
-            if (payloads.some((item) => item.aggregateID !== aggregateID)) {
-              return yield* Effect.die(
-                new InvalidDurableEventError({
-                  type: payloads[0].definition.type,
-                  message: "Published events must belong to the same aggregate",
-                }),
-              )
-            }
-            return yield* durableLocks.withLock(aggregateID)(
-              Effect.uninterruptible(
-                Effect.gen(function* () {
-                  const committed = yield* recordFacts(payloads)
-                  committed.route()
-                  yield* Effect.forEach(
-                    pubsub.durable.get(aggregateID) ?? [],
-                    (wake) => PubSub.publish(wake, undefined),
-                    {
-                      discard: true,
-                    },
-                  )
-                  yield* Effect.forEach(committed.events, (event) => notify(event, true), { discard: true })
-                  return committed.events as PublishResult<I>
-                }),
-              ),
-            )
-          })
-        }
 
         function remove(aggregateID: string) {
           return db
@@ -1044,7 +869,6 @@ export function configured(options?: Options) {
 
         return Service.of({
           publish,
-          publishAll,
           command,
           subscribe,
           log,

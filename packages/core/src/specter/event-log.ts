@@ -17,8 +17,9 @@ type DatabaseService = Database.Interface["db"]
 
 export interface Hooks {
   /**
-   * The identity of a commit's events: the IDs and creation times the Bus publisher chose, so the log names and dates
-   * an event as its publisher did. An event without a time is recorded at the time of the append.
+   * The identity of a commit's events: the IDs and creation times the Bus's dispatcher chose, so the log names and
+   * dates an event as its dispatcher did. An event without a time (one a Reaction's own Command records) is recorded
+   * at the time of the append.
    */
   readonly drafts: (
     idempotencyKey: string | undefined,

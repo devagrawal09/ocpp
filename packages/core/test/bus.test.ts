@@ -213,7 +213,7 @@ describe("Bus", () => {
         bus.command({ type: "renameSession", payload: { sessionID: Session.ID.create(), title: "Missing" } }),
       )
 
-      expect(error.cause).toEqual(new Error("Session not found"))
+      expect(error.rejection).toMatchObject({ code: "session-not-found", message: "Session not found" })
     }),
   )
 

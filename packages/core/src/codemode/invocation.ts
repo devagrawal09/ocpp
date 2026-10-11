@@ -87,8 +87,10 @@ const layer = Layer.effect(
             )
             .pipe(
               Effect.catch((error) => {
-                const reason = SpecterRejection.reason(error)
-                return reason === undefined ? Effect.die(error) : Effect.fail(new InvocationError({ message: reason }))
+                const rejection = SpecterRejection.of(error)
+                return rejection === undefined
+                  ? Effect.die(error)
+                  : Effect.fail(new InvocationError({ message: rejection.message }))
               }),
               Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : jobs.cancel(executionID))),
             )

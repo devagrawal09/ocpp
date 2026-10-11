@@ -1,5 +1,5 @@
 import { ProjectFact } from "@ocpp/schema/project-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -40,7 +40,7 @@ export const removeWorktree = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const project = state.projects[command.projectID]
-    if (!project) throw new Error("Project not found")
-    if (!project[command.directory]) throw new Error("Worktree not found")
+    if (!project) throw new CommandRejection("project-not-found", "Project not found")
+    if (!project[command.directory]) throw new CommandRejection("worktree-not-found", "Worktree not found")
     return [worktreeRemoved.create(command)]
   })

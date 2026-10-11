@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Stages a revert of an idle Session to a message: its history is cut there when the revert is committed, and a clear restores it. The host checks the message and restores the files first.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "stageRevert",
   "scenarios": [
@@ -178,7 +178,7 @@
         }
       ],
       "reject": {
-        "reason": "Session is busy"
+        "code": "session-busy"
       },
       "when": {
         "revert": {
@@ -194,7 +194,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "revert": {
@@ -231,7 +231,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "revert": {

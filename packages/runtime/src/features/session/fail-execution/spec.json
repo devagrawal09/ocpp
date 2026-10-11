@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Fails the active execution of a Session for a reason outside a step, such as a compaction that failed (OC++ runner: a failed compaction fails the drain).",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "failExecution",
   "scenarios": [
@@ -43,7 +43,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Execution not active"
+        "code": "execution-not-active"
       },
       "when": {
         "error": {
@@ -75,7 +75,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution not active"
+        "code": "execution-not-active"
       },
       "when": {
         "error": {

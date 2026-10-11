@@ -100,7 +100,7 @@ const layer = Layer.effect(
           row
             ? bus.command(command).pipe(
                 Effect.catchIf(
-                  (error) => SpecterRejection.reason(error) !== undefined,
+                  (error) => SpecterRejection.code(error) !== undefined,
                   () => Effect.void,
                 ),
                 Effect.orDie,
@@ -269,7 +269,7 @@ const layer = Layer.effect(
           (yield* bus.command({ type: "removeCodeModeEvent", payload: key }).pipe(
             Effect.as(true),
             Effect.catchIf(
-              (error) => SpecterRejection.reason(error) !== undefined,
+              (error) => SpecterRejection.code(error) !== undefined,
               () => Effect.succeed(false),
             ),
             Effect.orDie,

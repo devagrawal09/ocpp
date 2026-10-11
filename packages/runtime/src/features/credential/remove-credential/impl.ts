@@ -1,6 +1,6 @@
 import { Credential } from "@ocpp/schema/credential"
 import type { IntegrationID } from "@ocpp/schema/integration-id"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -59,7 +59,7 @@ export const removeCredential = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const integrationID = state.credentials[command.credentialID]
-    if (integrationID === undefined) throw new Error("Credential not found")
+    if (integrationID === undefined) throw new CommandRejection("credential-not-found", "Credential not found")
     // The newest of the integration's other credentials replaces the one it uses.
     const replacement =
       state.active[integrationID] === command.credentialID

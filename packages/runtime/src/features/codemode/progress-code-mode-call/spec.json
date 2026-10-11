@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Records the latest progress of a journaled call that can rejoin its work after a restart, such as the child Session a subagent call runs in.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "progressCodeModeCall",
   "scenarios": [
@@ -99,7 +99,7 @@
         }
       ],
       "reject": {
-        "reason": "Call not scheduled"
+        "code": "call-not-scheduled"
       },
       "when": {
         "executionID": "exe_1",
@@ -163,7 +163,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution not running"
+        "code": "execution-not-running"
       },
       "when": {
         "executionID": "exe_1",
@@ -178,7 +178,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Execution not found"
+        "code": "execution-not-found"
       },
       "when": {
         "executionID": "exe_1",

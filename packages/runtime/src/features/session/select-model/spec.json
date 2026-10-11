@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Selects the model a live Session runs on. The selection records the model it replaces: the one the Session was created with, or last selected. Selecting the model already selected records nothing; a model without a variant is its default variant.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "selectModel",
   "scenarios": [
@@ -175,7 +175,7 @@
         }
       ],
       "reject": {
-        "reason": "Model already selected"
+        "code": "model-already-selected"
       },
       "when": {
         "model": {
@@ -208,7 +208,7 @@
         }
       ],
       "reject": {
-        "reason": "Model already selected"
+        "code": "model-already-selected"
       },
       "when": {
         "model": {
@@ -224,7 +224,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "model": {
@@ -260,7 +260,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "model": {

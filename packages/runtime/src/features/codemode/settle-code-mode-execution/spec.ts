@@ -97,14 +97,14 @@ export const settleCodeModeExecutionSpec = createCommandSlice("settleCodeModeExe
       given: [admitted("exe_2", ["b"]), failed("exe_2", "Boom")],
       when: { executionID: "exe_2", outcome: "finished", values: { b: 2 }, limits },
       expect: [],
-      reject: { reason: "Execution already settled" },
+      reject: { code: "execution-already-settled" },
     },
     {
       description: "An execution never admitted, or discarded, is refused.",
       given: [admitted("exe_2", ["b"]), discarded],
       when: { executionID: "exe_2", outcome: "finished", values: { b: 2 }, limits },
       expect: [],
-      reject: { reason: "Execution not found" },
+      reject: { code: "execution-not-found" },
     },
   )
 

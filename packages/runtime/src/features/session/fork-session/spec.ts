@@ -83,21 +83,21 @@ export const forkSessionSpec = createCommandSlice("forkSession")
       given: [],
       when: { session: child, parentID: "ses_missing", boundary },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "Forking a deleted Session is refused.",
       given: [created("ses_1"), deleted("ses_1")],
       when: { session: child, parentID: "ses_1", boundary },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
     {
       description: "The child's ID must be new: one a live or deleted Session had is refused.",
       given: [created("ses_1"), created("ses_2"), deleted("ses_2")],
       when: { session: child, parentID: "ses_1", boundary },
       expect: [],
-      reject: { reason: "Session already exists" },
+      reject: { code: "session-already-exists" },
     },
   )
 

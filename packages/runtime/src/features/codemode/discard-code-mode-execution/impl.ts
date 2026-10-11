@@ -1,5 +1,5 @@
 import type { SessionID } from "@ocpp/schema/session-id"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -45,7 +45,8 @@ export const discardCodeModeExecution = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const execution = state.executions[command.executionID]
-    if (!execution) throw new Error("Execution not found")
-    if (execution.state !== "admitted") throw new Error("Execution already started")
+    if (!execution) throw new CommandRejection("execution-not-found", "Execution not found")
+    if (execution.state !== "admitted")
+      throw new CommandRejection("execution-already-started", "Execution already started")
     return [discarded.create({ sessionID: execution.sessionID, executionID: command.executionID })]
   })

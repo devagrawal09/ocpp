@@ -35,7 +35,7 @@ export const layer = Layer.effect(
         )
         .pipe(
           Effect.asVoid,
-          Effect.catch((error) => (SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.void)),
+          Effect.catch((error) => (SpecterRejection.code(error) === undefined ? Effect.die(error) : Effect.void)),
         )
 
     return SessionExecution.Service.of({
@@ -71,7 +71,7 @@ export const layer = Layer.effect(
           Effect.as(true),
           // Interrupting an idle, unknown or deleted Session is a no-op.
           Effect.catch((error) =>
-            SpecterRejection.reason(error) === undefined ? Effect.die(error) : Effect.succeed(false),
+            SpecterRejection.code(error) === undefined ? Effect.die(error) : Effect.succeed(false),
           ),
         )
         // A user's interrupt also stops the Session's background work, as in OC++'s runner.

@@ -27,7 +27,7 @@ export const resolveProjectSpec = createCommandSlice("resolveProject")
       given: [created],
       when: { projectID: "prj_1", canonical: "/repo", vcs: "git" },
       expect: [],
-      reject: { reason: "Project unchanged" },
+      reject: { code: "project-unchanged" },
     },
     {
       description: "Another version control is recorded.",
@@ -52,14 +52,14 @@ export const resolveProjectSpec = createCommandSlice("resolveProject")
       given: [created],
       when: { projectID: "prj_1", canonical: "/clone", vcs: "git" },
       expect: [],
-      reject: { reason: "Project unchanged" },
+      reject: { code: "project-unchanged" },
     },
     {
       description: "A directory the host found gone that the project no longer has moves nothing.",
       given: [created, relocated("/moved")],
       when: { projectID: "prj_1", canonical: "/clone", vcs: "git", missing: "/repo" },
       expect: [],
-      reject: { reason: "Project unchanged" },
+      reject: { code: "project-unchanged" },
     },
     {
       description: "A change of version control and a move are one commit.",

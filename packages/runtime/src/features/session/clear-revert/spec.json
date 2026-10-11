@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Clears the revert staged in an idle Session, leaving its history whole. The host restores the files the stage changed first.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "clearRevert",
   "scenarios": [
@@ -121,7 +121,7 @@
         }
       ],
       "reject": {
-        "reason": "No revert staged"
+        "code": "no-revert-staged"
       },
       "when": {
         "sessionID": "ses_1"
@@ -164,7 +164,7 @@
         }
       ],
       "reject": {
-        "reason": "No revert staged"
+        "code": "no-revert-staged"
       },
       "when": {
         "sessionID": "ses_1"
@@ -208,7 +208,7 @@
         }
       ],
       "reject": {
-        "reason": "No revert staged"
+        "code": "no-revert-staged"
       },
       "when": {
         "sessionID": "ses_1"
@@ -251,7 +251,7 @@
         }
       ],
       "reject": {
-        "reason": "Session is busy"
+        "code": "session-busy"
       },
       "when": {
         "sessionID": "ses_1"
@@ -262,7 +262,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "sessionID": "ses_1"
@@ -305,7 +305,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "sessionID": "ses_1"

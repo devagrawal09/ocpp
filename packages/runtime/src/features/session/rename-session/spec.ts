@@ -40,21 +40,21 @@ export const renameSessionSpec = createCommandSlice("renameSession")
       given: [created(), renamed("Manual title")],
       when: { sessionID: "ses_1", title: "Fix the build", replacing: {} },
       expect: [],
-      reject: { reason: "Title changed" },
+      reject: { code: "title-changed" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: { sessionID: "ses_1", title: "Fix the build" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created(), deleted],
       when: { sessionID: "ses_1", title: "Fix the build" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

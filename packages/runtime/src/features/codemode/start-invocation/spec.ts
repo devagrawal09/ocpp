@@ -43,28 +43,28 @@ export const startInvocationSpec = createCommandSlice("startInvocation")
       given: [created, admitted(), started],
       when: invocation,
       expect: [],
-      reject: { reason: "Invocation already started" },
+      reject: { code: "invocation-already-started" },
     },
     {
       description: "An execution another Session admitted is refused.",
       given: [created, admitted("ses_2")],
       when: invocation,
       expect: [],
-      reject: { reason: "Execution not found" },
+      reject: { code: "execution-not-found" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: invocation,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, admitted(), deleted],
       when: invocation,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

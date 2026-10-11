@@ -26,7 +26,7 @@ export const addWorktreeSpec = createCommandSlice("addWorktree")
       given: [created, recorded("git")],
       when: { projectID: "prj_1", directory: "/repo/feature", strategy: "git" },
       expect: [],
-      reject: { reason: "Worktree unchanged" },
+      reject: { code: "worktree-unchanged" },
     },
     {
       description: "A directory the project holds under another strategy is recorded again.",
@@ -45,7 +45,7 @@ export const addWorktreeSpec = createCommandSlice("addWorktree")
       given: [],
       when: { projectID: "prj_1", directory: "/repo/feature", strategy: "git" },
       expect: [],
-      reject: { reason: "Project not found" },
+      reject: { code: "project-not-found" },
     },
   )
 

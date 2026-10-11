@@ -20,14 +20,14 @@ const encodeRevert = Schema.encodeSync(SessionSchema.Revert)
 
 /**
  * The public error for a revert Command's rejection: the Session is gone, or runs (a revert changes only
- * an idle Session). "No revert staged" answers as if done.
+ * an idle Session). `no-revert-staged` answers as if done.
  */
 const refused =
   (sessionID: SessionSchema.ID) =>
   (error: unknown): Effect.Effect<void, BusyError | NotFoundError> => {
-    const reason = SpecterRejection.reason(error)
-    if (reason === "No revert staged") return Effect.void
-    if (reason === "Session is busy") return Effect.fail(new BusyError({ sessionID }))
+    const code = SpecterRejection.code(error)
+    if (code === "no-revert-staged") return Effect.void
+    if (code === "session-busy") return Effect.fail(new BusyError({ sessionID }))
     if (SpecterRejection.isMissingSession(error)) return Effect.fail(new NotFoundError({ sessionID }))
     return Effect.die(error)
   }

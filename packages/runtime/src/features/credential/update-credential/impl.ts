@@ -2,7 +2,7 @@ import { Credential } from "@ocpp/schema/credential"
 import { CredentialFact } from "@ocpp/schema/credential-fact"
 import type { IntegrationID } from "@ocpp/schema/integration-id"
 import { optional } from "@ocpp/schema/schema"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -53,7 +53,7 @@ export const updateCredential = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const credential = state.credentials[command.credentialID]
-    if (!credential) throw new Error("Credential not found")
+    if (!credential) throw new CommandRejection("credential-not-found", "Credential not found")
     const { credentialID } = command
     const integrationID = credential.integrationID
     const facts = [
@@ -64,6 +64,6 @@ export const updateCredential = implementCommand(specification)
         ? []
         : [credentialRotated.create({ credentialID, integrationID, secret: command.secret })]),
     ]
-    if (facts.length === 0) throw new Error("Credential unchanged")
+    if (facts.length === 0) throw new CommandRejection("credential-unchanged", "Credential unchanged")
     return facts
   })

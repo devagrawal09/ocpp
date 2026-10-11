@@ -36,21 +36,21 @@ export const progressCodeModeCallSpec = createCommandSlice("progressCodeModeCall
       given: [admitted, started],
       when: progress,
       expect: [],
-      reject: { reason: "Call not scheduled" },
+      reject: { code: "call-not-scheduled" },
     },
     {
       description: "A settled execution's call is refused.",
       given: [admitted, started, scheduled, settled],
       when: progress,
       expect: [],
-      reject: { reason: "Execution not running" },
+      reject: { code: "execution-not-running" },
     },
     {
       description: "An unknown execution is refused.",
       given: [],
       when: progress,
       expect: [],
-      reject: { reason: "Execution not found" },
+      reject: { code: "execution-not-found" },
     },
   )
 

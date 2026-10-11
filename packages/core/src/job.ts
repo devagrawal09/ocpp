@@ -241,7 +241,7 @@ export const make = Effect.gen(function* () {
     function* (notificationID) {
       yield* bus.command({ type: "completeBackgroundJob", payload: { notificationID } }).pipe(
         Effect.catchIf(
-          (error) => SpecterRejection.reason(error) === "Background job not found",
+          (error) => SpecterRejection.code(error) === "background-job-not-found",
           () => Effect.void,
         ),
         Effect.orDie,
@@ -566,9 +566,9 @@ export const make = Effect.gen(function* () {
     function* (notificationID) {
       yield* bus.command({ type: "markBackgroundTerminal", payload: { notificationID } }).pipe(
         Effect.catch((error) => {
-          const reason = SpecterRejection.reason(error)
-          if (reason === "Background job already terminal") return Effect.void
-          if (reason === "Background job not found")
+          const code = SpecterRejection.code(error)
+          if (code === "background-job-already-terminal") return Effect.void
+          if (code === "background-job-not-found")
             return Effect.die(new Error(`Background notification ${notificationID} is unavailable`))
           return Effect.die(error)
         }),

@@ -84,7 +84,7 @@ export const failToolInputSpec = createCommandSlice("failToolInput")
       ],
       when: failure(),
       expect: [],
-      reject: { reason: "Tool call already recorded" },
+      reject: { code: "tool-call-already-recorded" },
     },
     {
       description: "A call fails as input once.",
@@ -102,7 +102,7 @@ export const failToolInputSpec = createCommandSlice("failToolInput")
       ],
       when: failure(),
       expect: [],
-      reject: { reason: "Tool call already recorded" },
+      reject: { code: "tool-call-already-recorded" },
     },
     {
       description: "A settled step records no more calls.",
@@ -125,21 +125,21 @@ export const failToolInputSpec = createCommandSlice("failToolInput")
       ],
       when: failure(),
       expect: [],
-      reject: { reason: "Step not in flight" },
+      reject: { code: "step-not-in-flight" },
     },
     {
       description: "Only the in-flight step records its calls.",
       given: [started(), stepStarted("msg_2")],
       when: failure(),
       expect: [],
-      reject: { reason: "Step not in flight" },
+      reject: { code: "step-not-in-flight" },
     },
     {
       description: "An interrupted execution records nothing more.",
       given: [started(), stepStarted("msg_1"), interrupted()],
       when: failure(),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
   )
 

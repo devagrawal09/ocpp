@@ -364,11 +364,11 @@ const layer = Layer.effect(
           })
           .pipe(
             Effect.catch((error): Effect.Effect<void, NotFoundError | DeletedError> => {
-              const reason = SpecterRejection.reason(error)
+              const code = SpecterRejection.code(error)
               // Created meanwhile under the same ID: the existing Session wins.
-              if (reason === "Session already exists") return Effect.void
-              if (reason === "Session deleted") return Effect.fail(new DeletedError({ sessionID }))
-              if (input.parentID && (reason === "Parent session not found" || reason === "Parent session deleted"))
+              if (code === "session-already-exists") return Effect.void
+              if (code === "session-deleted") return Effect.fail(new DeletedError({ sessionID }))
+              if (input.parentID && (code === "parent-session-not-found" || code === "parent-session-deleted"))
                 return Effect.fail(new NotFoundError({ sessionID: input.parentID }))
               return Effect.die(error)
             }),

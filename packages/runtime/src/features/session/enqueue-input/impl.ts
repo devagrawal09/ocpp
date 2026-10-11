@@ -1,7 +1,7 @@
 import { SessionID } from "@ocpp/schema/session-id"
 import { SessionInbox } from "@ocpp/schema/session-inbox"
 import { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -144,14 +144,17 @@ export const enqueueInput = implementCommand(specification)
   // scenario puts it in Given to prove admission works normally afterwards.
   .apply(revertCommitted, async () => {})
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
 
     const existing = state.items[command.inboxID]
     if (existing) {
-      if (existing.sessionID !== command.sessionID) throw new Error("Inbox item belongs to a different session")
-      if (existing.type !== command.type) throw new Error("Inbox item type does not match existing item")
-      throw new Error("Inbox item already admitted")
+      if (existing.sessionID !== command.sessionID)
+        throw new CommandRejection("inbox-item-other-session", "Inbox item belongs to a different session")
+      if (existing.type !== command.type)
+        throw new CommandRejection("inbox-item-type-mismatch", "Inbox item type does not match existing item")
+      throw new CommandRejection("inbox-item-already-admitted", "Inbox item already admitted")
     }
 
     // A pending manual compaction absorbs another request for one: the caller
@@ -162,7 +165,7 @@ export const enqueueInput = implementCommand(specification)
         (item) => item.sessionID === command.sessionID && item.type === "compaction" && item.pending,
       )
     )
-      throw new Error("Compaction already pending")
+      throw new CommandRejection("compaction-already-pending", "Compaction already pending")
 
     // The replaced items must be exactly the ones pending under the key:
     // one delivered or cancelled meanwhile would be dropped, and one coalesced
@@ -176,7 +179,7 @@ export const enqueueInput = implementCommand(specification)
         ),
       )
       if (pending.size !== replaced.length || replaced.some((inboxID) => !pending.has(inboxID)))
-        throw new Error("Coalesced input changed")
+        throw new CommandRejection("coalesced-input-changed", "Coalesced input changed")
     }
 
     // The wake Reaction reads `resume: false` from the held fact; OC++'s

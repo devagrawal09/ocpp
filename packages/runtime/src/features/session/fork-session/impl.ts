@@ -1,7 +1,7 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
 import { optional } from "@ocpp/schema/schema"
 import { SessionID } from "@ocpp/schema/session-id"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -52,10 +52,10 @@ export const forkSession = implementCommand(specification)
     state.sessions[event.payload.sessionID] = "deleted"
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.parentID]) throw new Error("Session not found")
-    if (state.sessions[command.parentID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[command.parentID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.parentID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
     const sessionID = command.session.sessionID
-    if (state.sessions[sessionID]) throw new Error("Session already exists")
+    if (state.sessions[sessionID]) throw new CommandRejection("session-already-exists", "Session already exists")
     // The child's notebook comes before the fork, whose projection checkpoints it in the child's instructions.
     return [
       sessionCreated.create(command.session),

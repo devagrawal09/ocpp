@@ -237,7 +237,7 @@ const setup = Effect.gen(function* () {
     })
     .pipe(
       Effect.catchIf(
-        (error) => SpecterRejection.reason(error) === "Session already exists",
+        (error) => SpecterRejection.code(error) === "session-already-exists",
         () => Effect.void,
       ),
     )

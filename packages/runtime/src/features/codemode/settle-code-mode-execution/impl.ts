@@ -1,7 +1,7 @@
 import type { SessionID } from "@ocpp/schema/session-id"
 import { SessionFact } from "@ocpp/schema/session-fact"
 import { NonNegativeInt } from "@ocpp/schema/schema"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -91,8 +91,8 @@ export const settleCodeModeExecution = implementCommand(specification)
   .handle(async (command, state) => {
     const { limits, ...settlement } = command
     const execution = state.executions[settlement.executionID]
-    if (!execution) throw new Error("Execution not found")
-    if (execution.settled) throw new Error("Execution already settled")
+    if (!execution) throw new CommandRejection("execution-not-found", "Execution not found")
+    if (execution.settled) throw new CommandRejection("execution-already-settled", "Execution already settled")
     const { sessionID } = execution
     if (settlement.outcome !== "finished") return [settled.create({ sessionID, ...settlement })]
     const values = settlement.values ?? {}

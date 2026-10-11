@@ -5,7 +5,7 @@ import { SessionID } from "@ocpp/schema/session-id"
 import { SessionMessage } from "@ocpp/schema/session-message"
 import { TokenUsage } from "@ocpp/schema/token-usage"
 import { NonNegativeInt } from "@ocpp/schema/schema"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -106,11 +106,12 @@ export const finishAgentStep = implementCommand(specification)
   .handle(async (command, state) => {
     const { blocks, calls, ...outcome } = command
     const { sessionID, assistantMessageID } = outcome
-    if (!state.sessions[sessionID]) throw new Error("Session not found")
-    if (state.sessions[sessionID] === "deleted") throw new Error("Session deleted")
-    if (!state.active[sessionID]) throw new Error("Execution not active")
+    if (!state.sessions[sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    if (!state.active[sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     const step = state.inFlight[sessionID]
-    if (step?.assistantMessageID !== assistantMessageID) throw new Error("Step not in flight")
+    if (step?.assistantMessageID !== assistantMessageID)
+      throw new CommandRejection("step-not-in-flight", "Step not in flight")
     return [
       ...blocks.map((block) => blockRecorded.create({ sessionID, assistantMessageID, ...block })),
       ...calls

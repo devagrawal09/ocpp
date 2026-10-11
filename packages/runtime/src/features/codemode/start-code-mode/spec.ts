@@ -37,28 +37,28 @@ export const startCodeModeSpec = createCommandSlice("startCodeMode")
       given: [created, admitted(), started],
       when: start,
       expect: [],
-      reject: { reason: "Code Mode already started" },
+      reject: { code: "code-mode-already-started" },
     },
     {
       description: "An execution another Session admitted is refused.",
       given: [created, admitted("ses_2")],
       when: start,
       expect: [],
-      reject: { reason: "Execution not found" },
+      reject: { code: "execution-not-found" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: start,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, admitted(), deleted],
       when: start,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

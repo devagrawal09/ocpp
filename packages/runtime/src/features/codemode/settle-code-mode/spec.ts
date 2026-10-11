@@ -34,21 +34,21 @@ export const settleCodeModeSpec = createCommandSlice("settleCodeMode")
       given: [created, event("session-codemode-settled", completed)],
       when: cancelled,
       expect: [],
-      reject: { reason: "Code Mode already settled" },
+      reject: { code: "code-mode-already-settled" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: completed,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, deleted],
       when: completed,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

@@ -29,21 +29,21 @@ export const resumeCodeModeExecutionSpec = createCommandSlice("resumeCodeModeExe
       given: [admitted],
       when: { executionID: "exe_1" },
       expect: [],
-      reject: { reason: "Execution not running" },
+      reject: { code: "execution-not-running" },
     },
     {
       description: "A settled execution is refused.",
       given: [admitted, started, settled],
       when: { executionID: "exe_1" },
       expect: [],
-      reject: { reason: "Execution not running" },
+      reject: { code: "execution-not-running" },
     },
     {
       description: "An execution never admitted, or discarded, is refused.",
       given: [admitted, discarded],
       when: { executionID: "exe_1" },
       expect: [],
-      reject: { reason: "Execution not found" },
+      reject: { code: "execution-not-found" },
     },
   )
 

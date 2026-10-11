@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Removes an entry from a live Session's instructions. Only an entry the Session holds can be removed; a fork holds its parent's entries.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "removeInstructionEntry",
   "scenarios": [
@@ -67,7 +67,7 @@
         }
       ],
       "reject": {
-        "reason": "Instruction entry not found"
+        "code": "instruction-entry-not-found"
       },
       "when": {
         "key": "ticket",
@@ -112,7 +112,7 @@
         }
       ],
       "reject": {
-        "reason": "Instruction entry not found"
+        "code": "instruction-entry-not-found"
       },
       "when": {
         "key": "ticket",
@@ -248,7 +248,7 @@
         }
       ],
       "reject": {
-        "reason": "Instruction entry not found"
+        "code": "instruction-entry-not-found"
       },
       "when": {
         "key": "owner",
@@ -260,7 +260,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "key": "ticket",
@@ -304,7 +304,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "key": "ticket",

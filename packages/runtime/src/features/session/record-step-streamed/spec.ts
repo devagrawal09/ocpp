@@ -51,7 +51,7 @@ export const recordStepStreamedSpec = createCommandSlice("recordStepStreamed")
       given: [started(), stepStarted("msg_1"), streamed("msg_1")],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Step already streamed" },
+      reject: { code: "step-already-streamed" },
     },
     {
       description: "A retried attempt of the same step streams again.",
@@ -64,14 +64,14 @@ export const recordStepStreamedSpec = createCommandSlice("recordStepStreamed")
       given: [started(), stepStarted("msg_1"), stepEnded("msg_1")],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Step not in flight" },
+      reject: { code: "step-not-in-flight" },
     },
     {
       description: "A stream outside an active execution is rejected.",
       given: [started(), stepStarted("msg_1"), succeeded()],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
   )
 

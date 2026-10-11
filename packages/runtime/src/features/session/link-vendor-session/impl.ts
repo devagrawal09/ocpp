@@ -1,5 +1,5 @@
 import { ExternalSession } from "@ocpp/schema/external-session"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -46,10 +46,12 @@ export const linkVendorSession = implementCommand(specification)
     if (bound) bound.vendorSessionID = event.payload.vendorSessionID
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
     const bound = state.bound[command.sessionID]
-    if (!bound) throw new Error("External agent not bound")
-    if (bound.vendorSessionID === command.vendorSessionID) throw new Error("Vendor session already linked")
+    if (!bound) throw new CommandRejection("external-agent-not-bound", "External agent not bound")
+    if (bound.vendorSessionID === command.vendorSessionID)
+      throw new CommandRejection("vendor-session-already-linked", "Vendor session already linked")
     return [externalLinked.create(command)]
   })

@@ -1,7 +1,7 @@
 import { optional } from "@ocpp/schema/schema"
 import { SessionID } from "@ocpp/schema/session-id"
 import type { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -117,11 +117,11 @@ export const commitRevert = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { sessionID } = command
-    if (!state.sessions[sessionID]) throw new Error("Session not found")
-    if (state.sessions[sessionID] === "deleted") throw new Error("Session deleted")
-    if (state.active[sessionID]) throw new Error("Session is busy")
+    if (!state.sessions[sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    if (state.active[sessionID]) throw new CommandRejection("session-busy", "Session is busy")
     const to = state.staged[sessionID]
-    if (to === undefined) throw new Error("No revert staged")
+    if (to === undefined) throw new CommandRejection("no-revert-staged", "No revert staged")
     // An execution admitted since the revert was staged started after the message it cuts at.
     const cut = [...new Set([...(command.executions ?? []), ...(state.sinceStaged[sessionID] ?? [])])]
     return [

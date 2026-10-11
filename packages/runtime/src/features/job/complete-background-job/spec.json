@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Completes a background job's marker once its notification was delivered, or the job was discarded: nothing is left to recover, and the marker goes. Restart recovery completes the markers it settles.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "completeBackgroundJob",
   "scenarios": [
@@ -41,7 +41,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Background job not found"
+        "code": "background-job-not-found"
       },
       "when": {
         "notificationID": "msg_n1"
@@ -74,7 +74,7 @@
         }
       ],
       "reject": {
-        "reason": "Background job not found"
+        "code": "background-job-not-found"
       },
       "when": {
         "notificationID": "msg_n1"

@@ -33,14 +33,14 @@ export const startCompactionSpec = createCommandSlice("startCompaction")
       given: [],
       when: auto,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, deleted],
       when: auto,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

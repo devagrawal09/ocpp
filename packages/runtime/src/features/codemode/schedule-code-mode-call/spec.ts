@@ -36,21 +36,21 @@ export const scheduleCodeModeCallSpec = createCommandSlice("scheduleCodeModeCall
       given: [admitted, started, scheduled],
       when: call,
       expect: [],
-      reject: { reason: "Call already scheduled" },
+      reject: { code: "call-already-scheduled" },
     },
     {
       description: "An execution that has not started, or has settled, journals nothing.",
       given: [admitted, started, settled],
       when: call,
       expect: [],
-      reject: { reason: "Execution not running" },
+      reject: { code: "execution-not-running" },
     },
     {
       description: "An unknown execution is refused.",
       given: [],
       when: call,
       expect: [],
-      reject: { reason: "Execution not found" },
+      reject: { code: "execution-not-found" },
     },
   )
 

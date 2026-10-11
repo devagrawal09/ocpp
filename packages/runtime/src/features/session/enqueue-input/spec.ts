@@ -109,7 +109,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         coalesce: { key: "notify:build", replaces: ["msg_1"] },
       },
       expect: [],
-      reject: { reason: "Coalesced input changed" },
+      reject: { code: "coalesced-input-changed" },
     },
     {
       description:
@@ -131,7 +131,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         coalesce: { key: "notify:build", replaces: ["msg_1"] },
       },
       expect: [],
-      reject: { reason: "Coalesced input changed" },
+      reject: { code: "coalesced-input-changed" },
     },
     {
       description: "Only the Session's own pending notices under the key are replaced: another Session's are not.",
@@ -144,7 +144,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         coalesce: { key: "notify:build", replaces: ["msg_1"] },
       },
       expect: [],
-      reject: { reason: "Coalesced input changed" },
+      reject: { code: "coalesced-input-changed" },
     },
     {
       description: "A manual compaction is admitted as a control item; nothing behind it crosses it.",
@@ -181,7 +181,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         payload: {},
       },
       expect: [],
-      reject: { reason: "Compaction already pending" },
+      reject: { code: "compaction-already-pending" },
     },
     {
       description:
@@ -326,7 +326,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         payload: { text: "retry" },
       },
       expect: [],
-      reject: { reason: "Inbox item already admitted" },
+      reject: { code: "inbox-item-already-admitted" },
     },
     {
       description: "Reusing a synthetic inbox item ID for the same Session and type is rejected as already admitted.",
@@ -345,7 +345,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         payload: { text: "Shell command finished" },
       },
       expect: [],
-      reject: { reason: "Inbox item already admitted" },
+      reject: { code: "inbox-item-already-admitted" },
     },
     {
       description: "Cross-type reuse fails: an existing inbox item ID cannot be reused with a different type.",
@@ -357,7 +357,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         payload: { text: "not a user prompt" },
       },
       expect: [],
-      reject: { reason: "Inbox item type does not match existing item" },
+      reject: { code: "inbox-item-type-mismatch" },
     },
     {
       description: "Cross-Session reuse fails: an inbox item ID owned by another Session cannot be admitted.",
@@ -369,7 +369,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         payload: { text: "steal" },
       },
       expect: [],
-      reject: { reason: "Inbox item belongs to a different session" },
+      reject: { code: "inbox-item-other-session" },
     },
     {
       description: "Admission after a committed revert works normally: the revert changes history, not the inbox.",
@@ -392,7 +392,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         payload: { text: "hello" },
       },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session admits nothing.",
@@ -404,7 +404,7 @@ export const enqueueInputSpec = createCommandSlice("enqueueInput")
         payload: { text: "hello" },
       },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

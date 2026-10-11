@@ -6,7 +6,7 @@ import { SessionID } from "@ocpp/schema/session-id"
 import { SessionMessage } from "@ocpp/schema/session-message"
 import { Snapshot } from "@ocpp/schema/snapshot"
 import { TokenUsage } from "@ocpp/schema/token-usage"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -121,10 +121,11 @@ export const settleStep = implementCommand(specification)
     if (event.payload.retry.fresh) state.carried[event.payload.sessionID] = step.retries
   })
   .handle(async (command, state) => {
-    if (!state.active[command.sessionID]) throw new Error("Execution not active")
+    if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     const step = state.steps[command.assistantMessageID]
-    if (!step || step.sessionID !== command.sessionID) throw new Error("Step not started")
-    if (step.status === "settled") throw new Error("Step already settled")
+    if (!step || step.sessionID !== command.sessionID)
+      throw new CommandRejection("step-not-started", "Step not started")
+    if (step.status === "settled") throw new CommandRejection("step-already-settled", "Step already settled")
     const { sessionID, assistantMessageID } = command
     const recorded = {
       ...defined("rawFinish", command.rawFinish),

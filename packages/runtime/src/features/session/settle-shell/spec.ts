@@ -47,28 +47,28 @@ export const settleShellSpec = createCommandSlice("settleShell")
       given: [created],
       when: outcome,
       expect: [],
-      reject: { reason: "Shell not running" },
+      reject: { code: "shell-not-running" },
     },
     {
       description: "A shell that has settled is refused.",
       given: [created, started, settled],
       when: outcome,
       expect: [],
-      reject: { reason: "Shell not running" },
+      reject: { code: "shell-not-running" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: outcome,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, started, deleted],
       when: outcome,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

@@ -35,14 +35,14 @@ export const defineCodeModeEventSpec = createCommandSlice("defineCodeModeEvent")
       given: [],
       when,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created(), deleted],
       when,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

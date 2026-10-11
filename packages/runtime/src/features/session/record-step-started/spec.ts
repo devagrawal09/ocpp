@@ -90,28 +90,28 @@ export const recordStepStartedSpec = createCommandSlice("recordStepStarted")
       given: [],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description: "A succeeded execution is not active: no step starts.",
       given: [started(), succeeded()],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description: "An interrupted execution is not active: no step starts.",
       given: [started(), interrupted()],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description: "One step is in flight per Session: a second start is rejected.",
       given: [started(), stepStarted("msg_1")],
       when: step("msg_2"),
       expect: [],
-      reject: { reason: "Step already in flight" },
+      reject: { code: "step-already-in-flight" },
     },
     {
       description:
@@ -119,7 +119,7 @@ export const recordStepStartedSpec = createCommandSlice("recordStepStarted")
       given: [started(), stepStarted("msg_1"), stepEnded("msg_1")],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Step already started" },
+      reject: { code: "step-already-started" },
     },
     {
       description: "A step abandoned by an interrupted execution does not block the next execution.",
@@ -138,7 +138,7 @@ export const recordStepStartedSpec = createCommandSlice("recordStepStarted")
       given: [started(), failed()],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description:
@@ -152,7 +152,7 @@ export const recordStepStartedSpec = createCommandSlice("recordStepStarted")
       given: [started(), stepStarted("msg_1"), stepFailed("msg_1")],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Step already started" },
+      reject: { code: "step-already-started" },
     },
     {
       description: "A failed attempt is over: the next step can start without waiting for the failed one to end.",
@@ -166,7 +166,7 @@ export const recordStepStartedSpec = createCommandSlice("recordStepStarted")
       given: [started(), stepStarted("msg_1"), stepRetried("msg_1"), stepStarted("msg_1")],
       when: step("msg_1"),
       expect: [],
-      reject: { reason: "Step already started" },
+      reject: { code: "step-already-started" },
     },
   )
 

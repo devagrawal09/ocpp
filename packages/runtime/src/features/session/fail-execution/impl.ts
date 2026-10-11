@@ -1,6 +1,6 @@
 import { SessionError } from "@ocpp/schema/session-error"
 import { SessionID } from "@ocpp/schema/session-id"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -35,7 +35,7 @@ export const failExecution = implementCommand(specification)
     delete state.active[event.payload.sessionID]
   })
   .handle(async (command, state) => {
-    if (!state.active[command.sessionID]) throw new Error("Execution not active")
+    if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     return [
       executionSettled.create({
         sessionID: command.sessionID,

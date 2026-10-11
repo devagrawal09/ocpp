@@ -1,5 +1,5 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -40,8 +40,9 @@ export const settleCodeMode = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const session = state.sessions[command.sessionID]
-    if (!session) throw new Error("Session not found")
-    if (session === "deleted") throw new Error("Session deleted")
-    if (state.settled[command.executionID]) throw new Error("Code Mode already settled")
+    if (!session) throw new CommandRejection("session-not-found", "Session not found")
+    if (session === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    if (state.settled[command.executionID])
+      throw new CommandRejection("code-mode-already-settled", "Code Mode already settled")
     return [codeModeSettled.create(command)]
   })

@@ -12,6 +12,7 @@ import { Slug } from "./util/slug.js"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { SpecterRejection } from "./specter/rejection.js"
+import type { RejectionCode } from "@ocpp/runtime"
 import { Location } from "./location.js"
 import { ProjectFact } from "@ocpp/schema/project-fact"
 import { Worktree } from "@ocpp/schema/worktree"
@@ -187,13 +188,10 @@ const layer = Layer.effect(
           .pipe(Effect.orDie)
       }),
     }
-    // Records what an operation changed through its Command; a rejection for one of `unchanged` records nothing.
-    const record = (command: Bus.RuntimeCommand, unchanged: ReadonlyArray<string>) =>
+    // Records what an operation changed through its Command; a rejection with one of `unchanged` records nothing.
+    const record = (command: Bus.RuntimeCommand, unchanged: ReadonlyArray<RejectionCode>) =>
       bus.command(command).pipe(
-        Effect.catchIf(
-          (error) => unchanged.includes(SpecterRejection.reason(error) ?? ""),
-          () => Effect.succeed([]),
-        ),
+        Effect.catchIf(SpecterRejection.is(...unchanged), () => Effect.succeed([])),
         Effect.orDie,
       )
 
@@ -246,7 +244,7 @@ const layer = Layer.effect(
           type: "addWorktree",
           payload: { projectID: input.projectID, directory: result.directory, strategy: input.strategy },
         },
-        ["Worktree unchanged"],
+        ["worktree-unchanged"],
       )
       yield* changed(input.projectID, recorded.length > 0)
       const project = yield* db
@@ -287,7 +285,7 @@ const layer = Layer.effect(
       })
       const removed = yield* record(
         { type: "removeWorktree", payload: { projectID: input.projectID, directory: worktreeDirectory } },
-        ["Worktree not found"],
+        ["worktree-not-found"],
       )
       yield* changed(input.projectID, removed.length > 0)
     })
@@ -334,7 +332,7 @@ const layer = Layer.effect(
           },
         },
         // A project the log never created holds no directories.
-        ["Worktrees unchanged", "Project not found"],
+        ["worktrees-unchanged", "project-not-found"],
       )
       // Both facts name the directory they change.
       const directories = (type: string) =>

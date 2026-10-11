@@ -42,7 +42,7 @@ export const cancelInboxItemSpec = createCommandSlice("cancelInboxItem")
       ],
       when: { sessionID: "ses_1", inboxID: "msg_1" },
       expect: [],
-      reject: { reason: "Inbox item already delivered" },
+      reject: { code: "inbox-item-already-delivered" },
     },
     {
       description: "Cancelling an already cancelled item is rejected",
@@ -56,21 +56,21 @@ export const cancelInboxItemSpec = createCommandSlice("cancelInboxItem")
       ],
       when: { sessionID: "ses_1", inboxID: "msg_1" },
       expect: [],
-      reject: { reason: "Inbox item already cancelled" },
+      reject: { code: "inbox-item-already-cancelled" },
     },
     {
       description: "Cancelling an unknown inbox item fails.",
       given: [created],
       when: { sessionID: "ses_1", inboxID: "msg_missing" },
       expect: [],
-      reject: { reason: "Inbox item not found" },
+      reject: { code: "inbox-item-not-found" },
     },
     {
       description: "Cancelling in an unknown Session fails.",
       given: [],
       when: { sessionID: "ses_missing", inboxID: "msg_1" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "Cancelling in a deleted Session fails: deleting it cancelled its pending input.",
@@ -82,7 +82,7 @@ export const cancelInboxItemSpec = createCommandSlice("cancelInboxItem")
       ],
       when: { sessionID: "ses_1", inboxID: "msg_1" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

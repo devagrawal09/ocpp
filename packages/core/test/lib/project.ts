@@ -22,7 +22,7 @@ export const globalProjectNode = makeGlobalNode({
               .command({ type: "resolveProject", payload: { projectID: project.id, canonical: directory } })
               .pipe(
                 Effect.catchIf(
-                  (error) => SpecterRejection.reason(error) === "Project unchanged",
+                  (error) => SpecterRejection.code(error) === "project-unchanged",
                   () => Effect.void,
                 ),
                 Effect.orDie,

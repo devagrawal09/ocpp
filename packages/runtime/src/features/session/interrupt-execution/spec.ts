@@ -164,7 +164,7 @@ export const interruptExecutionSpec = createCommandSlice("interruptExecution")
       given: [created()],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Session is idle" },
+      reject: { code: "session-idle" },
     },
     {
       description:
@@ -179,7 +179,7 @@ export const interruptExecutionSpec = createCommandSlice("interruptExecution")
       ],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Session is idle" },
+      reject: { code: "session-idle" },
     },
     {
       description:
@@ -195,21 +195,21 @@ export const interruptExecutionSpec = createCommandSlice("interruptExecution")
       ],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Session is idle" },
+      reject: { code: "session-idle" },
     },
     {
       description: 'A second interrupt after an interruption is a no-op in OC++; modelled as "Session is idle".',
       given: [created(), started(), interrupted()],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Session is idle" },
+      reject: { code: "session-idle" },
     },
     {
       description: "The public interrupt operation verifies that the durable Session exists: an unknown Session fails.",
       given: [],
       when: { sessionID: "ses_missing" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session has nothing to interrupt: deleting it settled its execution.",
@@ -221,14 +221,14 @@ export const interruptExecutionSpec = createCommandSlice("interruptExecution")
       ],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
     {
       description: "Different Sessions run concurrently: interrupting one does not require the other to be active.",
       given: [created(), created("ses_2"), started("ses_1")],
       when: { sessionID: "ses_2" },
       expect: [],
-      reject: { reason: "Session is idle" },
+      reject: { code: "session-idle" },
     },
   )
 

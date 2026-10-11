@@ -1,7 +1,7 @@
 import { SessionID } from "@ocpp/schema/session-id"
 import { SessionInbox } from "@ocpp/schema/session-inbox"
 import { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -75,12 +75,15 @@ export const changeDelivery = implementCommand(specification)
     if (item) item.delivery = event.payload.delivery
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
     const item = state.items[command.inboxID]
-    if (item?.sessionID !== command.sessionID) throw new Error("Inbox item not found")
-    if (!item.pending) throw new Error("Inbox item not pending")
-    if (item.delivery === command.delivery) throw new Error(`Inbox item already ${command.delivery}`)
+    if (item?.sessionID !== command.sessionID)
+      throw new CommandRejection("inbox-item-not-found", "Inbox item not found")
+    if (!item.pending) throw new CommandRejection("inbox-item-not-pending", "Inbox item not pending")
+    if (item.delivery === command.delivery)
+      throw new CommandRejection("inbox-delivery-unchanged", `Inbox item already ${command.delivery}`)
     return [
       deliveryChanged.create({
         sessionID: command.sessionID,

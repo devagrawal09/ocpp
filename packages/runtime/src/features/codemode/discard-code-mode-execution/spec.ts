@@ -29,21 +29,21 @@ export const discardCodeModeExecutionSpec = createCommandSlice("discardCodeModeE
       given: [admitted, started],
       when: { executionID: "exe_1" },
       expect: [],
-      reject: { reason: "Execution already started" },
+      reject: { code: "execution-already-started" },
     },
     {
       description: "A settled execution is refused.",
       given: [admitted, settled],
       when: { executionID: "exe_1" },
       expect: [],
-      reject: { reason: "Execution already started" },
+      reject: { code: "execution-already-started" },
     },
     {
       description: "A discarded execution is gone.",
       given: [admitted, discarded],
       when: { executionID: "exe_1" },
       expect: [],
-      reject: { reason: "Execution not found" },
+      reject: { code: "execution-not-found" },
     },
   )
 

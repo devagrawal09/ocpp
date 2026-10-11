@@ -34,7 +34,7 @@ export const linkVendorSessionSpec = createCommandSlice("linkVendorSession")
       given: [created, bound, linked()],
       when: { sessionID: "ses_1", vendorSessionID: "vendor_1" },
       expect: [],
-      reject: { reason: "Vendor session already linked" },
+      reject: { code: "vendor-session-already-linked" },
     },
     {
       description: "Binding again unlinks the vendor session, so linking it again records it.",
@@ -47,21 +47,21 @@ export const linkVendorSessionSpec = createCommandSlice("linkVendorSession")
       given: [created],
       when: { sessionID: "ses_1", vendorSessionID: "vendor_1" },
       expect: [],
-      reject: { reason: "External agent not bound" },
+      reject: { code: "external-agent-not-bound" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: { sessionID: "ses_1", vendorSessionID: "vendor_1" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, bound, deleted],
       when: { sessionID: "ses_1", vendorSessionID: "vendor_1" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

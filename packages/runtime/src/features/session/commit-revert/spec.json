@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Commits the revert staged in an idle Session: its history is cut at the staged message. Input still pending belongs to the history it cuts away (a revert holds new notices while it is staged), so the commit cancels it in the same commit; the next input starts the new history. The cut takes the Code Mode notebook with it: the executions whose message it removes (the host resolves where each message sits, and every execution admitted since the stage started after it) lose their saved values, and those still running settle failed.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "commitRevert",
   "scenarios": [
@@ -471,7 +471,7 @@
         }
       ],
       "reject": {
-        "reason": "No revert staged"
+        "code": "no-revert-staged"
       },
       "when": {
         "sessionID": "ses_1"
@@ -514,7 +514,7 @@
         }
       ],
       "reject": {
-        "reason": "No revert staged"
+        "code": "no-revert-staged"
       },
       "when": {
         "sessionID": "ses_1"
@@ -558,7 +558,7 @@
         }
       ],
       "reject": {
-        "reason": "No revert staged"
+        "code": "no-revert-staged"
       },
       "when": {
         "sessionID": "ses_1"
@@ -601,7 +601,7 @@
         }
       ],
       "reject": {
-        "reason": "Session is busy"
+        "code": "session-busy"
       },
       "when": {
         "sessionID": "ses_1"
@@ -612,7 +612,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "sessionID": "ses_1"
@@ -655,7 +655,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "sessionID": "ses_1"

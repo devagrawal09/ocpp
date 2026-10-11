@@ -24,7 +24,7 @@ export const createCredentialSpec = createCommandSlice("createCredential")
       given: [created],
       when: { credentialID: "cred_1", integrationID: "anthropic", label: "default", secret },
       expect: [],
-      reject: { reason: "Credential already exists" },
+      reject: { code: "credential-already-exists" },
     },
     {
       description: "A removed credential's ID is gone with its key, and stores a credential again.",

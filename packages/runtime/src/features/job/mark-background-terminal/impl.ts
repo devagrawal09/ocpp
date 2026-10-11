@@ -1,5 +1,5 @@
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -57,7 +57,8 @@ export const markBackgroundTerminal = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const marker = state.markers[command.notificationID]
-    if (!marker) throw new Error("Background job not found")
-    if (marker.terminal) throw new Error("Background job already terminal")
+    if (!marker) throw new CommandRejection("background-job-not-found", "Background job not found")
+    if (marker.terminal)
+      throw new CommandRejection("background-job-already-terminal", "Background job already terminal")
     return [backgroundTerminal.create(command)]
   })

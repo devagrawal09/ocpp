@@ -49,14 +49,14 @@ export const admitCodeModeExecutionSpec = createCommandSlice("admitCodeModeExecu
       given: [created(), admitted("exe_1", ["a"]), saved("exe_1", { a: 1 })],
       when: { ...admission("exe_2", ["a"]), limits },
       expect: [],
-      reject: { reason: "Name already defined" },
+      reject: { code: "name-already-defined", details: { names: ["a"] } },
     },
     {
       description: "A name another execution reserved is refused until it settles.",
       given: [created(), admitted("exe_1", ["a"])],
       when: { ...admission("exe_2", ["a"]), limits },
       expect: [],
-      reject: { reason: "Name reserved" },
+      reject: { code: "name-reserved", details: { names: ["a"], owner: "exe_1" } },
     },
     {
       description: "An execution that settled without saving releases its names.",
@@ -75,14 +75,14 @@ export const admitCodeModeExecutionSpec = createCommandSlice("admitCodeModeExecu
       given: [created(), admitted("exe_1", ["a", "b"]), saved("exe_1", { a: 1, b: 2 })],
       when: { ...admission("exe_2", ["c", "d"]), limits },
       expect: [],
-      reject: { reason: "Notebook full" },
+      reject: { code: "notebook-full", details: { values: 4, bytes: 2 } },
     },
     {
       description: "A notebook past its bytes admits nothing more.",
       given: [created(), admitted("exe_1", ["a"]), saved("exe_1", { a: "x".repeat(120) })],
       when: { ...admission("exe_2", ["b"]), limits },
       expect: [],
-      reject: { reason: "Notebook full" },
+      reject: { code: "notebook-full", details: { values: 2, bytes: 122 } },
     },
     {
       description: "Values a revert removed free their names and their room.",
@@ -115,21 +115,21 @@ export const admitCodeModeExecutionSpec = createCommandSlice("admitCodeModeExecu
       given: [created(), admitted("exe_1", ["a"]), failed("exe_1")],
       when: { ...admission("exe_1", ["b"]), limits },
       expect: [],
-      reject: { reason: "Execution already admitted" },
+      reject: { code: "execution-already-admitted" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: { ...admission("exe_1", ["a"]), limits },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created(), deleted],
       when: { ...admission("exe_1", ["a"]), limits },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

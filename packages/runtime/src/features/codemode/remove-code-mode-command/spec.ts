@@ -46,21 +46,21 @@ export const removeCodeModeCommandSpec = createCommandSlice("removeCodeModeComma
       given: [created(), defined(), removed],
       when,
       expect: [],
-      reject: { reason: "Command not found" },
+      reject: { code: "command-not-found" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created(), defined(), deleted],
       when,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

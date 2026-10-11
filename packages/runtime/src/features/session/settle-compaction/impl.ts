@@ -1,7 +1,7 @@
 import { Money } from "@ocpp/schema/money"
 import { SessionEvent } from "@ocpp/schema/session-event"
 import { TokenUsage } from "@ocpp/schema/token-usage"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -53,9 +53,11 @@ export const settleCompaction = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { usage, ...settled } = command
-    if (!state.sessions[settled.sessionID]) throw new Error("Session not found")
-    if (state.sessions[settled.sessionID] === "deleted") throw new Error("Session deleted")
-    if (settled.outcome === "completed" && !state.running[settled.sessionID]) throw new Error("No compaction running")
+    if (!state.sessions[settled.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[settled.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
+    if (settled.outcome === "completed" && !state.running[settled.sessionID])
+      throw new CommandRejection("no-compaction-running", "No compaction running")
     return [
       ...(usage === undefined
         ? []

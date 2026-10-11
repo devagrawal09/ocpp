@@ -19,14 +19,14 @@ export const createWorkspaceSpec = createCommandSlice("createWorkspace")
       given: [created()],
       when: { workspaceID: "wrk_1", provider: "docker", time: 2 },
       expect: [],
-      reject: { reason: "Workspace already exists" },
+      reject: { code: "workspace-already-exists" },
     },
     {
       description: "Another provider's workspace under the ID is refused.",
       given: [created()],
       when: { workspaceID: "wrk_1", provider: "e2b", time: 2 },
       expect: [],
-      reject: { reason: "Workspace belongs to another provider" },
+      reject: { code: "workspace-other-provider" },
     },
     {
       description: "A destroyed workspace's ID is created again.",

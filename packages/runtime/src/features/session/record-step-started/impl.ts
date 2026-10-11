@@ -3,7 +3,7 @@ import { Model } from "@ocpp/schema/model"
 import { Snapshot } from "@ocpp/schema/snapshot"
 import { SessionID } from "@ocpp/schema/session-id"
 import { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -74,11 +74,12 @@ export const recordStepStarted = implementCommand(specification)
     if (step && event.payload.outcome === "failed" && event.payload.retry) step.retryScheduled = true
   })
   .handle(async (command, state) => {
-    if (!state.active[command.sessionID]) throw new Error("Execution not active")
+    if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     // A scheduled retry is the only way to start the same step again.
     const existing = state.steps[command.assistantMessageID]
-    if (existing && !existing.retryScheduled) throw new Error("Step already started")
-    if (state.inFlight[command.sessionID]) throw new Error("Step already in flight")
+    if (existing && !existing.retryScheduled) throw new CommandRejection("step-already-started", "Step already started")
+    if (state.inFlight[command.sessionID])
+      throw new CommandRejection("step-already-in-flight", "Step already in flight")
     return [
       stepStarted.create({
         sessionID: command.sessionID,

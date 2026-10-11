@@ -90,15 +90,15 @@ export const layer = Layer.effect(
         .pipe(
           Effect.map((events) => ({ events })),
           Effect.catch((error) => {
-            const reason = SpecterRejection.reason(error)
-            return reason === undefined ? Effect.die(error) : Effect.succeed({ reason })
+            const code = SpecterRejection.code(error)
+            return code === undefined ? Effect.die(error) : Effect.succeed({ code })
           }),
           // The inbox projection refused the item: its ID names a message already.
           Effect.catchDefect((defect) =>
             defect instanceof SessionInbox.LifecycleConflict ? Effect.fail(defect) : Effect.die(defect),
           ),
         )
-      if ("reason" in recorded) return recorded
+      if ("code" in recorded) return recorded
       // The item as the runtime admitted it: the runtime may deliver it before a projection read.
       const enqueued = recorded.events.find(
         (event): event is SessionEvent.InboxEnqueued => event.type === SessionEvent.InboxEnqueued.type,
@@ -121,7 +121,7 @@ export const layer = Layer.effect(
       if ("admitted" in recorded) return recorded.admitted
       // A retried admission: the first one wins.
       const first =
-        recorded.reason === "Inbox item already admitted"
+        recorded.code === "inbox-item-already-admitted"
           ? yield* admitted({ ...request, type: request.item.type, delivery: request.item.delivery })
           : undefined
       if (first) return first
@@ -142,7 +142,7 @@ export const layer = Layer.effect(
           })
           .pipe(
             Effect.catch((error) =>
-              SpecterRejection.reason(error) === undefined
+              SpecterRejection.code(error) === undefined
                 ? Effect.die(error)
                 : Effect.fail(new SessionInbox.LifecycleConflict({ id: input.id })),
             ),
@@ -157,7 +157,7 @@ export const layer = Layer.effect(
         .command({ type: "cancelInboxItem", payload: { sessionID: input.sessionID, inboxID: input.id } })
         .pipe(
           Effect.catch((error) =>
-            SpecterRejection.reason(error) === undefined
+            SpecterRejection.code(error) === undefined
               ? Effect.die(error)
               : Effect.fail(new SessionInbox.LifecycleConflict({ id: input.id })),
           ),
@@ -186,7 +186,7 @@ export const layer = Layer.effect(
           item: { type: "compaction", payload: {}, delivery: input.delivery },
         })
         if ("admitted" in recorded) return recorded.admitted
-        if (recorded.reason !== "Compaction already pending")
+        if (recorded.code !== "compaction-already-pending")
           return yield* new SessionInbox.LifecycleConflict({ id: input.id })
         // The runtime refused it for the pending one, which absorbs this request.
         const pending = (yield* SessionInbox.list(db, input.sessionID)).find(

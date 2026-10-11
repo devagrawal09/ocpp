@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Marks that a background job's outcome reached its Session: only its notification is left to deliver. A Code Mode run's settlement does this by itself. A marker is terminal once, and stays terminal when its job resumes.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "markBackgroundTerminal",
   "scenarios": [
@@ -63,7 +63,7 @@
         }
       ],
       "reject": {
-        "reason": "Background job already terminal"
+        "code": "background-job-already-terminal"
       },
       "when": {
         "notificationID": "msg_n1"
@@ -101,7 +101,7 @@
         }
       ],
       "reject": {
-        "reason": "Background job already terminal"
+        "code": "background-job-already-terminal"
       },
       "when": {
         "notificationID": "msg_n1"
@@ -148,7 +148,7 @@
         }
       ],
       "reject": {
-        "reason": "Background job already terminal"
+        "code": "background-job-already-terminal"
       },
       "when": {
         "notificationID": "msg_n1"
@@ -159,7 +159,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Background job not found"
+        "code": "background-job-not-found"
       },
       "when": {
         "notificationID": "msg_n1"
@@ -192,7 +192,7 @@
         }
       ],
       "reject": {
-        "reason": "Background job not found"
+        "code": "background-job-not-found"
       },
       "when": {
         "notificationID": "msg_n1"

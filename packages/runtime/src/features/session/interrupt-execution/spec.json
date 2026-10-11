@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Interrupts the active execution of a Session without touching pending input (session.md: Execution Is Process-Local). OC++ treats idle/settled interrupt as a public no-op; the app models it as a rejection and the M4 facade translates it back.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "interruptExecution",
   "scenarios": [
@@ -663,7 +663,7 @@
         }
       ],
       "reject": {
-        "reason": "Session is idle"
+        "code": "session-idle"
       },
       "when": {
         "sessionID": "ses_1"
@@ -703,7 +703,7 @@
         }
       ],
       "reject": {
-        "reason": "Session is idle"
+        "code": "session-idle"
       },
       "when": {
         "sessionID": "ses_1"
@@ -747,7 +747,7 @@
         }
       ],
       "reject": {
-        "reason": "Session is idle"
+        "code": "session-idle"
       },
       "when": {
         "sessionID": "ses_1"
@@ -788,7 +788,7 @@
         }
       ],
       "reject": {
-        "reason": "Session is idle"
+        "code": "session-idle"
       },
       "when": {
         "sessionID": "ses_1"
@@ -799,7 +799,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "sessionID": "ses_missing"
@@ -847,7 +847,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "sessionID": "ses_1"
@@ -892,7 +892,7 @@
         }
       ],
       "reject": {
-        "reason": "Session is idle"
+        "code": "session-idle"
       },
       "when": {
         "sessionID": "ses_2"

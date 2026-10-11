@@ -28,21 +28,21 @@ export const settleBackgroundJobSpec = createCommandSlice("settleBackgroundJob")
       given: [started, settled],
       when: outcome,
       expect: [],
-      reject: { reason: "Background job not running" },
+      reject: { code: "background-job-not-running" },
     },
     {
       description: "A notification without a marker is refused.",
       given: [],
       when: outcome,
       expect: [],
-      reject: { reason: "Background job not found" },
+      reject: { code: "background-job-not-found" },
     },
     {
       description: "A completed marker is gone.",
       given: [started, completed],
       when: outcome,
       expect: [],
-      reject: { reason: "Background job not found" },
+      reject: { code: "background-job-not-found" },
     },
   )
 

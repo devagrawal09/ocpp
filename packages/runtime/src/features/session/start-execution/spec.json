@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Starts a process-local busy period for a Session (session.md: Execution Is Process-Local).",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "startExecution",
   "scenarios": [
@@ -99,7 +99,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution already active"
+        "code": "execution-already-active"
       },
       "when": {
         "sessionID": "ses_1"
@@ -300,7 +300,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "sessionID": "ses_missing"
@@ -332,7 +332,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "sessionID": "ses_1"

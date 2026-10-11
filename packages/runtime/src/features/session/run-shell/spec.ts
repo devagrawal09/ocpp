@@ -44,28 +44,28 @@ export const runShellSpec = createCommandSlice("runShell")
       given: [created, started],
       when: { sessionID: "ses_1", shell },
       expect: [],
-      reject: { reason: "Shell already started" },
+      reject: { code: "shell-already-started" },
     },
     {
       description: "A shell that has settled is refused too: its ID names one run.",
       given: [created, started, settled],
       when: { sessionID: "ses_1", shell },
       expect: [],
-      reject: { reason: "Shell already started" },
+      reject: { code: "shell-already-started" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: { sessionID: "ses_1", shell },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, deleted],
       when: { sessionID: "ses_1", shell },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

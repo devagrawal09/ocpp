@@ -1,6 +1,6 @@
 import { SessionID } from "@ocpp/schema/session-id"
 import { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -56,13 +56,17 @@ export const cancelInboxItem = implementCommand(specification)
     if (item) item.status = "cancelled"
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
 
     const item = state.items[command.inboxID]
-    if (!item || item.sessionID !== command.sessionID) throw new Error("Inbox item not found")
-    if (item.status === "delivered") throw new Error("Inbox item already delivered")
-    if (item.status === "cancelled") throw new Error("Inbox item already cancelled")
+    if (!item || item.sessionID !== command.sessionID)
+      throw new CommandRejection("inbox-item-not-found", "Inbox item not found")
+    if (item.status === "delivered")
+      throw new CommandRejection("inbox-item-already-delivered", "Inbox item already delivered")
+    if (item.status === "cancelled")
+      throw new CommandRejection("inbox-item-already-cancelled", "Inbox item already cancelled")
     return [
       inboxCancelled.create({
         sessionID: command.sessionID,

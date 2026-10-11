@@ -50,14 +50,14 @@ export const settleCompactionSpec = createCommandSlice("settleCompaction")
       given: [created],
       when: completed,
       expect: [],
-      reject: { reason: "No compaction running" },
+      reject: { code: "no-compaction-running" },
     },
     {
       description: "A completed compaction cannot complete again.",
       given: [created, started, event("session-compaction-settled", completed)],
       when: completed,
       expect: [],
-      reject: { reason: "No compaction running" },
+      reject: { code: "no-compaction-running" },
     },
     {
       description: "A compaction that could not start fails without a start.",
@@ -76,14 +76,14 @@ export const settleCompactionSpec = createCommandSlice("settleCompaction")
       given: [],
       when: failed,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, started, deleted],
       when: completed,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

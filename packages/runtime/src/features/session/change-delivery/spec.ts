@@ -50,7 +50,7 @@ export const changeDeliverySpec = createCommandSlice("changeDelivery")
       given: [created(), enqueued("msg_1", "steer")],
       when: { sessionID: "ses_1", inboxID: "msg_1", delivery: "steer" },
       expect: [],
-      reject: { reason: "Inbox item already steer" },
+      reject: { code: "inbox-delivery-unchanged", message: "Inbox item already steer" },
     },
     {
       description: "Delivered input is no longer pending.",
@@ -64,7 +64,7 @@ export const changeDeliverySpec = createCommandSlice("changeDelivery")
       ],
       when: { sessionID: "ses_1", inboxID: "msg_1", delivery: "steer" },
       expect: [],
-      reject: { reason: "Inbox item not pending" },
+      reject: { code: "inbox-item-not-pending" },
     },
     {
       description: "Cancelled input is no longer pending.",
@@ -78,21 +78,21 @@ export const changeDeliverySpec = createCommandSlice("changeDelivery")
       ],
       when: { sessionID: "ses_1", inboxID: "msg_1", delivery: "steer" },
       expect: [],
-      reject: { reason: "Inbox item not pending" },
+      reject: { code: "inbox-item-not-pending" },
     },
     {
       description: "An unknown item, or one admitted to another Session, is not found.",
       given: [created(), created("ses_2"), enqueued("msg_1", "queue", "ses_2")],
       when: { sessionID: "ses_1", inboxID: "msg_1", delivery: "steer" },
       expect: [],
-      reject: { reason: "Inbox item not found" },
+      reject: { code: "inbox-item-not-found" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: { sessionID: "ses_1", inboxID: "msg_1", delivery: "steer" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused; deleting it cancelled its pending input.",
@@ -104,7 +104,7 @@ export const changeDeliverySpec = createCommandSlice("changeDelivery")
       ],
       when: { sessionID: "ses_1", inboxID: "msg_1", delivery: "steer" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

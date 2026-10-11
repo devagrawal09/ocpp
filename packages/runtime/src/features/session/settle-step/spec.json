@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Records the single terminal fact of one physical attempt of an in-flight step (session.md: One Step May Have Several Physical Attempts: \"Every local and hosted call reaches durable success or failure before the Step publishes its single terminal ended or failed event\"). A success records its finish reason and usage. A failure records, in the same fact, whether the step is retried; which failures are retryable is the caller's classification, while this Command owns the budget (limit, default 3) and fails the execution in the same commit once it is spent.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "settleStep",
   "scenarios": [
@@ -1263,7 +1263,7 @@
         }
       ],
       "reject": {
-        "reason": "Step not started"
+        "code": "step-not-started"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -1305,7 +1305,7 @@
         }
       ],
       "reject": {
-        "reason": "Step not started"
+        "code": "step-not-started"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -1365,7 +1365,7 @@
         }
       ],
       "reject": {
-        "reason": "Step already settled"
+        "code": "step-already-settled"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -1425,7 +1425,7 @@
         }
       ],
       "reject": {
-        "reason": "Step already settled"
+        "code": "step-already-settled"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -1477,7 +1477,7 @@
         }
       ],
       "reject": {
-        "reason": "Step already settled"
+        "code": "step-already-settled"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -1529,7 +1529,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution not active"
+        "code": "execution-not-active"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -1578,7 +1578,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution not active"
+        "code": "execution-not-active"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -1641,7 +1641,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution not active"
+        "code": "execution-not-active"
       },
       "when": {
         "assistantMessageID": "msg_1",

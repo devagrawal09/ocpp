@@ -1,6 +1,6 @@
 import { SessionID } from "@ocpp/schema/session-id"
 import { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -65,10 +65,11 @@ export const recordStepStreamed = implementCommand(specification)
     if (state.inFlight[sessionID]?.assistantMessageID === assistantMessageID) delete state.inFlight[sessionID]
   })
   .handle(async (command, state) => {
-    if (!state.active[command.sessionID]) throw new Error("Execution not active")
+    if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     const step = state.inFlight[command.sessionID]
-    if (step?.assistantMessageID !== command.assistantMessageID) throw new Error("Step not in flight")
-    if (step.streamed) throw new Error("Step already streamed")
+    if (step?.assistantMessageID !== command.assistantMessageID)
+      throw new CommandRejection("step-not-in-flight", "Step not in flight")
+    if (step.streamed) throw new CommandRejection("step-already-streamed", "Step already streamed")
     return [
       stepStreamed.create({
         sessionID: command.sessionID,

@@ -1,5 +1,5 @@
 import { KeyValueFact } from "@ocpp/schema/key-value-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -33,6 +33,6 @@ export const removeValue = implementCommand(specification)
     delete state.keys[event.payload.key]
   })
   .handle(async (command, state) => {
-    if (!state.keys[command.key]) throw new Error("Value not found")
+    if (!state.keys[command.key]) throw new CommandRejection("value-not-found", "Value not found")
     return [kvRemoved.create(command)]
   })

@@ -36,14 +36,14 @@ export const refreshWorktreesSpec = createCommandSlice("refreshWorktrees")
       given: [created, recorded("/repo")],
       when: { projectID: "prj_1", found: [{ directory: "/repo" }], gone: ["/repo/c"] },
       expect: [],
-      reject: { reason: "Worktrees unchanged" },
+      reject: { code: "worktrees-unchanged" },
     },
     {
       description: "An unknown project is refused.",
       given: [],
       when: { projectID: "prj_1", found: [{ directory: "/repo" }], gone: [] },
       expect: [],
-      reject: { reason: "Project not found" },
+      reject: { code: "project-not-found" },
     },
   )
 

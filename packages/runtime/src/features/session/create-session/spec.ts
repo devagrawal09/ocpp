@@ -51,28 +51,28 @@ export const createSessionSpec = createCommandSlice("createSession")
       given: [created()],
       when: { session: identity("ses_1", { title: "Again" }) },
       expect: [],
-      reject: { reason: "Session already exists" },
+      reject: { code: "session-already-exists" },
     },
     {
       description: "A deleted Session's ID is not given to a new Session.",
       given: [created(), deleted()],
       when: { session: identity() },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
     {
       description: "A child of an unknown Session is refused.",
       given: [],
       when: { session: identity("ses_1", { parentID: "ses_missing" }) },
       expect: [],
-      reject: { reason: "Parent session not found" },
+      reject: { code: "parent-session-not-found" },
     },
     {
       description: "A child of a deleted Session is refused.",
       given: [created("ses_parent"), deleted("ses_parent")],
       when: { session: identity("ses_1", { parentID: "ses_parent" }) },
       expect: [],
-      reject: { reason: "Parent session deleted" },
+      reject: { code: "parent-session-deleted" },
     },
   )
 

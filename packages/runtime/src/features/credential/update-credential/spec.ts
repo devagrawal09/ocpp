@@ -43,14 +43,14 @@ export const updateCredentialSpec = createCommandSlice("updateCredential")
       given: [created, relabeled("work")],
       when: { credentialID: "cred_1", label: "work" },
       expect: [],
-      reject: { reason: "Credential unchanged" },
+      reject: { code: "credential-unchanged" },
     },
     {
       description: "A removed credential is refused.",
       given: [created, removed],
       when: { credentialID: "cred_1", label: "work" },
       expect: [],
-      reject: { reason: "Credential not found" },
+      reject: { code: "credential-not-found" },
     },
   )
 

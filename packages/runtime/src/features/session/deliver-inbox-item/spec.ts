@@ -70,21 +70,21 @@ export const deliverInboxItemSpec = createCommandSlice("deliverInboxItem")
       given: [created, started(), enqueued("msg_1"), event("session-inbox-delivered", ref("msg_1"))],
       when: ref("msg_1"),
       expect: [],
-      reject: { reason: "Inbox item already delivered" },
+      reject: { code: "inbox-item-already-delivered" },
     },
     {
       description: "A cancelled item never becomes visible history.",
       given: [created, started(), enqueued("msg_1"), event("session-inbox-cancelled", ref("msg_1"))],
       when: ref("msg_1"),
       expect: [],
-      reject: { reason: "Inbox item already cancelled" },
+      reject: { code: "inbox-item-already-cancelled" },
     },
     {
       description: "An inbox item that was never admitted cannot be delivered.",
       given: [created, started()],
       when: ref("msg_missing"),
       expect: [],
-      reject: { reason: "Inbox item not found" },
+      reject: { code: "inbox-item-not-found" },
     },
     {
       description: "Cross-Session reuse fails: an item owned by another Session is not found in this one.",
@@ -102,7 +102,7 @@ export const deliverInboxItemSpec = createCommandSlice("deliverInboxItem")
       ],
       when: ref("msg_1", "ses_2"),
       expect: [],
-      reject: { reason: "Inbox item not found" },
+      reject: { code: "inbox-item-not-found" },
     },
     {
       description:
@@ -110,7 +110,7 @@ export const deliverInboxItemSpec = createCommandSlice("deliverInboxItem")
       given: [created, enqueued("msg_1")],
       when: ref("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description:
@@ -127,7 +127,7 @@ export const deliverInboxItemSpec = createCommandSlice("deliverInboxItem")
       ],
       when: ref("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description:
@@ -143,7 +143,7 @@ export const deliverInboxItemSpec = createCommandSlice("deliverInboxItem")
       ],
       when: ref("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description:
@@ -160,21 +160,21 @@ export const deliverInboxItemSpec = createCommandSlice("deliverInboxItem")
       ],
       when: ref("msg_1"),
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description: "Delivery to an unknown Session fails.",
       given: [],
       when: ref("msg_1", "ses_missing"),
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "Delivery to a deleted Session fails.",
       given: [created, event("session-deleted", { sessionID: "ses_1" })],
       when: ref("msg_1"),
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

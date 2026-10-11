@@ -125,7 +125,7 @@ const layer = Layer.effect(
         return yield* bus.command({ type: "removeCodeModeCommand", payload: { sessionID, name } }).pipe(
           Effect.as(true),
           Effect.catchIf(
-            (error) => SpecterRejection.reason(error) !== undefined,
+            (error) => SpecterRejection.code(error) !== undefined,
             () => Effect.succeed(false),
           ),
           Effect.orDie,

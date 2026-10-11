@@ -132,8 +132,8 @@ const layer = (options: Options) =>
         bus.command(command).pipe(
           Effect.asVoid,
           Effect.catch((error) => {
-            const reason = SpecterRejection.reason(error)
-            return reason === "Workspace not found" || reason === "Workspace destroyed"
+            const code = SpecterRejection.code(error)
+            return code === "workspace-not-found" || code === "workspace-destroyed"
               ? Effect.fail(new NotFound({ workspaceID }))
               : Effect.die(error)
           }),
@@ -335,9 +335,9 @@ const layer = (options: Options) =>
             .pipe(
               Effect.as(workspaceID),
               Effect.catch((error) => {
-                const reason = SpecterRejection.reason(error)
-                if (reason === "Workspace already exists") return Effect.succeed(workspaceID)
-                if (reason !== "Workspace belongs to another provider") return Effect.die(error)
+                const code = SpecterRejection.code(error)
+                if (code === "workspace-already-exists") return Effect.succeed(workspaceID)
+                if (code !== "workspace-other-provider") return Effect.die(error)
                 return find(workspaceID).pipe(
                   Effect.flatMap((row) => Effect.fail(conflict(row?.provider ?? input.provider))),
                 )

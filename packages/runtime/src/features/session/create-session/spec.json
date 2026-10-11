@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Creates a Session with the identity the host chose. An ID names one Session for good: a live or deleted Session's ID is refused, and a child's parent must be live. A Session imported from another server records its history in the same commit.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "createSession",
   "scenarios": [
@@ -193,7 +193,7 @@
         }
       ],
       "reject": {
-        "reason": "Session already exists"
+        "code": "session-already-exists"
       },
       "when": {
         "session": {
@@ -234,7 +234,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "session": {
@@ -253,7 +253,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Parent session not found"
+        "code": "parent-session-not-found"
       },
       "when": {
         "session": {
@@ -294,7 +294,7 @@
         }
       ],
       "reject": {
-        "reason": "Parent session deleted"
+        "code": "parent-session-deleted"
       },
       "when": {
         "session": {

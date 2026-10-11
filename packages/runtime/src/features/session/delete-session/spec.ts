@@ -130,14 +130,14 @@ export const deleteSessionSpec = createCommandSlice("deleteSession")
       given: [],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A Session is deleted once.",
       given: [created, deleted],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

@@ -1,5 +1,5 @@
 import { SessionID } from "@ocpp/schema/session-id"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -56,9 +56,10 @@ export const clearRevert = implementCommand(specification)
     delete state.staged[event.payload.sessionID]
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
-    if (state.active[command.sessionID]) throw new Error("Session is busy")
-    if (!state.staged[command.sessionID]) throw new Error("No revert staged")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
+    if (state.active[command.sessionID]) throw new CommandRejection("session-busy", "Session is busy")
+    if (!state.staged[command.sessionID]) throw new CommandRejection("no-revert-staged", "No revert staged")
     return [revertCleared.create({ sessionID: command.sessionID })]
   })

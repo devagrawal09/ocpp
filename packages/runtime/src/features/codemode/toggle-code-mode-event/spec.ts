@@ -49,21 +49,21 @@ export const toggleCodeModeEventSpec = createCommandSlice("toggleCodeModeEvent")
       given: [created(), defined(), removed],
       when,
       expect: [],
-      reject: { reason: "Event not found" },
+      reject: { code: "event-not-found" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created(), defined(), deleted],
       when,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

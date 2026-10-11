@@ -40,7 +40,7 @@ export const removeCredentialSpec = createCommandSlice("removeCredential")
       given: [],
       when: { credentialID: "cred_1" },
       expect: [],
-      reject: { reason: "Credential not found" },
+      reject: { code: "credential-not-found" },
     },
   )
 

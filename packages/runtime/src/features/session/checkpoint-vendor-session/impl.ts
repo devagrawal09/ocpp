@@ -1,5 +1,5 @@
 import { ExternalSession } from "@ocpp/schema/external-session"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -41,8 +41,10 @@ export const checkpointVendorSession = implementCommand(specification)
     state.bound[event.payload.sessionID] = true
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
-    if (!state.bound[command.sessionID]) throw new Error("External agent not bound")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
+    if (!state.bound[command.sessionID])
+      throw new CommandRejection("external-agent-not-bound", "External agent not bound")
     return [externalCheckpointed.create(command)]
   })

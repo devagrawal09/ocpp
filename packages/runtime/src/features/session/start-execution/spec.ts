@@ -47,7 +47,7 @@ export const startExecutionSpec = createCommandSlice("startExecution")
       given: [created(), started()],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Execution already active" },
+      reject: { code: "execution-already-active" },
     },
     {
       description: "Success releases the claim: a new busy period may start after success.",
@@ -78,14 +78,14 @@ export const startExecutionSpec = createCommandSlice("startExecution")
       given: [],
       when: { sessionID: "ses_missing" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session never runs again.",
       given: [created(), event("session-deleted", { sessionID: "ses_1" })],
       when: { sessionID: "ses_1" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

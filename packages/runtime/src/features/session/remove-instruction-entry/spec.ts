@@ -37,14 +37,14 @@ export const removeInstructionEntrySpec = createCommandSlice("removeInstructionE
       given: [created()],
       when: { sessionID: "ses_1", key: "ticket" },
       expect: [],
-      reject: { reason: "Instruction entry not found" },
+      reject: { code: "instruction-entry-not-found" },
     },
     {
       description: "An entry already removed is refused.",
       given: [created(), set, removed()],
       when: { sessionID: "ses_1", key: "ticket" },
       expect: [],
-      reject: { reason: "Instruction entry not found" },
+      reject: { code: "instruction-entry-not-found" },
     },
     {
       description: "A fork removes an entry its parent held.",
@@ -57,21 +57,21 @@ export const removeInstructionEntrySpec = createCommandSlice("removeInstructionE
       given: [created("ses_0"), created(), forked],
       when: { sessionID: "ses_1", key: "owner" },
       expect: [],
-      reject: { reason: "Instruction entry not found" },
+      reject: { code: "instruction-entry-not-found" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: { sessionID: "ses_1", key: "ticket" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created(), set, deleted],
       when: { sessionID: "ses_1", key: "ticket" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

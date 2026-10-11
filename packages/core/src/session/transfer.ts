@@ -135,13 +135,13 @@ const layer = Layer.effect(
           })
           .pipe(
             Effect.catch((error): Effect.Effect<never, ImportConflictError | Session.NotFoundError> => {
-              const reason = SpecterRejection.reason(error)
+              const code = SpecterRejection.code(error)
               // The ID names a Session, live or deleted.
-              if (reason === "Session already exists" || reason === "Session deleted")
+              if (code === "session-already-exists" || code === "session-deleted")
                 return Effect.fail(new ImportConflictError({ sessionID }))
               if (
                 input.data.info.parentID &&
-                (reason === "Parent session not found" || reason === "Parent session deleted")
+                (code === "parent-session-not-found" || code === "parent-session-deleted")
               )
                 return Effect.fail(new Session.NotFoundError({ sessionID: input.data.info.parentID }))
               return Effect.die(error)

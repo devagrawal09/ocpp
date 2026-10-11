@@ -135,7 +135,7 @@ export const layer = Layer.effect(
           })
           .pipe(
             Effect.catchIf(
-              (error) => SpecterRejection.reason(error) !== undefined,
+              (error) => SpecterRejection.code(error) !== undefined,
               () => Effect.void,
             ),
             Effect.orDie,

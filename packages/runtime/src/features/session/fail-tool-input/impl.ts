@@ -2,7 +2,7 @@ import { SessionError } from "@ocpp/schema/session-error"
 import { SessionID } from "@ocpp/schema/session-id"
 import { SessionMessage } from "@ocpp/schema/session-message"
 import { Tool } from "@ocpp/schema/tool"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -78,10 +78,12 @@ export const failToolInput = implementCommand(specification)
     record(state, event.payload)
   })
   .handle(async (command, state) => {
-    if (!state.active[command.sessionID]) throw new Error("Execution not active")
+    if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     const step = state.inFlight[command.sessionID]
-    if (step?.assistantMessageID !== command.assistantMessageID) throw new Error("Step not in flight")
-    if (step.calls.includes(command.id)) throw new Error("Tool call already recorded")
+    if (step?.assistantMessageID !== command.assistantMessageID)
+      throw new CommandRejection("step-not-in-flight", "Step not in flight")
+    if (step.calls.includes(command.id))
+      throw new CommandRejection("tool-call-already-recorded", "Tool call already recorded")
     return [
       toolInputFailed.create({
         sessionID: command.sessionID,

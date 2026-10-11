@@ -19,7 +19,7 @@ export const editProjectSpec = createCommandSlice("editProject")
       given: [],
       when: edit,
       expect: [],
-      reject: { reason: "Project not found" },
+      reject: { code: "project-not-found" },
     },
   )
 

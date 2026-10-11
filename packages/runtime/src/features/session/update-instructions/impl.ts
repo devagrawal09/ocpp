@@ -1,6 +1,6 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -45,8 +45,8 @@ export const updateInstructions = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { blobs, ...update } = command
-    if (!state.sessions[update.sessionID]) throw new Error("Session not found")
-    if (state.sessions[update.sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[update.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[update.sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
     return [
       ...(blobs === undefined || Object.keys(blobs).length === 0
         ? []

@@ -323,7 +323,7 @@ const layer = Layer.effect(
       const bind = Effect.fnUntraced(function* () {
         yield* bus.command({ type: "bindExternalAgent", payload: { sessionID, provider, directory } }).pipe(
           Effect.catchIf(
-            (error) => SpecterRejection.reason(error) === "External agent already bound",
+            (error) => SpecterRejection.code(error) === "external-agent-already-bound",
             () => Effect.succeed([]),
           ),
           Effect.orDie,
@@ -452,7 +452,7 @@ const layer = Layer.effect(
                 // A Session deleted meanwhile links nothing.
                 Effect.catchIf(
                   (error) =>
-                    SpecterRejection.reason(error) === "Vendor session already linked" ||
+                    SpecterRejection.code(error) === "vendor-session-already-linked" ||
                     SpecterRejection.isMissingSession(error),
                   () => Effect.succeed([]),
                 ),

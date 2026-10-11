@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { KeyValueFact } from "@ocpp/schema/key-value-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -37,6 +37,7 @@ export const storeValue = implementCommand(specification)
     delete state.values[event.payload.key]
   })
   .handle(async (command, state) => {
-    if (state.values[command.key] === digest(command.value)) throw new Error("Value unchanged")
+    if (state.values[command.key] === digest(command.value))
+      throw new CommandRejection("value-unchanged", "Value unchanged")
     return [kvStored.create(command)]
   })

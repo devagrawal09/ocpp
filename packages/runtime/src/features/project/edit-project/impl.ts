@@ -1,5 +1,5 @@
 import { ProjectFact } from "@ocpp/schema/project-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -29,6 +29,6 @@ export const editProject = implementCommand(specification)
     state.projects[event.payload.projectID] = true
   })
   .handle(async (command, state) => {
-    if (!state.projects[command.projectID]) throw new Error("Project not found")
+    if (!state.projects[command.projectID]) throw new CommandRejection("project-not-found", "Project not found")
     return [projectEdited.create(command)]
   })

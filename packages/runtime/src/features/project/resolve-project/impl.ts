@@ -1,6 +1,6 @@
 import { ProjectFact } from "@ocpp/schema/project-fact"
 import { AbsolutePath, optional } from "@ocpp/schema/schema"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -65,6 +65,6 @@ export const resolveProject = implementCommand(specification)
         ? [relocated.create({ projectID: resolved.projectID, canonical: resolved.canonical })]
         : []),
     ]
-    if (facts.length === 0) throw new Error("Project unchanged")
+    if (facts.length === 0) throw new CommandRejection("project-unchanged", "Project unchanged")
     return facts
   })

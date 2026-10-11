@@ -152,7 +152,7 @@ export const layer = Layer.effect(
         })
         .pipe(
           Effect.catchIf(
-            (error) => SpecterRejection.isMissingSession(error) || SpecterRejection.reason(error) === "Title changed",
+            (error) => SpecterRejection.isMissingSession(error) || SpecterRejection.code(error) === "title-changed",
             () => Effect.void,
           ),
           Effect.orDie,

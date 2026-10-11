@@ -1,7 +1,7 @@
 import { NonNegativeInt } from "@ocpp/schema/schema"
 import { SessionID } from "@ocpp/schema/session-id"
 import { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -76,10 +76,12 @@ export const recordBlock = implementCommand(specification)
     if (step?.assistantMessageID === event.payload.assistantMessageID) step.blocks.push(key(event.payload))
   })
   .handle(async (command, state) => {
-    if (!state.active[command.sessionID]) throw new Error("Execution not active")
+    if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     const step = state.inFlight[command.sessionID]
-    if (step?.assistantMessageID !== command.assistantMessageID) throw new Error("Step not in flight")
-    if (step.blocks.includes(key(command))) throw new Error("Block already recorded")
+    if (step?.assistantMessageID !== command.assistantMessageID)
+      throw new CommandRejection("step-not-in-flight", "Step not in flight")
+    if (step.blocks.includes(key(command)))
+      throw new CommandRejection("block-already-recorded", "Block already recorded")
     return [
       blockRecorded.create({
         sessionID: command.sessionID,

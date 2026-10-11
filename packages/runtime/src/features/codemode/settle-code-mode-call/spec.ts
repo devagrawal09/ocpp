@@ -49,28 +49,28 @@ export const settleCodeModeCallSpec = createCommandSlice("settleCodeModeCall")
       given: [admitted, started, scheduled, event("session-codemode-call-settled", { ...execution, ...completed })],
       when: completed,
       expect: [],
-      reject: { reason: "Call already settled" },
+      reject: { code: "call-already-settled" },
     },
     {
       description: "A call never journaled is refused.",
       given: [admitted, started],
       when: completed,
       expect: [],
-      reject: { reason: "Call not scheduled" },
+      reject: { code: "call-not-scheduled" },
     },
     {
       description: "A settled execution's call is refused.",
       given: [admitted, started, scheduled, settled],
       when: completed,
       expect: [],
-      reject: { reason: "Execution not running" },
+      reject: { code: "execution-not-running" },
     },
     {
       description: "An unknown execution is refused.",
       given: [],
       when: completed,
       expect: [],
-      reject: { reason: "Execution not found" },
+      reject: { code: "execution-not-found" },
     },
   )
 

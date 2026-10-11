@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Records in a live Session that an admitted Code Mode execution went to the background, for the call or the invocation that owns it: its result arrives later. An execution starts this way once.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "startCodeMode",
   "scenarios": [
@@ -106,7 +106,7 @@
         }
       ],
       "reject": {
-        "reason": "Code Mode already started"
+        "code": "code-mode-already-started"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -152,7 +152,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution not found"
+        "code": "execution-not-found"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -166,7 +166,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "assistantMessageID": "msg_1",
@@ -219,7 +219,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "assistantMessageID": "msg_1",

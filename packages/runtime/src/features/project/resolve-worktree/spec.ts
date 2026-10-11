@@ -31,7 +31,7 @@ export const resolveWorktreeSpec = createCommandSlice("resolveWorktree")
       given: [created, recorded()],
       when: { ...resolution, strategy: "git" },
       expect: [],
-      reject: { reason: "Worktree already resolved" },
+      reject: { code: "worktree-already-resolved" },
     },
     {
       description: "A directory the project no longer holds is resolved again.",
@@ -44,7 +44,7 @@ export const resolveWorktreeSpec = createCommandSlice("resolveWorktree")
       given: [],
       when: { ...resolution, strategy: "git" },
       expect: [],
-      reject: { reason: "Project not found" },
+      reject: { code: "project-not-found" },
     },
   )
 

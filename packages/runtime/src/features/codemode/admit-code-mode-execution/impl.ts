@@ -1,7 +1,7 @@
 import type { SessionID } from "@ocpp/schema/session-id"
 import { SessionFact } from "@ocpp/schema/session-fact"
 import { NonNegativeInt } from "@ocpp/schema/schema"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -101,16 +101,26 @@ export const admitCodeModeExecution = implementCommand(specification)
   .handle(async (command, state) => {
     const { limits, ...admission } = command
     const session = state.sessions[admission.sessionID]
-    if (!session) throw new Error("Session not found")
-    if (session === "deleted") throw new Error("Session deleted")
-    if (state.executions[admission.executionID]) throw new Error("Execution already admitted")
+    if (!session) throw new CommandRejection("session-not-found", "Session not found")
+    if (session === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    if (state.executions[admission.executionID])
+      throw new CommandRejection("execution-already-admitted", "Execution already admitted")
     const notebook = state.notebooks[admission.sessionID] ?? {}
     const names = Object.keys(notebook)
     const size = Object.values(notebook).reduce((total, entry) => total + entry.bytes, 0)
-    if (names.length + admission.reserved.length > limits.values || size > limits.bytes)
-      throw new Error("Notebook full")
-    if (admission.reserved.some((name) => notebook[name])) throw new Error("Name already defined")
-    if (admission.reserved.some((name) => state.reservations[admission.sessionID]?.[name]))
-      throw new Error("Name reserved")
+    // Each refusal names what the host tells the program: the notebook's size, or the names in the way.
+    const values = names.length + admission.reserved.length
+    if (values > limits.values || size > limits.bytes)
+      throw new CommandRejection("notebook-full", "Notebook full", { values, bytes: size })
+    const defined = admission.reserved.filter((name) => notebook[name])
+    if (defined.length > 0)
+      throw new CommandRejection("name-already-defined", "Name already defined", { names: defined })
+    const reservations = state.reservations[admission.sessionID] ?? {}
+    const reserved = admission.reserved.filter((name) => reservations[name])
+    if (reserved.length > 0)
+      throw new CommandRejection("name-reserved", "Name reserved", {
+        names: reserved,
+        owner: reservations[reserved[0]!],
+      })
     return [admitted.create({ ...admission, snapshot: names })]
   })

@@ -1,5 +1,5 @@
 import { CredentialFact } from "@ocpp/schema/credential-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -32,6 +32,7 @@ export const createCredential = implementCommand(specification)
     delete state.credentials[event.payload.credentialID]
   })
   .handle(async (command, state) => {
-    if (state.credentials[command.credentialID]) throw new Error("Credential already exists")
+    if (state.credentials[command.credentialID])
+      throw new CommandRejection("credential-already-exists", "Credential already exists")
     return [credentialCreated.create(command)]
   })

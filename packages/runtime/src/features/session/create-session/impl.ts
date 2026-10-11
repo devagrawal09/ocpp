@@ -1,6 +1,6 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -53,11 +53,13 @@ export const createSession = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const sessionID = command.session.sessionID
-    if (state.sessions[sessionID] === "deleted") throw new Error("Session deleted")
-    if (state.sessions[sessionID]) throw new Error("Session already exists")
+    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    if (state.sessions[sessionID]) throw new CommandRejection("session-already-exists", "Session already exists")
     const parentID = command.session.parentID
-    if (parentID !== undefined && !state.sessions[parentID]) throw new Error("Parent session not found")
-    if (parentID !== undefined && state.sessions[parentID] === "deleted") throw new Error("Parent session deleted")
+    if (parentID !== undefined && !state.sessions[parentID])
+      throw new CommandRejection("parent-session-not-found", "Parent session not found")
+    if (parentID !== undefined && state.sessions[parentID] === "deleted")
+      throw new CommandRejection("parent-session-deleted", "Parent session deleted")
     return [
       sessionCreated.create(command.session),
       ...(command.imported === undefined ? [] : [sessionImported.create({ sessionID, ...command.imported })]),

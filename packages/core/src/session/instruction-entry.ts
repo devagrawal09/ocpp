@@ -127,7 +127,7 @@ const layer = Layer.effect(
         .command({ type: "setInstructionEntry", payload: input })
         .pipe(
           Effect.catch((error) =>
-            SpecterRejection.reason(error) === "Instruction entry unchanged"
+            SpecterRejection.code(error) === "instruction-entry-unchanged"
               ? Effect.void
               : missing(input.sessionID, error),
           ),
@@ -140,7 +140,7 @@ const layer = Layer.effect(
         .command({ type: "removeInstructionEntry", payload: input })
         .pipe(
           Effect.catch((error) =>
-            SpecterRejection.reason(error) === "Instruction entry not found"
+            SpecterRejection.code(error) === "instruction-entry-not-found"
               ? Effect.void
               : missing(input.sessionID, error),
           ),

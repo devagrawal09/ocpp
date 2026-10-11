@@ -1,5 +1,5 @@
 import { ProjectFact } from "@ocpp/schema/project-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -33,7 +33,9 @@ export const createWorkspace = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const provider = state.workspaces[command.workspaceID]
-    if (provider === command.provider) throw new Error("Workspace already exists")
-    if (provider !== undefined) throw new Error("Workspace belongs to another provider")
+    if (provider === command.provider)
+      throw new CommandRejection("workspace-already-exists", "Workspace already exists")
+    if (provider !== undefined)
+      throw new CommandRejection("workspace-other-provider", "Workspace belongs to another provider")
     return [workspaceCreated.create(command)]
   })

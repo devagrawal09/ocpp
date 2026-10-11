@@ -135,7 +135,7 @@ const layer = Layer.effect(
         })
         .pipe(
           Effect.catchIf(
-            (error) => SpecterRejection.reason(error) === "Project unchanged",
+            (error) => SpecterRejection.code(error) === "project-unchanged",
             () => Effect.succeed([]),
           ),
           Effect.orDie,
@@ -210,7 +210,7 @@ const layer = Layer.effect(
             })
             .pipe(
               Effect.catchIf(
-                (error) => SpecterRejection.reason(error) === "Worktree already resolved",
+                (error) => SpecterRejection.code(error) === "worktree-already-resolved",
                 () => Effect.succeed([]),
               ),
               Effect.orDie,
@@ -238,7 +238,7 @@ const layer = Layer.effect(
         .command({ type: "editProject", payload: input })
         .pipe(
           Effect.catch((error) =>
-            SpecterRejection.reason(error) === "Project not found"
+            SpecterRejection.code(error) === "project-not-found"
               ? Effect.fail(new NotFoundError({ projectID: input.projectID }))
               : Effect.die(error),
           ),

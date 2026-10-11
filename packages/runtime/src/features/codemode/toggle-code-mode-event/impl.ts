@@ -1,5 +1,5 @@
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -51,8 +51,9 @@ export const toggleCodeModeEvent = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const session = state.sessions[command.sessionID]
-    if (!session) throw new Error("Session not found")
-    if (session === "deleted") throw new Error("Session deleted")
-    if (!state.events[command.sessionID]?.[command.name]) throw new Error("Event not found")
+    if (!session) throw new CommandRejection("session-not-found", "Session not found")
+    if (session === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    if (!state.events[command.sessionID]?.[command.name])
+      throw new CommandRejection("event-not-found", "Event not found")
     return [recorded.create(command)]
   })

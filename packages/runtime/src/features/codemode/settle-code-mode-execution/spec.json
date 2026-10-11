@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Settles a Code Mode execution once. A finished program saves the values of its declarations into its Session's notebook when the execution still holds their names and they fit the notebook; otherwise it fails and saves nothing, with why. A program that failed, or whose outcome is indeterminate, releases its names and saves nothing. A revert that cuts an execution's message settles it as it commits.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "settleCodeModeExecution",
   "scenarios": [
@@ -514,7 +514,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution already settled"
+        "code": "execution-already-settled"
       },
       "when": {
         "executionID": "exe_2",
@@ -560,7 +560,7 @@
         }
       ],
       "reject": {
-        "reason": "Execution not found"
+        "code": "execution-not-found"
       },
       "when": {
         "executionID": "exe_2",

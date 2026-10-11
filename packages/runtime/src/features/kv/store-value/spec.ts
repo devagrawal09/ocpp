@@ -25,7 +25,7 @@ export const storeValueSpec = createCommandSlice("storeValue")
       given: [stored({ mode: "dark" })],
       when: { key: "plugin:theme", value: { mode: "dark" } },
       expect: [],
-      reject: { reason: "Value unchanged" },
+      reject: { code: "value-unchanged" },
     },
     {
       description: "A removed key stores its value again.",

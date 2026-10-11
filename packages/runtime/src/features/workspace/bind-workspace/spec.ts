@@ -19,14 +19,14 @@ export const bindWorkspaceSpec = createCommandSlice("bindWorkspace")
       given: [],
       when: { workspaceID: "wrk_1", binding: { containerID: "c_1" } },
       expect: [],
-      reject: { reason: "Workspace not found" },
+      reject: { code: "workspace-not-found" },
     },
     {
       description: "A destroyed workspace is refused.",
       given: [created, destroyed],
       when: { workspaceID: "wrk_1", binding: { containerID: "c_1" } },
       expect: [],
-      reject: { reason: "Workspace destroyed" },
+      reject: { code: "workspace-destroyed" },
     },
   )
 

@@ -1,6 +1,6 @@
 import { SessionID } from "@ocpp/schema/session-id"
 import type { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -107,8 +107,8 @@ export const deleteSession = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { sessionID } = command
-    if (!state.sessions[sessionID]) throw new Error("Session not found")
-    if (state.sessions[sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
     const step = state.inFlight[sessionID]
     // An active execution ends as a user's interruption ends it.
     const interruption = !state.active[sessionID]

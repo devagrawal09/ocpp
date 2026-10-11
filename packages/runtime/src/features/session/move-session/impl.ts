@@ -1,6 +1,6 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -57,8 +57,8 @@ export const moveSession = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { sessionID } = command
-    if (!state.sessions[sessionID]) throw new Error("Session not found")
-    if (state.sessions[sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
     return [
       ...(state.moves[sessionID] ?? []).map((inboxID) => inboxCancelled.create({ sessionID, inboxID })),
       sessionMoved.create(command),

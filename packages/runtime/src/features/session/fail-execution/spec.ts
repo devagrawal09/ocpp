@@ -28,7 +28,7 @@ export const failExecutionSpec = createCommandSlice("failExecution")
       given: [],
       when: { sessionID: "ses_1", error },
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description: "A settled execution cannot fail again.",
@@ -42,7 +42,7 @@ export const failExecutionSpec = createCommandSlice("failExecution")
       ],
       when: { sessionID: "ses_1", error },
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
   )
 

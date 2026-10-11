@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Records a worktree the host created for a project, with the strategy that manages it. A directory the project holds under the same strategy records nothing.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "addWorktree",
   "scenarios": [
@@ -59,7 +59,7 @@
         }
       ],
       "reject": {
-        "reason": "Worktree unchanged"
+        "code": "worktree-unchanged"
       },
       "when": {
         "directory": "/repo/feature",
@@ -157,7 +157,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Project not found"
+        "code": "project-not-found"
       },
       "when": {
         "directory": "/repo/feature",

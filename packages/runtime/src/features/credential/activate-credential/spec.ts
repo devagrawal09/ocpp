@@ -28,28 +28,28 @@ export const activateCredentialSpec = createCommandSlice("activateCredential")
       given: [created("cred_1"), created("cred_2"), activated("cred_1")],
       when: { credentialID: "cred_1" },
       expect: [],
-      reject: { reason: "Credential already active" },
+      reject: { code: "credential-already-active" },
     },
     {
       description: "The credential that replaced a removed one is the one in use.",
       given: [created("cred_1"), created("cred_2"), removed("cred_2", "cred_1")],
       when: { credentialID: "cred_1" },
       expect: [],
-      reject: { reason: "Credential already active" },
+      reject: { code: "credential-already-active" },
     },
     {
       description: "An unknown credential is refused.",
       given: [],
       when: { credentialID: "cred_1" },
       expect: [],
-      reject: { reason: "Credential not found" },
+      reject: { code: "credential-not-found" },
     },
     {
       description: "A removed credential is refused.",
       given: [created("cred_1"), removed("cred_1")],
       when: { credentialID: "cred_1" },
       expect: [],
-      reject: { reason: "Credential not found" },
+      reject: { code: "credential-not-found" },
     },
   )
 

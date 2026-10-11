@@ -102,7 +102,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       .pipe(
         Effect.catch(
           (error): Effect.Effect<never, BusyError | NotFoundError> =>
-            SpecterRejection.reason(error) === "Session is busy"
+            SpecterRejection.code(error) === "session-busy"
               ? Effect.fail(new BusyError({ sessionID }))
               : missing(sessionID, error),
         ),
@@ -154,7 +154,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       .command({ type: "selectModel", payload: { sessionID, model: encodeModel(input.model) } })
       .pipe(
         Effect.catch((error) =>
-          SpecterRejection.reason(error) === "Model already selected" ? Effect.void : missing(sessionID, error),
+          SpecterRejection.code(error) === "model-already-selected" ? Effect.void : missing(sessionID, error),
         ),
       )
   })

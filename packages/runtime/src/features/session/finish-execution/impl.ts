@@ -1,5 +1,5 @@
 import { SessionID } from "@ocpp/schema/session-id"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -55,8 +55,8 @@ export const finishExecution = implementCommand(specification)
     if (state.inFlight[sessionID] === assistantMessageID) delete state.inFlight[sessionID]
   })
   .handle(async (command, state) => {
-    if (!state.active[command.sessionID]) throw new Error("Execution not active")
-    if (state.inFlight[command.sessionID]) throw new Error("Step in flight")
+    if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
+    if (state.inFlight[command.sessionID]) throw new CommandRejection("step-in-flight", "Step in flight")
     return [
       executionSettled.create({
         sessionID: command.sessionID,

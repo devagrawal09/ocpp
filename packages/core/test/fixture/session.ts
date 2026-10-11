@@ -48,7 +48,7 @@ export const recordSession = (input: {
       })
       .pipe(
         Effect.catchIf(
-          (error) => SpecterRejection.reason(error) === "Session already exists",
+          (error) => SpecterRejection.code(error) === "session-already-exists",
           () => Effect.void,
         ),
         Effect.orDie,

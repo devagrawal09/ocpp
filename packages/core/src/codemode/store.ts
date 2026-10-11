@@ -9,6 +9,7 @@ import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
 import { Job } from "../job.js"
 import { SpecterRejection } from "../specter/rejection.js"
+import type { RejectionCode } from "@ocpp/runtime"
 import { CodeModeHandler } from "./handler.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
@@ -348,14 +349,11 @@ const layer = Layer.effect(
         .get()
         .pipe(Effect.orDie)
 
-    // A Code Mode Command the runtime refused for one of `reasons` records nothing; any other failure is a defect.
-    const record = (command: Bus.RuntimeCommand, ...reasons: ReadonlyArray<string>) =>
+    // A Code Mode Command the runtime refused with one of `codes` records nothing; any other failure is a defect.
+    const record = (command: Bus.RuntimeCommand, ...codes: ReadonlyArray<RejectionCode>) =>
       bus.command(command).pipe(
         Effect.map((facts) => facts.length > 0),
-        Effect.catchIf(
-          (error) => reasons.includes(SpecterRejection.reason(error) ?? ""),
-          () => Effect.succeed(false),
-        ),
+        Effect.catchIf(SpecterRejection.is(...codes), () => Effect.succeed(false)),
         Effect.orDie,
       )
 
@@ -395,11 +393,11 @@ const layer = Layer.effect(
             snapshot: (facts[0]!.data as { readonly snapshot: ReadonlyArray<string> }).snapshot,
           })),
           Effect.catch((error) => {
-            const reason = SpecterRejection.reason(error)
-            return reason === undefined ? Effect.die(error) : Effect.succeed({ reason })
+            const rejection = SpecterRejection.of(error)
+            return rejection === undefined ? Effect.die(error) : Effect.succeed({ rejection })
           }),
         )
-      if ("reason" in recorded) return yield* refusal(input.sessionID, names, recorded.reason)
+      if ("rejection" in recorded) return yield* refusal(names, recorded.rejection)
       // The values the program sees: its snapshot's, which only a revert removes.
       const bindings =
         recorded.snapshot.length === 0
@@ -425,63 +423,53 @@ const layer = Layer.effect(
       }
     })
 
-    // Why the runtime refused a program, as the model reads it: the names involved come from the notebook and
-    // its reservations as they stand.
-    const refusal = Effect.fnUntraced(function* (
-      sessionID: SessionSchema.ID,
-      names: ReadonlyArray<string>,
-      reason: string,
-    ) {
-      if (reason === "Notebook full") {
-        const totals = yield* db
-          .select(notebookTotals)
-          .from(CodeModeBindingTable)
-          .where(eq(CodeModeBindingTable.session_id, sessionID))
-          .get()
-          .pipe(Effect.orDie)
-        return {
+    // Why the runtime refused a program, as the model reads it: the refusal's details name what is in the way, as
+    // the admission found it.
+    const refusal = (names: ReadonlyArray<string>, rejection: SpecterRejection.Rejection) => {
+      if (rejection.code === "notebook-full") {
+        const notebook = rejection.details as { readonly values: number; readonly bytes: number }
+        return Effect.succeed({
           ok: false as const,
           kind: "NotebookLimitExceeded" as const,
           names: [...names],
           message:
-            exceededNotebook((totals?.count ?? 0) + names.length, totals?.bytes ?? 0) ??
+            exceededNotebook(notebook.values, notebook.bytes) ??
             "This Session's notebook is full. Free space by reverting messages that saved values you no longer need.",
-        }
+        })
       }
-      if (reason === "Name already defined") {
-        const defined = (yield* savedNames(db, sessionID)).filter((name) => names.includes(name))
-        return {
+      if (rejection.code === "name-already-defined") {
+        const defined = (rejection.details as { readonly names: ReadonlyArray<string> }).names
+        return Effect.succeed({
           ok: false as const,
           kind: "NameAlreadyDefined" as const,
-          names: defined,
+          names: [...defined],
           message:
             "Notebook names are immutable and cannot be redefined: " + defined.join(", ") + ". Choose new names.",
-        }
+        })
       }
-      if (reason === "Name reserved") {
-        const reserved = (yield* reservations(sessionID)).filter((row) => names.includes(row.name))
-        const owner = reserved[0]?.owner ?? "another execution"
-        return {
+      if (rejection.code === "name-reserved") {
+        const reserved = rejection.details as { readonly names: ReadonlyArray<string>; readonly owner: string }
+        return Effect.succeed({
           ok: false as const,
           kind: "NameReserved" as const,
-          names: reserved.map((row) => row.name),
-          owner,
+          names: [...reserved.names],
+          owner: reserved.owner,
           message:
             "Execution " +
-            owner +
+            reserved.owner +
             " is already running and holds these notebook names: " +
-            reserved.map((row) => row.name).join(", ") +
+            reserved.names.join(", ") +
             ". Wait for it to finish or choose new names.",
-        }
+        })
       }
-      return yield* Effect.die(new Error(`Code Mode admission refused: ${reason}`))
-    })
+      return Effect.die(new Error(`Code Mode admission refused: ${rejection.code}`))
+    }
 
     const running: Interface["running"] = Effect.fn("CodeModeStore.running")(function* (executionID) {
       yield* record(
         { type: "startCodeModeExecution", payload: { executionID } },
-        "Execution not found",
-        "Execution already started",
+        "execution-not-found",
+        "execution-already-started",
       )
     })
 
@@ -501,7 +489,7 @@ const layer = Layer.effect(
           },
         },
         ...callRefusals,
-        "Call already scheduled",
+        "call-already-scheduled",
       )
     })
 
@@ -516,7 +504,7 @@ const layer = Layer.effect(
           },
         },
         ...callRefusals,
-        "Call not scheduled",
+        "call-not-scheduled",
       )
     })
 
@@ -542,8 +530,8 @@ const layer = Layer.effect(
           },
         },
         ...callRefusals,
-        "Call not scheduled",
-        "Call already settled",
+        "call-not-scheduled",
+        "call-already-settled",
       )
     })
 
@@ -560,8 +548,8 @@ const layer = Layer.effect(
             limits: { values: limits.maxNotebookValues, bytes: limits.maxNotebookBytes },
           },
         },
-        "Execution not found",
-        "Execution already settled",
+        "execution-not-found",
+        "execution-already-settled",
       )
       const row = yield* db
         .select({
@@ -593,15 +581,15 @@ const layer = Layer.effect(
             limits: { values: limits.maxNotebookValues, bytes: limits.maxNotebookBytes },
           },
         },
-        "Execution not found",
-        "Execution already settled",
+        "execution-not-found",
+        "execution-already-settled",
       ).pipe(Effect.asVoid)
 
     const discard: Interface["discard"] = Effect.fn("CodeModeStore.discard")(function* (executionID) {
       yield* record(
         { type: "discardCodeModeExecution", payload: { executionID } },
-        "Execution not found",
-        "Execution already started",
+        "execution-not-found",
+        "execution-already-started",
       )
     })
 
@@ -654,8 +642,8 @@ const layer = Layer.effect(
     const resume: Interface["resume"] = Effect.fn("CodeModeStore.resume")(function* (executionID) {
       const resumed = yield* record(
         { type: "resumeCodeModeExecution", payload: { executionID } },
-        "Execution not found",
-        "Execution not running",
+        "execution-not-found",
+        "execution-not-running",
       )
       if (!resumed) return undefined
       return yield* Effect.gen(function* () {
@@ -829,16 +817,10 @@ const abandon = (
   }).pipe(Effect.orDie)
 
 // A call's Command records nothing for an execution that is gone or no longer running.
-const callRefusals = ["Execution not found", "Execution not running"] as const
+const callRefusals = ["execution-not-found", "execution-not-running"] as const
 
 /** JSON as it is stored: what a fact carries of a value. */
 const json = (value: unknown) => JSON.parse(JSON.stringify(value ?? null)) as Schema.Json
-
-/** Measures the stored JSON as bytes rather than characters, matching how the limit is stated. */
-const notebookTotals = {
-  count: sql<number>`count(*)`,
-  bytes: sql<number>`coalesce(sum(length(cast(${CodeModeBindingTable.value} as blob))), 0)`,
-}
 
 function exceededNotebook(count: number, bytes: number) {
   if (count > limits.maxNotebookValues)

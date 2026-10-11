@@ -1,6 +1,6 @@
 import { ProjectFact } from "@ocpp/schema/project-fact"
 import { Worktree } from "@ocpp/schema/worktree"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -48,8 +48,9 @@ export const resolveWorktree = implementCommand(specification)
   .handle(async (command, state) => {
     const { strategy, ...resolution } = command
     const project = state.projects[resolution.projectID]
-    if (!project) throw new Error("Project not found")
-    if (project[resolution.directory]) throw new Error("Worktree already resolved")
+    if (!project) throw new CommandRejection("project-not-found", "Project not found")
+    if (project[resolution.directory])
+      throw new CommandRejection("worktree-already-resolved", "Worktree already resolved")
     return [
       worktreeResolved.create(resolution),
       worktreeRecorded.create({

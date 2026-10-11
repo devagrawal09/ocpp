@@ -1,5 +1,5 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -48,8 +48,8 @@ export const renameSession = implementCommand(specification)
   .handle(async (command, state) => {
     const { replacing, ...renamed } = command
     const session = state.sessions[renamed.sessionID]
-    if (!session) throw new Error("Session not found")
-    if (session.status === "deleted") throw new Error("Session deleted")
-    if (replacing && session.title !== replacing.title) throw new Error("Title changed")
+    if (!session) throw new CommandRejection("session-not-found", "Session not found")
+    if (session.status === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    if (replacing && session.title !== replacing.title) throw new CommandRejection("title-changed", "Title changed")
     return [sessionRenamed.create(renamed)]
   })

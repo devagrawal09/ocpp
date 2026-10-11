@@ -1,5 +1,5 @@
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -33,6 +33,7 @@ export const completeBackgroundJob = implementCommand(specification)
     delete state.markers[event.payload.notificationID]
   })
   .handle(async (command, state) => {
-    if (!state.markers[command.notificationID]) throw new Error("Background job not found")
+    if (!state.markers[command.notificationID])
+      throw new CommandRejection("background-job-not-found", "Background job not found")
     return [backgroundCompleted.create(command)]
   })

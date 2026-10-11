@@ -1,6 +1,6 @@
 import { ProjectFact } from "@ocpp/schema/project-fact"
 import { AbsolutePath } from "@ocpp/schema/schema"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -51,7 +51,7 @@ export const refreshWorktrees = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const project = state.projects[command.projectID]
-    if (!project) throw new Error("Project not found")
+    if (!project) throw new CommandRejection("project-not-found", "Project not found")
     const facts = [
       ...command.found
         .filter((item) => project[item.directory] !== (item.strategy ?? ""))
@@ -60,6 +60,6 @@ export const refreshWorktrees = implementCommand(specification)
         .filter((directory) => project[directory] !== undefined)
         .map((directory) => worktreeRemoved.create({ projectID: command.projectID, directory })),
     ]
-    if (facts.length === 0) throw new Error("Worktrees unchanged")
+    if (facts.length === 0) throw new CommandRejection("worktrees-unchanged", "Worktrees unchanged")
     return facts
   })

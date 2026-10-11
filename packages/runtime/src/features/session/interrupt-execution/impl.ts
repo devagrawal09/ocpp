@@ -1,6 +1,6 @@
 import { SessionID } from "@ocpp/schema/session-id"
 import type { SessionMessage } from "@ocpp/schema/session-message"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -113,11 +113,12 @@ export const interruptExecution = implementCommand(specification)
     closeCall(state, event.payload)
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
     // OC++: idle/settled interrupt is a public no-op; the M4 facade
     // translates this rejection back into success.
-    if (!state.active[command.sessionID]) throw new Error("Session is idle")
+    if (!state.active[command.sessionID]) throw new CommandRejection("session-idle", "Session is idle")
     const aborted = (state.openCalls[command.sessionID] ?? []).map((call) =>
       toolSettled.create({
         sessionID: command.sessionID,

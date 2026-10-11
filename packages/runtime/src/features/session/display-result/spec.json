@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Displays a result in a live Session's timeline: it never enters the model's history. The host names the event, from which the displayed message takes its ID.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "displayResult",
   "scenarios": [
@@ -54,7 +54,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "blocks": [
@@ -93,7 +93,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "blocks": [

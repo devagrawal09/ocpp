@@ -1,5 +1,5 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -44,8 +44,9 @@ export const editMessage = implementCommand(specification)
     delete state.active[event.payload.sessionID]
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
-    if (state.active[command.sessionID]) throw new Error("Session is busy")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
+    if (state.active[command.sessionID]) throw new CommandRejection("session-busy", "Session is busy")
     return [contentUpdated.create(command)]
   })

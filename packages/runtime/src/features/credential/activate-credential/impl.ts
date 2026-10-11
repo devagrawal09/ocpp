@@ -1,6 +1,6 @@
 import { Credential } from "@ocpp/schema/credential"
 import type { IntegrationID } from "@ocpp/schema/integration-id"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -49,7 +49,8 @@ export const activateCredential = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const integrationID = state.credentials[command.credentialID]
-    if (integrationID === undefined) throw new Error("Credential not found")
-    if (state.active[integrationID] === command.credentialID) throw new Error("Credential already active")
+    if (integrationID === undefined) throw new CommandRejection("credential-not-found", "Credential not found")
+    if (state.active[integrationID] === command.credentialID)
+      throw new CommandRejection("credential-already-active", "Credential already active")
     return [credentialActivated.create({ credentialID: command.credentialID, integrationID })]
   })

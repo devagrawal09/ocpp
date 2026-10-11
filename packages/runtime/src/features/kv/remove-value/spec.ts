@@ -17,14 +17,14 @@ export const removeValueSpec = createCommandSlice("removeValue")
       given: [],
       when: { key: "plugin:theme" },
       expect: [],
-      reject: { reason: "Value not found" },
+      reject: { code: "value-not-found" },
     },
     {
       description: "A removed key is refused too.",
       given: [stored, removed],
       when: { key: "plugin:theme" },
       expect: [],
-      reject: { reason: "Value not found" },
+      reject: { code: "value-not-found" },
     },
   )
 

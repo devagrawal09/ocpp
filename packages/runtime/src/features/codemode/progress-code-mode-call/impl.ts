@@ -1,6 +1,6 @@
 import type { SessionID } from "@ocpp/schema/session-id"
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -53,8 +53,9 @@ export const progressCodeModeCall = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const execution = state.executions[command.executionID]
-    if (!execution) throw new Error("Execution not found")
-    if (execution.state !== "running") throw new Error("Execution not running")
-    if (!state.calls[command.executionID]?.[command.index]) throw new Error("Call not scheduled")
+    if (!execution) throw new CommandRejection("execution-not-found", "Execution not found")
+    if (execution.state !== "running") throw new CommandRejection("execution-not-running", "Execution not running")
+    if (!state.calls[command.executionID]?.[command.index])
+      throw new CommandRejection("call-not-scheduled", "Call not scheduled")
     return [recorded.create({ sessionID: execution.sessionID, ...command })]
   })

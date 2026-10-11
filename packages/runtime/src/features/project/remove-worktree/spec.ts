@@ -20,14 +20,14 @@ export const removeWorktreeSpec = createCommandSlice("removeWorktree")
       given: [created, recorded, removed],
       when: { projectID: "prj_1", directory: "/repo/feature" },
       expect: [],
-      reject: { reason: "Worktree not found" },
+      reject: { code: "worktree-not-found" },
     },
     {
       description: "A directory of an unknown project is refused.",
       given: [],
       when: { projectID: "prj_1", directory: "/repo/feature" },
       expect: [],
-      reject: { reason: "Project not found" },
+      reject: { code: "project-not-found" },
     },
   )
 

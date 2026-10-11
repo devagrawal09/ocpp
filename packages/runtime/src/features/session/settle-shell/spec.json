@@ -1,7 +1,7 @@
 {
-  "$schema": "https://specter.dev/specification/v1/slice.schema.json",
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
   "description": "Settles a user's shell command in a live Session: how it ended, its exit code and the output it left. Only a shell the Session runs settles, and only once.",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "kind": "command",
   "name": "settleShell",
   "scenarios": [
@@ -94,7 +94,7 @@
         }
       ],
       "reject": {
-        "reason": "Shell not running"
+        "code": "shell-not-running"
       },
       "when": {
         "exit": 0,
@@ -166,7 +166,7 @@
         }
       ],
       "reject": {
-        "reason": "Shell not running"
+        "code": "shell-not-running"
       },
       "when": {
         "exit": 0,
@@ -186,7 +186,7 @@
       "expect": [],
       "given": [],
       "reject": {
-        "reason": "Session not found"
+        "code": "session-not-found"
       },
       "when": {
         "exit": 0,
@@ -249,7 +249,7 @@
         }
       ],
       "reject": {
-        "reason": "Session deleted"
+        "code": "session-deleted"
       },
       "when": {
         "exit": 0,

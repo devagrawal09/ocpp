@@ -27,21 +27,21 @@ export const checkpointVendorSessionSpec = createCommandSlice("checkpointVendorS
       given: [created],
       when: checkpoint,
       expect: [],
-      reject: { reason: "External agent not bound" },
+      reject: { code: "external-agent-not-bound" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: checkpoint,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, bound, deleted],
       when: checkpoint,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

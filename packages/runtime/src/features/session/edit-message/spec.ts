@@ -39,21 +39,21 @@ export const editMessageSpec = createCommandSlice("editMessage")
       given: [created, started],
       when: edit,
       expect: [],
-      reject: { reason: "Session is busy" },
+      reject: { code: "session-busy" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: edit,
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, deleted],
       when: edit,
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

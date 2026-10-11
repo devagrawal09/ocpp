@@ -39,21 +39,21 @@ export const bindExternalAgentSpec = createCommandSlice("bindExternalAgent")
       given: [created, bound()],
       when: { sessionID: "ses_1", provider: "claude", directory: "/tmp/ws" },
       expect: [],
-      reject: { reason: "External agent already bound" },
+      reject: { code: "external-agent-already-bound" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: { sessionID: "ses_1", provider: "claude", directory: "/tmp/ws" },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, deleted],
       when: { sessionID: "ses_1", provider: "claude", directory: "/tmp/ws" },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

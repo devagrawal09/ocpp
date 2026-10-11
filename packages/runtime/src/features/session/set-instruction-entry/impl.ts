@@ -1,5 +1,5 @@
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -55,9 +55,10 @@ export const setInstructionEntry = implementCommand(specification)
     delete state.entries[event.payload.sessionID]?.[event.payload.key]
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
     if (state.entries[command.sessionID]?.[command.key] === JSON.stringify(command.value))
-      throw new Error("Instruction entry unchanged")
+      throw new CommandRejection("instruction-entry-unchanged", "Instruction entry unchanged")
     return [entrySet.create(command)]
   })

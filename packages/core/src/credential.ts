@@ -11,6 +11,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { CredentialSeal } from "./credential/seal.js"
 import { CredentialKeyTable, CredentialSecretTable, CredentialTable } from "./credential/sql.js"
 import { SpecterRejection } from "./specter/rejection.js"
+import type { RejectionCode } from "@ocpp/runtime"
 
 export const ID = Credential.ID
 export type ID = Credential.ID
@@ -248,7 +249,7 @@ const layer = Layer.effect(
       activate: Effect.fn("Credential.activate")(function* (id) {
         const activated = yield* bus
           .command({ type: "activateCredential", payload: { credentialID: id } })
-          .pipe(unless("Credential not found", "Credential already active"))
+          .pipe(unless("credential-not-found", "credential-already-active"))
         yield* Effect.forEach(
           activated,
           (fact) => bus.publish(Event.Switched, fact.data as typeof Event.Switched.Type.data, { global: true }),
@@ -272,14 +273,14 @@ const layer = Layer.effect(
                 : { secret: yield* CredentialSeal.seal(key, updates.value) }),
             },
           })
-          .pipe(unless("Credential not found", "Credential unchanged"))
+          .pipe(unless("credential-not-found", "credential-unchanged"))
         if (facts.some((fact) => fact.type === CredentialFact.Relabeled.type))
           yield* bus.publish(Event.Updated, {}, { global: true })
       }),
       remove: Effect.fn("Credential.remove")(function* (id) {
         const removed = yield* bus
           .command({ type: "removeCredential", payload: { credentialID: id } })
-          .pipe(unless("Credential not found"))
+          .pipe(unless("credential-not-found"))
         if (removed.length === 0) return
         yield* bus.publish(Event.Updated, {}, { global: true })
         const data = removed[0]!.data as typeof CredentialFact.Removed.Type.data
@@ -295,15 +296,12 @@ const layer = Layer.effect(
   }),
 )
 
-/** A dispatch whose rejection for one of `reasons` records nothing; any other failure is a defect. */
+/** A dispatch whose rejection with one of `codes` records nothing; any other failure is a defect. */
 const unless =
-  (...reasons: ReadonlyArray<string>) =>
+  (...codes: ReadonlyArray<RejectionCode>) =>
   <A, E>(effect: Effect.Effect<ReadonlyArray<A>, E>) =>
     effect.pipe(
-      Effect.catchIf(
-        (error) => reasons.includes(SpecterRejection.reason(error) ?? ""),
-        () => Effect.succeed([]),
-      ),
+      Effect.catchIf(SpecterRejection.is(...codes), () => Effect.succeed([])),
       Effect.orDie,
     )
 

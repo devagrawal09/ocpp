@@ -1,5 +1,5 @@
 import { ProjectFact } from "@ocpp/schema/project-fact"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -35,7 +35,7 @@ export const destroyWorkspace = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const workspace = state.workspaces[command.workspaceID]
-    if (!workspace) throw new Error("Workspace not found")
-    if (workspace === "destroyed") throw new Error("Workspace destroyed")
+    if (!workspace) throw new CommandRejection("workspace-not-found", "Workspace not found")
+    if (workspace === "destroyed") throw new CommandRejection("workspace-destroyed", "Workspace destroyed")
     return [recorded.create(command)]
   })

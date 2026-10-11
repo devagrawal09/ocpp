@@ -89,7 +89,7 @@ export const finishAgentStepSpec = createCommandSlice("finishAgentStep")
       given: [created, executionStarted],
       when: { ...step, blocks: [], calls: [], ...succeeded },
       expect: [],
-      reject: { reason: "Step not in flight" },
+      reject: { code: "step-not-in-flight" },
     },
     {
       description: "A step that settled (an interrupt aborted it) is refused.",
@@ -105,28 +105,28 @@ export const finishAgentStepSpec = createCommandSlice("finishAgentStep")
       ],
       when: { ...step, blocks: [], calls: [], ...succeeded },
       expect: [],
-      reject: { reason: "Step not in flight" },
+      reject: { code: "step-not-in-flight" },
     },
     {
       description: "A step whose execution has settled is refused.",
       given: [created, executionStarted, stepStarted, executionSettled],
       when: { ...step, blocks: [], calls: [], ...succeeded },
       expect: [],
-      reject: { reason: "Execution not active" },
+      reject: { code: "execution-not-active" },
     },
     {
       description: "An unknown Session is refused.",
       given: [],
       when: { ...step, blocks: [], calls: [], ...succeeded },
       expect: [],
-      reject: { reason: "Session not found" },
+      reject: { code: "session-not-found" },
     },
     {
       description: "A deleted Session is refused.",
       given: [created, deleted],
       when: { ...step, blocks: [], calls: [], ...succeeded },
       expect: [],
-      reject: { reason: "Session deleted" },
+      reject: { code: "session-deleted" },
     },
   )
 

@@ -1,6 +1,6 @@
 import { Agent } from "@ocpp/schema/agent"
 import { SessionID } from "@ocpp/schema/session-id"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -42,8 +42,8 @@ export const selectAgent = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const session = state.sessions[command.sessionID]
-    if (!session) throw new Error("Session not found")
-    if (session.status === "deleted") throw new Error("Session deleted")
+    if (!session) throw new CommandRejection("session-not-found", "Session not found")
+    if (session.status === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
     return [
       agentSelected.create({
         sessionID: command.sessionID,

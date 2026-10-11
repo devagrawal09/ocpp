@@ -20,14 +20,14 @@ export const completeBackgroundJobSpec = createCommandSlice("completeBackgroundJ
       given: [],
       when: { notificationID: "msg_n1" },
       expect: [],
-      reject: { reason: "Background job not found" },
+      reject: { code: "background-job-not-found" },
     },
     {
       description: "A completed marker is gone.",
       given: [started, completed],
       when: { notificationID: "msg_n1" },
       expect: [],
-      reject: { reason: "Background job not found" },
+      reject: { code: "background-job-not-found" },
     },
   )
 

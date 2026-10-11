@@ -1,8 +1,10 @@
 // Public entry for a host process (OC++ core) that embeds the runtime.
 // Hosts import only from here; everything else is the runtime's own layout.
 
-// A Command's rejection: the runtime refused it with an exact reason.
+// A Command's rejection: the runtime refused it with a stable code (`error.rejection.code`), one of
+// `RejectionCode`, which the host matches on.
 export { SpecterCommandRejectedError } from "@specter-ts/core"
+export type { RejectionCode } from "./rejections.ts"
 // The Event Log contract a host implements when it keeps the log itself.
 export {
   type EventDraft,

@@ -6,6 +6,7 @@ import { KeyValueFact } from "@ocpp/schema/key-value-fact"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { SpecterRejection } from "./specter/rejection.js"
+import type { RejectionCode } from "@ocpp/runtime"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { KVTable } from "./kv/sql.js"
 
@@ -74,10 +75,10 @@ const layer = Layer.effect(
       set: Effect.fn("KV.set")(function* (key, value) {
         yield* bus
           .command({ type: "storeValue", payload: { key, value: JSON.parse(JSON.stringify(value)) as Value } })
-          .pipe(unless("Value unchanged"))
+          .pipe(unless("value-unchanged"))
       }),
       remove: Effect.fn("KV.remove")(function* (key) {
-        yield* bus.command({ type: "removeValue", payload: { key } }).pipe(unless("Value not found"))
+        yield* bus.command({ type: "removeValue", payload: { key } }).pipe(unless("value-not-found"))
       }),
       scan: Effect.fn("KV.scan")(function* (options) {
         const limit = Number.isNaN(options.limit) ? 100 : Math.min(Math.max(Math.floor(options.limit ?? 100), 1), 1000)
@@ -104,16 +105,13 @@ const layer = Layer.effect(
   }),
 )
 
-/** A dispatch whose rejection for `reason` means there is nothing to record; any other failure is a defect. */
+/** A dispatch whose rejection with `code` means there is nothing to record; any other failure is a defect. */
 const unless =
-  (reason: string) =>
+  (code: RejectionCode) =>
   <A, E>(effect: Effect.Effect<A, E>) =>
     effect.pipe(
       Effect.asVoid,
-      Effect.catchIf(
-        (error) => SpecterRejection.reason(error) === reason,
-        () => Effect.void,
-      ),
+      Effect.catchIf(SpecterRejection.is(code), () => Effect.void),
       Effect.orDie,
     )
 

@@ -1,5 +1,5 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
-import { implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
@@ -45,8 +45,10 @@ export const runShell = implementCommand(specification)
     if (shells?.[event.payload.shellID]) shells[event.payload.shellID] = "settled"
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new Error("Session not found")
-    if (state.sessions[command.sessionID] === "deleted") throw new Error("Session deleted")
-    if (state.shells[command.sessionID]?.[command.shell.id]) throw new Error("Shell already started")
+    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
+    if (state.sessions[command.sessionID] === "deleted")
+      throw new CommandRejection("session-deleted", "Session deleted")
+    if (state.shells[command.sessionID]?.[command.shell.id])
+      throw new CommandRejection("shell-already-started", "Shell already started")
     return [shellStarted.create(command)]
   })

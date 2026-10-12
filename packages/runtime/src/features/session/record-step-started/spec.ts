@@ -61,7 +61,7 @@ const step = (assistantMessageID: string, sessionID = "ses_1") => ({
 
 export const recordStepStartedSpec = createCommandSlice("recordStepStarted")
   .description(
-    "Records that a step began inside an active execution (session.md: One Step May Have Several Physical Attempts).",
+    "Records that a step began inside an active execution (session.md: One Step May Have Several Physical Attempts). A step's ID is used once in its execution, but by a retried attempt: the host numbers a Session's steps across its executions, so only the active execution's steps are kept to check a repeated start.",
   )
   .scenarios(
     {
@@ -117,11 +117,18 @@ export const recordStepStartedSpec = createCommandSlice("recordStepStarted")
     },
     {
       description:
-        "A step ID is used once: restarting an ended step is rejected, which makes a duplicate step request harmless.",
+        "A step ID is used once in its execution: restarting an ended step is rejected, which makes a duplicate step request harmless.",
       given: [started(), stepStarted("msg_1"), stepEnded("msg_1")],
       when: step("msg_1"),
       expect: [],
       reject: { code: "step-already-started" },
+    },
+    {
+      description:
+        "A settled execution's steps are forgotten: the host numbers a Session's steps across its executions, so the check is the active execution's.",
+      given: [started(), stepStarted("msg_1"), stepEnded("msg_1"), succeeded(), started()],
+      when: step("msg_1"),
+      expect: [stepStarted("msg_1")],
     },
     {
       description: "A step abandoned by an interrupted execution does not block the next execution.",

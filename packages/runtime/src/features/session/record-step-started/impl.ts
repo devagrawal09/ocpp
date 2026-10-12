@@ -21,9 +21,9 @@ import {
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: which Sessions have an active execution, which step
-// IDs were used, and which step is in flight. Its Session lifecycle is the
-// shared fold in session/lifecycle.ts; the rest is duplicated from settle-step
-// and finish-execution on purpose.
+// IDs the active execution used, and which step is in flight. Its Session
+// lifecycle is the shared fold in session/lifecycle.ts; the rest is duplicated
+// from settle-step and finish-execution on purpose.
 export type RecordStepStartedState = {
   active: Record<string, true>
   steps: Record<string, { sessionID: string; retryScheduled: boolean }>
@@ -56,7 +56,7 @@ const input = Schema.toStandardSchemaV1(
 // for it), so the next execution starts clean.
 export const recordStepStarted = implementCommand(specification)
   .inputSchema(input)
-  .store(recordStepStartedStore, { stateVersion: 2 })
+  .store(recordStepStartedStore, { stateVersion: 3 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(executionStarted, applyExecutionStarted)
   // A deleted Session is forgotten.
@@ -64,16 +64,19 @@ export const recordStepStarted = implementCommand(specification)
     forgetSession(event.payload.sessionID, state.active, state.inFlight)
     forgetOwned(event.payload.sessionID, state.steps)
   })
+  // A settled execution's steps are forgotten: the host numbers a Session's
+  // steps across its executions, so a later execution never starts one again.
   .apply(executionSettled, async (event, state) => {
     settleExecution(state, event.payload.sessionID)
+    forgetOwned(event.payload.sessionID, state.steps)
   })
   .apply(stepStarted, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload
     state.steps[assistantMessageID] = { sessionID, retryScheduled: false }
     state.inFlight[sessionID] = assistantMessageID
   })
-  // A settled attempt is over; the step id stays taken unless its failure is
-  // retried.
+  // A settled attempt is over; the step id stays taken while its execution
+  // runs, unless its failure is retried.
   .apply(stepSettled, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload
     closeStep(state, sessionID, assistantMessageID)

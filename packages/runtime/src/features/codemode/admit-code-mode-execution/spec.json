@@ -1,6 +1,6 @@
 {
   "$schema": "https://specter.dev/specification/v2/slice.schema.json",
-  "description": "Admits a Code Mode program in a live Session: it reserves every name the program declares, so the execution alone may save them, and it sees the notebook as it is now. A program whose names the notebook holds, or another running execution reserved, is refused, and so is one that would grow the notebook past its limits.",
+  "description": "Admits a Code Mode program in a live Session: it reserves every name the program declares, so the execution alone may save them, and it sees the notebook as it is now. A program whose names the notebook holds, or another running execution reserved, is refused, and so is one that would grow the notebook past its limits. An execution's ID is refused while it runs; the host generates every one, so a settled execution is forgotten.",
   "formatVersion": 2,
   "kind": "command",
   "name": "admitCodeModeExecution",
@@ -868,8 +868,84 @@
       }
     },
     {
-      "description": "An execution ID names one execution, settled or not.",
+      "description": "An execution ID names one execution while it runs: admitting it again is refused.",
       "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-already-admitted"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_1",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "b"
+        ],
+        "sessionID": "ses_1",
+        "toolCallID": "call_exe_1"
+      }
+    },
+    {
+      "description": "A settled execution is forgotten: the host generates every execution's ID, so the check is the executions that run.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
       "given": [
         {
           "eventType": "session-created",
@@ -913,9 +989,6 @@
           "kind": "scenario-event"
         }
       ],
-      "reject": {
-        "code": "execution-already-admitted"
-      },
       "when": {
         "assistantMessageID": "msg_1",
         "executionID": "exe_1",

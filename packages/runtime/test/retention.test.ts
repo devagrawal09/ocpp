@@ -126,6 +126,65 @@ describe("a deleted Session in the runtime's State", () => {
     ))
 })
 
+describe("a live Session in the runtime's State", () => {
+  it("keeps the step and execution IDs of what still runs only", () =>
+    run(
+      Effect.gen(function* () {
+        const log = createMemoryEventLog()
+        const runtime = yield* runtimeOver(log)
+        // Each execution runs a step and a Code Mode program; one ends, the next still runs.
+        const execution = (ordinal: number, settled: boolean): Fact[] => [
+          { type: "session-execution-started", payload: { sessionID: "ses_live" } },
+          {
+            type: "session-step-started",
+            payload: {
+              ...sessionFacts["session-step-started"],
+              sessionID: "ses_live",
+              assistantMessageID: `msg_${ordinal}`,
+            },
+          },
+          {
+            type: "session-codemode-execution-admitted",
+            payload: {
+              ...sessionFacts["session-codemode-execution-admitted"],
+              sessionID: "ses_live",
+              executionID: `exe_${ordinal}`,
+              reserved: [`value${ordinal}`],
+            },
+          },
+          ...(settled
+            ? [
+                {
+                  type: "session-codemode-execution-settled",
+                  payload: { sessionID: "ses_live", executionID: `exe_${ordinal}`, outcome: "failed", error: "Boom" },
+                },
+                {
+                  type: "session-step-settled",
+                  payload: {
+                    ...sessionFacts["session-step-settled"],
+                    sessionID: "ses_live",
+                    assistantMessageID: `msg_${ordinal}`,
+                  },
+                },
+                {
+                  type: "session-execution-settled",
+                  payload: { ...sessionFacts["session-execution-settled"], sessionID: "ses_live" },
+                },
+              ]
+            : []),
+        ]
+        yield* record(runtime, [
+          { type: "session-created", payload: { ...sessionFacts["session-created"], sessionID: "ses_live" } },
+          ...execution(1, true),
+          ...execution(2, false),
+        ])
+        const folded = yield* fold(log)
+        expect(Object.keys((folded["recordStepStarted"] as { steps: object }).steps)).toEqual(["msg_2"])
+        expect(Object.keys((folded["admitCodeModeExecution"] as { executions: object }).executions)).toEqual(["exe_2"])
+      }),
+    ))
+})
+
 describe("a deleted Session in the log", () => {
   it("is purged but for its tombstone, with the aggregates it owns, and the purged log folds the same", () =>
     run(

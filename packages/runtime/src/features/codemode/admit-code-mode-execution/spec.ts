@@ -35,7 +35,7 @@ const discarded = (executionID: string) =>
 
 export const admitCodeModeExecutionSpec = createCommandSlice("admitCodeModeExecution")
   .description(
-    "Admits a Code Mode program in a live Session: it reserves every name the program declares, so the execution alone may save them, and it sees the notebook as it is now. A program whose names the notebook holds, or another running execution reserved, is refused, and so is one that would grow the notebook past its limits.",
+    "Admits a Code Mode program in a live Session: it reserves every name the program declares, so the execution alone may save them, and it sees the notebook as it is now. A program whose names the notebook holds, or another running execution reserved, is refused, and so is one that would grow the notebook past its limits. An execution's ID is refused while it runs; the host generates every one, so a settled execution is forgotten.",
   )
   .scenarios(
     {
@@ -133,11 +133,18 @@ export const admitCodeModeExecutionSpec = createCommandSlice("admitCodeModeExecu
       reject: { code: "name-already-defined", details: { names: ["a"] } },
     },
     {
-      description: "An execution ID names one execution, settled or not.",
-      given: [created(), admitted("exe_1", ["a"]), failed("exe_1")],
+      description: "An execution ID names one execution while it runs: admitting it again is refused.",
+      given: [created(), admitted("exe_1", ["a"])],
       when: { ...admission("exe_1", ["b"]), limits },
       expect: [],
       reject: { code: "execution-already-admitted" },
+    },
+    {
+      description:
+        "A settled execution is forgotten: the host generates every execution's ID, so the check is the executions that run.",
+      given: [created(), admitted("exe_1", ["a"]), failed("exe_1")],
+      when: { ...admission("exe_1", ["b"]), limits },
+      expect: [admitted("exe_1", ["b"])],
     },
     {
       description: "An unknown Session is refused.",

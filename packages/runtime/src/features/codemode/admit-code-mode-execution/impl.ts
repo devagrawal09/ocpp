@@ -17,12 +17,12 @@ import {
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: every Session ID the log has named, live or deleted;
-// each execution the log admitted, with its Session and the names it holds
-// until it settles; each Session's notebook, the names its executions saved
-// with the size of each value; and each Session's reserved names. A revert's
-// fact names the executions whose values it removes; a fork's carries the
-// values it copies. Its Session lifecycle is the shared fold in
-// session/lifecycle.ts; the rest is duplicated from
+// each execution the log admitted that has not settled or been discarded, with
+// its Session and the names it holds; each Session's notebook, the names its
+// executions saved with the size of each value; and each Session's reserved
+// names. A revert's fact names the executions whose values it removes; a
+// fork's carries the values it copies. Its Session lifecycle is the shared
+// fold in session/lifecycle.ts; the rest is duplicated from
 // settle-code-mode-execution on purpose.
 export type AdmitCodeModeExecutionState = {
   sessions: Record<string, "live" | "deleted">
@@ -85,9 +85,12 @@ export const admitCodeModeExecution = implementCommand(specification)
     const reservations = (state.reservations[sessionID] ??= {})
     for (const name of reserved) reservations[name] = executionID
   })
+  // A settled execution is forgotten: the host generates every execution's ID,
+  // so it never admits one again, and only one that runs can be admitted twice.
   .apply(settled, async (event, state) => {
     const { sessionID, executionID } = event.payload
     release(state, executionID)
+    delete state.executions[executionID]
     if (event.payload.outcome !== "finished") return
     const notebook = (state.notebooks[sessionID] ??= {})
     for (const [name, value] of Object.entries(event.payload.values ?? {}))

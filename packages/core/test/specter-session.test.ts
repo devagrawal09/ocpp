@@ -43,7 +43,9 @@ import { SessionPromptNode } from "@ocpp/core/session/prompt-node"
 import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionMessage } from "@ocpp/core/session/message"
-import { SessionTable } from "@ocpp/core/session/sql"
+import { InstructionStateTable, SessionTable } from "@ocpp/core/session/sql"
+import { CodeModeCommandTable } from "@ocpp/core/codemode/command.sql"
+import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
 import { SessionStore } from "@ocpp/core/session/store"
 import { SkillInstructions } from "@ocpp/core/skill/instructions"
 import { Snapshot } from "@ocpp/core/snapshot"
@@ -78,6 +80,10 @@ const sharedLocation = makeGlobalNode({
   ),
   deps: [],
 })
+
+// The built-in instructions a test's Sessions read: none, unless a test gives them a context, whose value each
+// Session then stores by hash.
+const builtins: { context?: string } = {}
 
 const pluginRuntime = PluginRuntime.makeCell()
 const app = (database?: LayerNode.Node<Database.Service, never, any>) =>
@@ -124,7 +130,19 @@ const app = (database?: LayerNode.Node<Database.Service, never, any>) =>
       ],
       [
         InstructionBuiltIns.node,
-        Layer.mock(InstructionBuiltIns.Service, { load: () => Effect.succeed(Instructions.empty) }),
+        Layer.mock(InstructionBuiltIns.Service, {
+          load: () =>
+            Effect.sync(() =>
+              builtins.context === undefined
+                ? Instructions.empty
+                : Instructions.make({
+                    key: Instructions.Key.make("test/context"),
+                    codec: Schema.toCodecJson(Schema.String),
+                    read: Effect.succeed(builtins.context),
+                    render: { initial: String, changed: (_previous, current) => current },
+                  }),
+            ),
+        }),
       ],
       [
         InstructionDiscovery.node,
@@ -277,6 +295,178 @@ const rebuildProjections = Effect.gen(function* () {
   expect((yield* projections).every(([, rows]) => rows.length === 0)).toBeTrue()
   yield* (yield* Bus.Service).rebuild()
 })
+
+// The runtime's saved state: every Slice's snapshot, and how many facts the log holds.
+const savedState = Database.Service.use(({ db }) =>
+  Effect.all({
+    slices: db.all<{ readonly slice: string; readonly cursor: number; readonly state: string }>(
+      sql`SELECT slice_name AS slice, cursor, state_json AS state FROM specter_slice_snapshots ORDER BY slice_name`,
+    ),
+    facts: db.get<{ readonly count: number }>(sql`SELECT count(*) AS count FROM specter_events`),
+  }).pipe(Effect.orDie),
+)
+
+// The facts the log keeps under a Session's key.
+const keptOf = (sessionID: string) =>
+  Database.Service.use(({ db }) =>
+    db
+      .all<{ readonly type: string }>(
+        sql`SELECT e.type FROM specter_events e JOIN specter_event_keys k ON k.event_order = e.event_order
+          WHERE k.name = 'session' AND k.value = ${sessionID} ORDER BY e.event_order`,
+      )
+      .pipe(Effect.orDie),
+  )
+
+/**
+ * A Session saves a notebook function through a Code Mode program, with instructions and a command that calls it,
+ * then is forked, and each fork forked again, `depth` forks in all. Every Session but the last fork is deleted, and
+ * purged in full, though forks were made of it: the last fork recorded what it inherited, so it keeps its history,
+ * notebook, command and instructions, its read models rebuild from the log alone, it runs a program that calls its
+ * copied function, and a boot from the log alone saves the snapshots the boots that ran it saved.
+ */
+const forkOutlivesItsParents = (depth: number) =>
+  Effect.gen(function* () {
+    const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
+    builtins.context = "Forks keep this context"
+    yield* Effect.addFinalizer(() => Effect.sync(() => delete builtins.context))
+    yield* boot(
+      file,
+      Effect.gen(function* () {
+        yield* setupAgents
+        yield* (yield* Tool.Service).transform((draft) =>
+          draft.add({
+            name: "echo",
+            description: "Echo text",
+            input: Schema.Struct({ text: Schema.String }),
+            output: Schema.Struct({ text: Schema.String }),
+            execute: ({ text }) => Effect.succeed({ output: { text }, content: text }),
+          }),
+        )
+        const llm = yield* TestLLM.Service
+        yield* llm.push(
+          TestLLM.tool("call_1", "execute", {
+            code: 'function report() { return "answer=" + 6 * 7 }\nreturn report()',
+          }),
+        )
+        const said = (request: { readonly messages: unknown }, text: string) =>
+          JSON.stringify(request.messages).includes(text)
+        yield* (llm.client as TestLLM.TestInterface).serve((request) =>
+          said(request, "again=answer=42")
+            ? TestLLM.text("The fork says 42", "text_1")
+            : said(request, "answer=42")
+              ? TestLLM.text("The answer is 42", "text_1")
+              : TestLLM.text("Waiting for it", "text_1"),
+        )
+        const session = yield* Session.Service
+        const bus = yield* Bus.Service
+        const { db } = yield* Database.Service
+        const answered = (sessionID: Session.ID, text: string) =>
+          session.wait(sessionID).pipe(
+            Effect.andThen(session.messages({ sessionID, order: "asc" })),
+            Effect.repeat({
+              until: (messages) => JSON.stringify(messages.at(-1)).includes(text),
+              schedule: Schedule.spaced("20 millis"),
+            }),
+            Effect.timeout("5 seconds"),
+            Effect.andThen(session.wait(sessionID)),
+          )
+
+        const parent = yield* session.create({
+          location: Location.Ref.make({ directory: AbsolutePath.make("/project") }),
+        })
+        yield* session.prompt({ sessionID: parent.id, text: "Compute it" })
+        yield* answered(parent.id, "The answer is 42")
+        // A command calling the saved function, as CodeModeCommand.define records it.
+        yield* bus.command({
+          type: "defineCodeModeCommand",
+          payload: { sessionID: parent.id, name: "report", description: "Reports the answer", handler: "report" },
+        })
+        // The fork, and a fork of each fork.
+        const chain = [parent]
+        for (const _ of Array.from({ length: depth })) {
+          const forked = yield* session.fork({ sessionID: chain.at(-1)!.id, boundary: { type: "through" } })
+          chain.push(forked)
+        }
+        const last = chain.at(-1)!
+        // What the last fork holds of its inheritance.
+        const inherited = Effect.all({
+          messages: session.messages({ sessionID: last.id, order: "asc" }),
+          info: session.get(last.id),
+          notebook: db
+            .select({ name: CodeModeBindingTable.name, value: CodeModeBindingTable.value })
+            .from(CodeModeBindingTable)
+            .where(eq(CodeModeBindingTable.session_id, last.id))
+            .all()
+            .pipe(Effect.orDie),
+          commands: db
+            .select({ name: CodeModeCommandTable.name, handler: CodeModeCommandTable.handler })
+            .from(CodeModeCommandTable)
+            .where(eq(CodeModeCommandTable.session_id, last.id))
+            .all()
+            .pipe(Effect.orDie),
+          instructions: db
+            .select({ values: InstructionStateTable.current_values })
+            .from(InstructionStateTable)
+            .where(eq(InstructionStateTable.session_id, last.id))
+            .get()
+            .pipe(Effect.orDie),
+        })
+        const before = yield* inherited
+        expect(before.messages.map((message) => message.type)).toEqual(
+          (yield* session.messages({ sessionID: parent.id, order: "asc" })).map((message) => message.type),
+        )
+        expect(before.notebook.map((binding) => binding.name)).toEqual(["report"])
+        expect(before.commands).toEqual([{ name: "report", handler: "report" }])
+        expect(Object.keys(before.instructions?.values ?? {})).toContain("test/context")
+
+        // Every Session before the last fork goes, oldest first, and purges in full: its forks read none of it.
+        for (const removed of chain.slice(0, -1)) {
+          yield* session.remove(removed.id)
+          expect(
+            yield* keptOf(removed.id).pipe(
+              Effect.repeat({ until: (kept) => kept.length === 1, schedule: Schedule.spaced("20 millis") }),
+              Effect.timeout("5 seconds"),
+            ),
+          ).toEqual([{ type: "session-deleted" }])
+        }
+        expect(yield* inherited).toEqual(before)
+        expect(before.info.fork).toMatchObject({ sessionID: chain.at(-2)!.id })
+
+        // The read models rebuild from the log alone as they are: the fork's history, notebook, command and
+        // instruction values come from its own facts.
+        const projected = yield* projections
+        yield* rebuildProjections
+        expect(yield* projections).toEqual(projected)
+        expect(yield* inherited).toEqual(before)
+
+        // The fork runs: its instruction values load, and a program calls the function its notebook copied.
+        yield* llm.push(TestLLM.tool("call_2", "execute", { code: 'return "again=" + report()' }))
+        yield* session.prompt({ sessionID: last.id, text: "Again" })
+        yield* answered(last.id, "The fork says 42")
+      }),
+    )
+    // A boot from the log alone saves the snapshots the boots that ran it saved.
+    yield* boot(file, Effect.void)
+    const resumed = yield* boot(file, savedState)
+    yield* boot(
+      file,
+      Database.Service.use(({ db }) =>
+        Effect.all([
+          db.run(sql`DELETE FROM specter_slice_snapshots`),
+          db.run(sql`DELETE FROM specter_reaction_outbox`),
+        ]).pipe(Effect.orDie),
+      ),
+    )
+    yield* boot(file, Effect.void)
+    const rebuilt = yield* boot(file, savedState)
+    expect(resumed.slices.length).toBeGreaterThan(20)
+    // The same States: a fold of the purged log puts a tombstone where the whole log's fold first put the Session's
+    // entry, so a record may list its keys in another order.
+    const states = (slices: typeof resumed.slices) =>
+      slices.map((slice) => ({ ...slice, state: JSON.parse(slice.state) as unknown }))
+    expect(states(rebuilt.slices)).toEqual(states(resumed.slices))
+    expect(rebuilt.facts).toEqual(resumed.facts)
+  })
 
 describe("Sessions on the Specter runtime", () => {
   it.live("runs a prompt to a reply through OC++'s Session facade", () =>
@@ -822,6 +1012,18 @@ describe("Sessions on the Specter runtime", () => {
         for (const slice of resumed.slices)
           if (slice.state.includes(removed)) expect(slice.state.split(removed).length - 1).toBe(1)
       }),
+    30_000,
+  )
+
+  it.live(
+    "purges a forked parent in full, and its fork runs, rebuilds and boots from what it recorded",
+    () => forkOutlivesItsParents(1),
+    30_000,
+  )
+
+  it.live(
+    "purges every Session of a chain of forks but the last, which runs, rebuilds and boots from what it recorded",
+    () => forkOutlivesItsParents(2),
     30_000,
   )
 

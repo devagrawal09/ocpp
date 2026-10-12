@@ -1,6 +1,6 @@
 {
   "$schema": "https://specter.dev/specification/v2/slice.schema.json",
-  "description": "Forks a live Session: the child's creation and the fork are recorded in one commit, so the child exists exactly when its fork does. The host resolves the boundary to a message of the parent's history and chooses the child's identity; the fork's projection copies the history. The child's Code Mode notebook copies the values of the parent's executions the host found through the boundary, recorded in the same commit before the fork, whose projection checkpoints it.",
+  "description": "Forks a live Session: the child's creation and the fork are recorded in one commit, so the child exists exactly when its fork does. The host resolves the boundary to a message of the parent's history and chooses the child's identity, and gives what the child inherits of its parent's projection: its settled messages through the boundary, the notebook values they saved with the parent's commands and events, its newest instruction values with the values they refer to, its instruction entries and its tool list. The fork records all of it, before session-forked, so nothing of the child reads its parent's facts: its history in pages of at most the bytes the host gives, and its notebook with the commands and events whose handler it holds.",
   "formatVersion": 2,
   "kind": "command",
   "name": "forkSession",
@@ -70,7 +70,7 @@
       }
     },
     {
-      "description": "The child's notebook copies the values of the parent's executions the host found through the boundary.",
+      "description": "The child's history copies the parent's messages in pages: as many as fit in a page's bytes, in order, and one larger than a page in a page of its own.",
       "expect": [
         {
           "eventType": "session-created",
@@ -87,13 +87,64 @@
           "kind": "scenario-event"
         },
         {
-          "eventType": "session-codemode-notebook-copied",
+          "eventType": "session-history-copied",
           "examplePayload": {
-            "executions": [
-              "exe_1",
-              "exe_2"
+            "messages": [
+              {
+                "created": 1,
+                "data": {
+                  "text": "Plan the release"
+                },
+                "seq": 1,
+                "type": "user",
+                "updated": 1
+              },
+              {
+                "created": 2,
+                "data": {
+                  "finish": "stop"
+                },
+                "seq": 4,
+                "type": "assistant",
+                "updated": 3
+              }
             ],
-            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-history-copied",
+          "examplePayload": {
+            "messages": [
+              {
+                "created": 3,
+                "data": {
+                  "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                },
+                "seq": 5,
+                "type": "synthetic",
+                "updated": 3
+              }
+            ],
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-history-copied",
+          "examplePayload": {
+            "messages": [
+              {
+                "created": 4,
+                "data": {
+                  "text": "Ship it"
+                },
+                "seq": 7,
+                "type": "user",
+                "updated": 4
+              }
+            ],
             "sessionID": "ses_2"
           },
           "kind": "scenario-event"
@@ -132,10 +183,47 @@
           "messageID": "msg_3",
           "type": "through"
         },
-        "notebook": [
-          "exe_1",
-          "exe_2"
-        ],
+        "history": {
+          "messages": [
+            {
+              "created": 1,
+              "data": {
+                "text": "Plan the release"
+              },
+              "seq": 1,
+              "type": "user",
+              "updated": 1
+            },
+            {
+              "created": 2,
+              "data": {
+                "finish": "stop"
+              },
+              "seq": 4,
+              "type": "assistant",
+              "updated": 3
+            },
+            {
+              "created": 3,
+              "data": {
+                "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              },
+              "seq": 5,
+              "type": "synthetic",
+              "updated": 3
+            },
+            {
+              "created": 4,
+              "data": {
+                "text": "Ship it"
+              },
+              "seq": 7,
+              "type": "user",
+              "updated": 4
+            }
+          ],
+          "pageBytes": 160
+        },
         "parentID": "ses_1",
         "session": {
           "location": {
@@ -150,7 +238,153 @@
       }
     },
     {
-      "description": "The child adopts the parent's newest instruction values and entries, recorded with the fork.",
+      "description": "The child's notebook copies the values the host found through the boundary, with the commands and events those values handle.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "calm-heron",
+            "title": "Plan (fork #1)",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "commands": {
+              "deploy": {
+                "created": 1,
+                "description": "Deploys the app",
+                "handler": "report",
+                "updated": 2
+              }
+            },
+            "events": {
+              "nightly": {
+                "created": 1,
+                "description": "Reports nightly",
+                "handler": "report",
+                "schedule": {
+                  "every": "1d"
+                },
+                "updated": 5
+              }
+            },
+            "sessionID": "ses_2",
+            "values": {
+              "report": {
+                "executionID": "exe_1",
+                "seq": 4,
+                "value": {
+                  "kind": "function",
+                  "source": "function report() {}"
+                }
+              }
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_3",
+              "type": "through"
+            },
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "title": "Plan",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "through"
+        },
+        "notebook": {
+          "commands": {
+            "deploy": {
+              "created": 1,
+              "description": "Deploys the app",
+              "handler": "report",
+              "updated": 2
+            },
+            "publish": {
+              "created": 1,
+              "description": "Deploys the app",
+              "handler": "publish",
+              "updated": 2
+            }
+          },
+          "events": {
+            "hourly": {
+              "created": 1,
+              "description": "Reports nightly",
+              "handler": "later",
+              "schedule": {
+                "every": "1d"
+              },
+              "updated": 5
+            },
+            "nightly": {
+              "created": 1,
+              "description": "Reports nightly",
+              "handler": "report",
+              "schedule": {
+                "every": "1d"
+              },
+              "updated": 5
+            }
+          },
+          "values": {
+            "report": {
+              "executionID": "exe_1",
+              "seq": 4,
+              "value": {
+                "kind": "function",
+                "source": "function report() {}"
+              }
+            }
+          }
+        },
+        "parentID": "ses_1",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "A notebook without values copies nothing: no command or event has its handler.",
       "expect": [
         {
           "eventType": "session-created",
@@ -171,6 +405,117 @@
           "examplePayload": {
             "boundary": {
               "messageID": "msg_3",
+              "type": "through"
+            },
+            "parentID": "ses_1",
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "title": "Plan",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "through"
+        },
+        "notebook": {
+          "commands": {
+            "deploy": {
+              "created": 1,
+              "description": "Deploys the app",
+              "handler": "report",
+              "updated": 2
+            },
+            "publish": {
+              "created": 1,
+              "description": "Deploys the app",
+              "handler": "publish",
+              "updated": 2
+            }
+          },
+          "events": {
+            "hourly": {
+              "created": 1,
+              "description": "Reports nightly",
+              "handler": "later",
+              "schedule": {
+                "every": "1d"
+              },
+              "updated": 5
+            },
+            "nightly": {
+              "created": 1,
+              "description": "Reports nightly",
+              "handler": "report",
+              "schedule": {
+                "every": "1d"
+              },
+              "updated": 5
+            }
+          },
+          "values": {}
+        },
+        "parentID": "ses_1",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        }
+      }
+    },
+    {
+      "description": "The child adopts the parent's newest instruction values, storing the values they refer to, its entries and its tool list, recorded with the fork.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "calm-heron",
+            "title": "Plan (fork #1)",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-blobs-stored",
+          "examplePayload": {
+            "blobs": {
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "Use the agents in AGENTS.md"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_3",
               "type": "before"
             },
             "instructionEntries": [
@@ -182,6 +527,166 @@
                 }
               }
             ],
+            "instructions": {
+              "builtin/agents": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "parentID": "ses_1",
+            "sessionID": "ses_2",
+            "tools": [
+              "glob"
+            ]
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "blobs": {
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "Use the agents in AGENTS.md"
+        },
+        "boundary": {
+          "messageID": "msg_3",
+          "type": "before"
+        },
+        "instructionEntries": [
+          {
+            "key": "ticket",
+            "removed": false,
+            "value": {
+              "id": 42
+            }
+          }
+        ],
+        "instructions": {
+          "builtin/agents": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "parentID": "ses_1",
+        "session": {
+          "location": {
+            "directory": "/tmp/ws"
+          },
+          "projectID": "prj_1",
+          "sessionID": "ses_2",
+          "slug": "calm-heron",
+          "title": "Plan (fork #1)",
+          "version": "2"
+        },
+        "tools": [
+          "glob"
+        ]
+      }
+    },
+    {
+      "description": "Everything the child inherits precedes its fork, in one commit: its instruction values, its history, then its notebook.",
+      "expect": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "calm-heron",
+            "title": "Plan (fork #1)",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-instruction-blobs-stored",
+          "examplePayload": {
+            "blobs": {
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "Use the agents in AGENTS.md"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-history-copied",
+          "examplePayload": {
+            "messages": [
+              {
+                "created": 1,
+                "data": {
+                  "text": "Plan the release"
+                },
+                "seq": 1,
+                "type": "user",
+                "updated": 1
+              },
+              {
+                "created": 2,
+                "data": {
+                  "finish": "stop"
+                },
+                "seq": 4,
+                "type": "assistant",
+                "updated": 3
+              }
+            ],
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "commands": {
+              "deploy": {
+                "created": 1,
+                "description": "Deploys the app",
+                "handler": "report",
+                "updated": 2
+              }
+            },
+            "events": {
+              "nightly": {
+                "created": 1,
+                "description": "Reports nightly",
+                "handler": "report",
+                "schedule": {
+                  "every": "1d"
+                },
+                "updated": 5
+              }
+            },
+            "sessionID": "ses_2",
+            "values": {
+              "report": {
+                "executionID": "exe_1",
+                "seq": 4,
+                "value": {
+                  "kind": "function",
+                  "source": "function report() {}"
+                }
+              }
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-forked",
+          "examplePayload": {
+            "boundary": {
+              "messageID": "msg_3",
+              "type": "through"
+            },
             "instructions": {
               "builtin/agents": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             },
@@ -207,21 +712,84 @@
         }
       ],
       "when": {
+        "blobs": {
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "Use the agents in AGENTS.md"
+        },
         "boundary": {
           "messageID": "msg_3",
-          "type": "before"
+          "type": "through"
         },
-        "instructionEntries": [
-          {
-            "key": "ticket",
-            "removed": false,
-            "value": {
-              "id": 42
+        "history": {
+          "messages": [
+            {
+              "created": 1,
+              "data": {
+                "text": "Plan the release"
+              },
+              "seq": 1,
+              "type": "user",
+              "updated": 1
+            },
+            {
+              "created": 2,
+              "data": {
+                "finish": "stop"
+              },
+              "seq": 4,
+              "type": "assistant",
+              "updated": 3
             }
-          }
-        ],
+          ],
+          "pageBytes": 1024
+        },
         "instructions": {
           "builtin/agents": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "notebook": {
+          "commands": {
+            "deploy": {
+              "created": 1,
+              "description": "Deploys the app",
+              "handler": "report",
+              "updated": 2
+            },
+            "publish": {
+              "created": 1,
+              "description": "Deploys the app",
+              "handler": "publish",
+              "updated": 2
+            }
+          },
+          "events": {
+            "hourly": {
+              "created": 1,
+              "description": "Reports nightly",
+              "handler": "later",
+              "schedule": {
+                "every": "1d"
+              },
+              "updated": 5
+            },
+            "nightly": {
+              "created": 1,
+              "description": "Reports nightly",
+              "handler": "report",
+              "schedule": {
+                "every": "1d"
+              },
+              "updated": 5
+            }
+          },
+          "values": {
+            "report": {
+              "executionID": "exe_1",
+              "seq": 4,
+              "value": {
+                "kind": "function",
+                "source": "function report() {}"
+              }
+            }
+          }
         },
         "parentID": "ses_1",
         "session": {

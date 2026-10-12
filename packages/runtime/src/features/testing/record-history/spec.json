@@ -1713,6 +1713,51 @@
       }
     },
     {
+      "description": "Records session-history-copied as the test gave it.",
+      "expect": [
+        {
+          "eventType": "session-history-copied",
+          "examplePayload": {
+            "messages": [
+              {
+                "created": 1,
+                "data": {
+                  "text": "Hello"
+                },
+                "seq": 1,
+                "type": "user",
+                "updated": 1
+              }
+            ],
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "facts": [
+          {
+            "payload": {
+              "messages": [
+                {
+                  "created": 1,
+                  "data": {
+                    "text": "Hello"
+                  },
+                  "seq": 1,
+                  "type": "user",
+                  "updated": 1
+                }
+              ],
+              "sessionID": "ses_2"
+            },
+            "type": "session-history-copied"
+          }
+        ]
+      }
+    },
+    {
       "description": "Records session-instruction-blobs-stored as the test gave it.",
       "expect": [
         {
@@ -2061,11 +2106,33 @@
         {
           "eventType": "session-codemode-notebook-copied",
           "examplePayload": {
-            "executions": [
-              "exe_1"
-            ],
-            "parentID": "ses_1",
-            "sessionID": "ses_2"
+            "commands": {
+              "deploy": {
+                "created": 1,
+                "description": "Deploys the app",
+                "handler": "report",
+                "updated": 1
+              }
+            },
+            "events": {
+              "nightly": {
+                "created": 1,
+                "description": "Runs the nightly check",
+                "handler": "report",
+                "schedule": {
+                  "every": "1h"
+                },
+                "updated": 1
+              }
+            },
+            "sessionID": "ses_2",
+            "values": {
+              "report": {
+                "executionID": "exe_1",
+                "seq": 3,
+                "value": "done"
+              }
+            }
           },
           "kind": "scenario-event"
         }
@@ -2075,11 +2142,33 @@
         "facts": [
           {
             "payload": {
-              "executions": [
-                "exe_1"
-              ],
-              "parentID": "ses_1",
-              "sessionID": "ses_2"
+              "commands": {
+                "deploy": {
+                  "created": 1,
+                  "description": "Deploys the app",
+                  "handler": "report",
+                  "updated": 1
+                }
+              },
+              "events": {
+                "nightly": {
+                  "created": 1,
+                  "description": "Runs the nightly check",
+                  "handler": "report",
+                  "schedule": {
+                    "every": "1h"
+                  },
+                  "updated": 1
+                }
+              },
+              "sessionID": "ses_2",
+              "values": {
+                "report": {
+                  "executionID": "exe_1",
+                  "seq": 3,
+                  "value": "done"
+                }
+              }
             },
             "type": "session-codemode-notebook-copied"
           }

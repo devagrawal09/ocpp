@@ -83,7 +83,12 @@ export const settleCodeModeExecutionSpec = createCommandSlice("settleCodeModeExe
         finished("exe_3", { x: 1, y: 2 }, "ses_0"),
         admitted("exe_4", ["z"], "ses_0"),
         finished("exe_4", { z: 3 }, "ses_0"),
-        event("session-codemode-notebook-copied", { sessionID: "ses_1", parentID: "ses_0", executions: ["exe_4"] }),
+        event("session-codemode-notebook-copied", {
+          sessionID: "ses_1",
+          values: { z: { value: 3, executionID: "exe_4", seq: 2 } },
+          commands: {},
+          events: {},
+        }),
         admitted("exe_1", ["a", "b"]),
         finished("exe_1", { a: 1, b: 2 }),
         event("session-codemode-notebook-reverted", { sessionID: "ses_1", executions: ["exe_1"] }),

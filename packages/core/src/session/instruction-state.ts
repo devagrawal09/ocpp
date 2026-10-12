@@ -257,6 +257,11 @@ export const storeBlobs = Effect.fnUntraced(function* (
   yield* db.insert(InstructionBlobTable).values(rows).onConflictDoNothing().run().pipe(Effect.orDie)
 })
 
+/** The values that instruction values refer to, by hash: what a fork stores with the values it inherits. */
+export const blobs = Effect.fn("InstructionState.blobs")(function* (db: DatabaseService, values: Instructions.Values) {
+  return Object.fromEntries(yield* loadBlobs(db, Object.values(values)))
+})
+
 const loadBlobs = Effect.fnUntraced(function* (db: DatabaseService, values: ReadonlyArray<Instructions.Hash>) {
   const hashes = [...new Set(values)]
   const batches = Array.from({ length: Math.ceil(hashes.length / 500) }, (_, index) =>

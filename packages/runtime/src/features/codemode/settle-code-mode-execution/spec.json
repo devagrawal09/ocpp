@@ -397,11 +397,16 @@
         {
           "eventType": "session-codemode-notebook-copied",
           "examplePayload": {
-            "executions": [
-              "exe_4"
-            ],
-            "parentID": "ses_0",
-            "sessionID": "ses_1"
+            "commands": {},
+            "events": {},
+            "sessionID": "ses_1",
+            "values": {
+              "z": {
+                "executionID": "exe_4",
+                "seq": 2,
+                "value": 3
+              }
+            }
           },
           "kind": "scenario-event"
         },

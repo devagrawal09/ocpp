@@ -10,7 +10,8 @@ import { Database } from "../database/database.js"
 import { Job } from "../job.js"
 import { SpecterRejection } from "../specter/rejection.js"
 import type { RejectionCode } from "@ocpp/runtime"
-import { CodeModeHandler } from "./handler.js"
+import { CodeModeCommandTable } from "./command.sql.js"
+import { CodeModeEventTable } from "./event.sql.js"
 import type { SessionMessage } from "../session/message.js"
 import type { SessionSchema } from "../session/schema.js"
 import type { ToolLists } from "../tool/lists.js"
@@ -223,30 +224,60 @@ const layer = Layer.effect(
         ? saveDeclarations(db, event.data, event.created)
         : abandon(db, event.data.executionID, event.data.outcome, event.data.error ?? RESTART_MESSAGE, event.created),
     )
-    // A fork copies the values its history copied through the boundary, then the commands and events whose
-    // handler its notebook holds. Reservations belong to the Session that admitted them and are never copied.
+    // A fork's notebook is what its copy carries: the values its history saved through the boundary, each at its
+    // message's sequence, and the commands and events they handle, copied disabled with no firing history.
+    // Reservations belong to the Session that admitted them and are never copied.
     yield* bus.project(SessionFact.NotebookCopied, (event) =>
       Effect.gen(function* () {
-        const bindings = yield* db
-          .select()
-          .from(CodeModeBindingTable)
-          .where(
-            and(
-              eq(CodeModeBindingTable.session_id, event.data.parentID),
-              inArray(CodeModeBindingTable.execution_id, [...event.data.executions]),
-            ),
-          )
-          .all()
-          .pipe(Effect.orDie)
-        if (bindings.length > 0)
+        const sessionID = event.data.sessionID
+        const values = Object.entries(event.data.values)
+        if (values.length > 0)
           yield* db
             .insert(CodeModeBindingTable)
-            .values(bindings.map((binding) => ({ ...binding, session_id: event.data.sessionID })))
-            .onConflictDoNothing()
+            .values(
+              values.map(([name, entry]) => ({
+                session_id: sessionID,
+                name,
+                value: entry.value as CodeMode.NotebookValue,
+                message_seq: entry.seq,
+                execution_id: entry.executionID,
+              })),
+            )
             .run()
-            .pipe(Effect.orDie)
-        yield* CodeModeHandler.fork(db, { from: event.data.parentID, to: event.data.sessionID })
-      }),
+        const commands = Object.entries(event.data.commands)
+        if (commands.length > 0)
+          yield* db
+            .insert(CodeModeCommandTable)
+            .values(
+              commands.map(([name, command]) => ({
+                session_id: sessionID,
+                name,
+                description: command.description,
+                handler: command.handler,
+                time_created: command.created,
+                time_updated: command.updated,
+              })),
+            )
+            .run()
+        const events = Object.entries(event.data.events)
+        if (events.length > 0)
+          yield* db
+            .insert(CodeModeEventTable)
+            .values(
+              events.map(([name, definition]) => ({
+                session_id: sessionID,
+                name,
+                description: definition.description,
+                schedule: definition.schedule,
+                handler: definition.handler,
+                input: (definition.input as Schema.Json | undefined) ?? null,
+                enabled: false,
+                time_created: definition.created,
+                time_updated: definition.updated,
+              })),
+            )
+            .run()
+      }).pipe(Effect.orDie),
     )
     // A committed revert removes the values of the executions whose message it cut.
     yield* bus.project(SessionFact.NotebookReverted, (event) =>

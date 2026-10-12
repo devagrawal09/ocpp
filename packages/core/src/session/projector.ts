@@ -1,6 +1,6 @@
 export * as SessionProjector from "./projector.js"
 
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm"
+import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm"
 import { DateTime, Effect, Layer, Schema, Stream } from "effect"
 import path from "path"
 import { Database } from "../database/database.js"
@@ -48,7 +48,8 @@ type Usage = {
   }
 }
 
-const ForkBatchSize = 500
+// How many copied messages one insert writes: SQLite bounds a statement's parameters.
+const CopyBatchSize = 500
 
 /** What a step's attempt used, once it stands: a transparently retried attempt is the same step again. */
 const stepUsage = (step: typeof SessionEvent.Step.Settled.Type.data): Usage | undefined => {
@@ -105,52 +106,20 @@ const publishSessionUsage = Effect.fn("SessionProjector.publishUsage")(function*
   })
 })
 
+// A fork's facts carry everything it inherits: session-created, earlier in its commit, stored the child, and its
+// instruction values, history and notebook came before this fact. The fork records where it came from, with its
+// parent's stored tool list, so a fork of a subagent keeps the tools it was given; it reads nothing of its parent.
 const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
   db: DatabaseService,
   event: typeof SessionEvent.Forked.Type,
 ) {
-  const parent = yield* db
-    .select()
-    .from(SessionTable)
-    .where(eq(SessionTable.id, event.data.parentID))
-    .get()
-    .pipe(Effect.orDie)
-  if (!parent) return yield* Effect.die(new Error(`Fork parent session not found: ${event.data.parentID}`))
-  const boundary = yield* db
-    .select({ seq: SessionMessageTable.seq })
-    .from(SessionMessageTable)
-    .where(
-      and(
-        eq(SessionMessageTable.session_id, event.data.parentID),
-        eq(SessionMessageTable.id, event.data.boundary.messageID),
-      ),
-    )
-    .get()
-    .pipe(Effect.orDie)
-  if (!boundary)
-    return yield* Effect.die(new Error(`Fork boundary message not found: ${event.data.boundary.messageID}`))
-  const copied = yield* db
-    .select({ seq: SessionMessageTable.seq })
-    .from(SessionMessageTable)
-    .where(
-      and(
-        eq(SessionMessageTable.session_id, event.data.parentID),
-        event.data.boundary.type === "before"
-          ? lt(SessionMessageTable.seq, boundary.seq)
-          : lte(SessionMessageTable.seq, boundary.seq),
-      ),
-    )
-    .orderBy(desc(SessionMessageTable.seq))
-    .limit(1)
-    .get()
-    .pipe(Effect.orDie)
-  const copiedSeq = copied?.seq
-
-  // session-created, earlier in the fork's commit, stored the child; the fork records where it came from,
-  // and it keeps its parent's stored tool list, so a fork of a subagent keeps the tools it was given.
   const stored = yield* db
     .update(SessionTable)
-    .set({ fork_session_id: event.data.parentID, fork_boundary: event.data.boundary, tools: parent.tools })
+    .set({
+      fork_session_id: event.data.parentID,
+      fork_boundary: event.data.boundary,
+      tools: event.data.tools === undefined ? null : [...event.data.tools],
+    })
     .where(eq(SessionTable.id, event.data.sessionID))
     .returning({ sessionID: SessionTable.id })
     .get()
@@ -159,97 +128,44 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
 
   if (event.data.instructionEntries)
     yield* initializeInstructionEntries(db, event.data.sessionID, event.data.instructionEntries, event.created)
-
-  let cursor = -1
-  while (copiedSeq !== undefined) {
-    const rows = yield* db
-      .select()
-      .from(SessionMessageTable)
-      .where(
-        and(
-          eq(SessionMessageTable.session_id, event.data.parentID),
-          gt(SessionMessageTable.seq, cursor),
-          lt(SessionMessageTable.seq, copiedSeq + 1),
-          // Terminal events for active projections stay on the parent, so forks copy only settled history.
-          sql`${SessionMessageTable.type} != 'assistant' or json_extract(${SessionMessageTable.data}, '$.time.completed') is not null`,
-          sql`${SessionMessageTable.type} != 'shell' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
-          sql`${SessionMessageTable.type} != 'compaction' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
-          sql`${SessionMessageTable.type} != 'invocation' or json_extract(${SessionMessageTable.data}, '$.status') != 'running'`,
-        ),
-      )
-      .orderBy(asc(SessionMessageTable.seq))
-      .limit(ForkBatchSize)
-      .all()
-      .pipe(Effect.orDie)
-    if (rows.length === 0) break
-
-    yield* db
-      .insert(SessionMessageTable)
-      .values(
-        rows.map((row) => ({
-          id: SessionMessage.ID.make(`${SessionMessage.ID.fromEvent(event.id)}_${row.seq}`),
-          session_id: event.data.sessionID,
-          type: row.type,
-          seq: row.seq,
-          time_created: row.time_created,
-          time_updated: row.time_updated,
-          data: row.type === "assistant" ? settledCodeMode(row) : row.data,
-        })),
-      )
-      .run()
-      .pipe(Effect.orDie)
-
-    cursor = rows.at(-1)!.seq
-  }
-  if (copiedSeq !== undefined) yield* Bus.reserveSequence(db, event.data.sessionID, copiedSeq)
-  // The fork's Code Mode notebook, commands and events were copied by its session-codemode-notebook-copied,
-  // earlier in the commit, so the instruction baseline below checkpoints the notebook.
+  // The fork's Code Mode notebook was copied by its session-codemode-notebook-copied, earlier in the commit, so the
+  // instruction baseline checkpoints the notebook.
   if (event.data.instructions)
     yield* InstructionState.initialize(db, event.data.sessionID, event.durable.seq, event.data.instructions)
 })
 
-/**
- * An execution belongs to the Session that admitted it: its completion notification and the notebook
- * values it saves stay on the parent. A fork copies the settled tool result that announced it, so
- * that result is rewritten here to stop promising a notification the child will never receive. This
- * mirrors how running shell and compaction messages are left behind entirely.
- */
-function settledCodeMode(row: typeof SessionMessageTable.$inferSelect) {
-  const message = decodeMessage({ ...row.data, id: row.id, type: row.type })
-  if (message.type !== "assistant") return row.data
-  const inflight = message.content.some(
-    (part) => part.type === "tool" && part.state.status !== "streaming" && running(part.state.metadata),
+// A page of a fork's copied history: each message keeps its sequence in the parent, which the fork reserves, and is
+// named by the page's ID and that sequence, which no message ID derived from an event's takes.
+const projectHistoryCopied = Effect.fn("SessionProjector.projectHistoryCopied")(function* (
+  db: DatabaseService,
+  event: typeof SessionFact.HistoryCopied.Type,
+) {
+  const messages = event.data.messages
+  if (messages.length === 0) return
+  yield* Effect.forEach(
+    Array.from({ length: Math.ceil(messages.length / CopyBatchSize) }, (_, index) =>
+      messages.slice(index * CopyBatchSize, (index + 1) * CopyBatchSize),
+    ),
+    (batch) =>
+      db
+        .insert(SessionMessageTable)
+        .values(
+          batch.map((message) => ({
+            id: SessionMessage.ID.make(`${SessionMessage.ID.fromEvent(event.id)}_${message.seq}`),
+            session_id: event.data.sessionID,
+            type: message.type,
+            seq: message.seq,
+            time_created: message.created,
+            time_updated: message.updated,
+            data: message.data,
+          })) as never,
+        )
+        .run()
+        .pipe(Effect.orDie),
+    { discard: true },
   )
-  if (!inflight) return row.data
-  const { id, type, ...data } = encodeMessage({
-    ...message,
-    content: message.content.map((part) => {
-      if (part.type !== "tool" || part.state.status === "streaming" || !running(part.state.metadata)) return part
-      const metadata = part.state.metadata ?? {}
-      const executionID = metadata.executionID
-      return {
-        ...part,
-        state: {
-          ...part.state,
-          status: "completed" as const,
-          content: [
-            {
-              type: "text" as const,
-              text:
-                "Execution " +
-                (typeof executionID === "string" ? executionID : "") +
-                " was still running when this Session was forked. It stayed with the original Session: no notification arrives here and it saves no notebook values here. Start a new execution if you still need its result.",
-            },
-          ],
-          metadata: { ...metadata, executionStatus: "cancelled" },
-        },
-      }
-    }),
-  })
-  return data
-}
-
-const running = (metadata: Record<string, Schema.Json> | undefined) => metadata?.executionStatus === "running"
+  yield* Bus.reserveSequence(db, event.data.sessionID, Math.max(...messages.map((message) => message.seq)))
+})
 
 function run(db: DatabaseService, event: MessageEvent) {
   return Effect.gen(function* () {
@@ -741,6 +657,7 @@ const layer = Layer.effectDiscard(
     })
     yield* bus.project(SessionEvent.MessageContentUpdated, (event) => run(db, event))
     yield* bus.project(SessionEvent.UsageRecorded, (event) => applyUsage(db, event.data.sessionID, event.data))
+    yield* bus.project(SessionFact.HistoryCopied, (event) => projectHistoryCopied(db, event))
     yield* bus.project(SessionEvent.Forked, (event) => projectFork(db, event))
     yield* bus.project(SessionEvent.InboxDelivered, (event) =>
       Effect.gen(function* () {

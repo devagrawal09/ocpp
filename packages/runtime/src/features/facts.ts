@@ -368,6 +368,10 @@ export const sessionFacts = {
     time: { created: 1, updated: 2, idle: 2 },
     outcome: "succeeded",
   },
+  "session-history-copied": {
+    sessionID: "ses_2",
+    messages: [{ type: "user", seq: 1, created: 1, updated: 1, data: { text: "Hello" } }],
+  },
   "session-instruction-blobs-stored": {
     sessionID: "ses_1",
     blobs: { sha_1: "Follow the style guide." },
@@ -432,8 +436,17 @@ export const sessionFacts = {
   },
   "session-codemode-notebook-copied": {
     sessionID: "ses_2",
-    parentID: "ses_1",
-    executions: ["exe_1"],
+    values: { report: { value: "done", executionID: "exe_1", seq: 3 } },
+    commands: { deploy: { description: "Deploys the app", handler: "report", created: 1, updated: 1 } },
+    events: {
+      nightly: {
+        description: "Runs the nightly check",
+        schedule: { every: "1h" },
+        handler: "report",
+        created: 1,
+        updated: 1,
+      },
+    },
   },
   "session-codemode-notebook-reverted": {
     sessionID: "ses_1",

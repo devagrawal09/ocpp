@@ -13,7 +13,7 @@ import {
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: every Session ID the log has named, live or deleted,
-// and the commands each Session has, its fork's copies included. Its Session
+// and the commands each Session has, a fork's from its notebook copy. Its Session
 // lifecycle is the shared fold in session/lifecycle.ts; the rest is duplicated
 // from the other Code Mode command Slices on purpose.
 export type RemoveCodeModeCommandState = {
@@ -35,16 +35,18 @@ const input = Schema.toStandardSchemaV1(SessionFact.CommandRemoved.data)
 
 export const removeCodeModeCommand = implementCommand(specification)
   .inputSchema(input)
-  .store(removeCodeModeCommandStore)
+  .store(removeCodeModeCommandStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
   .apply(sessionDeleted, async (event, state) => {
     await applySessionDeleted(event, state)
     delete state.commands[event.payload.sessionID]
   })
-  // A fork's commands are copied with its notebook; its projection drops those whose handler it lacks.
+  // A fork's commands are those its notebook copy carries: the parent's whose handler it copied.
   .apply(notebookCopied, async (event, state) => {
-    state.commands[event.payload.sessionID] = { ...state.commands[event.payload.parentID] }
+    state.commands[event.payload.sessionID] = Object.fromEntries(
+      Object.keys(event.payload.commands).map((name) => [name, true as const]),
+    )
   })
   .apply(defined, async (event, state) => {
     ;(state.commands[event.payload.sessionID] ??= {})[event.payload.name] = true

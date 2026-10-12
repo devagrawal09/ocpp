@@ -20,9 +20,10 @@ import specification from "./spec.json" with { type: "json" }
 // each execution the log admitted, with its Session and the names it holds
 // until it settles; each Session's notebook, the names its executions saved
 // with the size of each value; and each Session's reserved names. A revert's
-// and a fork's facts name the executions whose values they remove or copy. Its
-// Session lifecycle is the shared fold in session/lifecycle.ts; the rest is
-// duplicated from settle-code-mode-execution on purpose.
+// fact names the executions whose values it removes; a fork's carries the
+// values it copies. Its Session lifecycle is the shared fold in
+// session/lifecycle.ts; the rest is duplicated from
+// settle-code-mode-execution on purpose.
 export type AdmitCodeModeExecutionState = {
   sessions: Record<string, "live" | "deleted">
   executions: Record<string, { sessionID: SessionID; reserved: string[] }>
@@ -69,7 +70,7 @@ const release = (state: AdmitCodeModeExecutionState, executionID: string) => {
 
 export const admitCodeModeExecution = implementCommand(specification)
   .inputSchema(input)
-  .store(admitCodeModeExecutionStore, { stateVersion: 2 })
+  .store(admitCodeModeExecutionStore, { stateVersion: 3 })
   .consistencyKeys({ session: (command) => command.sessionID, execution: (command) => command.executionID })
   .apply(sessionCreated, applySessionCreated)
   // A deleted Session is forgotten but for its tombstone.
@@ -96,11 +97,11 @@ export const admitCodeModeExecution = implementCommand(specification)
     release(state, event.payload.executionID)
     delete state.executions[event.payload.executionID]
   })
+  // A fork's notebook holds the values its copy carries, each its parent's execution's.
   .apply(notebookCopied, async (event, state) => {
-    const { sessionID, parentID, executions } = event.payload
-    const notebook = (state.notebooks[sessionID] ??= {})
-    for (const [name, entry] of Object.entries(state.notebooks[parentID] ?? {}))
-      if (executions.includes(entry.execution)) notebook[name] = entry
+    const notebook = (state.notebooks[event.payload.sessionID] ??= {})
+    for (const [name, entry] of Object.entries(event.payload.values))
+      notebook[name] = { execution: entry.executionID, bytes: bytes(entry.value) }
   })
   .apply(notebookReverted, async (event, state) => {
     const notebook = state.notebooks[event.payload.sessionID] ?? {}

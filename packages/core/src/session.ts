@@ -3,7 +3,7 @@ export * from "./session/schema.js"
 
 import { Cause, Effect, Layer, Schema, Context, RcMap, Stream, Scope } from "effect"
 import { ListAnchor } from "@ocpp/schema/session"
-import { and, asc, desc, eq, gt, isNull, like, lt, lte, or, type SQL } from "drizzle-orm"
+import { and, asc, desc, eq, gt, isNull, like, lt, or, type SQL } from "drizzle-orm"
 import { Project } from "./project.js"
 import { Workspace } from "@ocpp/schema/workspace"
 import { Model } from "@ocpp/schema/model"
@@ -49,7 +49,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { LocationServiceMap } from "./location-service-map.js"
 import { SessionEvent } from "./session/event.js"
 import { SessionInbox } from "./session/inbox.js"
-import { InstructionState } from "./session/instruction-state.js"
+import { SessionFork } from "./session/fork.js"
 import { SessionGenerate } from "./session/generate.js"
 import { Snapshot } from "./snapshot.js"
 import { Session } from "./session/session.js"
@@ -61,12 +61,10 @@ import { Skill } from "./skill.js"
 import { Job } from "./job.js"
 import { Command } from "./command.js"
 import { CodeModeCommand } from "./codemode/command.js"
-import { CodeModeBindingTable } from "./codemode/sql.js"
 import { CodeModeInvocation } from "./codemode/invocation-service.js"
 import { Global } from "@ocpp/util/global"
 import { SessionEnvironment } from "./session/environment.js"
 import { SessionHistory } from "./session/history.js"
-import { InstructionEntry } from "./session/instruction-entry.js"
 
 // get project -> project.locations
 //
@@ -398,30 +396,11 @@ const layer = Layer.effect(
           })
         if (!boundary) return yield* new ForkEmptyError({ sessionID: input.sessionID })
         const sessionID = SessionSchema.ID.create()
-        const inherited = yield* db
-          .transaction(() =>
-            Effect.all({
-              instructions: InstructionState.current(db, parent.id),
-              instructionEntries: InstructionEntry.snapshot(db, parent.id),
-              // The parent as stored: the fork keeps its version and selections exactly.
-              row: db.select().from(SessionTable).where(eq(SessionTable.id, parent.id)).get(),
-              // The executions whose saved values belong to the history the fork copies.
-              notebook: db
-                .selectDistinct({ executionID: CodeModeBindingTable.execution_id })
-                .from(CodeModeBindingTable)
-                .where(
-                  and(
-                    eq(CodeModeBindingTable.session_id, parent.id),
-                    input.boundary.type === "before"
-                      ? lt(CodeModeBindingTable.message_seq, boundary.seq)
-                      : lte(CodeModeBindingTable.message_seq, boundary.seq),
-                  ),
-                )
-                .all(),
-            }),
-          )
-          .pipe(Effect.orDie)
-        if (!inherited.row) return yield* new NotFoundError({ sessionID: input.sessionID })
+        const inherited = yield* SessionFork.inherit(db, {
+          parentID: parent.id,
+          boundary: { ...input.boundary, messageID: boundary.id },
+        })
+        if (!inherited) return yield* new NotFoundError({ sessionID: input.sessionID })
         // The fork is a Session of its own in the parent's place, with its selections and a fork title. It
         // adopts the parent's newest instruction values rather than the values in effect at the boundary;
         // copied history may contain frozen instruction-update text the initial baseline already reflects.
@@ -443,14 +422,18 @@ const layer = Layer.effect(
           boundary: { ...input.boundary, messageID: boundary.id },
           instructions: inherited.instructions,
           instructionEntries: inherited.instructionEntries,
+          tools: inherited.tools,
         })
+        // The fork records everything it inherits, so it never reads its parent again.
         yield* bus
           .command({
             type: "forkSession",
             payload: {
               session: child,
               ...fork,
-              notebook: inherited.notebook.map((row) => row.executionID),
+              ...(inherited.blobs === undefined ? {} : { blobs: inherited.blobs }),
+              history: inherited.history,
+              notebook: inherited.notebook,
             },
           })
           .pipe(

@@ -166,6 +166,7 @@ describe("public event manifest", () => {
         "workspace-used",
         "workspace-destroyed",
         "session-imported",
+        "session-history-copied",
         "session-instruction-blobs-stored",
         "session-instruction-entry-set",
         "session-instruction-entry-removed",

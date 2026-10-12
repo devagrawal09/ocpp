@@ -1,7 +1,9 @@
 import { Effect, Schema } from "effect"
 import { Bus } from "@ocpp/core/bus"
+import { Database } from "@ocpp/core/database/database"
 import { Project } from "@ocpp/core/project"
 import { SessionEvent } from "@ocpp/core/session/event"
+import { SessionFork } from "@ocpp/core/session/fork"
 import { SpecterRejection } from "@ocpp/core/specter/rejection"
 import { AbsolutePath } from "@ocpp/schema/schema"
 import { SessionID } from "@ocpp/schema/session-id"
@@ -67,14 +69,22 @@ export const stageRevert = (input: typeof SessionEvent.RevertEvent.Staged.Type.d
 const encodeForked = Schema.encodeSync(SessionEvent.Forked.data)
 
 /**
- * Forks a Session through the runtime's forkSession: the child is created in /project, as the parent of a
- * test is, and the fork projects the parent's history into it, with the values of the Code Mode executions
- * its notebook copies.
+ * Forks a Session through the runtime's forkSession, as Session.fork does: the child is created in /project, as the
+ * parent of a test is, and records what it inherits of the parent's projection through the boundary (its history,
+ * notebook, instruction values and entries, tool list), unless the input gives its instruction values or entries.
  */
-export const forkSession = (input: typeof SessionEvent.Forked.Type.data, notebook?: ReadonlyArray<string>) =>
+export const forkSession = (input: typeof SessionEvent.Forked.Type.data) =>
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    const { sessionID, ...fork } = encodeForked(input)
+    const { db } = yield* Database.Service
+    const inherited = yield* SessionFork.inherit(db, { parentID: input.parentID, boundary: input.boundary })
+    if (!inherited) return yield* Effect.die(new Error(`Fork parent not found: ${input.parentID}`))
+    const { sessionID, ...fork } = encodeForked({
+      instructions: inherited.instructions,
+      instructionEntries: inherited.instructionEntries,
+      tools: inherited.tools,
+      ...input,
+    })
     yield* bus
       .command({
         type: "forkSession",
@@ -87,7 +97,9 @@ export const forkSession = (input: typeof SessionEvent.Forked.Type.data, noteboo
             version: "test",
           },
           ...fork,
-          ...(notebook === undefined ? {} : { notebook }),
+          ...(inherited.blobs === undefined ? {} : { blobs: inherited.blobs }),
+          history: inherited.history,
+          notebook: inherited.notebook,
         },
       })
       .pipe(Effect.orDie)

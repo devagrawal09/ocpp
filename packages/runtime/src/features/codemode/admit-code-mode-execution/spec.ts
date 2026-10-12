@@ -96,7 +96,8 @@ export const admitCodeModeExecutionSpec = createCommandSlice("admitCodeModeExecu
       expect: [admitted("exe_2", ["a", "c"])],
     },
     {
-      description: "A fork holds the values its parent's notebook saved through the boundary, and nothing reserved.",
+      description:
+        "A fork holds the values its notebook copy carries, the parent's saved through the boundary, and nothing reserved.",
       given: [
         created(),
         admitted("exe_1", ["a"]),
@@ -105,10 +106,31 @@ export const admitCodeModeExecutionSpec = createCommandSlice("admitCodeModeExecu
         saved("exe_2", { b: 2 }),
         admitted("exe_3", ["c"]),
         created("ses_2"),
-        event("session-codemode-notebook-copied", { sessionID: "ses_2", parentID: "ses_1", executions: ["exe_1"] }),
+        event("session-codemode-notebook-copied", {
+          sessionID: "ses_2",
+          values: { a: { value: 1, executionID: "exe_1", seq: 1 } },
+          commands: {},
+          events: {},
+        }),
       ],
       when: { ...admission("exe_4", ["b", "c"], "ses_2"), limits },
       expect: [admitted("exe_4", ["b", "c"], ["a"], "ses_2")],
+    },
+    {
+      description:
+        "A fork's notebook is its copy's, whatever is left of its parent: with its parent purged, a copied name is still defined.",
+      given: [
+        created("ses_2"),
+        event("session-codemode-notebook-copied", {
+          sessionID: "ses_2",
+          values: { a: { value: 1, executionID: "exe_1", seq: 1 } },
+          commands: {},
+          events: {},
+        }),
+      ],
+      when: { ...admission("exe_4", ["a"], "ses_2"), limits },
+      expect: [],
+      reject: { code: "name-already-defined", details: { names: ["a"] } },
     },
     {
       description: "An execution ID names one execution, settled or not.",

@@ -226,16 +226,13 @@ describe("SessionProjector", () => {
         ])
         .run()
 
-      // The host names the executions whose values the history it copies holds.
-      yield* forkSession(
-        {
-          sessionID: child,
-          parentID: sessionID,
-          boundary: { type: "through", messageID: boundary },
-          instructions: {},
-        },
-        ["exe_early"],
-      )
+      // The fork copies the values its history saved through its boundary.
+      yield* forkSession({
+        sessionID: child,
+        parentID: sessionID,
+        boundary: { type: "through", messageID: boundary },
+        instructions: {},
+      })
 
       expect(
         (yield* db.select().from(CodeModeBindingTable).where(eq(CodeModeBindingTable.session_id, child)).all()).map(

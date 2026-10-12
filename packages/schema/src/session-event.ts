@@ -182,6 +182,8 @@ export const Forked = Event.durable({
     boundary: SessionFork.Boundary,
     instructions: Instruction.Values.pipe(optional),
     instructionEntries: InstructionEntry.Snapshot.pipe(optional),
+    /** The Code Mode paths the parent may call, kept by the fork: a fork of a subagent keeps the tools it was given. */
+    tools: Schema.Array(Schema.String).pipe(optional),
   },
 })
 export type Forked = typeof Forked.Type

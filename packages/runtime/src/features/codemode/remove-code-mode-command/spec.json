@@ -99,15 +99,96 @@
         {
           "eventType": "session-codemode-notebook-copied",
           "examplePayload": {
-            "executions": [
-              "exe_1"
-            ],
-            "parentID": "ses_1",
-            "sessionID": "ses_2"
+            "commands": {
+              "deploy": {
+                "created": 1,
+                "description": "Deploy the app",
+                "handler": "deploy",
+                "updated": 1
+              }
+            },
+            "events": {},
+            "sessionID": "ses_2",
+            "values": {
+              "deploy": {
+                "executionID": "exe_1",
+                "seq": 2,
+                "value": {
+                  "function": "deploy"
+                }
+              }
+            }
           },
           "kind": "scenario-event"
         }
       ],
+      "when": {
+        "name": "deploy",
+        "sessionID": "ses_2"
+      }
+    },
+    {
+      "description": "A fork has the commands its copy carries, not its parent's: one the copy left out is not the fork's.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-command-defined",
+          "examplePayload": {
+            "description": "Deploy the app",
+            "handler": "deploy",
+            "name": "deploy",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "ses_2",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "commands": {},
+            "events": {},
+            "sessionID": "ses_2",
+            "values": {
+              "deploy": {
+                "executionID": "exe_1",
+                "seq": 2,
+                "value": {
+                  "function": "deploy"
+                }
+              }
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "command-not-found"
+      },
       "when": {
         "name": "deploy",
         "sessionID": "ses_2"

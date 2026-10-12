@@ -314,17 +314,14 @@ describe("CodeModeStore", () => {
       yield* store.commit(second, { late: 2 })
       yield* admitted(store, { id: "exe_fork_pending", source: "const pending = 3" })
 
-      // The host names the executions whose values the fork's history copies through its boundary.
+      // The fork copies the values its history saved through its boundary.
       yield* forkSession({
         sessionID: emptyChild,
         parentID: parent,
         boundary: { type: "before", messageID: firstMessage },
       })
       expect(yield* store.bindings(emptyChild)).toEqual({})
-      yield* forkSession(
-        { sessionID: child, parentID: parent, boundary: { type: "through", messageID: firstMessage } },
-        [first.id],
-      )
+      yield* forkSession({ sessionID: child, parentID: parent, boundary: { type: "through", messageID: firstMessage } })
       expect(yield* store.bindings(child)).toEqual({ early: 1 })
       expect(yield* store.reservations(child)).toEqual([])
       // The forked Session may declare a name its parent is still holding.

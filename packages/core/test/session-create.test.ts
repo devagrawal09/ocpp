@@ -510,7 +510,8 @@ describe("Session.create", () => {
       expect(forked.parentID).toBeUndefined()
       expect(forkContext).toMatchObject([Expected.user("First"), { type: "synthetic", text: "parent note" }])
       expect(forkContext.map((message) => message.id)).not.toEqual(parentContext.map((message) => message.id))
-      // The child's creation and its fork are one commit.
+      // The child's creation and its fork are one commit, with the history it copied between them: an internal fact
+      // its log does not serve.
       expect(history).toHaveLength(2)
       expect(history[0]).toMatchObject({
         type: "session-created",
@@ -519,7 +520,7 @@ describe("Session.create", () => {
       })
       expect(history[1]).toMatchObject({
         type: "session-forked",
-        durable: { seq: 1 },
+        durable: { seq: 2 },
         data: { sessionID: forked.id, parentID: parent.id },
       })
       expect(yield* SessionInbox.find(db, forkContext[0].id)).toBeUndefined()
@@ -550,7 +551,7 @@ describe("Session.create", () => {
         Array.from(yield* Stream.runCollect(logEvents(session, forked.id))).map(
           (event): number | undefined => event.durable?.seq,
         ),
-      ).toEqual([0, 1, 10, 11, 12, 13, 14])
+      ).toEqual([0, 2, 10, 11, 12, 13, 14])
       expect(yield* SessionInbox.find(db, admitted.id)).toBeUndefined()
     }),
   )

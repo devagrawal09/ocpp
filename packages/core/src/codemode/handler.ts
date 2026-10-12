@@ -53,9 +53,9 @@ export const problem = Effect.fnUntraced(function* (
 })
 
 /**
- * Removes the commands and events whose handler is no longer in the notebook, as after a revert or a
- * fork before the handler was saved, so a later function of the same name never silently becomes
- * their handler. A handler that an in-flight execution will still save keeps them.
+ * Removes the commands and events whose handler is no longer in the notebook, as after a revert, so a
+ * later function of the same name never silently becomes their handler. A handler that an in-flight
+ * execution will still save keeps them. A fork copies only those whose handler its notebook copies.
  */
 export const prune = Effect.fnUntraced(function* (db: Database.Interface["db"], sessionID: SessionSchema.ID) {
   const kept = (table: typeof CodeModeCommandTable | typeof CodeModeEventTable) =>
@@ -71,55 +71,4 @@ export const prune = Effect.fnUntraced(function* (db: Database.Interface["db"], 
     .where(and(eq(CodeModeEventTable.session_id, sessionID), sql`not ${kept(CodeModeEventTable)}`))
     .run()
     .pipe(Effect.orDie)
-})
-
-/**
- * Copies a Session's commands and events into its fork, which has its own notebook copy. Copied events
- * start disabled and without firing history, so a fork never fires an event alongside its parent.
- */
-export const fork = Effect.fnUntraced(function* (
-  db: Database.Interface["db"],
-  input: { readonly from: SessionSchema.ID; readonly to: SessionSchema.ID },
-) {
-  const commands = yield* db
-    .select()
-    .from(CodeModeCommandTable)
-    .where(eq(CodeModeCommandTable.session_id, input.from))
-    .all()
-    .pipe(Effect.orDie)
-  if (commands.length > 0)
-    yield* db
-      .insert(CodeModeCommandTable)
-      .values(commands.map((command) => ({ ...command, session_id: input.to })))
-      .onConflictDoNothing()
-      .run()
-      .pipe(Effect.orDie)
-  const events = yield* db
-    .select()
-    .from(CodeModeEventTable)
-    .where(eq(CodeModeEventTable.session_id, input.from))
-    .all()
-    .pipe(Effect.orDie)
-  if (events.length > 0)
-    yield* db
-      .insert(CodeModeEventTable)
-      .values(
-        events.map((event) => ({
-          ...event,
-          session_id: input.to,
-          enabled: false,
-          time_next: null,
-          time_fired: null,
-          execution_id: null,
-          message_id: null,
-          error: null,
-          run_count: 0,
-          skip_count: 0,
-          time_skipped: null,
-        })),
-      )
-      .onConflictDoNothing()
-      .run()
-      .pipe(Effect.orDie)
-  yield* prune(db, input.to)
 })

@@ -8,7 +8,7 @@ const purge = (sessionID: string) => ({
 
 export const purgeSessionSpec = createReactionSlice("purgeSession")
   .description(
-    "Purges a deleted Session's facts from the log, and those of the aggregates it owns (its inbox, executions, Code Mode runs and calls, background job markers, external agent links), but for its deletion: the tombstone every Slice folds to keep refusing its ID. Its children are deleted, and purged, first. A Session whose notebook a fork copied keeps the facts the copy reads until that fork is purged too.",
+    "Purges a deleted Session's facts from the log, and those of the aggregates it owns (its inbox, executions, Code Mode runs and calls, background job markers, external agent links), but for its deletion: the tombstone every Slice folds to keep refusing its ID. Its children are deleted, and purged, first. Its forks are not its children and live on: each recorded what it inherited, so nothing of a fork reads its parent's facts.",
   )
   .scenarios(
     {

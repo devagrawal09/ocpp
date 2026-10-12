@@ -9,11 +9,17 @@ const created = (sessionID = "ses_1") =>
     version: "2",
   })
 const deleted = event("session-deleted", { sessionID: "ses_1" })
-const copied = event("session-codemode-notebook-copied", {
-  sessionID: "ses_2",
-  parentID: "ses_1",
-  executions: ["exe_1"],
-})
+// A fork's notebook copy: the value its parent's command calls, and that
+// command when the fork copied the value it handles.
+const copied = (withCommand: boolean) =>
+  event("session-codemode-notebook-copied", {
+    sessionID: "ses_2",
+    values: { deploy: { value: { function: "deploy" }, executionID: "exe_1", seq: 2 } },
+    commands: withCommand
+      ? { deploy: { description: "Deploy the app", handler: "deploy", created: 1, updated: 1 } }
+      : {},
+    events: {},
+  })
 const defined = (sessionID = "ses_1") =>
   event("session-codemode-command-defined", {
     sessionID,
@@ -37,9 +43,17 @@ export const removeCodeModeCommandSpec = createCommandSlice("removeCodeModeComma
     },
     {
       description: "A fork's command, copied with its notebook, is the fork's own.",
-      given: [created(), defined(), created("ses_2"), copied],
+      given: [created(), defined(), created("ses_2"), copied(true)],
       when: { ...when, sessionID: "ses_2" },
       expect: [event("session-codemode-command-removed", { ...when, sessionID: "ses_2" })],
+    },
+    {
+      description:
+        "A fork has the commands its copy carries, not its parent's: one the copy left out is not the fork's.",
+      given: [created(), defined(), created("ses_2"), copied(false)],
+      when: { ...when, sessionID: "ses_2" },
+      expect: [],
+      reject: { code: "command-not-found" },
     },
     {
       description: "A command the Session does not have is refused, and the host answers as done.",

@@ -47,6 +47,30 @@ export const Imported = Event.durable({
   },
 })
 
+/**
+ * A page of the history a fork copies from its parent through the boundary: the parent's settled messages, in order,
+ * as its projection held them (a Code Mode result promising a run the fork does not own already says so). A fork
+ * records its whole history in its one commit, before its `session-forked`, in pages of bounded size, so no one fact
+ * grows with the parent's history. Each copied message keeps its sequence in the parent, which the fork reserves (its
+ * own events follow), and is named by its page's ID and that sequence.
+ */
+export const HistoryCopied = Event.durable({
+  type: "session-history-copied",
+  durable: bySession,
+  schema: {
+    sessionID: SessionID,
+    messages: Schema.Array(
+      Schema.Struct({
+        type: Schema.String,
+        seq: NonNegativeInt,
+        created: NonNegativeInt,
+        updated: NonNegativeInt,
+        data: Schema.Json,
+      }),
+    ),
+  },
+})
+
 /** Instruction values the Session's instructions refer to by hash, stored with the update that uses them. */
 export const InstructionBlobsStored = Event.durable({
   type: "session-instruction-blobs-stored",
@@ -151,13 +175,41 @@ export const CallSettled = Event.durable({
 })
 
 /**
- * A fork's notebook: the parent's executions whose saved values the fork copies, those its history copies
- * through the boundary. The fork's commands and events are copied with it.
+ * A fork's notebook, copied from its parent through the boundary, before its `session-forked`: the values its history
+ * saved, each with the execution that saved it and the sequence of that execution's message, by which a revert of the
+ * fork cuts it; and the commands and events whose handler those values hold, with when the parent defined and last
+ * changed them. Events are copied disabled, with no firing history; reservations stay with the parent.
  */
 export const NotebookCopied = Event.durable({
   type: "session-codemode-notebook-copied",
   durable: bySession,
-  schema: { sessionID: SessionID, parentID: SessionID, executions: Schema.Array(Schema.String) },
+  schema: {
+    sessionID: SessionID,
+    values: Schema.Record(
+      Schema.String,
+      Schema.Struct({ value: Schema.Json, executionID: Schema.String, seq: NonNegativeInt }),
+    ),
+    commands: Schema.Record(
+      Schema.String,
+      Schema.Struct({
+        description: Schema.String,
+        handler: Schema.String,
+        created: NonNegativeInt,
+        updated: NonNegativeInt,
+      }),
+    ),
+    events: Schema.Record(
+      Schema.String,
+      Schema.Struct({
+        description: Schema.String,
+        schedule: CodeModeEvent.Schedule,
+        handler: Schema.String,
+        input: optional(Schema.Json),
+        created: NonNegativeInt,
+        updated: NonNegativeInt,
+      }),
+    ),
+  },
 })
 /**
  * A committed revert's cut of the notebook: the executions whose message it removed, so their saved values go
@@ -311,6 +363,7 @@ export const BackgroundCompleted = Event.durable({
  */
 export const Definitions = Event.inventory(
   Imported,
+  HistoryCopied,
   InstructionBlobsStored,
   InstructionEntrySet,
   InstructionEntryRemoved,

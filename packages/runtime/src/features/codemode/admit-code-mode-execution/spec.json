@@ -642,7 +642,7 @@
       }
     },
     {
-      "description": "A fork holds the values its parent's notebook saved through the boundary, and nothing reserved.",
+      "description": "A fork holds the values its notebook copy carries, the parent's saved through the boundary, and nothing reserved.",
       "expect": [
         {
           "eventType": "session-codemode-execution-admitted",
@@ -774,11 +774,16 @@
         {
           "eventType": "session-codemode-notebook-copied",
           "examplePayload": {
-            "executions": [
-              "exe_1"
-            ],
-            "parentID": "ses_1",
-            "sessionID": "ses_2"
+            "commands": {},
+            "events": {},
+            "sessionID": "ses_2",
+            "values": {
+              "a": {
+                "executionID": "exe_1",
+                "seq": 1,
+                "value": 1
+              }
+            }
           },
           "kind": "scenario-event"
         }
@@ -797,6 +802,66 @@
         "reserved": [
           "b",
           "c"
+        ],
+        "sessionID": "ses_2",
+        "toolCallID": "call_exe_4"
+      }
+    },
+    {
+      "description": "A fork's notebook is its copy's, whatever is left of its parent: with its parent purged, a copied name is still defined.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_2",
+            "slug": "ses_2",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-notebook-copied",
+          "examplePayload": {
+            "commands": {},
+            "events": {},
+            "sessionID": "ses_2",
+            "values": {
+              "a": {
+                "executionID": "exe_1",
+                "seq": 1,
+                "value": 1
+              }
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "name-already-defined",
+        "details": {
+          "names": [
+            "a"
+          ]
+        }
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "executionID": "exe_4",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "program": {
+          "source": "const a = 1",
+          "version": 1
+        },
+        "reserved": [
+          "a"
         ],
         "sessionID": "ses_2",
         "toolCallID": "call_exe_4"

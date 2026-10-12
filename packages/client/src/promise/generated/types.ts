@@ -1719,6 +1719,7 @@ export type SessionForked = {
     boundary: SessionForkBoundary
     instructions?: { [x: string]: string }
     instructionEntries?: InstructionEntrySnapshot
+    tools?: Array<string>
   }
 }
 

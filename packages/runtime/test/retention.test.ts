@@ -194,13 +194,14 @@ describe("a deleted Session in the log", () => {
       }),
     ))
 
-  it("keeps what a fork's notebook copy reads of its parent until the fork is purged too", () =>
+  it("purges a forked parent in full: a fork, and a fork of it, fold the same from what they recorded", () =>
     run(
       Effect.gen(function* () {
         const created = (sessionID: string) => ({
           type: "session-created",
           payload: { ...sessionFacts["session-created"], sessionID },
         })
+        // A parent whose notebook saved a value its command and event call.
         const parent: Fact[] = [
           created("ses_parent"),
           {
@@ -209,28 +210,44 @@ describe("a deleted Session in the log", () => {
           },
           {
             type: "session-codemode-command-defined",
-            payload: { ...sessionFacts["session-codemode-command-defined"], sessionID: "ses_parent" },
+            payload: {
+              ...sessionFacts["session-codemode-command-defined"],
+              sessionID: "ses_parent",
+              handler: "report",
+            },
           },
           {
             type: "session-codemode-event-defined",
-            payload: { ...sessionFacts["session-codemode-event-defined"], sessionID: "ses_parent" },
-          },
-          {
-            type: "session-renamed",
-            payload: { ...sessionFacts["session-renamed"], sessionID: "ses_parent" },
+            payload: { ...sessionFacts["session-codemode-event-defined"], sessionID: "ses_parent", handler: "report" },
           },
         ]
-        const fork: Fact[] = [
-          created("ses_fork"),
-          {
-            type: "session-codemode-notebook-copied",
-            payload: { sessionID: "ses_fork", parentID: "ses_parent", executions: ["exe_1"] },
+        // A fork inherits what the host read of its parent's projection: its history and notebook through the
+        // boundary, with the parent's commands and events.
+        const fork = (sessionID: string, parentID: string) => ({
+          type: "forkSession" as const,
+          payload: {
+            session: { ...sessionFacts["session-created"], sessionID },
+            parentID,
+            boundary: { type: "through" as const, messageID: "msg_boundary" },
+            history: {
+              messages: [{ type: "user", seq: 1, created: 1, updated: 1, data: { text: "Report" } }],
+              pageBytes: 1024,
+            },
+            notebook: {
+              values: { report: { value: "done", executionID: "exe_1", seq: 1 } },
+              commands: { deploy: { description: "Deploys the app", handler: "report", created: 1, updated: 1 } },
+              events: {
+                nightly: {
+                  description: "Runs the nightly check",
+                  schedule: { every: "1h" },
+                  handler: "report",
+                  created: 1,
+                  updated: 1,
+                },
+              },
+            },
           },
-          {
-            type: "session-forked",
-            payload: { ...sessionFacts["session-forked"], sessionID: "ses_fork", parentID: "ses_parent" },
-          },
-        ]
+        })
         const purged = createMemoryEventLog()
         const runtime = yield* runtimeOver(purged)
         yield* runtime.start(idleHost)
@@ -238,30 +255,35 @@ describe("a deleted Session in the log", () => {
         const unpurged = yield* runtimeOver(kept)
         for (const recorder of [runtime, unpurged]) {
           yield* record(recorder, parent)
-          yield* record(recorder, fork)
+          yield* recorder.command(fork("ses_fork", "ses_parent"))
+          yield* recorder.command(fork("ses_grandfork", "ses_fork"))
         }
 
-        // The parent goes first: what the fork's copy read of it stays, beside its tombstone.
-        yield* remove(runtime, "ses_parent")
-        yield* remove(unpurged, "ses_parent")
-        expect(yield* typesOf(purged, { name: "session", value: "ses_parent" })).toEqual([
-          "session-codemode-execution-settled",
-          "session-codemode-command-defined",
-          "session-codemode-event-defined",
-          "session-deleted",
-        ])
-        const folded = yield* fold(purged)
-        expect(differing(folded, yield* fold(kept))).toEqual([])
-        expect(folded["settleCodeModeExecution"]).toMatchObject({ notebooks: { ses_fork: { report: {} } } })
-        expect(folded["removeCodeModeCommand"]).toMatchObject({ commands: { ses_fork: { deploy: true } } })
-        expect(folded["toggleCodeModeEvent"]).toMatchObject({ events: { ses_fork: { nightly: true } } })
-
-        // Then the fork: its purge frees the parent's, and only tombstones are left.
-        yield* remove(runtime, "ses_fork")
-        yield* remove(unpurged, "ses_fork")
-        for (const sessionID of ["ses_parent", "ses_fork"])
+        // The parent, then the fork in the middle of the chain, purge in full: their tombstones are all that is left.
+        for (const sessionID of ["ses_parent", "ses_fork"]) {
+          yield* remove(runtime, sessionID)
+          yield* remove(unpurged, sessionID)
           expect(yield* typesOf(purged, { name: "session", value: sessionID })).toEqual(["session-deleted"])
-        expect(differing(yield* fold(purged), yield* fold(kept))).toEqual([])
+          // What is left folds as everything does: the forks after it hold what they copied.
+          const folded = yield* fold(purged)
+          expect(differing(folded, yield* fold(kept))).toEqual([])
+          for (const forked of sessionID === "ses_parent" ? ["ses_fork", "ses_grandfork"] : ["ses_grandfork"]) {
+            expect(folded["settleCodeModeExecution"]).toMatchObject({ notebooks: { [forked]: { report: {} } } })
+            expect(folded["removeCodeModeCommand"]).toMatchObject({ commands: { [forked]: { deploy: true } } })
+            expect(folded["toggleCodeModeEvent"]).toMatchObject({ events: { [forked]: { nightly: true } } })
+          }
+        }
+        expect(yield* typesOf(purged, { name: "session", value: "ses_grandfork" })).toEqual([
+          "session-created",
+          "session-history-copied",
+          "session-codemode-notebook-copied",
+          "session-forked",
+        ])
+        // The last fork still decides: its copied command is its own.
+        yield* runtime.command({
+          type: "removeCodeModeCommand",
+          payload: { sessionID: "ses_grandfork", name: "deploy" },
+        })
       }),
     ))
 })

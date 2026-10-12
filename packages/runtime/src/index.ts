@@ -4,7 +4,7 @@
 // A Command's rejection: the runtime refused it with a stable code (`error.rejection.code`), one of
 // `RejectionCode`, which the host matches on.
 export { SpecterCommandRejectedError } from "@specter-ts/core"
-export type { RejectionCode } from "./app.ts"
+export type { RejectionCode, RuntimeCommand } from "./app.ts"
 // The Event Log contract a host implements when it keeps the log itself.
 export {
   type EventDraft,

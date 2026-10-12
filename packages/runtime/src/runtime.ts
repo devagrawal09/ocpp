@@ -1,4 +1,4 @@
-import { eventsFor } from "@specter-ts/core"
+import { eventsFor, extendSpecterConfig } from "@specter-ts/core"
 import { makeSpecterRuntime } from "@specter-ts/core/effect"
 import { createMemoryReactionOutboxStore, type OutboxedReaction } from "@specter-ts/reaction-outbox"
 import { Effect } from "effect"
@@ -51,19 +51,22 @@ export type RuntimeOptions = {
 // runtime first, composes the rest, and then starts it.
 export const makeRuntime = (options: RuntimeOptions = {}) =>
   Effect.gen(function* () {
-    const config = createRuntimeConfig({
-      runStep: options.stores?.runStep ?? createMemoryReactionOutboxStore<OutboxedReaction<RunStepRequest>>(),
-      ...(options.outbox === undefined ? {} : { outbox: options.outbox }),
-      ...(options.stores?.drive === undefined ? {} : { drive: options.stores.drive }),
-    })
+    // A test's runtime registers recordHistory beside the production Slices; the production config's type never
+    // names it, and only a test's fixture dispatches it.
+    const config = extendSpecterConfig(
+      createRuntimeConfig({
+        runStep: options.stores?.runStep ?? createMemoryReactionOutboxStore<OutboxedReaction<RunStepRequest>>(),
+        ...(options.outbox === undefined ? {} : { outbox: options.outbox }),
+        ...(options.stores?.drive === undefined ? {} : { drive: options.stores.drive }),
+      }),
+      options.history ? { slices: { recordHistory } } : {},
+    )
     // Conformance wants every registered Event covered by a scenario, and
     // some of the catalog is not decided by any Slice: register the events the
     // Slices use.
-    // Typed as the production Slices: only a test's fixture dispatches recordHistory.
-    const slices = (options.history ? { ...config.slices, recordHistory } : config.slices) as typeof config.slices
     const events = [
       ...new Map(
-        Object.values(slices)
+        Object.values(config.slices)
           .flatMap((slice) => eventsFor(slice, config.events))
           .map((definition) => [definition.type, definition]),
       ).values(),
@@ -72,7 +75,7 @@ export const makeRuntime = (options: RuntimeOptions = {}) =>
     // `reactions` completes at once, and no step job runs, those the last
     // process left unfinished included.
     const app = yield* makeSpecterRuntime(
-      { ...config, slices, events },
+      { slices: config.slices, events },
       { reactions: "deferred", ...(options.catchUp ? { catchUp: "all" } : {}) },
     ).pipe(
       Effect.provide(options.stores?.slices ? createSliceStoreLayer(options.stores.slices) : memorySliceStoreLayer),

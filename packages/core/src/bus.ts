@@ -24,6 +24,7 @@ import {
   type ReactionOutboxStore,
   type RunStepOutboxStore,
   type Runtime,
+  type RuntimeCommand,
 } from "@ocpp/runtime"
 import { SpecterEventLog } from "./specter/event-log.js"
 import { SpecterOutbox } from "./specter/outbox.js"
@@ -216,8 +217,8 @@ export interface Interface {
   readonly runtime: Pick<Runtime, "query" | "subscribe" | "start">
 }
 
-/** A Command of the runtime, as `runtime.command` takes it. */
-export type RuntimeCommand = Parameters<Runtime["command"]>[0]
+/** A production Command of the runtime: a test's runtime also takes recordHistory, which the Bus's type never names. */
+export type { RuntimeCommand }
 
 export interface CommandOptions {
   /** The options of the facts the Command records, by position. */

@@ -6,7 +6,7 @@ import {
   type ReactionOutboxStore,
   withReactionOutbox,
 } from "@specter-ts/reaction-outbox"
-import type { SliceStoreService, SliceStoreTag, SpecterRejectionCode } from "@specter-ts/core"
+import type { SliceStoreService, SliceStoreTag, SpecterCommandEnvelope, SpecterRejectionCode } from "@specter-ts/core"
 import { Effect, Layer } from "effect"
 
 import { sessionEventDefinitions } from "./events.ts"
@@ -484,6 +484,10 @@ export const createRuntimeConfig = (options: {
 // them beside each spec.json. A Command may reject only with one of them (Specter fails any other), so this is
 // exactly the set a host can receive, and the host matches on it, never on a message.
 export type RejectionCode = SpecterRejectionCode<ReturnType<typeof createRuntimeConfig>>
+
+// A production Command of the runtime, as a host dispatches it: a test's runtime also takes recordHistory, which no
+// production envelope names.
+export type RuntimeCommand = SpecterCommandEnvelope<ReturnType<typeof createRuntimeConfig>>
 
 // Used by the per-Slice scenario tests, which never run Plugins; the
 // integration test builds its own config around an outbox store it inspects.

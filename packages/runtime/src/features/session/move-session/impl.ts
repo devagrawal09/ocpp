@@ -1,14 +1,22 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
 import type { SessionMessage } from "@ocpp/schema/session-message"
-import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted, and the move items waiting in each Session's inbox, in admission
-// order. Duplicated from the inbox Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted,
+// and the move items waiting in each Session's inbox, in admission order. Its
+// Session lifecycle is the shared fold in session/lifecycle.ts; the rest is
+// duplicated from the inbox Slices on purpose.
 export type MoveSessionState = {
   sessions: Record<string, "live" | "deleted">
   moves: Record<string, SessionMessage.ID[]>
@@ -20,8 +28,6 @@ export const moveSessionStore = Context.Service<SliceStoreService<MoveSessionSta
 
 export const createMoveSessionState = (): MoveSessionState => ({ sessions: {}, moves: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const sessionMoved = sessionEvent("session-moved")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
@@ -39,12 +45,8 @@ export const moveSession = implementCommand(specification)
   .inputSchema(input)
   .store(moveSessionStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     if (item.type === "move") state.moves[sessionID] = [...(state.moves[sessionID] ?? []), inboxID]
@@ -57,8 +59,7 @@ export const moveSession = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { sessionID } = command
-    if (!state.sessions[sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, sessionID)
     return [
       ...(state.moves[sessionID] ?? []).map((inboxID) => inboxCancelled.create({ sessionID, inboxID })),
       sessionMoved.create(command),

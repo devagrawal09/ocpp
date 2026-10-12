@@ -5,11 +5,19 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted, and the Sessions with a compaction running. Duplicated from the
-// other Session Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted,
+// and the Sessions with a compaction running. Its Session lifecycle is the
+// shared fold in session/lifecycle.ts; the rest is duplicated from the other
+// Session Slices on purpose.
 export type SettleCompactionState = {
   sessions: Record<string, "live" | "deleted">
   running: Record<string, true>
@@ -21,8 +29,6 @@ export const settleCompactionStore = Context.Service<
 
 export const createSettleCompactionState = (): SettleCompactionState => ({ sessions: {}, running: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const compactionStarted = sessionEvent("session-compaction-started")
 const compactionSettled = sessionEvent("session-compaction-settled")
 const usageRecorded = sessionEvent("session-usage-recorded")
@@ -38,11 +44,9 @@ export const settleCompaction = implementCommand(specification)
   .inputSchema(input)
   .store(settleCompactionStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
+  .apply(sessionCreated, applySessionCreated)
   .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
+    await applySessionDeleted(event, state)
     delete state.running[event.payload.sessionID]
   })
   .apply(compactionStarted, async (event, state) => {
@@ -53,9 +57,7 @@ export const settleCompaction = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { usage, ...settled } = command
-    if (!state.sessions[settled.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[settled.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, settled.sessionID)
     if (settled.outcome === "completed" && !state.running[settled.sessionID])
       throw new CommandRejection("no-compaction-running", "No compaction running")
     return [

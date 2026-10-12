@@ -5,11 +5,20 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  applyStepSettled,
+  executionSettled,
+  executionStarted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: active executions, the in-flight step per Session
-// and the blocks recorded in its current attempt, as kind:ordinal keys.
-// Duplicated from the other step Slices on purpose.
+// and the blocks recorded in its current attempt, as kind:ordinal keys. Its
+// Session lifecycle is the shared fold in session/lifecycle.ts; the rest is
+// duplicated from the other step Slices on purpose.
 export type RecordBlockState = {
   active: Record<string, true>
   inFlight: Record<string, { assistantMessageID: string; blocks: string[] }>
@@ -24,10 +33,7 @@ export const createRecordBlockState = (): RecordBlockState => ({
   inFlight: {},
 })
 
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 const blockRecorded = sessionEvent("session-block-recorded")
 
 const input = Schema.toStandardSchemaV1(
@@ -44,33 +50,20 @@ const input = Schema.toStandardSchemaV1(
 
 const key = (block: { kind: string; ordinal: number }) => `${block.kind}:${block.ordinal}`
 
-const settle = (state: RecordBlockState, sessionID: string) => {
-  delete state.active[sessionID]
-  delete state.inFlight[sessionID]
-}
-
-const closeStep = (state: RecordBlockState, sessionID: string, assistantMessageID: string) => {
-  if (state.inFlight[sessionID]?.assistantMessageID === assistantMessageID) delete state.inFlight[sessionID]
-}
-
 export const recordBlock = implementCommand(specification)
   .inputSchema(input)
   .store(recordBlockStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    settle(state, event.payload.sessionID)
+    settleExecution(state, event.payload.sessionID)
   })
   // Every step.started opens a physical attempt with fresh ordinals.
   .apply(stepStarted, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload
     state.inFlight[sessionID] = { assistantMessageID, blocks: [] }
   })
-  .apply(stepSettled, async (event, state) => {
-    closeStep(state, event.payload.sessionID, event.payload.assistantMessageID)
-  })
+  .apply(stepSettled, applyStepSettled)
   .apply(blockRecorded, async (event, state) => {
     const step = state.inFlight[event.payload.sessionID]
     if (step?.assistantMessageID === event.payload.assistantMessageID) step.blocks.push(key(event.payload))

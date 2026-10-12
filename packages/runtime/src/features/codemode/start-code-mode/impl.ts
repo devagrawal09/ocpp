@@ -3,12 +3,20 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../../session/lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted; the Session of each execution the log admitted; and the
-// executions that went to the background. Duplicated from the other Code
-// Mode lifecycle Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted;
+// the Session of each execution the log admitted; and the executions that went
+// to the background. Its Session lifecycle is the shared fold in
+// session/lifecycle.ts; the rest is duplicated from the other Code Mode
+// lifecycle Slices on purpose.
 export type StartCodeModeState = {
   sessions: Record<string, "live" | "deleted">
   executions: Record<string, string>
@@ -21,8 +29,6 @@ export const startCodeModeStore = Context.Service<SliceStoreService<StartCodeMod
 
 export const createStartCodeModeState = (): StartCodeModeState => ({ sessions: {}, executions: {}, started: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const executionAdmitted = sessionEvent("session-codemode-execution-admitted")
 const codeModeStarted = sessionEvent("session-codemode-started")
 
@@ -32,12 +38,8 @@ export const startCodeMode = implementCommand(specification)
   .inputSchema(input)
   .store(startCodeModeStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .apply(executionAdmitted, async (event, state) => {
     state.executions[event.payload.executionID] = event.payload.sessionID
   })
@@ -45,9 +47,7 @@ export const startCodeMode = implementCommand(specification)
     state.started[event.payload.executionID] = true
   })
   .handle(async (command, state) => {
-    const session = state.sessions[command.sessionID]
-    if (!session) throw new CommandRejection("session-not-found", "Session not found")
-    if (session === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
     if (state.executions[command.executionID] !== command.sessionID)
       throw new CommandRejection("execution-not-found", "Execution not found")
     if (state.started[command.executionID])

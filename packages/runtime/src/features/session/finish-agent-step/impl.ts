@@ -9,11 +9,25 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  applySessionCreated,
+  applySessionDeleted,
+  applyStepSettled,
+  executionSettled,
+  executionStarted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted, the Sessions with an active execution, and per Session the step in
-// flight with its calls still open. Duplicated from the runtime's own step
+// Rebuildable projection: every Session ID the log has named, live or deleted,
+// the Sessions with an active execution, and per Session the step in flight
+// with its calls still open. Its Session lifecycle is the shared fold in
+// session/lifecycle.ts; the rest is duplicated from the runtime's own step
 // Slices on purpose.
 export type FinishAgentStepState = {
   sessions: Record<string, "live" | "deleted">
@@ -27,12 +41,7 @@ export const finishAgentStepStore = Context.Service<
 
 export const createFinishAgentStepState = (): FinishAgentStepState => ({ sessions: {}, active: {}, inFlight: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 const toolRequested = sessionEvent("session-tool-requested")
 const toolSettled = sessionEvent("session-tool-settled")
 const blockRecorded = sessionEvent("session-block-recorded")
@@ -66,35 +75,23 @@ const input = Schema.toStandardSchemaV1(
   ]),
 )
 
-const settle = (state: FinishAgentStepState, sessionID: string) => {
-  delete state.active[sessionID]
-  delete state.inFlight[sessionID]
-}
-
 export const finishAgentStep = implementCommand(specification)
   .inputSchema(input)
   .store(finishAgentStepStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
+  .apply(sessionCreated, applySessionCreated)
   .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-    settle(state, event.payload.sessionID)
+    await applySessionDeleted(event, state)
+    settleExecution(state, event.payload.sessionID)
   })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    settle(state, event.payload.sessionID)
+    settleExecution(state, event.payload.sessionID)
   })
   .apply(stepStarted, async (event, state) => {
     state.inFlight[event.payload.sessionID] = { assistantMessageID: event.payload.assistantMessageID, open: {} }
   })
-  .apply(stepSettled, async (event, state) => {
-    if (state.inFlight[event.payload.sessionID]?.assistantMessageID === event.payload.assistantMessageID)
-      delete state.inFlight[event.payload.sessionID]
-  })
+  .apply(stepSettled, applyStepSettled)
   .apply(toolRequested, async (event, state) => {
     const step = state.inFlight[event.payload.sessionID]
     if (step?.assistantMessageID === event.payload.assistantMessageID) step.open[event.payload.id] = true
@@ -106,8 +103,7 @@ export const finishAgentStep = implementCommand(specification)
   .handle(async (command, state) => {
     const { blocks, calls, ...outcome } = command
     const { sessionID, assistantMessageID } = outcome
-    if (!state.sessions[sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, sessionID)
     if (!state.active[sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     const step = state.inFlight[sessionID]
     if (step?.assistantMessageID !== assistantMessageID)

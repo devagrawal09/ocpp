@@ -4,11 +4,20 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  applyStepSettled,
+  executionSettled,
+  executionStarted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: active executions and the in-flight step per
-// Session, with whether its current attempt has streamed. Duplicated from the
-// other step Slices on purpose.
+// Session, with whether its current attempt has streamed. Its Session
+// lifecycle is the shared fold in session/lifecycle.ts; the rest is duplicated
+// from the other step Slices on purpose.
 export type RecordStepStreamedState = {
   active: Record<string, true>
   inFlight: Record<string, { assistantMessageID: string; streamed: boolean }>
@@ -23,11 +32,8 @@ export const createRecordStepStreamedState = (): RecordStepStreamedState => ({
   inFlight: {},
 })
 
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
 const stepStreamed = sessionEvent("session-step-streamed")
-const stepSettled = sessionEvent("session-step-settled")
 
 const input = Schema.toStandardSchemaV1(
   Schema.Struct({
@@ -36,20 +42,13 @@ const input = Schema.toStandardSchemaV1(
   }),
 )
 
-const settle = (state: RecordStepStreamedState, sessionID: string) => {
-  delete state.active[sessionID]
-  delete state.inFlight[sessionID]
-}
-
 export const recordStepStreamed = implementCommand(specification)
   .inputSchema(input)
   .store(recordStepStreamedStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    settle(state, event.payload.sessionID)
+    settleExecution(state, event.payload.sessionID)
   })
   // Every step.started opens a physical attempt, which streams once.
   .apply(stepStarted, async (event, state) => {
@@ -60,10 +59,7 @@ export const recordStepStreamed = implementCommand(specification)
     const step = state.inFlight[event.payload.sessionID]
     if (step?.assistantMessageID === event.payload.assistantMessageID) step.streamed = true
   })
-  .apply(stepSettled, async (event, state) => {
-    const { sessionID, assistantMessageID } = event.payload
-    if (state.inFlight[sessionID]?.assistantMessageID === assistantMessageID) delete state.inFlight[sessionID]
-  })
+  .apply(stepSettled, applyStepSettled)
   .handle(async (command, state) => {
     if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     const step = state.inFlight[command.sessionID]

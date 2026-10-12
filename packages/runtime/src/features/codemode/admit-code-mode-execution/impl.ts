@@ -5,14 +5,22 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../../session/lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted; each execution the log admitted, with its Session and the names it
-// holds until it settles; each Session's notebook, the names its executions
-// saved with the size of each value; and each Session's reserved names. A
-// revert's and a fork's facts name the executions whose values they remove or
-// copy. Duplicated from settle-code-mode-execution on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted;
+// each execution the log admitted, with its Session and the names it holds
+// until it settles; each Session's notebook, the names its executions saved
+// with the size of each value; and each Session's reserved names. A revert's
+// and a fork's facts name the executions whose values they remove or copy. Its
+// Session lifecycle is the shared fold in session/lifecycle.ts; the rest is
+// duplicated from settle-code-mode-execution on purpose.
 export type AdmitCodeModeExecutionState = {
   sessions: Record<string, "live" | "deleted">
   executions: Record<string, { sessionID: SessionID; reserved: string[] }>
@@ -31,8 +39,6 @@ export const createAdmitCodeModeExecutionState = (): AdmitCodeModeExecutionState
   reservations: {},
 })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const admitted = sessionEvent("session-codemode-execution-admitted")
 const settled = sessionEvent("session-codemode-execution-settled")
 const discarded = sessionEvent("session-codemode-execution-discarded")
@@ -63,12 +69,8 @@ export const admitCodeModeExecution = implementCommand(specification)
   .inputSchema(input)
   .store(admitCodeModeExecutionStore)
   .consistencyKeys({ session: (command) => command.sessionID, execution: (command) => command.executionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .apply(admitted, async (event, state) => {
     const { sessionID, executionID, reserved } = event.payload
     state.executions[executionID] = { sessionID, reserved: [...reserved] }
@@ -100,9 +102,7 @@ export const admitCodeModeExecution = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { limits, ...admission } = command
-    const session = state.sessions[admission.sessionID]
-    if (!session) throw new CommandRejection("session-not-found", "Session not found")
-    if (session === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, admission.sessionID)
     if (state.executions[admission.executionID])
       throw new CommandRejection("execution-already-admitted", "Execution already admitted")
     const notebook = state.notebooks[admission.sessionID] ?? {}

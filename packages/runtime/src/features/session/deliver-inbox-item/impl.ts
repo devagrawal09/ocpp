@@ -5,10 +5,23 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionSettled,
+  applyExecutionStarted,
+  applySessionCreated,
+  applySessionDeleted,
+  executionSettled,
+  executionStarted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: known Sessions, active executions, and each inbox item's status.
-// Duplicated from cancel-inbox-item on purpose.
+// Rebuildable projection: known Sessions, active executions, and each inbox
+// item's status. Its Session lifecycle is the shared fold in
+// session/lifecycle.ts; the rest is duplicated from cancel-inbox-item on
+// purpose.
 export type DeliverInboxItemState = {
   sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
@@ -33,11 +46,7 @@ export const createDeliverInboxItemState = (): DeliverInboxItemState => ({
   items: {},
 })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
 const inboxCancelled = sessionEvent("session-inbox-cancelled")
 const sessionMoved = sessionEvent("session-moved")
@@ -48,13 +57,8 @@ export const deliverInboxItem = implementCommand(specification)
   .inputSchema(input)
   .store(deliverInboxItemStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    const { sessionID } = event.payload
-    state.sessions[sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     state.items[inboxID] ??= {
@@ -63,12 +67,8 @@ export const deliverInboxItem = implementCommand(specification)
       ...(item.type === "move" ? { move: item.payload } : {}),
     }
   })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
-  .apply(executionSettled, async (event, state) => {
-    delete state.active[event.payload.sessionID]
-  })
+  .apply(executionStarted, applyExecutionStarted)
+  .apply(executionSettled, applyExecutionSettled)
   .apply(inboxDelivered, async (event, state) => {
     const item = state.items[event.payload.inboxID]
     if (item) item.status = "delivered"
@@ -78,9 +78,7 @@ export const deliverInboxItem = implementCommand(specification)
     if (item) item.status = "cancelled"
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[command.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
     // Delivery is runner-owned: it cannot happen without an active execution.
     if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
 

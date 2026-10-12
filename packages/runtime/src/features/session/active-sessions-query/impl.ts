@@ -1,11 +1,13 @@
 import { implementQuery, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
-import { sessionEvent } from "../../../events.ts"
+import { applyExecutionSettled, applyExecutionStarted, executionSettled, executionStarted } from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: the Sessions whose latest execution has started and
-// not settled. Duplicated from session-status-query on purpose.
+// not settled. Its Session lifecycle is the shared fold in
+// session/lifecycle.ts; the rest is duplicated from session-status-query on
+// purpose.
 export type ActiveSessionsState = { active: Record<string, true> }
 
 export const activeSessionsStore = Context.Service<
@@ -14,17 +16,10 @@ export const activeSessionsStore = Context.Service<
 
 export const createActiveSessionsState = (): ActiveSessionsState => ({ active: {} })
 
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
-
 export const activeSessions = implementQuery(specification)
   .inputSchema(Schema.toStandardSchemaV1(Schema.Struct({})))
   .outputSchema<{ sessionIDs: string[] }>()
   .store(activeSessionsStore)
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
-  .apply(executionSettled, async (event, state) => {
-    delete state.active[event.payload.sessionID]
-  })
+  .apply(executionStarted, applyExecutionStarted)
+  .apply(executionSettled, applyExecutionSettled)
   .handle(async (_query, state) => ({ sessionIDs: Object.keys(state.active).sort() }))

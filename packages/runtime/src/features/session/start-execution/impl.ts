@@ -3,11 +3,23 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionSettled,
+  applyExecutionStarted,
+  applySessionCreated,
+  applySessionDeleted,
+  executionSettled,
+  executionStarted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: known Sessions and whether each has an active
-// execution (started, not yet succeeded/failed/interrupted). Duplicated from
-// the other execution slices on purpose.
+// execution (started, not yet succeeded/failed/interrupted). Its Session
+// lifecycle is the shared fold in session/lifecycle.ts; the rest is duplicated
+// from the other execution slices on purpose.
 export type StartExecutionState = {
   sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
@@ -21,11 +33,6 @@ export const createStartExecutionState = (): StartExecutionState => ({
   sessions: {},
   active: {},
 })
-
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 
 const executionContinued = sessionEvent("session-execution-continued")
 
@@ -42,22 +49,12 @@ export const startExecution = implementCommand(specification)
   .inputSchema(input)
   .store(startExecutionStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
-  .apply(executionSettled, async (event, state) => {
-    delete state.active[event.payload.sessionID]
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
+  .apply(executionStarted, applyExecutionStarted)
+  .apply(executionSettled, applyExecutionSettled)
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[command.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
     if (state.active[command.sessionID])
       throw new CommandRejection("execution-already-active", "Execution already active")
     return [

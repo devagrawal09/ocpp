@@ -4,23 +4,26 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+  type SessionsState,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session the log has named, live or deleted,
-// with the model it runs on. Duplicated from the other Session Slices on
-// purpose.
-export type SelectModelState = {
-  sessions: Record<string, { status: "live" | "deleted"; model?: Model.Ref }>
-}
+// Rebuildable projection: every Session the log has named, live or deleted
+// (the shared Session lifecycle), and the model each live Session runs on.
+export type SelectModelState = SessionsState & { models: Record<string, Model.Ref> }
 
 export const selectModelStore = Context.Service<SliceStoreService<SelectModelState, SelectModelState, unknown>>(
   "@ocpp/runtime/SelectModelStore",
 )
 
-export const createSelectModelState = (): SelectModelState => ({ sessions: {} })
+export const createSelectModelState = (): SelectModelState => ({ sessions: {}, models: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const modelSelected = sessionEvent("session-model-selected")
 
 const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, model: Model.Ref }))
@@ -36,27 +39,26 @@ export const selectModel = implementCommand(specification)
   .store(selectModelStore)
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, async (event, state) => {
-    const model = event.payload.model
-    state.sessions[event.payload.sessionID] = { status: "live", ...(model === undefined ? {} : { model }) }
+    await applySessionCreated(event, state)
+    if (event.payload.model !== undefined) state.models[event.payload.sessionID] = event.payload.model
   })
   .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = { status: "deleted" }
+    await applySessionDeleted(event, state)
+    delete state.models[event.payload.sessionID]
   })
   .apply(modelSelected, async (event, state) => {
-    const session = state.sessions[event.payload.sessionID]
-    if (session) session.model = event.payload.model
+    if (state.sessions[event.payload.sessionID]) state.models[event.payload.sessionID] = event.payload.model
   })
   .handle(async (command, state) => {
-    const session = state.sessions[command.sessionID]
-    if (!session) throw new CommandRejection("session-not-found", "Session not found")
-    if (session.status === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
-    if (session.model && same(session.model, command.model))
+    requireLiveSession(state, command.sessionID)
+    const previous = state.models[command.sessionID]
+    if (previous && same(previous, command.model))
       throw new CommandRejection("model-already-selected", "Model already selected")
     return [
       modelSelected.create({
         sessionID: command.sessionID,
         model: command.model,
-        ...(session.model === undefined ? {} : { previous: session.model }),
+        ...(previous === undefined ? {} : { previous }),
       }),
     ]
   })

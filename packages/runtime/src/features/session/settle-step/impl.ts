@@ -10,6 +10,13 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionSettled,
+  applyExecutionStarted,
+  executionSettled,
+  executionStarted,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 const DEFAULT_LIMIT = 3
@@ -17,6 +24,7 @@ const DEFAULT_LIMIT = 3
 // Rebuildable projection: active executions and, per step, whether an attempt
 // is in flight and how many retries it has had. A step id is reused by retried
 // attempts, so a new step-started puts it back in flight and keeps the count.
+// Its Session lifecycle is the shared fold in session/lifecycle.ts.
 export type SettleStepState = {
   active: Record<string, true>
   // Retries a fresh retry carries into the Session's next step.
@@ -34,10 +42,7 @@ export const createSettleStepState = (): SettleStepState => ({
   steps: {},
 })
 
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 
 const target = {
   sessionID: SessionID,
@@ -93,11 +98,9 @@ export const settleStep = implementCommand(specification)
   .inputSchema(input)
   .store(settleStepStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    delete state.active[event.payload.sessionID]
+    await applyExecutionSettled(event, state)
     delete state.carried[event.payload.sessionID]
   })
   .apply(stepStarted, async (event, state) => {

@@ -4,10 +4,18 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: known Sessions and each inbox item's status.
-// Duplicated from enqueue-input on purpose.
+// Rebuildable projection: known Sessions and each inbox item's status. Its
+// Session lifecycle is the shared fold in session/lifecycle.ts; the rest is
+// duplicated from enqueue-input on purpose.
 export type CancelInboxItemState = {
   sessions: Record<string, "live" | "deleted">
   items: Record<string, { sessionID: string; status: "pending" | "delivered" | "cancelled" }>
@@ -22,8 +30,6 @@ export const createCancelInboxItemState = (): CancelInboxItemState => ({
   items: {},
 })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
 const inboxCancelled = sessionEvent("session-inbox-cancelled")
@@ -34,13 +40,8 @@ export const cancelInboxItem = implementCommand(specification)
   .inputSchema(input)
   .store(cancelInboxItemStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    const { sessionID } = event.payload
-    state.sessions[sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID } = event.payload
     state.items[inboxID] ??= { sessionID, status: "pending" }
@@ -56,9 +57,7 @@ export const cancelInboxItem = implementCommand(specification)
     if (item) item.status = "cancelled"
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[command.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
 
     const item = state.items[command.inboxID]
     if (!item || item.sessionID !== command.sessionID)

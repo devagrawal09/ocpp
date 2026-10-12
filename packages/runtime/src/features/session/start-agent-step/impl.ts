@@ -3,11 +3,23 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionSettled,
+  applyExecutionStarted,
+  applySessionCreated,
+  applySessionDeleted,
+  executionSettled,
+  executionStarted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted, and the Sessions with an active execution. Duplicated from the
-// other Session Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted,
+// and the Sessions with an active execution. Its Session lifecycle is the
+// shared fold in session/lifecycle.ts; the rest is duplicated from the other
+// Session Slices on purpose.
 export type StartAgentStepState = {
   sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
@@ -19,10 +31,6 @@ export const startAgentStepStore = Context.Service<
 
 export const createStartAgentStepState = (): StartAgentStepState => ({ sessions: {}, active: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
 
 const input = Schema.toStandardSchemaV1(SessionEvent.Step.Started.data)
@@ -31,25 +39,15 @@ export const startAgentStep = implementCommand(specification)
   .inputSchema(input)
   .store(startAgentStepStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
-  .apply(executionSettled, async (event, state) => {
-    delete state.active[event.payload.sessionID]
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
+  .apply(executionStarted, applyExecutionStarted)
+  .apply(executionSettled, applyExecutionSettled)
   // Deliberately a no-op: a step in flight does not hold the next one back,
   // so the scenario that starts two needs no state.
   .apply(stepStarted, async () => {})
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[command.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
     if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     return [stepStarted.create(command)]
   })

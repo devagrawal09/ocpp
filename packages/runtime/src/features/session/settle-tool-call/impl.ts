@@ -6,10 +6,20 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  applyStepSettled,
+  executionSettled,
+  executionStarted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: active executions, the in-flight step per Session
-// and its recorded calls with whether each has settled. Duplicated on purpose.
+// and its recorded calls with whether each has settled. Its Session lifecycle
+// is the shared fold in session/lifecycle.ts; the rest is duplicated on
+// purpose.
 export type SettleToolCallState = {
   active: Record<string, true>
   inFlight: Record<string, { assistantMessageID: string; calls: Record<string, { settled: boolean }> }>
@@ -24,10 +34,7 @@ export const createSettleToolCallState = (): SettleToolCallState => ({
   inFlight: {},
 })
 
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 const toolRequested = sessionEvent("session-tool-requested")
 const toolSettled = sessionEvent("session-tool-settled")
 
@@ -48,15 +55,6 @@ const input = Schema.toStandardSchemaV1(
   }),
 )
 
-const settle = (state: SettleToolCallState, sessionID: string) => {
-  delete state.active[sessionID]
-  delete state.inFlight[sessionID]
-}
-
-const closeStep = (state: SettleToolCallState, sessionID: string, assistantMessageID: string) => {
-  if (state.inFlight[sessionID]?.assistantMessageID === assistantMessageID) delete state.inFlight[sessionID]
-}
-
 const settleCall = (
   state: SettleToolCallState,
   payload: { sessionID: string; assistantMessageID: string; id: string },
@@ -69,19 +67,15 @@ export const settleToolCall = implementCommand(specification)
   .inputSchema(input)
   .store(settleToolCallStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    settle(state, event.payload.sessionID)
+    settleExecution(state, event.payload.sessionID)
   })
   .apply(stepStarted, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload
     state.inFlight[sessionID] = { assistantMessageID, calls: {} }
   })
-  .apply(stepSettled, async (event, state) => {
-    closeStep(state, event.payload.sessionID, event.payload.assistantMessageID)
-  })
+  .apply(stepSettled, applyStepSettled)
   .apply(toolRequested, async (event, state) => {
     const { sessionID, assistantMessageID, id } = event.payload
     const step = state.inFlight[sessionID]

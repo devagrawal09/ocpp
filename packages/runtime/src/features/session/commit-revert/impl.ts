@@ -5,14 +5,26 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionSettled,
+  applyExecutionStarted,
+  applySessionCreated,
+  applySessionDeleted,
+  executionSettled,
+  executionStarted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted, the Sessions with an active execution, the message each staged
-// revert cuts at, each Session's pending inbox items in admission order, each
-// Session's Code Mode executions that have not settled, and those admitted
-// since its revert was staged. Duplicated from the other revert, inbox and
-// Code Mode Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted,
+// the Sessions with an active execution, the message each staged revert cuts
+// at, each Session's pending inbox items in admission order, each Session's
+// Code Mode executions that have not settled, and those admitted since its
+// revert was staged. Its Session lifecycle is the shared fold in
+// session/lifecycle.ts; the rest is duplicated from the other revert, inbox
+// and Code Mode Slices on purpose.
 export type CommitRevertState = {
   sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
@@ -35,10 +47,6 @@ export const createCommitRevertState = (): CommitRevertState => ({
   sinceStaged: {},
 })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const revertStaged = sessionEvent("session-revert-staged")
 const revertCleared = sessionEvent("session-revert-cleared")
 const revertCommitted = sessionEvent("session-revert-committed")
@@ -70,18 +78,10 @@ export const commitRevert = implementCommand(specification)
   .inputSchema(input)
   .store(commitRevertStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
-  .apply(executionSettled, async (event, state) => {
-    delete state.active[event.payload.sessionID]
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
+  .apply(executionStarted, applyExecutionStarted)
+  .apply(executionSettled, applyExecutionSettled)
   .apply(revertStaged, async (event, state) => {
     state.staged[event.payload.sessionID] = event.payload.revert.messageID
     state.sinceStaged[event.payload.sessionID] = []
@@ -117,8 +117,7 @@ export const commitRevert = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { sessionID } = command
-    if (!state.sessions[sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, sessionID)
     if (state.active[sessionID]) throw new CommandRejection("session-busy", "Session is busy")
     const to = state.staged[sessionID]
     if (to === undefined) throw new CommandRejection("no-revert-staged", "No revert staged")

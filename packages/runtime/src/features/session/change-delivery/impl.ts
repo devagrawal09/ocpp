@@ -5,11 +5,19 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted, and each inbox item's Session, delivery and whether it is still
-// pending. Duplicated from the other inbox Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted,
+// and each inbox item's Session, delivery and whether it is still pending. Its
+// Session lifecycle is the shared fold in session/lifecycle.ts; the rest is
+// duplicated from the other inbox Slices on purpose.
 export type ChangeDeliveryState = {
   sessions: Record<string, "live" | "deleted">
   items: Record<string, { sessionID: string; delivery: "steer" | "queue"; pending: boolean }>
@@ -24,8 +32,6 @@ export const createChangeDeliveryState = (): ChangeDeliveryState => ({
   items: {},
 })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
 const inboxCancelled = sessionEvent("session-inbox-cancelled")
@@ -50,12 +56,8 @@ export const changeDelivery = implementCommand(specification)
   .inputSchema(input)
   .store(changeDeliveryStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     state.items[inboxID] ??= {
@@ -75,9 +77,7 @@ export const changeDelivery = implementCommand(specification)
     if (item) item.delivery = event.payload.delivery
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[command.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
     const item = state.items[command.inboxID]
     if (item?.sessionID !== command.sessionID)
       throw new CommandRejection("inbox-item-not-found", "Inbox item not found")

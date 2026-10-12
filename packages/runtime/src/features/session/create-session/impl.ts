@@ -4,10 +4,11 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import { applySessionCreated, applySessionDeleted, sessionCreated, sessionDeleted } from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted. Duplicated in the other Session Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted.
+// Its Session lifecycle is the shared fold in session/lifecycle.ts.
 export type CreateSessionState = {
   sessions: Record<string, "live" | "deleted">
 }
@@ -18,8 +19,6 @@ export const createSessionStore = Context.Service<SliceStoreService<CreateSessio
 
 export const createCreateSessionState = (): CreateSessionState => ({ sessions: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const sessionImported = sessionEvent("session-imported")
 
 const { sessionID: _, ...imported } = SessionFact.Imported.data.fields
@@ -45,12 +44,8 @@ export const createSession = implementCommand(specification)
       ...(command.session.parentID === undefined ? [] : [command.session.parentID]),
     ],
   })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .handle(async (command, state) => {
     const sessionID = command.session.sessionID
     if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")

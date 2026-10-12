@@ -1,15 +1,29 @@
 import { SessionID } from "@ocpp/schema/session-id"
 import type { SessionMessage } from "@ocpp/schema/session-message"
-import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  applySessionCreated,
+  applySessionDeleted,
+  applyStepSettled,
+  executionSettled,
+  executionStarted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted; each Session's active execution, its in-flight step and the open
-// tool calls of that step (as interrupt-execution keeps them); and its
-// pending inbox items in admission order. Duplicated on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted;
+// each Session's active execution, its in-flight step and the open tool calls
+// of that step (as interrupt-execution keeps them); and its pending inbox
+// items in admission order. Its Session lifecycle is the shared fold in
+// session/lifecycle.ts; the rest is duplicated on purpose.
 export type DeleteSessionState = {
   sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
@@ -36,12 +50,7 @@ export const createDeleteSessionState = (): DeleteSessionState => ({
   pending: {},
 })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 const toolRequested = sessionEvent("session-tool-requested")
 const toolSettled = sessionEvent("session-tool-settled")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
@@ -59,30 +68,19 @@ export const deleteSession = implementCommand(specification)
   .inputSchema(input)
   .store(deleteSessionStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    const { sessionID } = event.payload
-    delete state.active[sessionID]
-    delete state.inFlight[sessionID]
-    delete state.openCalls[sessionID]
+    settleExecution(state, event.payload.sessionID)
+    delete state.openCalls[event.payload.sessionID]
   })
   .apply(stepStarted, async (event, state) => {
     // A new attempt starts with a clean call table.
     delete state.openCalls[event.payload.sessionID]
     state.inFlight[event.payload.sessionID] = event.payload.assistantMessageID
   })
-  .apply(stepSettled, async (event, state) => {
-    const { sessionID, assistantMessageID } = event.payload
-    if (state.inFlight[sessionID] === assistantMessageID) delete state.inFlight[sessionID]
-  })
+  .apply(stepSettled, applyStepSettled)
   .apply(toolRequested, async (event, state) => {
     const { sessionID, assistantMessageID, id, name, executed } = event.payload
     state.openCalls[sessionID] = [...(state.openCalls[sessionID] ?? []), { assistantMessageID, id, name, executed }]
@@ -107,8 +105,7 @@ export const deleteSession = implementCommand(specification)
   })
   .handle(async (command, state) => {
     const { sessionID } = command
-    if (!state.sessions[sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, sessionID)
     const step = state.inFlight[sessionID]
     // An active execution ends as a user's interruption ends it.
     const interruption = !state.active[sessionID]

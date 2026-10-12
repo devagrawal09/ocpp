@@ -3,10 +3,19 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  applyStepSettled,
+  executionSettled,
+  executionStarted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: active executions and the step in flight per
-// Session. Duplicated from record-step-started on purpose.
+// Session. Its Session lifecycle is the shared fold in session/lifecycle.ts;
+// the rest is duplicated from record-step-started on purpose.
 export type FinishExecutionState = {
   active: Record<string, true>
   inFlight: Record<string, string>
@@ -21,27 +30,17 @@ export const createFinishExecutionState = (): FinishExecutionState => ({
   inFlight: {},
 })
 
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 
 const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID }))
-
-const settle = (state: FinishExecutionState, sessionID: string) => {
-  delete state.active[sessionID]
-  delete state.inFlight[sessionID]
-}
 
 export const finishExecution = implementCommand(specification)
   .inputSchema(input)
   .store(finishExecutionStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    settle(state, event.payload.sessionID)
+    settleExecution(state, event.payload.sessionID)
   })
   .apply(stepStarted, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload
@@ -50,10 +49,7 @@ export const finishExecution = implementCommand(specification)
   // A settled step is no longer in flight, even one whose failure is retried:
   // a retried attempt that produces nothing leaves the failure standing, and
   // the execution may finish.
-  .apply(stepSettled, async (event, state) => {
-    const { sessionID, assistantMessageID } = event.payload
-    if (state.inFlight[sessionID] === assistantMessageID) delete state.inFlight[sessionID]
-  })
+  .apply(stepSettled, applyStepSettled)
   .handle(async (command, state) => {
     if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     if (state.inFlight[command.sessionID]) throw new CommandRejection("step-in-flight", "Step in flight")

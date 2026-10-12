@@ -1,15 +1,23 @@
 import { SessionEvent } from "@ocpp/schema/session-event"
 import { SessionFact } from "@ocpp/schema/session-fact"
-import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
+import { implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted. Duplicated in the other Session Slices on purpose. Which values the
-// Session already stored is not folded: it would hold every instruction value
-// ever recorded, and the host only stores what it has not stored.
+// Rebuildable projection: every Session ID the log has named, live or deleted.
+// Its Session lifecycle is the shared fold in session/lifecycle.ts. Which
+// values the Session already stored is not folded: it would hold every
+// instruction value ever recorded, and the host only stores what it has not
+// stored.
 export type UpdateInstructionsState = {
   sessions: Record<string, "live" | "deleted">
 }
@@ -20,8 +28,6 @@ export const updateInstructionsStore = Context.Service<
 
 export const createUpdateInstructionsState = (): UpdateInstructionsState => ({ sessions: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const instructionsUpdated = sessionEvent("session-instructions-updated")
 const blobsStored = sessionEvent("session-instruction-blobs-stored")
 
@@ -37,16 +43,11 @@ export const updateInstructions = implementCommand(specification)
   .inputSchema(input)
   .store(updateInstructionsStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .handle(async (command, state) => {
     const { blobs, ...update } = command
-    if (!state.sessions[update.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[update.sessionID] === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, update.sessionID)
     return [
       ...(blobs === undefined || Object.keys(blobs).length === 0
         ? []

@@ -3,12 +3,20 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted, and each live Session's entries with their values as JSON. An
-// entry's value is at most 8 KiB, and a Session holds a handful.
-// Duplicated from remove-instruction-entry on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted,
+// and each live Session's entries with their values as JSON. An entry's value
+// is at most 8 KiB, and a Session holds a handful. Its Session lifecycle is
+// the shared fold in session/lifecycle.ts; the rest is duplicated from remove-
+// instruction-entry on purpose.
 export type SetInstructionEntryState = {
   sessions: Record<string, "live" | "deleted">
   entries: Record<string, Record<string, string>>
@@ -20,8 +28,6 @@ export const setInstructionEntryStore = Context.Service<
 
 export const createSetInstructionEntryState = (): SetInstructionEntryState => ({ sessions: {}, entries: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const sessionForked = sessionEvent("session-forked")
 const entrySet = sessionEvent("session-instruction-entry-set")
 const entryRemoved = sessionEvent("session-instruction-entry-removed")
@@ -32,11 +38,9 @@ export const setInstructionEntry = implementCommand(specification)
   .inputSchema(input)
   .store(setInstructionEntryStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
+  .apply(sessionCreated, applySessionCreated)
   .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
+    await applySessionDeleted(event, state)
     delete state.entries[event.payload.sessionID]
   })
   // A fork starts with its parent's entries, removed ones included.
@@ -55,9 +59,7 @@ export const setInstructionEntry = implementCommand(specification)
     delete state.entries[event.payload.sessionID]?.[event.payload.key]
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[command.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
     if (state.entries[command.sessionID]?.[command.key] === JSON.stringify(command.value))
       throw new CommandRejection("instruction-entry-unchanged", "Instruction entry unchanged")
     return [entrySet.create(command)]

@@ -3,11 +3,19 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../../session/lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: every Session ID the log has named, live or
-// deleted, and the commands each Session has, its fork's copies included.
-// Duplicated from the other Code Mode command Slices on purpose.
+// Rebuildable projection: every Session ID the log has named, live or deleted,
+// and the commands each Session has, its fork's copies included. Its Session
+// lifecycle is the shared fold in session/lifecycle.ts; the rest is duplicated
+// from the other Code Mode command Slices on purpose.
 export type RemoveCodeModeCommandState = {
   sessions: Record<string, "live" | "deleted">
   commands: Record<string, Record<string, true>>
@@ -19,8 +27,6 @@ export const removeCodeModeCommandStore = Context.Service<
 
 export const createRemoveCodeModeCommandState = (): RemoveCodeModeCommandState => ({ sessions: {}, commands: {} })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const notebookCopied = sessionEvent("session-codemode-notebook-copied")
 const defined = sessionEvent("session-codemode-command-defined")
 const removed = sessionEvent("session-codemode-command-removed")
@@ -31,11 +37,9 @@ export const removeCodeModeCommand = implementCommand(specification)
   .inputSchema(input)
   .store(removeCodeModeCommandStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
+  .apply(sessionCreated, applySessionCreated)
   .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
+    await applySessionDeleted(event, state)
     delete state.commands[event.payload.sessionID]
   })
   // A fork's commands are copied with its notebook; its projection drops those whose handler it lacks.
@@ -49,9 +53,7 @@ export const removeCodeModeCommand = implementCommand(specification)
     delete state.commands[event.payload.sessionID]?.[event.payload.name]
   })
   .handle(async (command, state) => {
-    const session = state.sessions[command.sessionID]
-    if (!session) throw new CommandRejection("session-not-found", "Session not found")
-    if (session === "deleted") throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
     if (!state.commands[command.sessionID]?.[command.name])
       throw new CommandRejection("command-not-found", "Command not found")
     return [removed.create(command)]

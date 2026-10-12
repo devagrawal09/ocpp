@@ -7,10 +7,19 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  closeStep,
+  executionSettled,
+  executionStarted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: which Sessions have an active execution, which step
-// IDs were used, and which step is in flight. Duplicated from settle-step
+// IDs were used, and which step is in flight. Its Session lifecycle is the
+// shared fold in session/lifecycle.ts; the rest is duplicated from settle-step
 // and finish-execution on purpose.
 export type RecordStepStartedState = {
   active: Record<string, true>
@@ -28,10 +37,7 @@ export const createRecordStepStartedState = (): RecordStepStartedState => ({
   inFlight: {},
 })
 
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 
 const input = Schema.toStandardSchemaV1(
   Schema.Struct({
@@ -45,20 +51,13 @@ const input = Schema.toStandardSchemaV1(
 
 // An execution ending abandons its in-flight step (nothing more is recorded
 // for it), so the next execution starts clean.
-const settle = (state: RecordStepStartedState, sessionID: string) => {
-  delete state.active[sessionID]
-  delete state.inFlight[sessionID]
-}
-
 export const recordStepStarted = implementCommand(specification)
   .inputSchema(input)
   .store(recordStepStartedStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    settle(state, event.payload.sessionID)
+    settleExecution(state, event.payload.sessionID)
   })
   .apply(stepStarted, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload
@@ -69,7 +68,7 @@ export const recordStepStarted = implementCommand(specification)
   // retried.
   .apply(stepSettled, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload
-    if (state.inFlight[sessionID] === assistantMessageID) delete state.inFlight[sessionID]
+    closeStep(state, sessionID, assistantMessageID)
     const step = state.steps[assistantMessageID]
     if (step && event.payload.outcome === "failed" && event.payload.retry) step.retryScheduled = true
   })

@@ -5,12 +5,20 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applySessionCreated,
+  applySessionDeleted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Slice state is a rebuildable projection of the Event Log: which Sessions
 // exist, which Session/type each inbox ID was admitted under, whether it is
 // still pending, and the coalescing key a synthetic item was admitted under.
-// It is a duplicate of the projection in cancel-inbox-item on purpose.
+// Its Session lifecycle is the shared fold in session/lifecycle.ts; the rest
+// is duplicated from cancel-inbox-item on purpose.
 export type EnqueueInputState = {
   sessions: Record<string, "live" | "deleted">
   items: Record<string, { sessionID: string; type: string; pending: boolean; coalesce?: string }>
@@ -25,8 +33,6 @@ export const createEnqueueInputState = (): EnqueueInputState => ({
   items: {},
 })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
 const inboxCancelled = sessionEvent("session-inbox-cancelled")
@@ -115,13 +121,8 @@ export const enqueueInput = implementCommand(specification)
   .store(enqueueInputStore)
   // An inbox item ID names one item across Sessions.
   .consistencyKeys({ session: (command) => command.sessionID, inbox: (command) => command.inboxID })
-  .apply(sessionCreated, async (event, state) => {
-    const { sessionID } = event.payload
-    state.sessions[sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     const coalesce = item.type === "synthetic" ? item.payload.metadata?.coalesce : undefined
@@ -144,9 +145,7 @@ export const enqueueInput = implementCommand(specification)
   // scenario puts it in Given to prove admission works normally afterwards.
   .apply(revertCommitted, async () => {})
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[command.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
 
     const existing = state.items[command.inboxID]
     if (existing) {

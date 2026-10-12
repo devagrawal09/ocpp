@@ -6,11 +6,20 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  applyStepSettled,
+  executionSettled,
+  executionStarted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: active executions, the in-flight step per Session
-// and the call ids its current attempt recorded, requested or failed.
-// Duplicated on purpose.
+// and the call ids its current attempt recorded, requested or failed. Its
+// Session lifecycle is the shared fold in session/lifecycle.ts; the rest is
+// duplicated on purpose.
 export type FailToolInputState = {
   active: Record<string, true>
   inFlight: Record<string, { assistantMessageID: string; calls: string[] }>
@@ -25,10 +34,7 @@ export const createFailToolInputState = (): FailToolInputState => ({
   inFlight: {},
 })
 
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 const toolRequested = sessionEvent("session-tool-requested")
 const toolInputFailed = sessionEvent("session-tool-input-failed")
 
@@ -56,21 +62,15 @@ export const failToolInput = implementCommand(specification)
   .inputSchema(input)
   .store(failToolInputStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    delete state.active[event.payload.sessionID]
-    delete state.inFlight[event.payload.sessionID]
+    settleExecution(state, event.payload.sessionID)
   })
   .apply(stepStarted, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload
     state.inFlight[sessionID] = { assistantMessageID, calls: [] }
   })
-  .apply(stepSettled, async (event, state) => {
-    const { sessionID, assistantMessageID } = event.payload
-    if (state.inFlight[sessionID]?.assistantMessageID === assistantMessageID) delete state.inFlight[sessionID]
-  })
+  .apply(stepSettled, applyStepSettled)
   .apply(toolRequested, async (event, state) => {
     record(state, event.payload)
   })

@@ -4,11 +4,25 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import {
+  applyExecutionStarted,
+  applySessionCreated,
+  applySessionDeleted,
+  applyStepSettled,
+  executionSettled,
+  executionStarted,
+  requireLiveSession,
+  sessionCreated,
+  sessionDeleted,
+  settleExecution,
+  stepSettled,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: known Sessions and whether each has an active
-// execution (started, not yet succeeded/failed/interrupted). Duplicated from
-// the other execution slices on purpose.
+// execution (started, not yet succeeded/failed/interrupted). Its Session
+// lifecycle is the shared fold in session/lifecycle.ts; the rest is duplicated
+// from the other execution slices on purpose.
 export type InterruptExecutionState = {
   sessions: Record<string, "live" | "deleted">
   active: Record<string, true>
@@ -36,13 +50,8 @@ export const createInterruptExecutionState = (): InterruptExecutionState => ({
   inFlight: {},
 })
 
-const sessionCreated = sessionEvent("session-created")
-const sessionDeleted = sessionEvent("session-deleted")
 const inboxEnqueued = sessionEvent("session-inbox-enqueued")
-const executionStarted = sessionEvent("session-execution-started")
-const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
-const stepSettled = sessionEvent("session-step-settled")
 const toolRequested = sessionEvent("session-tool-requested")
 const toolSettled = sessionEvent("session-tool-settled")
 
@@ -76,22 +85,15 @@ export const interruptExecution = implementCommand(specification)
   .inputSchema(input)
   .store(interruptExecutionStore)
   .consistencyKeys({ session: (command) => command.sessionID })
-  .apply(sessionCreated, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "live"
-  })
-  .apply(sessionDeleted, async (event, state) => {
-    state.sessions[event.payload.sessionID] = "deleted"
-  })
+  .apply(sessionCreated, applySessionCreated)
+  .apply(sessionDeleted, applySessionDeleted)
   // Deliberately a no-op: the pending-input scenario puts an enqueued item in
   // Given, and conformance requires an apply handler for every Given event.
   // Interrupt never reads or changes inbox state.
   .apply(inboxEnqueued, async () => undefined)
-  .apply(executionStarted, async (event, state) => {
-    state.active[event.payload.sessionID] = true
-  })
+  .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, async (event, state) => {
-    delete state.active[event.payload.sessionID]
-    delete state.inFlight[event.payload.sessionID]
+    settleExecution(state, event.payload.sessionID)
     clearCalls(state, event.payload.sessionID)
   })
   .apply(stepStarted, async (event, state) => {
@@ -99,10 +101,7 @@ export const interruptExecution = implementCommand(specification)
     clearCalls(state, event.payload.sessionID)
     state.inFlight[event.payload.sessionID] = event.payload.assistantMessageID
   })
-  .apply(stepSettled, async (event, state) => {
-    const { sessionID, assistantMessageID } = event.payload
-    if (state.inFlight[sessionID] === assistantMessageID) delete state.inFlight[sessionID]
-  })
+  .apply(stepSettled, applyStepSettled)
   .apply(toolRequested, async (event, state) => {
     const { sessionID, assistantMessageID, id, name, executed } = event.payload
     const open = state.openCalls[sessionID] ?? []
@@ -113,9 +112,7 @@ export const interruptExecution = implementCommand(specification)
     closeCall(state, event.payload)
   })
   .handle(async (command, state) => {
-    if (!state.sessions[command.sessionID]) throw new CommandRejection("session-not-found", "Session not found")
-    if (state.sessions[command.sessionID] === "deleted")
-      throw new CommandRejection("session-deleted", "Session deleted")
+    requireLiveSession(state, command.sessionID)
     // OC++: idle/settled interrupt is a public no-op; the M4 facade
     // translates this rejection back into success.
     if (!state.active[command.sessionID]) throw new CommandRejection("session-idle", "Session is idle")

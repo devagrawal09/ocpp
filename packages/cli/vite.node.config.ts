@@ -4,7 +4,7 @@ import { createRequire } from "node:module"
 import { defineConfig, type Plugin, type UserConfig } from "vite"
 import solid from "vite-plugin-solid"
 import { nodeExecArgv, nodeTarget, type NodeTarget, photonWasmAsset } from "./src/node/target"
-import { verifySimulationGraph } from "./script/verify-artifact"
+import { verifySimulationGraph, verifySingleEffect } from "./script/verify-artifact"
 
 const dir = import.meta.dirname
 
@@ -58,6 +58,17 @@ function simulationGraphPlugin(): Plugin {
   }
 }
 
+// The linked Specter packages resolve effect from the Specter checkout; `dedupe` resolves every import of it from
+// OC++'s copy, and this fails the build unless the bundle holds exactly one.
+function singleEffectGraphPlugin(): Plugin {
+  return {
+    name: "ocpp:single-effect-graph",
+    generateBundle() {
+      verifySingleEffect([...this.getModuleIds()].filter((id) => /[/\\]effect[/\\]dist[/\\].+\.js$/.test(id)))
+    },
+  }
+}
+
 function fffNodePlugin(): Plugin {
   return {
     name: "ocpp:fff-node",
@@ -106,6 +117,7 @@ const resolve = {
     },
   ],
   conditions: ["node"],
+  dedupe: ["effect"],
 }
 
 const output = (entryFileNames: string, banner?: string) => ({
@@ -252,6 +264,7 @@ export function mainConfig(input: NodeBuildInput): UserConfig {
       runtimeRequirePlugin(),
       fffNodePlugin(),
       simulationGraphPlugin(),
+      singleEffectGraphPlugin(),
       solid({
         solid: {
           generate: "universal",

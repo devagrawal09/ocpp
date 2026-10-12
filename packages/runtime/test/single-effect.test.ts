@@ -21,8 +21,30 @@ test("the linked Specter packages load OC++'s Effect", async () => {
   loaded.forEach((module) => expect(module.Effect).toBe(Effect))
 })
 
-// Each linked package's tsconfig maps the Specter packages it imports to their sources; the preload makes those
-// imports load the builds OC++ links, so an error one package throws is the class another checks.
+// A linked package's import of another Specter package resolves, in the Specter checkout, to that package's build: the
+// one OC++ links. Bun applies a linked package's tsconfig `paths`, so a source mapping there would load it twice.
+test("the linked Specter packages resolve each other to the builds OC++ links", () => {
+  const linked = [
+    "@specter-ts/core",
+    "@specter-ts/memory",
+    "@specter-ts/reaction-outbox",
+    "@specter-ts/jsonl",
+    "@specter-ts/sqlite",
+    "@specter-ts/spec",
+  ]
+  const entry = (name: string) => fs.realpathSync(Bun.resolveSync(name, import.meta.dir))
+  const imports = linked.flatMap((name) => {
+    const build = path.dirname(entry(name))
+    const manifest = JSON.parse(fs.readFileSync(path.join(build, "..", "package.json"), "utf8"))
+    return Object.keys(manifest.dependencies ?? {})
+      .filter((dependency) => linked.includes(dependency))
+      .map((dependency) => [name, dependency, fs.realpathSync(Bun.resolveSync(dependency, build))])
+  })
+  expect(imports.length).toBeGreaterThan(0)
+  expect(imports).toEqual(imports.map(([name, dependency]) => [name, dependency, entry(dependency!)]))
+})
+
+// So an error one package throws is the class another checks.
 test("the linked Specter packages load each other as OC++ links them", async () => {
   const { createMemoryEventLog } = await import("@specter-ts/memory")
   const { createSqliteReactionOutboxStore } = await import("@specter-ts/sqlite")

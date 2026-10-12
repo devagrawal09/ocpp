@@ -26,18 +26,16 @@ export function installSingleEffect() {
  * plugin makes every `effect` module file loaded from such a copy re-export the same file from OC++'s
  * copy, so the process runs one Effect. Both copies must be the same version.
  *
- * The checkout's tsconfig `paths` map Specter's packages to their sources, and Bun applies them to the
- * linked packages' own imports, so `@specter-ts/sqlite` importing `@specter-ts/core` would load core a
- * second time, from source, and its errors would not be the classes the runtime checks. The plugin
- * resolves a linked package's import of another Specter package as the published package does: to the
- * build OC++ links.
+ * Only `effect` needs it: a linked package's import of another Specter package resolves, in the
+ * checkout, to that package's build, the one OC++ links (Specter keeps its source mappings out of the
+ * tsconfig its packages ship, which Bun would apply).
  *
  * A process installs it (`installSingleEffect`), and a bundle lists it among its build plugins, as the
  * CLI's compiled binary does. It is undefined when there is no second copy of `effect`.
  *
  * It exists only because of the links: once the Specter packages are installed from a registry or a
- * packed tarball, they resolve `effect` and each other from OC++'s `node_modules`, and this plugin and
- * the `effect` `paths` in the tsconfigs can go.
+ * packed tarball, they resolve `effect` from OC++'s `node_modules`, and this plugin and the `effect`
+ * `paths` in the tsconfigs can go.
  */
 export function singleEffect(): BunPlugin | undefined {
   const host = effectRoot(import.meta.dir)
@@ -52,17 +50,9 @@ export function singleEffect(): BunPlugin | undefined {
     if (version !== hostVersion)
       throw new Error(`The linked Specter packages' effect ${version} cannot share OC++'s effect ${hostVersion}`)
   })
-  // Each linked package's directory: its `dist` holds the entry.
-  const sources = linkedSources(entries.map((entry) => path.dirname(path.dirname(entry))))
   return {
     name: "ocpp-single-effect",
     setup(build) {
-      sources.forEach((linked, source) => {
-        build.onLoad({ filter: new RegExp(`^${escape(source)}$`) }, () => ({
-          contents: `export * from ${JSON.stringify(linked)}`,
-          loader: "js",
-        }))
-      })
       foreign.forEach((root) => {
         build.onLoad({ filter: new RegExp(`^${escape(path.join(root, "dist"))}[\\\\/].+\\.js$`) }, (args) => ({
           contents: `export * from ${JSON.stringify(path.join(host, path.relative(root, args.path)))}`,
@@ -71,26 +61,6 @@ export function singleEffect(): BunPlugin | undefined {
       })
     },
   }
-}
-
-/**
- * The sources the linked packages' tsconfig `paths` map Specter's packages to, each with the build OC++ links for
- * that package: what a linked package's import of another must load instead.
- */
-function linkedSources(directories: readonly string[]) {
-  const sources = new Map<string, string>()
-  directories.forEach((directory) => {
-    for (let file: string | undefined = path.join(directory, "tsconfig.json"); file && fs.existsSync(file); ) {
-      const config = JSON.parse(fs.readFileSync(file, "utf8"))
-      Object.entries<string[]>(config.compilerOptions?.paths ?? {}).forEach(([specifier, [target]]) => {
-        if (!specifier.startsWith("@specter-ts/") || !target) return
-        const linked = Bun.resolveSync(specifier, import.meta.dir)
-        sources.set(path.resolve(path.dirname(file!), target), fs.realpathSync(linked))
-      })
-      file = config.extends ? path.resolve(path.dirname(file), config.extends) : undefined
-    }
-  })
-  return sources
 }
 
 function effectRoot(from: string) {

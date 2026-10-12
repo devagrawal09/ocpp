@@ -34,6 +34,7 @@ const sessionCreated = sessionEvent("session-created")
 const modelSelected = sessionEvent("session-model-selected")
 const executionStarted = sessionEvent("session-execution-started")
 const executionSettled = sessionEvent("session-execution-settled")
+const sessionDeleted = sessionEvent("session-deleted")
 
 const driveExecutionRequest = Schema.Struct({
   type: Schema.Literal("driveExecution"),
@@ -56,7 +57,11 @@ export const createDriveExecution = <R>(plugin: ReactionPlugin<DriveExecutionReq
   implementReaction(specification)
     .outputSchema(Schema.toStandardSchemaV1(driveExecutionRequest))
     .plugin(plugin)
-    .store(driveExecutionStore)
+    .store(driveExecutionStore, { stateVersion: 2 })
+    // A deleted Session is forgotten: nothing more is requested for it.
+    .apply(sessionDeleted, async (event, state) => {
+      delete state.sessions[event.payload.sessionID]
+    })
     .apply(sessionCreated, async (event, state) => {
       driver(state, event.payload.sessionID, event.payload.model)
     })

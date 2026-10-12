@@ -11,6 +11,7 @@ import {
   applyStepSettled,
   executionSettled,
   executionStarted,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -83,10 +84,14 @@ const input = Schema.toStandardSchemaV1(
 // touched here.
 export const interruptExecution = implementCommand(specification)
   .inputSchema(input)
-  .store(interruptExecutionStore)
+  .store(interruptExecutionStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.active, state.openCalls, state.inFlight)
+  })
   // Deliberately a no-op: the pending-input scenario puts an enqueued item in
   // Given, and conformance requires an apply handler for every Given event.
   // Interrupt never reads or changes inbox state.

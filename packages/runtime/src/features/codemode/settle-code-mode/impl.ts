@@ -6,6 +6,7 @@ import { sessionEvent } from "../../../events.ts"
 import {
   applySessionCreated,
   applySessionDeleted,
+  forgetValued,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -13,12 +14,12 @@ import {
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: every Session ID the log has named, live or deleted,
-// and the executions whose Code Mode run settled. Its Session lifecycle is the
-// shared fold in session/lifecycle.ts; the rest is duplicated from the other
-// Code Mode lifecycle Slices on purpose.
+// and the executions whose Code Mode run settled, with their Session. Its
+// Session lifecycle is the shared fold in session/lifecycle.ts; the rest is
+// duplicated from the other Code Mode lifecycle Slices on purpose.
 export type SettleCodeModeState = {
   sessions: Record<string, "live" | "deleted">
-  settled: Record<string, true>
+  settled: Record<string, string>
 }
 
 export const settleCodeModeStore = Context.Service<
@@ -33,12 +34,16 @@ const input = Schema.toStandardSchemaV1(SessionEvent.CodeMode.Settled.data)
 
 export const settleCodeMode = implementCommand(specification)
   .inputSchema(input)
-  .store(settleCodeModeStore)
+  .store(settleCodeModeStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetValued(event.payload.sessionID, state.settled)
+  })
   .apply(codeModeSettled, async (event, state) => {
-    state.settled[event.payload.executionID] = true
+    state.settled[event.payload.executionID] = event.payload.sessionID
   })
   .handle(async (command, state) => {
     requireLiveSession(state, command.sessionID)

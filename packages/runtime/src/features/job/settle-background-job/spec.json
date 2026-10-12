@@ -13,7 +13,8 @@
           "examplePayload": {
             "notificationID": "msg_n1",
             "outcome": "completed",
-            "output": "done"
+            "output": "done",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -29,7 +30,8 @@
               "kind": "shell",
               "sessionID": "ses_1",
               "shellID": "sh_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -48,7 +50,8 @@
           "examplePayload": {
             "notificationID": "msg_n1",
             "outcome": "completed",
-            "output": "done"
+            "output": "done",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -64,7 +67,8 @@
               "kind": "shell",
               "sessionID": "ses_1",
               "shellID": "sh_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
@@ -73,7 +77,8 @@
           "examplePayload": {
             "notificationID": "msg_n1",
             "outcome": "completed",
-            "output": "done"
+            "output": "done",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
@@ -87,7 +92,8 @@
               "kind": "shell",
               "sessionID": "ses_1",
               "shellID": "sh_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -112,7 +118,8 @@
               "kind": "shell",
               "sessionID": "ses_1",
               "shellID": "sh_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
@@ -121,7 +128,8 @@
           "examplePayload": {
             "notificationID": "msg_n1",
             "outcome": "completed",
-            "output": "done"
+            "output": "done",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -162,14 +170,60 @@
               "kind": "shell",
               "sessionID": "ses_1",
               "shellID": "sh_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
         {
           "eventType": "session-background-completed",
           "examplePayload": {
-            "notificationID": "msg_n1"
+            "notificationID": "msg_n1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "background-job-not-found"
+      },
+      "when": {
+        "notificationID": "msg_n1",
+        "outcome": "completed",
+        "output": "done"
+      }
+    },
+    {
+      "description": "A deleted Session's marker is gone: its deletion completed it, and its tombstone forgets it.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }

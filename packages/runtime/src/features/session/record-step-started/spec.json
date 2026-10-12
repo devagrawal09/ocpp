@@ -732,6 +732,38 @@
         },
         "sessionID": "ses_1"
       }
+    },
+    {
+      "description": "A deleted Session's execution is forgotten: it cannot run a step.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-not-active"
+      },
+      "when": {
+        "agent": "build",
+        "assistantMessageID": "msg_1",
+        "model": {
+          "id": "scripted",
+          "providerID": "test"
+        },
+        "sessionID": "ses_1"
+      }
     }
   ]
 }

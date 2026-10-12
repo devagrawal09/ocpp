@@ -8,6 +8,7 @@ import { sessionEvent } from "../../../events.ts"
 import {
   applySessionCreated,
   applySessionDeleted,
+  forgetOwned,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -118,11 +119,15 @@ const item = (command: Command) => {
 
 export const enqueueInput = implementCommand(specification)
   .inputSchema(input)
-  .store(enqueueInputStore)
+  .store(enqueueInputStore, { stateVersion: 2 })
   // An inbox item ID names one item across Sessions.
   .consistencyKeys({ session: (command) => command.sessionID, inbox: (command) => command.inboxID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetOwned(event.payload.sessionID, state.items)
+  })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     const coalesce = item.type === "synthetic" ? item.payload.metadata?.coalesce : undefined

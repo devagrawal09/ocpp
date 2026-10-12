@@ -252,7 +252,7 @@
       }
     },
     {
-      "description": "A settled execution's call is refused.",
+      "description": "A settled execution is forgotten, with its calls: its call is refused as unknown, which the host answers as done.",
       "expect": [],
       "given": [
         {
@@ -305,7 +305,7 @@
         }
       ],
       "reject": {
-        "code": "execution-not-running"
+        "code": "execution-not-found"
       },
       "when": {
         "executionID": "exe_1",
@@ -319,6 +319,117 @@
       "description": "An unknown execution is refused.",
       "expect": [],
       "given": [],
+      "reject": {
+        "code": "execution-not-found"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "omitted": false,
+        "outcome": "completed",
+        "output": "text"
+      }
+    },
+    {
+      "description": "An execution discarded before it started is forgotten: its call is refused as unknown.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-discarded",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-not-found"
+      },
+      "when": {
+        "executionID": "exe_1",
+        "index": 0,
+        "omitted": false,
+        "outcome": "completed",
+        "output": "text"
+      }
+    },
+    {
+      "description": "A deleted Session's execution is gone: its deletion settled it, and its tombstone forgets it.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "await read()",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-started",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-call-scheduled",
+          "examplePayload": {
+            "executionID": "exe_1",
+            "index": 0,
+            "input": {
+              "path": "a.txt"
+            },
+            "omitted": false,
+            "sessionID": "ses_1",
+            "tool": "read"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "The Session was deleted; nothing was saved.",
+            "executionID": "exe_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
       "reject": {
         "code": "execution-not-found"
       },

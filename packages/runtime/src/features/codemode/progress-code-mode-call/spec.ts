@@ -20,6 +20,14 @@ const scheduled = event("session-codemode-call-scheduled", {
 })
 const progress = { executionID: "exe_1", index: 0, progress: { sessionID: "ses_child" } }
 
+// A deleted Session's execution: its deletion settles it, then records its tombstone.
+const deletedSettled = event("session-codemode-execution-settled", {
+  ...execution,
+  outcome: "failed",
+  error: "The Session was deleted; nothing was saved.",
+})
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 export const progressCodeModeCallSpec = createCommandSlice("progressCodeModeCall")
   .description(
     "Records the latest progress of a journaled call that can rejoin its work after a restart, such as the child Session a subagent call runs in.",
@@ -39,15 +47,30 @@ export const progressCodeModeCallSpec = createCommandSlice("progressCodeModeCall
       reject: { code: "call-not-scheduled" },
     },
     {
-      description: "A settled execution's call is refused.",
+      description:
+        "A settled execution is forgotten, with its calls: its call is refused as unknown, which the host answers as done.",
       given: [admitted, started, scheduled, settled],
       when: progress,
       expect: [],
-      reject: { code: "execution-not-running" },
+      reject: { code: "execution-not-found" },
     },
     {
       description: "An unknown execution is refused.",
       given: [],
+      when: progress,
+      expect: [],
+      reject: { code: "execution-not-found" },
+    },
+    {
+      description: "An execution discarded before it started is forgotten: its call is refused as unknown.",
+      given: [admitted, event("session-codemode-execution-discarded", execution)],
+      when: progress,
+      expect: [],
+      reject: { code: "execution-not-found" },
+    },
+    {
+      description: "A deleted Session's execution is gone: its deletion settled it, and its tombstone forgets it.",
+      given: [admitted, started, scheduled, deletedSettled, deleted],
       when: progress,
       expect: [],
       reject: { code: "execution-not-found" },

@@ -80,7 +80,7 @@
       }
     },
     {
-      "description": "A settled execution is refused.",
+      "description": "A settled execution is forgotten: it is refused as unknown, which the host answers as done.",
       "expect": [],
       "given": [
         {
@@ -113,7 +113,7 @@
         }
       ],
       "reject": {
-        "code": "execution-already-started"
+        "code": "execution-not-found"
       },
       "when": {
         "executionID": "exe_1"
@@ -145,6 +145,53 @@
           "eventType": "session-codemode-execution-discarded",
           "examplePayload": {
             "executionID": "exe_1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-not-found"
+      },
+      "when": {
+        "executionID": "exe_1"
+      }
+    },
+    {
+      "description": "A deleted Session's execution is gone: its deletion settled it, and its tombstone forgets it.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_1",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "a"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "The Session was deleted; nothing was saved.",
+            "executionID": "exe_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
             "sessionID": "ses_1"
           },
           "kind": "scenario-event"

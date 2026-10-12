@@ -1,5 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 // session.md: assistant output is durable as the step produces it. A finished
 // text or reasoning block is one fact with its kind, ordinal and final text.
 // Deltas are ephemeral and never recorded.
@@ -196,6 +198,13 @@ export const recordBlockSpec = createCommandSlice("recordBlock")
       when: text("msg_1", 0, "hello", "ses_2"),
       expect: [],
       reject: { code: "step-not-in-flight" },
+    },
+    {
+      description: "A deleted Session's step is forgotten: it cannot record a block.",
+      given: [started(), stepStarted("msg_1"), deleted],
+      when: text("msg_1", 0, "hello"),
+      expect: [],
+      reject: { code: "execution-not-active" },
     },
   )
 

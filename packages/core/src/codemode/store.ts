@@ -536,7 +536,8 @@ const layer = Layer.effect(
     })
 
     // The runtime's settleCodeModeExecution decides whether the declarations save: the execution still holds
-    // their names and they fit the notebook. A revert that cut the execution's message settled it already.
+    // their names and they fit the notebook. A revert that cut the execution's message settled it already; a
+    // settled execution is gone from the runtime's State, so a second settlement finds none.
     const commit: Interface["commit"] = Effect.fn("CodeModeStore.commit")(function* (execution, declarations) {
       yield* record(
         {
@@ -549,7 +550,6 @@ const layer = Layer.effect(
           },
         },
         "execution-not-found",
-        "execution-already-settled",
       )
       const row = yield* db
         .select({
@@ -582,7 +582,6 @@ const layer = Layer.effect(
           },
         },
         "execution-not-found",
-        "execution-already-settled",
       ).pipe(Effect.asVoid)
 
     const discard: Interface["discard"] = Effect.fn("CodeModeStore.discard")(function* (executionID) {

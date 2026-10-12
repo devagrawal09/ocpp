@@ -1,6 +1,6 @@
 {
   "$schema": "https://specter.dev/specification/v2/slice.schema.json",
-  "description": "Records that a recoverable job went to the background: until its notification is delivered, its marker tells a restart how to resume it. A job that ended before it went to the background records its outcome in the same commit, so its marker exists exactly when the job did. A resumed job goes to the background again under its notification.",
+  "description": "Records that a recoverable job went to the background: until its notification is delivered, its marker tells a restart how to resume it. The marker names the Session its notification arrives in, which owns it; a deleted Session takes no marker. A job that ended before it went to the background records its outcome in the same commit, so its marker exists exactly when the job did. A resumed job goes to the background again under its notification.",
   "formatVersion": 2,
   "kind": "command",
   "name": "backgroundJob",
@@ -18,7 +18,8 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -48,7 +49,8 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
@@ -57,7 +59,8 @@
           "examplePayload": {
             "notificationID": "msg_n1",
             "outcome": "completed",
-            "output": "done"
+            "output": "done",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -91,7 +94,8 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -107,7 +111,8 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
@@ -116,11 +121,69 @@
           "examplePayload": {
             "error": "All fibers interrupted without error",
             "notificationID": "msg_n1",
-            "outcome": "error"
+            "outcome": "error",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
       ],
+      "when": {
+        "jobID": "exe_1",
+        "notificationID": "msg_n1",
+        "recovery": {
+          "assistantMessageID": "msg_1",
+          "kind": "codemode",
+          "parentSessionID": "ses_1",
+          "toolCallID": "call_1"
+        }
+      }
+    },
+    {
+      "description": "A shell's marker is its own Session's.",
+      "expect": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_1",
+            "notificationID": "msg_n2",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_2",
+              "shellID": "sh_1"
+            },
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [],
+      "when": {
+        "jobID": "job_1",
+        "notificationID": "msg_n2",
+        "recovery": {
+          "command": "sleep 60",
+          "kind": "shell",
+          "sessionID": "ses_2",
+          "shellID": "sh_1"
+        }
+      }
+    },
+    {
+      "description": "A deleted Session's job is refused: nothing would deliver its notification.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "session-deleted"
+      },
       "when": {
         "jobID": "exe_1",
         "notificationID": "msg_n1",

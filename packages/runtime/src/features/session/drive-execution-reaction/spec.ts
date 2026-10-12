@@ -58,6 +58,15 @@ export const driveExecutionSpec = createReactionSlice("driveExecution")
       given: [created("ses_1", vendor), created("ses_2", vendor), started("ses_2"), started("ses_1")],
       expect: [drive("ses_1", 1), drive("ses_2", 1)],
     },
+    {
+      description: "A deleted Session is forgotten: its execution is not driven.",
+      given: [
+        created("ses_1", { id: "agent", providerID: "claude" }),
+        started("ses_1"),
+        event("session-deleted", { sessionID: "ses_1" }),
+      ],
+      expect: [],
+    },
   )
 
 export default driveExecutionSpec

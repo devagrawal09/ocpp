@@ -44,6 +44,13 @@ export const failExecutionSpec = createCommandSlice("failExecution")
       expect: [],
       reject: { code: "execution-not-active" },
     },
+    {
+      description: "A deleted Session's execution is forgotten: there is none to fail.",
+      given: [started(), event("session-deleted", { sessionID: "ses_1" })],
+      when: { sessionID: "ses_1", error },
+      expect: [],
+      reject: { code: "execution-not-active" },
+    },
   )
 
 export default failExecutionSpec

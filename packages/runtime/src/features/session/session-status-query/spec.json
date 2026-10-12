@@ -1917,6 +1917,58 @@
       "when": {
         "sessionID": "ses_1"
       }
+    },
+    {
+      "description": "A deleted Session is forgotten: it reads as a Session with no events.",
+      "expect": {
+        "executions": 0,
+        "lastOutcome": null,
+        "next": {
+          "attempt": 1,
+          "boundary": "idle",
+          "stepsInExecution": 0,
+          "stepsSinceInput": 0
+        },
+        "status": "idle",
+        "step": {
+          "attempts": 0,
+          "started": 0
+        }
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
     }
   ]
 }

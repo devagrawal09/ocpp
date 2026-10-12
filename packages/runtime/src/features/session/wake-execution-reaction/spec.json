@@ -859,6 +859,34 @@
           "kind": "scenario-event"
         }
       ]
+    },
+    {
+      "description": "A deleted Session is forgotten: its pending input wakes nothing.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "hello"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
     }
   ]
 }

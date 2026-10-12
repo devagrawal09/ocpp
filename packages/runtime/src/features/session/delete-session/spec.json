@@ -1,6 +1,6 @@
 {
   "$schema": "https://specter.dev/specification/v2/slice.schema.json",
-  "description": "Deletes a Session. Nothing of it runs or waits afterwards: in the same commit, an active execution is interrupted as the user's interruption settles it (its open tool calls and in-flight step aborted), and every input still pending is cancelled, so nothing wakes it again. The host deletes its children first.",
+  "description": "Deletes a Session. Nothing of it runs or waits afterwards: in the same commit, an active execution is interrupted as the user's interruption settles it (its open tool calls and in-flight step aborted), every input still pending is cancelled, so nothing wakes it again, and every Code Mode execution still admitted or running fails, and every background job marker it owns completes. Its deletion is the tombstone its purge keeps. The host deletes its children first.",
   "formatVersion": 2,
   "kind": "command",
   "name": "deleteSession",
@@ -514,6 +514,225 @@
       "reject": {
         "code": "session-deleted"
       },
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Code Mode execution still admitted or running ends with its Session, in admission order.",
+      "expect": [
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "The Session was deleted; nothing was saved.",
+            "executionID": "exe_1",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_2",
+            "executionID": "exe_1",
+            "program": {
+              "source": "return 1",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_2",
+            "executionID": "exe_2",
+            "program": {
+              "source": "return 1",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_2",
+            "executionID": "exe_3",
+            "program": {
+              "source": "return 1",
+              "version": 1
+            },
+            "reserved": [],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_3"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_2",
+            "outcome": "finished",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-discarded",
+          "examplePayload": {
+            "executionID": "exe_3",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A background job marker it owns completes with it, in start order: nothing would deliver its notification.",
+      "expect": [
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n3",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_msg_n1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_msg_n2",
+            "notificationID": "msg_n2",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_msg_n3",
+            "notificationID": "msg_n3",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n2",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "job_msg_n1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "command": "sleep 60",
+              "kind": "shell",
+              "sessionID": "ses_1",
+              "shellID": "sh_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
       "when": {
         "sessionID": "ses_1"
       }

@@ -786,6 +786,49 @@
         "sessionID": "ses_2",
         "text": "hello"
       }
+    },
+    {
+      "description": "A deleted Session's step is forgotten: it cannot record a block.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-not-active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "kind": "text",
+        "ordinal": 0,
+        "sessionID": "ses_1",
+        "text": "hello"
+      }
     }
   ]
 }

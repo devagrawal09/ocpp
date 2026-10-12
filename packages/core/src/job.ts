@@ -224,6 +224,7 @@ export const make = Effect.gen(function* () {
           .pipe(Effect.catch(() => Effect.void))
       return
     }
+    // A deleted Session's job is not recoverable: it records no marker.
     yield* bus
       .command({
         type: "backgroundJob",
@@ -234,7 +235,13 @@ export const make = Effect.gen(function* () {
           ...(settled ? { settled } : {}),
         },
       })
-      .pipe(Effect.orDie)
+      .pipe(
+        Effect.catchIf(
+          (error) => SpecterRejection.code(error) === "session-deleted",
+          () => Effect.void,
+        ),
+        Effect.orDie,
+      )
   })
   // A marker that is gone (completed already) has nothing left to complete.
   const completeBackground: Interface["completeBackground"] = Effect.fn("Job.completeBackground")(

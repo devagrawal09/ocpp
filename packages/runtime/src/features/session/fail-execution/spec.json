@@ -84,6 +84,36 @@
         },
         "sessionID": "ses_1"
       }
+    },
+    {
+      "description": "A deleted Session's execution is forgotten: there is none to fail.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-not-active"
+      },
+      "when": {
+        "error": {
+          "message": "Compaction produced no summary",
+          "type": "compaction.failed"
+        },
+        "sessionID": "ses_1"
+      }
     }
   ]
 }

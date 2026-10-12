@@ -5,13 +5,13 @@ import { Context, Schema } from "effect"
 import { sessionEvent } from "../../../events.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: per-Session inbox items in enqueue order. The
-// Event Log owns what happened; this only folds it.
+// Rebuildable projection: per-Session inbox items still pending, in enqueue
+// order. The Event Log owns what happened; this only folds it. A delivered or
+// cancelled item is gone, and so is a deleted Session.
 type InboxItem = {
   inboxID: string
   type: string
   delivery: "steer" | "queue"
-  status: "pending" | "delivered" | "cancelled"
 }
 
 export type NextDeliverableState = {
@@ -30,6 +30,7 @@ const inboxEnqueued = sessionEvent("session-inbox-enqueued")
 const inboxDelivered = sessionEvent("session-inbox-delivered")
 const inboxCancelled = sessionEvent("session-inbox-cancelled")
 const inboxDeliveryChanged = sessionEvent("session-inbox-delivery-changed")
+const sessionDeleted = sessionEvent("session-deleted")
 
 const input = Schema.toStandardSchemaV1(
   Schema.Struct({
@@ -40,6 +41,14 @@ const input = Schema.toStandardSchemaV1(
 
 const find = (state: NextDeliverableState, ref: { sessionID: string; inboxID: string }) =>
   state.sessions[ref.sessionID]?.find((item) => item.inboxID === ref.inboxID)
+
+// A delivered or cancelled item leaves the Session's pending items.
+const settle = (state: NextDeliverableState, ref: { sessionID: string; inboxID: string }) => {
+  const items = state.sessions[ref.sessionID]?.filter((item) => item.inboxID !== ref.inboxID)
+  if (items === undefined) return
+  if (items.length > 0) state.sessions[ref.sessionID] = items
+  else delete state.sessions[ref.sessionID]
+}
 
 // Control items (compaction, move) are delivered alone.
 const controlTypes = new Set(["compaction", "move"])
@@ -55,7 +64,7 @@ export const nextDeliverable = implementQuery(specification)
     item: { inboxID: string; type: string; delivery: string } | null
     reason: string
   }>()
-  .store(nextDeliverableStore)
+  .store(nextDeliverableStore, { stateVersion: 2 })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     const items = state.sessions[sessionID] ?? []
@@ -65,24 +74,24 @@ export const nextDeliverable = implementQuery(specification)
       inboxID,
       type: item.type,
       delivery: item.delivery,
-      status: "pending",
     })
   })
   .apply(inboxDelivered, async (event, state) => {
-    const item = find(state, event.payload)
-    if (item?.status === "pending") item.status = "delivered"
+    settle(state, event.payload)
   })
   .apply(inboxCancelled, async (event, state) => {
-    const item = find(state, event.payload)
-    if (item?.status === "pending") item.status = "cancelled"
+    settle(state, event.payload)
   })
   .apply(inboxDeliveryChanged, async (event, state) => {
     const payload = event.payload
     const item = find(state, payload)
-    if (item?.status === "pending") item.delivery = payload.delivery
+    if (item) item.delivery = payload.delivery
+  })
+  .apply(sessionDeleted, async (event, state) => {
+    delete state.sessions[event.payload.sessionID]
   })
   .handle(async (query, state) => {
-    const pending = (state.sessions[query.sessionID] ?? []).filter((item) => item.status === "pending")
+    const pending = state.sessions[query.sessionID] ?? []
     const first = pending[0]
     if (!first) return { item: null, reason: "nothing-pending" }
 

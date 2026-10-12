@@ -231,7 +231,8 @@ export const EventSkipped = Event.durable({
 })
 
 // A background job's marker is its own aggregate, keyed by the notification its result arrives in: it
-// is recorded from the job registry, which Session listeners call while holding their Session.
+// is recorded from the job registry, which Session listeners call while holding their Session. Each of
+// its facts names the Session its notification arrives in, which owns it: the marker goes with it.
 const byNotification = { aggregate: "notificationID" } as const
 
 /** How restart recovery resumes a background job: a shell, a subagent's Session or a Code Mode run. */
@@ -264,6 +265,7 @@ export const BackgroundStarted = Event.durable({
   durable: byNotification,
   schema: {
     notificationID: SessionMessage.ID,
+    sessionID: SessionID,
     jobID: Schema.String,
     recovery: BackgroundRecovery,
   },
@@ -277,6 +279,7 @@ export const BackgroundSettled = Event.durable({
   durable: byNotification,
   schema: {
     notificationID: SessionMessage.ID,
+    sessionID: SessionID,
     outcome: Schema.Literals(["completed", "error", "cancelled"]),
     output: optional(Schema.String),
     error: optional(Schema.String),
@@ -289,13 +292,16 @@ export const BackgroundSettled = Event.durable({
 export const BackgroundTerminal = Event.durable({
   type: "session-background-terminal",
   durable: byNotification,
-  schema: { notificationID: SessionMessage.ID },
+  schema: { notificationID: SessionMessage.ID, sessionID: SessionID },
 })
-/** The job's notification was delivered, or the job discarded: nothing is left to recover, and the marker goes. */
+/**
+ * The job's notification was delivered, or the job discarded (its Session's deletion discards it): nothing is
+ * left to recover, and the marker goes.
+ */
 export const BackgroundCompleted = Event.durable({
   type: "session-background-completed",
   durable: byNotification,
-  schema: { notificationID: SessionMessage.ID },
+  schema: { notificationID: SessionMessage.ID, sessionID: SessionID },
 })
 
 /**

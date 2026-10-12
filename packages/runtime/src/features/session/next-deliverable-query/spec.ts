@@ -264,6 +264,12 @@ export const nextDeliverableSpec = createQuerySlice("nextDeliverable")
       when: { sessionID: "ses_1", boundary: "idle" },
       expect: { item: null, reason: "nothing-pending" },
     },
+    {
+      description: "A deleted Session's items are forgotten: nothing is pending.",
+      given: [enqueued("msg_1", user("Hi", "steer")), event("session-deleted", { sessionID: "ses_1" })],
+      when: { sessionID: "ses_1", boundary: "idle" },
+      expect: { item: null, reason: "nothing-pending" },
+    },
   )
 
 export default nextDeliverableSpec

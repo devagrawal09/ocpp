@@ -1,5 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 const model = { id: "scripted", providerID: "test" }
 const started = (sessionID = "ses_1") => event("session-execution-started", { sessionID })
 const succeeded = (sessionID = "ses_1") => event("session-execution-settled", { sessionID, outcome: "succeeded" })
@@ -90,6 +92,13 @@ export const finishExecutionSpec = createCommandSlice("finishExecution")
     {
       description: "A failed execution cannot finish again.",
       given: [started(), failed()],
+      when: { sessionID: "ses_1" },
+      expect: [],
+      reject: { code: "execution-not-active" },
+    },
+    {
+      description: "A deleted Session's execution is forgotten: it cannot finish.",
+      given: [started(), deleted],
       when: { sessionID: "ses_1" },
       expect: [],
       reject: { code: "execution-not-active" },

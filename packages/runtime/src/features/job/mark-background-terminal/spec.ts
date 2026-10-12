@@ -1,9 +1,14 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
 const recovery = { kind: "codemode", parentSessionID: "ses_1", assistantMessageID: "msg_1", toolCallID: "call_1" }
-const started = event("session-background-started", { notificationID: "msg_n1", jobID: "exe_1", recovery })
-const terminal = event("session-background-terminal", { notificationID: "msg_n1" })
-const completed = event("session-background-completed", { notificationID: "msg_n1" })
+const started = event("session-background-started", {
+  notificationID: "msg_n1",
+  sessionID: "ses_1",
+  jobID: "exe_1",
+  recovery,
+})
+const terminal = event("session-background-terminal", { notificationID: "msg_n1", sessionID: "ses_1" })
+const completed = event("session-background-completed", { notificationID: "msg_n1", sessionID: "ses_1" })
 const codemodeSettled = event("session-codemode-settled", {
   sessionID: "ses_1",
   assistantMessageID: "msg_1",
@@ -55,6 +60,13 @@ export const markBackgroundTerminalSpec = createCommandSlice("markBackgroundTerm
     {
       description: "A completed marker is gone.",
       given: [started, completed],
+      when: { notificationID: "msg_n1" },
+      expect: [],
+      reject: { code: "background-job-not-found" },
+    },
+    {
+      description: "A deleted Session's marker is gone: its deletion completed it, and its tombstone forgets it.",
+      given: [started, completed, event("session-deleted", { sessionID: "ses_1" })],
       when: { notificationID: "msg_n1" },
       expect: [],
       reject: { code: "background-job-not-found" },

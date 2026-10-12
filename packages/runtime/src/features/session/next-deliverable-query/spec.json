@@ -1079,6 +1079,41 @@
         "boundary": "idle",
         "sessionID": "ses_1"
       }
+    },
+    {
+      "description": "A deleted Session's items are forgotten: nothing is pending.",
+      "expect": {
+        "item": null,
+        "reason": "nothing-pending"
+      },
+      "given": [
+        {
+          "eventType": "session-inbox-enqueued",
+          "examplePayload": {
+            "inboxID": "msg_1",
+            "item": {
+              "delivery": "steer",
+              "payload": {
+                "text": "Hi"
+              },
+              "type": "user"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "boundary": "idle",
+        "sessionID": "ses_1"
+      }
     }
   ]
 }

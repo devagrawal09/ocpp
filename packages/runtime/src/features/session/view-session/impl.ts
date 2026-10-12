@@ -7,6 +7,7 @@ import {
   applySessionCreated,
   applySessionDeleted,
   executionSettled,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -34,10 +35,14 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Viewed.data)
 
 export const viewSession = implementCommand(specification)
   .inputSchema(input)
-  .store(viewSessionStore)
+  .store(viewSessionStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.idle, state.viewed)
+  })
   // An import sets both as its export gave them.
   .apply(sessionImported, async (event, state) => {
     const { sessionID, time } = event.payload

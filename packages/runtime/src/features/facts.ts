@@ -486,6 +486,7 @@ export const sessionFacts = {
   },
   "session-background-started": {
     notificationID: "msg_3",
+    sessionID: "ses_1",
     jobID: "exe_2",
     recovery: {
       kind: "codemode",
@@ -496,14 +497,17 @@ export const sessionFacts = {
   },
   "session-background-settled": {
     notificationID: "msg_3",
+    sessionID: "ses_1",
     outcome: "completed",
     output: "done",
   },
   "session-background-terminal": {
     notificationID: "msg_3",
+    sessionID: "ses_1",
   },
   "session-background-completed": {
     notificationID: "msg_3",
+    sessionID: "ses_1",
   },
   "kv-stored": {
     key: "websearch:provider",

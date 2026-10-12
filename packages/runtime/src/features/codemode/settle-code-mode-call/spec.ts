@@ -27,6 +27,14 @@ const interrupted = {
   omitted: false,
 }
 
+// A deleted Session's execution: its deletion settles it, then records its tombstone.
+const deletedSettled = event("session-codemode-execution-settled", {
+  ...execution,
+  outcome: "failed",
+  error: "The Session was deleted; nothing was saved.",
+})
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 export const settleCodeModeCallSpec = createCommandSlice("settleCodeModeCall")
   .description(
     "Settles a journaled call of a running Code Mode execution: completed with its output, failed with its error, or indeterminate when a shutdown interrupted it. An indeterminate call settles again when a resumed run reaches it; a call that completed or failed settles once.",
@@ -59,15 +67,30 @@ export const settleCodeModeCallSpec = createCommandSlice("settleCodeModeCall")
       reject: { code: "call-not-scheduled" },
     },
     {
-      description: "A settled execution's call is refused.",
+      description:
+        "A settled execution is forgotten, with its calls: its call is refused as unknown, which the host answers as done.",
       given: [admitted, started, scheduled, settled],
       when: completed,
       expect: [],
-      reject: { code: "execution-not-running" },
+      reject: { code: "execution-not-found" },
     },
     {
       description: "An unknown execution is refused.",
       given: [],
+      when: completed,
+      expect: [],
+      reject: { code: "execution-not-found" },
+    },
+    {
+      description: "An execution discarded before it started is forgotten: its call is refused as unknown.",
+      given: [admitted, event("session-codemode-execution-discarded", execution)],
+      when: completed,
+      expect: [],
+      reject: { code: "execution-not-found" },
+    },
+    {
+      description: "A deleted Session's execution is gone: its deletion settled it, and its tombstone forgets it.",
+      given: [admitted, started, scheduled, deletedSettled, deleted],
       when: completed,
       expect: [],
       reject: { code: "execution-not-found" },

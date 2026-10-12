@@ -4,6 +4,7 @@ import { implementQuery, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import { forgetValued } from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection, per Session: its executions, the input that will
@@ -49,9 +50,10 @@ type Entry = {
 
 export type SessionStatusState = {
   sessions: Record<string, Entry>
-  // Input items (user, synthetic) by inbox ID: delivering one resets the
-  // step-limit counter, a control item does not.
-  inputs: Record<string, true>
+  // Input items (user, synthetic) not yet delivered or cancelled, by inbox ID,
+  // with their Session: delivering one resets the step-limit counter, a control
+  // item does not.
+  inputs: Record<string, string>
 }
 
 export const sessionStatusStore = Context.Service<SliceStoreService<SessionStatusState, SessionStatusState, unknown>>(
@@ -74,6 +76,7 @@ const stepStarted = sessionEvent("session-step-started")
 const stepSettled = sessionEvent("session-step-settled")
 const toolRequested = sessionEvent("session-tool-requested")
 const toolSettled = sessionEvent("session-tool-settled")
+const sessionDeleted = sessionEvent("session-deleted")
 
 const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID }))
 
@@ -140,7 +143,12 @@ export const sessionStatus = implementQuery(specification)
       attempt: number
     }
   }>()
-  .store(sessionStatusStore)
+  .store(sessionStatusStore, { stateVersion: 2 })
+  // A deleted Session is forgotten: it reads as one with no events.
+  .apply(sessionDeleted, async (event, state) => {
+    delete state.sessions[event.payload.sessionID]
+    forgetValued(event.payload.sessionID, state.inputs)
+  })
   // A new execution starts idle with no steps of its own.
   .apply(executionStarted, async (event, state) => {
     const session = entry(state, event.payload.sessionID)
@@ -180,7 +188,7 @@ export const sessionStatus = implementQuery(specification)
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     entry(state, sessionID).waking[inboxID] = true
-    if (item.type === "user" || item.type === "synthetic") state.inputs[inboxID] = true
+    if (item.type === "user" || item.type === "synthetic") state.inputs[inboxID] = sessionID
   })
   .apply(inboxHeld, async (event, state) => {
     consumed(state, event.payload)
@@ -188,9 +196,11 @@ export const sessionStatus = implementQuery(specification)
   .apply(inboxDelivered, async (event, state) => {
     consumed(state, event.payload)
     if (state.inputs[event.payload.inboxID]) entry(state, event.payload.sessionID).stepsSinceInput = 0
+    delete state.inputs[event.payload.inboxID]
   })
   .apply(inboxCancelled, async (event, state) => {
     consumed(state, event.payload)
+    delete state.inputs[event.payload.inboxID]
   })
   .apply(stepStarted, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload

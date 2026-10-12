@@ -164,6 +164,11 @@ export const wakeExecutionSpec = createReactionSlice("wakeExecution")
       given: [enqueued("ses_1", "msg_1"), started("ses_1"), enqueued("ses_1", "msg_2"), failed("ses_1")],
       expect: [start("ses_1")],
     },
+    {
+      description: "A deleted Session is forgotten: its pending input wakes nothing.",
+      given: [enqueued("ses_1", "msg_1"), event("session-deleted", { sessionID: "ses_1" })],
+      expect: [],
+    },
   )
 
 export default wakeExecutionSpec

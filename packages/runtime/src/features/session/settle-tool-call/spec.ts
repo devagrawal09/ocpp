@@ -1,5 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 // session.md: tool outcomes are serialized after the call is durable. A
 // requested call settles exactly once, succeeded (non-empty content) or failed
 // (an error), in one self-contained terminal fact.
@@ -281,6 +283,13 @@ export const settleToolCallSpec = createCommandSlice("settleToolCall")
       when: abort("msg_1", "call_1"),
       expect: [],
       reject: { code: "tool-call-already-settled" },
+    },
+    {
+      description: "A deleted Session's calls are forgotten: none can settle.",
+      given: [...open, deleted],
+      when: success("msg_1", "call_1", "2"),
+      expect: [],
+      reject: { code: "execution-not-active" },
     },
   )
 

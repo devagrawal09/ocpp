@@ -11,7 +11,8 @@
         {
           "eventType": "session-background-terminal",
           "examplePayload": {
-            "notificationID": "msg_n1"
+            "notificationID": "msg_n1",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -27,7 +28,8 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -50,14 +52,16 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
         {
           "eventType": "session-background-terminal",
           "examplePayload": {
-            "notificationID": "msg_n1"
+            "notificationID": "msg_n1",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -83,7 +87,8 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
@@ -121,14 +126,16 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
         {
           "eventType": "session-background-terminal",
           "examplePayload": {
-            "notificationID": "msg_n1"
+            "notificationID": "msg_n1",
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
@@ -142,7 +149,8 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }
@@ -179,14 +187,58 @@
               "kind": "codemode",
               "parentSessionID": "ses_1",
               "toolCallID": "call_1"
-            }
+            },
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         },
         {
           "eventType": "session-background-completed",
           "examplePayload": {
-            "notificationID": "msg_n1"
+            "notificationID": "msg_n1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "background-job-not-found"
+      },
+      "when": {
+        "notificationID": "msg_n1"
+      }
+    },
+    {
+      "description": "A deleted Session's marker is gone: its deletion completed it, and its tombstone forgets it.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-background-started",
+          "examplePayload": {
+            "jobID": "exe_1",
+            "notificationID": "msg_n1",
+            "recovery": {
+              "assistantMessageID": "msg_1",
+              "kind": "codemode",
+              "parentSessionID": "ses_1",
+              "toolCallID": "call_1"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-background-completed",
+          "examplePayload": {
+            "notificationID": "msg_n1",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
           },
           "kind": "scenario-event"
         }

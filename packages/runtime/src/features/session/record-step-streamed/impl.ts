@@ -9,6 +9,8 @@ import {
   applyStepSettled,
   executionSettled,
   executionStarted,
+  forgetSession,
+  sessionDeleted,
   settleExecution,
   stepSettled,
 } from "../lifecycle.ts"
@@ -44,9 +46,13 @@ const input = Schema.toStandardSchemaV1(
 
 export const recordStepStreamed = implementCommand(specification)
   .inputSchema(input)
-  .store(recordStepStreamedStore)
+  .store(recordStepStreamedStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(executionStarted, applyExecutionStarted)
+  // A deleted Session is forgotten.
+  .apply(sessionDeleted, async (event, state) => {
+    forgetSession(event.payload.sessionID, state.active, state.inFlight)
+  })
   .apply(executionSettled, async (event, state) => {
     settleExecution(state, event.payload.sessionID)
   })

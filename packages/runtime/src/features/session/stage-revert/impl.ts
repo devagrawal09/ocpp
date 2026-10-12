@@ -11,6 +11,7 @@ import {
   applySessionDeleted,
   executionSettled,
   executionStarted,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -38,10 +39,14 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, re
 
 export const stageRevert = implementCommand(specification)
   .inputSchema(input)
-  .store(stageRevertStore)
+  .store(stageRevertStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.active)
+  })
   .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, applyExecutionSettled)
   // Deliberately a no-op: a stage replaces whatever was staged, so the

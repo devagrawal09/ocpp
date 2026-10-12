@@ -1649,6 +1649,104 @@
         "outcome": "succeeded",
         "sessionID": "ses_1"
       }
+    },
+    {
+      "description": "A deleted Session's step is forgotten: it cannot settle.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-not-active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "at": 2000,
+        "error": {
+          "message": "connection reset",
+          "type": "transport"
+        },
+        "outcome": "failed",
+        "retryable": true,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A settled execution's steps are forgotten: the next execution cannot settle one of them.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "user",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "step-not-started"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "finish": "stop",
+        "outcome": "succeeded",
+        "sessionID": "ses_1"
+      }
     }
   ]
 }

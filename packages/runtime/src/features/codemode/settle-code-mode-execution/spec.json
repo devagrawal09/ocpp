@@ -481,7 +481,7 @@
       }
     },
     {
-      "description": "An execution that settled is refused, and the host reports how it settled.",
+      "description": "A settled execution is forgotten: it is refused as unknown, and the host reports how it settled.",
       "expect": [],
       "given": [
         {
@@ -514,7 +514,7 @@
         }
       ],
       "reject": {
-        "code": "execution-already-settled"
+        "code": "execution-not-found"
       },
       "when": {
         "executionID": "exe_2",
@@ -554,6 +554,91 @@
           "eventType": "session-codemode-execution-discarded",
           "examplePayload": {
             "executionID": "exe_2",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-not-found"
+      },
+      "when": {
+        "executionID": "exe_2",
+        "limits": {
+          "bytes": 100,
+          "values": 3
+        },
+        "outcome": "finished",
+        "values": {
+          "b": 2
+        }
+      }
+    },
+    {
+      "description": "A deleted Session is forgotten with its notebook and executions.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_3",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "x"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_3"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "executionID": "exe_3",
+            "outcome": "finished",
+            "sessionID": "ses_1",
+            "values": {
+              "x": 1
+            }
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-admitted",
+          "examplePayload": {
+            "assistantMessageID": "msg_1",
+            "executionID": "exe_2",
+            "program": {
+              "source": "const a = 1",
+              "version": 1
+            },
+            "reserved": [
+              "b"
+            ],
+            "sessionID": "ses_1",
+            "snapshot": [],
+            "toolCallID": "call_exe_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-codemode-execution-settled",
+          "examplePayload": {
+            "error": "The Session was deleted.",
+            "executionID": "exe_2",
+            "outcome": "failed",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
             "sessionID": "ses_1"
           },
           "kind": "scenario-event"

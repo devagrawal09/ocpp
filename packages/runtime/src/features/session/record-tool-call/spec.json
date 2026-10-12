@@ -727,6 +727,51 @@
         "name": "execute",
         "sessionID": "ses_1"
       }
+    },
+    {
+      "description": "A deleted Session's step is forgotten: it cannot record a call.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-step-started",
+          "examplePayload": {
+            "agent": "build",
+            "assistantMessageID": "msg_1",
+            "model": {
+              "id": "scripted",
+              "providerID": "test"
+            },
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "execution-not-active"
+      },
+      "when": {
+        "assistantMessageID": "msg_1",
+        "id": "call_1",
+        "input": {
+          "code": "a"
+        },
+        "name": "execute",
+        "sessionID": "ses_1"
+      }
     }
   ]
 }

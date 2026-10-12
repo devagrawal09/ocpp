@@ -47,6 +47,7 @@ const inboxCancelled = sessionEvent("session-inbox-cancelled")
 const inboxHeld = sessionEvent("session-inbox-held")
 const executionStarted = sessionEvent("session-execution-started")
 const executionSettled = sessionEvent("session-execution-settled")
+const sessionDeleted = sessionEvent("session-deleted")
 
 const startExecutionRequest = Schema.toStandardSchemaV1(
   Schema.Struct({
@@ -86,7 +87,11 @@ const startUnlessMovedOn: ReactionPlugin<{
 export const wakeExecution = implementReaction(specification)
   .outputSchema(startExecutionRequest)
   .plugin(startUnlessMovedOn)
-  .store(wakeExecutionStore)
+  .store(wakeExecutionStore, { stateVersion: 2 })
+  // A deleted Session is forgotten: nothing more is requested for it.
+  .apply(sessionDeleted, async (event, state) => {
+    delete state.sessions[event.payload.sessionID]
+  })
   .apply(inboxEnqueued, async (event, state) => {
     entry(state, event.payload.sessionID).waking[event.payload.inboxID] = true
   })

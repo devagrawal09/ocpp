@@ -273,6 +273,43 @@
           "kind": "scenario-event"
         }
       ]
+    },
+    {
+      "description": "A deleted Session is forgotten: its execution is not driven.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "model": {
+              "id": "agent",
+              "providerID": "claude"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "slug-ses_1",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
     }
   ]
 }

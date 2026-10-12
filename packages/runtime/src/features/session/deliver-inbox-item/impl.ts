@@ -12,6 +12,8 @@ import {
   applySessionDeleted,
   executionSettled,
   executionStarted,
+  forgetOwned,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -55,10 +57,15 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, in
 
 export const deliverInboxItem = implementCommand(specification)
   .inputSchema(input)
-  .store(deliverInboxItemStore)
+  .store(deliverInboxItemStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.active)
+    forgetOwned(event.payload.sessionID, state.items)
+  })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     state.items[inboxID] ??= {

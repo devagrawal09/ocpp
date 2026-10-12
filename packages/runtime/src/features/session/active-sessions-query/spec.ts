@@ -35,6 +35,12 @@ export const activeSessionsSpec = createQuerySlice("activeSessions")
       when: {},
       expect: { sessionIDs: ["ses_a", "ses_b"] },
     },
+    {
+      description: "A deleted Session is forgotten: it is not active.",
+      given: [started("ses_1"), started("ses_2"), event("session-deleted", { sessionID: "ses_1" })],
+      when: {},
+      expect: { sessionIDs: ["ses_2"] },
+    },
   )
 
 export default activeSessionsSpec

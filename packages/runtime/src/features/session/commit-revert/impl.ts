@@ -12,6 +12,7 @@ import {
   applySessionDeleted,
   executionSettled,
   executionStarted,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -76,10 +77,14 @@ const settle = (state: CommitRevertState, payload: { readonly sessionID: string;
 
 export const commitRevert = implementCommand(specification)
   .inputSchema(input)
-  .store(commitRevertStore)
+  .store(commitRevertStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.active, state.staged, state.pending, state.running, state.sinceStaged)
+  })
   .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, applyExecutionSettled)
   .apply(revertStaged, async (event, state) => {

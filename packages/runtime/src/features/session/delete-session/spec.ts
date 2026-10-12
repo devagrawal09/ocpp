@@ -58,10 +58,28 @@ const enqueued = (inboxID: string) =>
   })
 const delivered = (inboxID: string) => event("session-inbox-delivered", { sessionID: "ses_1", inboxID })
 const cancelled = (inboxID: string) => event("session-inbox-cancelled", { sessionID: "ses_1", inboxID })
+const admitted = (executionID: string) =>
+  event("session-codemode-execution-admitted", {
+    sessionID: "ses_1",
+    executionID,
+    assistantMessageID: "msg_2",
+    toolCallID: `call_${executionID}`,
+    program: { version: 1, source: "return 1" },
+    snapshot: [],
+    reserved: [],
+  })
+
+const marker = (notificationID: string) =>
+  event("session-background-started", {
+    notificationID,
+    sessionID: "ses_1",
+    jobID: `job_${notificationID}`,
+    recovery: { kind: "shell", sessionID: "ses_1", shellID: "sh_1", command: "sleep 60" },
+  })
 
 export const deleteSessionSpec = createCommandSlice("deleteSession")
   .description(
-    "Deletes a Session. Nothing of it runs or waits afterwards: in the same commit, an active execution is interrupted as the user's interruption settles it (its open tool calls and in-flight step aborted), and every input still pending is cancelled, so nothing wakes it again. The host deletes its children first.",
+    "Deletes a Session. Nothing of it runs or waits afterwards: in the same commit, an active execution is interrupted as the user's interruption settles it (its open tool calls and in-flight step aborted), every input still pending is cancelled, so nothing wakes it again, and every Code Mode execution still admitted or running fails, and every background job marker it owns completes. Its deletion is the tombstone its purge keeps. The host deletes its children first.",
   )
   .scenarios(
     {
@@ -138,6 +156,45 @@ export const deleteSessionSpec = createCommandSlice("deleteSession")
       when: { sessionID: "ses_1" },
       expect: [],
       reject: { code: "session-deleted" },
+    },
+    {
+      description: "A Code Mode execution still admitted or running ends with its Session, in admission order.",
+      given: [
+        created,
+        admitted("exe_1"),
+        admitted("exe_2"),
+        admitted("exe_3"),
+        event("session-codemode-execution-settled", { sessionID: "ses_1", executionID: "exe_2", outcome: "finished" }),
+        event("session-codemode-execution-discarded", { sessionID: "ses_1", executionID: "exe_3" }),
+      ],
+      when: { sessionID: "ses_1" },
+      expect: [
+        event("session-codemode-execution-settled", {
+          sessionID: "ses_1",
+          executionID: "exe_1",
+          outcome: "failed",
+          error: "The Session was deleted; nothing was saved.",
+        }),
+        deleted,
+      ],
+    },
+    {
+      description:
+        "A background job marker it owns completes with it, in start order: nothing would deliver its notification.",
+      given: [
+        created,
+        marker("msg_n1"),
+        marker("msg_n2"),
+        marker("msg_n3"),
+        event("session-background-completed", { notificationID: "msg_n2", sessionID: "ses_1" }),
+        marker("msg_n1"),
+      ],
+      when: { sessionID: "ses_1" },
+      expect: [
+        event("session-background-completed", { notificationID: "msg_n1", sessionID: "ses_1" }),
+        event("session-background-completed", { notificationID: "msg_n3", sessionID: "ses_1" }),
+        deleted,
+      ],
     },
   )
 

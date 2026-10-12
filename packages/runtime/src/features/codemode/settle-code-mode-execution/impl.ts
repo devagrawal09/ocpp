@@ -5,15 +5,16 @@ import { CommandRejection, implementCommand, type SliceStoreService } from "@spe
 import { Context, Schema } from "effect"
 
 import { sessionEvent } from "../../../events.ts"
+import { forgetOwned, forgetSession, sessionDeleted } from "../../session/lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
-// Rebuildable projection: each execution the log admitted, with its Session,
-// the names it holds and whether it settled; and each Session's notebook, the
-// names its executions saved with the size of each value. A revert's and a
-// fork's facts name the executions whose values they remove or copy.
-// Duplicated from admit-code-mode-execution on purpose.
+// Rebuildable projection: each execution the log admitted that has not
+// settled or been discarded, with its Session and the names it holds; and each
+// live Session's notebook, the names its executions saved with the size of
+// each value. A revert's and a fork's facts name the executions whose values
+// they remove or copy. Duplicated from admit-code-mode-execution on purpose.
 export type SettleCodeModeExecutionState = {
-  executions: Record<string, { sessionID: SessionID; reserved: string[]; settled: boolean }>
+  executions: Record<string, { sessionID: SessionID; reserved: string[] }>
   notebooks: Record<string, Record<string, { execution: string; bytes: number }>>
 }
 
@@ -55,7 +56,7 @@ const overflow = (count: number, size: number, limits: { readonly values: number
 
 export const settleCodeModeExecution = implementCommand(specification)
   .inputSchema(input)
-  .store(settleCodeModeExecutionStore)
+  .store(settleCodeModeExecutionStore, { stateVersion: 2 })
   // The execution's Session, whose notebook the settlement reads.
   .consistencyKeys({
     execution: (command) => command.executionID,
@@ -63,12 +64,13 @@ export const settleCodeModeExecution = implementCommand(specification)
   })
   .apply(admitted, async (event, state) => {
     const { sessionID, executionID, reserved } = event.payload
-    state.executions[executionID] = { sessionID, reserved: [...reserved], settled: false }
+    state.executions[executionID] = { sessionID, reserved: [...reserved] }
   })
   .apply(settled, async (event, state) => {
     const { sessionID, executionID } = event.payload
-    const execution = state.executions[executionID]
-    if (execution) state.executions[executionID] = { ...execution, reserved: [], settled: true }
+    // A settled execution is forgotten: a later settlement is refused as unknown, and its host reads how it
+    // settled from its own record.
+    delete state.executions[executionID]
     if (event.payload.outcome !== "finished") return
     const notebook = (state.notebooks[sessionID] ??= {})
     for (const [name, value] of Object.entries(event.payload.values ?? {}))
@@ -76,6 +78,11 @@ export const settleCodeModeExecution = implementCommand(specification)
   })
   .apply(discarded, async (event, state) => {
     delete state.executions[event.payload.executionID]
+  })
+  // A deleted Session is forgotten, its notebook with it.
+  .apply(sessionDeleted, async (event, state) => {
+    forgetSession(event.payload.sessionID, state.notebooks)
+    forgetOwned(event.payload.sessionID, state.executions)
   })
   .apply(notebookCopied, async (event, state) => {
     const { sessionID, parentID, executions } = event.payload
@@ -92,7 +99,6 @@ export const settleCodeModeExecution = implementCommand(specification)
     const { limits, ...settlement } = command
     const execution = state.executions[settlement.executionID]
     if (!execution) throw new CommandRejection("execution-not-found", "Execution not found")
-    if (execution.settled) throw new CommandRejection("execution-already-settled", "Execution already settled")
     const { sessionID } = execution
     if (settlement.outcome !== "finished") return [settled.create({ sessionID, ...settlement })]
     const values = settlement.values ?? {}

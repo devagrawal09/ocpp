@@ -1,5 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 const model = { id: "scripted", providerID: "test" }
 const zeroTokens = {
   input: 0,
@@ -323,6 +325,20 @@ export const settleStepSpec = createCommandSlice("settleStep")
       when: success(),
       expect: [],
       reject: { code: "execution-not-active" },
+    },
+    {
+      description: "A deleted Session's step is forgotten: it cannot settle.",
+      given: [started(), stepStarted("msg_1"), deleted],
+      when: failure(),
+      expect: [],
+      reject: { code: "execution-not-active" },
+    },
+    {
+      description: "A settled execution's steps are forgotten: the next execution cannot settle one of them.",
+      given: [started(), stepStarted("msg_1"), interrupted(), started()],
+      when: success(),
+      expect: [],
+      reject: { code: "step-not-started" },
     },
   )
 

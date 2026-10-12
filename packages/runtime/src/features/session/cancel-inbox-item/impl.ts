@@ -7,6 +7,7 @@ import { sessionEvent } from "../../../events.ts"
 import {
   applySessionCreated,
   applySessionDeleted,
+  forgetOwned,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -38,10 +39,14 @@ const input = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: SessionID, in
 
 export const cancelInboxItem = implementCommand(specification)
   .inputSchema(input)
-  .store(cancelInboxItemStore)
+  .store(cancelInboxItemStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetOwned(event.payload.sessionID, state.items)
+  })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID } = event.payload
     state.items[inboxID] ??= { sessionID, status: "pending" }

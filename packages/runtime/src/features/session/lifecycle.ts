@@ -33,6 +33,27 @@ export const applySessionDeleted = async (event: EventForDefinition<typeof sessi
   state.sessions[event.payload.sessionID] = "deleted"
 }
 
+// A deleted Session is forgotten but for its tombstone (`sessions`, when a
+// Slice keeps one): each record loses the Session's entry. Its facts are then
+// purged, and a fold of what the purge leaves holds the same.
+export const forgetSession = (sessionID: string, ...records: Record<string, unknown>[]) => {
+  for (const record of records) delete record[sessionID]
+}
+
+// Each record loses the entries that belong to the Session: its executions,
+// inbox items or steps, kept by their own IDs.
+export const forgetOwned = (sessionID: string, ...records: Record<string, { readonly sessionID: string }>[]) => {
+  for (const record of records)
+    for (const [id, entry] of Object.entries(record)) if (entry.sessionID === sessionID) delete record[id]
+}
+
+// Each record, which maps an ID to the Session it belongs to, loses the
+// Session's IDs.
+export const forgetValued = (sessionID: string, ...records: Record<string, string>[]) => {
+  for (const record of records)
+    for (const [id, owner] of Object.entries(record)) if (owner === sessionID) delete record[id]
+}
+
 export const applyExecutionStarted = async (event: EventForDefinition<typeof executionStarted>, state: ActiveState) => {
   state.active[event.payload.sessionID] = true
 }

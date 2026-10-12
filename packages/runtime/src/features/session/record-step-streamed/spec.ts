@@ -1,5 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 // session.md: a step's provider stream ends before its local tools settle.
 // That boundary is durable: the attempt has everything the model sent, and
 // what follows is the tools' work.
@@ -69,6 +71,13 @@ export const recordStepStreamedSpec = createCommandSlice("recordStepStreamed")
     {
       description: "A stream outside an active execution is rejected.",
       given: [started(), stepStarted("msg_1"), succeeded()],
+      when: step("msg_1"),
+      expect: [],
+      reject: { code: "execution-not-active" },
+    },
+    {
+      description: "A deleted Session's step is forgotten: it cannot record its stream.",
+      given: [started(), stepStarted("msg_1"), deleted],
       when: step("msg_1"),
       expect: [],
       reject: { code: "execution-not-active" },

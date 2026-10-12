@@ -8,6 +8,8 @@ import { sessionEvent } from "../../../events.ts"
 import {
   applySessionCreated,
   applySessionDeleted,
+  forgetOwned,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -67,10 +69,15 @@ const release = (state: AdmitCodeModeExecutionState, executionID: string) => {
 
 export const admitCodeModeExecution = implementCommand(specification)
   .inputSchema(input)
-  .store(admitCodeModeExecutionStore)
+  .store(admitCodeModeExecutionStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID, execution: (command) => command.executionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.notebooks, state.reservations)
+    forgetOwned(event.payload.sessionID, state.executions)
+  })
   .apply(admitted, async (event, state) => {
     const { sessionID, executionID, reserved } = event.payload
     state.executions[executionID] = { sessionID, reserved: [...reserved] }

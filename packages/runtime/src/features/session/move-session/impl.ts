@@ -7,6 +7,7 @@ import { sessionEvent } from "../../../events.ts"
 import {
   applySessionCreated,
   applySessionDeleted,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -43,10 +44,14 @@ const settle = (state: MoveSessionState, payload: { readonly sessionID: string; 
 
 export const moveSession = implementCommand(specification)
   .inputSchema(input)
-  .store(moveSessionStore)
+  .store(moveSessionStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.moves)
+  })
   .apply(inboxEnqueued, async (event, state) => {
     const { sessionID, inboxID, item } = event.payload
     if (item.type === "move") state.moves[sessionID] = [...(state.moves[sessionID] ?? []), inboxID]

@@ -10,6 +10,7 @@ import {
   applySessionDeleted,
   executionSettled,
   executionStarted,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -37,10 +38,14 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Step.Started.data)
 
 export const startAgentStep = implementCommand(specification)
   .inputSchema(input)
-  .store(startAgentStepStore)
+  .store(startAgentStepStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.active)
+  })
   .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, applyExecutionSettled)
   // Deliberately a no-op: a step in flight does not hold the next one back,

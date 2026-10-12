@@ -105,6 +105,38 @@
         }
       ],
       "when": {}
+    },
+    {
+      "description": "A deleted Session is forgotten: it is not active.",
+      "expect": {
+        "sessionIDs": [
+          "ses_2"
+        ]
+      },
+      "given": [
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-started",
+          "examplePayload": {
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {}
     }
   ]
 }

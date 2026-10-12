@@ -3,7 +3,14 @@ import { SessionID } from "@ocpp/schema/session-id"
 import { CommandRejection, implementCommand, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
-import { applyExecutionSettled, applyExecutionStarted, executionSettled, executionStarted } from "../lifecycle.ts"
+import {
+  applyExecutionSettled,
+  applyExecutionStarted,
+  executionSettled,
+  executionStarted,
+  forgetSession,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: active executions. Its Session lifecycle is the
@@ -28,6 +35,11 @@ export const failExecution = implementCommand(specification)
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, applyExecutionSettled)
+  // A deleted Session's execution was settled first; a fold that finds only
+  // its tombstone (the rest purged) forgets it by that.
+  .apply(sessionDeleted, async (event, state) => {
+    forgetSession(event.payload.sessionID, state.active)
+  })
   .handle(async (command, state) => {
     if (!state.active[command.sessionID]) throw new CommandRejection("execution-not-active", "Execution not active")
     return [

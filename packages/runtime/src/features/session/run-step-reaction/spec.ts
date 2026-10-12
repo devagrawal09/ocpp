@@ -208,6 +208,11 @@ export const runStepSpec = createReactionSlice("runStep")
       ],
       expect: [run("ses_1", 0)],
     },
+    {
+      description: "A deleted Session is forgotten: no step is requested for it.",
+      given: [started("ses_1"), event("session-deleted", { sessionID: "ses_1" })],
+      expect: [],
+    },
   )
 
 export default runStepSpec

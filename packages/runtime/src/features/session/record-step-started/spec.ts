@@ -1,5 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 // session.md: One Step May Have Several Physical Attempts. A step is a busy
 // period's unit of work: started, then ended. Only an active execution may run
 // steps, and one step is in flight per Session at a time.
@@ -167,6 +169,13 @@ export const recordStepStartedSpec = createCommandSlice("recordStepStarted")
       when: step("msg_1"),
       expect: [],
       reject: { code: "step-already-started" },
+    },
+    {
+      description: "A deleted Session's execution is forgotten: it cannot run a step.",
+      given: [started(), deleted],
+      when: step("msg_1"),
+      expect: [],
+      reject: { code: "execution-not-active" },
     },
   )
 

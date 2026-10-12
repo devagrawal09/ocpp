@@ -15,15 +15,19 @@ import {
   applyExecutionStarted,
   executionSettled,
   executionStarted,
+  forgetOwned,
+  forgetSession,
+  sessionDeleted,
   stepSettled,
 } from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 const DEFAULT_LIMIT = 3
 
-// Rebuildable projection: active executions and, per step, whether an attempt
-// is in flight and how many retries it has had. A step id is reused by retried
-// attempts, so a new step-started puts it back in flight and keeps the count.
+// Rebuildable projection: active executions and, per step of an active
+// execution, whether an attempt is in flight and how many retries it has had.
+// A step id is reused by retried attempts, so a new step-started puts it back
+// in flight and keeps the count.
 // Its Session lifecycle is the shared fold in session/lifecycle.ts.
 export type SettleStepState = {
   active: Record<string, true>
@@ -96,12 +100,20 @@ const zeroTokens = {
 
 export const settleStep = implementCommand(specification)
   .inputSchema(input)
-  .store(settleStepStore)
+  .store(settleStepStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(executionStarted, applyExecutionStarted)
+  // A deleted Session is forgotten.
+  .apply(sessionDeleted, async (event, state) => {
+    forgetSession(event.payload.sessionID, state.active, state.carried)
+    forgetOwned(event.payload.sessionID, state.steps)
+  })
+  // A settled execution's steps are over: a later settlement of one is refused,
+  // as the execution's until the next one starts, then as an unknown step.
   .apply(executionSettled, async (event, state) => {
     await applyExecutionSettled(event, state)
     delete state.carried[event.payload.sessionID]
+    forgetOwned(event.payload.sessionID, state.steps)
   })
   .apply(stepStarted, async (event, state) => {
     const { sessionID, assistantMessageID } = event.payload

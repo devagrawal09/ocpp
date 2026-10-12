@@ -41,6 +41,7 @@ const executionStarted = sessionEvent("session-execution-started")
 const executionSettled = sessionEvent("session-execution-settled")
 const stepStarted = sessionEvent("session-step-started")
 const stepSettled = sessionEvent("session-step-settled")
+const sessionDeleted = sessionEvent("session-deleted")
 
 const runStepRequest = Schema.Struct({
   type: Schema.Literal("runStep"),
@@ -79,7 +80,11 @@ export const createRunStep = <R>(plugin: ReactionPlugin<RunStepRequest, R>) =>
   implementReaction(specification)
     .outputSchema(Schema.toStandardSchemaV1(runStepRequest))
     .plugin(plugin)
-    .store(runStepStore)
+    .store(runStepStore, { stateVersion: 2 })
+    // A deleted Session is forgotten: nothing more is requested for it.
+    .apply(sessionDeleted, async (event, state) => {
+      delete state.sessions[event.payload.sessionID]
+    })
     .apply(sessionCreated, async (event, state) => {
       driver(state, event.payload.sessionID, event.payload.model)
     })

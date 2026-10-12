@@ -6,6 +6,7 @@ import { sessionEvent } from "../../../events.ts"
 import {
   applySessionCreated,
   applySessionDeleted,
+  forgetValued,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -14,13 +15,13 @@ import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: every Session ID the log has named, live or deleted;
 // the Session of each execution the log admitted; and the executions an
-// invocation owns. Its Session lifecycle is the shared fold in
-// session/lifecycle.ts; the rest is duplicated from the other Code Mode
-// lifecycle Slices on purpose.
+// invocation owns, with their Session. Its Session lifecycle is the shared
+// fold in session/lifecycle.ts; the rest is duplicated from the other Code
+// Mode lifecycle Slices on purpose.
 export type StartInvocationState = {
   sessions: Record<string, "live" | "deleted">
   executions: Record<string, string>
-  started: Record<string, true>
+  started: Record<string, string>
 }
 
 export const startInvocationStore = Context.Service<
@@ -36,15 +37,19 @@ const input = Schema.toStandardSchemaV1(SessionEvent.Invocation.Started.data)
 
 export const startInvocation = implementCommand(specification)
   .inputSchema(input)
-  .store(startInvocationStore)
+  .store(startInvocationStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetValued(event.payload.sessionID, state.executions, state.started)
+  })
   .apply(executionAdmitted, async (event, state) => {
     state.executions[event.payload.executionID] = event.payload.sessionID
   })
   .apply(invocationStarted, async (event, state) => {
-    state.started[event.payload.executionID] = true
+    state.started[event.payload.executionID] = event.payload.sessionID
   })
   .handle(async (command, state) => {
     requireLiveSession(state, command.sessionID)

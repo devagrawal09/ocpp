@@ -1,5 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 // session.md: "Each complete local tool call is durable before side effects
 // begin." The call is one tool-requested fact with its name and decoded input.
 // Execution happens only after this commit.
@@ -193,6 +195,13 @@ export const recordToolCallSpec = createCommandSlice("recordToolCall")
       when: call("msg_2", "call_1", { code: "a" }),
       expect: [],
       reject: { code: "step-not-in-flight" },
+    },
+    {
+      description: "A deleted Session's step is forgotten: it cannot record a call.",
+      given: [started(), stepStarted("msg_1"), deleted],
+      when: call("msg_1", "call_1", { code: "a" }),
+      expect: [],
+      reject: { code: "execution-not-active" },
     },
   )
 

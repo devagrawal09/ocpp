@@ -11,6 +11,8 @@ import {
   applyStepSettled,
   executionSettled,
   executionStarted,
+  forgetSession,
+  sessionDeleted,
   settleExecution,
   stepSettled,
 } from "../lifecycle.ts"
@@ -65,9 +67,13 @@ const settleCall = (
 
 export const settleToolCall = implementCommand(specification)
   .inputSchema(input)
-  .store(settleToolCallStore)
+  .store(settleToolCallStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(executionStarted, applyExecutionStarted)
+  // A deleted Session is forgotten.
+  .apply(sessionDeleted, async (event, state) => {
+    forgetSession(event.payload.sessionID, state.active, state.inFlight)
+  })
   .apply(executionSettled, async (event, state) => {
     settleExecution(state, event.payload.sessionID)
   })

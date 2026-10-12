@@ -1,7 +1,14 @@
 import { implementQuery, type SliceStoreService } from "@specter-ts/core"
 import { Context, Schema } from "effect"
 
-import { applyExecutionSettled, applyExecutionStarted, executionSettled, executionStarted } from "../lifecycle.ts"
+import {
+  applyExecutionSettled,
+  applyExecutionStarted,
+  executionSettled,
+  executionStarted,
+  forgetSession,
+  sessionDeleted,
+} from "../lifecycle.ts"
 import specification from "./spec.json" with { type: "json" }
 
 // Rebuildable projection: the Sessions whose latest execution has started and
@@ -22,4 +29,9 @@ export const activeSessions = implementQuery(specification)
   .store(activeSessionsStore)
   .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, applyExecutionSettled)
+  // A deleted Session's execution was settled first; a fold that finds only
+  // its tombstone (the rest purged) forgets it by that.
+  .apply(sessionDeleted, async (event, state) => {
+    forgetSession(event.payload.sessionID, state.active)
+  })
   .handle(async (_query, state) => ({ sessionIDs: Object.keys(state.active).sort() }))

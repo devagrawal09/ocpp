@@ -10,6 +10,7 @@ import {
   applySessionDeleted,
   executionSettled,
   executionStarted,
+  forgetSession,
   requireLiveSession,
   sessionCreated,
   sessionDeleted,
@@ -47,10 +48,14 @@ const input = Schema.toStandardSchemaV1(
 
 export const startExecution = implementCommand(specification)
   .inputSchema(input)
-  .store(startExecutionStore)
+  .store(startExecutionStore, { stateVersion: 2 })
   .consistencyKeys({ session: (command) => command.sessionID })
   .apply(sessionCreated, applySessionCreated)
-  .apply(sessionDeleted, applySessionDeleted)
+  // A deleted Session is forgotten but for its tombstone.
+  .apply(sessionDeleted, async (event, state) => {
+    await applySessionDeleted(event, state)
+    forgetSession(event.payload.sessionID, state.active)
+  })
   .apply(executionStarted, applyExecutionStarted)
   .apply(executionSettled, applyExecutionSettled)
   .handle(async (command, state) => {

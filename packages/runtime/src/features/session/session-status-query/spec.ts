@@ -466,6 +466,12 @@ export const sessionStatusSpec = createQuerySlice("sessionStatus")
         { boundary: "step", stepsInExecution: 1, stepsSinceInput: 1 },
       ),
     },
+    {
+      description: "A deleted Session is forgotten: it reads as a Session with no events.",
+      given: [started(), enqueued("msg_1"), event("session-deleted", { sessionID: "ses_1" })],
+      when,
+      expect: status(),
+    },
   )
 
 export default sessionStatusSpec

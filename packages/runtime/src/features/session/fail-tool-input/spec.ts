@@ -1,5 +1,7 @@
 import { createCommandSlice, event } from "@specter-ts/spec"
 
+const deleted = event("session-deleted", { sessionID: "ses_1" })
+
 // A call the model began but that never became a call: its input stopped
 // streaming, or never parsed. It fails as one fact, with what input there was.
 const model = { id: "scripted", providerID: "test" }
@@ -137,6 +139,13 @@ export const failToolInputSpec = createCommandSlice("failToolInput")
     {
       description: "An interrupted execution records nothing more.",
       given: [started(), stepStarted("msg_1"), interrupted()],
+      when: failure(),
+      expect: [],
+      reject: { code: "execution-not-active" },
+    },
+    {
+      description: "A deleted Session's step is forgotten: it cannot fail a call's input.",
+      given: [started(), stepStarted("msg_1"), deleted],
       when: failure(),
       expect: [],
       reject: { code: "execution-not-active" },

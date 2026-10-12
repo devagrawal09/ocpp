@@ -3,7 +3,7 @@ export * as Bus from "./bus.js"
 import { Cause, Clock, Context, Duration, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
 import { Event } from "@ocpp/schema/event"
 import type { EventLog } from "@ocpp/schema/event-log"
-import { and, asc, eq, gt, lte, sql, type SQL } from "drizzle-orm"
+import { and, asc, eq, gt, inArray, lte, sql, type SQL } from "drizzle-orm"
 import { Database } from "./database/database.js"
 import { EventSequenceTable, EventTable } from "./event/sql.js"
 import { SpecterEventTable } from "./specter/tables.js"
@@ -19,6 +19,7 @@ import {
   EventLog as SpecterEventLogService,
   makeRuntime,
   persistSliceSnapshots,
+  servedSlices,
   SpecterCommandRejectedError,
   type DriveExecutionOutboxStore,
   type PersistedEvent,
@@ -220,6 +221,9 @@ export interface Interface {
    */
   readonly runtime: Pick<Runtime, "query" | "subscribe" | "start">
 }
+
+// How many purged facts' index rows one statement removes: SQLite bounds a statement's parameters.
+const purgeChunk = 500
 
 /** A production Command of the runtime: a test's runtime also takes recordHistory, which the Bus's type never names. */
 export type { RuntimeCommand }
@@ -559,6 +563,33 @@ export function configured(options?: Options) {
                 )
               })
             }),
+          // A purge (a deleted Session's facts go, its tombstone kept) takes what this database indexes of the
+          // facts it removes in its own transaction: their index rows, and the sequence of an aggregate (a Code
+          // Mode run's, a background job marker's) left with no fact.
+          onPurge: ({ orders }) =>
+            Effect.gen(function* () {
+              const aggregates = new Set<string>()
+              for (let start = 0; start < orders.length; start += purgeChunk) {
+                const chunk = orders.slice(start, start + purgeChunk)
+                const indexed = yield* db
+                  .select({ aggregateID: EventTable.aggregate_id })
+                  .from(EventTable)
+                  .where(inArray(EventTable.log_order, chunk))
+                  .all()
+                for (const row of indexed) aggregates.add(row.aggregateID)
+                yield* db.delete(EventTable).where(inArray(EventTable.log_order, chunk)).run()
+              }
+              for (const aggregateID of aggregates) {
+                const left = yield* db
+                  .select({ order: EventTable.log_order })
+                  .from(EventTable)
+                  .where(eq(EventTable.aggregate_id, aggregateID))
+                  .limit(1)
+                  .get()
+                if (left === undefined)
+                  yield* db.delete(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).run()
+              }
+            }),
         })
         // An append holds the locks of the aggregates it records for, so listeners see each aggregate's events
         // in order, and an aggregate's rebuild sees none recorded meanwhile.
@@ -585,8 +616,10 @@ export function configured(options?: Options) {
         // The runtime keeps its state in this database too, so a boot resumes from where the last one
         // stopped: its Slices from their snapshots, saved every minute and once the runtime (made after them)
         // has closed, and its Reactions' jobs from their outbox queues, where a replayed delivery finds its job
-        // instead of running again.
-        const slices = yield* persistSliceSnapshots(createSqliteSliceSnapshotStore(database)).pipe(Effect.orDie)
+        // instead of running again. The snapshots of a Slice the runtime no longer serves go.
+        const slices = yield* persistSliceSnapshots(createSqliteSliceSnapshotStore(database), {
+          slices: servedSlices({ history: options?.history === true }),
+        }).pipe(Effect.orDie)
         const runStep = createSqliteReactionOutboxStore<OutboxPayload<RunStepOutboxStore>>(database, {
           queue: "runStep",
         })

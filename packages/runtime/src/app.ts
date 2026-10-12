@@ -11,6 +11,7 @@ import { Effect, Layer } from "effect"
 
 import { sessionEventDefinitions } from "./events.ts"
 import { driveExecutionPlugin } from "./plugins/drive-execution.ts"
+import { purgeSessionPlugin } from "./plugins/purge-session.ts"
 import { runStepPlugin } from "./plugins/run-step.ts"
 import { clearRevert, clearRevertStore, createClearRevertState } from "./features/session/clear-revert/impl.ts"
 import { commitRevert, commitRevertStore, createCommitRevertState } from "./features/session/commit-revert/impl.ts"
@@ -344,6 +345,11 @@ import {
   wakeExecution,
   wakeExecutionStore,
 } from "./features/session/wake-execution-reaction/impl.ts"
+import {
+  createPurgeSession,
+  createPurgeSessionState,
+  purgeSessionStore,
+} from "./features/session/purge-session-reaction/impl.ts"
 
 export type RunStepOutboxStore = ReactionOutboxStore<OutboxedReaction<RunStepRequest>>
 export type DriveExecutionOutboxStore = ReactionOutboxStore<OutboxedReaction<DriveExecutionRequest>>
@@ -477,6 +483,9 @@ export const createRuntimeConfig = (options: {
           concurrencyKey: (request) => request.payload.sessionID,
         }),
       ),
+      // Purges what the log holds of a deleted Session, in the Reaction's delivery: a purge is one short
+      // transaction, and idempotent.
+      purgeSession: createPurgeSession(purgeSessionPlugin),
     },
   }) as const
 
@@ -596,6 +605,7 @@ export const createSliceStoreLayer = (provide: ProvideSliceStore) =>
     provide(recordHistoryStore, createRecordHistoryState),
     provide(runStepStore, createRunStepState),
     provide(driveExecutionStore, createDriveExecutionState),
+    provide(purgeSessionStore, createPurgeSessionState),
   )
 
 // Fresh in-memory state per Layer scope.

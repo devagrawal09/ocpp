@@ -34,7 +34,7 @@ export type { DriveExecutionOutboxStore, ProvideSliceStore, RunStepOutboxStore }
 // Slice Stores that start from the host's saved snapshots and save theirs back.
 export { createSnapshotSliceStores, persistSliceSnapshots, type SnapshotSliceStores } from "@specter-ts/memory"
 export type { SliceSnapshot, SliceSnapshotStore } from "@specter-ts/core"
-export { makeRuntime, type Runtime } from "./runtime.ts"
+export { makeRuntime, type Runtime, servedSlices } from "./runtime.ts"
 export { sessionEvent, sessionEventDefinitions } from "./events.ts"
 export {
   type AttemptOutcome,

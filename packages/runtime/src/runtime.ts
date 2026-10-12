@@ -1,4 +1,4 @@
-import { eventsFor, extendSpecterConfig } from "@specter-ts/core"
+import { EventLog, eventsFor, extendSpecterConfig } from "@specter-ts/core"
 import { makeSpecterRuntime } from "@specter-ts/core/effect"
 import { createMemoryReactionOutboxStore, type OutboxedReaction } from "@specter-ts/reaction-outbox"
 import { Effect } from "effect"
@@ -11,6 +11,7 @@ import {
   type ProvideSliceStore,
   type RunStepOutboxOptions,
   type RunStepOutboxStore,
+  runtimeConfig,
 } from "./app.ts"
 import type { RunStepRequest } from "./features/session/run-step-reaction/impl.ts"
 import { recordHistory } from "./features/testing/record-history/impl.ts"
@@ -44,13 +45,15 @@ export type RuntimeOptions = {
   readonly history?: boolean
 }
 
-// Requires the EventLog service and a Scope. Commands and Queries work as soon
-// as the runtime is made; its Reactions start when the host starts them with
-// its step I/O. A host whose step I/O depends on services that depend on the
-// runtime (OC++'s does: its Bus records through the runtime) makes the
-// runtime first, composes the rest, and then starts it.
+// Requires the EventLog service, which purges (a deleted Session's facts go),
+// and a Scope. Commands and Queries work as soon as the runtime is made; its
+// Reactions start when the host starts them with its step I/O. A host whose
+// step I/O depends on services that depend on the runtime (OC++'s does: its
+// Bus records through the runtime) makes the runtime first, composes the rest,
+// and then starts it.
 export const makeRuntime = (options: RuntimeOptions = {}) =>
   Effect.gen(function* () {
+    const log = yield* EventLog
     // A test's runtime registers recordHistory beside the production Slices; the production config's type never
     // names it, and only a test's fixture dispatches it.
     const config = extendSpecterConfig(
@@ -76,7 +79,7 @@ export const makeRuntime = (options: RuntimeOptions = {}) =>
     // process left unfinished included.
     const app = yield* makeSpecterRuntime(
       { slices: config.slices, events },
-      { reactions: "deferred", ...(options.catchUp ? { catchUp: "all" } : {}) },
+      { reactions: "deferred", requires: { purge: true }, ...(options.catchUp ? { catchUp: "all" } : {}) },
     ).pipe(
       Effect.provide(options.stores?.slices ? createSliceStoreLayer(options.stores.slices) : memorySliceStoreLayer),
     )
@@ -84,11 +87,19 @@ export const makeRuntime = (options: RuntimeOptions = {}) =>
       command: app.command,
       query: app.query,
       subscribe: app.subscribe,
-      // Starts the Reactions with the host's step I/O: their Plugins read it,
-      // they catch up with the log, as at a boot, and run for every commit
-      // after.
-      start: (stepHost: StepHost["Service"]) => app.start.pipe(Effect.provideService(StepHost, stepHost)),
+      // Starts the Reactions with the host's step I/O: their Plugins read it
+      // (and the purge's, the Event Log), they catch up with the log, as at a
+      // boot, and run for every commit after.
+      start: (stepHost: StepHost["Service"]) =>
+        app.start.pipe(Effect.provideService(StepHost, stepHost), Effect.provideService(EventLog, log)),
     }
   })
 
 export type Runtime = Effect.Success<ReturnType<typeof makeRuntime>>
+
+// The names of the Slices a runtime made with these options serves: a host that saves their snapshots removes
+// those of any other Slice, which nothing serves any more.
+export const servedSlices = (options: Pick<RuntimeOptions, "history"> = {}): readonly string[] => [
+  ...Object.keys(runtimeConfig.slices),
+  ...(options.history ? [recordHistory.name] : []),
+]

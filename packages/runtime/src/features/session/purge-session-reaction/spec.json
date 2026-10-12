@@ -1,0 +1,62 @@
+{
+  "$schema": "https://specter.dev/specification/v2/slice.schema.json",
+  "description": "Purges a deleted Session's facts from the log, and those of the aggregates it owns (its inbox, executions, Code Mode runs and calls, background job markers, external agent links), but for its deletion: the tombstone every Slice folds to keep refusing its ID. Its children are deleted, and purged, first. A Session whose notebook a fork copied keeps the facts the copy reads until that fork is purged too.",
+  "formatVersion": 2,
+  "kind": "reaction",
+  "name": "purgeSession",
+  "scenarios": [
+    {
+      "description": "A deleted Session is purged.",
+      "expect": [
+        {
+          "payload": {
+            "sessionID": "ses_1"
+          },
+          "type": "purgeSession"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ]
+    },
+    {
+      "description": "Each Session a commit deletes is purged.",
+      "expect": [
+        {
+          "payload": {
+            "sessionID": "ses_1"
+          },
+          "type": "purgeSession"
+        },
+        {
+          "payload": {
+            "sessionID": "ses_2"
+          },
+          "type": "purgeSession"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-deleted",
+          "examplePayload": {
+            "sessionID": "ses_2"
+          },
+          "kind": "scenario-event"
+        }
+      ]
+    }
+  ]
+}

@@ -639,6 +639,192 @@ describe("Sessions on the Specter runtime", () => {
     }),
   )
 
+  it.live(
+    "purges a deleted Session from the log, its index and every read model, and rebuilds the same",
+    () =>
+      Effect.gen(function* () {
+        const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
+        const saved = Database.Service.use(({ db }) =>
+          Effect.all({
+            slices: db.all<{ readonly slice: string; readonly cursor: number; readonly state: string }>(
+              sql`SELECT slice_name AS slice, cursor, state_json AS state FROM specter_slice_snapshots ORDER BY slice_name`,
+            ),
+            facts: db.get<{ readonly count: number }>(sql`SELECT count(*) AS count FROM specter_events`),
+          }).pipe(Effect.orDie),
+        )
+        // What the log and its index hold that names a Session: its own facts and those of the aggregates it owns
+        // (its Code Mode runs and their calls, its background job markers), which name it.
+        const held = (id: string) =>
+          Database.Service.use(({ db }) =>
+            Effect.all({
+              facts: db.all<{ readonly type: string }>(
+                sql`SELECT type FROM specter_events WHERE payload LIKE ${`%${id}%`} ORDER BY event_order`,
+              ),
+              keys: db.all<{ readonly name: string; readonly value: string }>(
+                sql`SELECT k.name, k.value FROM specter_event_keys k JOIN specter_events e ON e.event_order = k.event_order
+                WHERE e.payload LIKE ${`%${id}%`} ORDER BY k.event_order, k.name`,
+              ),
+              indexed: db.all<{ readonly aggregate: string }>(
+                sql`SELECT x.aggregate_id AS aggregate FROM event x JOIN specter_events e ON e.event_order = x.log_order
+                WHERE e.payload LIKE ${`%${id}%`}`,
+              ),
+              sequences: db.all<{ readonly aggregate: string }>(
+                sql`SELECT aggregate_id AS aggregate FROM event_sequence
+                WHERE aggregate_id NOT IN (SELECT aggregate_id FROM event)`,
+              ),
+            }).pipe(Effect.orDie),
+          )
+        const removed = yield* boot(
+          file,
+          Effect.gen(function* () {
+            yield* setupAgents
+            yield* (yield* Tool.Service).transform((draft) =>
+              draft.add({
+                name: "echo",
+                description: "Echo text",
+                input: Schema.Struct({ text: Schema.String }),
+                output: Schema.Struct({ text: Schema.String }),
+                execute: ({ text }) => Effect.succeed({ output: { text }, content: text }),
+              }),
+            )
+            const llm = yield* TestLLM.Service
+            yield* llm.push(
+              TestLLM.text("Staying", "text_1"),
+              TestLLM.tool("call_1", "execute", { code: 'tools.echo({ text: "hi" })\nreturn "answer=" + 6 * 7' }),
+            )
+            const seen = (request: { readonly messages: unknown }) =>
+              JSON.stringify(request.messages).includes("answer=42")
+            yield* (llm.client as TestLLM.TestInterface).serve((request) =>
+              seen(request) ? TestLLM.text("The answer is 42", "text_1") : TestLLM.text("Waiting for it", "text_1"),
+            )
+            const session = yield* Session.Service
+            const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
+            // A Session that stays, and one with a run, a Code Mode program and its tool call, and a user shell.
+            const stays = yield* session.create({ location })
+            yield* session.prompt({ sessionID: stays.id, text: "Stay" })
+            yield* session.wait(stays.id)
+            const goes = yield* session.create({ location })
+            yield* session.prompt({ sessionID: goes.id, text: "Compute it" })
+            yield* session.wait(goes.id).pipe(
+              Effect.andThen(session.messages({ sessionID: goes.id, order: "asc" })),
+              Effect.repeat({
+                until: (messages) => JSON.stringify(messages.at(-1)).includes("The answer is 42"),
+                schedule: Schedule.spaced("20 millis"),
+              }),
+              Effect.timeout("5 seconds"),
+            )
+            yield* session.wait(goes.id)
+            // A user shell, recorded through its Commands as Session.shell records it.
+            const bus = yield* Bus.Service
+            yield* bus.command({
+              type: "runShell",
+              payload: {
+                sessionID: goes.id,
+                shell: {
+                  id: "sh_purged",
+                  status: "running",
+                  command: "pwd",
+                  cwd: "/project",
+                  shell: "/bin/sh",
+                  file: "/tmp/sh_purged.out",
+                  metadata: { background: true },
+                  time: { started: 0 },
+                },
+              },
+            })
+            yield* bus.command({
+              type: "settleShell",
+              payload: {
+                sessionID: goes.id,
+                shellID: "sh_purged",
+                outcome: "exited",
+                exit: 0,
+                output: { output: "/project", cursor: 8, size: 8, truncated: false },
+              },
+            })
+            const before = yield* held(goes.id)
+            for (const type of [
+              "session-codemode-execution-settled",
+              "session-codemode-call-scheduled",
+              "session-background-started",
+              "session-shell-settled",
+              "session-tool-settled",
+            ])
+              expect(before.facts.map((fact) => fact.type)).toContain(type)
+            const staying = yield* held(stays.id)
+
+            yield* session.remove(goes.id)
+            // Its purge runs once its deletion commits: its tombstone is all that is left.
+            const after = yield* held(goes.id).pipe(
+              Effect.repeat({
+                until: (held) => held.facts.length === 1,
+                schedule: Schedule.spaced("20 millis"),
+              }),
+              Effect.timeout("5 seconds"),
+            )
+            expect(after.facts).toEqual([{ type: "session-deleted" }])
+            expect(after.keys).toEqual([{ name: "session", value: goes.id }])
+            expect(after.indexed).toEqual([])
+            expect(after.sequences).toEqual([])
+            expect(yield* held(stays.id)).toEqual(staying)
+            // No read model holds anything of it.
+            const projected = yield* projections
+            expect(
+              projected.flatMap(([table, rows]) => rows.filter((row) => row.includes(goes.id)).map(() => table)),
+            ).toEqual([])
+            expect(projected.find(([table]) => table === "session_message")?.[1].length).toBeGreaterThan(0)
+
+            // The read models rebuild from the log alone as they are.
+            yield* rebuildProjections
+            expect(yield* projections).toEqual(projected)
+
+            // Its ID is still refused.
+            const refused = yield* (yield* Bus.Service)
+              .command({
+                type: "createSession",
+                payload: {
+                  session: {
+                    sessionID: goes.id,
+                    projectID: goes.projectID,
+                    slug: "again",
+                    location: { directory: "/project" },
+                    title: "again",
+                    version: "test",
+                  },
+                },
+              })
+              .pipe(Effect.flip)
+            expect(SpecterRejection.code(refused)).toBe("session-deleted")
+            return goes.id
+          }),
+        )
+        // A boot from the log alone saves the snapshots the boots that ran it saved.
+        yield* boot(file, Effect.void)
+        const resumed = yield* boot(file, saved)
+        yield* boot(
+          file,
+          Database.Service.use(({ db }) =>
+            Effect.all([
+              db.run(sql`DELETE FROM specter_slice_snapshots`),
+              db.run(sql`DELETE FROM specter_reaction_outbox`),
+            ]).pipe(Effect.orDie),
+          ),
+        )
+        yield* boot(file, Effect.void)
+        const rebuilt = yield* boot(file, saved)
+        expect(resumed.slices.length).toBeGreaterThan(20)
+        expect(rebuilt.slices).toEqual(resumed.slices)
+        expect(rebuilt.facts).toEqual(resumed.facts)
+        expect(resumed.slices.filter((slice) => slice.state.includes(removed)).map((slice) => slice.slice)).toEqual(
+          expect.arrayContaining(["createSession"]),
+        )
+        // Each Slice holds its tombstone, if any, and nothing else of it.
+        for (const slice of resumed.slices)
+          if (slice.state.includes(removed)) expect(slice.state.split(removed).length - 1).toBe(1)
+      }),
+    30_000,
+  )
+
   it.live("starts nothing at the next boot for a Session that settled", () =>
     Effect.gen(function* () {
       const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")

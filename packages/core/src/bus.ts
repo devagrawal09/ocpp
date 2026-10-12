@@ -79,7 +79,7 @@ const durableDefinitions = new Map<string, Event.DurableDefinition>(
 )
 
 /** The definition of a fact in Specter's log: every fact is an OC++ event of the same name. */
-const definitionOf = (fact: PersistedEvent) => {
+const definitionOf = (fact: Pick<PersistedEvent, "id" | "type">) => {
   const definition = durableDefinitions.get(fact.type)
   if (!definition)
     throw new InvalidDurableEventError({
@@ -104,7 +104,7 @@ const aggregateOf = (definition: Event.DurableDefinition, payload: unknown) => {
 type Indexed = {
   readonly aggregateID: string
   readonly seq: number
-  readonly fact: PersistedEvent
+  readonly fact: Omit<PersistedEvent, "keys">
 }
 
 /** The event a fact is: its ID, its time, its payload decoded, and its place in its aggregate. */
@@ -240,6 +240,22 @@ interface Options {
    * history Commands would have recorded. Production never makes the runtime with it.
    */
   readonly history?: boolean
+}
+
+/**
+ * A Command dispatched through the Bus: when and where it was dispatched and the options of the facts it records,
+ * by position. It travels to the log's append as each fact's context, and holds what the append projected.
+ */
+class Dispatch {
+  recorded?: readonly Event.Payload[]
+
+  constructor(
+    readonly created: number,
+    readonly location: Location.Ref | undefined,
+    readonly facts: ReadonlyArray<FactOptions | undefined>,
+    // Notifies as interruptibly as the dispatcher is: a dispatch from a finalizer notifies whole.
+    readonly restore: <A>(effect: Effect.Effect<A>) => Effect.Effect<A>,
+  ) {}
 }
 
 export function configured(options?: Options) {
@@ -464,33 +480,16 @@ export function configured(options?: Options) {
 
         // Every fact is recorded by the Specter runtime into its Event Log, kept in this database. The
         // log's append runs projectBatch inside its own transaction, so a recorded fact and OC++'s read
-        // models change together or not at all. A Command dispatched through this Bus carries the options of
-        // the facts it records, by position, and when and where it was dispatched; one a Reaction dispatches
-        // itself records its facts at the log's time, without a Location.
-        type Dispatch = {
-          readonly created: number
-          readonly location?: Location.Ref
-          readonly facts: ReadonlyArray<FactOptions | undefined>
-          // Notifies as interruptibly as the dispatcher is: a dispatch from a finalizer notifies whole.
-          readonly restore: <A>(effect: Effect.Effect<A>) => Effect.Effect<A>
-          recorded?: readonly Event.Payload[]
-        }
-        const pending = new Map<string, Dispatch>()
+        // models change together or not at all. A Command dispatched through this Bus gives each fact it records
+        // its Dispatch as context: the fact's ID and time, and its options by position and where it was
+        // dispatched. One a Reaction dispatches itself records its facts at the log's time, without a Location.
         const specterLog = SpecterEventLog.make(db, {
-          drafts: (key, count) =>
-            Array.from({ length: count }, (_, index) => {
-              const dispatch = key === undefined ? undefined : pending.get(key)
-              return dispatch
-                ? { id: dispatch.facts[index]?.id ?? Event.ID.create(), created: dispatch.created }
-                : { id: Event.ID.create() }
-            }),
-          appended: (key, events) =>
+          id: () => Event.ID.create(),
+          appended: (events, contexts) =>
             Effect.gen(function* () {
               // Project each fact as the event it is here, and notify after the transaction commits. A Command
               // dispatched through this Bus publishes them with its options.
-              const dispatch = key === undefined ? undefined : pending.get(key)
-              const created =
-                dispatch?.created ?? (Date.parse(events[0]?.recordedAt ?? "") || (yield* Clock.currentTimeMillis))
+              const dispatch = contexts.find((context) => context instanceof Dispatch)
               type Placed = BatchItem & { readonly order: number }
               const items = events.map((recorded, index): Placed => {
                 const definition = definitionOf(recorded)
@@ -502,7 +501,7 @@ export function configured(options?: Options) {
                   commit: options?.commit,
                   event: {
                     id: Event.ID.make(recorded.id),
-                    created,
+                    created: Date.parse(recorded.recordedAt),
                     ...(options?.metadata ? { metadata: options.metadata } : {}),
                     type: definition.type,
                     ...(location ? { location } : {}),
@@ -600,29 +599,32 @@ export function configured(options?: Options) {
           Effect.uninterruptibleMask((restore) =>
             Effect.gen(function* () {
               const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
-              const key = `bus:${crypto.randomUUID()}`
-              const entry: Dispatch = {
-                created: yield* Clock.currentTimeMillis,
-                ...(serviceLocation
-                  ? { location: { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID } }
-                  : {}),
-                facts: options?.facts ?? [],
+              const dispatch = new Dispatch(
+                yield* Clock.currentTimeMillis,
+                serviceLocation
+                  ? { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID }
+                  : undefined,
+                options?.facts ?? [],
                 restore,
-              }
-              const execution = yield* Effect.acquireUseRelease(
-                Effect.sync(() => pending.set(key, entry)),
-                () =>
-                  runtime
-                    .command(envelope, { idempotencyKey: key })
-                    .pipe(
-                      Effect.catch((error) =>
-                        error instanceof SpecterCommandRejectedError ? Effect.fail(error) : Effect.die(error),
-                      ),
-                    ),
-                () => Effect.sync(() => pending.delete(key)),
               )
+              const recordedAt = new Date(dispatch.created).toISOString()
+              const execution = yield* runtime
+                .command(envelope, {
+                  // Each fact is named and dated as its dispatcher chose, and carries the dispatch to the log's
+                  // append, which projects and notifies it with the options at its position.
+                  eventContext: (_, index) => ({
+                    id: dispatch.facts[index]?.id ?? Event.ID.create(),
+                    recordedAt,
+                    metadata: dispatch,
+                  }),
+                })
+                .pipe(
+                  Effect.catch((error) =>
+                    error instanceof SpecterCommandRejectedError ? Effect.fail(error) : Effect.die(error),
+                  ),
+                )
               if (options?.reactions) yield* restore(execution.reactions.pipe(Effect.orDie))
-              return entry.recorded ?? []
+              return dispatch.recorded ?? []
             }),
           )
 

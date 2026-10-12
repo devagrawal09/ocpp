@@ -1,6 +1,6 @@
 export * as SpecterEventLog from "./event-log.js"
 
-import { and, asc, between, desc, eq, gt, inArray, or } from "drizzle-orm"
+import { and, asc, between, desc, eq, gt, inArray, or, sql } from "drizzle-orm"
 import { Effect } from "effect"
 import {
   EventLogFailure,
@@ -19,24 +19,34 @@ type DatabaseService = Database.Interface["db"]
 
 export interface Hooks {
   /**
-   * The identity of a commit's events: the IDs and creation times the Bus's dispatcher chose, so the log names and
-   * dates an event as its dispatcher did. An event without a time (one a Reaction's own Command records) is recorded
-   * at the time of the append.
+   * The ID of a fact its dispatcher named none for: one a Reaction's own Command records. A fact the Bus dispatched
+   * comes with the ID its dispatcher chose, and with the time of its dispatch.
    */
-  readonly drafts: (
-    idempotencyKey: string | undefined,
-    count: number,
-  ) => readonly { readonly id: string; readonly created?: number }[]
+  readonly id: () => string
   /**
-   * Runs inside the append transaction, after the events are stored: OC++ projects the commit there
-   * (projectors, commit hooks, Bus sequences). A failure, defects included, rolls the append back, so
-   * Specter's log and OC++'s read models never disagree. Returns what to do once the transaction has
-   * committed (notify listeners); it runs uninterruptibly, so it marks what may be interrupted.
+   * Runs inside the append transaction, after the facts are stored, with the context each was dispatched with
+   * (`EventLogDraft.metadata`), by position: OC++ projects the commit there (projectors, commit hooks, Bus
+   * sequences). A failure, defects included, rolls the append back, so Specter's log and OC++'s read models never
+   * disagree. Returns what to do once the transaction has committed (notify listeners); it runs uninterruptibly, so
+   * it marks what may be interrupted.
    */
   readonly appended: (
-    idempotencyKey: string | undefined,
     events: readonly PersistedEvent[],
+    contexts: readonly unknown[],
   ) => Effect.Effect<Effect.Effect<void>>
+}
+
+// A fact's keys, as one JSON object of the keys stored with it. The outer column is spelled out: drizzle leaves a
+// single table's columns unqualified, which inside the subquery would name its own.
+const keysColumn = sql<string>`(select json_group_object(stored.name, stored.value) from ${SpecterEventKeyTable} stored where stored."order" = "specter_event"."order")`
+
+const eventColumns = {
+  order: SpecterEventTable.order,
+  id: SpecterEventTable.id,
+  type: SpecterEventTable.type,
+  payload: SpecterEventTable.payload,
+  recorded_at: SpecterEventTable.recorded_at,
+  keys: keysColumn,
 }
 
 /** Specter's Event Log on OC++'s database. */
@@ -44,12 +54,13 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
   const fail = (operation: EventLogFailure["operation"]) => (cause: unknown) =>
     Effect.fail(new EventLogFailure(operation, cause))
 
-  const toEvent = (row: typeof SpecterEventTable.$inferSelect): PersistedEvent => ({
+  const toEvent = (row: typeof SpecterEventTable.$inferSelect & { readonly keys: string }): PersistedEvent => ({
     id: row.id,
     order: row.order,
     type: row.type,
     payload: row.payload,
     recordedAt: row.recorded_at,
+    keys: JSON.parse(row.keys),
   })
 
   const currentVersion = db
@@ -62,7 +73,7 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
 
   const withEvents = (row: typeof SpecterCommitTable.$inferSelect) =>
     db
-      .select()
+      .select(eventColumns)
       .from(SpecterEventTable)
       .where(between(SpecterEventTable.order, row.first_order, row.version))
       .orderBy(asc(SpecterEventTable.order))
@@ -91,7 +102,7 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
     eventTypes.length === 0
       ? Effect.succeed([])
       : db
-          .select()
+          .select(eventColumns)
           .from(SpecterEventTable)
           .where(and(gt(SpecterEventTable.order, afterOrder), inArray(SpecterEventTable.type, [...eventTypes])))
           .orderBy(asc(SpecterEventTable.order))
@@ -153,9 +164,10 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
             if (unchanged && stale !== undefined)
               return yield* fail("append")(new SpecterVersionConflictError(unchanged.afterOrder, stale))
             const recordedAt = new Date().toISOString()
-            const identities = hooks.drafts(options.idempotencyKey, drafts.length).map((identity) => ({
-              id: identity.id,
-              recordedAt: identity.created === undefined ? recordedAt : new Date(identity.created).toISOString(),
+            // A fact takes the ID and time its dispatcher gave it, or the log's.
+            const identities = drafts.map((draft) => ({
+              id: draft.id ?? hooks.id(),
+              recordedAt: draft.recordedAt ?? recordedAt,
             }))
             const rows = yield* db
               .insert(SpecterEventTable)
@@ -175,6 +187,7 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
                 payload: draft.payload,
                 ...identities[index]!,
                 order: rows[index]!.order,
+                keys: draft.keys,
               }),
             )
             const keys = drafts.flatMap((draft, index) =>
@@ -192,7 +205,10 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
                 committed_at: recordedAt,
               })
               .run()
-            const committed = yield* hooks.appended(options.idempotencyKey, events)
+            const committed = yield* hooks.appended(
+              events,
+              drafts.map((draft) => draft.metadata),
+            )
             return {
               committed,
               events,
@@ -218,7 +234,7 @@ export const make = (db: DatabaseService, hooks: Hooks): EventLogService => {
     query: (afterOrder, eventTypes) => query(afterOrder, eventTypes).pipe(Effect.catch(fail("query"))),
     readKey: (key, page = {}) =>
       db
-        .select({ event: SpecterEventTable })
+        .select({ event: eventColumns })
         .from(SpecterEventKeyTable)
         .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, SpecterEventKeyTable.order))
         .where(

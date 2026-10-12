@@ -15,7 +15,7 @@ const makeLog = Effect.gen(function* () {
   const database = yield* Database.Service
   let next = 0
   return SpecterEventLog.make(database.db, {
-    drafts: (_, count) => Array.from({ length: count }, () => ({ id: `evt_${++next}` })),
+    id: () => `evt_${++next}`,
     appended: () => Effect.succeed(Effect.void),
   })
 })

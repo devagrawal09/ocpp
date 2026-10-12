@@ -209,6 +209,15 @@ const migration: DatabaseMigration.Migration = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`instruction_blob_fact\` (
+          \`event_id\` text NOT NULL,
+          \`hash\` text NOT NULL,
+          CONSTRAINT \`instruction_blob_fact_pk\` PRIMARY KEY(\`event_id\`, \`hash\`),
+          CONSTRAINT \`fk_instruction_blob_fact_event_id_specter_events_id_fk\` FOREIGN KEY (\`event_id\`) REFERENCES \`specter_events\`(\`id\`),
+          CONSTRAINT \`fk_instruction_blob_fact_hash_instruction_blob_hash_fk\` FOREIGN KEY (\`hash\`) REFERENCES \`instruction_blob\`(\`hash\`)
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`instruction_blob\` (
           \`hash\` text PRIMARY KEY,
           \`value\` text
@@ -327,6 +336,7 @@ const migration: DatabaseMigration.Migration = {
       )
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)
       yield* tx.run(`CREATE INDEX \`job_background_job_idx\` ON \`job_background\` (\`job_id\`);`)
+      yield* tx.run(`CREATE INDEX \`instruction_blob_fact_hash_idx\` ON \`instruction_blob_fact\` (\`hash\`);`)
       yield* tx.run(
         `CREATE INDEX \`session_inbox_session_delivery_seq_idx\` ON \`session_inbox\` (\`session_id\`,\`delivery\`,\`enqueued_seq\`);`,
       )

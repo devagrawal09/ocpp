@@ -7,6 +7,7 @@ import type { Project } from "@ocpp/schema/project"
 import type { SessionSchema } from "./schema.js"
 import type { Workspace } from "@ocpp/schema/workspace"
 import { Timestamps } from "../database/schema.sql.js"
+import { SpecterEventTable } from "../specter/tables.js"
 import type { Instruction } from "@ocpp/schema/instruction"
 import type { Session } from "@ocpp/schema/session"
 import type { CompactionPayload, MovePayload, SyntheticPayload, UserPayload } from "@ocpp/schema/session-inbox"
@@ -127,6 +128,28 @@ export const InstructionBlobTable = sqliteTable("instruction_blob", {
   hash: text().$type<Instruction.Hash>().primaryKey(),
   value: text({ mode: "json" }).$type<Schema.Json>(),
 })
+
+/**
+ * The facts that store each instruction value. A value is stored once by hash and shared by every Session whose facts
+ * store it, so it goes only once no fact left in the log stores it: the purge of a Session's facts removes their rows
+ * here and the values left without one (the Bus's `onPurge`), as a rebuild from what is left would.
+ */
+export const InstructionBlobFactTable = sqliteTable(
+  "instruction_blob_fact",
+  {
+    event_id: text()
+      .notNull()
+      .references(() => SpecterEventTable.id),
+    hash: text()
+      .$type<Instruction.Hash>()
+      .notNull()
+      .references(() => InstructionBlobTable.hash),
+  },
+  (table) => [
+    primaryKey({ columns: [table.event_id, table.hash] }),
+    index("instruction_blob_fact_hash_idx").on(table.hash),
+  ],
+)
 
 export const InstructionStateTable = sqliteTable("instruction_state", {
   session_id: text()

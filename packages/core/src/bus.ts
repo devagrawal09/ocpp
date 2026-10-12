@@ -3,10 +3,12 @@ export * as Bus from "./bus.js"
 import { Cause, Clock, Context, Duration, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
 import { Event } from "@ocpp/schema/event"
 import type { EventLog } from "@ocpp/schema/event-log"
-import { and, asc, eq, gt, inArray, lte, sql, type SQL } from "drizzle-orm"
+import type { Instruction } from "@ocpp/schema/instruction"
+import { and, asc, eq, gt, inArray, lte, notExists, sql, type SQL } from "drizzle-orm"
 import { Database } from "./database/database.js"
 import { EventSequenceTable, EventTable } from "./event/sql.js"
 import { SpecterEventTable } from "./specter/tables.js"
+import { InstructionBlobFactTable, InstructionBlobTable } from "./session/sql.js"
 import type { Location } from "@ocpp/schema/location"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
@@ -564,11 +566,14 @@ export function configured(options?: Options) {
               })
             }),
           // A purge (a deleted Session's facts go, its tombstone kept) takes what this database indexes of the
-          // facts it removes in its own transaction: their index rows, and the sequence of an aggregate (a Code
-          // Mode run's, a background job marker's) left with no fact.
+          // facts it removes in its own transaction: their index rows, the sequence of an aggregate (a Code
+          // Mode run's, a background job marker's) left with no fact, and the instruction values no fact left
+          // stores. Values are stored once by hash and shared by every Session that stores them, so a rebuild from
+          // what is left keeps exactly those another fact stores.
           onPurge: ({ orders }) =>
             Effect.gen(function* () {
               const aggregates = new Set<string>()
+              const values = new Set<Instruction.Hash>()
               for (let start = 0; start < orders.length; start += purgeChunk) {
                 const chunk = orders.slice(start, start + purgeChunk)
                 const indexed = yield* db
@@ -578,6 +583,20 @@ export function configured(options?: Options) {
                   .all()
                 for (const row of indexed) aggregates.add(row.aggregateID)
                 yield* db.delete(EventTable).where(inArray(EventTable.log_order, chunk)).run()
+                const facts = db
+                  .select({ id: SpecterEventTable.id })
+                  .from(SpecterEventTable)
+                  .where(inArray(SpecterEventTable.event_order, chunk))
+                const stored = yield* db
+                  .select({ hash: InstructionBlobFactTable.hash })
+                  .from(InstructionBlobFactTable)
+                  .where(inArray(InstructionBlobFactTable.event_id, facts))
+                  .all()
+                for (const row of stored) values.add(row.hash)
+                yield* db
+                  .delete(InstructionBlobFactTable)
+                  .where(inArray(InstructionBlobFactTable.event_id, facts))
+                  .run()
               }
               for (const aggregateID of aggregates) {
                 const left = yield* db
@@ -589,6 +608,22 @@ export function configured(options?: Options) {
                 if (left === undefined)
                   yield* db.delete(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).run()
               }
+              const hashes = [...values]
+              for (let start = 0; start < hashes.length; start += purgeChunk)
+                yield* db
+                  .delete(InstructionBlobTable)
+                  .where(
+                    and(
+                      inArray(InstructionBlobTable.hash, hashes.slice(start, start + purgeChunk)),
+                      notExists(
+                        db
+                          .select({ hash: InstructionBlobFactTable.hash })
+                          .from(InstructionBlobFactTable)
+                          .where(eq(InstructionBlobFactTable.hash, InstructionBlobTable.hash)),
+                      ),
+                    ),
+                  )
+                  .run()
             }),
         })
         // An append holds the locks of the aggregates it records for, so listeners see each aggregate's events

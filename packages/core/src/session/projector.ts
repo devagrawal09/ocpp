@@ -422,7 +422,9 @@ const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
-    yield* bus.project(SessionFact.InstructionBlobsStored, (event) => InstructionState.storeBlobs(db, event.data.blobs))
+    yield* bus.project(SessionFact.InstructionBlobsStored, (event) =>
+      InstructionState.storeBlobs(db, event.id, event.data.blobs),
+    )
     yield* bus.project(SessionFact.Imported, (event) =>
       Effect.gen(function* () {
         const data = event.data

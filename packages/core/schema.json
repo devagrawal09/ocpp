@@ -69,6 +69,10 @@
       "entityType": "tables"
     },
     {
+      "name": "instruction_blob_fact",
+      "entityType": "tables"
+    },
+    {
       "name": "instruction_blob",
       "entityType": "tables"
     },
@@ -1222,6 +1226,26 @@
     },
     {
       "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "event_id",
+      "entityType": "columns",
+      "table": "instruction_blob_fact"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "hash",
+      "entityType": "columns",
+      "table": "instruction_blob_fact"
+    },
+    {
+      "type": "text",
       "notNull": false,
       "autoincrement": false,
       "default": null,
@@ -2022,6 +2046,28 @@
       "table": "session_external"
     },
     {
+      "columns": ["event_id"],
+      "tableTo": "specter_events",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_instruction_blob_fact_event_id_specter_events_id_fk",
+      "entityType": "fks",
+      "table": "instruction_blob_fact"
+    },
+    {
+      "columns": ["hash"],
+      "tableTo": "instruction_blob",
+      "columnsTo": ["hash"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_instruction_blob_fact_hash_instruction_blob_hash_fk",
+      "entityType": "fks",
+      "table": "instruction_blob_fact"
+    },
+    {
       "columns": ["session_id"],
       "tableTo": "session_v2",
       "columnsTo": ["id"],
@@ -2121,6 +2167,13 @@
       "name": "codemode_reservation_pk",
       "entityType": "pks",
       "table": "codemode_reservation"
+    },
+    {
+      "columns": ["event_id", "hash"],
+      "nameExplicit": false,
+      "name": "instruction_blob_fact_pk",
+      "entityType": "pks",
+      "table": "instruction_blob_fact"
     },
     {
       "columns": ["session_id", "key"],
@@ -2336,6 +2389,20 @@
       "name": "job_background_job_idx",
       "entityType": "indexes",
       "table": "job_background"
+    },
+    {
+      "columns": [
+        {
+          "value": "hash",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "instruction_blob_fact_hash_idx",
+      "entityType": "indexes",
+      "table": "instruction_blob_fact"
     },
     {
       "columns": [

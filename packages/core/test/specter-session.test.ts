@@ -43,7 +43,7 @@ import { SessionPromptNode } from "@ocpp/core/session/prompt-node"
 import { SessionRunnerModel } from "@ocpp/core/session/runner/model"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionMessage } from "@ocpp/core/session/message"
-import { InstructionStateTable, SessionTable } from "@ocpp/core/session/sql"
+import { InstructionBlobTable, InstructionStateTable, SessionTable } from "@ocpp/core/session/sql"
 import { CodeModeCommandTable } from "@ocpp/core/codemode/command.sql"
 import { CodeModeBindingTable } from "@ocpp/core/codemode/sql"
 import { SessionStore } from "@ocpp/core/session/store"
@@ -81,9 +81,9 @@ const sharedLocation = makeGlobalNode({
   deps: [],
 })
 
-// The built-in instructions a test's Sessions read: none, unless a test gives them a context, whose value each
-// Session then stores by hash.
-const builtins: { context?: string } = {}
+// The built-in instructions a test's Sessions read: none, unless a test gives them values (`test/<name>`), each of which
+// a Session then stores by hash.
+const builtins: { context?: string; only?: string } = {}
 
 const pluginRuntime = PluginRuntime.makeCell()
 const app = (database?: LayerNode.Node<Database.Service, never, any>) =>
@@ -133,14 +133,16 @@ const app = (database?: LayerNode.Node<Database.Service, never, any>) =>
         Layer.mock(InstructionBuiltIns.Service, {
           load: () =>
             Effect.sync(() =>
-              builtins.context === undefined
-                ? Instructions.empty
-                : Instructions.make({
-                    key: Instructions.Key.make("test/context"),
+              Instructions.combine(
+                Object.entries(builtins).map(([name, value]) =>
+                  Instructions.make({
+                    key: Instructions.Key.make(`test/${name}`),
                     codec: Schema.toCodecJson(Schema.String),
-                    read: Effect.succeed(builtins.context),
+                    read: Effect.succeed(value),
                     render: { initial: String, changed: (_previous, current) => current },
                   }),
+                ),
+              ),
             ),
         }),
       ],
@@ -834,6 +836,27 @@ describe("Sessions on the Specter runtime", () => {
     () =>
       Effect.gen(function* () {
         const file = path.join((yield* tmpdirScoped()).path, "ocpp.sqlite")
+        // Both Sessions store the context's value; only the deleted one stores `only`'s.
+        const shared = "Every Session keeps this context"
+        const own = "Only the deleted Session reads this"
+        builtins.context = shared
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            delete builtins.context
+            delete builtins.only
+          }),
+        )
+        // The instruction values the database stores, which Sessions share by hash.
+        const values = Database.Service.use(({ db }) =>
+          db
+            .select({ value: InstructionBlobTable.value })
+            .from(InstructionBlobTable)
+            .all()
+            .pipe(
+              Effect.orDie,
+              Effect.map((rows) => rows.map((row) => row.value)),
+            ),
+        )
         const saved = Database.Service.use(({ db }) =>
           Effect.all({
             slices: db.all<{ readonly slice: string; readonly cursor: number; readonly state: string }>(
@@ -893,6 +916,7 @@ describe("Sessions on the Specter runtime", () => {
             const stays = yield* session.create({ location })
             yield* session.prompt({ sessionID: stays.id, text: "Stay" })
             yield* session.wait(stays.id)
+            builtins.only = own
             const goes = yield* session.create({ location })
             yield* session.prompt({ sessionID: goes.id, text: "Compute it" })
             yield* session.wait(goes.id).pipe(
@@ -904,6 +928,8 @@ describe("Sessions on the Specter runtime", () => {
               Effect.timeout("5 seconds"),
             )
             yield* session.wait(goes.id)
+            delete builtins.only
+            expect(yield* values).toEqual(expect.arrayContaining([shared, own]))
             // A user shell, recorded through its Commands as Session.shell records it.
             const bus = yield* Bus.Service
             yield* bus.command({
@@ -957,6 +983,10 @@ describe("Sessions on the Specter runtime", () => {
             expect(after.indexed).toEqual([])
             expect(after.sequences).toEqual([])
             expect(yield* held(stays.id)).toEqual(staying)
+            // The value only its facts stored went with them; the one the staying Session stores too stayed.
+            const kept = yield* values
+            expect(kept).toContain(shared)
+            expect(kept).not.toContain(own)
             // No read model holds anything of it.
             const projected = yield* projections
             expect(
@@ -964,7 +994,8 @@ describe("Sessions on the Specter runtime", () => {
             ).toEqual([])
             expect(projected.find(([table]) => table === "session_message")?.[1].length).toBeGreaterThan(0)
 
-            // The read models rebuild from the log alone as they are.
+            // The read models rebuild from the log alone as they are, the instruction values and the facts that store
+            // them included.
             yield* rebuildProjections
             expect(yield* projections).toEqual(projected)
 

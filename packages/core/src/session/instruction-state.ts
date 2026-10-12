@@ -8,7 +8,7 @@ import { CodeModeStore } from "../codemode/store.js"
 import { Instructions } from "../instructions/index.js"
 import { SessionEvent } from "./event.js"
 import { SessionSchema } from "./schema.js"
-import { InstructionBlobTable, InstructionStateTable } from "./sql.js"
+import { InstructionBlobFactTable, InstructionBlobTable, InstructionStateTable } from "./sql.js"
 
 type DatabaseService = Database.Interface["db"]
 
@@ -247,14 +247,21 @@ const find = Effect.fnUntraced(function* (db: DatabaseService, sessionID: Sessio
     .pipe(Effect.orDie)
 })
 
-/** Stores instruction values by hash: the projection of their facts. */
+/** Stores instruction values by hash, and that the fact stores each: the projection of their facts. */
 export const storeBlobs = Effect.fnUntraced(function* (
   db: DatabaseService,
+  eventID: string,
   blobs: Readonly<Record<string, Schema.Json>>,
 ) {
   const rows = Object.entries(blobs).map(([hash, value]) => ({ hash: Instructions.Hash.make(hash), value }))
   if (rows.length === 0) return
   yield* db.insert(InstructionBlobTable).values(rows).onConflictDoNothing().run().pipe(Effect.orDie)
+  yield* db
+    .insert(InstructionBlobFactTable)
+    .values(rows.map((row) => ({ event_id: eventID, hash: row.hash })))
+    .onConflictDoNothing()
+    .run()
+    .pipe(Effect.orDie)
 })
 
 /** The values that instruction values refer to, by hash: what a fork stores with the values it inherits. */

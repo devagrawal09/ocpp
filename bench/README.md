@@ -1,36 +1,37 @@
 # bench — paired-commit runner
 
-`paired.ts` runs one task manifest under two OC++ commits with the same model and reports per-task deltas plus reliability events. It drives the existing headless `run --format json` and adds no agent loop.
+`paired.ts` runs one manifest under two OC++ commits with one model through the existing headless `run --format json`.
 
 ## Run
 
 ```sh
-bun bench/paired.ts --a <shaA> --b <shaB> --model claude/sonnet --tasks bench/tasks.json \
-  --repeats 3 --out bench/out/<ts>/ [--only noedit,grounding] [--seed 1] [--pass-env CLAUDE_CODE_OAUTH_TOKEN]
-cd bench && bun test ./paired.test.ts   # model-free smoke test
+bun bench/paired.ts --a <rev> --b <rev> --model claude/sonnet --repeats 3 --out bench/out/<new-dir>/ \
+  [--only noedit,grounding] [--seed 1] [--pass-env CLAUDE_CODE_OAUTH_TOKEN] [--resume]
+cd bench && bun test ./paired.test.ts
 ```
 
-## Isolation
+## Enforced
 
-- Each arm gets a detached worktree (`out/wt-<sha>`) installed with `bun install --frozen-lockfile`. Your checkout is never touched.
-- Every arm/repeat gets fresh HOME, XDG_*, TMPDIR, task git repo, config (`experimental.subagent_depth`, no MCP/plugins) and its own `serve` on a distinct loopback port.
-- The child env holds only PATH plus the `--pass-env` names.
-- Before admission the runner refuses an occupied port, matches the health PID and argv to the arm's worktree, and checks that the DB is under the isolated data dir.
-- Blocks run serially; tasks interleave and AB/BA order is seeded.
-- `meta.json` records SHAs, versions, deadlines, and hashes of the manifest, grader, runner and fixtures, plus dirty state.
+- `--out` must be new or empty. `--resume` requires identical frozen inputs (SHAs, model, seed, manifest/grader/runner/fixture hashes), keeps completed runs and moves partial ones to `attempts/`.
+- Task IDs and fixtures are single path components without symlinks.
+- Arms run in a fresh detached worktree, installed with `--frozen-lockfile`. Worktrees must be clean, and the tree and lockfile hashes are archived.
+- Each arm/repeat gets fresh HOME, XDG_* and TMPDIR, a task repo and a `serve` on its own port, under a `/tmp` work root with no config ancestors.
+- Preflight refuses live ports, PID/argv mismatches, ancestor config, and any config other than the generated document. MCP servers, plugins and references must be empty.
+- Credentials go only to the server via the `--pass-env` allowlist. The client, git, grader and session shell get credential-free environments.
+- Every arm writes `envelope.json`, even on failure. Owned processes and descendants are killed before the next arm.
 
-## Archive and report
+## Report
 
-Each run keeps `envelope.json`, `stdout.jsonl`, `reply.txt`, `diff.patch`, `grade.json`, server logs, the isolated DB and `db.json` (bounded session_v2/session_message/codemode_execution rows, including descendants).
+Success requires a valid run, task pass and conduct pass. Hidden behavioural suites and pre-run hashes back the grader.
 
-`report.json`/`report.md` give per task: A/B success, paired B−A with a bootstrap 95% CI, wall/token/cost deltas, timeout/reliability/setup counts, cache strata and raw pairs. Timeouts, server death, missing delivery and agent errors count as failures. Setup errors are excluded from pairs.
+Each task row has pairs, bootstrap CIs (n≥2 only), wall/token/cost deltas over the whole session tree, and to/reliability/invalid/setup counts. Cost is labelled `sdk_estimate` or `unknown`, and unknown cost gives no delta.
 
 ## Limitations
 
-- Pass `CLAUDE_CODE_OAUTH_TOKEN` explicitly for `claude/*`. Its $ is an SDK estimate, and OpenAI $ is unknown.
-- Provider caches can't be reset.
-- The same model doesn't mean the same sampling, and agent clocks are real.
-- Source builds report `version: "local"`.
+- HOME isolation is not an OS sandbox.
+- Provider caches can't be reset; only first-request cache reads are reported.
+- The same model doesn't mean the same sampling.
+- `e2e-1`/`e2e-2` are single-repeat, read-only smoke runs.
 
 ## Blockers
 

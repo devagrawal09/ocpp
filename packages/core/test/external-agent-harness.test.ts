@@ -481,23 +481,30 @@ describe("vendor-driven sessions", () => {
     Effect.gen(function* () {
       const env = yield* setup(ref("claude", "sonnet"))
       const midTurn: string[] = []
+      const heard: string[] = []
+      const working = Promise.withResolvers<void>()
+      // `vendor` is shared: a run this test did not start (an earlier test's, left running when it timed out)
+      // records there too, so the test waits for and checks its own Session's vendor only.
       vendor.turn = async (options, message) => {
+        if (options.directory === env.directory.path) heard.push(message)
         if (message !== "Start") return say("Later: " + message)(options, message)
         await options.emit({ type: "step-start", id: "busy" })
         await options.emit({ type: "text", id: "t", delta: "Working" })
+        working.resolve()
         // Still inside the turn: only steers are delivered now.
         const steer = await options.next(options.signal)
         midTurn.push(steer === undefined ? "none" : plain(steer))
         await options.emit({ type: "step-end" })
       }
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
-      while (vendor.messages.length === 0) yield* Effect.promise(() => Bun.sleep(5))
+      // Steer once the turn runs: input admitted before the vendor took "Start" is delivered with it.
+      yield* Effect.promise(() => working.promise)
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Queued for later", delivery: "queue" })
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Steer now" })
       yield* env.sessions.wait(env.session.id)
       expect(midTurn).toEqual(["Steer now"])
-      expect(vendor.messages).toEqual(["Start", "Queued for later"])
-      expect(vendor.runs).toHaveLength(1)
+      expect(heard).toEqual(["Start", "Queued for later"])
+      expect(vendor.runs.filter((run) => run.directory === env.directory.path)).toHaveLength(1)
     }),
   )
 
@@ -535,10 +542,11 @@ describe("vendor-driven sessions", () => {
     Effect.gen(function* () {
       const env = yield* setup(ref("claude", "sonnet"))
       const aborted = { value: false }
+      const working = Promise.withResolvers<void>()
       vendor.turn = async (options) => {
         await options.emit({ type: "step-start", id: "long" })
         await options.emit({ type: "text", id: "t", delta: "Working" })
-        await new Promise<void>((_resolve, reject) =>
+        await new Promise<void>((_resolve, reject) => {
           options.signal.addEventListener(
             "abort",
             () => {
@@ -546,13 +554,12 @@ describe("vendor-driven sessions", () => {
               reject(new Error("aborted"))
             },
             { once: true },
-          ),
-        )
+          )
+          working.resolve()
+        })
       }
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Work for a long time" })
-      while (vendor.runs.length === 0) yield* Effect.promise(() => Bun.sleep(5))
-      while (vendor.messages.length === 0) yield* Effect.promise(() => Bun.sleep(5))
-      yield* Effect.promise(() => Bun.sleep(20))
+      yield* Effect.promise(() => working.promise)
       expect(yield* env.sessions.interrupt(env.session.id)).toBe(true)
       yield* env.sessions.wait(env.session.id)
       expect(aborted.value).toBe(true)
@@ -1155,15 +1162,17 @@ describe("vendor attachments", () => {
     Effect.gen(function* () {
       const env = yield* setup(ref("claude", "sonnet"))
       const midTurn: unknown[] = []
+      const working = Promise.withResolvers<void>()
       vendor.turn = async (options, message) => {
         if (message !== "Start") return say("Later")(options, message)
         await options.emit({ type: "step-start", id: "busy" })
+        working.resolve()
         const steer = await options.next(options.signal)
         if (steer !== undefined) midTurn.push(await wire("claude", steer, options.directory))
         await say("Both seen")(options, message)
       }
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
-      while (vendor.messages.length === 0) yield* Effect.promise(() => Bun.sleep(5))
+      yield* Effect.promise(() => working.promise)
       yield* env.sessions.prompt({ sessionID: env.session.id, text: "Also this one", files: [image] })
       yield* env.sessions.wait(env.session.id)
       expect(midTurn).toEqual([
@@ -1180,7 +1189,7 @@ describe("vendor attachments", () => {
           priority: "next",
         },
       ])
-      expect(vendor.runs).toHaveLength(1)
+      expect(vendor.runs.filter((run) => run.directory === env.directory.path)).toHaveLength(1)
     }),
   )
 

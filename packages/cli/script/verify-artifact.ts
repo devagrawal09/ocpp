@@ -34,6 +34,18 @@ export function verifySimulationGraph(inputs: Iterable<string>) {
   if (missing.length > 0) throw new Error(`Build graph is missing simulation bridge inputs: ${missing.join(", ")}`)
 }
 
+/** The bundle's effect modules all come from one copy of effect: OC++'s. */
+export function verifySingleEffect(inputs: Iterable<string>) {
+  const copies = new Set(
+    Array.from(inputs, (input) => {
+      const module = input.replaceAll("\\", "/")
+      return module.slice(0, module.lastIndexOf("/effect/dist/") + "/effect".length)
+    }),
+  )
+  if (copies.size !== 1)
+    throw new Error(`Build graph must load exactly one copy of effect, found ${copies.size}: ${[...copies].join(", ")}`)
+}
+
 async function artifactFiles(target: string): Promise<string[]> {
   if ((await stat(target)).isFile()) return [target]
   return (await collectFiles(target)).map((file) => path.join(target, file))

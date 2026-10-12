@@ -8,8 +8,9 @@ import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import type { BunPlugin } from "bun"
 import pkg from "../package.json"
 import { buildAppArchive } from "./app-assets"
-import { verifyArtifact, verifySimulationGraph } from "./verify-artifact"
+import { verifyArtifact, verifySimulationGraph, verifySingleEffect } from "./verify-artifact"
 import { resolveOpencodePty } from "./opencode-pty"
+import { singleEffect } from "../../runtime/src/single-effect"
 
 const dir = path.resolve(import.meta.dirname, "..")
 const binary = "ocpp"
@@ -28,6 +29,8 @@ const requestedTarget = process.argv.find((arg) => arg.startsWith("--target="))?
 const skipInstall = process.argv.includes("--skip-install")
 const skipWebUi = process.argv.includes("--skip-web-ui")
 const solidPlugin = createSolidTransformPlugin()
+// The linked Specter packages bring their own copy of effect; the binary must run OC++'s only.
+const singleEffectPlugin = singleEffect()
 const releaseAssets = new Map<string, Promise<Map<string, string>>>()
 
 const allTargets: {
@@ -98,6 +101,14 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
     },
   }
   const simulationInputs = new Set<string>()
+  // Listed after the single-Effect plugin, so it sees only the effect modules the bundle loads as source.
+  const effectInputs = new Set<string>()
+  const effectGraphPlugin: BunPlugin = {
+    name: "ocpp-effect-graph",
+    setup(build) {
+      build.onLoad({ filter: /[/\\]effect[/\\]dist[/\\].+\.js$/ }, (args) => void effectInputs.add(args.path))
+    },
+  }
   const simulationGraphPlugin: BunPlugin = {
     name: "ocpp-simulation-graph",
     setup(build) {
@@ -124,7 +135,15 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
   const result = await Bun.build({
     entrypoints: ["./src/index.ts"],
     tsconfig: "./tsconfig.json",
-    plugins: [appAssetsPlugin, solidPlugin, parcelWatcherPlugin, opencodePtyPlugin, simulationGraphPlugin],
+    plugins: [
+      appAssetsPlugin,
+      solidPlugin,
+      parcelWatcherPlugin,
+      opencodePtyPlugin,
+      simulationGraphPlugin,
+      ...(singleEffectPlugin ? [singleEffectPlugin] : []),
+      effectGraphPlugin,
+    ],
     external: ["node-gyp"],
     format: "esm",
     minify: true,
@@ -157,6 +176,7 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
     process.exit(1)
   }
   verifySimulationGraph(simulationInputs)
+  verifySingleEffect(effectInputs)
 
   await Bun.write(
     path.join(outdir, name, "package.json"),

@@ -1,4 +1,4 @@
-import { plugin } from "bun"
+import { plugin, type BunPlugin } from "bun"
 import fs from "fs"
 import path from "path"
 
@@ -6,18 +6,27 @@ import path from "path"
 const linked = ["@specter-ts/core", "@specter-ts/memory", "@specter-ts/reaction-outbox", "@specter-ts/jsonl"]
 
 /**
+ * Installs the plugin in this process. Run it before any Specter package is imported (a Bun preload).
+ */
+export function installSingleEffect() {
+  const single = singleEffect()
+  if (single) plugin(single)
+}
+
+/**
  * This package depends on Specter's packages through `link:`, so each resolves to a Specter checkout
  * that has its own `node_modules`, and their imports of `effect` load a second copy from there. Two
  * copies are two runtimes: symbols, Context keys and fibers stop matching across the boundary. This
  * plugin makes every `effect` module file loaded from such a copy re-export the same file from OC++'s
- * copy, so the process runs one Effect. Both copies must be the same version. Install it before any
- * Specter package is imported (a Bun preload).
+ * copy, so the process runs one Effect. Both copies must be the same version. A process installs it
+ * (`installSingleEffect`), and a bundle lists it among its build plugins, as the CLI's compiled binary
+ * does. It is undefined when there is no second copy.
  *
  * It exists only because of the links: once the Specter packages are installed from a registry or a
  * packed tarball, they resolve `effect` from OC++'s `node_modules`, and this plugin and the `effect`
  * `paths` in the tsconfigs can go.
  */
-export function installSingleEffect() {
+export function singleEffect(): BunPlugin | undefined {
   const host = effectRoot(import.meta.dir)
   const foreign = [
     ...new Set(
@@ -34,7 +43,7 @@ export function installSingleEffect() {
     if (version !== hostVersion)
       throw new Error(`The linked Specter packages' effect ${version} cannot share OC++'s effect ${hostVersion}`)
   })
-  plugin({
+  return {
     name: "ocpp-single-effect",
     setup(build) {
       foreign.forEach((root) => {
@@ -44,7 +53,7 @@ export function installSingleEffect() {
         }))
       })
     },
-  })
+  }
 }
 
 function effectRoot(from: string) {

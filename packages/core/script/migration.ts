@@ -81,19 +81,18 @@ async function check() {
       throw new Error("Database migration registry is stale. Run `bun script/migration.ts` from packages/core.")
     }
 
-    // A database the migrations build has the schema the tables declare, beside the tables Specter's stores
-    // prescribe, which the baseline creates from Specter's statements.
+    // The tables of the Specter stores the runtime keeps here are Specter's migrations, which OC++'s migrations apply:
+    // every one of each store they use, each once and in order, so a Specter release that adds one fails here until
+    // a migration applies it.
+    const specter = await specterMigrations()
+
+    // A database the migrations build has the schema the tables declare, beside the tables of those stores.
     await fs.mkdir(full)
     await drizzle(temporary, full, "schema")
     const declared = path.join(temporary, "declared.sqlite")
     const database = new Database(declared)
-    const { sqliteEventLogSchema, sqliteReactionOutboxSchema, sqliteSliceSnapshotSchema } = await import(
-      "@ocpp/runtime/sqlite"
-    )
     for (const statement of [
-      ...sqliteEventLogSchema,
-      ...sqliteSliceSnapshotSchema,
-      ...sqliteReactionOutboxSchema,
+      ...specter.flatMap((migration) => migration.statements),
       ...statements(await generatedSql(full)),
     ])
       database.run(statement)
@@ -111,6 +110,27 @@ async function check() {
   } finally {
     await fs.rm(temporary, { recursive: true, force: true })
   }
+}
+
+// Specter's migrations of the stores OC++'s migrations bring in, once each has been checked to be applied in full.
+async function specterMigrations() {
+  const { specterSqliteMigrations } = await import("@ocpp/runtime/sqlite")
+  const { migrations } = await import("../src/database/migration.gen.ts")
+  const applied = migrations.flatMap((migration) => migration.specter ?? [])
+  const stores = new Set(applied.map((migration) => migration.store))
+  const specter = specterSqliteMigrations.filter((migration) => stores.has(migration.store))
+  const versions = (list: typeof specter, store: string) =>
+    list.filter((migration) => migration.store === store).map((migration) => migration.version)
+  const differences = [...stores].flatMap((store) =>
+    versions(applied, store).join() === versions(specter, store).join()
+      ? []
+      : [`  ${store}: OC++ applies [${versions(applied, store)}], Specter has [${versions(specter, store)}]`],
+  )
+  if (differences.length > 0)
+    throw new Error(
+      `OC++'s migrations do not apply Specter's migrations of its stores, each once and in order:\n${differences.join("\n")}\nAdd a migration that applies the missing ones (\`specter\`).`,
+    )
+  return specter
 }
 
 async function drizzle(temporary: string, output: string, name?: string, hints?: string) {

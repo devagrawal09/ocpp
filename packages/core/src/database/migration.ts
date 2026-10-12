@@ -2,6 +2,7 @@ export * as DatabaseMigration from "./migration.js"
 
 import { sql } from "drizzle-orm"
 import { Effect, Semaphore } from "effect"
+import type { SqliteMigration } from "@ocpp/runtime/sqlite"
 import { supportsForeignKeyToggle } from "#sqlite"
 import type { EffectDrizzleSqlite } from "./drizzle.js"
 import { migrations } from "./migration.gen.js"
@@ -14,6 +15,11 @@ const lock = Semaphore.makeUnsafe(1)
 export type Migration = {
   id: string
   foreignKeys?: boolean
+  /**
+   * Specter's migrations of the stores whose tables the runtime keeps here, which this migration applies, in order,
+   * before `up`. Specter defines those tables; the `migration` row records them with the rest of this migration.
+   */
+  specter?: readonly SqliteMigration[]
   up: (tx: Transaction) => Effect.Effect<void, unknown, Global.Service>
 }
 
@@ -58,6 +64,8 @@ export function applyOnly(db: Database, input: Migration[]) {
       yield* Effect.logInfo("database migration started", { migration: migration.id })
       const apply = db.transaction((tx) =>
         Effect.gen(function* () {
+          for (const statement of (migration.specter ?? []).flatMap((specter) => specter.statements))
+            yield* tx.run(statement)
           yield* migration.up(tx)
           yield* tx.run(
             sql`INSERT INTO ${sql.identifier("migration")} (id, time_completed) VALUES (${migration.id}, ${Date.now()})`,

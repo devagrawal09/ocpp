@@ -1,15 +1,21 @@
 import { Effect } from "effect"
-import { sqliteEventLogSchema, sqliteReactionOutboxSchema, sqliteSliceSnapshotSchema } from "@ocpp/runtime/sqlite"
+import {
+  sqliteEventLogMigrations,
+  sqliteReactionOutboxMigrations,
+  sqliteSliceSnapshotMigrations,
+} from "@ocpp/runtime/sqlite"
 import type { DatabaseMigration } from "../migration.js"
 
 const migration: DatabaseMigration.Migration = {
   id: "20261010175350_baseline",
+  // The runtime's Event Log, Slice snapshots and outboxes are Specter's SQLite stores, whose tables Specter defines:
+  // the baseline brings each to its version 1, before OC++'s tables, as drizzle-kit generates them (`event` indexes
+  // Specter's log). A later version of one is a later migration's.
+  specter: [...sqliteEventLogMigrations, ...sqliteSliceSnapshotMigrations, ...sqliteReactionOutboxMigrations].filter(
+    (specter) => specter.version === 1,
+  ),
   up(tx) {
     return Effect.gen(function* () {
-      // The runtime's Event Log, Slice snapshots and outboxes are Specter's SQLite stores, whose tables Specter
-      // prescribes. OC++'s tables follow, as drizzle-kit generates them; `event` indexes Specter's log.
-      for (const statement of [...sqliteEventLogSchema, ...sqliteSliceSnapshotSchema, ...sqliteReactionOutboxSchema])
-        yield* tx.run(statement)
       yield* tx.run(`
         CREATE TABLE \`codemode_command\` (
           \`session_id\` text NOT NULL,

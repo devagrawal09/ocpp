@@ -1,0 +1,1 @@
+{ "name": "pattern-repo", "type": "module", "scripts": { "test": "bun test" } }

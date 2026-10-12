@@ -1,0 +1,1 @@
+{ "name": "shrink-repo", "type": "module", "scripts": { "test": "bun test" } }

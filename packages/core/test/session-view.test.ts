@@ -139,13 +139,14 @@ describe("Session.view", () => {
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(stale.time.idle) + 1 })
       expect((yield* session.get(created.id)).time.viewed).toEqual(observed)
 
-      // A duplicate stale watermark never regresses a newer acknowledgement.
+      // A duplicate stale watermark never regresses a newer acknowledgement: the runtime refuses it.
       yield* session.view({ sessionID: created.id, idle: DateTime.toEpochMillis(stale.time.idle) })
       const acked = yield* session.get(created.id)
       expect(acked.time.viewed).toEqual(acked.time.idle)
-      yield* bus
+      const refused = yield* bus
         .command({ type: "viewSession", payload: { sessionID: created.id, idle: DateTime.toEpochMillis(observed) } })
-        .pipe(Effect.orDie)
+        .pipe(Effect.flip)
+      expect(refused.rejection.code).toBe("already-viewed")
       expect((yield* session.get(created.id)).time.viewed).toEqual(acked.time.viewed)
     }),
   )

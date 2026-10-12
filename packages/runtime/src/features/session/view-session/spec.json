@@ -1,17 +1,17 @@
 {
   "$schema": "https://specter.dev/specification/v2/slice.schema.json",
-  "description": "Records that a viewer saw a live Session as of an idle time. Whether that time is newer than what was viewed is the host's to decide from its projection: the idle watermark is the time its execution settled, which only the host's events carry.",
+  "description": "Records that a viewer saw a live Session as of an idle time: the time its execution last settled, which the Session's facts carry. A viewer cannot have seen an idle time the Session has not reached, and one it saw already is not recorded again.",
   "formatVersion": 2,
   "kind": "command",
   "name": "viewSession",
   "scenarios": [
     {
-      "description": "A viewer saw the Session as of an idle time.",
+      "description": "A viewer saw the Session as of the time its execution settled.",
       "expect": [
         {
           "eventType": "session-viewed",
           "examplePayload": {
-            "idle": 1700000000000,
+            "idle": 2000,
             "sessionID": "ses_1"
           },
           "kind": "scenario-event"
@@ -30,10 +30,369 @@
             "version": "2"
           },
           "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
         }
       ],
       "when": {
-        "idle": 1700000000000,
+        "idle": 2000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A view of an earlier idle time is recorded: the later one stays unread.",
+      "expect": [
+        {
+          "eventType": "session-viewed",
+          "examplePayload": {
+            "idle": 2000,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "idle": 2000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A Session whose execution never settled has no idle time to view.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "idle-not-reached"
+      },
+      "when": {
+        "idle": 1000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A viewer cannot have seen an idle time the Session has not reached.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "idle-not-reached"
+      },
+      "when": {
+        "idle": 3000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An idle time viewed already is not viewed again.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-viewed",
+          "examplePayload": {
+            "idle": 2000,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "already-viewed"
+      },
+      "when": {
+        "idle": 2000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A newer idle time is viewed after an older one.",
+      "expect": [
+        {
+          "eventType": "session-viewed",
+          "examplePayload": {
+            "idle": 4000,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-viewed",
+          "examplePayload": {
+            "idle": 2000,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "idle": 4000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "A shutdown leaves the Session idle as it was.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "succeeded",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-execution-settled",
+          "examplePayload": {
+            "outcome": "interrupted",
+            "reason": "shutdown",
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "idle-not-reached"
+      },
+      "when": {
+        "idle": 3000,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An imported Session is idle and viewed as its export says.",
+      "expect": [
+        {
+          "eventType": "session-viewed",
+          "examplePayload": {
+            "idle": 1200,
+            "sessionID": "ses_1"
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-imported",
+          "examplePayload": {
+            "cost": 0,
+            "messages": [],
+            "sessionID": "ses_1",
+            "time": {
+              "created": 1,
+              "idle": 1200,
+              "updated": 2,
+              "viewed": 1100
+            },
+            "tokens": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "when": {
+        "idle": 1200,
+        "sessionID": "ses_1"
+      }
+    },
+    {
+      "description": "An imported Session's view stands.",
+      "expect": [],
+      "given": [
+        {
+          "eventType": "session-created",
+          "examplePayload": {
+            "location": {
+              "directory": "/tmp/ws"
+            },
+            "projectID": "prj_1",
+            "sessionID": "ses_1",
+            "slug": "brave-otter",
+            "version": "2"
+          },
+          "kind": "scenario-event"
+        },
+        {
+          "eventType": "session-imported",
+          "examplePayload": {
+            "cost": 0,
+            "messages": [],
+            "sessionID": "ses_1",
+            "time": {
+              "created": 1,
+              "idle": 1200,
+              "updated": 2,
+              "viewed": 1100
+            },
+            "tokens": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 0,
+              "output": 0,
+              "reasoning": 0
+            }
+          },
+          "kind": "scenario-event"
+        }
+      ],
+      "reject": {
+        "code": "already-viewed"
+      },
+      "when": {
+        "idle": 1100,
         "sessionID": "ses_1"
       }
     },
@@ -45,7 +404,7 @@
         "code": "session-not-found"
       },
       "when": {
-        "idle": 1700000000000,
+        "idle": 1000,
         "sessionID": "ses_1"
       }
     },
@@ -78,7 +437,7 @@
         "code": "session-deleted"
       },
       "when": {
-        "idle": 1700000000000,
+        "idle": 1000,
         "sessionID": "ses_1"
       }
     }

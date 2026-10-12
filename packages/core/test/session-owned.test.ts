@@ -35,7 +35,6 @@ import { toLLMMessages } from "../src/session/runner/to-llm-message.js"
 import { CodeModeLimits } from "../src/codemode/limits.js"
 import { SessionSchema } from "../src/session/schema.js"
 import { Session } from "../src/session/session.js"
-import { SessionTable } from "../src/session/sql.js"
 import { SessionStore } from "../src/session/store.js"
 import { Shell } from "../src/shell.js"
 import { Skill } from "../src/skill.js"
@@ -180,12 +179,8 @@ describe("Session-owned handles", () => {
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
         outcome: "succeeded",
       })
-      yield* fixture.db
-        .update(SessionTable)
-        .set({ time_idle: 0 })
-        .where(eq(SessionTable.id, sessionID))
-        .run()
-        .pipe(Effect.orDie)
+      yield* TestHistory.of(fixture.bus).publish(SessionEvent.Execution.Settled, { sessionID, outcome: "succeeded" })
+      const idle = yield* Effect.fromNullishOr((yield* handle.get()).time.idle).pipe(Effect.orDie)
       const { rename, switchAgent, switchModel, view, message, updateMessage } = handle
 
       yield* Effect.gen(function* () {
@@ -193,8 +188,8 @@ describe("Session-owned handles", () => {
         yield* switchAgent({ agent: Agent.ID.make("review") })
         yield* switchModel({ model })
         yield* switchModel({ model })
-        yield* view({ idle: 0 })
-        yield* view({ idle: 0 })
+        yield* view({ idle: DateTime.toEpochMillis(idle) })
+        yield* view({ idle: DateTime.toEpochMillis(idle) })
         const content = [SessionMessage.AssistantText.make({ type: "text", text: "Edited" })]
         expect((yield* updateMessage({ messageID, content })).content).toEqual(content)
         expect(yield* message(messageID)).toMatchObject({ type: "assistant", content })
@@ -202,7 +197,7 @@ describe("Session-owned handles", () => {
 
       const session = yield* handle.get()
       expect(session).toMatchObject({ title: "Renamed", agent: "review", model })
-      expect(session.time.viewed && DateTime.toEpochMillis(session.time.viewed)).toBe(0)
+      expect(session.time.viewed).toEqual(idle)
       expect(yield* fixture.sessions.forSession(otherID).message(messageID)).toBeUndefined()
       expect((yield* fixture.sessions.forSession(otherID).get()).title).toBe("Owned session")
       expect(fixture.locations).toEqual([])

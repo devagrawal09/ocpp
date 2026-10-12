@@ -1,6 +1,6 @@
 export * as Session from "./session.js"
 
-import { DateTime, Effect, Fiber, Layer, Schema, Scope } from "effect"
+import { Effect, Fiber, Layer, Schema, Scope } from "effect"
 import type { Agent } from "@ocpp/schema/agent"
 import type { Model } from "@ocpp/schema/model"
 import type { FileAttachment } from "@ocpp/schema/prompt"
@@ -111,17 +111,13 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     if (updated?.type !== "assistant") return yield* new MessageNotFoundError(ref)
     return updated
   })
+  // The runtime decides a view from the Session's facts: an idle time the Session has not reached, or one viewed
+  // already, records nothing.
   const view = Effect.fn("Session.view")(function* (sessionID: SessionSchema.ID, input: { idle: number }) {
-    const session = yield* get(sessionID)
-    if (
-      session.time.idle === undefined ||
-      input.idle > DateTime.toEpochMillis(session.time.idle) ||
-      (session.time.viewed !== undefined && DateTime.toEpochMillis(session.time.viewed) >= input.idle)
+    yield* bus.command({ type: "viewSession", payload: { sessionID, idle: input.idle } }).pipe(
+      Effect.catchIf(SpecterRejection.is("idle-not-reached", "already-viewed"), () => Effect.void),
+      Effect.catch((error) => missing(sessionID, error)),
     )
-      return
-    yield* bus
-      .command({ type: "viewSession", payload: { sessionID, idle: input.idle } })
-      .pipe(Effect.catch((error) => missing(sessionID, error)))
   })
   const rename = Effect.fn("Session.rename")(function* (sessionID: SessionSchema.ID, input: { title: string }) {
     yield* bus

@@ -4,6 +4,9 @@
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "noUncheckedIndexedAccess": false,
+    // specter-spec export declares each spec.json's literal types beside it (spec.d.json.ts), so a Command's
+    // rejection codes are a type.
+    "allowArbitraryExtensions": true,
     // The linked Specter packages declare their types against the Specter checkout's copy of effect. Map
     // effect to OC++'s declarations so both sides name the same types; src/single-effect.ts does the same
     // at runtime. Both go away once Specter is installed from a registry or a packed tarball.

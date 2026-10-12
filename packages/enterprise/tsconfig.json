@@ -11,6 +11,8 @@
     "allowJs": true,
     "noEmit": true,
     "strict": true,
+    // @ocpp/runtime's spec.json imports are typed by the spec.d.json.ts beside each.
+    "allowArbitraryExtensions": true,
     "types": ["@cloudflare/workers-types", "vite/client", "bun"],
     "isolatedModules": true,
     "paths": {

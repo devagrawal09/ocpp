@@ -4,6 +4,8 @@
   "compilerOptions": {
     "incremental": true,
     "noUncheckedIndexedAccess": false,
+    // @ocpp/runtime's spec.json imports are typed by the spec.d.json.ts beside each.
+    "allowArbitraryExtensions": true,
     // @ocpp/runtime links Specter's packages, whose declarations name the Specter checkout's copy
     // of effect. Map effect to OC++'s declarations so both sides name the same types. Bun ignores .d.ts
     // targets at runtime; the runtime side is unified by @ocpp/runtime's src/single-effect.ts. Both go

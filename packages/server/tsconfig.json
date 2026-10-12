@@ -4,6 +4,8 @@
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "noUncheckedIndexedAccess": false,
+    // @ocpp/runtime's spec.json imports are typed by the spec.d.json.ts beside each.
+    "allowArbitraryExtensions": true,
     // Core's declarations import @ocpp/runtime, whose sources reach the Specter packages it links;
     // they bring the Specter checkout's copy of effect: types resolve to OC++'s one copy, as core's own
     // tsconfig maps them.

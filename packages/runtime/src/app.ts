@@ -6,7 +6,7 @@ import {
   type ReactionOutboxStore,
   withReactionOutbox,
 } from "@specter-ts/reaction-outbox"
-import type { SliceStoreService, SliceStoreTag } from "@specter-ts/core"
+import type { SliceStoreService, SliceStoreTag, SpecterRejectionCode } from "@specter-ts/core"
 import { Effect, Layer } from "effect"
 
 import { sessionEventDefinitions } from "./events.ts"
@@ -479,6 +479,11 @@ export const createRuntimeConfig = (options: {
       ),
     },
   }) as const
+
+// Every code a runtime Command rejects with: the codes its rejected Scenarios name, as `specter-spec export` declares
+// them beside each spec.json. A Command may reject only with one of them (Specter fails any other), so this is
+// exactly the set a host can receive, and the host matches on it, never on a message.
+export type RejectionCode = SpecterRejectionCode<ReturnType<typeof createRuntimeConfig>>
 
 // Used by the per-Slice scenario tests, which never run Plugins; the
 // integration test builds its own config around an outbox store it inspects.

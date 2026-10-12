@@ -6,6 +6,8 @@
     "jsxImportSource": "@opentui/solid",
     "lib": ["ESNext", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
     "noUncheckedIndexedAccess": false,
+    // @ocpp/runtime's spec.json imports are typed by the spec.d.json.ts beside each.
+    "allowArbitraryExtensions": true,
     // Core's sources reach the Specter packages @ocpp/runtime links, which bring the Specter
     // checkout's copy of effect: types resolve to OC++'s one copy, as core's own tsconfig maps them.
     "paths": {

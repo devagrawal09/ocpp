@@ -96,13 +96,14 @@ describe("readLocalImage", () => {
     expect(requests).toHaveLength(0)
   })
 
-  test.each([400, 401])("propagates declared API errors (%s)", async (status) => {
+  test.each([400])("propagates declared API errors (%s)", async (status) => {
     const error = { _tag: "RequestError", message: "Cannot read image" }
     const { api } = setup(() => Response.json(error, { status }))
     await expect(readLocalImage(api, "/repo", "image.png", new AbortController().signal)).rejects.toEqual(error)
   })
 
-  test.each([404, 500])("does not turn an unexpected HTTP status (%s) into a Blob", async (status) => {
+  // The server no longer authenticates requests, so file.read declares no 401: it is an unexpected status.
+  test.each([401, 404, 500])("does not turn an unexpected HTTP status (%s) into a Blob", async (status) => {
     const { api } = setup(() => new Response("Not an image", { status }))
     await expect(readLocalImage(api, "/repo", "image.png", new AbortController().signal)).rejects.toMatchObject({
       reason: "UnexpectedStatus",

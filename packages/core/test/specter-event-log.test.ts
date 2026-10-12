@@ -1,10 +1,11 @@
 import { describe, expect } from "bun:test"
 import { Cause, Effect, Exit } from "effect"
 import { EventLogFailure, SpecterVersionConflictError } from "@ocpp/runtime"
-import { eventLogConformance } from "@ocpp/runtime/testing"
+import { createSqliteEventLogService, createSqliteSliceSnapshotStore } from "@ocpp/runtime/sqlite"
+import { eventLogConformance, sliceSnapshotStoreConformance } from "@ocpp/runtime/testing"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
-import { SpecterEventLog } from "@ocpp/core/specter/event-log"
+import { SpecterDatabase } from "@ocpp/core/specter/database"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { testEffect } from "./lib/effect"
 
@@ -14,10 +15,7 @@ const it = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node]), [])
 const makeLog = Effect.gen(function* () {
   const database = yield* Database.Service
   let next = 0
-  return SpecterEventLog.make(database.db, {
-    id: () => `evt_${++next}`,
-    appended: () => Effect.succeed(Effect.void),
-  })
+  return createSqliteEventLogService(SpecterDatabase.make(database.db), { eventId: () => `evt_${++next}` })
 })
 
 const stale = (exit: Exit.Exit<unknown, EventLogFailure>) =>
@@ -29,8 +27,8 @@ const stale = (exit: Exit.Exit<unknown, EventLogFailure>) =>
       reason.error.cause instanceof SpecterVersionConflictError,
   )
 
-describe("Specter Event Log", () => {
-  it.effect("conforms to Specter's Event Log contract: stored keys, the scoped check and keyed reads", () =>
+describe("Specter Event Log on OC++'s database", () => {
+  it.effect("conforms to Specter's Event Log contract: stored keys, the scoped check, keyed and paged reads", () =>
     Effect.gen(function* () {
       const log = yield* makeLog
       yield* eventLogConformance(Effect.succeed(log))
@@ -91,6 +89,15 @@ describe("Specter Event Log", () => {
         expectedUnchanged: { afterOrder: 0, eventTypes: ["kv-stored"] },
       })
       expect(again).toMatchObject({ duplicate: true, version: first.version })
+    }),
+  )
+
+  it.effect("keeps Slice snapshots by Slice and version, as Specter's snapshot store contract says", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      yield* sliceSnapshotStoreConformance(
+        Effect.succeed(createSqliteSliceSnapshotStore(SpecterDatabase.make(database.db))),
+      )
     }),
   )
 })

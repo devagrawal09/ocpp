@@ -46,7 +46,7 @@ import { tempGlobalLayer } from "./fixture/global"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 import { TestStepHost } from "./fixture/step-host"
-import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/tables"
 import { TestHistory } from "./fixture/history"
 import {
   activateCodeMode,
@@ -586,9 +586,9 @@ const restart = Effect.gen(function* () {
 /** The Specter log's latest position, from which `woken` reads. */
 const position = Database.Service.use(({ db }) =>
   db
-    .select({ order: SpecterEventTable.order })
+    .select({ order: SpecterEventTable.event_order })
     .from(SpecterEventTable)
-    .orderBy(desc(SpecterEventTable.order))
+    .orderBy(desc(SpecterEventTable.event_order))
     .limit(1)
     .get()
     .pipe(
@@ -605,11 +605,11 @@ const woken = (since: number) =>
       .from(SpecterEventTable)
       .where(
         and(
-          gt(SpecterEventTable.order, since),
+          gt(SpecterEventTable.event_order, since),
           inArray(SpecterEventTable.type, ["session-inbox-enqueued", "session-inbox-held"]),
         ),
       )
-      .orderBy(asc(SpecterEventTable.order))
+      .orderBy(asc(SpecterEventTable.event_order))
       .all()
       .pipe(
         Effect.orDie,

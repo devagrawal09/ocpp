@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core"
-import { SpecterEventTable } from "../specter/sql.js"
+import { SpecterEventTable } from "../specter/tables.js"
 
 /** Each aggregate's latest sequence, which its next event follows. */
 export const EventSequenceTable = sqliteTable("event_sequence", {
@@ -16,7 +16,7 @@ export const EventTable = sqliteTable(
   {
     log_order: integer()
       .primaryKey()
-      .references(() => SpecterEventTable.order),
+      .references(() => SpecterEventTable.event_order),
     aggregate_id: text()
       .notNull()
       .references(() => EventSequenceTable.aggregate_id, { onDelete: "cascade" }),

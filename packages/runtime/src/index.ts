@@ -31,7 +31,9 @@ export {
 } from "@specter-ts/reaction-outbox"
 
 export type { DriveExecutionOutboxStore, ProvideSliceStore, RunStepOutboxStore } from "./app.ts"
-export { makeSnapshotSliceStores, type SliceSnapshot } from "./snapshots.ts"
+// Slice Stores that start from the host's saved snapshots and save theirs back.
+export { createSnapshotSliceStores, persistSliceSnapshots, type SnapshotSliceStores } from "@specter-ts/memory"
+export type { SliceSnapshot, SliceSnapshotStore } from "@specter-ts/core"
 export { makeRuntime, type Runtime } from "./runtime.ts"
 export { sessionEvent, sessionEventDefinitions } from "./events.ts"
 export {

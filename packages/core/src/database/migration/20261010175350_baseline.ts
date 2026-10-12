@@ -1,10 +1,15 @@
 import { Effect } from "effect"
+import { sqliteEventLogSchema, sqliteReactionOutboxSchema, sqliteSliceSnapshotSchema } from "@ocpp/runtime/sqlite"
 import type { DatabaseMigration } from "../migration.js"
 
 const migration: DatabaseMigration.Migration = {
   id: "20261010175350_baseline",
   up(tx) {
     return Effect.gen(function* () {
+      // The runtime's Event Log, Slice snapshots and outboxes are Specter's SQLite stores, whose tables Specter
+      // prescribes. OC++'s tables follow, as drizzle-kit generates them; `event` indexes Specter's log.
+      for (const statement of [...sqliteEventLogSchema, ...sqliteSliceSnapshotSchema, ...sqliteReactionOutboxSchema])
+        yield* tx.run(statement)
       yield* tx.run(`
         CREATE TABLE \`codemode_command\` (
           \`session_id\` text NOT NULL,
@@ -144,7 +149,7 @@ const migration: DatabaseMigration.Migration = {
           \`log_order\` integer PRIMARY KEY,
           \`aggregate_id\` text NOT NULL,
           \`seq\` integer NOT NULL,
-          CONSTRAINT \`fk_event_log_order_specter_event_order_fk\` FOREIGN KEY (\`log_order\`) REFERENCES \`specter_event\`(\`order\`),
+          CONSTRAINT \`fk_event_log_order_specter_events_event_order_fk\` FOREIGN KEY (\`log_order\`) REFERENCES \`specter_events\`(\`event_order\`),
           CONSTRAINT \`fk_event_aggregate_id_event_sequence_aggregate_id_fk\` FOREIGN KEY (\`aggregate_id\`) REFERENCES \`event_sequence\`(\`aggregate_id\`) ON DELETE CASCADE
         );
       `)
@@ -287,58 +292,6 @@ const migration: DatabaseMigration.Migration = {
         );
       `)
       yield* tx.run(`
-        CREATE TABLE \`specter_commit\` (
-          \`version\` integer PRIMARY KEY,
-          \`idempotency_key\` text UNIQUE,
-          \`fingerprint\` text,
-          \`first_order\` integer NOT NULL,
-          \`committed_at\` text NOT NULL
-        );
-      `)
-      yield* tx.run(`
-        CREATE TABLE \`specter_event\` (
-          \`order\` integer PRIMARY KEY AUTOINCREMENT,
-          \`id\` text NOT NULL UNIQUE,
-          \`type\` text NOT NULL,
-          \`payload\` text NOT NULL,
-          \`recorded_at\` text NOT NULL
-        );
-      `)
-      yield* tx.run(`
-        CREATE TABLE \`specter_event_key\` (
-          \`order\` integer NOT NULL,
-          \`name\` text NOT NULL,
-          \`value\` text NOT NULL,
-          CONSTRAINT \`specter_event_key_pk\` PRIMARY KEY(\`order\`, \`name\`),
-          CONSTRAINT \`fk_specter_event_key_order_specter_event_order_fk\` FOREIGN KEY (\`order\`) REFERENCES \`specter_event\`(\`order\`)
-        );
-      `)
-      yield* tx.run(`
-        CREATE TABLE \`specter_outbox_job\` (
-          \`id\` text PRIMARY KEY,
-          \`reaction\` text NOT NULL,
-          \`idempotency_key\` text NOT NULL,
-          \`concurrency_key\` text,
-          \`payload\` text NOT NULL,
-          \`status\` text NOT NULL,
-          \`requested_at\` integer NOT NULL,
-          \`available_at\` integer NOT NULL,
-          \`attempt_count\` integer NOT NULL,
-          \`active_attempt_id\` text,
-          \`lease_expires_at\` integer,
-          \`completed_at\` integer,
-          \`last_error\` text
-        );
-      `)
-      yield* tx.run(`
-        CREATE TABLE \`specter_slice_snapshot\` (
-          \`slice\` text PRIMARY KEY,
-          \`state\` text NOT NULL,
-          \`cursor\` integer NOT NULL,
-          \`saved_at\` integer NOT NULL
-        );
-      `)
-      yield* tx.run(`
         CREATE TABLE \`workspace\` (
           \`id\` text PRIMARY KEY,
           \`provider\` text NOT NULL,
@@ -387,16 +340,6 @@ const migration: DatabaseMigration.Migration = {
       yield* tx.run(`CREATE INDEX \`session_v2_project_idx\` ON \`session_v2\` (\`project_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_v2_workspace_idx\` ON \`session_v2\` (\`workspace_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_v2_parent_idx\` ON \`session_v2\` (\`parent_id\`);`)
-      yield* tx.run(
-        `CREATE INDEX \`specter_event_key_name_value_order_idx\` ON \`specter_event_key\` (\`name\`,\`value\`,\`order\`);`,
-      )
-      yield* tx.run(`CREATE INDEX \`specter_event_type_order_idx\` ON \`specter_event\` (\`type\`,\`order\`);`)
-      yield* tx.run(
-        `CREATE UNIQUE INDEX \`specter_outbox_job_key_idx\` ON \`specter_outbox_job\` (\`reaction\`,\`idempotency_key\`);`,
-      )
-      yield* tx.run(
-        `CREATE INDEX \`specter_outbox_job_claim_idx\` ON \`specter_outbox_job\` (\`reaction\`,\`status\`,\`available_at\`);`,
-      )
     })
   },
 }

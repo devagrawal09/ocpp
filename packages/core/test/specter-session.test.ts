@@ -597,10 +597,10 @@ describe("Sessions on the Specter runtime", () => {
       const saved = Database.Service.use(({ db }) =>
         Effect.all({
           slices: db.all<{ readonly slice: string; readonly cursor: number; readonly state: string }>(
-            sql`SELECT slice, cursor, state FROM specter_slice_snapshot ORDER BY slice`,
+            sql`SELECT slice_name AS slice, cursor, state_json AS state FROM specter_slice_snapshots ORDER BY slice_name`,
           ),
-          jobs: db.all<{ readonly status: string }>(sql`SELECT status FROM specter_outbox_job`),
-          facts: db.get<{ readonly count: number }>(sql`SELECT count(*) AS count FROM specter_event`),
+          jobs: db.all<{ readonly status: string }>(sql`SELECT status FROM specter_reaction_outbox`),
+          facts: db.get<{ readonly count: number }>(sql`SELECT count(*) AS count FROM specter_events`),
         }).pipe(Effect.orDie),
       )
       yield* boot(
@@ -622,8 +622,8 @@ describe("Sessions on the Specter runtime", () => {
         file,
         Database.Service.use(({ db }) =>
           Effect.all([
-            db.run(sql`DELETE FROM specter_slice_snapshot`),
-            db.run(sql`DELETE FROM specter_outbox_job`),
+            db.run(sql`DELETE FROM specter_slice_snapshots`),
+            db.run(sql`DELETE FROM specter_reaction_outbox`),
           ]).pipe(Effect.orDie),
         ),
       )

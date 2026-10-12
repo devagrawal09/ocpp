@@ -81,12 +81,22 @@ async function check() {
       throw new Error("Database migration registry is stale. Run `bun script/migration.ts` from packages/core.")
     }
 
-    // A database the migrations build has the schema the tables declare.
+    // A database the migrations build has the schema the tables declare, beside the tables Specter's stores
+    // prescribe, which the baseline creates from Specter's statements.
     await fs.mkdir(full)
     await drizzle(temporary, full, "schema")
     const declared = path.join(temporary, "declared.sqlite")
     const database = new Database(declared)
-    for (const statement of statements(await generatedSql(full))) database.run(statement)
+    const { sqliteEventLogSchema, sqliteReactionOutboxSchema, sqliteSliceSnapshotSchema } = await import(
+      "@ocpp/runtime/sqlite"
+    )
+    for (const statement of [
+      ...sqliteEventLogSchema,
+      ...sqliteSliceSnapshotSchema,
+      ...sqliteReactionOutboxSchema,
+      ...statements(await generatedSql(full)),
+    ])
+      database.run(statement)
     database.close()
     const migrated = path.join(temporary, "migrated.sqlite")
     await migrate(migrated, temporary)

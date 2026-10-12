@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { Effect } from "effect"
 import { KV } from "@ocpp/core/kv"
 import { Database } from "@ocpp/core/database/database"
-import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/tables"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { asc, like } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
@@ -40,7 +40,7 @@ describe("KV", () => {
         .select({ type: SpecterEventTable.type, payload: SpecterEventTable.payload })
         .from(SpecterEventTable)
         .where(like(SpecterEventTable.type, "kv-%"))
-        .orderBy(asc(SpecterEventTable.order))
+        .orderBy(asc(SpecterEventTable.event_order))
         .all()
         .pipe(Effect.orDie)
       expect(facts).toEqual([

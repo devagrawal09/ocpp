@@ -9,7 +9,11 @@ import {
   ReactionScheduler,
   type ReactionSchedulerService,
 } from "@specter-ts/core"
-import { createImmediateReactionSchedulerService, createMemoryEventLog } from "@specter-ts/memory"
+import {
+  createImmediateReactionSchedulerService,
+  createMemoryEventLog,
+  createSnapshotSliceStores,
+} from "@specter-ts/memory"
 import { createMemoryReactionOutboxStore, type OutboxedReaction } from "@specter-ts/reaction-outbox"
 import { Effect, Layer } from "effect"
 import { afterEach, describe, expect, it } from "bun:test"
@@ -20,7 +24,6 @@ import {
   memorySliceStoreLayer,
   type ProvideSliceStore,
 } from "../src/app.ts"
-import { makeSnapshotSliceStores } from "../src/snapshots.ts"
 import { sessionEvent } from "../src/events.ts"
 import type { RunStepRequest } from "../src/features/session/run-step-reaction/impl.ts"
 import { StepHost } from "../src/plugins/step-host.ts"
@@ -572,17 +575,17 @@ describe("step loop with a scripted host", () => {
     })
 
     it("starts every Slice from its snapshot instead of the log", async () => {
-      const stores = makeSnapshotSliceStores([])
-      const { first } = await firstBoot(stores.provide)
+      const stores = createSnapshotSliceStores()
+      const { first } = await firstBoot(stores.layer)
       const snapshots = stores.snapshot()
       const status = snapshots.find((one) => one.slice === "sessionStatus")
       expect(status?.cursor).toBe(first.log.inspect().length)
 
-      const restored = makeSnapshotSliceStores(snapshots)
+      const restored = createSnapshotSliceStores(snapshots)
       const second = await start({
         log: first.log,
         outbox: first.outbox,
-        slices: restored.provide,
+        slices: restored.layer,
       })
       expect(
         await second.app.query({

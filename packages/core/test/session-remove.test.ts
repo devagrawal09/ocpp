@@ -11,7 +11,7 @@ import { Project } from "@ocpp/core/project"
 import { AbsolutePath } from "@ocpp/core/schema"
 import { Session } from "@ocpp/core/session"
 import { EventTable } from "@ocpp/core/event/sql"
-import { SpecterCommitTable, SpecterEventTable } from "@ocpp/core/specter/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/tables"
 import { Recorded } from "./lib/recorded"
 import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionMessage } from "@ocpp/core/session/message"
@@ -133,18 +133,16 @@ describe("Session.remove", () => {
       closeGate = undefined
       // The notice waited for the Session, so deleting it cancelled the notice in the deletion's own commit.
       const deletion = yield* db
-        .select({ type: SpecterEventTable.type, order: SpecterEventTable.order })
+        .select({ type: SpecterEventTable.type, order: SpecterEventTable.event_order })
         .from(SpecterEventTable)
         .where(sql`json_extract(${SpecterEventTable.payload}, '$.sessionID') = ${parent.id}`)
-        .orderBy(desc(SpecterEventTable.order))
+        .orderBy(desc(SpecterEventTable.event_order))
         .limit(2)
         .all()
       expect(deletion.map((fact) => fact.type)).toEqual(["session-deleted", "session-inbox-cancelled"])
-      const commit = yield* db
-        .select({ first: SpecterCommitTable.first_order })
-        .from(SpecterCommitTable)
-        .where(eq(SpecterCommitTable.version, deletion[0]!.order))
-        .get()
+      const commit = yield* db.get<{ readonly first: number }>(
+        sql`SELECT first_event_order AS first FROM specter_event_commits WHERE commit_version = ${deletion[0]!.order}`,
+      )
       expect(commit?.first).toBeLessThanOrEqual(deletion[1]!.order)
 
       expect((yield* session.list()).data).toEqual([])

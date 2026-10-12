@@ -1,10 +1,11 @@
 import { describe, expect } from "bun:test"
+import { Effect } from "effect"
+import { createSqliteReactionOutboxStore } from "@ocpp/runtime/sqlite"
+import { type ReactionOutboxConformancePayload, reactionOutboxStoreConformance } from "@ocpp/runtime/testing"
 import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
-import { SpecterOutbox } from "@ocpp/core/specter/outbox"
-import { ReactionOutboxLeaseLostError } from "@ocpp/runtime"
+import { SpecterDatabase } from "@ocpp/core/specter/database"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
-import { Effect } from "effect"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node])))
@@ -18,13 +19,27 @@ const job = (id: string, concurrencyKey?: string, requested = 0) => ({
   requestedAt: at(requested),
   availableAt: at(requested),
 })
-const open = (reaction = "runStep") =>
+// One Reaction's queue of Specter's outbox on OC++'s database, as the Bus opens it.
+const open = (queue = "runStep") =>
   Effect.gen(function* () {
     const { db } = yield* Database.Service
-    return yield* SpecterOutbox.make<{ readonly id: string }>(db, reaction)
+    return createSqliteReactionOutboxStore<{ readonly id: string }>(SpecterDatabase.make(db), { queue })
   })
 
-describe("Specter outbox", () => {
+describe("Specter outbox on OC++'s database", () => {
+  it.effect("conforms to Specter's outbox Store contract, concurrency keys, lease renewal and wake-ups included", () =>
+    Effect.gen(function* () {
+      const { db } = yield* Database.Service
+      yield* reactionOutboxStoreConformance(
+        Effect.succeed(
+          createSqliteReactionOutboxStore<ReactionOutboxConformancePayload>(SpecterDatabase.make(db), {
+            queue: "conformance",
+          }),
+        ),
+      )
+    }),
+  )
+
   it.effect("dedupes a delivery by its idempotency key, per Reaction", () =>
     Effect.gen(function* () {
       const steps = yield* open("runStep")
@@ -42,53 +57,7 @@ describe("Specter outbox", () => {
     }),
   )
 
-  it.effect("runs one job per concurrency key at a time, in order", () =>
-    Effect.gen(function* () {
-      const outbox = yield* open()
-      yield* outbox.enqueue(job("a1", "a", 1))
-      yield* outbox.enqueue(job("a2", "a", 2))
-      yield* outbox.enqueue(job("b1", "b", 3))
-      yield* outbox.enqueue(job("free", undefined, 4))
-      const now = at(10)
-      const lease = at(1_000)
-      const first = yield* outbox.claimNext(now, lease)
-      expect(first?.id).toBe("a1")
-      expect((yield* outbox.claimNext(now, lease))?.id).toBe("b1")
-      expect((yield* outbox.claimNext(now, lease))?.id).toBe("free")
-      expect(yield* outbox.claimNext(now, lease)).toBeUndefined()
-      // a2 waits for a1, so the next work is the earliest lease.
-      expect(yield* outbox.nextWorkAt()).toEqual(lease)
-      yield* outbox.complete(first!.id, first!.activeAttemptId, at(20))
-      expect(yield* outbox.nextWorkAt()).toEqual(at(2))
-      const second = yield* outbox.claimNext(at(20), lease)
-      expect(second).toMatchObject({ id: "a2", status: "running", attemptCount: 1, activeAttemptId: "a2:attempt:1" })
-    }),
-  )
-
-  it.effect("settles only the active attempt", () =>
-    Effect.gen(function* () {
-      const outbox = yield* open()
-      yield* outbox.enqueue(job("j", "s"))
-      const claim = (yield* outbox.claimNext(at(0), at(100)))!
-      yield* outbox.reschedule(claim.id, claim.activeAttemptId, at(50), "boom")
-      expect(yield* outbox.get("j")).toMatchObject({ status: "pending", availableAt: at(50), lastError: "boom" })
-      const stale = yield* outbox.complete(claim.id, claim.activeAttemptId, at(60)).pipe(Effect.flip)
-      expect(stale).toBeInstanceOf(ReactionOutboxLeaseLostError)
-      const retry = (yield* outbox.claimNext(at(50), at(100)))!
-      expect(retry.attemptCount).toBe(2)
-      yield* outbox.renewLease(retry.id, retry.activeAttemptId, at(500))
-      expect(yield* outbox.requeueExpired(at(400))).toBe(0)
-      expect(yield* outbox.requeueExpired(at(500))).toBe(1)
-      expect(yield* outbox.get("j")).toMatchObject({ status: "pending", lastError: "Reaction attempt lease expired" })
-      const last = (yield* outbox.claimNext(at(500), at(600)))!
-      yield* outbox.deadLetter(last.id, last.activeAttemptId, at(510), "gave up")
-      expect(yield* outbox.list("dead-letter")).toHaveLength(1)
-      yield* outbox.retryDeadLetter("j", at(520))
-      expect(yield* outbox.get("j")).toMatchObject({ status: "pending", availableAt: at(520) })
-    }),
-  )
-
-  it.effect("opening the outbox again requeues what the last process left unfinished", () =>
+  it.effect("releases what the last process left unfinished when a boot opens it", () =>
     Effect.gen(function* () {
       const before = yield* open()
       yield* before.enqueue(job("running", "s1", 1))
@@ -100,6 +69,7 @@ describe("Specter outbox", () => {
       yield* before.deadLetter(dead.id, dead.activeAttemptId, at(11), "gave up")
       yield* before.complete(done.id, done.activeAttemptId, at(11))
       const after = yield* open()
+      expect(yield* after.release(new Date(), { deadLetters: true })).toBe(2)
       expect(yield* after.get(running.id)).toMatchObject({ status: "pending", attemptCount: 0 })
       expect(yield* after.get(dead.id)).toMatchObject({ status: "pending", attemptCount: 0 })
       expect(yield* after.get(done.id)).toMatchObject({ status: "completed" })
@@ -110,7 +80,6 @@ describe("Specter outbox", () => {
 
   it.effect("prunes jobs that completed before a time", () =>
     Effect.gen(function* () {
-      const { db } = yield* Database.Service
       const outbox = yield* open()
       yield* outbox.enqueue(job("old", undefined, 1))
       yield* outbox.enqueue(job("new", undefined, 2))
@@ -118,7 +87,7 @@ describe("Specter outbox", () => {
       const recent = (yield* outbox.claimNext(at(5), at(100)))!
       yield* outbox.complete(old.id, old.activeAttemptId, at(10))
       yield* outbox.complete(recent.id, recent.activeAttemptId, at(30))
-      yield* SpecterOutbox.prune(db, 20)
+      expect(yield* outbox.prune(at(20))).toBe(1)
       expect((yield* outbox.list()).map((item) => item.id)).toEqual(["new"])
     }),
   )

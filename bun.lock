@@ -545,6 +545,7 @@
         "@specter-ts/core": "link:@specter-ts/core",
         "@specter-ts/memory": "link:@specter-ts/memory",
         "@specter-ts/reaction-outbox": "link:@specter-ts/reaction-outbox",
+        "@specter-ts/sqlite": "link:@specter-ts/sqlite",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -2800,6 +2801,8 @@
     "@specter-ts/reaction-outbox": ["@specter-ts/reaction-outbox@link:@specter-ts/reaction-outbox", {}],
 
     "@specter-ts/spec": ["@specter-ts/spec@link:@specter-ts/spec", { "bin": { "specter-spec": "./dist/cli.js" } }],
+
+    "@specter-ts/sqlite": ["@specter-ts/sqlite@link:@specter-ts/sqlite", {}],
 
     "@speed-highlight/core": ["@speed-highlight/core@1.2.24", "", {}, "sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw=="],
 

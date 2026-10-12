@@ -53,10 +53,9 @@ import { registeredTools } from "./lib/tool"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { vendorDrivers } from "./lib/drivers"
 import { SessionTable } from "@ocpp/core/session/sql"
-import { SpecterOutboxJobTable } from "@ocpp/core/specter/sql"
 import { SpecterSessionRuntime } from "@ocpp/core/specter/session-runtime"
 import { Database as SqliteDatabase } from "bun:sqlite"
-import { desc, eq } from "drizzle-orm"
+import { desc, eq, sql } from "drizzle-orm"
 
 type Turn = (options: ExternalAgentDriver.Options, message: string) => Promise<void>
 
@@ -628,8 +627,8 @@ describe("vendor-driven sessions", () => {
       )
       // The runtime's jobs and Slice snapshots are derived from the log: losing them costs time only.
       const saved = new SqliteDatabase(file)
-      saved.query("DELETE FROM specter_outbox_job").run()
-      saved.query("DELETE FROM specter_slice_snapshot").run()
+      saved.query("DELETE FROM specter_reaction_outbox").run()
+      saved.query("DELETE FROM specter_slice_snapshots").run()
       saved.close()
       vendor.turn = say("Answer two")
       yield* boot(
@@ -676,21 +675,23 @@ describe("vendor-driven sessions", () => {
       // The stopping boot saved its Slices' states. Bump one so the next boot shows where it starts from.
       const saved = new SqliteDatabase(file)
       const slices = saved
-        .query<{ slice: string; cursor: number }, []>("SELECT slice, cursor FROM specter_slice_snapshot")
+        .query<{ slice: string; cursor: number }, []>("SELECT slice_name AS slice, cursor FROM specter_slice_snapshots")
         .all()
-      const head = saved.query<{ head: number }, []>('SELECT MAX("order") AS head FROM specter_event').get()!.head
+      const head = saved.query<{ head: number }, []>("SELECT MAX(event_order) AS head FROM specter_events").get()!.head
       expect(slices.map((row) => row.slice)).toEqual(
         expect.arrayContaining(["createSession", "sessionStatus", "driveExecution"]),
       )
       expect(Math.max(...slices.map((row) => row.cursor))).toBe(head)
       saved
-        .query("UPDATE specter_slice_snapshot SET state = json_set(state, ?, 41) WHERE slice = 'sessionStatus'")
+        .query(
+          "UPDATE specter_slice_snapshots SET state_json = json_set(state_json, ?, 41) WHERE slice_name = 'sessionStatus'",
+        )
         .run(`$.sessions.${sessionID}.attempts`)
       const jobs = saved
         .query<
-          { id: string; attempt_count: number; completed_at: number },
+          { id: string; attempt_count: number; completed_at: string },
           []
-        >("SELECT id, attempt_count, completed_at FROM specter_outbox_job ORDER BY id")
+        >("SELECT id, attempt_count, completed_at FROM specter_reaction_outbox ORDER BY id")
         .all()
       saved.close()
       expect(jobs.length).toBeGreaterThan(0)
@@ -707,7 +708,9 @@ describe("vendor-driven sessions", () => {
           expect(texts(yield* messages(sessionID!)).at(-1)).toBe("Answer two")
           // The first boot's deliveries were not replayed: their jobs ran once.
           const { db } = yield* Database.Service
-          const after = yield* db.select().from(SpecterOutboxJobTable).all()
+          const after = yield* db.all<{ id: string; status: string; attempt_count: number; completed_at: string }>(
+            sql`SELECT id, status, attempt_count, completed_at FROM specter_reaction_outbox`,
+          )
           for (const job of jobs)
             expect(after.find((row) => row.id === job.id)).toMatchObject({
               status: "completed",

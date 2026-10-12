@@ -15,7 +15,7 @@ import { Global } from "@ocpp/util/global"
 import { Bus } from "../src/bus.js"
 import { Database } from "../src/database/database.js"
 import { EventTable } from "../src/event/sql.js"
-import { SpecterEventTable } from "../src/specter/sql.js"
+import { SpecterEventTable } from "../src/specter/tables.js"
 import { Recorded } from "./lib/recorded.js"
 import { Image } from "../src/image.js"
 import { PluginHooks } from "../src/plugin/hooks.js"
@@ -292,7 +292,7 @@ describe("Session-owned handles", () => {
             inArray(
               EventTable.log_order,
               fixture.db
-                .select({ order: SpecterEventTable.order })
+                .select({ order: SpecterEventTable.event_order })
                 .from(SpecterEventTable)
                 .where(eq(SpecterEventTable.type, SessionEvent.InboxEnqueued.type)),
             ),

@@ -14,7 +14,7 @@ import { EventSequenceTable, EventTable } from "@ocpp/core/event/sql"
 import { ProjectTable } from "@ocpp/core/project/sql"
 import { SessionMessageTable, SessionTable } from "@ocpp/core/session/sql"
 import { SessionStats } from "@ocpp/core/session/stats"
-import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/tables"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { DateTime, Effect, Schema } from "effect"
 import { testEffect } from "./lib/effect"
@@ -208,7 +208,7 @@ describe("SessionStats", () => {
                 payload: data,
                 recorded_at: new Date(event.created).toISOString(),
               })
-              .returning({ order: SpecterEventTable.order })
+              .returning({ order: SpecterEventTable.event_order })
               .get()
               .pipe(Effect.orDie)
             yield* db

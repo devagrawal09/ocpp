@@ -63,10 +63,11 @@ describe("DatabaseMigration", () => {
         expect(tables).toEqual(
           expect.arrayContaining([
             "session_v2",
-            "specter_event",
-            "specter_commit",
-            "specter_slice_snapshot",
-            "specter_outbox_job",
+            "specter_events",
+            "specter_event_keys",
+            "specter_event_commits",
+            "specter_slice_snapshots",
+            "specter_reaction_outbox",
           ]),
         )
         expect(yield* db.all(sql`SELECT id FROM migration ORDER BY id`)).toEqual(

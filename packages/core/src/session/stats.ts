@@ -10,7 +10,7 @@ import { SessionEvent } from "@ocpp/schema/session-event"
 import { ToolMode } from "@ocpp/schema/session-stats"
 import { Database } from "../database/database.js"
 import { EventTable } from "../event/sql.js"
-import { SpecterEventTable } from "../specter/sql.js"
+import { SpecterEventTable } from "../specter/tables.js"
 import { SessionMessageTable, SessionTable } from "./sql.js"
 
 type Input = {
@@ -291,7 +291,7 @@ export const get = Effect.fn("SessionStats.get")(function* (input: Input = {}) {
       db
         .select({ data: SpecterEventTable.payload })
         .from(EventTable)
-        .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+        .innerJoin(SpecterEventTable, eq(SpecterEventTable.event_order, EventTable.log_order))
         .where(
           and(
             inArray(EventTable.aggregate_id, batch),

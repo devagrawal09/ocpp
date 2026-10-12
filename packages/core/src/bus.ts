@@ -6,7 +6,7 @@ import type { EventLog } from "@ocpp/schema/event-log"
 import { and, asc, eq, gt, lte, sql, type SQL } from "drizzle-orm"
 import { Database } from "./database/database.js"
 import { EventSequenceTable, EventTable } from "./event/sql.js"
-import { SpecterEventTable } from "./specter/sql.js"
+import { SpecterEventTable } from "./specter/tables.js"
 import type { Location } from "@ocpp/schema/location"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { makeGlobalNode } from "@ocpp/util/effect/app-node"
@@ -18,6 +18,7 @@ import {
   type EventLogService as SpecterEventLogContract,
   EventLog as SpecterEventLogService,
   makeRuntime,
+  persistSliceSnapshots,
   SpecterCommandRejectedError,
   type DriveExecutionOutboxStore,
   type PersistedEvent,
@@ -26,9 +27,12 @@ import {
   type Runtime,
   type RuntimeCommand,
 } from "@ocpp/runtime"
-import { SpecterEventLog } from "./specter/event-log.js"
-import { SpecterOutbox } from "./specter/outbox.js"
-import { SpecterSnapshots } from "./specter/snapshots.js"
+import {
+  createSqliteEventLogService,
+  createSqliteReactionOutboxStore,
+  createSqliteSliceSnapshotStore,
+} from "@ocpp/runtime/sqlite"
+import { SpecterDatabase } from "./specter/database.js"
 
 type OutboxPayload<S> = S extends ReactionOutboxStore<infer T> ? T : never
 
@@ -479,20 +483,22 @@ export function configured(options?: Options) {
             return { events: queued, route }
           })
 
+        // The runtime's state lives in this database, in Specter's own SQLite stores.
+        const database = SpecterDatabase.make(db)
         // Every fact is recorded by the Specter runtime into its Event Log, kept in this database. The
         // log's append runs projectBatch inside its own transaction, so a recorded fact and OC++'s read
         // models change together or not at all. A Command dispatched through this Bus gives each fact it records
         // its Dispatch as context: the fact's ID and time, and its options by position and where it was
         // dispatched. One a Reaction dispatches itself records its facts at the log's time, without a Location.
-        const specterLog = SpecterEventLog.make(db, {
-          id: () => Event.ID.create(),
-          appended: (events, contexts) =>
+        const specterLog = createSqliteEventLogService(database, {
+          eventId: () => Event.ID.create(),
+          onAppend: ({ commit, metadata }) =>
             Effect.gen(function* () {
               // Project each fact as the event it is here, and notify after the transaction commits. A Command
               // dispatched through this Bus publishes them with its options.
-              const dispatch = contexts.find((context) => context instanceof Dispatch)
+              const dispatch = metadata.find((context) => context instanceof Dispatch)
               type Placed = BatchItem & { readonly order: number }
-              const items = events.map((recorded, index): Placed => {
+              const items = commit.events.map((recorded, index): Placed => {
                 const definition = definitionOf(recorded)
                 const options = dispatch?.facts[index]
                 const location = options?.global ? undefined : (options?.location ?? dispatch?.location)
@@ -577,18 +583,33 @@ export function configured(options?: Options) {
               ),
         }
         // The runtime keeps its state in this database too, so a boot resumes from where the last one
-        // stopped: its Slices from their snapshots, and its Reactions' jobs from the outbox, where a
-        // replayed delivery finds its job instead of running again.
-        const slices = yield* SpecterSnapshots.persisted(db)
-        yield* SpecterOutbox.prune(db, Date.now() - Duration.toMillis(Duration.days(1))).pipe(Effect.orDie)
-        const runStep = yield* SpecterOutbox.make<OutboxPayload<RunStepOutboxStore>>(db, "runStep").pipe(Effect.orDie)
-        const drive = yield* SpecterOutbox.make<OutboxPayload<DriveExecutionOutboxStore>>(db, "driveExecution").pipe(
-          Effect.orDie,
-        )
+        // stopped: its Slices from their snapshots, saved every minute and once the runtime (made after them)
+        // has closed, and its Reactions' jobs from their outbox queues, where a replayed delivery finds its job
+        // instead of running again.
+        const slices = yield* persistSliceSnapshots(createSqliteSliceSnapshotStore(database)).pipe(Effect.orDie)
+        const runStep = createSqliteReactionOutboxStore<OutboxPayload<RunStepOutboxStore>>(database, {
+          queue: "runStep",
+        })
+        const drive = createSqliteReactionOutboxStore<OutboxPayload<DriveExecutionOutboxStore>>(database, {
+          queue: "driveExecution",
+        })
+        // This process is the outboxes' only worker: the jobs the last one left unfinished run again at once, with
+        // a fresh retry budget, as replaying them into an empty outbox did, and jobs completed over a day ago go. A
+        // delivery that old is behind its Reaction's snapshot; replayed anyway, its job runs again and finds its
+        // Commands recorded.
+        const now = Date.now()
+        yield* Effect.forEach(
+          [runStep, drive],
+          (outbox) =>
+            outbox
+              .release(new Date(now), { deadLetters: true })
+              .pipe(Effect.andThen(outbox.prune(new Date(now - Duration.toMillis(Duration.days(1)))))),
+          { discard: true },
+        ).pipe(Effect.orDie)
         const runtime = yield* makeRuntime({
           // One step per Session at a time; different Sessions (subagents included) run at once.
           outbox: { worker: { concurrency: 64 } },
-          stores: { slices, runStep, drive },
+          stores: { slices: slices.layer, runStep, drive },
           // Every Slice holds the log's state once the runtime is up; from saved snapshots that is only the
           // log's tail.
           catchUp: true,
@@ -689,14 +710,14 @@ export function configured(options?: Options) {
               seq: EventTable.seq,
               fact: {
                 id: SpecterEventTable.id,
-                order: SpecterEventTable.order,
+                order: SpecterEventTable.event_order,
                 type: SpecterEventTable.type,
                 payload: SpecterEventTable.payload,
                 recordedAt: SpecterEventTable.recorded_at,
               },
             })
             .from(EventTable)
-            .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+            .innerJoin(SpecterEventTable, eq(SpecterEventTable.event_order, EventTable.log_order))
             .where(where)
             .orderBy(...orderBy)
             .limit(limit)

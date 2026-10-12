@@ -7,7 +7,7 @@ import { Database } from "@ocpp/core/database/database"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { EventSequenceTable, EventTable } from "@ocpp/core/event/sql"
-import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/tables"
 import { ProjectFact } from "@ocpp/schema/project-fact"
 import { Project } from "@ocpp/core/project"
 import { KeyValueFact } from "@ocpp/schema/key-value-fact"
@@ -327,7 +327,7 @@ describe("Bus", () => {
       const indexed = yield* db
         .select({ seq: EventTable.seq, fact: SpecterEventTable })
         .from(EventTable)
-        .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+        .innerJoin(SpecterEventTable, eq(SpecterEventTable.event_order, EventTable.log_order))
         .where(eq(EventTable.aggregate_id, aggregateID))
         .all()
         .pipe(Effect.orDie)
@@ -476,7 +476,7 @@ describe("Bus", () => {
           : db
               .select({ id: SpecterEventTable.id, seq: EventTable.seq })
               .from(EventTable)
-              .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+              .innerJoin(SpecterEventTable, eq(SpecterEventTable.event_order, EventTable.log_order))
               .where(eq(SpecterEventTable.id, event.id))
               .get()
               .pipe(

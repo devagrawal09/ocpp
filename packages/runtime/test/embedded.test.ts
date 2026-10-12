@@ -5,7 +5,8 @@ import { describe, expect, it } from "bun:test"
 
 import { StepHost } from "../src/plugins/step-host.ts"
 import { makeRuntime, type RuntimeOptions } from "../src/runtime.ts"
-import { makeSnapshotSliceStores, type SliceSnapshot } from "../src/snapshots.ts"
+import type { SliceSnapshot } from "@specter-ts/core"
+import { createSnapshotSliceStores } from "@specter-ts/memory"
 import { makeScriptedStepHost } from "./fixture/scripted-step-host.ts"
 
 const hostLog = () => {
@@ -101,12 +102,12 @@ describe("embedded runtime", () => {
           )
         // A Session runs to the end of its execution, and the host saves the
         // runtime's Slices.
-        const first = makeSnapshotSliceStores([])
+        const first = createSnapshotSliceStores()
         const saved = yield* Effect.scoped(
           Effect.gen(function* () {
             const { runtime, host, recorded } = yield* bootOver(log, {
               catchUp: true,
-              stores: { slices: first.provide },
+              stores: { slices: first.layer },
             })
             host.script("ses_1", [{ finish: "stop", text: "Hello" }])
             yield* runtime.command(creation)
@@ -126,10 +127,10 @@ describe("embedded runtime", () => {
         const length = log.inspect().length
 
         // The next boot starts from them; another starts from the log alone.
-        const resumed = makeSnapshotSliceStores(saved)
-        yield* Effect.scoped(bootOver(log, { catchUp: true, stores: { slices: resumed.provide } }))
-        const fromLog = makeSnapshotSliceStores([])
-        yield* Effect.scoped(bootOver(log, { catchUp: true, stores: { slices: fromLog.provide } }))
+        const resumed = createSnapshotSliceStores(saved)
+        yield* Effect.scoped(bootOver(log, { catchUp: true, stores: { slices: resumed.layer } }))
+        const fromLog = createSnapshotSliceStores()
+        yield* Effect.scoped(bootOver(log, { catchUp: true, stores: { slices: fromLog.layer } }))
 
         // Neither boot recorded anything, and both hold every Slice as the log
         // folds it.

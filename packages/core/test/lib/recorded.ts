@@ -4,7 +4,7 @@ import { asc, eq, type SQL } from "drizzle-orm"
 import { Effect } from "effect"
 import { Database } from "@ocpp/core/database/database"
 import { EventTable } from "@ocpp/core/event/sql"
-import { SpecterEventTable } from "@ocpp/core/specter/sql"
+import { SpecterEventTable } from "@ocpp/core/specter/tables"
 
 /**
  * Recorded events in the order they were recorded, each with its data as recorded (encoded): the facts in
@@ -23,7 +23,7 @@ export const events = (where?: SQL) =>
         data: SpecterEventTable.payload,
       })
       .from(EventTable)
-      .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+      .innerJoin(SpecterEventTable, eq(SpecterEventTable.event_order, EventTable.log_order))
       .where(where)
       .orderBy(asc(EventTable.log_order))
       .all()
@@ -40,7 +40,7 @@ export const types = (aggregateID: string) =>
     return yield* db
       .select({ type: SpecterEventTable.type })
       .from(EventTable)
-      .innerJoin(SpecterEventTable, eq(SpecterEventTable.order, EventTable.log_order))
+      .innerJoin(SpecterEventTable, eq(SpecterEventTable.event_order, EventTable.log_order))
       .where(eq(EventTable.aggregate_id, aggregateID))
       .orderBy(asc(EventTable.seq))
       .all()

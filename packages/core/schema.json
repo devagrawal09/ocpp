@@ -93,26 +93,6 @@
       "entityType": "tables"
     },
     {
-      "name": "specter_commit",
-      "entityType": "tables"
-    },
-    {
-      "name": "specter_event_key",
-      "entityType": "tables"
-    },
-    {
-      "name": "specter_event",
-      "entityType": "tables"
-    },
-    {
-      "name": "specter_outbox_job",
-      "entityType": "tables"
-    },
-    {
-      "name": "specter_slice_snapshot",
-      "entityType": "tables"
-    },
-    {
       "name": "workspace",
       "entityType": "tables"
     },
@@ -1831,306 +1811,6 @@
       "table": "session_v2"
     },
     {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "version",
-      "entityType": "columns",
-      "table": "specter_commit"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "idempotency_key",
-      "entityType": "columns",
-      "table": "specter_commit"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "fingerprint",
-      "entityType": "columns",
-      "table": "specter_commit"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "first_order",
-      "entityType": "columns",
-      "table": "specter_commit"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "committed_at",
-      "entityType": "columns",
-      "table": "specter_commit"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "order",
-      "entityType": "columns",
-      "table": "specter_event_key"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "name",
-      "entityType": "columns",
-      "table": "specter_event_key"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "value",
-      "entityType": "columns",
-      "table": "specter_event_key"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": true,
-      "default": null,
-      "generated": null,
-      "name": "order",
-      "entityType": "columns",
-      "table": "specter_event"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "specter_event"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "type",
-      "entityType": "columns",
-      "table": "specter_event"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "payload",
-      "entityType": "columns",
-      "table": "specter_event"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "recorded_at",
-      "entityType": "columns",
-      "table": "specter_event"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "reaction",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "idempotency_key",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "concurrency_key",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "payload",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "status",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "requested_at",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "available_at",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "attempt_count",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "active_attempt_id",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "lease_expires_at",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "completed_at",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "last_error",
-      "entityType": "columns",
-      "table": "specter_outbox_job"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "slice",
-      "entityType": "columns",
-      "table": "specter_slice_snapshot"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "state",
-      "entityType": "columns",
-      "table": "specter_slice_snapshot"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "cursor",
-      "entityType": "columns",
-      "table": "specter_slice_snapshot"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "saved_at",
-      "entityType": "columns",
-      "table": "specter_slice_snapshot"
-    },
-    {
       "type": "text",
       "notNull": false,
       "autoincrement": false,
@@ -2310,12 +1990,12 @@
     },
     {
       "columns": ["log_order"],
-      "tableTo": "specter_event",
-      "columnsTo": ["order"],
+      "tableTo": "specter_events",
+      "columnsTo": ["event_order"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "nameExplicit": false,
-      "name": "fk_event_log_order_specter_event_order_fk",
+      "name": "fk_event_log_order_specter_events_event_order_fk",
       "entityType": "fks",
       "table": "event"
     },
@@ -2397,17 +2077,6 @@
       "table": "session_v2"
     },
     {
-      "columns": ["order"],
-      "tableTo": "specter_event",
-      "columnsTo": ["order"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "fk_specter_event_key_order_specter_event_order_fk",
-      "entityType": "fks",
-      "table": "specter_event_key"
-    },
-    {
       "columns": ["project_id"],
       "tableTo": "project",
       "columnsTo": ["id"],
@@ -2459,13 +2128,6 @@
       "name": "instruction_entry_pk",
       "entityType": "pks",
       "table": "instruction_entry"
-    },
-    {
-      "columns": ["order", "name"],
-      "nameExplicit": false,
-      "name": "specter_event_key_pk",
-      "entityType": "pks",
-      "table": "specter_event_key"
     },
     {
       "columns": ["project_id", "directory"],
@@ -2584,34 +2246,6 @@
       "nameExplicit": false,
       "name": "session_v2_pk",
       "table": "session_v2",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["version"],
-      "nameExplicit": false,
-      "name": "specter_commit_pk",
-      "table": "specter_commit",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["order"],
-      "nameExplicit": false,
-      "name": "specter_event_pk",
-      "table": "specter_event",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "specter_outbox_job_pk",
-      "table": "specter_outbox_job",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["slice"],
-      "nameExplicit": false,
-      "name": "specter_slice_snapshot_pk",
-      "table": "specter_slice_snapshot",
       "entityType": "pks"
     },
     {
@@ -2860,100 +2494,6 @@
       "name": "session_v2_parent_idx",
       "entityType": "indexes",
       "table": "session_v2"
-    },
-    {
-      "columns": [
-        {
-          "value": "name",
-          "isExpression": false
-        },
-        {
-          "value": "value",
-          "isExpression": false
-        },
-        {
-          "value": "order",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "specter_event_key_name_value_order_idx",
-      "entityType": "indexes",
-      "table": "specter_event_key"
-    },
-    {
-      "columns": [
-        {
-          "value": "type",
-          "isExpression": false
-        },
-        {
-          "value": "order",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "specter_event_type_order_idx",
-      "entityType": "indexes",
-      "table": "specter_event"
-    },
-    {
-      "columns": [
-        {
-          "value": "reaction",
-          "isExpression": false
-        },
-        {
-          "value": "idempotency_key",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "origin": "manual",
-      "name": "specter_outbox_job_key_idx",
-      "entityType": "indexes",
-      "table": "specter_outbox_job"
-    },
-    {
-      "columns": [
-        {
-          "value": "reaction",
-          "isExpression": false
-        },
-        {
-          "value": "status",
-          "isExpression": false
-        },
-        {
-          "value": "available_at",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "specter_outbox_job_claim_idx",
-      "entityType": "indexes",
-      "table": "specter_outbox_job"
-    },
-    {
-      "columns": ["idempotency_key"],
-      "nameExplicit": false,
-      "name": "specter_commit_idempotency_key_unique",
-      "entityType": "uniques",
-      "table": "specter_commit"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "specter_event_id_unique",
-      "entityType": "uniques",
-      "table": "specter_event"
     }
   ],
   "renames": []

@@ -1080,7 +1080,7 @@ export type SessionCreated = {
   }
 }
 
-export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
+export type SessionRevert = { messageID: string; snapshot?: string; files?: Array<FileDiffInfo> }
 
 export type SessionStatsTools =
   | { mode: "none" }
@@ -2839,7 +2839,6 @@ export type SessionImportInput = {
       readonly metadata?: { readonly [x: string]: JsonValue }
       readonly revert?: {
         readonly messageID: string
-        readonly partID?: string
         readonly snapshot?: string
         readonly files?: ReadonlyArray<{
           readonly file: string
@@ -3196,7 +3195,6 @@ export type SessionImportInput = {
       readonly metadata?: { readonly [x: string]: JsonValue }
       readonly revert?: {
         readonly messageID: string
-        readonly partID?: string
         readonly snapshot?: string
         readonly files?: ReadonlyArray<{
           readonly file: string
@@ -3553,7 +3551,6 @@ export type SessionImportInput = {
       readonly metadata?: { readonly [x: string]: JsonValue }
       readonly revert?: {
         readonly messageID: string
-        readonly partID?: string
         readonly snapshot?: string
         readonly files?: ReadonlyArray<{
           readonly file: string

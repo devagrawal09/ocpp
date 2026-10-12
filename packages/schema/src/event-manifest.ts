@@ -10,11 +10,9 @@ import { Credential } from "./credential.js"
 import { Durable } from "./durable-event-manifest.js"
 import { Event } from "./event.js"
 import { FileSystem } from "./filesystem.js"
-import { FileSystemV1 } from "./filesystem-v1.js"
 import { Form } from "./form.js"
 import { InstallationEvent } from "./installation-event.js"
 import { Integration } from "./integration.js"
-import { LegacyEventV1 } from "./legacy-event.js"
 import { LspEvent } from "./lsp-event.js"
 import { McpEvent } from "./mcp-event.js"
 import { ModelsDev } from "./models-dev.js"
@@ -81,8 +79,6 @@ export const Definitions = Event.inventory(
   ...featureDefinitions,
   ...LspEvent.Definitions,
   ...McpEvent.Definitions,
-  ...LegacyEventV1.Definitions,
-  ...FileSystemV1.Event.Definitions,
   ...SessionStatusEvent.Definitions,
   ...VcsEvent.Definitions,
   ...WorkspaceEvent.Definitions,

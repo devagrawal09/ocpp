@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { LegacyEventV1 } from "../src/legacy-event.js"
 import { PermissionV1 } from "../src/permission-v1.js"
-import { QuestionV1 } from "../src/question-v1.js"
 import { Project } from "../src/project.js"
 import { SessionV1 } from "../src/session-v1.js"
 
@@ -31,22 +29,14 @@ describe("legacy public event schemas", () => {
       SessionV1.Error.type,
       PermissionV1.Event.Asked.type,
       PermissionV1.Event.Replied.type,
-      QuestionV1.Event.Asked.type,
-      QuestionV1.Event.Replied.type,
-      QuestionV1.Event.Rejected.type,
       Project.Event.Updated.type,
-      LegacyEventV1.CommandExecuted.type,
     ]).toEqual([
       "message.part.delta",
       "session.diff",
       "session.error",
       "permission.asked",
       "permission.replied",
-      "question.asked",
-      "question.replied",
-      "question.rejected",
       "project-updated",
-      "command-executed",
     ])
   })
 })

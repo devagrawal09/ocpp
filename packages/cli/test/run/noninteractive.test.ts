@@ -56,36 +56,6 @@ function settled(outcome: "success" | "interrupted" = "success"): V2Event {
   }
 }
 
-function stepStarted(): V2Event {
-  return {
-    id: "evt_step_started",
-    created: 1,
-    type: "session-step-started",
-    durable: { aggregateID: "ses_1", seq: 1 },
-    data: {
-      sessionID: "ses_1",
-      assistantMessageID: "msg_assistant",
-      agent: "build",
-      model: { providerID: "test", id: "test-model" },
-    },
-  }
-}
-
-function stepFailed(message: string): V2Event {
-  return {
-    id: "evt_step_failed",
-    created: 2,
-    type: "session-step-settled",
-    durable: { aggregateID: "ses_1", seq: 2 },
-    data: {
-      sessionID: "ses_1",
-      assistantMessageID: "msg_assistant",
-      outcome: "failed",
-      error: { type: "provider.transport", message },
-    },
-  }
-}
-
 function executionFailed(message: string): V2Event {
   return {
     id: "evt_execution_failed",
@@ -214,7 +184,6 @@ async function run(input: {
   pendingForms?: FormInfo[]
   attached?: boolean
   format?: "default" | "json"
-  compatibility?: "v1"
   cancel?: (input: { sessionID: string; formID: string }) => Promise<void>
   renderTool?: (part: SessionMessageAssistantTool) => Promise<void>
   renderToolError?: (part: SessionMessageAssistantTool) => Promise<void>
@@ -279,7 +248,6 @@ async function run(input: {
     thinking: false,
     format: input.format ?? "default",
     attached: input.attached ?? false,
-    compatibility: input.compatibility,
     renderTool: input.renderTool ?? (() => Promise.resolve()),
     renderToolError: input.renderToolError ?? (() => Promise.resolve()),
   })
@@ -452,63 +420,6 @@ describe("runNonInteractivePrompt", () => {
     )
   })
 
-  test("V1 JSON output flushes step_start before an unrelated step failure", async () => {
-    const output = await capture({
-      compatibility: "v1",
-      format: "json",
-      turn: (messageID) => [
-        prompted(messageID),
-        stepStarted(),
-        stepFailed("Provider request failed"),
-        executionFailed("Provider request failed"),
-      ],
-    })
-
-    expect(
-      output.stdout
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => JSON.parse(line)),
-    ).toEqual([
-      expect.objectContaining({ type: "step_start", part: expect.objectContaining({ type: "step-start" }) }),
-      expect.objectContaining({
-        type: "error",
-        error: { type: "provider.transport", message: "Provider request failed" },
-      }),
-    ])
-    expect(output.stderr).toBe("")
-    const sdk = await run({ compatibility: "v1", turn: (messageID) => [prompted(messageID), settled()] })
-    expect(sdk.session.wait).not.toHaveBeenCalled()
-    expect(sdk.message.list).not.toHaveBeenCalled()
-  })
-
-  test("V1 default output flushes step_start before an unrelated execution failure", async () => {
-    const output = await capture({
-      compatibility: "v1",
-      turn: (messageID) => [prompted(messageID), stepStarted(), executionFailed("Execution failed")],
-    })
-
-    expect(output.stdout).toBe("")
-    expect(output.stderr).toContain("> build · test-model")
-    expect(output.stderr).toContain("Error: \u001b[0mExecution failed")
-    expect(output.stderr.indexOf("> build · test-model")).toBeLessThan(output.stderr.indexOf("Execution failed"))
-  })
-
-  test("V1 preserves terminal-finish failure suppression before content", async () => {
-    const output = await capture({
-      compatibility: "v1",
-      format: "json",
-      turn: (messageID) => [
-        prompted(messageID),
-        stepStarted(),
-        stepFailed("The provider response ended unexpectedly."),
-        executionFailed("The provider response ended unexpectedly."),
-      ],
-    })
-
-    expect(output).toEqual({ stdout: "", stderr: "", exitCode: 0 })
-  })
-
   test("renders a native terminal failure snapshot when live progress was missed", async () => {
     const rendered: SessionMessageAssistantTool[] = []
     const failed: SessionMessageAssistantTool[] = []
@@ -547,8 +458,8 @@ describe("runNonInteractivePrompt", () => {
     ])
   })
 
-  test("keeps failed tool partial output out of the explicit V1 JSON bridge shape", async () => {
-    const output = await capture({ compatibility: "v1", format: "json", turn: failedTool })
+  test("keeps failed tool partial output out of the JSON tool shape", async () => {
+    const output = await capture({ format: "json", turn: failedTool })
     const events = output.stdout
       .split("\n")
       .filter(Boolean)

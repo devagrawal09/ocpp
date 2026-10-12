@@ -19,7 +19,7 @@ describe("CLI frontend import boundaries", () => {
     const run = await import("@ocpp/cli/run")
     const cli = await Bun.file(path.join(root, "packages/cli/package.json")).json()
 
-    expect(Object.keys(run).sort()).toEqual(["runNonInteractive", "runV1Bridge"])
+    expect(Object.keys(run).sort()).toEqual(["runNonInteractive"])
     expect(Object.keys(cli.exports).filter((key) => key === "./mini" || key.startsWith("./mini/"))).toEqual([])
   })
 

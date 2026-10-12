@@ -37,7 +37,6 @@ type Input = {
   format: "default" | "json"
   /** True when the client is attached to a shared server rather than an exclusive in-process one. */
   attached: boolean
-  compatibility?: "v1"
   renderTool: (part: SessionMessageAssistantTool) => Promise<void>
   renderToolError: (part: SessionMessageAssistantTool) => Promise<void>
 }
@@ -83,11 +82,9 @@ export async function runNonInteractivePrompt(input: Input) {
   let emittedError = false
   let formCancelled = false
   let interrupted = false
-  let v1InvalidOutput = false
   let prePromotionError: { message: string; [key: string]: unknown } | undefined
   let finalizing = false
   let admission: AbortController | undefined
-  let pendingStep: { timestamp: number; part: Record<string, unknown>; label: string } | undefined
 
   const emit = (type: string, timestamp: number, data: Record<string, unknown>) => {
     if (input.format !== "json") return false
@@ -117,17 +114,6 @@ export async function runNonInteractivePrompt(input: Input) {
     UI.empty()
     UI.println(`${UI.Style.TEXT_DIM}\u001b[3m${line}\u001b[0m${UI.Style.TEXT_NORMAL}`)
     UI.empty()
-  }
-
-  const flushStep = () => {
-    if (!pendingStep) return
-    const value = pendingStep
-    pendingStep = undefined
-    if (!emit("step_start", value.timestamp, { part: value.part }) && input.format !== "json") {
-      UI.empty()
-      UI.println(value.label)
-      UI.empty()
-    }
   }
 
   const cancelForm = async (request: Pick<FormRequest, "id" | "sessionID">) => {
@@ -194,14 +180,6 @@ export async function runNonInteractivePrompt(input: Input) {
           type: "step-start",
           snapshot: event.data.snapshot,
         }
-        if (input.compatibility === "v1") {
-          pendingStep = {
-            timestamp: time,
-            part,
-            label: `> ${event.data.agent} · ${event.data.model.id}`,
-          }
-          continue
-        }
         if (!emit("step_start", time, { part }) && input.format !== "json") {
           UI.empty()
           UI.println(`> ${event.data.agent} · ${event.data.model.id}`)
@@ -211,7 +189,6 @@ export async function runNonInteractivePrompt(input: Input) {
       }
 
       if (event.type === "session-block-started") {
-        flushStep()
         starts.set(`${event.data.kind}\u0000${contentKey(event.data.assistantMessageID, event.data.ordinal)}`, {
           id: partID(event.id),
           timestamp: time,
@@ -254,7 +231,6 @@ export async function runNonInteractivePrompt(input: Input) {
       }
 
       if (event.type === "session-tool-input-started") {
-        flushStep()
         tools.set(toolKey(event.data.assistantMessageID, event.data.id), {
           id: partID(event.id),
           timestamp: time,
@@ -272,7 +248,6 @@ export async function runNonInteractivePrompt(input: Input) {
         continue
       }
       if (event.type === "session-tool-requested") {
-        flushStep()
         const key = toolKey(event.data.assistantMessageID, event.data.id)
         const current = tools.get(key)
         tools.set(key, {
@@ -394,7 +369,6 @@ export async function runNonInteractivePrompt(input: Input) {
         }
         tools.delete(key)
         renderedTools.add(key)
-        if (input.compatibility === "v1" && formCancelled) continue
         if (!emit("tool_use", time, { part })) {
           if (content && toolOutputText(content).trim())
             await input.renderTool({
@@ -413,7 +387,6 @@ export async function runNonInteractivePrompt(input: Input) {
       }
 
       if (event.type === "session-step-settled" && event.data.outcome === "succeeded") {
-        flushStep()
         const part = {
           id: partID(event.id),
           sessionID: input.sessionID,
@@ -433,21 +406,13 @@ export async function runNonInteractivePrompt(input: Input) {
         event.data.outcome === "failed" &&
         (!event.data.retry || event.data.retry.fresh)
       ) {
-        if (input.compatibility === "v1" && event.data.error.message === "The provider response ended unexpectedly.") {
-          pendingStep = undefined
-          v1InvalidOutput = true
-          continue
-        }
         if (interrupted || formCancelled) continue
-        flushStep()
         emittedError = true
         process.exitCode = 1
         if (!emit("error", time, { error: event.data.error })) UI.error(event.data.error.message)
         continue
       }
       if (settled?.outcome === "failed") {
-        if (input.compatibility === "v1" && (v1InvalidOutput || formCancelled)) return
-        flushStep()
         if (!emittedError && !formCancelled) {
           emittedError = true
           process.exitCode = 1
@@ -456,7 +421,6 @@ export async function runNonInteractivePrompt(input: Input) {
         return
       }
       if (settled?.outcome === "interrupted") {
-        if (input.compatibility === "v1" && formCancelled) return
         if (settled.reason === "user" && interrupted) process.exitCode = 130
         if (settled.reason !== "user" && !emittedError) {
           emittedError = true
@@ -674,11 +638,6 @@ export async function runNonInteractivePrompt(input: Input) {
         ? globals.data.filter((form) => form.sessionID === GLOBAL_FORM_SESSION_ID).map(cancelForm)
         : []),
     ])
-    if (input.compatibility === "v1") {
-      await completed
-      return
-    }
-
     const waiting = input.client.session.wait({ sessionID: input.sessionID })
     await Promise.race([waiting, completed.then(() => waiting)])
     finalizing = true
@@ -695,8 +654,7 @@ export async function runNonInteractivePrompt(input: Input) {
   } finally {
     process.off("SIGINT", interrupt)
     controller.abort()
-    if (input.compatibility === "v1") await stream.return?.(undefined).catch(() => {})
-    else void stream.return?.(undefined).catch(() => {})
+    void stream.return?.(undefined).catch(() => {})
   }
 }
 

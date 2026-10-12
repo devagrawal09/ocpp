@@ -542,8 +542,8 @@ const decodeCatalog = (text: string) =>
 const Cache = Schema.Struct({
   updatedAt: Schema.Number,
   // Digest of the raw body, persisted so refresh() can skip republishing a
-  // byte-identical catalog. Optional for entries written before it existed.
-  digest: Schema.optional(Schema.String),
+  // byte-identical catalog.
+  digest: Schema.String,
   body: CatalogJson,
 })
 const defaultSource = "https://models.opencode.ai"

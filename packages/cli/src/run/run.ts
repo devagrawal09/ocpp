@@ -33,18 +33,9 @@ type FilePart = {
 }
 
 type Prepared = {
-  directory?: string
+  directory: string
   message: string
   files: FilePart[]
-}
-
-type ExecutionOptions = {
-  root?: string
-  directory?: string
-  useServerDirectory?: boolean
-  variant?: string
-  attached?: boolean
-  compatibility?: "v1"
 }
 
 class RunTargetError extends Error {
@@ -59,27 +50,21 @@ class RunTargetError extends Error {
 const ATTACH_FILE_MAX_BYTES = 10 * 1024 * 1024
 
 export function runNonInteractive(input: RunCommandInput) {
-  return runNonInteractiveWithOptions(input, {})
+  return run(input).catch((error) => reportRunError(input, errorMessage(error)))
 }
 
-/** @internal Used only by the V1 command boundary. */
-export function runNonInteractiveWithOptions(input: RunCommandInput, options: ExecutionOptions) {
-  return run(input, options).catch((error) => reportRunError(input, errorMessage(error)))
-}
-
-async function run(input: RunCommandInput, options: ExecutionOptions) {
+async function run(input: RunCommandInput) {
   if (input.fork && !input.continue && !input.session) fail("--fork requires --continue or --session")
-  const root = options.root ?? process.env.PWD ?? process.cwd()
-  const local = localDirectory(root)
-  const directory = options.useServerDirectory ? undefined : (options.directory ?? local)
+  const root = process.env.PWD ?? process.cwd()
+  const directory = localDirectory(root)
   const message = mergeInput(formatMessage(input.message), process.stdin.isTTY ? undefined : await readStdin())
   if (!message?.trim()) fail("You must provide a message")
-  const files = await Promise.all(input.file.map((file) => prepareFile(file, root, options)))
+  const files = await Promise.all(input.file.map((file) => prepareFile(file, root)))
   const prepared = { directory, message, files }
-  return execute(input, prepared, input.server.endpoint, options)
+  return execute(input, prepared, input.server.endpoint)
 }
 
-async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Endpoint, options: ExecutionOptions) {
+async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Endpoint) {
   const client = Ocpp.make({
     baseUrl: endpoint.url,
     // Bun's default five-minute deadline terminates the event stream used by long-running sessions.
@@ -89,7 +74,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
   const explicit = parseRunModel(input.model)
   const target = await resolveSessionTarget({
     client,
-    location: prepared.directory ? { directory: prepared.directory } : undefined,
+    location: { directory: prepared.directory },
     continue: input.continue,
     session: input.session,
     fork: input.fork,
@@ -99,23 +84,9 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
     agent: input.agent,
     environment: input.server.service ? Env.session() : undefined,
     prepare: async (next) => {
-      const selected =
-        next.model ??
-        (options.variant
-          ? await client.model
-              .default({ location: { directory: next.location.directory, workspace: next.location.workspaceID } })
-              .then((result) => result.data)
-          : undefined)
-      const model = selected
-        ? {
-            providerID: selected.providerID,
-            id: selected.id,
-            variant: options.variant ?? ("variant" in selected ? selected.variant : undefined),
-          }
-        : undefined
-      if ((options.variant ?? explicit?.variant) && !model)
+      if (explicit?.variant && !next.model)
         throw new RunTargetError("Cannot select a variant before selecting a model", next.session?.id)
-      return { model, agent: next.agent }
+      return { model: next.model, agent: next.agent }
     },
   }).catch((error) => {
     if (!(error instanceof RunTargetError)) throw error
@@ -143,8 +114,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
     variant,
     thinking: input.thinking ?? false,
     format: input.format,
-    attached: options.attached ?? true,
-    compatibility: options.compatibility,
+    attached: true,
     renderTool,
     renderToolError,
   }).catch((error) => reportRunError(input, errorMessage(error), target.session.id))
@@ -179,13 +149,11 @@ export function parseRunModel(value?: string) {
   }
 }
 
-async function prepareFile(input: string, directory: string, options: ExecutionOptions): Promise<FilePart> {
+async function prepareFile(input: string, directory: string): Promise<FilePart> {
   const file = path.resolve(directory, input)
   const handle = await open(file, "r").catch(() => fail(`File not found: ${input}`))
   try {
     const stat = await handle.stat()
-    if (options.compatibility === "v1" && options.attached && stat.isDirectory())
-      fail(`Cannot attach local directory without a shared filesystem: ${input}`)
     if (!stat.isFile() || stat.size > ATTACH_FILE_MAX_BYTES)
       fail(`Cannot attach a directory, special file, or file larger than 10 MiB: ${input}`)
     const content = Buffer.alloc(Number(stat.size))
@@ -236,8 +204,7 @@ async function renderToolError(part: SessionMessageAssistantTool) {
   UI.println(UI.Style.TEXT_NORMAL + "✗", UI.Style.TEXT_NORMAL + `${toolDisplay(part).title} failed`)
 }
 
-/** @internal Used by the V1 command boundary before a Session exists. */
-export function reportRunError(input: Pick<RunCommandInput, "format">, message: string, sessionID?: string) {
+function reportRunError(input: Pick<RunCommandInput, "format">, message: string, sessionID?: string) {
   process.exitCode = 1
   if (input.format === "json") {
     process.stdout.write(

@@ -479,37 +479,6 @@ describe("ModelsDev Service", () => {
     }),
   )
 
-  it.live("refresh(false) republishes once for legacy cache entries without a digest", () =>
-    Effect.gen(function* () {
-      const cache = makeCache()
-      cache.values.set(cacheKey, { updatedAt: Date.now() - 10 * 60 * 1000, body: JSON.stringify(fixture) })
-      const state = yield* Ref.make(initialState)
-      yield* provided(
-        state,
-        cache,
-        Effect.gen(function* () {
-          const svc = yield* ModelsDev.Service
-          const bus = yield* Bus.Service
-          const refreshed = yield* bus.subscribe(ModelsDev.Event.Refreshed).pipe(
-            Stream.take(1),
-            Stream.runCollect,
-            Effect.forkScoped,
-            Effect.flatMap((fiber) =>
-              Effect.gen(function* () {
-                yield* Effect.yieldNow
-                yield* svc.refresh(false)
-                return yield* Fiber.join(fiber)
-              }),
-            ),
-          )
-          expect(refreshed.length).toBe(1)
-        }),
-      )
-      // The rewritten entry now carries a digest, so later identical bodies stay quiet.
-      expect(cache.values.get(cacheKey)).toMatchObject({ digest: bodyDigest(JSON.stringify(fixture)) })
-    }),
-  )
-
   it.live("refresh swallows HTTP errors and leaves cache intact", () =>
     Effect.gen(function* () {
       const cache = makeCache()

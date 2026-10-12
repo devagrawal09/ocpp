@@ -647,6 +647,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Create a session at the requested location.",
@@ -17172,9 +17182,6 @@
           "messageID": {
             "type": "string",
             "pattern": "^msg_"
-          },
-          "partID": {
-            "type": "string"
           },
           "snapshot": {
             "type": "string"

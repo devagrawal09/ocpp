@@ -17,7 +17,6 @@ import { CredentialFact } from "../src/credential-fact.js"
 import { KeyValueFact } from "../src/key-value-fact.js"
 import { ProjectFact } from "../src/project-fact.js"
 import { SessionFact } from "../src/session-fact.js"
-import { FileSystemV1 } from "../src/filesystem-v1.js"
 import { IdeEvent } from "../src/ide-event.js"
 import { McpEvent } from "../src/mcp-event.js"
 import { Plugin } from "../src/plugin.js"
@@ -67,7 +66,6 @@ describe("public event manifest", () => {
     expect(Project.Event.Definitions).toEqual([Project.Event.Updated])
     expect(Config.Event.Definitions).toEqual([Config.Event.Updated])
     expect(FileSystem.Event.Definitions).toEqual([FileSystem.Event.Changed])
-    expect(FileSystemV1.Event.Definitions).toEqual([FileSystemV1.Event.Edited])
     expect(Integration.Event.Definitions).toEqual([Integration.Event.Updated])
     expect(PersistentPty.Event.Definitions).toEqual([PersistentPty.Event.Added, PersistentPty.Event.Removed])
     expect(Form.Event.Definitions).toEqual([Form.Event.Created, Form.Event.Replied, Form.Event.Cancelled])

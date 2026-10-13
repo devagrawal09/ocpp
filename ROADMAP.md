@@ -79,4 +79,17 @@ agreed; complete it with a repeatable task set and a report of quality and cost.
 
 ## Completed
 
-No completed roadmap items recorded yet.
+### Decision-First Capability Loop: Repeatability Phase
+
+Status: completed; explicitly requested experiment, separate from the performance baseline.
+
+The median proof demonstrated generation and next-step execution with Jev-owned
+termination. The unchanged loop then passed 5/9 trials across three fixtures,
+three isolated repeats each. Tests were unchanged in all runs; the four failures
+hit the step bound, with no false-success quits. Complete traces and independent
+verification were recorded. Brittle file comparisons, malformed generated patches,
+and early generation-budget consumption remain limitations, not solved reliability.
+
+See [methodology, results, and reproduction](.ocpp/experiments/decision-loop/RESULTS.md).
+No general-reliability or total-cost claim is made.
+Implementation and evidence: [6f310d25c6](https://github.com/devagrawal09/ocpp/commit/6f310d25c6).

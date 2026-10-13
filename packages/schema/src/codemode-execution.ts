@@ -2,9 +2,9 @@ export * as CodeModeExecution from "./codemode-execution.js"
 
 import { Schema } from "effect"
 import { ascending } from "./identifier.js"
-import { optional, statics } from "./schema.js"
+import { brand, optional, statics } from "./schema.js"
 
-const IDSchema = Schema.String.check(Schema.isStartsWith("exe_")).pipe(Schema.brand("CodeModeExecution.ID"))
+const IDSchema = Schema.String.check(Schema.isStartingWith("exe_")).pipe(brand("CodeModeExecution.ID"))
 
 export const ID = IDSchema.pipe(
   statics((schema: typeof IDSchema) => ({

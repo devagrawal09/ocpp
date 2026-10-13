@@ -3,7 +3,7 @@ import { makeGlobalNode } from "@ocpp/util/effect/app-node"
 import { httpClient } from "@ocpp/util/effect/app-node-platform"
 import { SdkPlugins } from "@ocpp/core/plugin/sdk"
 import { Config, Effect, FileSystem, Layer } from "effect"
-import { HttpClient } from "effect/unstable/http"
+import { HttpClient } from "effect/http"
 import { DriveManifest } from "../manifest"
 import { SimulationNetwork } from "./network"
 import { SimulationOpenAI } from "./openai"
@@ -28,7 +28,7 @@ export const simulationReplacements: (app: {
     // ModelsDev dies when its catalog fetch fails, so simulation answers it with
     // an empty catalog; providers come from seeded config instead.
     const models = SimulationNetwork.json("GET", "https://models.opencode.ai/api.json", {})
-    const drive = yield* Config.string("OCPP_DRIVE").pipe(Config.withDefault(undefined))
+    const drive = yield* Config.String("OCPP_DRIVE").pipe(Config.withDefault(undefined))
     if (!drive) return [[httpClient, SimulationNetwork.layer([models])]] satisfies LayerNode.Replacements
 
     const manifest = yield* DriveManifest.resolve()

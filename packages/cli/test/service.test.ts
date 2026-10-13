@@ -4,6 +4,7 @@ import { Global } from "@ocpp/util/global"
 import { OCPP_VERSION } from "../src/version"
 import { expect, test } from "bun:test"
 import { Effect, Schema } from "effect"
+import { NetAddress } from "effect/net"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -483,7 +484,7 @@ test("service registration replaces a stale owner with the bound address", async
   try {
     const cleanup = await Effect.runPromise(
       ServiceRegistration.register({
-        address: { _tag: "TcpAddress", hostname: "127.0.0.1", port: 4321 },
+        address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 4321),
         id: "owner",
         file: registration,
         shutdown: Effect.never,

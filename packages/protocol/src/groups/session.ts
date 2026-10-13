@@ -6,11 +6,12 @@ import { Session } from "@ocpp/schema/session"
 import { SessionStats } from "@ocpp/schema/session-stats"
 import { InstructionEntry } from "@ocpp/schema/instruction-entry"
 import { Project } from "@ocpp/schema/project"
-import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, statics } from "@ocpp/schema/schema"
+import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, brand, statics } from "@ocpp/schema/schema"
 import { Event } from "@ocpp/schema/event"
 import { Workspace } from "@ocpp/schema/workspace"
-import { Context, Effect, Encoding, Result, Schema, SchemaGetter, Struct } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { Context, Effect, Result, Schema, SchemaGetter, SchemaParser, Struct } from "effect"
+import { Base64Url } from "effect/encoding"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
 import {
   ConflictError,
   CommandExecutionError,
@@ -89,14 +90,15 @@ const decodeSessionsCursor = Schema.decodeUnknownEffect(SessionsCursorJson)
 const invalidCursor = "Invalid cursor" as const
 
 export const SessionsCursor = Schema.String.pipe(
-  Schema.brand("SessionsCursor"),
+  brand("SessionsCursor"),
   statics((schema) => {
-    const make = schema.make.bind(schema)
+    // Reading `schema.make` would memoize it as a read-only property that the override below cannot replace.
+    const make = SchemaParser.make(schema)
     return {
-      make: (input: typeof SessionsCursorInput.Type) => make(Encoding.encodeBase64Url(encodeSessionsCursor(input))),
+      make: (input: typeof SessionsCursorInput.Type) => make(Base64Url.encode(encodeSessionsCursor(input))),
       parse: (input: string) =>
         Effect.suspend(() => {
-          const result = Encoding.decodeBase64UrlString(input)
+          const result = Base64Url.decodeString(input)
           return Result.isFailure(result)
             ? Effect.fail(invalidCursor)
             : decodeSessionsCursor(result.success).pipe(Effect.mapError(() => invalidCursor))

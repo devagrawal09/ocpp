@@ -2,7 +2,7 @@ import { Integration } from "@ocpp/schema/integration"
 import { Location } from "@ocpp/schema/location"
 import { Form } from "@ocpp/schema/form"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { InvalidRequestError } from "../errors.js"
 import { LocationQuery, locationQueryOpenApi } from "./location.js"
 

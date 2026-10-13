@@ -1,5 +1,5 @@
 import { Effect, Layer, Ref } from "effect"
-import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { LLMClient, RequestExecutor } from "../../src/route.js"
 import type { Service as LLMClientService } from "../../src/route/client.js"
 import type { Service as RequestExecutorService } from "../../src/route/executor.js"

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Money } from "@ocpp/schema/money"
 import { Effect, Fiber, Layer, Ref, Scope, Stream } from "effect"
-import { HttpClient, HttpClientResponse } from "effect/unstable/http"
+import { HttpClient, HttpClientResponse } from "effect/http"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@ocpp/util/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"

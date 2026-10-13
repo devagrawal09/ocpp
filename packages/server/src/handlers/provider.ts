@@ -1,7 +1,7 @@
 import { Catalog } from "@ocpp/core/catalog"
 import { ProviderNotFoundError, ServiceUnavailableError } from "@ocpp/protocol/errors"
 import { Effect } from "effect"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api"
 import { response } from "../location"
 import { pluginReadiness } from "./plugin-readiness"

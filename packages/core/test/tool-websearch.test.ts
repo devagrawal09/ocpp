@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Context, Effect, Layer, Schema } from "effect"
-import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { KV } from "@ocpp/core/kv"

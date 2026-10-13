@@ -1,7 +1,7 @@
 import { define } from "@ocpp/plugin/effect/plugin"
 import type { Entry } from "@ocpp/schema/config"
 import { Duration, Effect, Schedule, Schema, Semaphore, Stream } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { Config } from "../../config.js"
 import { Model } from "../../model.js"
 import type { PluginInternal } from "../internal.js"

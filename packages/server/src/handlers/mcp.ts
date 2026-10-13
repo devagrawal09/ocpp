@@ -1,7 +1,7 @@
 import { Mcp } from "@ocpp/core/mcp/index"
 import { McpServerNotFoundError } from "@ocpp/protocol/errors"
 import { Effect } from "effect"
-import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiBuilder, HttpApiSchema } from "effect/http-api"
 import { Api } from "../api"
 import { response } from "../location"
 

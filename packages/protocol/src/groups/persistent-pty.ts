@@ -3,7 +3,7 @@ import { Pty } from "@ocpp/schema/pty"
 import { PtyTicket } from "@ocpp/schema/pty-ticket"
 import { Session } from "@ocpp/schema/session"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { ForbiddenError, InvalidRequestError, PtyNotFoundError, ServiceUnavailableError } from "../errors.js"
 import { PTY_CONNECT_TICKET_QUERY, PTY_CONNECT_TOKEN_HEADER, PTY_CONNECT_TOKEN_HEADER_VALUE } from "./pty.js"
 

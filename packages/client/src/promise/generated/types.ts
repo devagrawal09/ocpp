@@ -455,6 +455,15 @@ export type WebSearchProvider = { id: string; name: string }
 
 export type WebSearchResult = { url: string; title?: string; content?: string; time: { published?: number } }
 
+export type SessionMessageModelSelected = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  type: "model-switched"
+  model: ModelRef
+  previous?: ModelRef
+}
+
 export type ProviderRequest = {
   settings: ProviderSettings
   headers: { [x: string]: string }
@@ -464,6 +473,8 @@ export type ProviderRequest = {
 export type PluginInfo =
   | { id: string; source: PluginSource; status: "active" }
   | { id?: string; source: PluginSource; status: "failed"; error: string }
+
+export type SessionStatsModelUsage = { model: ModelRef; steps: number; tokens: TokenUsageInfo; cost: MoneyUSD }
 
 export type SessionMessageLocationSwitched = {
   id: string
@@ -477,107 +488,6 @@ export type SessionMessageLocationSwitched = {
 }
 
 export type SessionInboxMovePayload = { location: LocationRef; projectID: string; subpath?: string }
-
-export type V2EventServerConnected = {
-  id: string
-  metadata?: { [x: string]: any } | undefined
-  location?: LocationRef | undefined
-  type: "server.connected"
-  data: {}
-}
-
-export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
-
-export type SessionStatsTools =
-  | { mode: "none" }
-  | { mode: "summary"; totals: SessionStatsToolTotals }
-  | { mode: "detail"; totals: SessionStatsToolTotals; usage: Array<SessionStatsToolUsage> }
-
-export type SessionStatsModelUsage = { model: ModelRef; steps: number; tokens: TokenUsageInfo; cost: MoneyUSD }
-
-export type SessionMessageModelSelected = {
-  id: string
-  metadata?: { [x: string]: JsonValue }
-  time: { created: number }
-  type: "model-switched"
-  model: ModelRef
-  previous?: ModelRef
-}
-
-export type PromptFileAttachment = {
-  data: PromptBase64
-  mime: string
-  source: PromptFileSource
-  name?: string
-  description?: string
-  mention?: PromptMention
-}
-
-export type PromptAgentAttachment = { name: string; mention?: PromptMention }
-
-export type PromptSkillAttachment = { id: string; name: string; text?: string; mention?: PromptMention }
-
-export type SessionMessageDisplayCell = null | boolean | number | string | SessionMessageDisplayFile
-
-export type CodeModeExecutionEntry = CodeModeExecutionToolEvent | CodeModeExecutionTraceEvent
-
-export type SessionMessageAssistantText = { type: "text"; text: string; state?: SessionMessageProviderState }
-
-export type SessionMessageAssistantReasoning = {
-  type: "reasoning"
-  text: string
-  state?: SessionMessageProviderState
-  time?: { created: number; completed?: number }
-}
-
-export type ToolContent = ToolTextContent | ToolFileContent
-
-export type SessionMessageAssistantRetry = { attempt: number; at: number; error: SessionStructuredError }
-
-export type SessionMessageCompactionFailed = {
-  type: "compaction"
-  id: string
-  metadata?: { [x: string]: JsonValue }
-  time: { created: number }
-  status: "failed"
-  reason: "auto" | "manual"
-  error: SessionStructuredError
-}
-
-export type SessionInboxCompaction = {
-  id: string
-  sessionID: string
-  timeCreated: number
-  type: "compaction"
-  payload: SessionInboxCompactionPayload
-  delivery: SessionInboxDelivery
-}
-
-export type InstructionEntryInfo = { key: InstructionEntryKey; value: JsonValue }
-
-export type InstructionEntrySnapshot = Array<{ key: InstructionEntryKey; value: JsonValue; removed: boolean }>
-
-export type SessionCreated = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.created"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: {
-    sessionID: string
-    projectID: string
-    location: LocationRef
-    subpath?: string
-    parentID?: string
-    slug: string
-    title?: string
-    agent?: string
-    model?: ModelRef
-    metadata?: SessionMetadata
-    version: string
-  }
-}
 
 export type SessionAgentSelected = {
   id: string
@@ -669,16 +579,6 @@ export type SessionInboxCancelled = {
   data: { sessionID: string; inboxID: string }
 }
 
-export type SessionInboxDeliveryChanged = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.inbox.delivery.changed"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: { sessionID: string; inboxID: string; delivery: SessionInboxDelivery }
-}
-
 export type SessionExecutionStarted = {
   id: string
   created: number
@@ -697,16 +597,6 @@ export type SessionExecutionSucceeded = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string }
-}
-
-export type SessionExecutionFailed = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.execution.failed"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: { sessionID: string; error: SessionStructuredError }
 }
 
 export type SessionExecutionInterrupted = {
@@ -809,32 +699,6 @@ export type SessionCodemodeStarted = {
   data: { sessionID: string; assistantMessageID: string; id: string; executionID: string }
 }
 
-export type SessionInvocationStarted = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.invocation.started"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: {
-    sessionID: string
-    executionID: string
-    trigger: SessionMessageInvocationTrigger
-    handler: string
-    input: JsonValue
-  }
-}
-
-export type SessionRetryScheduled = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.retry.scheduled"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: { sessionID: string; assistantMessageID: string; attempt: number; at: number; error: SessionStructuredError }
-}
-
 export type SessionCompactionStarted = {
   id: string
   created: number
@@ -853,16 +717,6 @@ export type SessionCompactionEnded = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; reason: "auto" | "manual"; text: string; recent: string }
-}
-
-export type SessionCompactionFailed = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.compaction.failed"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: { sessionID: string; reason: "auto" | "manual"; error: SessionStructuredError; inputID?: string }
 }
 
 export type SessionRevertCleared = {
@@ -1210,6 +1064,152 @@ export type McpResourcesChanged = {
   location?: LocationRef
   data: { server: string }
 }
+
+export type V2EventServerConnected = {
+  id: string
+  metadata?: { [x: string]: any } | undefined
+  location?: LocationRef | undefined
+  type: "server.connected"
+  data: {}
+}
+
+export type SessionCreated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.created"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    projectID: string
+    location: LocationRef
+    subpath?: string
+    parentID?: string
+    slug: string
+    title?: string
+    agent?: string
+    model?: ModelRef
+    metadata?: SessionMetadata
+    version: string
+  }
+}
+
+export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
+
+export type SessionStatsTools =
+  | { mode: "none" }
+  | { mode: "summary"; totals: SessionStatsToolTotals }
+  | { mode: "detail"; totals: SessionStatsToolTotals; usage: Array<SessionStatsToolUsage> }
+
+export type PromptFileAttachment = {
+  data: PromptBase64
+  mime: string
+  source: PromptFileSource
+  name?: string
+  description?: string
+  mention?: PromptMention
+}
+
+export type PromptAgentAttachment = { name: string; mention?: PromptMention }
+
+export type PromptSkillAttachment = { id: string; name: string; text?: string; mention?: PromptMention }
+
+export type SessionMessageDisplayCell = null | boolean | number | string | SessionMessageDisplayFile
+
+export type SessionInvocationStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.invocation.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    executionID: string
+    trigger: SessionMessageInvocationTrigger
+    handler: string
+    input: JsonValue
+  }
+}
+
+export type CodeModeExecutionEntry = CodeModeExecutionToolEvent | CodeModeExecutionTraceEvent
+
+export type SessionMessageAssistantText = { type: "text"; text: string; state?: SessionMessageProviderState }
+
+export type SessionMessageAssistantReasoning = {
+  type: "reasoning"
+  text: string
+  state?: SessionMessageProviderState
+  time?: { created: number; completed?: number }
+}
+
+export type ToolContent = ToolTextContent | ToolFileContent
+
+export type SessionMessageAssistantRetry = { attempt: number; at: number; error: SessionStructuredError }
+
+export type SessionMessageCompactionFailed = {
+  type: "compaction"
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  status: "failed"
+  reason: "auto" | "manual"
+  error: SessionStructuredError
+}
+
+export type SessionExecutionFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.execution.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; error: SessionStructuredError }
+}
+
+export type SessionRetryScheduled = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.retry.scheduled"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; attempt: number; at: number; error: SessionStructuredError }
+}
+
+export type SessionCompactionFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.compaction.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; reason: "auto" | "manual"; error: SessionStructuredError; inputID?: string }
+}
+
+export type SessionInboxDeliveryChanged = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.inbox.delivery.changed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; inboxID: string; delivery: SessionInboxDelivery }
+}
+
+export type SessionInboxCompaction = {
+  id: string
+  sessionID: string
+  timeCreated: number
+  type: "compaction"
+  payload: SessionInboxCompactionPayload
+  delivery: SessionInboxDelivery
+}
+
+export type InstructionEntryInfo = { key: InstructionEntryKey; value: JsonValue }
+
+export type InstructionEntrySnapshot = Array<{ key: InstructionEntryKey; value: JsonValue; removed: boolean }>
 
 export type SessionShellStarted = {
   id: string

@@ -12,8 +12,8 @@ export const Rule = Schema.Union([Action, Object]).annotate({ identifier: "Permi
 export type Rule = Schema.Schema.Type<typeof Rule>
 
 // Known permission keys get explicit types in the Effect schema for generated
-// docs/types. Runtime config parsing uses Effect's `propertyOrder: "original"`
-// parse option so user key order is preserved for permission precedence.
+// docs/types. Effect decodes known keys first, then the rest in input order, so
+// decoded key order does not follow user order.
 const InputObject = Schema.StructWithRest(
   Schema.Struct({
     read: Schema.optional(Rule),

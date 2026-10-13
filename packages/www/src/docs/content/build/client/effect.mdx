@@ -16,7 +16,7 @@ Create a client with the server URL, then call methods grouped by API resource.
 ```ts
 import { AbsolutePath, Location, OC++ } from "@ocpp/client/effect"
 import { Effect } from "effect"
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 
 const program = Effect.gen(function* () {
   const client = yield* OC++.make({ baseUrl: "http://localhost:4096" })
@@ -75,7 +75,7 @@ import { NodeFileSystem } from "@effect/platform-node"
 import { OC++ } from "@ocpp/client/effect"
 import { Service } from "@ocpp/client/effect/service"
 import { Effect } from "effect"
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 
 const program = Effect.gen(function* () {
   const endpoint = yield* Service.ensure()

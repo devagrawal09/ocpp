@@ -1,10 +1,10 @@
-import { Argument, Flag, GlobalFlag } from "effect/unstable/cli"
+import { Argument, Flag, GlobalFlag } from "effect/cli"
 import { Schema } from "effect"
 import { Spec } from "../framework/spec"
 import { Updater } from "../services/updater"
 
-export const PrintLogs = GlobalFlag.setting("print-logs")({
-  flag: Flag.boolean("print-logs").pipe(
+export const PrintLogs = GlobalFlag.Setting("print-logs")({
+  flag: Flag.Boolean("print-logs").pipe(
     Flag.withDescription("Print logs to stderr (server logs require --standalone)"),
     Flag.withDefault(false),
   ),
@@ -13,11 +13,11 @@ export const PrintLogs = GlobalFlag.setting("print-logs")({
 declare const OCPP_CLI_NAME: string | undefined
 
 const ServerParams = {
-  standalone: Flag.boolean("standalone").pipe(
+  standalone: Flag.Boolean("standalone").pipe(
     Flag.withDescription("Run with a private server instead of the background service"),
     Flag.withDefault(false),
   ),
-  server: Flag.string("server").pipe(
+  server: Flag.String("server").pipe(
     Flag.withDescription("Connect to a server URL instead of the background service"),
     Flag.optional,
   ),
@@ -25,9 +25,9 @@ const ServerParams = {
 
 // Accepted and ignored so existing scripts keep working: nothing asks for approval anymore.
 const IgnoredParams = {
-  auto: Flag.boolean("auto").pipe(Flag.withDefault(false), Flag.withHidden),
-  yolo: Flag.boolean("yolo").pipe(Flag.withDefault(false), Flag.withHidden),
-  dangerouslySkipPermissions: Flag.boolean("dangerously-skip-permissions").pipe(
+  auto: Flag.Boolean("auto").pipe(Flag.withDefault(false), Flag.withHidden),
+  yolo: Flag.Boolean("yolo").pipe(Flag.withDefault(false), Flag.withHidden),
+  dangerouslySkipPermissions: Flag.Boolean("dangerously-skip-permissions").pipe(
     Flag.withDefault(false),
     Flag.withHidden,
   ),
@@ -40,11 +40,11 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
     Spec.make("upgrade", {
       description: "Upgrade OC++ to the latest or a specific version",
       params: {
-        target: Argument.string("target").pipe(
+        target: Argument.String("target").pipe(
           Argument.withDescription("Version to upgrade to (with or without a leading v)"),
           Argument.optional,
         ),
-        method: Flag.choice("method", Updater.methods).pipe(
+        method: Flag.Literals("method", Updater.methods).pipe(
           Flag.withAlias("m"),
           Flag.withDescription("Installation method to use"),
           Flag.optional,
@@ -56,17 +56,17 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
       description: "Make a request to the running server",
       params: {
         ...ServerParams,
-        request: Argument.string("operation | method path").pipe(
+        request: Argument.String("operation | method path").pipe(
           Argument.withDescription("OpenAPI operation ID, or an HTTP method followed by a path"),
           Argument.variadic({ min: 1, max: 2 }),
         ),
-        data: Flag.string("data").pipe(Flag.withAlias("d"), Flag.withDescription("Request body"), Flag.optional),
-        header: Flag.string("header").pipe(
+        data: Flag.String("data").pipe(Flag.withAlias("d"), Flag.withDescription("Request body"), Flag.optional),
+        header: Flag.String("header").pipe(
           Flag.withAlias("H"),
           Flag.withDescription("Request header in name:value form"),
           Flag.atMost(100),
         ),
-        param: Flag.keyValuePair("param").pipe(Flag.withDescription("OpenAPI path or query parameter"), Flag.optional),
+        param: Flag.KeyValuePair("param").pipe(Flag.withDescription("OpenAPI path or query parameter"), Flag.optional),
       },
     }),
     Spec.make("debug", {
@@ -83,7 +83,7 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         Spec.make("login", {
           description: "Log in to OC++ Console",
           params: {
-            url: Argument.string("url").pipe(Argument.withDescription("Console server URL"), Argument.optional),
+            url: Argument.String("url").pipe(Argument.withDescription("Console server URL"), Argument.optional),
           },
         }),
       ],
@@ -95,7 +95,7 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
           description: "list providers and credentials",
           params: {
             ...ServerParams,
-            format: Flag.choice("format", ["default", "json"]).pipe(
+            format: Flag.Literals("format", ["default", "json"]).pipe(
               Flag.withDescription("Output format"),
               Flag.withDefault("default"),
             ),
@@ -105,18 +105,18 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
           description: "log in to a provider",
           params: {
             ...ServerParams,
-            target: Argument.string("target").pipe(
+            target: Argument.String("target").pipe(
               Argument.withDescription("Integration ID, name, or well-known provider URL"),
               Argument.optional,
             ),
-            method: Flag.string("method").pipe(Flag.withDescription("Authentication method ID"), Flag.optional),
+            method: Flag.String("method").pipe(Flag.withDescription("Authentication method ID"), Flag.optional),
           },
         }),
         Spec.make("logout", {
           description: "log out from a configured provider",
           params: {
             ...ServerParams,
-            target: Argument.string("target").pipe(
+            target: Argument.String("target").pipe(
               Argument.withDescription("Integration ID or name"),
               Argument.optional,
             ),
@@ -131,21 +131,21 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         Spec.make("add", {
           description: "Add an MCP server to your configuration",
           params: {
-            name: Argument.string("name").pipe(Argument.withDescription("Name of the MCP server")),
-            command: Argument.string("command").pipe(
+            name: Argument.String("name").pipe(Argument.withDescription("Name of the MCP server")),
+            command: Argument.String("command").pipe(
               Argument.withDescription("Command and arguments for a local server, passed after --"),
               Argument.variadic({ min: 0 }),
             ),
-            url: Flag.string("url").pipe(Flag.withDescription("URL for a remote MCP server"), Flag.optional),
-            header: Flag.keyValuePair("header").pipe(
+            url: Flag.String("url").pipe(Flag.withDescription("URL for a remote MCP server"), Flag.optional),
+            header: Flag.KeyValuePair("header").pipe(
               Flag.withDescription("HTTP header for a remote server, as name=value"),
               Flag.optional,
             ),
-            env: Flag.keyValuePair("env").pipe(
+            env: Flag.KeyValuePair("env").pipe(
               Flag.withDescription("Environment variable for a local server, as name=value"),
               Flag.optional,
             ),
-            global: Flag.boolean("global").pipe(
+            global: Flag.Boolean("global").pipe(
               Flag.withDescription("Write to the global config instead of the project config"),
               Flag.withDefault(false),
             ),
@@ -153,11 +153,11 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         }),
         Spec.make("auth", {
           description: "Authenticate with an OAuth-capable remote MCP server",
-          params: { name: Argument.string("name").pipe(Argument.withDescription("Name of the MCP server")) },
+          params: { name: Argument.String("name").pipe(Argument.withDescription("Name of the MCP server")) },
         }),
         Spec.make("logout", {
           description: "Remove stored OAuth credentials for an MCP server",
-          params: { name: Argument.string("name").pipe(Argument.withDescription("Name of the MCP server")) },
+          params: { name: Argument.String("name").pipe(Argument.withDescription("Name of the MCP server")) },
         }),
       ],
     }),
@@ -167,7 +167,7 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         Spec.make("list", {
           description: "List plugins",
           params: {
-            builtin: Flag.boolean("builtin").pipe(
+            builtin: Flag.Boolean("builtin").pipe(
               Flag.withDescription("Include built-in server plugins"),
               Flag.withDefault(false),
             ),
@@ -176,13 +176,13 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         Spec.make("add", {
           description: "Install a plugin and add it to the global configuration",
           params: {
-            package: Argument.string("package").pipe(Argument.withDescription("npm registry or Git package specifier")),
+            package: Argument.String("package").pipe(Argument.withDescription("npm registry or Git package specifier")),
           },
         }),
         Spec.make("remove", {
           description: "Remove a plugin from global configuration",
           params: {
-            package: Argument.string("package").pipe(Argument.withDescription("configured package specifier")),
+            package: Argument.String("package").pipe(Argument.withDescription("configured package specifier")),
           },
         }),
       ],
@@ -195,39 +195,39 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
       description: "Show shareable usage statistics",
       params: {
         ...ServerParams,
-        days: Flag.integer("days").pipe(
+        days: Flag.Int("days").pipe(
           Flag.withSchema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
           Flag.withDescription("Show the last N days; 0 means today"),
           Flag.optional,
         ),
-        year: Flag.integer("year").pipe(
+        year: Flag.Int("year").pipe(
           Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 1970, maximum: 9_999 }))),
           Flag.withDescription("Show a calendar year"),
           Flag.optional,
         ),
-        all: Flag.boolean("all").pipe(Flag.withDescription("Show lifetime statistics"), Flag.withDefault(false)),
-        project: Flag.string("project").pipe(
+        all: Flag.Boolean("all").pipe(Flag.withDescription("Show lifetime statistics"), Flag.withDefault(false)),
+        project: Flag.String("project").pipe(
           Flag.withDescription('Filter by project ID, or use "." for the current project'),
           Flag.optional,
         ),
-        models: Flag.boolean("models").pipe(Flag.withDescription("Show model usage"), Flag.withDefault(false)),
-        tools: Flag.boolean("tools").pipe(Flag.withDescription("Show tool reliability"), Flag.withDefault(false)),
-        cost: Flag.boolean("cost").pipe(Flag.withDescription("Show cost and token details"), Flag.withDefault(false)),
-        full: Flag.boolean("full").pipe(Flag.withDescription("Show every detailed section"), Flag.withDefault(false)),
-        limit: Flag.integer("limit").pipe(
+        models: Flag.Boolean("models").pipe(Flag.withDescription("Show model usage"), Flag.withDefault(false)),
+        tools: Flag.Boolean("tools").pipe(Flag.withDescription("Show tool reliability"), Flag.withDefault(false)),
+        cost: Flag.Boolean("cost").pipe(Flag.withDescription("Show cost and token details"), Flag.withDefault(false)),
+        full: Flag.Boolean("full").pipe(Flag.withDescription("Show every detailed section"), Flag.withDefault(false)),
+        limit: Flag.Int("limit").pipe(
           Flag.withSchema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
           Flag.withDescription("Number of rows in detailed sections"),
           Flag.withDefault(5),
         ),
-        json: Flag.boolean("json").pipe(Flag.withDescription("Output statistics as JSON"), Flag.withDefault(false)),
+        json: Flag.Boolean("json").pipe(Flag.withDescription("Output statistics as JSON"), Flag.withDefault(false)),
       },
     }),
     Spec.make("export", {
       description: "Export session data as JSON",
       params: {
         ...ServerParams,
-        session: Argument.string("session").pipe(Argument.withDescription("Session ID to export"), Argument.optional),
-        sanitize: Flag.boolean("sanitize").pipe(
+        session: Argument.String("session").pipe(Argument.withDescription("Session ID to export"), Argument.optional),
+        sanitize: Flag.Boolean("sanitize").pipe(
           Flag.withDescription("Redact sensitive transcript and file data"),
           Flag.withDefault(false),
         ),
@@ -237,8 +237,8 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
       description: "Import session data from a JSON file or URL",
       params: {
         ...ServerParams,
-        file: Argument.string("file").pipe(Argument.withDescription("JSON file or URL to import")),
-        directory: Flag.string("directory").pipe(
+        file: Argument.String("file").pipe(Argument.withDescription("JSON file or URL to import")),
+        directory: Flag.String("directory").pipe(
           Flag.withDescription("Directory in which to import the session"),
           Flag.optional,
         ),
@@ -248,41 +248,41 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
       description: "Run OC++ with a message",
       params: {
         ...ServerParams,
-        message: Argument.string("message").pipe(
+        message: Argument.String("message").pipe(
           Argument.withDescription("Message to send"),
           Argument.variadic({ min: 0 }),
         ),
-        continue: Flag.boolean("continue").pipe(
+        continue: Flag.Boolean("continue").pipe(
           Flag.withAlias("c"),
           Flag.withDescription("Continue the last session"),
           Flag.withDefault(false),
         ),
-        session: Flag.string("session").pipe(
+        session: Flag.String("session").pipe(
           Flag.withAlias("s"),
           Flag.withDescription("Session ID to continue"),
           Flag.optional,
         ),
-        fork: Flag.boolean("fork").pipe(
+        fork: Flag.Boolean("fork").pipe(
           Flag.withDescription("Fork the session before continuing"),
           Flag.withDefault(false),
         ),
-        model: Flag.string("model").pipe(
+        model: Flag.String("model").pipe(
           Flag.withAlias("m"),
           Flag.withDescription("Model to use in the format provider/model#variant"),
           Flag.optional,
         ),
-        agent: Flag.string("agent").pipe(Flag.withDescription("Agent to use"), Flag.optional),
-        format: Flag.choice("format", ["default", "json"]).pipe(
+        agent: Flag.String("agent").pipe(Flag.withDescription("Agent to use"), Flag.optional),
+        format: Flag.Literals("format", ["default", "json"]).pipe(
           Flag.withDescription("Output format"),
           Flag.withDefault("default"),
         ),
-        file: Flag.string("file").pipe(
+        file: Flag.String("file").pipe(
           Flag.withAlias("f"),
           Flag.withDescription("File to attach to the message"),
           Flag.atMost(100),
         ),
-        title: Flag.string("title").pipe(Flag.withDescription("Session title"), Flag.optional),
-        thinking: Flag.boolean("thinking").pipe(Flag.withDescription("Show thinking blocks"), Flag.withDefault(false)),
+        title: Flag.String("title").pipe(Flag.withDescription("Session title"), Flag.optional),
+        thinking: Flag.Boolean("thinking").pipe(Flag.withDescription("Show thinking blocks"), Flag.withDefault(false)),
         ...IgnoredParams,
       },
     }),
@@ -296,8 +296,8 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         Spec.make("get", {
           description: "Get service configuration",
           params: {
-            key: Argument.string("key").pipe(Argument.withDescription("Service setting or env"), Argument.optional),
-            name: Argument.string("name").pipe(
+            key: Argument.String("key").pipe(Argument.withDescription("Service setting or env"), Argument.optional),
+            name: Argument.String("name").pipe(
               Argument.withDescription("Environment variable name"),
               Argument.optional,
             ),
@@ -306,11 +306,11 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         Spec.make("set", {
           description: "Set service configuration",
           params: {
-            key: Argument.string("key").pipe(Argument.withDescription("Service setting or env")),
-            value: Argument.string("value").pipe(
+            key: Argument.String("key").pipe(Argument.withDescription("Service setting or env")),
+            value: Argument.String("value").pipe(
               Argument.withDescription("Setting value or environment variable name"),
             ),
-            nestedValue: Argument.string("env-value").pipe(
+            nestedValue: Argument.String("env-value").pipe(
               Argument.withDescription("Environment variable value"),
               Argument.optional,
             ),
@@ -319,8 +319,8 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
         Spec.make("unset", {
           description: "Unset service configuration",
           params: {
-            key: Argument.string("key").pipe(Argument.withDescription("Service setting or env")),
-            name: Argument.string("name").pipe(
+            key: Argument.String("key").pipe(Argument.withDescription("Service setting or env")),
+            name: Argument.String("name").pipe(
               Argument.withDescription("Environment variable name"),
               Argument.optional,
             ),
@@ -332,15 +332,15 @@ const Root = Spec.make(typeof OCPP_CLI_NAME === "string" ? OCPP_CLI_NAME : "ocpp
     Spec.make("serve", {
       description: "Start the v2 API and web server",
       params: {
-        hostname: Flag.string("hostname").pipe(Flag.optional),
-        port: Flag.integer("port").pipe(Flag.optional),
-        cors: Flag.string("cors").pipe(
+        hostname: Flag.String("hostname").pipe(Flag.optional),
+        port: Flag.Int("port").pipe(Flag.optional),
+        cors: Flag.String("cors").pipe(
           Flag.withSchema(Schema.NonEmptyString),
           Flag.withDescription("Additional allowed CORS origin (repeat for multiple origins)"),
           Flag.atLeast(0),
         ),
-        service: Flag.boolean("service").pipe(Flag.withDefault(false)),
-        stdio: Flag.boolean("stdio").pipe(Flag.withDefault(false)),
+        service: Flag.Boolean("service").pipe(Flag.withDefault(false)),
+        stdio: Flag.Boolean("stdio").pipe(Flag.withDefault(false)),
       },
     }),
   ],

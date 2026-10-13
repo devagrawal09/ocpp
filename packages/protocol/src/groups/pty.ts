@@ -2,7 +2,7 @@ import { Pty } from "@ocpp/schema/pty"
 import { PtyTicket } from "@ocpp/schema/pty-ticket"
 import { Location } from "@ocpp/schema/location"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { ForbiddenError, PtyNotFoundError } from "../errors.js"
 import { LocationQuery, locationQueryOpenApi } from "./location.js"
 

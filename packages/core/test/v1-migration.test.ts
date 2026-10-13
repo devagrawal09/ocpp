@@ -13,7 +13,7 @@ import { AbsolutePath } from "@ocpp/core/schema"
 import { Global } from "@ocpp/util/global"
 import { Effect, Fiber, Layer, Logger, Schedule, Schema, Scope } from "effect"
 import { eq, sql } from "drizzle-orm"
-import type { SqlClient } from "effect/unstable/sql/SqlClient"
+import type { SqlClient } from "effect/sql/SqlClient"
 import { tmpdir } from "./fixture/tmpdir"
 import path from "path"
 

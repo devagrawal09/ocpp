@@ -1,7 +1,7 @@
 import { Session } from "@ocpp/schema/session"
 import { SessionMessage } from "@ocpp/schema/session-message"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { InvalidCursorError, SessionNotFoundError, UnknownError } from "../errors.js"
 
 export const SessionMessagesQuery = Schema.Struct({

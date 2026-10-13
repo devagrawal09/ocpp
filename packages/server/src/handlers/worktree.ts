@@ -2,7 +2,7 @@ import { Git } from "@ocpp/core/git"
 import { Worktree } from "@ocpp/core/worktree"
 import { WorktreeError } from "@ocpp/protocol/groups/worktree"
 import { Effect } from "effect"
-import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiBuilder, HttpApiSchema } from "effect/http-api"
 import { Api } from "../api"
 
 export const WorktreeHandler = HttpApiBuilder.group(Api, "server.worktree", (handlers) =>

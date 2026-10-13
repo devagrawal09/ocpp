@@ -5,11 +5,11 @@ import { optional } from "./schema.js"
 import { ephemeral, inventory } from "./event.js"
 import { IntegrationID, IntegrationMethodID } from "./integration-id.js"
 import { ascending } from "./identifier.js"
-import { NonNegativeInt, statics } from "./schema.js"
+import { NonNegativeInt, brand, statics } from "./schema.js"
 import { Form } from "./form.js"
 
 export const ID = Schema.String.pipe(
-  Schema.brand("Credential.ID"),
+  brand("Credential.ID"),
   statics((schema) => ({ create: () => schema.make("cred_" + ascending()) })),
 )
 export type ID = typeof ID.Type

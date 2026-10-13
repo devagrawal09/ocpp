@@ -1,4 +1,5 @@
-import { Effect, Encoding, Schema } from "effect"
+import { Effect, Schema } from "effect"
+import { Base64 } from "effect/encoding"
 import { Route } from "../route/client.js"
 import { Endpoint } from "../route/endpoint.js"
 import { Protocol } from "../route/protocol.js"
@@ -526,7 +527,7 @@ const encodeRedactedContent = (chunks: ReadonlyArray<Uint8Array>) => {
     bytes.set(chunk, offset)
     return offset + chunk.length
   }, 0)
-  return Encoding.encodeBase64(bytes)
+  return Base64.encode(bytes)
 }
 
 const step = (state: ParserState, event: BedrockEvent) =>
@@ -576,7 +577,7 @@ const step = (state: ParserState, event: BedrockEvent) =>
       const events: LLMEvent[] = []
       const redactedChunks = yield* (() => {
         if (reasoning.redactedContent === undefined) return Effect.succeed(undefined)
-        return Effect.fromResult(Encoding.decodeBase64(reasoning.redactedContent)).pipe(
+        return Effect.fromResult(Base64.decode(reasoning.redactedContent)).pipe(
           Effect.map((chunk) => [...(state.reasoningRedactedContent[index] ?? []), chunk]),
           Effect.mapError((cause) =>
             ProviderShared.eventError(

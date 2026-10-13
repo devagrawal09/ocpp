@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { ConfigProvider, Effect, Layer, Ref, Stream } from "effect"
-import { Headers, HttpClientRequest } from "effect/unstable/http"
+import { Headers, HttpClientRequest } from "effect/http"
 import {
   LLM,
   AIError,

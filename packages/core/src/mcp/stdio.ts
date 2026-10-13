@@ -4,8 +4,8 @@ import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/s
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js"
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js"
 import { Cause, Duration, Effect, Queue, Scope, Stream } from "effect"
-import { ChildProcess } from "effect/unstable/process"
-import type { ChildProcessHandle } from "effect/unstable/process/ChildProcessSpawner"
+import { ChildProcess } from "effect/process"
+import type { ChildProcessHandle } from "effect/process/ChildProcessSpawner"
 import { Environment } from "../environment/index.js"
 
 /** Mirrors StdioClientTransport: wait this long for a graceful exit after stdin closes. */

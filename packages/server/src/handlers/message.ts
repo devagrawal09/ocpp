@@ -1,7 +1,7 @@
 import { SessionMessage } from "@ocpp/core/session/message"
 import { Session } from "@ocpp/core/session"
 import { Effect, Schema } from "effect"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api"
 import { InvalidCursorError } from "@ocpp/protocol/errors"
 import { failedMessageDecode, missingSession } from "./session-error"

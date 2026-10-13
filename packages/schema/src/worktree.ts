@@ -3,10 +3,10 @@ export * as Worktree from "./worktree.js"
 import { Schema } from "effect"
 import { durable, ephemeral, inventory } from "./event.js"
 import { ProjectID } from "./project-id.js"
-import { AbsolutePath, optional } from "./schema.js"
+import { AbsolutePath, brand, optional } from "./schema.js"
 import { Project } from "./project.js"
 
-export const StrategyID = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()), Schema.brand("Worktree.StrategyID"))
+export const StrategyID = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()), brand("Worktree.StrategyID"))
 export type StrategyID = typeof StrategyID.Type
 
 export const CreateInput = Schema.Struct({

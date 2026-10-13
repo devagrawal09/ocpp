@@ -1,5 +1,6 @@
-import { Effect, Encoding, Schema } from "effect"
-import { Headers, HttpClientRequest } from "effect/unstable/http"
+import { Effect, Schema } from "effect"
+import { Base64 } from "effect/encoding"
+import { Headers, HttpClientRequest } from "effect/http"
 import { GeneratedImage, ImageModel, ImageResponse, type ImageRequestFor, type ImageRoute } from "../image.js"
 import { Auth, type Definition as AuthDefinition } from "../route/auth.js"
 import { Usage, mergeHttpOptions, mergeJsonRecords, type HttpOptions } from "../schema/index.js"
@@ -142,7 +143,7 @@ export const model = (input: ModelInput) => {
       const images = yield* Effect.forEach(decoded.data, (item, index) => {
         const mediaType = item.mime_type ?? "application/octet-stream"
         if (item.b64_json)
-          return Effect.fromResult(Encoding.decodeBase64(item.b64_json)).pipe(
+          return Effect.fromResult(Base64.decode(item.b64_json)).pipe(
             Effect.mapError((cause) =>
               output.invalid(`xAI Images result ${index} contains invalid base64 data`, cause),
             ),

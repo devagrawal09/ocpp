@@ -6,13 +6,13 @@ import {
   PTY_CONNECT_TOKEN_HEADER,
   PTY_CONNECT_TOKEN_HEADER_VALUE,
 } from "@ocpp/protocol/groups/persistent-pty"
-import { Effect, Queue, Semaphore } from "effect"
-import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
-import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
-import { Socket } from "effect/unstable/socket"
+import { Effect, Queue } from "effect"
+import { HttpServerRequest, HttpServerResponse } from "effect/http"
+import { HttpApiBuilder, HttpApiSchema } from "effect/http-api"
+import { Socket } from "effect/socket"
 import { Api } from "../api"
 import { CorsConfig, isAllowedRequestOrigin } from "../cors"
-import { runPtySocket } from "./pty-socket"
+import { readPtySocket, runPtySocket } from "./pty-socket"
 
 export const PersistentPtyHandler = HttpApiBuilder.group(Api, "server.experimental", (handlers) =>
   Effect.gen(function* () {
@@ -124,9 +124,8 @@ export const PersistentPtyHandler = HttpApiBuilder.group(Api, "server.experiment
           if (!Number.isSafeInteger(cursor) || cursor < 0) return HttpServerResponse.empty({ status: 400 })
 
           const socket = yield* Effect.orDie(ctx.request.upgrade)
-          const write = yield* socket.writer
+          const writer = yield* socket.writer
           const outbox = yield* Queue.unbounded<string | Uint8Array | Socket.CloseEvent>()
-          const input = yield* Semaphore.make(1)
           let attachment: PersistentPty.Attachment | undefined
           // Bun's native ws upgrade must start before asynchronous daemon I/O.
           const onOpen = Effect.gen(function* () {
@@ -187,44 +186,42 @@ export const PersistentPtyHandler = HttpApiBuilder.group(Api, "server.experiment
           const drain = Effect.gen(function* () {
             while (true) {
               const item = yield* Queue.take(outbox)
-              yield* write(item)
+              yield* writer.write(item)
               if (item instanceof Socket.CloseEvent) return
             }
           })
 
           yield* runPtySocket(
             drain,
-            socket.runRaw(
+            readPtySocket(
+              socket,
+              // The reader handles one frame at a time, so daemon input stays ordered without a lock.
               (message) =>
-                input.withPermit(
-                  Effect.suspend(() => {
-                    if (!attachment) return Effect.void
-                    const data = typeof message === "string" ? Buffer.from(message) : message
-                    if (!framedInput)
-                      return pty
-                        .input(
-                          ctx.params.ptyID,
-                          attachmentID,
-                          attachment.info.size.cols,
-                          attachment.info.size.rows,
-                          data,
-                        )
-                        .pipe(Effect.ignore)
-                    if (data.byteLength < 5) return Effect.void
-                    const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
-                    const type = data[0]
-                    const cols = view.getUint16(1)
-                    const rows = view.getUint16(3)
-                    if ((type !== 0 && type !== 1) || cols === 0 || rows === 0) return Effect.void
-                    if (type === 0) return pty.control(ctx.params.ptyID, attachmentID, cols, rows).pipe(Effect.ignore)
-                    return pty.input(ctx.params.ptyID, attachmentID, cols, rows, data.subarray(5)).pipe(Effect.ignore)
-                  }),
-                ),
-              { onOpen },
+                Effect.suspend(() => {
+                  if (!attachment) return Effect.void
+                  const data = typeof message === "string" ? Buffer.from(message) : message
+                  if (!framedInput)
+                    return pty
+                      .input(ctx.params.ptyID, attachmentID, attachment.info.size.cols, attachment.info.size.rows, data)
+                      .pipe(Effect.ignore)
+                  if (data.byteLength < 5) return Effect.void
+                  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+                  const type = data[0]
+                  const cols = view.getUint16(1)
+                  const rows = view.getUint16(3)
+                  if ((type !== 0 && type !== 1) || cols === 0 || rows === 0) return Effect.void
+                  if (type === 0) return pty.control(ctx.params.ptyID, attachmentID, cols, rows).pipe(Effect.ignore)
+                  return pty.input(ctx.params.ptyID, attachmentID, cols, rows, data.subarray(5)).pipe(Effect.ignore)
+                }),
+              onOpen,
             ),
             () => attachment?.detach(),
           ).pipe(
-            Effect.catchReason("SocketError", "SocketCloseError", () => Effect.void),
+            // A client may also disconnect before the upgrade completes; neither case is a server defect.
+            Effect.catchReasons("SocketError", {
+              SocketCloseError: () => Effect.void,
+              SocketOpenError: () => Effect.void,
+            }),
             Effect.orDie,
           )
           return HttpServerResponse.empty()

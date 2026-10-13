@@ -2,7 +2,7 @@ export * as VcsGitPlugin from "./git.js"
 
 import { define } from "@ocpp/plugin/effect/plugin"
 import { Effect } from "effect"
-import { ChildProcess } from "effect/unstable/process"
+import { ChildProcess } from "effect/process"
 import { FileDiff } from "@ocpp/schema/file-diff"
 import { Base, BranchList, FileStatus, Info, Mode } from "@ocpp/schema/vcs"
 import { AppProcess } from "@ocpp/util/process"

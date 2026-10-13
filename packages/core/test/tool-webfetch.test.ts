@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Duration, Effect, Fiber, Layer, Schema } from "effect"
 import * as TestClock from "effect/testing/TestClock"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { LayerNodePlatform } from "@ocpp/util/effect/app-node-platform"

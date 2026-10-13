@@ -1,8 +1,8 @@
 import { Database } from "@ocpp/core/database/database"
 import { LocationServiceMap } from "@ocpp/core/location-services"
 import { Effect, Layer } from "effect"
-import { HttpRouter } from "effect/unstable/http"
-import { HttpApiMiddleware } from "effect/unstable/httpapi"
+import { HttpRouter } from "effect/http"
+import { HttpApiMiddleware } from "effect/http-api"
 import { InvalidRequestError, SessionNotFoundError } from "@ocpp/protocol/errors"
 import { sessionRef, type LocationServices } from "../location"
 

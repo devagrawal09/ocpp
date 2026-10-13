@@ -2,7 +2,7 @@ import { Environment } from "@ocpp/core/environment/index"
 import { CrossSpawnSpawner } from "@ocpp/util/cross-spawn-spawner"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Effect, Layer } from "effect"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
 
 /**
  * The host environment, without the workspace machinery: what a location with no `workspaceID`

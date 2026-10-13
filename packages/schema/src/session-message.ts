@@ -7,7 +7,7 @@ import { Location } from "./location.js"
 import { Model } from "./model.js"
 import { Project } from "./project.js"
 import { Prompt } from "./prompt.js"
-import { DateTimeUtcFromMillis, PositiveInt, RelativePath, statics } from "./schema.js"
+import { DateTimeUtcFromMillis, PositiveInt, RelativePath, brand, statics } from "./schema.js"
 import { ascending } from "./identifier.js"
 import { Event } from "./event.js"
 import { Shell as ShellSchema } from "./shell.js"
@@ -20,8 +20,8 @@ import { Snapshot } from "./snapshot.js"
 import { TokenUsage } from "./token-usage.js"
 import { CodeModeExecution } from "./codemode-execution.js"
 
-export const ID = Schema.String.check(Schema.isStartsWith("msg_")).pipe(
-  Schema.brand("Session.Message.ID"),
+export const ID = Schema.String.check(Schema.isStartingWith("msg_")).pipe(
+  brand("Session.Message.ID"),
   statics((schema) => ({
     create: () => schema.make("msg_" + ascending()),
     fromEvent: (eventID: Event.ID) => schema.make(eventID.replace(/^evt_/, "msg_")),

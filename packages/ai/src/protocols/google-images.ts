@@ -1,5 +1,6 @@
-import { Effect, Encoding, Schema } from "effect"
-import { Headers, HttpClientRequest } from "effect/unstable/http"
+import { Effect, Schema } from "effect"
+import { Base64 } from "effect/encoding"
+import { Headers, HttpClientRequest } from "effect/http"
 import {
   GeneratedImage,
   ImageModel,
@@ -190,7 +191,7 @@ export const model = (input: ModelInput) => {
         ),
       )
       const images = yield* Effect.forEach(encoded, (item) =>
-        Effect.fromResult(Encoding.decodeBase64(item.inlineData.data)).pipe(
+        Effect.fromResult(Base64.decode(item.inlineData.data)).pipe(
           Effect.mapError((cause) =>
             output.invalid(
               `Google Images candidate ${item.candidateIndex} part ${item.partIndex} contains invalid base64 data`,
@@ -265,7 +266,7 @@ export const model = (input: ModelInput) => {
 
 const googleImagePart = (image: ImageInput): Effect.Effect<Record<string, unknown>, AIError> => {
   if (image.type === "bytes")
-    return Effect.succeed({ inlineData: { mimeType: image.mediaType, data: Encoding.encodeBase64(image.data) } })
+    return Effect.succeed({ inlineData: { mimeType: image.mediaType, data: Base64.encode(image.data) } })
   if (image.type === "file-uri") return Effect.succeed({ fileData: { mimeType: image.mediaType, fileUri: image.uri } })
   if (image.type === "url")
     return ImageInputs.decodeDataUrl(image.url).pipe(
@@ -277,7 +278,7 @@ const googleImagePart = (image: ImageInput): Effect.Effect<Record<string, unknow
             ),
           )
         return Effect.succeed({
-          inlineData: { mimeType: decoded.mediaType, data: Encoding.encodeBase64(decoded.data) },
+          inlineData: { mimeType: decoded.mediaType, data: Base64.encode(decoded.data) },
         })
       }),
     )

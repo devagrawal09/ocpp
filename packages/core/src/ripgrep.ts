@@ -1,7 +1,7 @@
 export * as Ripgrep from "./ripgrep.js"
 
 import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect"
-import { ChildProcess } from "effect/unstable/process"
+import { ChildProcess } from "effect/process"
 import { Entry, Match } from "@ocpp/schema/filesystem"
 import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import { collectStream, waitForAbort } from "@ocpp/util/process"

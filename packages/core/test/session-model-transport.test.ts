@@ -10,7 +10,7 @@ import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { Session } from "@ocpp/schema/session"
 import { Cause, Deferred, Effect, Fiber, Metric, Queue, Stream } from "effect"
 import { TestClock } from "effect/testing"
-import { Headers } from "effect/unstable/http"
+import { Headers } from "effect/http"
 
 const session = Session.ID.make("ses_transport")
 const otherSession = Session.ID.make("ses_transport_other")

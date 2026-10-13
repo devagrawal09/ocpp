@@ -78,12 +78,15 @@ type NewtypeSchema<Self, Tag extends string, S extends Schema.Top> = (abstract n
   Omit<S, keyof Schema.Top>
 
 export function Newtype<Self>() {
-  return <const Tag extends string, S extends Schema.Top>(tag: Tag, schema: S): NewtypeSchema<Self, Tag, S> => {
+  return <const Tag extends string, S extends Schema.Top>(
+    tag: Parameters<typeof Schema.brand<Tag>>[0],
+    schema: S,
+  ): NewtypeSchema<Self, Tag, S> => {
     abstract class Base {
       declare readonly _newtype: Tag
     }
 
-    Object.setPrototypeOf(Base, schema.pipe(Schema.brand(tag)))
+    Object.setPrototypeOf(Base, schema.pipe(Schema.brand<Tag>(tag)))
     return Base as unknown as NewtypeSchema<Self, Tag, S>
   }
 }

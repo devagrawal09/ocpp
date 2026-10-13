@@ -9,7 +9,7 @@ import { SessionTitle } from "@ocpp/core/session/title"
 import { SessionTransfer } from "@ocpp/core/session/transfer"
 import { InstructionEntry } from "@ocpp/core/session/instruction-entry"
 import { DateTime, Effect, Stream } from "effect"
-import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiBuilder, HttpApiSchema } from "effect/http-api"
 import { Api } from "../api"
 import { SessionsCursor } from "@ocpp/protocol/groups/session"
 import {

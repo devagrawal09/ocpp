@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { Duration, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import { Arbitrary, Duration, Effect, Schema } from "effect"
 import { ConfigNormalize } from "@ocpp/core/config/normalize"
 import { Info } from "@ocpp/schema/config"
 
-const options = { errors: "all", onExcessProperty: "ignore", propertyOrder: "original" } as const
+const options = { errors: "all", onExcessProperty: "ignore" } as const
 
 function normalized(input: unknown) {
   const result = ConfigNormalize.normalize(input)
@@ -80,16 +79,21 @@ describe("ConfigNormalize", () => {
   })
 
   test("preserves arbitrary JSON-round-tripped native configuration", () => {
-    FastCheck.assert(
-      FastCheck.property(Schema.toArbitrary(Info)(FastCheck), (info) => {
-        const source = JSON.parse(JSON.stringify(Schema.encodeSync(Info)(info)))
-        const result = normalized(source)
-        expect(Schema.decodeUnknownSync(Info)(result.encoded)).toEqual(
-          Schema.decodeUnknownSync(Info)(withoutEmptyCompatibilityContainers(source)),
-        )
-      }),
-      { numRuns: 100 },
+    const result = Effect.runSync(
+      Arbitrary.checkEffect(
+        Arbitrary.schema(Info),
+        (info) =>
+          Effect.try(() => {
+            const source = JSON.parse(JSON.stringify(Schema.encodeSync(Info)(info)))
+            expect(Schema.decodeUnknownSync(Info)(normalized(source).encoded)).toEqual(
+              Schema.decodeUnknownSync(Info)(withoutEmptyCompatibilityContainers(source)),
+            )
+            return true
+          }),
+        { runs: 100 },
+      ),
     )
+    expect(Arbitrary.formatCheckFailure(result)).toBeUndefined()
   })
 
   test("merges named maps by entry and gives valid native entries precedence", () => {

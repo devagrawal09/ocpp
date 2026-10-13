@@ -22,6 +22,8 @@ const context = {
 }
 
 const on: CodeModeSpeculation.Caps = { maxSpeculativeCalls: 8, maxSpeculativeCallsPerExecution: 64 }
+// Speculation is on by default, so a run without it disables it explicitly.
+const disabled: CodeModeSpeculation.Caps = { maxSpeculativeCalls: 0, maxSpeculativeCallsPerExecution: 0 }
 
 /** Tools over a small key-value world that record every run, its overlap, and its interruption. */
 const world = (delay = 10) => {
@@ -270,9 +272,9 @@ const programs = {
 }
 
 describe("Code Mode speculation", () => {
-  test("is off by default", () => {
-    expect(limits.maxSpeculativeCalls).toBe(0)
-    expect(limits.maxSpeculativeCallsPerExecution).toBe(0)
+  test("is on by default with bounded caps", () => {
+    expect(limits.maxSpeculativeCalls).toBe(8)
+    expect(limits.maxSpeculativeCallsPerExecution).toBe(32)
   })
 
   test("a run with speculation gives the same results, notebook values and journal as one without", async () => {
@@ -280,7 +282,7 @@ describe("Code Mode speculation", () => {
       const executionID = "exe_" + ascending()
       const offWorld = world()
       const onWorld = world()
-      const off = await run(code, offWorld.tools, { executionID })
+      const off = await run(code, offWorld.tools, { executionID, speculation: disabled })
       const speculated = await run(code, onWorld.tools, { executionID, speculation: on })
       expect({ name, outcome: speculated.outcome }).toEqual({ name, outcome: off.outcome })
       expect(speculated.declarations()).toEqual(off.declarations())
@@ -443,7 +445,7 @@ describe("Code Mode speculation", () => {
     expect(atLimit.speculative().length).toBeGreaterThan(0)
     const executionID = "exe_" + ascending()
     const over = await run(calls(limits.maxToolCalls + 1), world(0).tools, { speculation: on, executionID })
-    const overOff = await run(calls(limits.maxToolCalls + 1), world(0).tools, { executionID })
+    const overOff = await run(calls(limits.maxToolCalls + 1), world(0).tools, { executionID, speculation: disabled })
     expect(over.outcome).toEqual(overOff.outcome)
     expect(over.outcome.summary).toContain("tool-call limit of " + limits.maxToolCalls)
     expect(over.journal()).toHaveLength(limits.maxToolCalls)

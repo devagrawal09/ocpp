@@ -416,7 +416,7 @@ describe("Plugin", () => {
       ])
       expect((yield* agents.get(Agent.ID.make("configured")))?.description).toBe("setup continued")
       expect((yield* toolDefinitions(tools)).map((tool) => tool.name)).toEqual(["execute"])
-      expect(yield* codeModeTools(tools)).toEqual(["healthy"])
+      expect(yield* codeModeTools(tools)).toEqual(["healthy", "notebook.inspect", "notebook.list"])
       yield* plugins.activate([])
       expect(yield* toolDefinitions(tools)).toEqual([])
       expect(yield* codeModeTools(tools)).toEqual([])
@@ -650,7 +650,13 @@ describe("Plugin", () => {
         "plain",
       ])
       expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
-      expect(yield* codeModeTools(registry)).toEqual(["context7.look_up", "context7.search", "plain"])
+      expect(yield* codeModeTools(registry)).toEqual([
+        "context7.look_up",
+        "context7.search",
+        "notebook.inspect",
+        "notebook.list",
+        "plain",
+      ])
     }),
   )
 

@@ -961,7 +961,8 @@ describe("fromPromise", () => {
       ).effect(host)
       const snapshot = yield* registry.snapshot()
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
-      expect(snapshot.codeModeCatalog).toEqual([
+      // notebook.* are Code Mode built-ins pinned into every catalog.
+      expect(snapshot.codeModeCatalog?.filter((tool) => !tool.path.startsWith("notebook."))).toEqual([
         expect.objectContaining({ path: "acme.hello", description: "Wrapped" }),
       ])
       expect((yield* registeredTools(registry)).get("acme_hello")?.output).toBeUndefined()
@@ -983,7 +984,12 @@ describe("fromPromise", () => {
       yield* Effect.promise(() => registration.dispose())
       yield* Effect.promise(() => registration.dispose())
       const restored = yield* registry.snapshot()
-      expect(restored.codeModeCatalog?.map((tool) => tool.path)).toEqual(["acme.hello", "temporary"])
+      expect(restored.codeModeCatalog?.map((tool) => tool.path)).toEqual([
+        "acme.hello",
+        "notebook.inspect",
+        "notebook.list",
+        "temporary",
+      ])
       expect(restored.codeModeCatalog?.[0]?.description).toBe("Hello")
     }),
   )
@@ -1004,7 +1010,9 @@ describe("fromPromise", () => {
         })
       })
       const pins = (snapshot: Tool.Snapshot) =>
-        snapshot.codeModeCatalog?.map((tool) => ({ path: tool.path, pinned: tool.pinned }))
+        snapshot.codeModeCatalog
+          ?.filter((tool) => !tool.path.startsWith("notebook."))
+          .map((tool) => ({ path: tool.path, pinned: tool.pinned }))
       const original = yield* registry.snapshot()
       expect(pins(original)).toEqual([{ path: "acme.hello", pinned: true }])
 

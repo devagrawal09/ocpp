@@ -934,6 +934,7 @@
 [data-component="user-message"] [data-slot="user-message-text"],
 [data-component="text-part"],
 [data-component="reasoning-part"],
+[data-component="session-display-result"],
 [data-component="tool-output"],
 [data-component="bash-output"],
 [data-component="edit-content"],

@@ -66,6 +66,7 @@ export interface ToolFailures extends Record<keyof ToolHooks, unknown> {
 }
 
 export interface ToolDomain {
+  readonly evaluator: Tool.Info
   readonly transform: Transform<ToolDraft>
   readonly reload: () => Effect.Effect<void>
   readonly hook: Hooks<ToolHooks, ToolFailures>

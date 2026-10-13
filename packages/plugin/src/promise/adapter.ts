@@ -299,6 +299,7 @@ export function fromPromise(plugin: Plugin) {
             scan: (options) => run(host.storage.scan(options)),
           },
           tool: {
+            evaluator: { ...host.tool.evaluator, execute: promiseExecutor(host.tool.evaluator.execute) },
             reload: () => run(host.tool.reload()),
             transform: (callback) =>
               register(

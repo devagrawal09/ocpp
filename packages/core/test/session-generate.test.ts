@@ -8,6 +8,7 @@ import { AppNodeBuilder } from "@ocpp/core/effect/app-node-builder"
 import { llmClient } from "@ocpp/core/effect/app-node-platform"
 import { LayerNode } from "@ocpp/util/effect/layer-node"
 import { Bus } from "@ocpp/core/bus"
+import { CodeModeEvaluator } from "@ocpp/core/codemode/evaluator"
 import { EventTable } from "@ocpp/core/event/sql"
 import { InstructionDiscovery } from "@ocpp/core/instruction-discovery"
 import { Instructions } from "@ocpp/core/instructions/index"
@@ -107,6 +108,7 @@ const references = Layer.mock(ReferenceInstructions.Service, { load: () => Effec
 const mcp = Layer.mock(McpInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
 const plugins = Layer.mock(PluginSupervisor.Service, { flush: Effect.void })
 const tools = Layer.mock(Tool.Service, {
+  evaluator: CodeModeEvaluator.tool(() => Effect.die("unused evaluator gateway")),
   snapshot: () =>
     Effect.succeed({
       codeModeCatalog: [

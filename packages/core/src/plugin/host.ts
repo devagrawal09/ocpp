@@ -340,6 +340,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
       hook: (name, callback) => hooks.register("shell", name, callback),
     },
     tool: {
+      evaluator: tools.evaluator,
       transform: tools.transform,
       reload: tools.reload,
       hook: (name, callback) => hooks.register("tool", name, callback),

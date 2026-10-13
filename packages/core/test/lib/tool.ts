@@ -142,6 +142,7 @@ export const registerToolPlugin = <R>(
         hook: () => Effect.succeed({ dispose: Effect.void }),
       },
       tool: {
+        evaluator: tools.evaluator,
         transform: tools.transform,
         reload: tools.reload,
         hook: (name, callback) =>

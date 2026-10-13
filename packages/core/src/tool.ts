@@ -9,6 +9,7 @@ import { makeLocationNode } from "@ocpp/util/effect/app-node"
 import type { Agent } from "./agent.js"
 import type { Model } from "./model.js"
 import { CodeModeCatalog } from "./codemode/catalog.js"
+import { CodeModeEvaluator } from "./codemode/evaluator.js"
 import { CodeModeStore } from "./codemode/store.js"
 import { CodeModeTool } from "./codemode/tool.js"
 import { Bus } from "./bus.js"
@@ -42,6 +43,8 @@ type Data = {
 }
 
 export interface Interface extends State.Transformable<Draft> {
+  /** Confined evaluator definition. A plugin may register it with a normal scoped transform. */
+  readonly evaluator: Tool.Info
   readonly registerSession: (
     sessionID: SessionSchema.ID,
     tools: ReadonlyArray<Tool.Info>,
@@ -353,6 +356,7 @@ const layer = Layer.effect(
     })
 
     return Service.of({
+      evaluator: CodeModeEvaluator.tool(executeCodeModeTool),
       transform: state.transform,
       reload: state.reload,
       registerSession,

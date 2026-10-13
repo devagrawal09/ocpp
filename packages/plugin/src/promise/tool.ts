@@ -76,6 +76,7 @@ interface ToolHooks {
 }
 
 export interface ToolDomain {
+  readonly evaluator: Info
   readonly transform: Transform<ToolDraft>
   readonly reload: () => Promise<void>
   readonly hook: Hooks<ToolHooks>

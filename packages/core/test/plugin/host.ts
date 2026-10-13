@@ -2,6 +2,7 @@ import { Plugin } from "@ocpp/plugin/effect"
 import type { IntegrationMethod } from "@ocpp/plugin/effect/integration"
 import { Agent } from "@ocpp/core/agent"
 import { Catalog } from "@ocpp/core/catalog"
+import { CodeModeEvaluator } from "@ocpp/core/codemode/evaluator"
 import { Credential } from "@ocpp/core/credential"
 import { Integration } from "@ocpp/core/integration"
 import { Location } from "@ocpp/core/location"
@@ -119,6 +120,7 @@ export function host(overrides: Overrides = {}): Plugin.Context {
       hook: () => Effect.die("unused shell.hook"),
     },
     tool: overrides.tool ?? {
+      evaluator: CodeModeEvaluator.tool(() => Effect.die("unused evaluator gateway")),
       transform: () => Effect.die("unused tool.transform"),
       reload: () => Effect.die("unused tool.reload"),
       hook: () => Effect.die("unused tool.hook"),

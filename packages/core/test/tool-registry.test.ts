@@ -336,6 +336,30 @@ describe("Tool", () => {
     }),
   )
 
+  it.effect("routes opt-in confined evaluation through the same validated tool hooks", () =>
+    Effect.gen(function* () {
+      yield* seedToolSession(sessionID, identity.messageID)
+      const service = yield* Tool.Service
+      const hooks = yield* PluginHooks.Service
+      yield* transform(service, { echo: make() })
+      yield* service.transform((draft) => draft.add(service.evaluator))
+      const seen: string[] = []
+      yield* hooks.register("tool", "execute.before", (event) => Effect.sync(() => { seen.push(event.tool) }))
+      const snapshot = yield* service.snapshot()
+      const execution = yield* snapshot.execute({
+        ...call("execute"),
+        call: {
+          type: "tool-call", id: "nested-evaluator", name: "execute",
+          input: { code: "return tools.capability.evaluate(" + JSON.stringify({ code: 'return tools.echo({ text: "hello" })', tools: ["echo"] }) + ")" },
+        },
+      })
+      expect(yield* waitCodeMode(execution.output, "nested-evaluator")).toMatchObject({
+        status: "saved", summary: expect.stringContaining('"value":{"text":"hello"}'),
+      })
+      expect(seen).toEqual(["execute", "capability_evaluate", "echo"])
+    }),
+  )
+
   it.effect("hooks execute and known Code Mode calls once but leaves unknown interpreter paths unchanged", () =>
     Effect.gen(function* () {
       yield* seedToolSession(sessionID, identity.messageID)

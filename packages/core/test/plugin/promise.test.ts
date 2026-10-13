@@ -845,7 +845,7 @@ describe("fromPromise", () => {
         define({
           id: "promise-tool-lifecycle",
           setup: async (ctx) => {
-            expect(Object.keys(ctx.tool).sort()).toEqual(["hook", "reload", "transform"])
+            expect(Object.keys(ctx.tool).sort()).toEqual(["evaluator", "hook", "reload", "transform"])
             const registration = await ctx.tool.transform((draft) => {
               source.replays++
               const description = source.description

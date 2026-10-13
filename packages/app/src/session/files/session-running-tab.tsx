@@ -61,7 +61,8 @@ export function SessionRunningTab(props: {
               id: target.shellID,
               location: { directory: target.location.directory, workspace: target.location.workspaceID },
             })
-          : sdk.api.session.interrupt({ sessionID: target.sessionID })
+          : // A subagent is stopped with everything it runs in the background, down the tree.
+            sdk.api.session.interrupt({ sessionID: target.sessionID, scope: "all" })
     void request
       .catch((error: unknown) =>
         showToast({

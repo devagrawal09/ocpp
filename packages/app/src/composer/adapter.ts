@@ -5,6 +5,7 @@ import type { ModelSelection } from "@/providers/models/selection"
 import type { ServerSDK } from "@/runtime/server/client"
 import type { ComposerStateTarget } from "./submission-state"
 import type { createComposerSubmission } from "./submission-state"
+import type { StopBackground } from "./stop"
 
 export type ComposerControls = {
   agents: {
@@ -95,7 +96,10 @@ type ComposerAdapterBase = {
 export type ActiveComposerAdapter = ComposerAdapterBase & {
   kind: "active-session"
   session: () => ComposerSession
-  interrupt: () => Promise<void>
+  /** "turn" (default) stops the active turn; "all" also stops the Session's background work. */
+  interrupt: (scope?: "turn" | "all") => Promise<void>
+  /** Background work the Session runs, which an "all" interrupt stops. */
+  background?: Accessor<StopBackground>
   setEditor: (element: HTMLDivElement) => void
 }
 

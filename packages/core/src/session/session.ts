@@ -365,7 +365,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       ),
   )
   const interrupt = Effect.fn("Session.interrupt")(
-    (sessionID: SessionSchema.ID, options?: { readonly continue?: boolean }) =>
+    (sessionID: SessionSchema.ID, options?: SessionExecution.InterruptOptions) =>
       Effect.uninterruptible(execution.interrupt(sessionID, options)),
   )
   /**

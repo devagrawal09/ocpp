@@ -51,9 +51,9 @@ export function createSessionRevert(input: {
     if (!sessionID) return
     const owner = input.session.ownership.capture()
     const target = prompt.capture()
-    if (data.session.status(sessionID) === "running") {
-      await server.api.session.interrupt({ sessionID }).catch(() => undefined)
-    }
+    // Stop background executions and their subagents too, even while idle: they would keep
+    // changing the files the revert restores.
+    await server.api.session.interrupt({ sessionID, scope: "all" }).catch(() => undefined)
     if (!(await request(() => server.api.session.revert.stage({ sessionID, messageID: message.id })))) return
     // Reverting to a previous prompt discards the pending queue (and pending
     // steers): they were written against the history being rewound. Cancel

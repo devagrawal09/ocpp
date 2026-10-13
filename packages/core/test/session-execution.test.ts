@@ -163,7 +163,12 @@ describe("SessionExecution lifecycle", () => {
       expect(yield* execution.interrupt(sessionID)).toBeTrue()
       yield* execution.awaitIdle(sessionID)
       expect((yield* claims(database))[sessionID]).toBe(false)
+      // Stopping the turn leaves the Session's background executions running.
+      expect((yield* jobs.get("exe_user_cancel"))?.status).toBe("running")
+      // Stopping everything cancels them, even though the Session is idle now.
+      expect(yield* execution.interrupt(sessionID, { scope: "all" })).toBeTrue()
       expect((yield* jobs.wait({ id: "exe_user_cancel" })).info?.status).toBe("cancelled")
+      expect(yield* execution.interrupt(sessionID, { scope: "all" })).toBeFalse()
     }),
   )
 
@@ -1508,6 +1513,161 @@ function seedInbox(
     .run()
     .pipe(Effect.orDie)
 }
+
+describe("SessionExecution interrupt scope", () => {
+  /** A subagent call as the subagent tool makes it: cancelling the call stops the child and all it runs. */
+  const subagentCall = (execution: SessionExecution.Interface, child: Session.ID, after: Effect.Effect<void>) =>
+    execution
+      .resume(child)
+      .pipe(
+        Effect.andThen(after),
+        Effect.onInterrupt(() => execution.interrupt(child, { scope: "all" })),
+        Effect.as("done"),
+      )
+
+  it.effect("a turn interrupt leaves background executions and their subagents running, and they still wake the Session", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const jobs = yield* Job.Service
+      const parent = Session.ID.make("ses_scope_turn_parent")
+      const child = Session.ID.make("ses_scope_turn_child")
+      yield* seedSessions(database, [parent])
+      yield* seedSessions(database, [child], { parent_id: parent })
+
+      const parentBusy = yield* Deferred.make<void>()
+      const childBusy = yield* Deferred.make<void>()
+      const childRelease = yield* Deferred.make<void>()
+      const finish = yield* Deferred.make<void>()
+      const woke = yield* Deferred.make<void>()
+      let parentDrains = 0
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const context = yield* buildExecution(scope, ({ sessionID }) => {
+        if (sessionID === child)
+          return Deferred.succeed(childBusy, undefined).pipe(Effect.andThen(Deferred.await(childRelease)))
+        parentDrains++
+        if (parentDrains === 1) return Deferred.succeed(parentBusy, undefined).pipe(Effect.andThen(Effect.never))
+        return Deferred.succeed(woke, undefined).pipe(Effect.asVoid)
+      })
+      const execution = Context.get(context, SessionExecution.Service)
+
+      yield* execution.resume(parent).pipe(Effect.forkScoped)
+      yield* Deferred.await(parentBusy)
+      yield* jobs.startLimited({
+        id: "exe_scope_turn",
+        type: "codemode",
+        ownerSessionID: parent,
+        maxConcurrent: 4,
+        // Its completion notification wakes the owner, as a Code Mode completion does.
+        run: subagentCall(execution, child, Deferred.await(finish)).pipe(Effect.tap(() => execution.wake(parent))),
+      })
+      yield* Deferred.await(childBusy)
+
+      expect(yield* execution.interrupt(parent)).toBeTrue()
+      yield* execution.awaitIdle(parent)
+      expect((yield* claims(database))[parent]).toBe(false)
+      expect((yield* jobs.get("exe_scope_turn"))?.status).toBe("running")
+      expect(yield* execution.isActive(child)).toBe(true)
+
+      yield* Deferred.succeed(childRelease, undefined)
+      yield* Deferred.succeed(finish, undefined)
+      expect((yield* jobs.wait({ id: "exe_scope_turn" })).info?.status).toBe("completed")
+      yield* Deferred.await(woke)
+      expect(parentDrains).toBe(2)
+    }),
+  )
+
+  it.effect("an all interrupt of an idle Session cancels its executions down the subagent tree", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const jobs = yield* Job.Service
+      const parent = Session.ID.make("ses_scope_all_parent")
+      const child = Session.ID.make("ses_scope_all_child")
+      const grandchild = Session.ID.make("ses_scope_all_grandchild")
+      yield* seedSessions(database, [parent])
+      yield* seedSessions(database, [child], { parent_id: parent })
+      yield* seedSessions(database, [grandchild], { parent_id: child })
+
+      const grandchildBusy = yield* Deferred.make<void>()
+      let childDrains = 0
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      // Filled in once the execution service exists; drains only run after that.
+      let service: SessionExecution.Interface | undefined
+      const context = yield* buildExecution(scope, ({ sessionID }) => {
+        if (sessionID === grandchild)
+          return Deferred.succeed(grandchildBusy, undefined).pipe(Effect.andThen(Effect.never))
+        if (sessionID !== child || childDrains++ > 0 || !service) return Effect.void
+        // The child's turn starts its own background execution, running the grandchild, and ends.
+        return jobs
+          .startLimited({
+            id: "exe_scope_all_child",
+            type: "codemode",
+            ownerSessionID: child,
+            maxConcurrent: 4,
+            run: subagentCall(service, grandchild, Effect.never),
+          })
+          .pipe(Effect.asVoid)
+      })
+      const execution = Context.get(context, SessionExecution.Service)
+      service = execution
+
+      yield* jobs.startLimited({
+        id: "exe_scope_all_parent",
+        type: "codemode",
+        ownerSessionID: parent,
+        maxConcurrent: 4,
+        run: subagentCall(execution, child, Effect.never),
+      })
+      yield* Deferred.await(grandchildBusy)
+      yield* execution.awaitIdle(child)
+      expect(yield* execution.isActive(parent)).toBe(false)
+      expect(yield* execution.isActive(child)).toBe(false)
+      expect(yield* execution.isActive(grandchild)).toBe(true)
+
+      // A turn interrupt of the idle Session stops nothing.
+      expect(yield* execution.interrupt(parent)).toBeFalse()
+      expect((yield* jobs.get("exe_scope_all_parent"))?.status).toBe("running")
+
+      expect(yield* execution.interrupt(parent, { scope: "all" })).toBeTrue()
+      expect((yield* jobs.wait({ id: "exe_scope_all_parent" })).info?.status).toBe("cancelled")
+      expect((yield* jobs.wait({ id: "exe_scope_all_child" })).info?.status).toBe("cancelled")
+      yield* execution.awaitIdle(grandchild)
+      expect(yield* execution.isActive(grandchild)).toBe(false)
+      expect((yield* claims(database))[grandchild]).toBe(false)
+    }),
+  )
+
+  it.effect("shutdown keeps the claim and leaves background executions to restart", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const jobs = yield* Job.Service
+      const sessionID = Session.ID.make("ses_scope_shutdown")
+      yield* seedSessions(database, [sessionID])
+
+      const busy = yield* Deferred.make<void>()
+      const scope = yield* Scope.make()
+      const context = yield* buildExecution(scope, () =>
+        Deferred.succeed(busy, undefined).pipe(Effect.andThen(Effect.never)),
+      )
+      const execution = Context.get(context, SessionExecution.Service)
+      yield* jobs.startLimited({
+        id: "exe_scope_shutdown",
+        type: "codemode",
+        ownerSessionID: sessionID,
+        maxConcurrent: 4,
+        run: Effect.never,
+      })
+      yield* execution.resume(sessionID).pipe(Effect.forkIn(scope))
+      yield* Deferred.await(busy)
+
+      yield* Scope.close(scope, Exit.void)
+      expect((yield* claims(database))[sessionID]).toBe(true)
+      expect((yield* jobs.get("exe_scope_shutdown"))?.status).toBe("running")
+      yield* jobs.cancel("exe_scope_shutdown")
+    }),
+  )
+})
 
 function seedSessions(
   database: Database.Service["Service"],

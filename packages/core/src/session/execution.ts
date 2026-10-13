@@ -28,12 +28,18 @@ export interface Interface {
   /** Registers newly recorded work. Repeated wakeups may coalesce. */
   readonly wake: (sessionID: SessionSchema.ID) => Effect.Effect<void>
   /**
-   * Interrupt active work owned by this process. Idle interruption is a no-op. Resolves once
-   * the interruption is accepted; cleanup settles asynchronously in the execution fiber.
-   * Returns whether an active execution was interrupted. Compose with `awaitIdle` when
-   * settlement matters.
+   * Interrupt work owned by this process. Resolves once the interruption is accepted; cleanup
+   * settles asynchronously in the execution fiber. Compose with `awaitIdle` when settlement matters.
+   *
+   * Scope "turn" (default) stops only the active turn; idle interruption is a no-op. Code Mode
+   * executions the Session already started in the background keep running, along with their
+   * subagents, and their completions wake the Session as usual. Scope "all" also cancels every
+   * Code Mode execution the Session owns, even while it is idle; their in-flight subagent calls
+   * interrupt their children with scope "all" in turn, so the whole tree stops.
+   *
+   * Returns whether anything was stopped: an active turn, or (scope "all") a running execution.
    */
-  readonly interrupt: (sessionID: SessionSchema.ID, options?: { readonly continue?: boolean }) => Effect.Effect<boolean>
+  readonly interrupt: (sessionID: SessionSchema.ID, options?: InterruptOptions) => Effect.Effect<boolean>
   /** Resolves once this process owns no active execution for the Session. Returns immediately when idle and never starts work. */
   readonly awaitIdle: (sessionID: SessionSchema.ID) => Effect.Effect<void>
 }
@@ -41,11 +47,23 @@ export interface Interface {
 /** Routes execution from a Session ID to the runner owned by that Session's Location. */
 export class Service extends Context.Service<Service, Interface>()("@ocpp/SessionExecution") {}
 
-type InterruptReason = "user" | "shutdown"
+/** What a user interrupt stops: the active turn only, or the turn and all background work. */
+export type InterruptScope = "turn" | "all"
+
+export interface InterruptOptions {
+  /** Resume steering input and between-turn control work after interrupting. */
+  readonly continue?: boolean
+  /** Defaults to "turn". */
+  readonly scope?: InterruptScope
+}
+
+/** "user-all" is a user interrupt with scope "all"; it settles as a "user" interruption. */
+type InterruptReason = "user" | "user-all" | "shutdown"
 
 export function terminal(exit: Exit.Exit<void, SessionRunner.RunError>, reason?: InterruptReason) {
   if (Exit.isSuccess(exit)) return { type: "succeeded" as const }
-  if (Cause.hasInterrupts(exit.cause)) return { type: "interrupted" as const, reason: reason ?? "shutdown" }
+  if (Cause.hasInterrupts(exit.cause))
+    return { type: "interrupted" as const, reason: reason === "user-all" ? ("user" as const) : (reason ?? "shutdown") }
   const failure = Cause.squash(exit.cause)
   if (failure instanceof UserInterruptedError) return { type: "interrupted" as const, reason: "user" as const }
   return { type: "failed" as const, error: toSessionError(failure) }
@@ -126,6 +144,9 @@ export const layer = Layer.effect(
           sessionID,
           Effect.gen(function* () {
             const outcome = terminal(exit, reason)
+            // The run is gone either way, so a user interrupt with scope "all" re-sweeps here:
+            // an execution the dying turn launched after the interrupt's own sweep is cancelled too.
+            if (reason === "user-all") yield* jobs.cancelAll({ ownerSessionID: sessionID, type: "codemode" })
             if (outcome.type === "succeeded") {
               yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID }, releaseOnCommit(sessionID))
               return
@@ -133,10 +154,11 @@ export const layer = Layer.effect(
             if (outcome.type === "interrupted") {
               // A user cancel releases the claim: the turn must not resurrect at the next
               // boot. Shutdown interruption keeps it for restart continuity.
-              if (outcome.reason === "user") {
-                yield* jobs.cancel(sessionID)
-                yield* jobs.cancelAll({ ownerSessionID: sessionID, type: "codemode" })
-              }
+              // The Job keyed by this Session is the background run of this Session as a subagent
+              // (see restart recovery): it is this turn, so it stops with it. Code Mode executions
+              // the Session started in the background are not part of the turn and keep running
+              // unless the interrupt asked for scope "all".
+              if (outcome.reason === "user") yield* jobs.cancel(sessionID)
               yield* bus.publish(
                 SessionEvent.Execution.Interrupted,
                 { sessionID, reason: outcome.reason },
@@ -161,7 +183,12 @@ export const layer = Layer.effect(
       isActive: coordinator.isActive,
       interrupt: (sessionID, options) =>
         Effect.gen(function* () {
-          const interrupted = yield* coordinator.interrupt(sessionID, "user")
+          const all = options?.scope === "all"
+          const turn = yield* coordinator.interrupt(sessionID, all ? "user-all" : "user")
+          // Cancelling an execution interrupts its in-flight subagent calls, which interrupt their
+          // children with scope "all". Cancelled executions report without waking the Session.
+          const cancelled = all ? yield* jobs.cancelAll({ ownerSessionID: sessionID, type: "codemode" }) : []
+          const interrupted = turn || cancelled.length > 0
           if (!options?.continue) return interrupted
           // Resume steering input and between-turn control work from the interrupted
           // intent. Queued next-turn prompts stay parked: a steer-scoped drain never

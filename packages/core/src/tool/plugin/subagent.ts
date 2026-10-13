@@ -812,7 +812,7 @@ export const Plugin = {
               const resume = () =>
                 runtime.session.resume(child.id).pipe(
                   Effect.as({ type: "idle" as const }),
-                  Effect.onInterrupt(() => runtime.session.interrupt(child.id).pipe(Effect.ignore)),
+                  Effect.onInterrupt(() => runtime.session.interrupt(child.id, { scope: "all" }).pipe(Effect.ignore)),
                   Effect.mapError(
                     (error) =>
                       new ToolFailure({

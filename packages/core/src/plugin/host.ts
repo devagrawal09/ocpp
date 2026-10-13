@@ -406,7 +406,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, p
       display: runtime.session.display,
       interrupt: (input) =>
         runtime.session
-          .interrupt(input.sessionID, { continue: input.continue })
+          .interrupt(input.sessionID, { continue: input.continue, scope: input.scope })
           .pipe(Effect.map((interrupted) => ({ interrupted }))),
       wait: (input) => runtime.session.wait(input.sessionID),
       context: (input) => runtime.session.context(input.sessionID),

@@ -55,6 +55,8 @@ function ComposerStory(props: {
   label?: string
   inspectRequest?: boolean
   continueOnStop?: boolean
+  /** A pending "stop all background work" confirmation. */
+  confirm?: string
 }) {
   const [draft, setDraft] = createStore<ComposerPersistedState>({
     prompt: props.prompt ?? [{ type: "text", content: "", start: 0, end: 0 }],
@@ -143,6 +145,7 @@ function ComposerStory(props: {
       submit: {
         stopping: () => !!props.stopping,
         working: () => !!props.working,
+        confirm: () => props.confirm,
         onSubmit: () => {
           const value = draft.prompt.map((part) => ("content" in part ? part.content : `[${part.filename}]`)).join("")
           const request = props.inspectRequest
@@ -256,6 +259,16 @@ export const SlashSuggestions = { render: () => <ComposerStory suggestions="comm
 export const ContextSuggestions = { render: () => <ComposerStory suggestions="context" /> }
 
 export const RunningAndStopping = { render: () => <ComposerStory working stopping label="Session is running" /> }
+
+export const StopAllBackgroundConfirmation = {
+  render: () => (
+    <ComposerStory
+      stopping
+      confirm="Stop all background work? 2 executions and 1 subagent. Press Esc or Stop again to confirm."
+      label="Turn stopped; background work still running"
+    />
+  ),
+}
 
 export const SteeringFollowUp = {
   render: () => <ComposerStory prompt={text("Use this correction at the next boundary")} working />,

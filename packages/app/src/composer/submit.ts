@@ -131,7 +131,8 @@ export function createComposerSubmit(input: ComposerSubmitInput) {
 
   return {
     submit,
-    stop: () => (input.adapter.kind === "active-session" ? input.adapter.interrupt() : Promise.resolve()),
+    stop: (scope?: "turn" | "all") =>
+      input.adapter.kind === "active-session" ? input.adapter.interrupt(scope) : Promise.resolve(),
   }
 }
 

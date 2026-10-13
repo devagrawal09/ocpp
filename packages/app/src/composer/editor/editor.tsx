@@ -208,6 +208,18 @@ export function ComposerEditor(props: ComposerEditorProps) {
           </Show>
         </div>
 
+        <Show when={view.submit.confirm?.()}>
+          {(message) => (
+            <div
+              data-slot="composer-stop-confirm"
+              role="status"
+              aria-live="polite"
+              class="px-4 pb-1 text-[12px] font-[440] leading-4 text-v2-text-text-muted"
+            >
+              {message()}
+            </div>
+          )}
+        </Show>
         <div class="flex h-11 items-center px-2">
           <div
             class="flex min-w-0 flex-1 items-center gap-1"

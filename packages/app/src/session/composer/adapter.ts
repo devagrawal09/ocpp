@@ -1,10 +1,11 @@
-import type { Accessor } from "solid-js"
+import { createMemo, type Accessor } from "solid-js"
 import type { ActiveComposerAdapter, ComposerControls } from "@/composer/adapter"
 import { useComposerState } from "@/composer/persistence"
 import { useData } from "@/runtime/server/current"
 import { useServerSDK } from "@/runtime/server/client"
 import { useWorkspaceLocation } from "@/workspaces/location"
 import type { SessionModel } from "../model"
+import { runningItems } from "../files/session-running"
 
 export function createActiveComposerAdapter(input: {
   session: SessionModel
@@ -21,6 +22,24 @@ export function createActiveComposerAdapter(input: {
   const data = useData()
   const server = useServerSDK()
   const location = useWorkspaceLocation()
+  // The executions and subagents the Running view lists, which an "all" interrupt stops.
+  const background = createMemo(
+    () => {
+      const items = runningItems({
+        sessionID: id,
+        messages: data.session.message.list(id),
+        sessions: data.session.list(),
+        status: data.session.status,
+        shells: [],
+      })
+      return {
+        executions: items.filter((item) => item.kind === "execution").length,
+        subagents: items.filter((item) => item.kind === "subagent").length,
+      }
+    },
+    undefined,
+    { equals: (a, b) => a?.executions === b?.executions && a?.subagents === b?.subagents },
+  )
   const adapter: ActiveComposerAdapter = {
     kind: "active-session",
     state,
@@ -37,9 +56,11 @@ export function createActiveComposerAdapter(input: {
       current: () => data.session.get(id),
       admitted: (messageID) => data.session.input.has(id, messageID) || !!data.session.message.get(id, messageID),
     }),
-    interrupt: () =>
+    background,
+    // Stopping the turn resumes pending steers; stopping everything does not.
+    interrupt: (scope = "turn") =>
       server.api.session
-        .interrupt({ sessionID: id, continue: true })
+        .interrupt(scope === "all" ? { sessionID: id, scope } : { sessionID: id, continue: true })
         .then(() => undefined)
         .catch(() => undefined),
   }

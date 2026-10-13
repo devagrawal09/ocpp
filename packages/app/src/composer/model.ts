@@ -23,6 +23,7 @@ import type { PromptHistoryComment } from "./history/entry"
 import { createComposerHistory } from "./history/store"
 import { composerPlaceholder } from "./placeholder"
 import { createComposerSubmit } from "./submit"
+import { createStopGesture, type StopBackground } from "./stop"
 
 export type ComposerModel = ComposerEditorModel & {
   readonly model: ComposerControls["model"]
@@ -79,7 +80,18 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       .join("")
     return text.trim().length === 0 && attachments().length === 0 && commentCount() === 0
   })
-  const stopping = createMemo(() => adapter.working() && blank())
+  // Esc or the stop button: stop the turn; press again quickly to confirm stopping background work too.
+  const stopGesture = createStopGesture({
+    working: adapter.working,
+    background: () => (adapter.kind === "active-session" ? adapter.background?.() : undefined) ?? noBackground,
+    interrupt: (scope) => void submission.stop(scope),
+  })
+  const stopping = createMemo(() => stopGesture.available() && blank())
+  const stopConfirm = createMemo(() => {
+    const background = stopGesture.confirming()
+    if (!background) return undefined
+    return language.t("session.stop.confirm", { work: backgroundWork(language, background) })
+  })
   const placeholder = () =>
     composerPlaceholder(
       mode(),
@@ -383,6 +395,8 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       submit: {
         stopping,
         working: adapter.working,
+        stoppable: stopGesture.available,
+        confirm: stopConfirm,
         queue: options?.queue,
         onSubmit: (submitOptions) => {
           const queue = options?.queue
@@ -395,7 +409,7 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
           }
           void submission.submit(new Event("submit"), submitOptions)
         },
-        onStop: () => void submission.stop(),
+        onStop: () => void stopGesture.press(),
       },
     },
   })
@@ -429,6 +443,18 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
   ])
 
   return controller as ComposerModel
+}
+
+const noBackground: StopBackground = { executions: 0, subagents: 0 }
+
+/** "2 executions and 1 subagent", leaving out what does not run. */
+function backgroundWork(language: ReturnType<typeof useLanguage>, background: StopBackground) {
+  const parts = [
+    background.executions > 0 ? language.plural("session.stop.execution", background.executions) : undefined,
+    background.subagents > 0 ? language.plural("session.background.subagent", background.subagents) : undefined,
+  ].filter((part): part is string => part !== undefined)
+  if (parts.length < 2) return parts[0] ?? ""
+  return language.t("session.background.combine", { first: parts[0], second: parts[1] })
 }
 
 function composerErrorMessage(language: ReturnType<typeof useLanguage>, error: unknown) {

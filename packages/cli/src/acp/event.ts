@@ -337,7 +337,8 @@ export async function streamTurn(input: {
       return response(undefined, undefined, "succeeded", control.cancelled, undefined)
     }
     if (control.cancelled) {
-      await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
+      // ACP clients have no notion of background work, so cancel stops all of it.
+      await input.client.session.interrupt({ sessionID: input.sessionID, scope: "all" }).catch(() => {})
       if (!started) {
         streamController.abort()
         await completed.catch(() => {})

@@ -38,6 +38,10 @@ export type ComposerEditorView = {
   submit: {
     stopping: Accessor<boolean>
     working?: Accessor<boolean>
+    /** Whether Esc stops something: a running turn, or background work. Defaults to `working`. */
+    stoppable?: Accessor<boolean>
+    /** The pending "stop all background work" confirmation to show, if any. */
+    confirm?: Accessor<string | undefined>
     queue?: ComposerQueue
     onSubmit: (options?: { alternate?: boolean }) => void
     onStop: () => void
@@ -220,7 +224,7 @@ export function createComposerEditor(input: {
       return true
     }
     const stop =
-      input.view.submit.working?.() &&
+      (input.view.submit.stoppable ?? input.view.submit.working)?.() &&
       ((event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "g") ||
         event.key === "Escape")
     if (stop) {

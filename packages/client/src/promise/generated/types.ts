@@ -4538,7 +4538,11 @@ export type SessionLogOutput = SessionLogItem
 
 export type SessionInterruptInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly continue?: { readonly continue?: boolean | undefined }["continue"]
+  readonly continue?: {
+    readonly continue?: boolean | undefined
+    readonly scope?: "turn" | "all" | undefined
+  }["continue"]
+  readonly scope?: { readonly continue?: boolean | undefined; readonly scope?: "turn" | "all" | undefined }["scope"]
 }
 
 export type SessionInterruptOutput = SessionInterruptResponse

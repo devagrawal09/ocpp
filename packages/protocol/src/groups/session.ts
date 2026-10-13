@@ -690,10 +690,19 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.post("session.interrupt", "/api/session/:sessionID/interrupt", {
         params: { sessionID: Session.ID },
-        query: { continue: BooleanFromString.pipe(Schema.optional) },
+        query: {
+          continue: BooleanFromString.pipe(Schema.optional),
+          scope: Schema.Literals(["turn", "all"])
+            .annotate({
+              description:
+                'What to stop. "turn" (default) interrupts only the active turn; Code Mode executions running in the background and their subagents keep going. "all" also cancels every Code Mode execution the session owns, even while it is idle, cascading to their subagents.',
+            })
+            .pipe(Schema.optional),
+        },
         success: Schema.Struct({
           interrupted: Schema.Boolean.annotate({
-            description: "Whether an active execution owned by this OC++ process was interrupted.",
+            description:
+              'Whether anything owned by this OC++ process was stopped: an active turn, or with scope "all" a running Code Mode execution.',
           }),
         }).annotate({ identifier: "SessionInterruptResponse" }),
         error: SessionNotFoundError,
@@ -704,7 +713,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
             identifier: "v2.session.interrupt",
             summary: "Interrupt session execution",
             description:
-              "Interrupt active execution owned by this OC++ process. Returns interrupted=true when an active execution was interrupted and false for the idle no-op. When continue=true, execution resumes pending steering input and next-in-line control items (manual compaction, moves) while queued prompts remain parked.",
+              "Interrupt work owned by this OC++ process. scope=turn (default) interrupts the active turn only and is a no-op while idle; background Code Mode executions keep running and still notify the session. scope=all also cancels every Code Mode execution the session owns, even while idle, and interrupts their subagents with scope=all. Returns interrupted=true when anything was stopped. When continue=true, execution resumes pending steering input and next-in-line control items (manual compaction, moves) while queued prompts remain parked.",
           }),
         ),
     )
@@ -891,7 +900,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           identifier: "v2.session.execution.cancel",
           summary: "Cancel Code Mode execution",
           description:
-            "Cancel one running Code Mode execution of this session, as interrupting a busy session cancels all of them. Its outcome reaches the model as a cancelled notification without waking it. Returns cancelled=false when the execution is not running in this OC++ process.",
+            "Cancel one running Code Mode execution of this session, as interrupting with scope=all cancels all of them. Its outcome reaches the model as a cancelled notification without waking it. Returns cancelled=false when the execution is not running in this OC++ process.",
         }),
       ),
     )

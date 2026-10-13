@@ -662,7 +662,12 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.interrupt",
         Effect.fn(function* (ctx) {
-          return { interrupted: yield* session.interrupt(ctx.params.sessionID, { continue: ctx.query.continue }) }
+          return {
+            interrupted: yield* session.interrupt(ctx.params.sessionID, {
+              continue: ctx.query.continue,
+              scope: ctx.query.scope,
+            }),
+          }
         }),
       )
       .handle(
@@ -760,7 +765,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         "session.execution.cancel",
         Effect.fn(function* (ctx) {
           yield* session.get(ctx.params.sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
-          // Only this session's own running executions, the ones a user interrupt would cancel.
+          // Only this session's own running executions, the ones a scope "all" interrupt would cancel.
           const running = yield* jobs.active({ ownerSessionID: ctx.params.sessionID, type: "codemode" })
           if (!running.some((job) => job.id === ctx.params.executionID)) return { cancelled: false }
           return { cancelled: (yield* jobs.cancel(ctx.params.executionID))?.status === "cancelled" }

@@ -258,7 +258,7 @@ export function make(input: { readonly client: OcppClient; readonly connection: 
         turn.cancelled = true
         turn.admission.abort()
       }
-      await input.client.session.interrupt({ sessionID: params.sessionId }).catch(() => {})
+      await input.client.session.interrupt({ sessionID: params.sessionId, scope: "all" }).catch(() => {})
       return {}
     },
     forkSession: async (params) => {
@@ -344,7 +344,8 @@ export function make(input: { readonly client: OcppClient; readonly connection: 
         current.cancelled = true
         current.admission.abort()
       }
-      await input.client.session.interrupt({ sessionID: params.sessionId }).catch(() => {})
+      // ACP clients have no notion of background work, so cancel stops all of it.
+      await input.client.session.interrupt({ sessionID: params.sessionId, scope: "all" }).catch(() => {})
     },
   }
 }

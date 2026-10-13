@@ -15,7 +15,7 @@ Authority follows the concern:
 
 Current specifications explain cross-module contracts without copying exact types. Decision records explain why a design was selected. Historical documents describe earlier states and may use obsolete names.
 
-Generated clients follow the assembled public `HttpApi`. GitHub issues own active work; Git history preserves removed plans and scratchpads.
+Generated clients follow the assembled public `HttpApi`. The [roadmap](../../ROADMAP.md) owns work priorities and intended outcomes; GitHub issues track detailed tasks and discussion. Git history preserves removed plans and scratchpads.
 
 ## Current Contracts
 

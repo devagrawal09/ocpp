@@ -1,5 +1,7 @@
 # OC++
 
+See the [roadmap](ROADMAP.md) for work priorities, planned outcomes, and completion criteria.
+
 OC++ is an open source AI coding agent. It ships as the `ocpp` command: running `ocpp` starts a local background server if needed and opens the OC++ web app in your browser, while subcommands such as `ocpp run`, `ocpp serve`, and `ocpp acp` work from the terminal and other tools. It reads its own `ocpp.json` configuration and is developed and released as its own product.
 
 OC++ is forked from [OpenCode](https://github.com/anomalyco/opencode). It is an independent project: it is not an OpenCode branch, edition, or distribution, and it is not affiliated with or endorsed by the OpenCode project. Upstream Git history and the MIT license are preserved, and OpenCode retains copyright in the code inherited from it.

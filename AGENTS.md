@@ -1,3 +1,4 @@
+- Read `ROADMAP.md` before choosing or scoping work. It is the central priority guide; update it when roadmap work changes status, scope, or completion. Explicit user requests take precedence over roadmap ordering.
 - After changing the public Protocol or Server `HttpApi`, run `bun run generate` from `packages/client`. Do not edit generated client files directly.
 - Keep runtime dependencies directed from Schema to Core and Protocol, then from Core and Protocol to Server. Client runtime code may depend on Schema and Protocol but never Core or Server; `sdk` composes Client, Core, and Server.
 - Current implementation changes belong in `packages/core`, `packages/cli`, `packages/server`, `packages/protocol`, `packages/schema`, and related generated client surfaces when required.

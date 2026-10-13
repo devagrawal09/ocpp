@@ -2,7 +2,7 @@ import type { Effect } from "effect"
 import type { coercionFunctions, globalNamespaces, uriFunctions } from "../globals.js"
 import { isRecord, type AstNode } from "../ir.js"
 import type { SafeObject } from "../tool-runtime.js"
-import type { CodeModePromise } from "../values.js"
+import type { CodeModePromise, ToolRun } from "../values.js"
 
 // The compiled representation lives in ../ir.ts so the compiler that produces it does not depend on
 // the interpreter that evaluates it. Interpreter modules keep reading it through this module.
@@ -103,6 +103,11 @@ export class PromiseInstanceMethodReference {
   ) {}
 }
 
+/** `run.wait()` on a run of a concurrent tool, as a value the program can call. */
+export class ToolRunWaitReference {
+  constructor(readonly run: ToolRun) {}
+}
+
 export class PromiseCapabilityFunction {
   constructor(readonly settle: (value: unknown) => void) {}
 }
@@ -182,7 +187,7 @@ export type DiagnosticKind =
 export const OptionalShortCircuit: unique symbol = Symbol("codemode.optional-short-circuit")
 
 export const supportedSyntaxMessage =
-  "Supported syntax: direct blocking tools.* calls, immutable data literals and transformations, local let bindings, synchronous functions and callbacks, control flow, and captured console output. Direct top-level const and function declarations are saved to the notebook automatically. await and Promise.all are warning-producing compatibility no-ops; other Promise forms, async, generators, dynamic tool dispatch, export, and aggregate mutation are not supported."
+  "Supported syntax: direct blocking tools.* calls, immutable data literals and transformations, local let bindings, synchronous functions and callbacks, control flow, and captured console output. Direct top-level const and function declarations are saved to the notebook automatically. await and Promise.all resolve concurrent tool runs (and otherwise preserve values) with compatibility warnings; other Promise forms, async, generators, dynamic tool dispatch, export, and aggregate mutation are not supported."
 
 export class InterpreterRuntimeError extends Error {
   readonly node?: AstNode

@@ -39,6 +39,7 @@ import { SessionContext } from "@ocpp/core/session/context"
 import { SessionCompaction } from "@ocpp/core/session/compaction"
 import { SessionInbox } from "@ocpp/core/session/inbox"
 import { SessionMessage } from "@ocpp/core/session/message"
+import { CodeModeCompletion } from "@ocpp/core/session/codemode-completion"
 import { SessionModelRequest } from "@ocpp/core/session/model-request"
 import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { Money } from "@ocpp/schema/money"
@@ -320,6 +321,8 @@ const layer = Layer.unwrap(
               Effect.gen(function* () {
                 state.authorizations.push(context)
                 state.executions.push(text)
+                // Echoing a session ID names it as a started child, the way subagent reports one.
+                if (text.startsWith("ses_")) yield* context.progress({ sessionID: text, status: "running" })
                 yield* state.awaitToolBarrier
                 return { output: { text }, content: text }
               }),
@@ -3622,6 +3625,59 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(2)
     expect(userTexts(s.requests[0])).toEqual(["Start steering"])
     expect(userTexts(s.requests[1])).toEqual(["Start steering", "Queue for later"])
+  })
+
+  scenario("a subagent start wakes the idle model with the child's ID before its execution completes", function* (s) {
+    s.directTools = false
+    yield* s.admit("Start a subagent")
+    yield* s.llm.push(
+      TestLLM.tool("call-spawn", "execute", {
+        code: 'tools.echo({ text: "hold" })\nreturn tools.echo({ text: "ses_childstarted" })',
+      }),
+      TestLLM.text("Waiting for it", "text-wait"),
+      TestLLM.text("Following the child", "text-follow"),
+      TestLLM.text("Child finished", "text-done"),
+    )
+    // The program holds until the admitting turn has ended, so the child starts while the model is idle.
+    const holding = yield* s.blockTools()
+    yield* s.resume
+    yield* holding.started
+    expect(s.requests).toHaveLength(2)
+    const spawning = yield* s.blockTools()
+    yield* holding.release
+    yield* spawning.started
+    yield* s.llm.wait(3)
+    const woken = userTexts(s.requests[2])
+    expect(woken.at(-1)).toStartWith("Execution exe_")
+    expect(woken.at(-1)).toContain(" started subagent session ses_childstarted.")
+    expect(woken.join("\n")).not.toContain("saved no notebook values")
+    yield* spawning.release
+    yield* s.llm.wait(4)
+    yield* s.session.wait(sessionID)
+    expect(userTexts(s.requests[3]).at(-1)).toContain("Subagent sessions: ses_childstarted (completed)")
+  })
+
+  scenario("subagent start notices join a running turn at its next step, merged into one", function* (s) {
+    yield* s.admit("Start working")
+    yield* s.llm.push(TestLLM.tool("call-missing", "missing", {}), TestLLM.stop())
+    const firstStream = yield* s.llm.gate
+    const run = yield* s.resume.pipe(Effect.forkChild)
+    yield* firstStream.started
+    const recovery = { parentSessionID: sessionID, assistantMessageID: SessionMessage.ID.create() }
+    yield* CodeModeCompletion.started(s.session, { executionID: "exe_one", recovery, sessionID: "ses_one" })
+    yield* CodeModeCompletion.started(s.session, { executionID: "exe_two", recovery, sessionID: "ses_two" })
+    yield* firstStream.release
+    yield* Fiber.join(run)
+    yield* s.session.wait(sessionID)
+
+    expect(s.requests).toHaveLength(2)
+    expect(userTexts(s.requests[1])).toEqual([
+      "Start working",
+      CodeModeCompletion.startedNotice([
+        { executionID: "exe_one", sessionID: "ses_one" },
+        { executionID: "exe_two", sessionID: "ses_two" },
+      ]).text,
+    ])
   })
 
   scenario("promotes steers before the next queued input", function* (s) {

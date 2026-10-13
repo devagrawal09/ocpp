@@ -1,6 +1,6 @@
 import { containsOpaqueReference, containsRuntimeReference, isRuntimeReference } from "../interpreter/references.js"
-import { copyIn, copyOut } from "../tool-runtime.js"
-import { CodeModePromise } from "../values.js"
+import { copyIn, copyOut, toolExpression } from "../tool-runtime.js"
+import { CodeModePromise, ToolRun } from "../values.js"
 import { boundedData } from "./value.js"
 
 export const consoleMethods = new Set(["log", "info", "debug", "warn", "error", "dir", "table"])
@@ -26,6 +26,7 @@ const formatConsoleValue = (value: unknown, seen: Set<object>, depth: number): s
   if (typeof value === "number" || typeof value === "boolean") return String(value)
   if (typeof value !== "object") return String(value)
   if (value instanceof CodeModePromise) return "[Promise (tool calls block and return their result directly)]"
+  if (value instanceof ToolRun) return `[run of ${toolExpression(value.tool)} (call wait() for its result)]`
   if (depth > MAX_CONSOLE_DEPTH) return "..."
   if (seen.has(value)) return "[Circular]"
   if (isRuntimeReference(value)) return "[opaque reference]"

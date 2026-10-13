@@ -41,6 +41,7 @@ import { SessionEvent } from "@ocpp/core/session/event"
 import { SessionExecution } from "@ocpp/core/session/execution"
 import { SessionRestart } from "@ocpp/core/session/execution/restart"
 import { SessionMessage } from "@ocpp/core/session/message"
+import { CodeModeCompletion } from "@ocpp/core/session/codemode-completion"
 import { SessionModelTransport } from "@ocpp/core/session/model-transport"
 import { SessionProjector } from "@ocpp/core/session/projector"
 import { SessionStore } from "@ocpp/core/session/store"
@@ -470,6 +471,35 @@ describe("vendor-driven sessions", () => {
       expect(midTurn).toEqual(["Steer now"])
       expect(vendor.messages).toEqual(["Start", "Queued for later"])
       expect(vendor.runs).toHaveLength(1)
+    }),
+  )
+
+  it.live("a subagent start wakes the idle vendor, which still waits for that execution's completion", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      vendor.turn = async (options, message) => {
+        if (message !== "Start") return say("Noted")(options, message)
+        const result = await run(options, 'const slow = tools.shell({ command: "sleep 2; echo slow done" })')
+        const executionID = result._tag === "Success" ? /exe_\w+/.exec(String(result.success))?.[0] : undefined
+        await say("Waiting")(options, message)
+        // Admitted as the turn ends, so the vendor is idle, waiting on the execution, when the notice arrives.
+        if (executionID)
+          await Effect.runPromise(
+            CodeModeCompletion.started(env.sessions, {
+              executionID,
+              recovery: { parentSessionID: env.session.id, assistantMessageID: SessionMessage.ID.create() },
+              sessionID: "ses_childstarted",
+            }),
+          )
+      }
+      yield* env.sessions.prompt({ sessionID: env.session.id, text: "Start" })
+      yield* env.sessions.wait(env.session.id)
+      // The notice started its own vendor turn, and the run still waited for the real completion.
+      expect(vendor.runs).toHaveLength(1)
+      expect(vendor.messages).toHaveLength(3)
+      expect(vendor.messages[1]).toContain(" started subagent session ses_childstarted.")
+      expect(vendor.messages[1]).not.toContain("saved notebook values")
+      expect(vendor.messages[2]).toContain("saved notebook values: slow")
     }),
   )
 
@@ -1184,6 +1214,53 @@ describe("subagent drivers", () => {
       expect(SessionDriver.of((yield* child(env))?.model)).toBe("codex")
       if (overridden._tag === "Success")
         expect(overridden.success.content).toEqual([{ type: "text", text: expect.stringContaining("Child answer") }])
+    }),
+  )
+
+  it.live("a follow-up to a running vendor child is steered into its turn, and the running call returns the answer", () =>
+    Effect.gen(function* () {
+      const env = yield* setup(ref("claude", "sonnet"))
+      const steered: string[] = []
+      vendor.turn = async (options, message) => {
+        if (!message.includes("Do the task")) return say("Later: " + message)(options, message)
+        await options.emit({ type: "step-start", id: "busy" })
+        // Still inside the turn: the follow-up arrives as a steer.
+        const steer = await options.next(options.signal)
+        steered.push(steer === undefined ? "none" : plain(steer))
+        await options.emit({ type: "text", id: "t", delta: "Done with " + steered.join(", ") })
+        await options.emit({ type: "step-end" })
+      }
+      const running = yield* call(env, {}).pipe(Effect.forkChild)
+      while (vendor.messages.length === 0) yield* Effect.promise(() => Bun.sleep(5))
+      const childID = (yield* child(env))?.id
+      if (childID === undefined) return yield* Effect.die("the call created no child")
+      // Only sessionID and message: the running call keeps its harness and tools.
+      const followUp = yield* env.within(
+        Effect.gen(function* () {
+          const tool = (yield* registeredTools(yield* Tool.Service)).get(SubagentTool.name)
+          if (!tool) return yield* Effect.die("subagent is not registered")
+          return yield* execute(
+            tool,
+            { sessionID: childID, message: "Use the staging database" },
+            {
+              sessionID: env.session.id,
+              agent: Agent.ID.make("build"),
+              messageID: SessionMessage.ID.create(),
+              id: Tool.CallID.make(crypto.randomUUID()),
+              progress: () => Effect.void,
+            },
+          )
+        }),
+      )
+      expect(followUp.output).toMatchObject({ sessionID: childID, status: "delivered" })
+      const result = yield* Fiber.join(running)
+      expect(steered).toEqual(["Use the staging database"])
+      expect(result._tag).toBe("Success")
+      if (result._tag === "Success")
+        expect(result.success.content).toEqual([
+          { type: "text", text: expect.stringContaining("Done with Use the staging database") },
+        ])
+      expect(vendor.runs).toHaveLength(1)
     }),
   )
 

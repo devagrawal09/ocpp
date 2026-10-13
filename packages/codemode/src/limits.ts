@@ -28,6 +28,13 @@ export const MAX_SPECULATIVE_LOOKAHEAD_CALLS = 16
 /** Maximum top-level statements one look-ahead scans. */
 export const MAX_SPECULATIVE_LOOKAHEAD_STATEMENTS = 64
 
+/**
+ * Maximum runs of concurrent tools, such as subagents, that one execution may hold without having called
+ * `wait()` on them. A call over it is refused before it starts, so a loop cannot launch unbounded work, and
+ * the count depends only on program order, so a replayed execution refuses the same call.
+ */
+export const MAX_UNWAITED_RUNS = 10
+
 export const collectionLimitMessage = (label: string, items: number) =>
   `${label} would hold ${items} items, over the ${MAX_COLLECTION_ITEMS}-item limit for one value.`
 

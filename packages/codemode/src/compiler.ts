@@ -170,7 +170,7 @@ const removedGlobals = new Map([
 const promiseUnsupported = "Promise is not supported; tool calls block and return their result directly."
 const promiseSuggestions = [
   "Call the tool and use its value directly: const file = tools.fs.read({ path })",
-  "Run independent work concurrently as separate execute calls instead.",
+  "A tool whose signature returns { wait(): ... } already runs concurrently: start several calls, then call wait() on each.",
 ]
 
 const mutatingMethods = new Set([
@@ -229,7 +229,7 @@ export function compile(code: string, options?: CompileOptions): Program {
           {
             kind: "Compatibility" as const,
             message:
-              "await was ignored for compatibility. Do not use it: operations within a script are semantically synchronous. Only execution of the script as a whole is asynchronous to the model.",
+              "await resolves a concurrent tool run and otherwise leaves the value unchanged. Prefer run.wait(); ordinary tool calls already return their results directly.",
           },
         ]
       : []),
@@ -238,7 +238,7 @@ export function compile(code: string, options?: CompileOptions): Program {
           {
             kind: "Compatibility" as const,
             message:
-              "Promise.all was serialized for compatibility. Do not use it: operations within a script are semantically synchronous, so array entries already run in order.",
+              "Promise.all resolves concurrent tool runs in an array and leaves other entries unchanged. Ordinary tool calls still block; start concurrent tools before waiting on their results.",
           },
         ]
       : []),

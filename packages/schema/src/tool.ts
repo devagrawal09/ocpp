@@ -46,6 +46,11 @@ export interface Options {
    * reported, which it receives as `Context.recovered`.
    */
   readonly reattach?: boolean
+  /**
+   * In Code Mode, a call returns a run at once instead of blocking, and `run.wait()` returns its result, so one
+   * program can run several calls at the same time. For long-running work such as a subagent.
+   */
+  readonly concurrent?: boolean
 }
 
 export type ValueSchema<A = unknown> = Schema.Codec<A, any> | StandardSchemaV1<any, A> | JsonSchema.JsonSchema

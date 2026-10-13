@@ -19,9 +19,10 @@ isolate-based approach.
 - **Only supported APIs are available.** Programs can use the provided tools and supported JavaScript
   built-ins. APIs such as `fetch`, timers, `process`, filesystem access, imports, and modules are
   unavailable.
-- **Tool calls are synchronous.** A direct call returns its decoded value. `await` and `Promise.all`
-  are accepted only as compatibility no-ops and produce warnings; other `Promise` syntax and `async`
-  are rejected before execution.
+- **Ordinary tool calls are synchronous.** A direct call returns its decoded value. A tool marked
+  `concurrent` returns an execution-local run; `run.wait()` returns its result. `await run` and
+  `Promise.all(runs)` also resolve runs, with compatibility warnings, and preserve ordinary values.
+  Other `Promise` syntax and `async` are rejected before execution.
 - **Values are durable data.** `null`, booleans, finite numbers, strings, immutable arrays,
   string-keyed records, and functions. `Date`, `Map`, `Set`, `URL`, and `URLSearchParams` are replaced
   by the `time` and `url` helpers, which return plain data. Regular expressions are unavailable.
@@ -166,21 +167,21 @@ retains admitted calls in order, including after failure.
 
 Diagnostic kinds:
 
-| Kind                    | Meaning                                                             |
-| ----------------------- | ------------------------------------------------------------------- |
-| `ParseError`            | Source is empty or cannot be parsed.                                |
-| `UnsupportedSyntax`     | Parsed JavaScript is outside the supported subset.                  |
-| `UnknownTool`           | The program referenced an unavailable tool.                         |
-| `InvalidToolInput`      | Tool input failed schema decoding or safe-data copying.             |
-| `InvalidToolOutput`     | Tool output failed schema decoding or safe-data copying.            |
-| `InvalidDataValue`      | Program data violated the plain-data contract.                      |
-| `InvalidDurableValue`   | A declared value cannot be saved durably, or exceeds a value limit. |
-| `ToolCallLimitExceeded` | The program exceeded `maxToolCalls`.                                |
-| `TimeoutExceeded`       | Execution exceeded its wall-clock deadline.                         |
-| `ToolFailure`           | A tool refused or failed.                                           |
-| `ExecutionFailure`      | The program threw or another execution error occurred.              |
-| `Compatibility`         | Warning only: `await` or `Promise.all` was accepted as a no-op.     |
-| `Truncated`             | Warning only: additional warnings were omitted by `maxOutputBytes`. |
+| Kind                    | Meaning                                                                   |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `ParseError`            | Source is empty or cannot be parsed.                                      |
+| `UnsupportedSyntax`     | Parsed JavaScript is outside the supported subset.                        |
+| `UnknownTool`           | The program referenced an unavailable tool.                               |
+| `InvalidToolInput`      | Tool input failed schema decoding or safe-data copying.                   |
+| `InvalidToolOutput`     | Tool output failed schema decoding or safe-data copying.                  |
+| `InvalidDataValue`      | Program data violated the plain-data contract.                            |
+| `InvalidDurableValue`   | A declared value cannot be saved durably, or exceeds a value limit.       |
+| `ToolCallLimitExceeded` | The program exceeded `maxToolCalls`.                                      |
+| `TimeoutExceeded`       | Execution exceeded its wall-clock deadline.                               |
+| `ToolFailure`           | A tool refused or failed.                                                 |
+| `ExecutionFailure`      | The program threw or another execution error occurred.                    |
+| `Compatibility`         | Warning only: `await` or `Promise.all` was accepted; prefer `run.wait()`. |
+| `Truncated`             | Warning only: additional warnings were omitted by `maxOutputBytes`.       |
 
 Host failures and defects report their messages and underlying causes. Invalid outputs include the
 validation or copying error. Interruption propagates without becoming an error diagnostic.

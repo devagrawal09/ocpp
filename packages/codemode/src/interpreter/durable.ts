@@ -1,5 +1,6 @@
 import { ToolHandle } from "../tool-handle.js"
-import { ToolReference } from "../tool-runtime.js"
+import { toolExpression, ToolReference } from "../tool-runtime.js"
+import { ToolRun } from "../values.js"
 import { IR_VERSION } from "../ir.js"
 import {
   BrokenNotebookValue,
@@ -103,6 +104,10 @@ export const encodeDeclarations = (
     if (value instanceof ToolHandle)
       throw invalid(`${label} contains a live tool handle, which exists only for one execution.`, [
         "Publish the data a handle produces, or define the handle again in the execution that uses it.",
+      ])
+    if (value instanceof ToolRun)
+      throw invalid(`${label} contains a run of ${toolExpression(value.tool)}, which exists only for one execution.`, [
+        "Save what run.wait() returns instead, and bind the run itself with let.",
       ])
     if (value instanceof ToolReference)
       throw invalid(`${label} contains a tool reference, which exists only for one execution.`, [

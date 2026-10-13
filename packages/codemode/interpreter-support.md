@@ -37,22 +37,23 @@ application effects are available only when the host exposes a named tool that p
 
 ## Feature Summary
 
-| Feature                | Behavior                                                                                                                                  |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Automatic publication  | Direct top-level `const` and `function` declarations are saved. No `export` syntax exists.                                                |
-| Immutable names        | A notebook name is written once and can never be redefined or reused.                                                                     |
-| Admission              | Tool paths and names are checked before an execution ID exists. Unavailable tools and name conflicts refuse immediately.                  |
-| Fixed snapshots        | An execution sees exactly the completed notebook captured when it was admitted.                                                           |
-| All-or-nothing saving  | Success saves every declaration in one transaction; any failure saves none.                                                               |
-| Durable functions      | Closures are saved with their compiled body and exact captures, and re-resolve tools on call.                                             |
-| Plain durable data     | `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, functions.                                             |
-| Asynchronous execution | `execute` returns an execution ID; the outcome arrives as one later notification.                                                         |
-| Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.                                               |
-| Blocking tool calls    | `tools.repository.read(input)` returns its decoded result directly. `await` and `Promise.all` are warning-producing compatibility no-ops. |
+| Feature                | Behavior                                                                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Automatic publication  | Direct top-level `const` and `function` declarations are saved. No `export` syntax exists.                                                           |
+| Immutable names        | A notebook name is written once and can never be redefined or reused.                                                                                |
+| Admission              | Tool paths and names are checked before an execution ID exists. Unavailable tools and name conflicts refuse immediately.                             |
+| Fixed snapshots        | An execution sees exactly the completed notebook captured when it was admitted.                                                                      |
+| All-or-nothing saving  | Success saves every declaration in one transaction; any failure saves none.                                                                          |
+| Durable functions      | Closures are saved with their compiled body and exact captures, and re-resolve tools on call.                                                        |
+| Plain durable data     | `null`, booleans, finite numbers, strings, immutable arrays, string-keyed records, functions.                                                        |
+| Asynchronous execution | `execute` returns an execution ID; the outcome arrives as one later notification.                                                                    |
+| Bounded lifecycle      | Status, saved names, diagnostics, logs, tool-call journal, and a small preview are bounded.                                                          |
+| Blocking tool calls    | `tools.repository.read(input)` returns its decoded result directly. `await` and `Promise.all` resolve concurrent runs; ordinary values pass through. |
+| Concurrent runs        | A concurrent tool's call, such as `tools.subagent`, returns a run at once; `run.wait()` returns its result.                                          |
 
-Calls within one execution always run serially, including subagent calls. To run independent
-subagents concurrently, issue one `execute` invocation per subagent; never put parallel subagent
-work in the same execution.
+Calls run in program order and block until their result is ready, except calls to a concurrent tool
+such as `tools.subagent`, which return a run at once (see [Concurrent Tool Runs](#concurrent-tool-runs)).
+Start several runs before waiting on any of them to run subagents at the same time in one execution.
 
 ## Quick Start
 
@@ -455,7 +456,9 @@ happened at the moment the host stopped. It guarantees instead that no call that
 runs again. Two consequences follow from replaying by call number: a subagent's custom tools that
 called other tools during a completed subagent call shift the numbering, so replay past that call
 settles `indeterminate`; and a child session's execution that used custom tools from its parent
-settles `indeterminate` when it resumes before its parent's call rejoins it.
+settles `indeterminate` when it resumes before its parent's call rejoins it. Concurrent runs are numbered
+when they start, in program order, so each replays or rejoins its child like any call; but the calls
+their children make through lent tools interleave, so replay past them may settle `indeterminate`.
 
 ## Language
 
@@ -577,6 +580,48 @@ Aggregate values are immutable. Derive replacements with `map`, `filter`, `slice
 literals. Notebook values are immutable even when they are arrays or records, and compiler validation
 rejects assignment targets hidden in destructuring and loop forms.
 
+## Concurrent Tool Runs
+
+A host may declare a tool `concurrent`; OC++ declares `tools.subagent` that way. A call to such a tool
+does not block. It is admitted, counted, and journaled in program order like any call, then its work
+starts on its own and the call returns a **run** at once. `run.wait()` returns the call's result, or
+throws its error where the program can catch it. The catalog signature shows the shape:
+`tools.subagent(input: { ... }): { wait(): { ... } }`.
+
+```ts
+let runs = ["src/a.ts", "src/b.ts"].map((path) =>
+  tools.subagent({
+    agent: "explore",
+    description: "Review " + path,
+    message: "Review the error handling in " + path + ".",
+    tools: [tools.read, tools.grep],
+  }),
+)
+const reviews = runs.map((run) => run.wait())
+```
+
+- Runs started before any `wait()` run at the same time. `tools.subagent(input).wait()` behaves exactly
+  like a blocking call.
+- `wait()` may be called more than once. Every call returns the same outcome, and the tool never runs
+  again.
+- `await run` also waits for its result. `Promise.all(runs)` resolves every run in an array, preserving
+  order and leaving plain values unchanged. Failures can be caught around either expression. Both
+  forms produce compatibility warnings; prefer explicit `run.wait()`. Ordinary tool calls still
+  block, so `Promise.all` does not make them concurrent.
+- A run is opaque like a tool handle: it is not data, cannot be passed to a tool or returned, and cannot
+  be saved. Bind it with `let`. A top-level `const` whose value holds a run is refused as soon as it is
+  bound, without waiting for the run, with a suggestion to save `run.wait()` instead. A run's only
+  member is `wait`; reading anything else, such as `run.output`, is an error rather than `undefined`.
+- A program that ends without waiting on a run still waits for it, in start order, before the execution
+  saves. A run that failed and was never waited on fails the execution like an uncaught call. A program
+  that throws, is cancelled, or times out interrupts its unfinished runs.
+  Returning a run, including inside an array or record, is refused before joining unfinished work.
+- At most 10 runs may be un-waited at once. A call over the limit is refused with
+  `ToolCallLimitExceeded` before it is counted or started. The count depends only on program order, so
+  a resumed execution refuses the same call.
+- Runs belong to their execution. The execution stays the one background job the Session tracks: its
+  completion notification lists every child session its runs named, and cancelling it stops them all.
+
 ## Opaque Tool Handles
 
 `tool.define` creates a delegated tool that exists only for the current execution:
@@ -606,12 +651,14 @@ let inspect = tool.define({
       .filter((item) => item.text.toLowerCase().includes(input.pattern.toLowerCase())),
 })
 
-const review = tools.subagent({
-  agent: "build",
-  description: "Review error handling",
-  message: "Use inspect to find error-handling branches in src/worker.ts, then explain the gaps.",
-  tools: [inspect],
-})
+const review = tools
+  .subagent({
+    agent: "build",
+    description: "Review error handling",
+    message: "Use inspect to find error-handling branches in src/worker.ts, then explain the gaps.",
+    tools: [inspect],
+  })
+  .wait()
 ```
 
 Handle guarantees:
@@ -636,7 +683,7 @@ const review = tools.subagent({
   description: "Review error handling",
   message: "Find error-handling branches in src/worker.ts and explain the gaps.",
   tools: [tools.fs.read, tools.fs.grep, tools.linear, inspect],
-})
+}).wait()
 ```
 
 - A reference must name a static path, like a call. The `tools` root and computed names are not
@@ -672,18 +719,20 @@ rendered into either model's context: it is available directly as `input` in the
 executions, so a notebook value travels by reference in source instead of being pasted into a prompt:
 
 ```ts
-const review = tools.subagent({
-  agent: "build",
-  description: "Summarize the dataset",
-  message: "Read the machine input, summarize its dataset, and submit the totals.",
-  input: { dataset },
-  inputSchema: { type: "object", required: ["dataset"] },
-  outputSchema: {
-    type: "object",
-    properties: { total: { type: "number" } },
-    required: ["total"],
-  },
-})
+const review = tools
+  .subagent({
+    agent: "build",
+    description: "Summarize the dataset",
+    message: "Read the machine input, summarize its dataset, and submit the totals.",
+    input: { dataset },
+    inputSchema: { type: "object", required: ["dataset"] },
+    outputSchema: {
+      type: "object",
+      properties: { total: { type: "number" } },
+      required: ["total"],
+    },
+  })
+  .wait()
 ```
 
 The child's prompt says only that machine input is available and describes its shape and size. The
@@ -804,6 +853,7 @@ OC++ Core applies these fixed host limits. A program cannot raise or lower them.
 | Captured tool and trace events    |  100 each |
 | One captured event value          |     4 KiB |
 | Concurrent executions per Session |        10 |
+| Un-waited runs per execution      |        10 |
 | Durable value depth               |        32 |
 | Items in one array or record      | 1,000,000 |
 | Characters in one string          | 4,000,000 |
@@ -865,7 +915,7 @@ const wide = "ab".repeat(3_000_000_000) // InvalidDataValue, before the native r
 | `TimeoutExceeded`       | Execution exceeded its wall-clock deadline.                                                                                  |
 | `ToolFailure`           | A tool refused or failed.                                                                                                    |
 | `ExecutionFailure`      | The program threw or another execution error occurred.                                                                       |
-| `Compatibility`         | Warning only: `await` or `Promise.all` was accepted as an ignored no-op.                                                     |
+| `Compatibility`         | Warning only: `await` or `Promise.all` was accepted; prefer explicit `run.wait()`.                                           |
 | `Truncated`             | Warning only: output was cut by the output limit.                                                                            |
 
 Admission errors are reported by the host with a stable `kind` of `NameAlreadyDefined`,

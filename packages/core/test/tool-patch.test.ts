@@ -149,12 +149,27 @@ describe("PatchTool", () => {
               .snapshot(undefined, sessionID, input)
               .pipe(Effect.map((snapshot) => snapshot.codeModeCatalog?.map((tool) => tool.path)))
 
-          expect(yield* paths(request("gpt-5", "openai"))).toEqual(["patch"])
-          expect(yield* paths(request("gpt-4.1", "openai"))).toEqual(["edit", "write"])
-          expect(yield* paths(request("gpt-oss-120b", "openrouter"))).toEqual(["edit", "write"])
-          expect(yield* paths(request("claude-sonnet-4-5", "anthropic"))).toEqual(["edit", "write"])
+          expect(yield* paths(request("gpt-5", "openai"))).toEqual(["notebook.inspect", "notebook.list", "patch"])
+          expect(yield* paths(request("gpt-4.1", "openai"))).toEqual([
+            "edit",
+            "notebook.inspect",
+            "notebook.list",
+            "write",
+          ])
+          expect(yield* paths(request("gpt-oss-120b", "openrouter"))).toEqual([
+            "edit",
+            "notebook.inspect",
+            "notebook.list",
+            "write",
+          ])
+          expect(yield* paths(request("claude-sonnet-4-5", "anthropic"))).toEqual([
+            "edit",
+            "notebook.inspect",
+            "notebook.list",
+            "write",
+          ])
           // Command and event handler runs involve no model, so every file tool stays callable.
-          expect(yield* paths()).toEqual(["edit", "patch", "write"])
+          expect(yield* paths()).toEqual(["edit", "notebook.inspect", "notebook.list", "patch", "write"])
 
           const refused = yield* (yield* registry.snapshot(undefined, sessionID, request("gpt-5", "openai")))
             .execute({
@@ -201,7 +216,7 @@ describe("PatchTool", () => {
             withTool(tmp.path, (registry) =>
               Effect.gen(function* () {
                 expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
-                expect(yield* codeModeTools(registry)).toEqual(["patch"])
+                expect(yield* codeModeTools(registry)).toEqual(["notebook.inspect", "notebook.list", "patch"])
                 const settled = yield* executeTool(
                   registry,
                   call(

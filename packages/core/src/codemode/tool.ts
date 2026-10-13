@@ -72,8 +72,8 @@ type ExecutionServices = {
 
 const description = [
   "Run a JavaScript-shaped program that calls tools and composes their results.",
-  "Tool calls block and return values directly. await and Promise.all are accepted only as ignored compatibility no-ops that produce a warning; do not use them. Other Promise forms, async, generators, dynamic tool dispatch, imports, filesystem access, fetch, and timers are unavailable.",
-  "Calls within one execution always run serially, including subagent calls. To run independent subagents concurrently, issue one execute call per subagent; never put parallel subagent work in the same execution.",
+  "Ordinary tool calls block and return values directly. await resolves a concurrent tool run; Promise.all resolves an array of runs while preserving plain values. Both are accepted with a compatibility warning; prefer run.wait(). Other Promise forms, async, generators, dynamic tool dispatch, imports, filesystem access, fetch, and timers are unavailable.",
+  "A tool whose signature returns { wait(): ... }, such as tools.subagent, does not block: the call starts it and returns a run at once, and run.wait() returns its result or throws its error. Start several before waiting on any to run them at the same time, for example let runs = tasks.map((task) => tools.subagent(task)); let results = runs.map((run) => run.wait()). Bind runs with let; a run cannot be saved or passed to a tool. Runs never waited on finish before the execution saves.",
   "Call only exact static paths from the catalog, for example tools.fs.read(input).",
   'To discover tools, call tools.search({ query: "what you need" }). To browse available tools, call tools.search({}), optionally filtering by namespace, and follow next.offset for more results. The bare tools root is not a runtime object: do not use Object.keys(tools) or computed paths such as tools[name]. Use returned paths literally in a subsequent execution.',
   "Use local let for scalar working state. Arrays and objects are immutable; use map, filter, slice, spread, and object literals to derive values.",
@@ -432,6 +432,7 @@ const launch = (
           entry === undefined ||
           rules?.readOnly !== true ||
           rules.reattach === true ||
+          rules.concurrent === true ||
           rules.acceptsToolHandles === true ||
           options.lent.has(entry.name) ||
           live?.has(entry.name) === true
@@ -762,6 +763,7 @@ export function tools(
           input: child.inputSchema,
           output: child.outputSchema ?? Schema.NullOr(Schema.String),
           acceptsToolHandles: registration.options?.acceptsToolHandles === true,
+          concurrent: registration.options?.concurrent === true,
           execute: (input, call) =>
             call
               ? executeTool(name, registration, input, call.index)

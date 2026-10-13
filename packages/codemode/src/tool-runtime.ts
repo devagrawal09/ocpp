@@ -12,7 +12,7 @@ import {
 import { isTool, type Tool } from "./tool.js"
 import { ToolHandle } from "./tool-handle.js"
 import type { Tools } from "./tools.js"
-import { CodeModePromise } from "./values.js"
+import { CodeModePromise, ToolRun } from "./values.js"
 
 const compareText = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0)
 
@@ -199,6 +199,12 @@ const copyBounded = (
       `${label} contains an un-awaited Promise; tool calls block and return their result directly.`,
     )
   }
+  if (value instanceof ToolRun) {
+    throw new ToolRuntimeError(
+      "InvalidDataValue",
+      `${label} contains a run of ${toolExpression(value.tool)}, which is not data; call .wait() on it and use the result.`,
+    )
+  }
   if (value instanceof ToolHandle) {
     if (preserveToolHandles) return value
     throw new ToolRuntimeError("InvalidDataValue", `${label} contains an opaque tool handle.`)
@@ -320,7 +326,10 @@ const flattenTools = <R>(
 const describeTool = <R>(path: string, tool: Tool<R>): ToolDescription => ({
   path,
   description: tool.description,
-  signature: `${toolExpression(path)}(input: ${inputTypeScript(tool, true)}): ${outputTypeScript(tool, true)}`,
+  // A concurrent tool's call returns a run whose wait() returns the result, which the signature shows directly.
+  signature: `${toolExpression(path)}(input: ${inputTypeScript(tool, true)}): ${
+    tool.concurrent === true ? `{ wait(): ${outputTypeScript(tool, true)} }` : outputTypeScript(tool, true)
+  }`,
 })
 
 // Discovery bytes are durable instructions, so order only after canonical-path collisions settle.
@@ -486,10 +495,25 @@ const resolve = <R>(root: ToolNode<R>, path: ReadonlyArray<string>): Tool<R> => 
   return node.tool
 }
 
+/**
+ * Where calls to a concurrent tool run: the owner of an execution's background work. Without it, a
+ * concurrent tool's calls block like any other.
+ */
+export type Runs<R = never> = {
+  /** Throws when the program may not start another run now. Checked before the call is counted. */
+  readonly admit: (tool: string) => void
+  /** Starts a call's body on its own and returns the run the program waits on. */
+  readonly start: (tool: string, body: Effect.Effect<unknown, unknown, R>) => Effect.Effect<ToolRun, never, R>
+}
+
 export type ToolRuntime<R = never> = {
   readonly root: ToolReference
   readonly calls: Array<ToolCall>
-  readonly execute: (path: ReadonlyArray<string>, args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
+  readonly execute: (
+    path: ReadonlyArray<string>,
+    args: Array<unknown>,
+    runs?: Runs<R>,
+  ) => Effect.Effect<unknown, unknown, R>
   readonly search: (args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
   readonly keys: (path: ReadonlyArray<string>) => ReadonlyArray<string>
   readonly notebookReference: (path: ReadonlyArray<string>) => string | undefined
@@ -510,20 +534,24 @@ export const make = <R>(
   searchNode.tool = searchTool
   root.children.set("search", searchNode)
 
-  const observeEnd = <A, E>(effect: Effect.Effect<A, E, R>, call: ToolCallStarted): Effect.Effect<A, E, R> => {
+  // Reports how a call ended to the host, timed from when the call started.
+  const observer = (call: ToolCallStarted) => {
     const onEnd = hooks?.onToolCallEnd
-    if (onEnd === undefined) return effect
+    if (onEnd === undefined) return undefined
     const startedAt = Date.now()
-    return effect.pipe(
-      Effect.onExit((exit) => {
-        const durationMs = Date.now() - startedAt
-        if (Exit.isSuccess(exit)) return onEnd({ ...call, durationMs, outcome: "success", output: exit.value })
-        if (Cause.hasInterruptsOnly(exit.cause)) return onEnd({ ...call, durationMs, outcome: "interrupted" })
-        const error = Cause.squash(exit.cause)
-        const message = error instanceof Error ? error.message : Cause.pretty(exit.cause)
-        return onEnd({ ...call, durationMs, outcome: "failure", message })
-      }),
-    )
+    return (exit: Exit.Exit<unknown, unknown>) => {
+      const durationMs = Date.now() - startedAt
+      if (Exit.isSuccess(exit)) return onEnd({ ...call, durationMs, outcome: "success", output: exit.value })
+      if (Cause.hasInterruptsOnly(exit.cause)) return onEnd({ ...call, durationMs, outcome: "interrupted" })
+      const error = Cause.squash(exit.cause)
+      const message = error instanceof Error ? error.message : Cause.pretty(exit.cause)
+      return onEnd({ ...call, durationMs, outcome: "failure", message })
+    }
+  }
+
+  const observeEnd = <A, E>(effect: Effect.Effect<A, E, R>, call: ToolCallStarted): Effect.Effect<A, E, R> => {
+    const end = observer(call)
+    return end === undefined ? effect : Effect.onExit(effect, end)
   }
 
   const recordCall = (call: ToolCall): void => {
@@ -533,7 +561,7 @@ export const make = <R>(
     calls.push(call)
   }
 
-  const executeTool = (name: string, tool: Tool<R>, externalArgs: Array<unknown>) =>
+  const executeTool = (name: string, tool: Tool<R>, externalArgs: Array<unknown>, detach?: Runs<R>) =>
     Effect.gen(function* () {
       if (externalArgs.length !== 1)
         throw new ToolRuntimeError("InvalidToolInput", `Tool '${name}' expects exactly one input object.`)
@@ -546,33 +574,43 @@ export const make = <R>(
             name === "search" ? [] : ["The signature may have changed. Use tools.search to get the current signature."],
           ),
       })
+      const runs = tool.concurrent === true ? detach : undefined
+      // Refused before the call is counted, so a refused run never reaches the host or its journal.
+      if (runs !== undefined) runs.admit(name)
       const index = yield* Effect.sync(() => {
         recordCall({ name })
         return calls.length - 1
       })
       const call = { index, name, input }
-      return yield* observeEnd(
-        Effect.gen(function* () {
-          if (hooks?.onToolCallStart !== undefined) yield* hooks.onToolCallStart(call)
-          const raw = yield* Effect.suspend(() => tool.execute(input, { index, name })).pipe(
-            Effect.catchCause((cause) => {
-              if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt
-              return Effect.fail(
-                toolError(
-                  Cause.prettyErrors(cause)
-                    .map((error) => (error.cause ? Formatter.format(error) : error.message || error.name))
-                    .join("\n"),
-                ),
-              )
-            }),
-          )
-          return yield* Effect.try({
-            try: () => copyIn(decodeToolOutput(tool, raw), `Result from tool '${name}'`),
-            catch: (cause) => new ToolRuntimeError("InvalidToolOutput", `Invalid output from tool '${name}': ${cause}`),
-          })
-        }),
-        call,
-      )
+      const start = hooks?.onToolCallStart === undefined ? Effect.void : hooks.onToolCallStart(call)
+      const body = Effect.gen(function* () {
+        const raw = yield* Effect.suspend(() => tool.execute(input, { index, name })).pipe(
+          Effect.catchCause((cause) => {
+            if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt
+            return Effect.fail(
+              toolError(
+                Cause.prettyErrors(cause)
+                  .map((error) => (error.cause ? Formatter.format(error) : error.message || error.name))
+                  .join("\n"),
+              ),
+            )
+          }),
+        )
+        return yield* Effect.try({
+          try: () => copyIn(decodeToolOutput(tool, raw), `Result from tool '${name}'`),
+          catch: (cause) => new ToolRuntimeError("InvalidToolOutput", `Invalid output from tool '${name}': ${cause}`),
+        })
+      })
+      if (runs === undefined) return yield* observeEnd(Effect.andThen(start, body), call)
+      // A concurrent call is counted and announced in program order, so its index and start hook never depend
+      // on how runs interleave. Only its body runs on its own, and its end is observed there.
+      const end = observer(call)
+      if (end === undefined) {
+        yield* start
+        return yield* runs.start(name, body)
+      }
+      yield* start.pipe(Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : end(exit))))
+      return yield* runs.start(name, body.pipe(Effect.onExit(end)))
     })
 
   // A proposal is decoded exactly as executeTool decodes the real call, but never records a call,
@@ -620,7 +658,7 @@ export const make = <R>(
           args.map((arg) => copyOut(copyIn(arg, "Arguments for tool 'search'"), "json")),
         ),
       ),
-    execute: (path, args) =>
+    execute: (path, args, runs) =>
       Effect.gen(function* () {
         const name = canonicalSegments(path).join(".")
         const tool = resolve(root, path)
@@ -639,7 +677,7 @@ export const make = <R>(
             `Tool reference ${toolExpression(unknown.join("."))} names no tool in this catalog.`,
             ["Pass only tools this program can call; tools.search lists them."],
           )
-        return yield* executeTool(name, tool, externalArgs)
+        return yield* executeTool(name, tool, externalArgs, runs)
       }),
   }
 }

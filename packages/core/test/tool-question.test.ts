@@ -116,7 +116,7 @@ describe("QuestionTool", () => {
       ]
 
       expect((yield* toolDefinitions(registry)).map((definition) => definition.name)).toEqual(["execute"])
-      expect(yield* codeModeTools(registry)).toEqual(["question"])
+      expect(yield* codeModeTools(registry)).toEqual(["notebook.inspect", "notebook.list", "question"])
       expect(
         yield* executeTool(registry, {
           sessionID,

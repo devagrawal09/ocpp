@@ -102,7 +102,7 @@ describe("WebSearchTool registration", () => {
       yield* fixture.websearch.select(WebSearch.ID.make("exa"))
 
       expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
-      expect(yield* codeModeTools(registry)).toEqual(["websearch"])
+      expect(yield* codeModeTools(registry)).toEqual(["notebook.inspect", "notebook.list", "websearch"])
       expect(
         yield* executeTool(registry, {
           sessionID,
@@ -144,7 +144,7 @@ describe("WebSearchTool registration", () => {
       yield* fixture.websearch.select(false)
 
       const snapshot = yield* registry.snapshot()
-      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo"])
+      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["echo", "notebook.inspect", "notebook.list"])
       const refused = yield* snapshot
         .execute({
           sessionID,
@@ -161,7 +161,7 @@ describe("WebSearchTool registration", () => {
       expect(fixture.events).toEqual([])
 
       yield* fixture.websearch.select(WebSearch.ID.make("exa"))
-      expect(yield* codeModeTools(registry)).toEqual(["echo", "websearch"])
+      expect(yield* codeModeTools(registry)).toEqual(["echo", "notebook.inspect", "notebook.list", "websearch"])
     }),
   )
 

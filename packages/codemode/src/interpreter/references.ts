@@ -18,11 +18,12 @@ import {
   SymbolNamespace,
   ToolDefineReference,
   ToolNamespace,
+  ToolRunWaitReference,
   UriFunction,
 } from "./model.js"
 import { ToolHandle } from "../tool-handle.js"
 import { ToolReference } from "../tool-runtime.js"
-import { CodeModePromise } from "../values.js"
+import { CodeModePromise, ToolRun } from "../values.js"
 
 export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof CodeModeFunction ||
@@ -45,7 +46,9 @@ export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof SearchFunction ||
   value instanceof PromiseCapabilityFunction ||
   value instanceof ErrorConstructorReference ||
-  value instanceof SymbolNamespace
+  value instanceof SymbolNamespace ||
+  value instanceof ToolRun ||
+  value instanceof ToolRunWaitReference
 
 function* childValues(value: object): Generator<unknown> {
   if (Array.isArray(value)) {
@@ -72,6 +75,25 @@ export const containsRuntimeReference = (value: unknown): boolean => {
     pending.push(childValues(current))
   }
   return false
+}
+
+/** The first run of a concurrent tool held in a value, searching arrays and records. */
+export const findToolRun = (value: unknown): ToolRun | undefined => {
+  const pending: Array<Iterator<unknown>> = [[value].values()]
+  const seen = new Set<object>()
+  while (pending.length > 0) {
+    const next = pending.at(-1)!.next()
+    if (next.done) {
+      pending.pop()
+      continue
+    }
+    const current = next.value
+    if (current instanceof ToolRun) return current
+    if (current === null || typeof current !== "object" || isRuntimeReference(current) || seen.has(current)) continue
+    seen.add(current)
+    pending.push(childValues(current))
+  }
+  return undefined
 }
 
 // CodeMode values are data here, not opaque interpreter references.
@@ -129,7 +151,12 @@ export const typeofValue = (value: unknown): string => {
     value instanceof ToolDefineReference
   )
     return "function"
-  if (value instanceof UriFunction || value instanceof SearchFunction || value instanceof ToolDefineReference)
+  if (
+    value instanceof UriFunction ||
+    value instanceof SearchFunction ||
+    value instanceof ToolDefineReference ||
+    value instanceof ToolRunWaitReference
+  )
     return "function"
   if (value instanceof ToolHandle) return "object"
   if (value instanceof ToolNamespace) return "object"

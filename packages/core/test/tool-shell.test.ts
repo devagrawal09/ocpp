@@ -384,7 +384,12 @@ describe("ShellTool", () => {
               expect(shellDefinition.inputSchema).not.toHaveProperty("properties.timeout.maximum")
               // Code Mode receives the declared output schema, including the command output text.
               expect(shellDefinition.outputSchema).toHaveProperty("properties.output")
-              expect(yield* codeModeTools(registry, { paths: ["read", "glob"] })).toEqual(["glob", "read"])
+              expect(yield* codeModeTools(registry, { paths: ["read", "glob"] })).toEqual([
+                "glob",
+                "notebook.inspect",
+                "notebook.list",
+                "read",
+              ])
 
               const settled = yield* executeTool(registry, call({ command: helloCommand }))
               expect(settled.status).toBe("completed")

@@ -118,6 +118,8 @@ describe("SkillTool", () => {
             const registry = yield* Tool.Service
             expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["execute"])
             expect((yield* registry.snapshot()).codeModeCatalog).toEqual([
+              expect.objectContaining({ path: "notebook.inspect" }),
+              expect.objectContaining({ path: "notebook.list" }),
               expect.objectContaining({ path: "skill", description: SkillTool.description }),
             ])
             delivered.length = 0

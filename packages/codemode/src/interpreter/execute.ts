@@ -86,6 +86,8 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
           )
           const executed = yield* interpreter.run(parsed.body)
           const result = copyOut(copyIn(executed.value, "Execution preview"), "nullify") as DataValue
+          // Runs the program never waited on finish before anything is saved, and fail it like a call would.
+          yield* promises.joinRuns()
           // Saving happens before the execution reports success, so an invalid durable value fails
           // the execution instead of surprising the host at commit.
           const declarations = encodeDeclarations(executed.declarations, interpreter.notebook(), {
@@ -191,11 +193,12 @@ export const evaluateWithLimits = <const Provided extends Record<string, unknown
     yield* Effect.addFinalizer(() => Effect.sync(() => handles.forEach((handle) => handle.close())))
     const run = Effect.gen(function* () {
       const parsed = decoded?.program ?? compile(options.code, { notebook: false })
+      const promises = new PromiseRuntime<Services<Provided>>(scope)
       const executed = yield* new Interpreter<Services<Provided>>(
         tools.execute,
         tools.search,
         tools.keys,
-        new PromiseRuntime<Services<Provided>>(scope),
+        promises,
         logs,
         options.onTrace,
         parsed.source,
@@ -208,9 +211,11 @@ export const evaluateWithLimits = <const Provided extends Record<string, unknown
         handles,
         options.impure,
       ).run(parsed.body, false)
+      const value = copyIn(executed.value, "Returned value", true)
+      yield* promises.joinRuns()
       return {
         ok: true,
-        value: copyIn(executed.value, "Returned value", true),
+        value,
         ...(logs.length > 0 ? { logs: [...logs] } : {}),
         toolCalls: tools.calls,
       } as const

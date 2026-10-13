@@ -520,7 +520,7 @@ describe("Code Mode resume", () => {
         const call = { agent: "reviewer", description: "review", message: "check it" }
         const { session, executionID } = yield* crashed(
           location,
-          "const review = tools.subagent(" + JSON.stringify(call) + ")",
+          "const review = await tools.subagent(" + JSON.stringify(call) + ")",
           [],
         )
         const child = yield* sessions.create({
@@ -1026,10 +1026,28 @@ const childTools = (held?: Deferred.Deferred<void>): ReadonlyArray<Tool.Info> =>
     name: "spawn",
     options: { namespace: "test" },
     description: "Starts a child session.",
-    input: Schema.Struct({ id: Schema.String, fail: Schema.optional(Schema.String), hold: Schema.optional(Schema.Boolean) }),
-    output: Schema.Struct({ ok: Schema.Boolean }),
-    execute: (input: { readonly id: string; readonly fail?: string; readonly hold?: boolean }, context) =>
+    input: Schema.Struct({
+      id: Schema.String,
+      fail: Schema.optional(Schema.String),
+      hold: Schema.optional(Schema.Boolean),
+      delivered: Schema.optional(Schema.Boolean),
+    }),
+    output: Schema.Struct({
+      ok: Schema.Boolean,
+      sessionID: Schema.optional(Schema.String),
+      status: Schema.optional(Schema.String),
+    }),
+    execute: (
+      input: { readonly id: string; readonly fail?: string; readonly hold?: boolean; readonly delivered?: boolean },
+      context,
+    ) =>
       Effect.gen(function* () {
+        // A follow-up steered into a child an earlier call still runs returns at once, without progress.
+        if (input.delivered)
+          return {
+            output: { ok: true, sessionID: input.id, status: "delivered" },
+            metadata: { sessionID: input.id, status: "delivered" },
+          }
         yield* context.progress({ sessionID: input.id, status: "running" })
         if (input.hold && held) {
           yield* Deferred.succeed(held, undefined)

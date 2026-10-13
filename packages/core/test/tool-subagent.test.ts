@@ -1186,7 +1186,7 @@ describe("SubagentTool", () => {
           ).toMatchObject({ status: "saved", saved: ["dataset", "note"] })
           const delegated = yield* run(
             "call-delegate",
-            'const review = tools.subagent({ agent: "reviewer", description: "analyze", message: "Analyze the dataset", input: { dataset, note } })',
+            'const review = tools.subagent({ agent: "reviewer", description: "analyze", message: "Analyze the dataset", input: { dataset, note } }).wait()',
           )
           expect(delegated).toMatchObject({ status: "saved", saved: ["review"] })
           expect(delegated.summary).not.toContain("secret-token")
@@ -1204,6 +1204,64 @@ describe("SubagentTool", () => {
               "Analyze the dataset",
             ].join("\n"),
           ])
+        }),
+      ),
+    ),
+  )
+
+  it.live("resolves several subagents with Promise.all from one Code Mode program", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          yield* seedToolSession(parent.id, toolIdentity.messageID)
+          const id = "call-parallel"
+          const started = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call" as const,
+              id,
+              name: "execute",
+              input: {
+                code: [
+                  'let runs = ["first", "second"].map((name) => tools.subagent({ agent: "reviewer", description: "review " + name, message: "Review " + name }))',
+                  "const reviews = await Promise.all(runs)",
+                ].join("\n"),
+              },
+            },
+          })
+          expect(started.status).toBe("completed")
+          const settled = yield* waitForCodeMode(started.output, {
+            sessionID: parent.id,
+            assistantMessageID: toolIdentity.messageID,
+            id,
+          })
+          expect(settled).toMatchObject({ status: "saved", saved: ["reviews"] })
+
+          const notebook = yield* readCodeModeNotebook(parent.id)
+          const reviews = notebook.reviews as Array<unknown>
+          expect(reviews).toHaveLength(2)
+          const children = reviews.map(outputSessionID)
+          expect(new Set(children).size).toBe(2)
+          for (const [index, review] of reviews.entries())
+            expect(review).toEqual({
+              sessionID: children[index],
+              status: "completed",
+              message: childText,
+              output: null,
+            })
+          expect((yield* sessions.list({ parentID: parent.id })).data.map((item) => item.id).sort()).toEqual(
+            [...children].sort(),
+          )
         }),
       ),
     ),

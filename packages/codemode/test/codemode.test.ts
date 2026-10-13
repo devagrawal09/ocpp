@@ -776,7 +776,7 @@ describe("CodeMode public contract", () => {
         {
           kind: "Compatibility",
           message:
-            "await was ignored for compatibility. Do not use it: operations within a script are semantically synchronous. Only execution of the script as a whole is asynchronous to the model.",
+            "await resolves a concurrent tool run and otherwise leaves the value unchanged. Prefer run.wait(); ordinary tool calls already return their results directly.",
         },
       ],
       toolCalls: [{ name: "orders.lookup" }],
@@ -802,7 +802,7 @@ describe("CodeMode public contract", () => {
         {
           kind: "Compatibility",
           message:
-            "Promise.all was serialized for compatibility. Do not use it: operations within a script are semantically synchronous, so array entries already run in order.",
+            "Promise.all resolves concurrent tool runs in an array and leaves other entries unchanged. Ordinary tool calls still block; start concurrent tools before waiting on their results.",
         },
       ],
       toolCalls: [{ name: "orders.lookup" }, { name: "orders.lookup" }],

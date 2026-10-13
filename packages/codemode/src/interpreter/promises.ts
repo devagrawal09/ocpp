@@ -1,6 +1,7 @@
 import { Cause, Deferred, Effect, Exit, Fiber, Scope } from "effect"
 import type { Diagnostic } from "../codemode.js"
-import type { SafeObject } from "../tool-runtime.js"
+import { MAX_UNWAITED_RUNS } from "../limits.js"
+import { type Runs, type SafeObject, toolExpression, ToolRuntimeError } from "../tool-runtime.js"
 import {
   type AstNode,
   CodeModeFunction,
@@ -14,7 +15,7 @@ import { caughtErrorValue, normalizeError } from "./errors.js"
 import { applyCollectionCallback, isSupportedCallback, type CallbackRunner, type SupportedCallback } from "./methods.js"
 import { typeofValue } from "./references.js"
 import { createAggregateErrorValue } from "../stdlib/value.js"
-import { CodeModePromise } from "../values.js"
+import { CodeModePromise, ToolRun } from "../values.js"
 import type { SyncIteratorRunner } from "./iterator.js"
 
 // Observation only controls rejection reporting; program completion interrupts all promise work.
@@ -66,6 +67,51 @@ export class PromiseRuntime<R> {
 
   fork(effect: Effect.Effect<unknown, unknown, R>): Effect.Effect<void, never, R> {
     return Effect.asVoid(Effect.forkIn(effect, this.scope, { startImmediately: true }))
+  }
+
+  // Runs of concurrent tools the program has not waited on, in the order they started.
+  private readonly unwaited = new Set<ToolRun>()
+
+  /** Where the tool runtime starts calls to concurrent tools, so they share the execution's scope. */
+  readonly runs: Runs<R> = {
+    admit: (tool) => {
+      if (this.unwaited.size >= MAX_UNWAITED_RUNS)
+        throw new ToolRuntimeError(
+          "ToolCallLimitExceeded",
+          `${toolExpression(tool)} was not started: this execution already holds ${MAX_UNWAITED_RUNS} runs it has not waited on.`,
+          ["Call wait() on a run you started before starting another."],
+        )
+    },
+    start: (tool, body) =>
+      Effect.map(Effect.forkIn(body, this.scope, { startImmediately: true }), (fiber) => {
+        const run = new ToolRun(tool, fiber)
+        this.unwaited.add(run)
+        return run
+      }),
+  }
+
+  /** A run's outcome: its result, or its error to throw. Waiting again returns the same outcome. */
+  waitRun(run: ToolRun): Effect.Effect<unknown, unknown> {
+    return Effect.suspend(() => {
+      this.unwaited.delete(run)
+      return Effect.flatMap(Fiber.await(run.fiber), (exit) => Effect.andThen(Effect.yieldNow, exit))
+    })
+  }
+
+  /**
+   * Waits, in start order, for every run the program finished without waiting on. A run that fails here
+   * fails the execution like any call the program made and did not catch.
+   */
+  joinRuns(): Effect.Effect<void, unknown> {
+    const self = this
+    return Effect.gen(function* () {
+      // A run can start another, such as a tool.define handle a subagent calls, so check again each time.
+      while (self.unwaited.size > 0) {
+        const next = self.unwaited.values().next()
+        if (next.done) return
+        yield* self.waitRun(next.value)
+      }
+    })
   }
 
   diagnostics(): Array<Diagnostic> {

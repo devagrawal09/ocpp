@@ -28,7 +28,7 @@ The user will primarily request you perform software engineering tasks. This inc
 # Tool usage policy
 - Your only tool is `execute`. It runs a short JavaScript program in which every other tool is a function called by its exact catalog path, such as `tools.read(...)` or `tools.shell(...)`.
 - Tool calls inside one program run in order and return their results directly, so do dependent steps (find, read, filter, edit) in one program instead of one execution per call. Never use placeholders or guess missing parameters.
-- To run independent work concurrently, such as several subagents, make multiple `execute` calls in a single response. Calls inside one program always run one at a time. If the user asks you to run tools "in parallel", send one message with multiple `execute` calls.
+- To run independent work concurrently, make multiple `execute` calls in a single response. Calls inside one program run one at a time, except `tools.subagent`, which returns a run at once: start several subagents in one program, then call `run.wait()` on each to run them concurrently. If the user asks you to run tools "in parallel", send one message with multiple `execute` calls.
 - `execute` returns an execution ID immediately, and its outcome arrives later as a notification. Keep working on anything that does not depend on it.
 - Only the returned value and console output reach you, truncated to about 4 KB, so select the lines or fields you need in code instead of returning whole files. Images and PDFs that tools return are attached to the notification.
 - Top-level `const` and `function` declarations are saved and readable by name in later programs, so keep data you need again there instead of fetching it twice.

@@ -5,6 +5,7 @@ import { ToolHandle } from "../tool-handle.js"
 import { isPromiseAllCall, staticToolCalls, staticToolPath } from "../ir.js"
 import {
   isBlockedMember,
+  type Runs,
   type Speculation,
   type ToolCallProposal,
   toolExpression,
@@ -54,6 +55,7 @@ import {
   type StatementResult,
   ToolDefineReference,
   ToolNamespace,
+  ToolRunWaitReference,
   unsupportedSyntax,
   UriFunction,
 } from "./model.js"
@@ -75,7 +77,13 @@ import {
   resolvePromise,
   resolvePromiseValue,
 } from "./promises.js"
-import { containsOpaqueReference, isRuntimeReference, rejectCircularInsertion, typeofValue } from "./references.js"
+import {
+  containsOpaqueReference,
+  findToolRun,
+  isRuntimeReference,
+  rejectCircularInsertion,
+  typeofValue,
+} from "./references.js"
 import { collectPatternNames, freeIdentifiers } from "./captures.js"
 import {
   collectionLimitMessage,
@@ -108,7 +116,7 @@ import {
   errorConstructors,
   invokeCoercion,
 } from "../stdlib/value.js"
-import { CodeModePromise } from "../values.js"
+import { CodeModePromise, ToolRun } from "../values.js"
 import { timeMethods } from "../stdlib/time.js"
 
 const globalStaticMembers: Partial<Record<GlobalNamespaceName, Set<string>>> = {
@@ -229,6 +237,7 @@ type OpaqueMemberReference =
   | JsonMethodReference
   | GeneratorMethodReference
   | ToolDefineReference
+  | ToolRunWaitReference
 
 const isOpaqueMemberReference = (value: unknown): value is OpaqueMemberReference =>
   value instanceof ToolReference ||
@@ -238,7 +247,8 @@ const isOpaqueMemberReference = (value: unknown): value is OpaqueMemberReference
   value instanceof GlobalMethodReference ||
   value instanceof JsonMethodReference ||
   value instanceof GeneratorMethodReference ||
-  value instanceof ToolDefineReference
+  value instanceof ToolDefineReference ||
+  value instanceof ToolRunWaitReference
 
 const copyIteratorSymbols = (source: object, target: object, consumed?: ReadonlySet<PropertyKey>): void => {
   for (const symbol of IteratorSymbols) {
@@ -270,6 +280,7 @@ export class Interpreter<R> {
   private readonly executeTool: (
     path: ReadonlyArray<string>,
     args: Array<unknown>,
+    runs?: Runs<R>,
   ) => Effect.Effect<unknown, unknown, R>
   private readonly invokeSearch: (args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
   private readonly toolKeys: (path: ReadonlyArray<string>) => ReadonlyArray<string>
@@ -297,7 +308,11 @@ export class Interpreter<R> {
   }
 
   constructor(
-    executeTool: (path: ReadonlyArray<string>, args: Array<unknown>) => Effect.Effect<unknown, unknown, R>,
+    executeTool: (
+      path: ReadonlyArray<string>,
+      args: Array<unknown>,
+      runs?: Runs<R>,
+    ) => Effect.Effect<unknown, unknown, R>,
     invokeSearch: (args: Array<unknown>) => Effect.Effect<unknown, unknown, R>,
     toolKeys: (path: ReadonlyArray<string>) => ReadonlyArray<string>,
     promises: PromiseRuntime<R>,
@@ -375,6 +390,26 @@ export class Interpreter<R> {
     return new Map([...this.notebookScope].map(([name, binding]) => [name, binding.value]))
   }
 
+  // Which tool can return a run is known only from the catalog, so a saved name holding one is refused here, as
+  // soon as it is bound, rather than when the execution saves after every run it started has finished.
+  private refuseSavedRun(statement: AstNode): void {
+    for (const item of getArray(statement, "declarations")) {
+      const id = getNode(asNode(item, "declarations"), "id")
+      if (id.type !== "Identifier") continue
+      const name = getString(id, "name")
+      if (!this.declarationNames.includes(name)) continue
+      const run = findToolRun(this.scopes.get(name, id))
+      if (run === undefined) continue
+      const tool = toolExpression(run.tool)
+      throw new InterpreterRuntimeError(
+        `'${name}' would hold a run of ${tool}, which exists only for this execution and cannot be saved.`,
+        id,
+        "InvalidDataValue",
+        [`Bind the run with let and save its result: let run = ${tool}(input); const ${name} = run.wait()`],
+      )
+    }
+  }
+
   /** Runs a program. Its tool handles close when it settles, unless the host keeps them open for later calls. */
   run(
     program: ProgramNode,
@@ -396,6 +431,7 @@ export class Interpreter<R> {
           break
         }
         const result = yield* self.evaluateStatement(statement)
+        if (statement.type === "VariableDeclaration" && statement.kind === "const") self.refuseSavedRun(statement)
 
         if (result.kind === "return") {
           value = result.value
@@ -519,7 +555,8 @@ export class Interpreter<R> {
     if (this.allowedTools !== undefined && !this.allowedTools.has(name)) {
       throw new ToolRuntimeError("UnknownTool", `Tool handle does not declare capability '${name}'.`)
     }
-    return Effect.suspend(() => this.executeTool(path, args))
+    // A concurrent tool's call starts in this execution's scope and returns its run.
+    return Effect.suspend(() => this.executeTool(path, args, this.promises.runs))
   }
 
   private createPromise(effect: Effect.Effect<unknown, unknown, R>): Effect.Effect<CodeModePromise, never, R> {
@@ -1556,7 +1593,9 @@ export class Interpreter<R> {
       case "UpdateExpression":
         return this.evaluateUpdateExpression(node)
       case "AwaitExpression": {
-        return this.evaluateExpression(getNode(node, "argument"))
+        return Effect.flatMap(this.evaluateExpression(getNode(node, "argument")), (value) =>
+          value instanceof ToolRun ? this.promises.waitRun(value) : Effect.succeed(value),
+        )
       }
       case "YieldExpression":
         return this.evaluateYieldExpression(node)
@@ -1866,13 +1905,22 @@ export class Interpreter<R> {
     const callee = getNode(node, "callee")
     const argNodes = getArray(node, "arguments")
     if (isPromiseAllCall(node))
-      return Effect.flatMap(this.evaluateExpression(asNode(argNodes[0], "Promise.all argument")), (value) =>
-        Array.isArray(value)
-          ? Effect.succeed(value)
-          : Effect.fail(
-              new InterpreterRuntimeError("Promise.all compatibility expects an array argument.", node).as("TypeError"),
-            ),
-      )
+      return Effect.flatMap(this.evaluateExpression(asNode(argNodes[0], "Promise.all argument")), (value) => {
+        if (!Array.isArray(value))
+          return Effect.fail(
+            new InterpreterRuntimeError("Promise.all compatibility expects an array argument.", node).as("TypeError"),
+          )
+        // Only distinct runs need waiters, not every entry in a potentially large data array.
+        const runs = [...new Set(value.filter((item) => item instanceof ToolRun))]
+        if (runs.length === 0) return Effect.succeed(value)
+        return Effect.map(
+          Effect.forEach(runs, (run) => this.promises.waitRun(run), { concurrency: "unbounded" }),
+          (results) => {
+            const outcomes = new Map(runs.map((run, index) => [run, results[index]]))
+            return value.map((item) => (item instanceof ToolRun ? outcomes.get(item) : item))
+          },
+        )
+      })
 
     const self = this
     return Effect.gen(function* () {
@@ -1942,6 +1990,10 @@ export class Interpreter<R> {
       }
       if (callable instanceof PromiseInstanceMethodReference) {
         return yield* invokePromiseInstanceMethod(self.runner, self.promises, callable, args, node)
+      }
+      if (callable instanceof ToolRunWaitReference) {
+        if (args.length > 0) throw new InterpreterRuntimeError("wait() takes no arguments.", callee).as("TypeError")
+        return yield* self.promises.waitRun(callable.run)
       }
       if (callable instanceof CodeModeFunction) {
         return yield* self.invokeFunction(callable, args, traceStatements)
@@ -2588,6 +2640,7 @@ export class Interpreter<R> {
     | JsonMethodReference
     | GeneratorMethodReference
     | ToolDefineReference
+    | ToolRunWaitReference
     | ComputedValue
     | typeof OptionalShortCircuit
     | undefined,
@@ -2696,6 +2749,18 @@ export class Interpreter<R> {
           return new GlobalMethodReference("String", key)
         }
         return new ComputedValue(undefined)
+      }
+
+      // A run's only member is wait(), so a result read without waiting fails instead of reading undefined.
+      if (objectValue instanceof ToolRun) {
+        if (key === "wait") return new ToolRunWaitReference(objectValue)
+        const tool = toolExpression(objectValue.tool)
+        throw new InterpreterRuntimeError(
+          `This value is a run of ${tool}, not its result; its only member is wait().`,
+          objectNode,
+          "InvalidDataValue",
+          [`Call wait() for the result: let run = ${tool}(input); let result = run.wait()`],
+        )
       }
 
       // Reject unknown promise properties so a missing await cannot hide.

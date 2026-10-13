@@ -362,7 +362,7 @@ export const Plugin = {
         })
         draft.add({
           name,
-          options: { acceptsToolHandles: true, reattach: true },
+          options: { acceptsToolHandles: true, reattach: true, concurrent: true },
           description,
           input: Input,
           output: Output,

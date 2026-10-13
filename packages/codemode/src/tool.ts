@@ -36,6 +36,8 @@ export type Tool<R = never> = {
   readonly input: SchemaType
   readonly output: SchemaType | undefined
   readonly acceptsToolHandles: boolean
+  /** Calls return a ToolRun at once and run on their own; `run.wait()` returns the result. */
+  readonly concurrent?: boolean
   readonly notebookReference?: string
   readonly execute: (input: unknown, call?: ToolCallContext) => Effect.Effect<unknown, unknown, R>
 }
@@ -56,6 +58,12 @@ export type Options<I extends SchemaType, O extends SchemaType | undefined, R = 
   readonly output?: O
   /** Allows this in-process host boundary to receive opaque same-activation tool handles. */
   readonly acceptsToolHandles?: boolean
+  /**
+   * A call starts the tool and returns a run handle at once instead of blocking, so a program can start
+   * several calls before reading any result. `run.wait()` returns the result or throws the call's error. For
+   * long-running work, such as a subagent, whose callers want to run several at the same time.
+   */
+  readonly concurrent?: boolean
   /** Input property requiring a direct saved identifier; the host receives its snapshot name, not its value. */
   readonly notebookReference?: string
   readonly execute: (input: InputType<I>, call?: ToolCallContext) => Effect.Effect<ResultType<O>, unknown, R>
@@ -84,6 +92,7 @@ export const make = <I extends SchemaType, const O extends SchemaType | undefine
   input: options.input,
   output: options.output,
   acceptsToolHandles: options.acceptsToolHandles === true,
+  ...(options.concurrent === true ? { concurrent: true } : {}),
   notebookReference: options.notebookReference,
   execute: (input, call) => options.execute(input as InputType<I>, call),
 })

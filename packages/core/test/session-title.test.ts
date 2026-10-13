@@ -42,6 +42,14 @@ const smallModel = LanguageModel.make({
   provider: "test",
   route: OpenAIChat.route,
 })
+// What the real catalog defaults to without a configured model: the newest available model, here OpenCode's keyless
+// free tier, which rejects OC++ requests.
+const keylessModel = LanguageModel.make({
+  id: "keyless-free",
+  provider: "opencode",
+  route: OpenAIChat.route,
+})
+let keylessDefault = false
 const cost = [
   {
     input: Money.USDPerMillionTokens.make(1),
@@ -91,12 +99,15 @@ const models = Layer.mock(SessionRunnerModel.Service)({
         }),
       )
     return Effect.succeed(
-      SessionRunnerModel.resolved(session.model?.id === "title-small" ? smallModel : model, {
-        capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
-        cost,
-        limit: { context: 200_000, output: 32_000 },
-        variant: session.model?.variant,
-      }),
+      SessionRunnerModel.resolved(
+        !session.model && keylessDefault ? keylessModel : session.model?.id === "title-small" ? smallModel : model,
+        {
+          capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+          cost,
+          limit: { context: 200_000, output: 32_000 },
+          variant: session.model?.variant,
+        },
+      ),
     )
   },
 })
@@ -111,7 +122,8 @@ const catalog = Layer.mock(Catalog.Service, {
     all: () => Effect.die("unused"),
     available: () => Effect.die("unused"),
     default: () => Effect.die("unused"),
-    small: () => Effect.succeed(selectedSmall),
+    // Like the real catalog: OpenCode has no model in a small-model family.
+    small: (providerID) => Effect.succeed(providerID === "opencode" ? undefined : selectedSmall),
   },
 })
 const it = testEffect(
@@ -196,6 +208,7 @@ beforeEach(() => {
   selectedSmall = undefined
   selections = []
   titleStream = successfulTitle
+  keylessDefault = false
 })
 
 const enableTitleAgent = Effect.gen(function* () {
@@ -276,6 +289,42 @@ it.effect("titles a vendor-driven session with the default model's provider", ()
 
     expect(selections[1]).toBeUndefined()
     expect(requests.map((request) => String(request.model.id))).toEqual(["title-small"])
+    const store = yield* SessionStore.Service
+    expect((yield* store.get(sessionID))?.title).toBe("Generated Title")
+  }),
+)
+
+it.effect("titles a vendor-driven session with the provider of the latest OC++-driven session", () =>
+  Effect.gen(function* () {
+    keylessDefault = true
+    titleStream = () =>
+      String(requests.at(-1)?.model.id) === "keyless-free"
+        ? Stream.make(LLMEvent.providerError({ message: "OpenCode's free tier can only be used from within OpenCode" }))
+        : successfulTitle()
+    selectedSmall = small
+    yield* enableTitleAgent
+    const claude = Model.Ref.make({ providerID: Provider.ID.make("claude"), id: Model.ID.make("opus") })
+    yield* insertSession(
+      Session.ID.make("ses_title_earlier_ocpp"),
+      "Earlier OC++ work",
+      undefined,
+      Model.Ref.make({
+        providerID: Provider.ID.make("test"),
+        id: Model.ID.make("title-model"),
+        variant: Model.VariantID.make("high"),
+      }),
+    )
+    yield* insertSession(Session.ID.make("ses_title_earlier_vendor"), "Earlier Claude Code work", undefined, claude)
+    const sessionID = Session.ID.make("ses_title_vendor_recent")
+    yield* insertSession(sessionID, undefined, undefined, claude)
+    yield* prompt(sessionID, "Title a Claude Code session")
+
+    const title = yield* SessionTitle.Service
+    yield* title.generate(sessionID)
+
+    // The keyless default is never tried: the title uses the small model of the provider the user runs OC++ on.
+    expect(requests.map((request) => String(request.model.id))).toEqual(["title-small"])
+    expect(selections).not.toContainEqual(undefined)
     const store = yield* SessionStore.Service
     expect((yield* store.get(sessionID))?.title).toBe("Generated Title")
   }),

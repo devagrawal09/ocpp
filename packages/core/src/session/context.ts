@@ -1,7 +1,9 @@
 export * as SessionContext from "./context.js"
 
 import { Model } from "@ocpp/schema/model"
+import { Provider } from "@ocpp/schema/provider"
 import { SessionDriver } from "@ocpp/schema/session-driver"
+import { and, desc, isNotNull, isNull, ne } from "drizzle-orm"
 import { Context, Effect, Layer, Result } from "effect"
 import { Agent } from "../agent.js"
 import { Catalog } from "../catalog.js"
@@ -30,6 +32,7 @@ import { SessionMessage } from "./message.js"
 import { SessionModelRequest } from "./model-request.js"
 import { SessionRunnerModel } from "./runner/model.js"
 import { SessionSchema } from "./schema.js"
+import { SessionTable } from "./sql.js"
 import { SessionStore } from "./store.js"
 
 export interface Selection {
@@ -106,17 +109,45 @@ const layer = Layer.effect(
 
     const resolveModel = (session: SessionSchema.Info) => models.resolve(session, catalog.model.available)
 
+    /** The newest model a recent top-level OC++-driven Session ran on that still resolves here, at its default effort. */
+    const recentModel = Effect.fn("SessionContext.recentModel")(function* (session: SessionSchema.Info) {
+      const rows = yield* db
+        .select({ model: SessionTable.model })
+        .from(SessionTable)
+        .where(and(isNull(SessionTable.parent_id), isNotNull(SessionTable.model), ne(SessionTable.id, session.id)))
+        .orderBy(desc(SessionTable.time_created))
+        .limit(RECENT_MODEL_SESSIONS)
+        .all()
+        .pipe(Effect.orDie)
+      const seen = new Set<string>()
+      for (const row of rows) {
+        if (!row.model) continue
+        const model = Model.Ref.make({
+          providerID: Provider.ID.make(row.model.providerID),
+          id: Model.ID.make(row.model.id),
+        })
+        const key = `${model.providerID}/${model.id}`
+        if (seen.has(key) || SessionDriver.of(model) !== "ocpp") continue
+        seen.add(key)
+        const resolved = yield* resolveModel({ ...session, model }).pipe(Effect.orElseSucceed(() => undefined))
+        if (resolved) return resolved
+      }
+    })
+
     const selectTitle = Effect.fn("SessionContext.selectTitle")(function* (session: SessionSchema.Info) {
       const agent = yield* agents.get(Agent.ID.make("title"))
       if (!agent) return
       const own = yield* resolveModel(session).pipe(Effect.orElseSucceed(() => undefined))
-      // A vendor driver's model (claude/sonnet) is never in the provider catalog, so a vendor-driven Session
-      // titles with the model a Session without one would run on.
+      // A vendor driver's model (claude/sonnet) is never in the provider catalog, so a vendor-driven Session titles
+      // with the provider the user's latest OC++-driven Session ran on. Without a configured `model` the catalog
+      // default is merely the newest available model, which can be one this user cannot run (OpenCode's keyless free
+      // tier rejects OC++ for most of its models), so it is only the last resort.
       const primary =
         own ??
         (SessionDriver.of(session.model) === "ocpp"
           ? undefined
-          : yield* resolveModel({ ...session, model: undefined }).pipe(Effect.orElseSucceed(() => undefined)))
+          : ((yield* recentModel(session)) ??
+            (yield* resolveModel({ ...session, model: undefined }).pipe(Effect.orElseSucceed(() => undefined)))))
       const info = yield* Effect.gen(function* () {
         if (agent.model) return yield* catalog.model.get(agent.model.providerID, agent.model.id)
         if (!primary) return
@@ -214,6 +245,8 @@ const layer = Layer.effect(
   }),
 )
 
+/** How many recent top-level Sessions a vendor-driven Session's title looks through for a model the user runs. */
+const RECENT_MODEL_SESSIONS = 20
 /** Variant IDs that minimize reasoning output, in preference order. */
 const MINIMAL_REASONING_VARIANTS = ["none", "minimal", "low"].map((id) => Model.VariantID.make(id))
 

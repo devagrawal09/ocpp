@@ -80,8 +80,95 @@ export const deliver = Effect.fnUntraced(function* (
   if (input.notificationID) yield* jobs.completeBackground(input.notificationID)
 })
 
-/** Where a child session's work stood when the execution that called it ended. */
-export type ChildStatus = "running" | "completed" | "failed" | "interrupted"
+/** A subagent an execution started, as a start notice names it. */
+export type Started = { readonly executionID: string; readonly sessionID: string }
+
+/**
+ * Tells the parent model, while the execution still runs, that one of its tool calls started a subagent,
+ * so it can read the child's transcript before the completion lists it. The notice is an ordinary steer:
+ * a running turn reads it at its next step, and an idle parent is woken to read it. Notices the model has
+ * not read yet merge into one, so children that start close together cost one turn. It names only
+ * execution and child IDs, never text the child controls. An execution a command or event ran outside
+ * the model announces nothing, as its outcome waits for the model's next turn.
+ */
+export const started = Effect.fnUntraced(function* (
+  sessions: Pick<Session.Interface, "message" | "synthetic">,
+  input: Started & {
+    readonly recovery: Pick<Extract<Job.Recovery, { kind: "codemode" }>, "parentSessionID" | "assistantMessageID">
+  },
+) {
+  const child = { executionID: input.executionID, sessionID: input.sessionID }
+  if (!wellFormed(child)) return
+  const owner = yield* sessions.message({
+    sessionID: input.recovery.parentSessionID,
+    messageID: input.recovery.assistantMessageID,
+  })
+  if (owner?.type === "invocation") return
+  yield* sessions.synthetic({
+    sessionID: input.recovery.parentSessionID,
+    ...startedNotice([child]),
+    coalesce: {
+      key: "codemode:subagents-started",
+      merge: (replaced) => startedNotice([...replaced.flatMap((payload) => startedChildren(payload.metadata)), child]),
+    },
+  })
+})
+
+const wellFormed = (child: Started) => EXECUTION_ID.test(child.executionID) && CHILD_SESSION_ID.test(child.sessionID)
+
+/** The children an earlier start notice named, from its metadata. */
+const startedChildren = (metadata: Record<string, unknown> | undefined): ReadonlyArray<Started> => {
+  const listed = metadata?.subagentsStarted
+  if (!Array.isArray(listed)) return []
+  return listed.flatMap((entry) =>
+    typeof entry === "object" &&
+    entry !== null &&
+    typeof entry.execution === "string" &&
+    typeof entry.sessionID === "string" &&
+    wellFormed({ executionID: entry.execution, sessionID: entry.sessionID })
+      ? [{ executionID: entry.execution, sessionID: entry.sessionID }]
+      : [],
+  )
+}
+
+/** What the model reads for the subagents that started since it last looked, oldest first. */
+export const startedNotice = (children: ReadonlyArray<Started>) => {
+  const unique = Array.from(
+    new Map(children.map((child) => [child.executionID + "/" + child.sessionID, child] as const)).values(),
+  )
+  const first = unique[0]
+  const text =
+    unique.length === 1 && first
+      ? "Execution " +
+        first.executionID +
+        " started subagent session " +
+        first.sessionID +
+        ". Read its progress with tools.subagent.transcript({ sessionID: " +
+        JSON.stringify(first.sessionID) +
+        " }); its result arrives with the execution's completion."
+      : "Subagent sessions started: " +
+        unique
+          .slice(0, MAX_LISTED_CHILDREN)
+          .map((child) => child.sessionID + " (execution " + child.executionID + ")")
+          .join(", ") +
+        (unique.length > MAX_LISTED_CHILDREN ? ", and " + (unique.length - MAX_LISTED_CHILDREN) + " more" : "") +
+        ". Read one's progress with tools.subagent.transcript({ sessionID }); each result arrives with its execution's completion."
+  return {
+    description: unique.length === 1 ? "Subagent started" : "Subagents started",
+    text,
+    // No `executionID` key: consumers read that as the execution's completion notification.
+    metadata: {
+      source: "codemode",
+      subagentsStarted: unique.map((child) => ({ execution: child.executionID, sessionID: child.sessionID })),
+    },
+  }
+}
+
+/**
+ * Where a child session's work stood when the execution that called it ended. "delivered" means the
+ * execution only steered a follow-up into a run an earlier call owns, whose result arrives with that call.
+ */
+export type ChildStatus = "running" | "completed" | "failed" | "interrupted" | "delivered"
 
 export type Child = { readonly sessionID: string; readonly status: ChildStatus }
 
@@ -89,6 +176,7 @@ const MAX_LISTED_CHILDREN = 20
 // Session IDs are harness-generated, so a well-formed one is safe on a harness-trusted line. Anything
 // else a tool put in its metadata is dropped instead of reaching the model outside an untrusted block.
 const CHILD_SESSION_ID = /^ses[A-Za-z0-9_-]{1,96}$/
+const EXECUTION_ID = /^exe[A-Za-z0-9_-]{1,96}$/
 
 /**
  * Adds one harness-written line naming the execution's child sessions right after the summary's

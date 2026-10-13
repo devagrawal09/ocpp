@@ -323,8 +323,30 @@ const launch = (
     // notification always lists them, so the model can reach a child even when the program never
     // returned its ID, threw, caught the call's failure, or was cancelled.
     const children = yield* Ref.make<ReadonlyMap<SessionSchema.ID, CodeModeCompletion.ChildStatus>>(new Map())
-    const noteChild = (sessionID: SessionSchema.ID | undefined, status: CodeModeCompletion.ChildStatus) =>
-      sessionID === undefined ? Effect.void : Ref.update(children, (current) => new Map(current).set(sessionID, status))
+    // The first time a live call names a child, the model also hears about it right away, so it can follow
+    // a long execution's subagents. The notice is best effort: failing to post it never fails the call.
+    // A child a resumed run finds in its journal was named before the restart, and announced then, since
+    // the notice is admitted before the call's progress or outcome is journaled.
+    const announce = (sessionID: SessionSchema.ID) =>
+      CodeModeCompletion.started(services.sessions, {
+        executionID,
+        recovery: { parentSessionID: context.sessionID, assistantMessageID: context.messageID },
+        sessionID,
+      }).pipe(Effect.catchCause((cause) => Effect.logWarning("Code Mode subagent notice failed", cause)))
+    const noteChild = (
+      sessionID: SessionSchema.ID | undefined,
+      status: CodeModeCompletion.ChildStatus,
+      journaled = false,
+    ) =>
+      sessionID === undefined
+        ? Effect.void
+        : Ref.modify(children, (current) => {
+            const previous = current.get(sessionID)
+            // A delivered follow-up is not a start: the model already holds that ID. A call that runs the child
+            // later in this execution is announced as usual.
+            const first = status !== "delivered" && (previous === undefined || previous === "delivered")
+            return [first, new Map(current).set(sessionID, CodeModeChildren.merge(previous, status))] as const
+          }).pipe(Effect.flatMap((first) => (first && !journaled ? announce(sessionID) : Effect.void)))
     const slots = yield* Ref.make<Array<number>>([])
     const toolCount = yield* Ref.make(0)
     const traceCount = yield* Ref.make(0)
@@ -465,7 +487,12 @@ const launch = (
               yield* speculator.drop(index)
               yield* noteChild(
                 childSessionID(decision.entry.progress) ?? childSessionID(decision.entry.output),
-                decision.entry.status === "failed" ? "failed" : "completed",
+                decision.entry.status === "failed"
+                  ? "failed"
+                  : CodeModeChildren.delivered(decision.entry.output)
+                    ? "delivered"
+                    : "completed",
+                true,
               )
               return decision.entry.status === "failed"
                 ? yield* Effect.fail(toolError(decision.entry.error ?? "Tool failed"))
@@ -474,7 +501,7 @@ const launch = (
             // The child this call reported while running, settled with the call even when its final
             // metadata or error does not name it again.
             let child = childSessionID(decision.recovered)
-            yield* noteChild(child, "running")
+            yield* noteChild(child, "running", true)
             const progress = (metadata: Tool.Metadata) => {
               const shown = displayMetadata(metadata)
               child = childSessionID(metadata) ?? child
@@ -524,7 +551,13 @@ const launch = (
                 : (executed.content ?? [])
             yield* Ref.update(media, (current) => content.filter(isAttachable).reduce(collect, current))
             const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
-            yield* noteChild(childSessionID(executed.metadata) ?? child, "completed")
+            // A follow-up steered into a child's running call names it in its outcome, without running it.
+            const followUp =
+              CodeModeChildren.delivered(executed.metadata) || CodeModeChildren.delivered(executed.output)
+            yield* noteChild(
+              childSessionID(executed.metadata) ?? (followUp ? childSessionID(executed.output) : undefined) ?? child,
+              followUp ? "delivered" : "completed",
+            )
             const metadata = displayMetadata(executed.metadata)
             yield* updateTool(index, (current) => ({
               ...current,
@@ -690,15 +723,16 @@ const launch = (
           // The execution has ended, so a child whose call never settled was interrupted with it. A
           // resumed run also lists the children its journal names, since a run that diverged or
           // stopped early never reached those calls again; what the live run saw takes precedence.
+          const live = Array.from(yield* Ref.get(children), ([sessionID, status]) => ({
+            sessionID,
+            status: status === "running" ? ("interrupted" as const) : status,
+          }))
           const spawned = Array.from(
-            new Map([
-              ...(options.journal === undefined ? [] : CodeModeChildren.fromJournal(options.journal)).map(
-                (child) => [child.sessionID, child.status] as const,
-              ),
-              ...Array.from(yield* Ref.get(children), ([sessionID, status]) =>
-                [sessionID, status === "running" ? ("interrupted" as const) : status] as const,
-              ),
-            ]),
+            [...(options.journal === undefined ? [] : CodeModeChildren.fromJournal(options.journal)), ...live].reduce(
+              (merged, child) =>
+                new Map(merged).set(child.sessionID, CodeModeChildren.merge(merged.get(child.sessionID), child.status)),
+              new Map<string, CodeModeCompletion.ChildStatus>(),
+            ),
             ([sessionID, status]) => ({ sessionID, status }),
           )
           // The Session can be deleted while the execution runs. Restart recovery already

@@ -7,7 +7,7 @@ import { Model } from "@ocpp/schema/model"
 import { Provider } from "@ocpp/schema/provider"
 import { SessionDriver } from "@ocpp/schema/session-driver"
 import { FSUtil } from "@ocpp/util/fs-util"
-import { Deferred, Effect, Option, Schema } from "effect"
+import { Deferred, Effect, Option, Schema, Semaphore } from "effect"
 import { realpath, stat } from "node:fs/promises"
 import path from "path"
 import { Agent } from "../../agent.js"
@@ -61,6 +61,34 @@ const MAX_DESCENDANT_DEPTH = 16
 const TRANSCRIPT_SCAN = 10
 
 type Submission = { readonly message: string; readonly output: typeof Schema.Json.Type }
+
+/** A subagent call running its child, with the follow-ups it must see answered before it returns. */
+type Running = { readonly followUps: Array<SessionMessage.ID> }
+/**
+ * The call running each child, for every driver and every Location's plugin instance. Only that call returns the
+ * child's result: a call naming a running child is a follow-up, steered into that run, and returns at once.
+ */
+const running = new Map<SessionSchema.ID, Running>()
+/** Per-child locks, so checking for a running call and claiming the child or following up on it is one step. */
+const locks = new Map<SessionSchema.ID, { readonly semaphore: Semaphore.Semaphore; users: number }>()
+const withChild = <A, E, R>(sessionID: SessionSchema.ID, effect: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const lock = locks.get(sessionID) ?? { semaphore: Semaphore.makeUnsafe(1), users: 0 }
+      lock.users++
+      locks.set(sessionID, lock)
+      return lock
+    }),
+    (lock) => lock.semaphore.withPermit(effect),
+    (lock) =>
+      Effect.sync(() => {
+        lock.users--
+        if (lock.users === 0) locks.delete(sessionID)
+      }),
+  )
+/** What only the call that runs a child decides. A follow-up to a running child passes none of them. */
+const RUN_FIELDS = ["agent", "model", "driver", "harness", "tools", "outputSchema", "input", "inputSchema", "root"] as const
+const DELIVERED = "Delivered to the running subagent. Its result arrives with the call that is running it."
 
 export const Input = Schema.Struct({
   agent: Schema.optionalKey(Schema.String).annotate({
@@ -170,12 +198,13 @@ export const TranscriptOutput = Schema.Struct({
 
 export const Output = Schema.Struct({
   sessionID: SessionSchema.ID,
-  status: Schema.Literal("completed"),
+  /** delivered: a follow-up steered into a running call, whose result arrives with that call. */
+  status: Schema.Literals(["completed", "delivered"]),
   /** The subagent's final text, or the message it submitted with a structured result. */
   message: Schema.String,
   /** The submitted structured result, or null when no outputSchema was requested. */
   output: Schema.Json,
-  /** Which tools a continued child lost because its caller no longer has them, and a newer version of its pinned vendor model. */
+  /** Which tools a continued child lost because its caller no longer has them, a newer version of its pinned vendor model, and follow-ups a structured child submitted before answering. */
   notice: Schema.optionalKey(Schema.String),
 })
 export const description = [
@@ -185,12 +214,13 @@ export const description = [
   "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi it is Pi's provider/model.",
   'Vendor-driven children run in the OC++ harness by default: their only tool is execute over the tools you pass. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt as well; OC++ execute over the tools you pass, tool.define handles and submit_result remain available to it over MCP.',
   "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child runs under that directory's own config (agents, MCP servers, plugins, instructions), the agent must be defined there, and the tools you pass must exist there by the same paths. The child keeps that directory when continued.",
-  "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent. To continue, pass just { sessionID, message }: the child keeps its agent, title, model, driver, harness, root and tools unless you pass new ones. Only your own direct children can be continued.",
+  "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent. You are also told the sessionID as soon as the subagent starts, at your next step or in a notification that wakes you, so you can read its transcript while the execution still runs; its result still arrives with the execution's completion. To continue, pass just { sessionID, message }: the child keeps its agent, title, model, driver, harness, root and tools unless you pass new ones. Only your own direct children can be continued.",
+  'A call with just { sessionID, message } for a subagent that is still running is a follow-up: it is steered into the running work and returns immediately with status "delivered", and the result, after the subagent has seen it, arrives with the call that is running it.',
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "The subagent runs to completion and returns its final response as message. With outputSchema it must call tools.submit_result({ message, output }): message is returned in full, and output is returned only as machine data with a short summary in metadata.",
   "input is never shown to either model; it is available directly as `input` in the subagent's Code Mode executions. Pass existing notebook values by reference and describe them in message.",
-  "Within Code Mode, subagent calls in one execution run serially. Use one separate execute invocation per subagent when they should run concurrently.",
-  "Never poll a spawned subagent for status or results. Launch it once in a separate execute invocation, continue other independent work, and let its completion notification deliver the result. Use sessionID only for real follow-up work after completion, never to check whether it is done.",
+  "In Code Mode, the call returns a run at once while the child works: call run.wait() for this result. Start several subagents before waiting on any to run them at the same time.",
+  "Never poll a spawned subagent for status or results. Launch it once in a separate execute invocation, continue other independent work, and let its completion notification deliver the result. Use sessionID only for real follow-up work, never to check whether it is done.",
   "tool.define(...) handles run in your own execution and can call only your tools.",
 ].join("\n")
 
@@ -368,6 +398,68 @@ export const Plugin = {
           output: Output,
           execute: (input, context) =>
             Effect.gen(function* () {
+              // The child this call runs once it claims it, released however the call ends.
+              const entry: Running = { followUps: [] }
+              let claimed: SessionSchema.ID | undefined
+              const release = () => {
+                if (claimed !== undefined && running.get(claimed) === entry) running.delete(claimed)
+              }
+              yield* Effect.addFinalizer(() => {
+                const sessionID = claimed
+                return sessionID === undefined ? Effect.void : withChild(sessionID, Effect.sync(release))
+              })
+              // Only the call running a child answers for it: a call naming a running child is a follow-up, steered
+              // into that run, and returns at once. Any other call naming a child claims it in the same step as the
+              // check, so two calls never both run it. A call rejoining after a restart already ran it.
+              const target =
+                context.recovered === undefined && input.sessionID !== undefined
+                  ? yield* ownChild(input.sessionID, context.sessionID)
+                  : undefined
+              if (target !== undefined) {
+                const delivered = yield* withChild(
+                  target.id,
+                  Effect.gen(function* () {
+                    const active = running.get(target.id)
+                    if (active === undefined) {
+                      running.set(target.id, entry)
+                      claimed = target.id
+                      return false
+                    }
+                    const owned = RUN_FIELDS.filter((key) => input[key] !== undefined)
+                    // The child is fine, so the metadata does not name it as its sessionID, which marks it failed.
+                    if (owned.length > 0)
+                      return yield* new ToolFailure({
+                        message: `Subagent session ${target.id} is still running an earlier call, which owns its ${owned.join(", ")}. A follow-up to a running subagent passes only sessionID and message; pass the others in a later call once that call has returned.`,
+                        metadata: { status: "refused", reason: "running-call-owns-fields", target: target.id },
+                      })
+                    const id = SessionMessage.ID.create()
+                    yield* runtime.session
+                      .prompt({ sessionID: target.id, id, text: input.message, delivery: "steer" })
+                      .pipe(
+                        Effect.mapError(
+                          (error) =>
+                            new ToolFailure({
+                              message: `Failed to deliver the follow-up to subagent session ${target.id}`,
+                              error,
+                              metadata: { status: "error", reason: "follow-up-failed", target: target.id },
+                            }),
+                        ),
+                      )
+                    active.followUps.push(id)
+                    return true
+                  }),
+                )
+                // Records no progress: a restart never rejoins a follow-up as if it ran the child.
+                if (delivered) {
+                  const output: typeof Output.Type = {
+                    sessionID: target.id,
+                    status: "delivered",
+                    message: DELIVERED,
+                    output: null,
+                  }
+                  return { output, structured: false }
+                }
+              }
               // After a restart the call rejoins the child that already holds its task. Its checks
               // passed and its prompt was admitted before the restart, so none of that repeats.
               // A "starting" record is not rejoined (see Starting): the call starts over as if it never ran.
@@ -479,7 +571,9 @@ export const Plugin = {
               }
               const existing =
                 reattached ??
-                (input.sessionID === undefined ? undefined : yield* ownChild(input.sessionID, context.sessionID))
+                (input.sessionID === undefined
+                  ? undefined
+                  : (target ?? (yield* ownChild(input.sessionID, context.sessionID))))
               if (existing !== undefined && existing.parentID !== context.sessionID)
                 return yield* new ToolFailure({
                   message: `Session ${existing.id} is not a child of the current session`,
@@ -720,11 +814,29 @@ export const Plugin = {
                     ),
                     // Reported in the same uninterruptible step as the create, so no failure or interruption after
                     // it can lose the child's ID. Every failure from here on also carries it as metadata.
+                    // Claimed before anyone can know its ID, so a follow-up to it is steered into this call's run.
+                    Effect.tap((created) =>
+                      Effect.sync(() => {
+                        running.set(created.id, entry)
+                        claimed = created.id
+                      }),
+                    ),
                     Effect.tap((created) => context.progress({ sessionID: created.id, status: "starting" })),
                     Effect.uninterruptible,
                   ))
               if (existing !== undefined && reattached === undefined)
                 yield* context.progress({ sessionID: existing.id, status: "starting" })
+              // A child rejoined or adopted after a restart is claimed here; a new one was as it was created, and a
+              // continued one before its checks.
+              if (claimed === undefined)
+                yield* withChild(
+                  child.id,
+                  Effect.sync(() => {
+                    if (running.has(child.id)) return
+                    running.set(child.id, entry)
+                    claimed = child.id
+                  }),
+                )
               const vendor = SessionDriver.of(selected ?? existing?.model) !== "ocpp"
               // A new child gets exactly the tools the call passes, and none without them. A continued child keeps its
               // list unless the call passes a new one, less every tool its caller no longer has, such as after the
@@ -812,6 +924,7 @@ export const Plugin = {
               const resume = () =>
                 runtime.session.resume(child.id).pipe(
                   Effect.as({ type: "idle" as const }),
+                  // The call is cancelled: stop the child and everything it runs in the background, down the tree.
                   Effect.onInterrupt(() => runtime.session.interrupt(child.id, { scope: "all" }).pipe(Effect.ignore)),
                   Effect.mapError(
                     (error) =>
@@ -820,6 +933,71 @@ export const Plugin = {
                         error,
                         metadata: failure(child.id, "child-failed"),
                       }),
+                  ),
+                )
+              // Follow-ups delivered to this call that are still in the child's inbox, unseen by it.
+              const unseen = () =>
+                entry.followUps.length === 0
+                  ? Effect.succeed(0)
+                  : runtime.session.inbox(child.id).pipe(
+                      Effect.map(
+                        (inbox) => entry.followUps.filter((id) => inbox.some((item) => item.id === id)).length,
+                      ),
+                      Effect.mapError(
+                        (error) =>
+                          new ToolFailure({
+                            message: `Failed to read subagent session: ${child.id}`,
+                            error,
+                            metadata: failure(child.id, "output-unavailable"),
+                          }),
+                      ),
+                    )
+              // Runs the child until it is idle having seen every follow-up delivered to this call, then decides with
+              // `settled` while holding the child's lock, so a follow-up is either seen by the run this call returns
+              // or finds no running call and runs as a call of its own. A follow-up delivered as a run was ending is
+              // run by its own wake: an unseen one starts a run this call joins, and one already taken ran in a run
+              // this call waits for. Neither adds a model step.
+              const idle = <A>(settled: Effect.Effect<A, ToolFailure>) =>
+                Effect.gen(function* () {
+                  let seen = entry.followUps.length
+                  yield* resume()
+                  while (true) {
+                    const checked = yield* withChild(
+                      child.id,
+                      Effect.gen(function* () {
+                        if (entry.followUps.length === seen) return { type: "settled" as const, value: yield* settled }
+                        return { type: "again" as const, unseen: (yield* unseen()) > 0, seen: entry.followUps.length }
+                      }),
+                    )
+                    if (checked.type === "settled") return checked.value
+                    seen = checked.seen
+                    if (checked.unseen) yield* resume()
+                    else
+                      yield* runtime.session.wait(child.id).pipe(
+                        Effect.onInterrupt(() =>
+                          runtime.session.interrupt(child.id, { scope: "all" }).pipe(Effect.ignore),
+                        ),
+                        Effect.mapError(
+                          (error) =>
+                            new ToolFailure({
+                              message: `Subagent session not found: ${child.id}`,
+                              error,
+                              metadata: failure(child.id, "child-failed"),
+                            }),
+                        ),
+                      )
+                  }
+                })
+              // Ends this call's claim in the same step as its last check. A follow-up the child never saw is named in
+              // the notice; one delivered later finds no running call and runs as a call of its own.
+              const answer = (result: Submission) =>
+                withChild(
+                  child.id,
+                  unseen().pipe(
+                    Effect.map((open) => {
+                      release()
+                      return { message: result.message, output: result.output, open }
+                    }),
                   ),
                 )
               // Hold the submission until the execution that produced it commits its declarations.
@@ -831,7 +1009,10 @@ export const Plugin = {
                   Effect.as({ type: "submitted" as const, ...result }),
                 )
               const awaitSubmission = (pending: Deferred.Deferred<Submission>) =>
-                Effect.raceFirst(resume(), Deferred.await(pending).pipe(Effect.flatMap(completeSubmission)))
+                Effect.raceFirst(
+                  idle(Effect.succeed({ type: "idle" as const })),
+                  Deferred.await(pending).pipe(Effect.flatMap(completeSubmission)),
+                )
               // A submission made from Code Mode ends this call only after that execution commits its
               // top-level declarations. Track running child executions so the terminal event that
               // follows the submission can release the wait.
@@ -886,22 +1067,26 @@ export const Plugin = {
                 // Recorded only once the child holds the task, so a restart before this point never
                 // rejoins a child that has nothing to do.
                 yield* context.progress({ sessionID: child.id, status: "running" })
-                if (submitted === undefined) {
-                  yield* resume()
-                  const message = yield* latestAssistantText(child.id).pipe(
-                    Effect.mapError(
-                      (error) =>
-                        new ToolFailure({
-                          message: `Failed to read subagent output: ${child.id}`,
-                          error,
-                          metadata: failure(child.id, "output-unavailable"),
-                        }),
+                if (submitted === undefined)
+                  // The text returned here follows every follow-up this call was given.
+                  return yield* idle(
+                    latestAssistantText(child.id).pipe(
+                      Effect.mapError(
+                        (error) =>
+                          new ToolFailure({
+                            message: `Failed to read subagent output: ${child.id}`,
+                            error,
+                            metadata: failure(child.id, "output-unavailable"),
+                          }),
+                      ),
+                      Effect.map((message) => {
+                        release()
+                        return { message, output: null, open: 0 }
+                      }),
                     ),
                   )
-                  return { message, output: null }
-                }
                 const first = yield* awaitSubmission(submitted)
-                if (first.type === "submitted") return { message: first.message, output: first.output }
+                if (first.type === "submitted") return yield* answer(first)
                 // The child went idle. A submission may still have been accepted from its final
                 // execution just before it settled, so finish that rather than sending a needless
                 // reminder that would cost another model step.
@@ -910,7 +1095,7 @@ export const Plugin = {
                   // The child is already idle here; stop it so a late completion notification cannot
                   // wake a further model step.
                   yield* runtime.session.interrupt(child.id, { continue: false }).pipe(Effect.ignore)
-                  return { message: done.message, output: done.output }
+                  return yield* answer(done)
                 }
                 yield* runtime.session
                   .prompt({
@@ -929,7 +1114,7 @@ export const Plugin = {
                     ),
                   )
                 const second = yield* awaitSubmission(submitted)
-                if (second.type === "submitted") return { message: second.message, output: second.output }
+                if (second.type === "submitted") return yield* answer(second)
                 return yield* new ToolFailure({
                   message: `Subagent did not submit a structured result (sessionID: ${child.id})`,
                   metadata: failure(child.id, "no-submission"),
@@ -978,8 +1163,9 @@ export const Plugin = {
                 output: {
                   sessionID: child.id,
                   status: "completed" as const,
-                  ...result,
-                  ...(lost.length === 0 && upgrade === undefined
+                  message: result.message,
+                  output: result.output,
+                  ...(lost.length === 0 && upgrade === undefined && result.open === 0
                     ? {}
                     : {
                         notice: [
@@ -989,17 +1175,23 @@ export const Plugin = {
                                 `The subagent no longer has ${lost.map((path) => "tools." + path).join(", ")}: you no longer have ${lost.length === 1 ? "that tool" : "those tools"}, and a subagent keeps only tools its caller has.`,
                               ]),
                           ...(upgrade === undefined ? [] : [upgrade]),
+                          ...(result.open === 0
+                            ? []
+                            : [
+                                `The subagent submitted its result before answering ${result.open === 1 ? "a follow-up" : `${result.open} follow-ups`} you sent it; continue it with its sessionID if ${result.open === 1 ? "it still matters" : "they still matter"}.`,
+                              ]),
                         ].join("\n"),
                       }),
                 },
                 structured: outputCodec !== undefined,
               }
             }).pipe(
+              Effect.scoped,
               Effect.map((result) => ({
                 output: result.output,
                 // Only the message reaches the parent model; machine output stays in the
                 // declared output, which a Code Mode assignment retains in full.
-                content: `<subagent sessionID="${result.output.sessionID}" state="completed">\n${result.output.message}\n</subagent>${result.output.notice === undefined ? "" : "\n" + result.output.notice}`,
+                content: `<subagent sessionID="${result.output.sessionID}" state="${result.output.status}">\n${result.output.message}\n</subagent>${result.output.notice === undefined ? "" : "\n" + result.output.notice}`,
                 metadata: {
                   sessionID: result.output.sessionID,
                   status: result.output.status,

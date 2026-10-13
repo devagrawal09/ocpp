@@ -14,6 +14,7 @@ import { makeGlobalNode, makeLocationNode } from "@ocpp/util/effect/app-node"
 import { Database } from "@ocpp/core/database/database"
 import { Bus } from "@ocpp/core/bus"
 import { Catalog } from "@ocpp/core/catalog"
+import { CodeModeChildren } from "@ocpp/core/codemode/children"
 import { CodeModeStore } from "@ocpp/core/codemode/store"
 import { Config } from "@ocpp/core/config"
 import { Location } from "@ocpp/core/location"
@@ -1616,6 +1617,257 @@ describe("SubagentTool", () => {
           })
         }),
       ),
+    ),
+  )
+})
+
+/**
+ * A child's runs, stepped the way the runner drains them: each step takes the inbox and answers what it took. A test
+ * can hold the next step, so a steer admitted meanwhile joins it, or the end of the next run: the gap between a drain's
+ * last check and going idle, where a follow-up starts a run of its own.
+ */
+const stepping: {
+  gate?: {
+    readonly at: "step" | "settle"
+    readonly entered: Deferred.Deferred<Session.ID>
+    readonly release: Deferred.Deferred<void>
+  }
+} = {}
+const answered = (texts: ReadonlyArray<string>) => `Answered: ${texts.join(" | ")}`
+
+const steppedExecutionNode = makeGlobalNode({
+  service: SessionExecution.Service,
+  layer: Layer.effect(
+    SessionExecution.Service,
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const { db } = yield* Database.Service
+      const runs = new Map<Session.ID, Deferred.Deferred<void>>()
+      const pass = (sessionID: Session.ID, at: "step" | "settle") =>
+        Effect.gen(function* () {
+          const gate = stepping.gate
+          if (gate === undefined || gate.at !== at) return
+          stepping.gate = undefined
+          yield* Deferred.succeed(gate.entered, sessionID)
+          yield* Deferred.await(gate.release)
+        })
+      const texts = (items: ReadonlyArray<SessionInbox.Info>) =>
+        items.flatMap((item) => (item.type === "user" ? [item.payload.text] : []))
+      const drain = Effect.fn("SubagentTest.drain")(function* (sessionID: Session.ID) {
+        while (true) {
+          const taken = yield* SessionInbox.promoteItems(db, bus, sessionID, "input")
+          if (taken.length === 0) return yield* pass(sessionID, "settle")
+          yield* pass(sessionID, "step")
+          const steered = yield* SessionInbox.promoteItems(db, bus, sessionID, "steer")
+          const assistantMessageID = SessionMessage.ID.create()
+          yield* bus.publish(SessionEvent.Step.Started, {
+            sessionID,
+            assistantMessageID,
+            agent: Agent.ID.make("reviewer"),
+            model: childModel,
+          })
+          yield* bus.publish(SessionEvent.Text.Started, { sessionID, assistantMessageID, ordinal: 0 })
+          yield* bus.publish(SessionEvent.Text.Ended, {
+            sessionID,
+            assistantMessageID,
+            ordinal: 0,
+            text: answered(texts([...taken, ...steered])),
+          })
+          yield* bus.publish(SessionEvent.Step.Ended, {
+            sessionID,
+            assistantMessageID,
+            finish: "stop",
+            cost: Money.USD.zero,
+            tokens,
+          })
+        }
+      })
+      return SessionExecution.Service.of({
+        active: Effect.sync(() => new Set(runs.keys())),
+        isActive: (sessionID) => Effect.sync(() => runs.has(sessionID)),
+        resume: (sessionID) =>
+          Effect.gen(function* () {
+            const current = runs.get(sessionID)
+            if (current !== undefined) return yield* Deferred.await(current)
+            const done = yield* Deferred.make<void>()
+            runs.set(sessionID, done)
+            yield* drain(sessionID).pipe(
+              Effect.orDie,
+              Effect.ensuring(
+                Effect.sync(() => runs.delete(sessionID)).pipe(Effect.andThen(Deferred.succeed(done, undefined))),
+              ),
+            )
+          }),
+        wake: () => Effect.void,
+        interrupt: () => Effect.succeed(false),
+        awaitIdle: (sessionID) => Effect.suspend(() => runs.get(sessionID)?.pipe(Deferred.await) ?? Effect.void),
+      })
+    }),
+  ),
+  deps: [Bus.node, Database.node],
+})
+const followUpIt = testEffect(
+  AppNodeBuilder.build(nodes, [
+    [SessionExecution.node, steppedExecutionNode],
+    [Global.node, tempGlobalLayer],
+    [ExternalAgentDrivers.node, noVendorDrivers],
+    [PluginSupervisor.node, subagentPluginSupervisor],
+  ]),
+)
+
+describe("SubagentTool follow-ups", () => {
+  const task = "You are a subagent spawned by another session.\nreview this"
+  const delivered = "Delivered to the running subagent. Its result arrives with the call that is running it."
+  const inDirectory = <A, E, R>(
+    body: (call: (input: Record<string, unknown>) => ReturnType<typeof execute>) => Effect.Effect<A, E, R>,
+  ) =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          stepping.gate = undefined
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const subagent = (yield* registeredTools(registry)).get(SubagentTool.name)
+          if (!subagent) return yield* Effect.die("subagent is not registered")
+          return yield* body((input) =>
+            execute(subagent, input, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              id: Tool.CallID.make(crypto.randomUUID()),
+              progress: () => Effect.void,
+            }),
+          )
+        }),
+      ),
+    )
+  const hold = (at: "step" | "settle") =>
+    Effect.gen(function* () {
+      const gate = { at, entered: yield* Deferred.make<Session.ID>(), release: yield* Deferred.make<void>() }
+      stepping.gate = gate
+      return gate
+    })
+  const start = { agent: "reviewer", description: "review", message: "review this" }
+
+  followUpIt.live("steers a follow-up into a running child and returns at once; the running call answers it", () =>
+    inDirectory((call) =>
+      Effect.gen(function* () {
+        const gate = yield* hold("step")
+        const running = yield* call(start).pipe(Effect.forkChild)
+        const childID = yield* Deferred.await(gate.entered)
+
+        // The child is mid-step: the follow-up is delivered and returns without waiting for it.
+        const followUp = yield* call({ sessionID: childID, message: "Also check the tests", description: "ignored" })
+        expect(followUp.output).toEqual({ sessionID: childID, status: "delivered", message: delivered, output: null })
+        expect(followUp.metadata).toEqual({ sessionID: childID, status: "delivered" })
+        expect(followUp.content).toEqual([
+          { type: "text", text: `<subagent sessionID="${childID}" state="delivered">\n${delivered}\n</subagent>` },
+        ])
+
+        yield* Deferred.succeed(gate.release, undefined)
+        const result = yield* Fiber.join(running)
+        // The step that was running took the follow-up as a steer, and the call returns its answer.
+        expect(result.output).toMatchObject({
+          sessionID: childID,
+          status: "completed",
+          message: answered([task, "Also check the tests"]),
+        })
+      }),
+    ),
+  )
+
+  followUpIt.live("a follow-up delivered as the run ends is answered before the running call returns", () =>
+    inDirectory((call) =>
+      Effect.gen(function* () {
+        const gate = yield* hold("settle")
+        const running = yield* call(start).pipe(Effect.forkChild)
+        // The run answered its task and is past its last check: the follow-up starts a run of its own.
+        const childID = yield* Deferred.await(gate.entered)
+        const followUp = yield* call({ sessionID: childID, message: "One more thing" })
+        expect(followUp.output).toMatchObject({ status: "delivered" })
+        yield* Deferred.succeed(gate.release, undefined)
+        const result = yield* Fiber.join(running)
+        expect(result.output).toMatchObject({ status: "completed", message: answered(["One more thing"]) })
+      }),
+    ),
+  )
+
+  followUpIt.live("delivers concurrent follow-ups, and the running call answers all of them", () =>
+    inDirectory((call) =>
+      Effect.gen(function* () {
+        const gate = yield* hold("step")
+        const running = yield* call(start).pipe(Effect.forkChild)
+        const childID = yield* Deferred.await(gate.entered)
+        const followUps = yield* Effect.all(
+          [call({ sessionID: childID, message: "first" }), call({ sessionID: childID, message: "second" })],
+          { concurrency: "unbounded" },
+        )
+        expect(followUps.map((item) => item.output)).toMatchObject([{ status: "delivered" }, { status: "delivered" }])
+        yield* Deferred.succeed(gate.release, undefined)
+        const result = yield* Fiber.join(running)
+        const message = Schema.decodeUnknownSync(SubagentTool.Output)(result.output).message
+        expect(message).toStartWith(answered([task]))
+        expect(message).toContain("first")
+        expect(message).toContain("second")
+      }),
+    ),
+  )
+
+  followUpIt.live("refuses a follow-up that passes what the running call owns, without marking the child failed", () =>
+    inDirectory((call) =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const gate = yield* hold("step")
+        const running = yield* call(start).pipe(Effect.forkChild)
+        const childID = yield* Deferred.await(gate.entered)
+        const refused = yield* call({ sessionID: childID, message: "switch", agent: "reviewer", tools: [] }).pipe(
+          Effect.flip,
+        )
+        expect(refused.message).toContain(`Subagent session ${childID} is still running an earlier call, which owns its agent, tools.`)
+        expect(refused.metadata).toEqual({ status: "refused", reason: "running-call-owns-fields", target: childID })
+        // Code Mode names a child failed by the sessionID in a failure's metadata; a refusal names none.
+        expect(CodeModeChildren.sessionID(refused.metadata)).toBeUndefined()
+        expect(
+          (yield* sessions.inbox(childID)).flatMap((item) => (item.type === "user" ? [item.payload.text] : [])),
+        ).toEqual([])
+
+        yield* Deferred.succeed(gate.release, undefined)
+        expect((yield* Fiber.join(running)).output).toMatchObject({ status: "completed", message: answered([task]) })
+      }),
+    ),
+  )
+
+  followUpIt.live("a call after the running call returned continues the child and returns its answer", () =>
+    inDirectory((call) =>
+      Effect.gen(function* () {
+        const first = yield* call(start)
+        const childID = outputSessionID(first.output)
+        const continued = yield* call({ sessionID: childID, message: "continue" })
+        expect(continued.output).toMatchObject({ sessionID: childID, status: "completed", message: answered(["continue"]) })
+
+        // Two calls naming the idle child at once: one claims and runs it, the other is steered into that run.
+        const gate = yield* hold("step")
+        const left = yield* call({ sessionID: childID, message: "left" }).pipe(Effect.forkChild)
+        const right = yield* call({ sessionID: childID, message: "right" }).pipe(Effect.forkChild)
+        yield* Deferred.await(gate.entered)
+        // The claimer is held mid-step, so the first call to return is the other one, steered into its run.
+        const steered = yield* Effect.raceFirst(Fiber.join(left), Fiber.join(right))
+        expect(steered.output).toMatchObject({ status: "delivered" })
+        yield* Deferred.succeed(gate.release, undefined)
+        const outputs = [yield* Fiber.join(left), yield* Fiber.join(right)].map((item) =>
+          Schema.decodeUnknownSync(SubagentTool.Output)(item.output),
+        )
+        expect(outputs.map((output) => output.status).toSorted()).toEqual(["completed", "delivered"])
+        const ran = outputs.find((output) => output.status === "completed")
+        expect(ran?.message).toContain("left")
+        expect(ran?.message).toContain("right")
+      }),
     ),
   )
 })

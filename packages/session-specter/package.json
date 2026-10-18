@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ocpp/session-specter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/session-app.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit",
+    "bench": "bun bench/spike.ts"
+  },
+  "dependencies": {
+    "@ocpp/ai": "workspace:*",
+    "@ocpp/core": "workspace:*",
+    "@specter-ts/core": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-core-0.4.0.tgz",
+    "@specter-ts/jsonl": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-jsonl-0.4.0.tgz",
+    "@specter-ts/memory": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-memory-0.4.0.tgz",
+    "@specter-ts/reaction-outbox": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-reaction-outbox-0.4.0.tgz",
+    "@specter-ts/spec": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-spec-0.4.0.tgz",
+    "effect": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

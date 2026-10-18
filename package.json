@@ -151,7 +151,12 @@
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "effect": "catalog:",
-    "solid-js": "catalog:"
+    "solid-js": "catalog:",
+    "@specter-ts/core": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-core-0.4.0.tgz",
+    "@specter-ts/jsonl": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-jsonl-0.4.0.tgz",
+    "@specter-ts/memory": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-memory-0.4.0.tgz",
+    "@specter-ts/reaction-outbox": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-reaction-outbox-0.4.0.tgz",
+    "@specter-ts/spec": "file:/tmp/claude-0/-home-user/15403b96-8edd-54a8-9c42-053f34da1b7c/scratchpad/specter-tgz/specter-ts-spec-0.4.0.tgz"
   },
   "patchedDependencies": {
     "@ai-sdk/openai-compatible@2.0.41": "patches/@ai-sdk%2Fopenai-compatible@2.0.41.patch",

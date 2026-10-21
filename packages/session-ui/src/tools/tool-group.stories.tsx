@@ -89,7 +89,7 @@ export const ResumedCodeModeTrace = {
       "codemode_resumed",
       "execute",
       "completed",
-      { code: 'const issues = tools.grep({ pattern: "TODO" })\nconst report = tools.subagent({ agent: "general" })' },
+      { code: 'const issues = tools.grep({ pattern: "TODO" })\nconst report = tools.subagent({ description: "Report TODOs", message: "Summarize the TODOs" })' },
       {
         output: "Execution started",
         metadata: {

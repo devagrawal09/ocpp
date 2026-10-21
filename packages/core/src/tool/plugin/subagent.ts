@@ -10,7 +10,6 @@ import { FSUtil } from "@ocpp/util/fs-util"
 import { Deferred, Effect, Option, Schema, Semaphore } from "effect"
 import { realpath, stat } from "node:fs/promises"
 import path from "path"
-import { Agent } from "../../agent.js"
 import { Bus } from "../../bus.js"
 import { Catalog } from "../../catalog.js"
 import { Config } from "../../config.js"
@@ -87,14 +86,10 @@ const withChild = <A, E, R>(sessionID: SessionSchema.ID, effect: Effect.Effect<A
       }),
   )
 /** What only the call that runs a child decides. A follow-up to a running child passes none of them. */
-const RUN_FIELDS = ["agent", "model", "driver", "harness", "tools", "outputSchema", "input", "inputSchema", "root"] as const
+const RUN_FIELDS = ["model", "driver", "harness", "tools", "outputSchema", "input", "inputSchema", "root"] as const
 const DELIVERED = "Delivered to the running subagent. Its result arrives with the call that is running it."
 
 export const Input = Schema.Struct({
-  agent: Schema.optionalKey(Schema.String).annotate({
-    description:
-      "The agent preset to use: a prompt and model for the child. It grants no tools; pass them as tools. Required for a new subagent; a continued session keeps its own unless you pass another",
-  }),
   description: Schema.optionalKey(Schema.String).annotate({
     description:
       "A short 3-5 word label for the task, displayed to the user. Required for a new subagent; a continued session keeps its own title",
@@ -113,7 +108,7 @@ export const Input = Schema.Struct({
   }),
   driver: Schema.optionalKey(SessionDriver.ID).annotate({
     description:
-      "What runs the child session: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi). Defaults to the driver of the agent's configured model, else the calling session's; a continued session keeps its own",
+      "What runs the child session: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi). Defaults to the calling session's driver; a continued session keeps its own",
   }),
   harness: Schema.optionalKey(SessionDriver.Harness).annotate({
     description:
@@ -133,7 +128,7 @@ export const Input = Schema.Struct({
   }),
   root: Schema.optionalKey(Schema.String).annotate({
     description:
-      "Existing absolute directory the child session runs in, such as a separate git worktree. The child runs under that directory's own config: its agents, models, MCP servers, plugins and instructions, and the tools you pass resolve there by the same paths. Defaults to the calling session's directory; a continued session keeps its own",
+      "Existing absolute directory the child session runs in, such as a separate git worktree. The child runs under that directory's own config: its models, MCP servers, plugins and instructions, and the tools you pass resolve there by the same paths. Defaults to the calling session's directory; a continued session keeps its own",
   }),
 })
 
@@ -189,7 +184,6 @@ const TranscriptMessage = Schema.Struct({
 export const TranscriptOutput = Schema.Struct({
   sessionID: SessionSchema.ID,
   title: Schema.optionalKey(Schema.String),
-  agent: Schema.optionalKey(Schema.String),
   /** Oldest first. */
   messages: Schema.Array(TranscriptMessage),
   /** Pass back as cursor to read older messages; absent when there are none. */
@@ -208,13 +202,13 @@ export const Output = Schema.Struct({
   notice: Schema.optionalKey(Schema.String),
 })
 export const description = [
-  "Spawns an agent in a child session to work on the specified task.",
-  "tools sets exactly what the child can call: pass your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles, for example tools: [tools.read, tools.glob, tools.grep]. You can pass only tools you have. Without tools the child has none, only tools.submit_result when you pass outputSchema. The agent is a prompt and model preset and grants no tools.",
+  "Spawns an agent in a child session to work on the specified task. A new subagent needs description and message; it has no preset prompt and runs on your driver and model unless you pass driver or model.",
+  "tools sets exactly what the child can call: pass your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles, for example tools: [tools.read, tools.glob, tools.grep]. You can pass only tools you have. Without tools the child has none, only tools.submit_result when you pass outputSchema.",
   "Call tools.subagent.models({}) to list the model IDs and variants currently available to subagents, and which vendor drivers are ready. Call tools.subagent.transcript({ sessionID }) to read the recent messages of a subagent you started, or of any subagent below it, without prompting it.",
-  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes its agent's configured model's driver, else the calling session's; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi it is Pi's provider/model.",
+  "driver picks what runs the child: ocpp (the OC++ runner with a provider model), claude (Claude Code), codex (Codex) or pi (Pi), each using the user's own login. A new child takes the calling session's driver; a continued session keeps its own. For claude or codex, model is the vendor's model name without a provider, with an optional effort after #, such as opus#high; an alias such as opus or sol always runs the vendor's newest model of that name. For pi it is Pi's provider/model.",
   'Vendor-driven children run in the OC++ harness by default: their only tool is execute over the tools you pass. Pass harness: "native" to give a claude, codex or pi child its own tools and prompt as well; OC++ execute over the tools you pass, tool.define handles and submit_result remain available to it over MCP.',
-  "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child runs under that directory's own config (agents, MCP servers, plugins, instructions), the agent must be defined there, and the tools you pass must exist there by the same paths. The child keeps that directory when continued.",
-  "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent. You are also told the sessionID as soon as the subagent starts, at your next step or in a notification that wakes you, so you can read its transcript while the execution still runs; its result still arrives with the execution's completion. To continue, pass just { sessionID, message }: the child keeps its agent, title, model, driver, harness, root and tools unless you pass new ones. Only your own direct children can be continued.",
+  "Use root to run a subagent in another existing directory, such as a separate git worktree, with any driver. The child runs under that directory's own config (MCP servers, plugins, instructions), and the tools you pass must exist there by the same paths. The child keeps that directory when continued.",
+  "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent. You are also told the sessionID as soon as the subagent starts, at your next step or in a notification that wakes you, so you can read its transcript while the execution still runs; its result still arrives with the execution's completion. To continue, pass just { sessionID, message }: the child keeps its title, model, driver, harness, root and tools unless you pass new ones. Only your own direct children can be continued.",
   'A call with just { sessionID, message } for a subagent that is still running is a follow-up: it is steered into the running work and returns immediately with status "delivered", and the result, after the subagent has seen it, arrives with the call that is running it.',
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "The subagent runs to completion and returns its final response as message. With outputSchema it must call tools.submit_result({ message, output }): message is returned in full, and output is returned only as machine data with a short summary in metadata.",
@@ -228,7 +222,6 @@ export const Plugin = {
   id: "ocpp.tool.subagent",
   effect: Effect.fn("SubagentTool.Plugin")(function* (ctx: Context) {
     const runtime = yield* PluginRuntime.Service
-    const agents = yield* Agent.Service
     const bus = yield* Bus.Service
     const catalog = yield* Catalog.Service
     const config = yield* Config.Service
@@ -377,7 +370,6 @@ export const Plugin = {
                 output: {
                   sessionID: child.id,
                   ...(child.title === undefined ? {} : { title: child.title }),
-                  ...(child.agent === undefined ? {} : { agent: child.agent }),
                   messages,
                   ...(cursor === undefined ? {} : { cursor }),
                 },
@@ -578,35 +570,16 @@ export const Plugin = {
                 return yield* new ToolFailure({
                   message: `Session ${existing.id} is not a child of the current session`,
                 })
-              // A new child needs both; a continued one keeps its own agent and title unless the call names another agent.
-              if (existing === undefined && (input.agent === undefined || input.description === undefined))
+              // A new child needs a title; a continued one keeps its own.
+              if (existing === undefined && input.description === undefined)
                 return yield* new ToolFailure({
                   message:
-                    "agent and description are required to start a new subagent. To continue a previous subagent, pass its sessionID.",
-                })
-              const agentID = input.agent ?? existing?.agent
-              if (agentID === undefined)
-                return yield* new ToolFailure({
-                  message: `Subagent session ${existing?.id} has no agent; pass agent to choose one`,
+                    "description is required to start a new subagent. To continue a previous subagent, pass its sessionID.",
                 })
               const location = yield* place(input.root, existing?.location ?? parent.location, existing !== undefined)
               const directory = location.directory
 
-              // What the child is: its agent where it runs, its driver, harness and model.
-              const agentAt = Effect.fnUntraced(function* () {
-                const found = same(location, parent.location)
-                  ? yield* agents.resolve(agentID)
-                  : (yield* runtime.location.agent.list(location)).data.find((item) => item.id === agentID)
-                if (found === undefined)
-                  return yield* new ToolFailure({
-                    message: same(location, parent.location)
-                      ? `Unknown agent: ${agentID}`
-                      : `Unknown agent: ${agentID} is not defined in ${directory}`,
-                  })
-                if (found.mode === "primary")
-                  return yield* new ToolFailure({ message: `Agent ${agentID} cannot run as a subagent` })
-                return found
-              })
+              // What the child is: its driver, harness and model.
               // What the call alone decides, so a mistake fails before any child exists.
               const precheck = Effect.fnUntraced(function* (driver: SessionDriver.ID | undefined) {
                 if (input.harness === "native" && driver === "ocpp")
@@ -627,10 +600,9 @@ export const Plugin = {
                         : `${SessionDriver.names[driver]} models are named without a provider, such as ${ExternalAgentDrivers.defaults[driver]}: ${named}. A provider/model ID runs on the ocpp driver.`,
                   })
               })
-              const choose = Effect.fnUntraced(function* (agent: Agent.Info) {
-                // Unless the call names one: a continued child keeps its own driver, and a new one takes its agent's
-                // configured model's driver, else its caller's.
-                const driver = input.driver ?? SessionDriver.of(existing?.model ?? agent.model ?? parent.model)
+              const choose = Effect.fnUntraced(function* () {
+                // Unless the call names one: a continued child keeps its own driver, and a new one takes its caller's.
+                const driver = input.driver ?? SessionDriver.of(existing?.model ?? parent.model)
                 yield* precheck(driver)
                 // A continued vendor child keeps the harness it last ran with, unless the call names one.
                 const kept =
@@ -641,16 +613,16 @@ export const Plugin = {
                   reattached !== undefined
                     ? undefined
                     : driver === "ocpp"
-                      ? yield* runnerModel(agent)
-                      : yield* vendorModel(driver, agent)
-                return { agent, driver, harness: input.harness ?? kept ?? "ocpp", selected }
+                      ? yield* runnerModel()
+                      : yield* vendorModel(driver)
+                return { driver, harness: input.harness ?? kept ?? "ocpp", selected }
               })
-              // The model for an OC++-run child: requested, else a provider model its agent or caller already uses.
-              const runnerModel = Effect.fnUntraced(function* (agent: Agent.Info) {
-                const inherited = [
-                  ...(existing === undefined || existing.agent !== agent.id ? [agent.model] : []),
-                  ...(existing === undefined ? [parent.model] : []),
-                ].find((model) => model !== undefined && SessionDriver.of(model) === "ocpp")
+              // The model for an OC++-run child: requested, else a provider model its caller already uses.
+              const runnerModel = Effect.fnUntraced(function* () {
+                const inherited =
+                  existing === undefined && parent.model !== undefined && SessionDriver.of(parent.model) === "ocpp"
+                    ? parent.model
+                    : undefined
                 const requested = input.model
                 if (requested === undefined) {
                   if (existing === undefined || SessionDriver.of(existing.model) === "ocpp")
@@ -689,11 +661,11 @@ export const Plugin = {
                   return yield* unsupportedModel(requested, availableModels)
                 return { model, requested: true }
               })
-              // The model for a vendor-run child: requested as name#effort, else what the child, its agent or its
-              // caller already uses with this vendor, else the vendor's configured default.
-              const vendorModel = Effect.fnUntraced(function* (provider: ExternalSession.Provider, agent: Agent.Info) {
+              // The model for a vendor-run child: requested as name#effort, else what the child or its caller
+              // already uses with this vendor, else the vendor's configured default.
+              const vendorModel = Effect.fnUntraced(function* (provider: ExternalSession.Provider) {
                 const requested = input.model?.split("#")
-                const current = (existing === undefined ? [agent.model, parent.model] : [existing.model]).find(
+                const current = (existing === undefined ? [parent.model] : [existing.model]).find(
                   (model) => model !== undefined && SessionDriver.of(model) === provider,
                 )
                 const settings = yield* drivers.settings(provider)
@@ -742,8 +714,7 @@ export const Plugin = {
                       }),
                 }
               })
-              const chosen = yield* choose(yield* agentAt())
-              const agent = chosen.agent
+              const chosen = yield* choose()
               const driver = chosen.driver
               const harness = chosen.harness
               const selected = chosen.selected?.model
@@ -760,15 +731,10 @@ export const Plugin = {
               }
               if (reattached === undefined && existing !== undefined)
                 yield* (
-                  existing.agent === agent.id
+                  selected === undefined
                     ? Effect.void
-                    : runtime.session.switchAgent({ sessionID: existing.id, agent: agent.id })
+                    : runtime.session.switchModel({ sessionID: existing.id, model: selected })
                 ).pipe(
-                  Effect.andThen(
-                    selected === undefined
-                      ? Effect.void
-                      : runtime.session.switchModel({ sessionID: existing.id, model: selected }),
-                  ),
                   Effect.mapError(
                     (error) =>
                       new ToolFailure({
@@ -803,7 +769,6 @@ export const Plugin = {
                   .create({
                     parentID: context.sessionID,
                     title: input.description,
-                    agent: Agent.ID.make(agentID),
                     model: selected,
                     // Otherwise the child inherits the caller's Location, workspace included.
                     ...(same(location, parent.location) ? {} : { location }),
@@ -1203,21 +1168,15 @@ export const Plugin = {
       })
       .pipe(Effect.orDie)
 
-    // The catalog lists only each description's first line, so SubagentInstructions shows the same
-    // list up front; this copy is what tools.search returns.
+    // The catalog lists only each description's first line, so SubagentInstructions shows the ready drivers
+    // up front; this copy is what tools.search returns.
     yield* ctx.tool.hook("catalog", (event) =>
       Effect.gen(function* () {
         const tool = event.tools[name]
         if (!tool || !event.agent) return
-        const subagents = available(yield* agents.list())
-        if (subagents.length === 0) return
-        tool.description = [
-          tool.description,
-          "",
-          "Available subagents:",
-          ...listing(subagents),
-          ...listDrivers(yield* drivers.list()),
-        ].join("\n")
+        const listed = listDrivers(yield* drivers.list())
+        if (listed.length === 0) return
+        tool.description = [tool.description, ...listed].join("\n")
       }),
     )
   }),
@@ -1280,7 +1239,7 @@ export function listDrivers(drivers: ReadonlyArray<SessionDriver.Info>) {
   if (ready.length === 0) return []
   return [
     "",
-    "Drivers (the default is the agent's configured model's driver, else the calling session's):",
+    "Drivers (the default is the calling session's):",
     "- ocpp: the OC++ runner with a provider model",
     ...ready.map(
       (driver) =>
@@ -1293,21 +1252,6 @@ export function listDrivers(drivers: ReadonlyArray<SessionDriver.Info>) {
         }`,
     ),
   ]
-}
-
-/** The agents a caller may start as subagents: never primary or hidden agents. */
-export function available(agents: ReadonlyArray<Agent.Info>) {
-  return agents
-    .filter((agent) => agent.mode !== "primary" && !agent.hidden)
-    .toSorted((a, b) => a.id.localeCompare(b.id))
-    .map((agent) => ({
-      id: agent.id,
-      description: agent.description ?? "This subagent should only be called when explicitly requested.",
-    }))
-}
-
-export function listing(subagents: ReadonlyArray<{ readonly id: string; readonly description: string }>) {
-  return subagents.map((agent) => `- ${agent.id}: ${agent.description}`)
 }
 
 /**

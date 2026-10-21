@@ -1123,7 +1123,7 @@ describe("subagent drivers", () => {
         return yield* Effect.result(
           execute(
             tool,
-            { agent: "general", description: "Task", message: "Do the task", ...input },
+            { description: "Task", message: "Do the task", ...input },
             {
               sessionID: env.session.id,
               agent: Agent.ID.make("build"),
@@ -1157,17 +1157,6 @@ describe("subagent drivers", () => {
       return row === undefined ? undefined : yield* env.sessions.get(Session.ID.make(row.id))
     })
 
-  const configure = (
-    env: Pick<Effect.Success<ReturnType<typeof setup>>, "within">,
-    id: string,
-    edit: (agent: Types.DeepMutable<Agent.Info>) => void,
-  ) =>
-    env.within(
-      Effect.gen(function* () {
-        const agents = yield* Agent.Service
-        yield* agents.transform((draft) => draft.update(Agent.ID.make(id), edit))
-      }),
-    )
   /** Tool references, as a program passes tools.read or the namespace tools.linear. */
   const refs = (...paths: ReadonlyArray<string>) => paths.map((item) => new ToolReference(item.split(".")))
   // A namespace only the caller's Location provides, as an MCP server configured there would.
@@ -1607,23 +1596,19 @@ describe("subagent drivers", () => {
     }),
   )
 
-  it.live("a new child takes its agent's configured driver, and a model ID must fit the driver", () =>
+  it.live("a new child takes its caller's driver unless the call names one, and a model ID must fit the driver", () =>
     Effect.gen(function* () {
       const env = yield* setup(ref("claude", "opus"))
       vendor.turn = say("Answered")
-      yield* configure(env, "general", (agent) => {
-        agent.model = ref("codex", "gpt-5.6-terra")
-      })
+      // No agent: the caller's driver and model run the child.
       expect((yield* call(env, {}))._tag).toBe("Success")
-      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "gpt-5.6-terra" })
+      expect(vendor.runs.at(-1)).toMatchObject({ provider: "claude" })
+      expect((yield* child(env))?.agent).toBeUndefined()
+      expect(SessionDriver.of((yield* child(env))?.model)).toBe("claude")
 
-      // A provider model on the agent selects the OC++ runner, whatever drives the caller.
-      yield* configure(env, "general", (agent) => {
-        agent.model = ref("openai", "gpt-5")
-      })
-      yield* call(env, {})
-      expect(SessionDriver.of((yield* child(env))?.model)).toBe("ocpp")
-      expect(vendor.runs).toHaveLength(1)
+      expect((yield* call(env, { driver: "codex", model: "gpt-5.6-terra" }))._tag).toBe("Success")
+      expect(vendor.runs.at(-1)).toMatchObject({ provider: "codex", model: "gpt-5.6-terra" })
+      expect(vendor.runs).toHaveLength(2)
 
       const failure = (result: Effect.Success<ReturnType<typeof call>>) =>
         result._tag === "Failure" ? result.failure.message : "succeeded"
@@ -1636,7 +1621,7 @@ describe("subagent drivers", () => {
       expect(failure(yield* call(env, { driver: "pi", model: "sonnet" }))).toContain(
         "Pi models are named provider/model",
       )
-      expect(vendor.runs).toHaveLength(1)
+      expect(vendor.runs).toHaveLength(2)
     }),
   )
 
@@ -1688,17 +1673,6 @@ describe("subagent drivers", () => {
   )
 
   describe("root", () => {
-    // Agent definitions in another Location, such as a root's own config.
-    const configureAt = (ref: Location.Ref, id: string, edit: (agent: Types.DeepMutable<Agent.Info>) => void) =>
-      Effect.gen(function* () {
-        const locations = yield* LocationServiceMap.Service
-        yield* Effect.gen(function* () {
-          const plugins = yield* PluginSupervisor.Service
-          yield* plugins.flush
-          const agents = yield* Agent.Service
-          yield* agents.transform((draft) => draft.update(Agent.ID.make(id), edit))
-        }).pipe(Effect.provide(locations.get(ref)))
-      })
     const at = (directory: string) => Location.Ref.make({ directory: AbsolutePath.make(directory) })
     const worktree = Effect.gen(function* () {
       const outer = yield* tmpdirScoped()
@@ -1882,31 +1856,22 @@ describe("subagent drivers", () => {
       }),
     )
 
-    it.live("the child's agent, driver and model come from its root's own definitions", () =>
+    it.live("a rooted child needs no agent defined there: its driver and model come from the call or its caller", () =>
       Effect.gen(function* () {
         const env = yield* setup(ref("claude", "opus"))
         const root = yield* worktree
         vendor.turn = say("Done")
-        yield* configureAt(at(root.directory), "rooted", (agent) => {
-          agent.mode = "subagent"
-          agent.model = ref("codex", "gpt-5.6-terra")
-        })
-        yield* configure(env, "caller-only", (agent) => {
-          agent.mode = "subagent"
-        })
-        expect((yield* call(env, { agent: "rooted", root: root.directory }))._tag).toBe("Success")
+        expect((yield* call(env, { root: root.directory }))._tag).toBe("Success")
+        expect(vendor.runs.at(-1)).toMatchObject({ provider: "claude", directory: root.directory })
+        expect((yield* child(env))?.agent).toBeUndefined()
+        expect(
+          (yield* call(env, { root: root.directory, driver: "codex", model: "gpt-5.6-terra" }))._tag,
+        ).toBe("Success")
         expect(vendor.runs.at(-1)).toMatchObject({
           provider: "codex",
           model: "gpt-5.6-terra",
           directory: root.directory,
         })
-        expect(failure(yield* call(env, { agent: "rooted" }))).toContain("Unknown agent: rooted")
-        const before = (yield* child(env))?.id
-        expect(failure(yield* call(env, { agent: "caller-only", root: root.directory }))).toContain(
-          `is not defined in ${root.directory}`,
-        )
-        // Refused before any child Session or prompt.
-        expect((yield* child(env))?.id).toBe(before)
       }),
     )
 

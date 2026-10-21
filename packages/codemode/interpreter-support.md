@@ -591,7 +591,6 @@ throws its error where the program can catch it. The catalog signature shows the
 ```ts
 let runs = ["src/a.ts", "src/b.ts"].map((path) =>
   tools.subagent({
-    agent: "explore",
     description: "Review " + path,
     message: "Review the error handling in " + path + ".",
     tools: [tools.read, tools.grep],
@@ -653,7 +652,6 @@ let inspect = tool.define({
 
 const review = tools
   .subagent({
-    agent: "build",
     description: "Review error handling",
     message: "Use inspect to find error-handling branches in src/worker.ts, then explain the gaps.",
     tools: [inspect],
@@ -679,7 +677,6 @@ whole namespace, such as `tools.linear`. References exist to hand tools to a hos
 ```ts
 let inspect = tool.define({ ... })
 const review = tools.subagent({
-  agent: "explore",
   description: "Review error handling",
   message: "Find error-handling branches in src/worker.ts and explain the gaps.",
   tools: [tools.fs.read, tools.fs.grep, tools.linear, inspect],
@@ -721,7 +718,6 @@ executions, so a notebook value travels by reference in source instead of being 
 ```ts
 const review = tools
   .subagent({
-    agent: "build",
     description: "Summarize the dataset",
     message: "Read the machine input, summarize its dataset, and submit the totals.",
     input: { dataset },

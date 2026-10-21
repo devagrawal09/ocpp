@@ -243,32 +243,8 @@ const withSubagent = (location: Location.Ref) =>
     ).pipe(Effect.provide(locations.get(location)))
   })
 
-// Beside withSubagent's agents: a described subagent and a hidden one.
-const withListedSubagents = (location: Location.Ref) =>
-  Effect.gen(function* () {
-    const locations = yield* LocationServiceMap.Service
-    yield* Agent.Service.use((agents) =>
-      agents.transform((draft) => {
-        draft.update(Agent.ID.make("reviewer"), (agent) => {
-          agent.description = "Reviews changes for correctness."
-        })
-        draft.update(Agent.ID.make("hidden"), (agent) => {
-          agent.mode = "subagent"
-          agent.hidden = true
-        })
-      }),
-    ).pipe(Effect.provide(locations.get(location)))
-  })
-
-// Primary and hidden agents are left out.
-const listedSubagents = [
-  "Available subagents:",
-  "- fallback: This subagent should only be called when explicitly requested.",
-  "- reviewer: Reviews changes for correctness.",
-]
-
 describe("SubagentTool", () => {
-  it.live("appends the subagents the caller may start to the description tools.search returns", () =>
+  it.live("keeps the description tools.search returns free of agents when no vendor driver is ready", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
@@ -279,15 +255,12 @@ describe("SubagentTool", () => {
           const sessions = yield* Session.Service
           const parent = yield* sessions.create({ location })
           yield* withSubagent(parent.location)
-          yield* withListedSubagents(parent.location)
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
-          const described = [
-            SubagentTool.description,
-            "",
-            // No vendor driver is ready here, so none is offered.
-            ...listedSubagents,
-          ].join("\n")
+          // No vendor driver is ready here, so none is offered, and subagents have no agent to choose.
+          const described = SubagentTool.description
+          expect(described).not.toContain("agent preset")
+          expect(described).not.toContain("Available subagents")
           const subagentEntry = (snapshot: Tool.Snapshot) =>
             snapshot.codeModeCatalog?.find((tool) => tool.path === SubagentTool.name)?.description
 
@@ -322,7 +295,7 @@ describe("SubagentTool", () => {
     ),
   )
 
-  requestIt.live("shows the model the subagents it may start before it searches", () =>
+  requestIt.live("shows the model how to start a subagent before it searches", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
@@ -333,7 +306,6 @@ describe("SubagentTool", () => {
           const sessions = yield* Session.Service
           const parent = yield* sessions.create({ location, model: parentModel })
           yield* withSubagent(parent.location)
-          yield* withListedSubagents(parent.location)
           modelRequests.length = 0
 
           yield* sessions.prompt({ sessionID: parent.id, text: "Who can review this change?", resume: false })
@@ -342,19 +314,19 @@ describe("SubagentTool", () => {
           const system = modelRequests[0]?.system.map((part) => part.text).join("\n") ?? ""
           expect(system).toContain(
             [
-              "Subagents work on a task in a child session. Start one with `tools.subagent`, passing one of these IDs as `agent` and the child's tools as `tools`.",
-              "An agent is a prompt and model preset; it grants no tools. The child can call exactly the tools you pass: your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles. Without `tools` it has none, only tools.submit_result when you pass an outputSchema.",
+              "Subagents work on a task in a child session. Start one with `tools.subagent`, passing a short `description`, the task as `message` and the child's tools as `tools`.",
+              "A new child has no preset prompt and fresh context, so include everything it needs in `message`. It runs on your model and driver unless you pass `model` or `driver`. The child can call exactly the tools you pass: your own tools such as tools.read, whole namespaces such as tools.linear, and tool.define handles. Without `tools` it has none, only tools.submit_result when you pass an outputSchema.",
               "Pass `root` to run one in another existing directory, such as a separate git worktree.",
-              ...listedSubagents,
             ].join("\n"),
           )
+          expect(system).not.toContain("Available subagents")
           expect(system).toContain("  - tools.subagent(input: {")
         }),
       ),
     ),
   )
 
-  productionIt.live("registers globally while resolving agents from the caller location", () =>
+  productionIt.live("registers globally and requires a description for a new child", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
@@ -377,14 +349,18 @@ describe("SubagentTool", () => {
               ...toolIdentity,
               call: {
                 type: "tool-call",
-                id: "call-primary",
+                id: "call-no-description",
                 name: SubagentTool.name,
-                input: { agent: "primary", description: "primary", message: "should fail" },
+                input: { message: "should fail" },
               },
             }),
           ).toEqual({
             status: "error",
-            error: { type: "tool.execution", message: "Agent primary cannot run as a subagent" },
+            error: {
+              type: "tool.execution",
+              message:
+                "description is required to start a new subagent. To continue a previous subagent, pass its sessionID.",
+            },
           })
         }),
       ),
@@ -414,7 +390,7 @@ describe("SubagentTool", () => {
                 type: "tool-call",
                 id: "call-nested-subagent",
                 name: SubagentTool.name,
-                input: { agent: "reviewer", description: "nested", message: "should fail" },
+                input: { description: "nested", message: "should fail" },
               },
             }),
           ).toEqual({
@@ -455,7 +431,7 @@ describe("SubagentTool", () => {
               type: "tool-call",
               id: "call-configured-nested-subagent",
               name: SubagentTool.name,
-              input: { agent: "reviewer", description: "nested", message: "should run" },
+              input: { description: "nested", message: "should run" },
             },
           })
 
@@ -530,7 +506,6 @@ describe("SubagentTool", () => {
               id: "call-subagent-unsupported-model",
               name: SubagentTool.name,
               input: {
-                agent: "reviewer",
                 description: "review",
                 message: "review this",
                 model: "test/overide#hgh",
@@ -555,7 +530,7 @@ describe("SubagentTool", () => {
               type: "tool-call",
               id: "call-subagent",
               name: SubagentTool.name,
-              input: { agent: "reviewer", description: "review", message: "review this" },
+              input: { description: "review", message: "review this" },
             },
           })
 
@@ -572,28 +547,30 @@ describe("SubagentTool", () => {
             { sessionID: child.id, status: "starting" },
             { sessionID: child.id, status: "running" },
           ])
+          // Without an agent or a model, a new child runs on its caller's model and stores no agent.
           expect(child).toMatchObject({
             parentID: parent.id,
             location: parent.location,
-            agent: "reviewer",
-            model: childModel,
+            model: parentModel,
           })
+          expect(child.agent).toBeUndefined()
           expect((yield* sessions.inbox(child.id)).find((message) => message.type === "user")?.payload.text).toBe(
             "You are a subagent spawned by another session.\nreview this",
           )
 
-          const fallback = yield* executeTool(registry, {
+          const chosen = yield* executeTool(registry, {
             sessionID: parent.id,
             ...toolIdentity,
             call: {
               type: "tool-call",
-              id: "call-subagent-fallback",
+              id: "call-subagent-model",
               name: SubagentTool.name,
-              input: { agent: "fallback", description: "fallback", message: "fallback" },
+              input: { description: "chosen model", message: "use the child model", model: "test/child" },
             },
           })
-          const fallbackChild = yield* sessions.get(outputSessionID(fallback.metadata))
-          expect(fallbackChild).toMatchObject({ parentID: parent.id, model: parentModel })
+          const chosenChild = yield* sessions.get(outputSessionID(chosen.metadata))
+          expect(chosenChild).toMatchObject({ parentID: parent.id, model: childModel })
+          expect(chosenChild.agent).toBeUndefined()
         }),
       ),
     ),
@@ -620,7 +597,7 @@ describe("SubagentTool", () => {
               type: "tool-call",
               id: "call-subagent-first",
               name: SubagentTool.name,
-              input: { agent: "reviewer", description: "review", message: "review this" },
+              input: { description: "review", message: "review this" },
             },
           })
           const childID = outputSessionID(first.metadata)
@@ -632,7 +609,6 @@ describe("SubagentTool", () => {
               id: "call-subagent-second",
               name: SubagentTool.name,
               input: {
-                agent: "reviewer",
                 description: "follow up",
                 message: "continue this",
                 sessionID: childID,
@@ -662,7 +638,7 @@ describe("SubagentTool", () => {
     ),
   )
 
-  it.live("rejects unrelated children and switches agents on continuation", () =>
+  it.live("rejects unrelated children and continues a child stored with a legacy agent", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
@@ -678,7 +654,8 @@ describe("SubagentTool", () => {
             title: "other review",
             agent: Agent.ID.make("reviewer"),
           })
-          const switched = yield* sessions.create({
+          // A child an earlier version started with an agent preset keeps working without one.
+          const legacy = yield* sessions.create({
             parentID: parent.id,
             title: "fallback review",
             agent: Agent.ID.make("fallback"),
@@ -687,7 +664,7 @@ describe("SubagentTool", () => {
           yield* withSubagent(parent.location)
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
-          const call = (sessionID: Session.ID, id: string, agent = "reviewer") =>
+          const call = (sessionID: Session.ID, id: string, extra: Record<string, unknown> = {}) =>
             executeTool(registry, {
               sessionID: parent.id,
               ...toolIdentity,
@@ -695,7 +672,7 @@ describe("SubagentTool", () => {
                 type: "tool-call" as const,
                 id,
                 name: SubagentTool.name,
-                input: { agent, description: "follow up", message: "continue", sessionID },
+                input: { description: "follow up", message: "continue", sessionID, ...extra },
               },
             })
 
@@ -714,21 +691,22 @@ describe("SubagentTool", () => {
               message: `Session ${unrelated.id} is not a child of the current session`,
             },
           })
-          expect(yield* call(switched.id, "call-switched-child")).toMatchObject({
+          expect(yield* call(legacy.id, "call-legacy-child")).toMatchObject({
             status: "completed",
-            metadata: { sessionID: switched.id, status: "completed" },
+            metadata: { sessionID: legacy.id, status: "completed" },
           })
-          expect(yield* sessions.get(switched.id)).toMatchObject({
-            agent: "reviewer",
-            model: childModel,
+          // The stored agent is left as it was, and the child keeps its own model.
+          expect(yield* sessions.get(legacy.id)).toMatchObject({
+            agent: Agent.ID.make("fallback"),
+            model: parentModel,
           })
-          // Switching to an agent without a configured model keeps the child's current model.
-          expect(yield* call(switched.id, "call-modelless-switch", "fallback")).toMatchObject({
+          // An explicit model still switches it.
+          expect(yield* call(legacy.id, "call-legacy-model", { model: "test/child" })).toMatchObject({
             status: "completed",
-            metadata: { sessionID: switched.id, status: "completed" },
+            metadata: { sessionID: legacy.id, status: "completed" },
           })
-          expect(yield* sessions.get(switched.id)).toMatchObject({
-            agent: "fallback",
+          expect(yield* sessions.get(legacy.id)).toMatchObject({
+            agent: Agent.ID.make("fallback"),
             model: childModel,
           })
         }),
@@ -736,7 +714,7 @@ describe("SubagentTool", () => {
     ),
   )
 
-  it.live("continues a child with only sessionID and message, keeping its agent, title and model", () =>
+  it.live("continues a child with only sessionID and message, keeping its title and model", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
@@ -757,7 +735,7 @@ describe("SubagentTool", () => {
               type: "tool-call",
               id: "call-subagent-minimal-first",
               name: SubagentTool.name,
-              input: { agent: "reviewer", description: "review", message: "review this" },
+              input: { description: "review", message: "review this" },
             },
           })
           const childID = outputSessionID(first.metadata)
@@ -775,11 +753,12 @@ describe("SubagentTool", () => {
 
           expect(second).toMatchObject({ status: "completed", metadata: { sessionID: childID, status: "completed" } })
           expect(yield* sessions.get(childID)).toMatchObject({
-            agent: "reviewer",
             title: "review",
             model: before.model,
           })
-          expect(before.model).toMatchObject(childModel)
+          expect(before.model).toMatchObject(parentModel)
+          expect(before.agent).toBeUndefined()
+          expect((yield* sessions.get(childID)).agent).toBeUndefined()
           expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
           expect(
             (yield* sessions.inbox(childID)).flatMap((message) =>
@@ -791,7 +770,7 @@ describe("SubagentTool", () => {
     ),
   )
 
-  it.live("requires agent and description to start a new child and creates none without them", () =>
+  it.live("requires a description to start a new child and creates none without one", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
@@ -815,14 +794,19 @@ describe("SubagentTool", () => {
             error: {
               type: "tool.execution" as const,
               message:
-                "agent and description are required to start a new subagent. To continue a previous subagent, pass its sessionID.",
+                "description is required to start a new subagent. To continue a previous subagent, pass its sessionID.",
             },
           }
 
           expect(yield* call("call-new-bare", {})).toEqual(required)
-          expect(yield* call("call-new-no-description", { agent: "reviewer" })).toEqual(required)
-          expect(yield* call("call-new-no-agent", { description: "review" })).toEqual(required)
+          expect(yield* call("call-new-no-description", { model: "test/child" })).toEqual(required)
           expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(0)
+          // A description alone is enough: no agent is needed.
+          expect(yield* call("call-new-description-only", { description: "review" })).toMatchObject({
+            status: "completed",
+            metadata: { status: "completed" },
+          })
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
         }),
       ),
     ),
@@ -859,7 +843,7 @@ describe("SubagentTool", () => {
               type: "tool-call",
               id: "call-subagent-transcript-child",
               name: SubagentTool.name,
-              input: { agent: "reviewer", description: "review", message: "review this" },
+              input: { description: "review", message: "review this" },
             },
           })
           const childID = outputSessionID(first.metadata)
@@ -906,7 +890,8 @@ describe("SubagentTool", () => {
             )
 
           const plain = yield* read("call-transcript-plain", { sessionID: childID })
-          expect(plain.output).toMatchObject({ sessionID: childID, title: "review", agent: "reviewer" })
+          expect(plain.output).toMatchObject({ sessionID: childID, title: "review" })
+          expect(plain.output).not.toHaveProperty("agent")
           expect(plain.output.cursor).toBeUndefined()
           // Without include, the tool-only step has nothing to show.
           expect(plain.output.messages.map((message) => [message.role, message.text])).toEqual([
@@ -982,7 +967,7 @@ describe("SubagentTool", () => {
                 type: "tool-call",
                 id: "call-subagent-failure",
                 name: SubagentTool.name,
-                input: { agent: "reviewer", description: "fail review", message: "please fail" },
+                input: { description: "fail review", message: "please fail" },
               },
             }),
           ).toEqual({
@@ -1021,7 +1006,6 @@ describe("SubagentTool", () => {
               id: "call-structured-failure",
               name: SubagentTool.name,
               input: {
-                agent: "reviewer",
                 description: "fail review",
                 message: "please fail",
                 input: { dataset: [1] },
@@ -1062,7 +1046,6 @@ describe("SubagentTool", () => {
 
           const first = { dataset: [1, 2, 3], note: secret }
           const settled = yield* call("call-subagent-input", {
-            agent: "reviewer",
             description: "analyze",
             message: "Analyze the dataset",
             input: first,
@@ -1091,7 +1074,6 @@ describe("SubagentTool", () => {
           // Every continuation may carry invocation-local input for that call.
           expect(
             yield* call("call-subagent-again", {
-              agent: "reviewer",
               description: "again",
               message: "Use the new data",
               input: { dataset: [4] },
@@ -1100,7 +1082,6 @@ describe("SubagentTool", () => {
           ).toMatchObject({ status: "completed", metadata: { sessionID: childID } })
           expect(
             yield* call("call-subagent-third", {
-              agent: "reviewer",
               description: "third",
               message: "Use the list",
               input: [5, 6],
@@ -1137,7 +1118,7 @@ describe("SubagentTool", () => {
                 type: "tool-call" as const,
                 id,
                 name: SubagentTool.name,
-                input: { agent: "reviewer", description: "invalid", message: "should fail", ...input },
+                input: { description: "invalid", message: "should fail", ...input },
               },
             }).pipe(Effect.map((settled) => settled.error?.message ?? settled.status))
 
@@ -1187,7 +1168,7 @@ describe("SubagentTool", () => {
           ).toMatchObject({ status: "saved", saved: ["dataset", "note"] })
           const delegated = yield* run(
             "call-delegate",
-            'const review = tools.subagent({ agent: "reviewer", description: "analyze", message: "Analyze the dataset", input: { dataset, note } }).wait()',
+            'const review = tools.subagent({ description: "analyze", message: "Analyze the dataset", input: { dataset, note } }).wait()',
           )
           expect(delegated).toMatchObject({ status: "saved", saved: ["review"] })
           expect(delegated.summary).not.toContain("secret-token")
@@ -1234,7 +1215,7 @@ describe("SubagentTool", () => {
               name: "execute",
               input: {
                 code: [
-                  'let runs = ["first", "second"].map((name) => tools.subagent({ agent: "reviewer", description: "review " + name, message: "Review " + name }))',
+                  'let runs = ["first", "second"].map((name) => tools.subagent({ description: "review " + name, message: "Review " + name }))',
                   "const reviews = await Promise.all(runs)",
                 ].join("\n"),
               },
@@ -1289,7 +1270,6 @@ describe("SubagentTool", () => {
               id: "call-structured-subagent",
               name: SubagentTool.name,
               input: {
-                agent: "reviewer",
                 description: "structured review",
                 message: "Add up the values",
                 input: { values: [40, 2], note: secret },
@@ -1360,7 +1340,6 @@ describe("SubagentTool", () => {
 
           // The child's own run fails: the runner error stays the message, the reason is data.
           const crashed = yield* fail("call-reason-child-failed", {
-            agent: "reviewer",
             description: "fail review",
             message: "please fail",
           })
@@ -1373,7 +1352,6 @@ describe("SubagentTool", () => {
           // A structured child that answers in text twice is reminded once and then reported,
           // without a second repair attempt.
           const silent = yield* fail("call-reason-no-submission", {
-            agent: "reviewer",
             description: "structured review",
             message: "Add up the values",
             outputSchema: { type: "object", properties: { answer: { type: "number" } }, required: ["answer"] },
@@ -1418,7 +1396,7 @@ describe("SubagentTool", () => {
           // registering this call's input fails after the create and before the child receives its task.
           const failed = yield* execute(
             subagent,
-            { agent: "reviewer", description: "review", message: "review this", input: { value: 1 } },
+            { description: "review", message: "review this", input: { value: 1 } },
             {
               sessionID: parent.id,
               ...toolIdentity,
@@ -1462,7 +1440,7 @@ describe("SubagentTool", () => {
           const recover = (id: string, sessionID: Session.ID, input: Record<string, unknown> = {}) =>
             execute(
               subagent,
-              { agent: "reviewer", description: "review", message: "review this", ...input },
+              { description: "review", message: "review this", ...input },
               {
                 sessionID: parent.id,
                 ...toolIdentity,
@@ -1532,7 +1510,7 @@ describe("SubagentTool", () => {
               type: "tool-call",
               id: "call-subagent-transcript-bounded",
               name: SubagentTool.name,
-              input: { agent: "reviewer", description: "review", message: "review this" },
+              input: { description: "review", message: "review this" },
             },
           })
           const childID = outputSessionID(first.metadata)
@@ -1753,7 +1731,7 @@ describe("SubagentTool follow-ups", () => {
       stepping.gate = gate
       return gate
     })
-  const start = { agent: "reviewer", description: "review", message: "review this" }
+  const start = { description: "review", message: "review this" }
 
   followUpIt.live("steers a follow-up into a running child and returns at once; the running call answers it", () =>
     inDirectory((call) =>
@@ -1826,10 +1804,10 @@ describe("SubagentTool follow-ups", () => {
         const gate = yield* hold("step")
         const running = yield* call(start).pipe(Effect.forkChild)
         const childID = yield* Deferred.await(gate.entered)
-        const refused = yield* call({ sessionID: childID, message: "switch", agent: "reviewer", tools: [] }).pipe(
+        const refused = yield* call({ sessionID: childID, message: "switch", model: "test/child", tools: [] }).pipe(
           Effect.flip,
         )
-        expect(refused.message).toContain(`Subagent session ${childID} is still running an earlier call, which owns its agent, tools.`)
+        expect(refused.message).toContain(`Subagent session ${childID} is still running an earlier call, which owns its model, tools.`)
         expect(refused.metadata).toEqual({ status: "refused", reason: "running-call-owns-fields", target: childID })
         // Code Mode names a child failed by the sessionID in a failure's metadata; a refusal names none.
         expect(CodeModeChildren.sessionID(refused.metadata)).toBeUndefined()

@@ -65,7 +65,7 @@ export const layer = Layer.effect(
           yield* mcp.flush
           yield* openapi.flush
           // A command or event runs with the Session agent's tools, as it did when it started.
-          const agent = yield* agents.select(started.type === "assistant" ? started.agent : session.agent)
+          const agent = yield* agents.select(started.type === "assistant" ? started.agent : Agent.sessionAgent(session))
           if (agent.info === undefined) return "Its agent " + agent.id + " no longer exists."
           return yield* tools.resume({
             // The tool list it was admitted with, init.ts source included, rebuilds the same catalog.

@@ -19,6 +19,20 @@ export type Info = Agent.Info
 
 export { Event } from "@ocpp/schema/agent"
 
+/**
+ * What a subagent child started without an agent preset runs as: no prompt, model, settings or step limit of its own,
+ * so no configured agent, the default one included, shapes it. Its ID is reserved: no definition can claim it.
+ */
+export const presetlessID = ID.make("ocpp.subagent")
+export const presetless: Info = { ...Info.default(presetlessID), mode: "subagent", hidden: true }
+
+/**
+ * The agent a Session runs as: its stored one, else the presetless one for a subagent child (a Session with a
+ * parent), else the default. Children an earlier version started with an agent keep running as that agent.
+ */
+export const sessionAgent = (session: { readonly agent?: ID; readonly parentID?: unknown }) =>
+  session.agent ?? (session.parentID === undefined ? undefined : presetlessID)
+
 export interface Selection {
   readonly id: ID
   readonly info: Info | undefined
@@ -96,6 +110,7 @@ const layer = Layer.effect(
         return selectedDefault()
       }),
       select: Effect.fn("Agent.select")(function* (id) {
+        if (id === presetlessID) return { id: presetlessID, info: presetless }
         if (id !== undefined) {
           const selected = ID.make(id)
           return { id: selected, info: state.get().agents.get(selected) }

@@ -295,7 +295,7 @@ describe("SubagentTool", () => {
     ),
   )
 
-  requestIt.live("shows the model how to start a subagent before it searches", () =>
+  requestIt.live("shows the model how to start a subagent, whose child runs without the default agent's prompt", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
@@ -306,6 +306,17 @@ describe("SubagentTool", () => {
           const sessions = yield* Session.Service
           const parent = yield* sessions.create({ location, model: parentModel })
           yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          // The default agent carries a preset prompt: the caller runs under it, a new child must not.
+          const preset = "PRESET PROMPT OF THE DEFAULT AGENT"
+          yield* Agent.Service.use((agents) =>
+            agents.transform((draft) => {
+              draft.default(toolIdentity.agent)
+              draft.update(toolIdentity.agent, (agent) => {
+                agent.system = preset
+              })
+            }),
+          ).pipe(Effect.provide(locations.get(parent.location)))
           modelRequests.length = 0
 
           yield* sessions.prompt({ sessionID: parent.id, text: "Who can review this change?", resume: false })
@@ -321,6 +332,26 @@ describe("SubagentTool", () => {
           )
           expect(system).not.toContain("Available subagents")
           expect(system).toContain("  - tools.subagent(input: {")
+          expect(system).toContain(preset)
+
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          modelRequests.length = 0
+          const settled = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-presetless-child",
+              name: SubagentTool.name,
+              input: { description: "presetless", message: "Say done" },
+            },
+          })
+          expect(settled).toMatchObject({ status: "completed" })
+          const child = yield* sessions.get(outputSessionID(settled.metadata))
+          expect(child.agent).toBeUndefined()
+          expect(modelRequests.length).toBeGreaterThan(0)
+          const childSystem = modelRequests.map((request) => request.system.map((part) => part.text).join("\n"))
+          for (const text of childSystem) expect(text).not.toContain(preset)
         }),
       ),
     ),
@@ -807,6 +838,19 @@ describe("SubagentTool", () => {
             metadata: { status: "completed" },
           })
           expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
+
+          // agent was removed: passing it fails clearly, for a new child and for a continued one, and changes nothing.
+          const removed = {
+            status: "error",
+            error: { message: expect.stringContaining(SubagentTool.AGENT_REMOVED) },
+          }
+          expect(yield* call("call-new-agent", { agent: "general", description: "review" })).toMatchObject(removed)
+          const childID = (yield* sessions.list({ parentID: parent.id })).data[0]!.id
+          expect(yield* call("call-continue-agent", { agent: "general", sessionID: childID })).toMatchObject(removed)
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
+          expect(
+            (yield* sessions.inbox(childID)).flatMap((message) => (message.type === "user" ? [message.payload.text] : [])),
+          ).toHaveLength(1)
         }),
       ),
     ),

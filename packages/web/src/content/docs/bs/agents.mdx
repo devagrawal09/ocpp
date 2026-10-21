@@ -33,9 +33,7 @@ OC++ dolazi sa dva ugrađena primarna agenta, **Build** i **Plan**. Pogledat će
 
 ### Subagenti
 
-Subagenti su specijalizovani pomoćnici koje primarni agenti mogu pozvati za određene zadatke. Možete ih i ručno pozvati **@ spominjanjem** u svojim porukama.
-
-OC++ dolazi sa tri ugrađena subagenta, **General**, **Explore** i **Scout**. Ovo ćemo pogledati u nastavku.
+Subagenti su podređene sesije koje agent pokreće pomoću `tools.subagent` da rade na zadatku. `tools.subagent` ne prima agenta: subagent nema unaprijed postavljen prompt, radi na modelu i drajveru sesije koja ga je pokrenula osim ako poziv ne proslijedi `model` ili `driver`, i može pozivati tačno one alate koje poziv proslijedi. Agenti s `mode: subagent`, uključujući ugrađene ispod, ne koriste se za pokretanje subagenata; ostaju samo da bi sesije subagenata koje je ranija verzija pokrenula s njima nastavile raditi.
 
 ---
 
@@ -119,13 +117,7 @@ Skriveni sistemski agent koji kreira sažetke sesije. Pokreće se automatski i n
 
 1. Za primarne agente, koristite taster **Tab** za kretanje kroz njih tokom sesije. Također možete koristiti svoju konfiguriranu vezu tipke `switch_agent`.
 
-2. Subagenti se mogu pozvati:
-   - **Automatski** od strane primarnih agenata za specijalizovane zadatke na osnovu njihovih opisa.
-   - Ručno **@ spominjanjem** subagenta u vašoj poruci. Na primjer.
-
-     ```txt frame="none"
-     @general help me search for this function
-     ```
+2. Subagente pokreće agent s kojim radite, putem `tools.subagent`. U poruci opišite posao koji želite delegirati; spominjanje agenta sa **@** ne mijenja način na koji subagent radi.
 
 3. **Navigacija između sesija**: Kada subagenti kreiraju vlastite podređene sesije, možete se kretati između roditeljske sesije i svih podređenih sesija koristeći:
    - **\<Leader>+Right** (ili vaša konfigurirana `session_child_cycle` veza) za kretanje naprijed kroz roditelj → dijete1 → dijete2 → ... → roditelj
@@ -353,7 +345,7 @@ Ova putanja je relativna u odnosu na mjesto gdje se nalazi konfiguracijski fajl.
 Koristite `model` konfiguraciju da nadjačate model za ovog agenta. Korisno za korištenje različitih modela optimiziranih za različite zadatke. Na primjer, brži model za planiranje, sposobniji model za implementaciju.
 
 :::tip
-Ako ne navedete model, primarni agenti koriste [model globalno konfiguriran](/docs/config#models) dok će podagenti koristiti model primarnog agenta koji je pozvao subagenta.
+Ako ne navedete model, primarni agenti koriste [globalno konfigurisani model](/docs/config#models). Subagent pokrenut pomoću `tools.subagent` radi na modelu sesije koja ga je pokrenula osim ako poziv ne proslijedi `model`.
 :::
 
 ```json title="ocpp.json"
@@ -549,7 +541,7 @@ Opcija `mode` se može postaviti na `primary`, `subagent` ili `all`. Ako `mode` 
 
 ### Skriveno
 
-Sakrij podagenta iz `@` menija za automatsko dovršavanje sa `hidden: true`. Korisno za interne podagente koje bi drugi agenti trebali programski pozvati samo preko Task alata.
+Sakrijte agenta iz `@` menija za automatsko dovršavanje pomoću `hidden: true`.
 
 ```json title="ocpp.json"
 {
@@ -562,43 +554,10 @@ Sakrij podagenta iz `@` menija za automatsko dovršavanje sa `hidden: true`. Kor
 }
 ```
 
-Ovo utiče samo na vidljivost korisnika u meniju za automatsko dovršavanje. Skriveni agenti se i dalje mogu pozvati od strane modela putem alata Task ako dozvole to dozvoljavaju.
+Ovo utiče samo na vidljivost u meniju za automatsko dovršavanje.
 
 :::note
 Odnosi se samo na `mode: subagent` agente.
-:::
-
----
-
-### Dozvole zadataka
-
-Kontrolirajte koje podagente agent može pozvati preko Task alata sa `permission.task`. Koristi glob uzorke za fleksibilno uparivanje.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-Kada se postavi na `deny`, subagent se u potpunosti uklanja iz opisa alata za zadatak, tako da ga model neće pokušati pozvati.
-
-:::tip
-Pravila se procjenjuju po redoslijedu i **posljednje odgovarajuće pravilo pobjeđuje**. U gornjem primjeru, `orchestrator-planner` odgovara i `*` (deny) i `orchestrator-*` (allow), ali pošto `orchestrator-*` dolazi nakon `*`, rezultat je `allow`.
-:::
-
-:::tip
-Korisnici uvijek mogu pozvati bilo kojeg subagenta direktno preko `@` menija za autodovršavanje, čak i ako bi dozvole za zadatak agenta to uskratile.
 :::
 
 ---

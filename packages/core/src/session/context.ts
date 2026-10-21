@@ -179,7 +179,7 @@ const layer = Layer.effect(
       yield* plugins.flush
       yield* mcpTools.flush
       yield* openapi.flush
-      const agent = yield* agents.select(session.agent)
+      const agent = yield* agents.select(Agent.sessionAgent(session))
       if (!agent.info) return yield* new AgentNotFoundError({ sessionID: session.id, agent: session.agent ?? agent.id })
       const model = yield* resolveModel(session).pipe(Effect.result)
       // The catalog is exactly the Session's tool list, and guidance for tools outside it would only mislead.

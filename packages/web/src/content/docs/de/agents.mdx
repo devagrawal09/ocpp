@@ -32,6 +32,12 @@ Schauen wir uns diese unten an.
 
 ---
 
+### Subagenten
+
+Subagenten sind untergeordnete Sitzungen, die ein Agent mit `tools.subagent` startet, um an einer Aufgabe zu arbeiten. `tools.subagent` nimmt keinen Agenten entgegen: Ein Subagent hat keinen voreingestellten Prompt, läuft mit dem Modell und Treiber der Sitzung, die ihn gestartet hat, sofern der Aufruf nicht `model` oder `driver` übergibt, und kann genau die Tools aufrufen, die der Aufruf übergibt. Agenten mit `mode: subagent`, einschließlich der unten aufgeführten integrierten, werden nicht zum Starten von Subagenten verwendet; sie bleiben nur bestehen, damit Subagent-Sitzungen, die eine frühere Version mit ihnen gestartet hat, weiter funktionieren.
+
+---
+
 ### Build
 
 _Modus_: `primary`
@@ -106,13 +112,7 @@ Versteckter Systemagent, der Sitzungszusammenfassungen erstellt. Es läuft autom
 
 1. Verwenden Sie für primäre Agenten die **Tabulatortaste**, um während einer Sitzung durch sie zu blättern. Sie können auch Ihre konfigurierte `switch_agent`-Tastenkombination verwenden.
 
-2. Subagenten können aufgerufen werden:
-   - **Automatisch** durch primäre Agenten für spezielle Aufgaben basierend auf ihren Beschreibungen.
-   - Manuell durch **@ Erwähnung** eines Subagenten in Ihrer Nachricht. Zum Beispiel.
-
-     ```txt frame="none"
-     @general help me search for this function
-     ```
+2. Subagenten werden von dem Agenten, mit dem Sie arbeiten, über `tools.subagent` gestartet. Beschreiben Sie in Ihrer Nachricht die Arbeit, die Sie delegieren möchten; das Erwähnen eines Agenten mit **@** ändert nicht, wie ein Subagent läuft.
 
 3. **Navigation zwischen Sitzungen**: Wenn Subagenten ihre eigenen untergeordneten Sitzungen erstellen, können Sie zwischen der übergeordneten Sitzung und allen untergeordneten Sitzungen sorgfältig handeln, indem Sie Folgendes verwenden:
    - **\<Leader>+Rechts** (oder Ihre konfigurierte `session_child_cycle`-Tastenkombination), um vorwärts durch Parent → Child1 → Child2 → ... → Parent zu blättern
@@ -340,7 +340,7 @@ Dieser Pfad ist relativ zum Speicherort der Konfigurationsdatei. Dies funktionie
 Verwenden Sie die `model`-Konfiguration, um das Modell für diese Agenten zu überschreiben. Nützlich für die Verwendung verschiedener Modelle, die für verschiedene Aufgaben optimiert sind. Zum Beispiel ein schnelleres Modell für die Planung, ein leistungsfähigeres Modell für die Umsetzung.
 
 :::tip
-Wenn Sie kein Modell angeben, verwenden Sie den primären Agenten [model globally configured](/docs/config#models), während die Subagenten das Modell des primären Agenten verwenden, der den Subagenten aufgerufen hat.
+Wenn Sie kein Modell angeben, verwenden Primäragenten das [global konfigurierte Modell](/docs/config#models). Ein mit `tools.subagent` gestarteter Subagent läuft mit dem Modell der Sitzung, die ihn gestartet hat, sofern der Aufruf nicht `model` übergibt.
 :::
 
 ```json title="ocpp.json"
@@ -536,7 +536,7 @@ Die Option `mode` kann auf `primary`, `subagent` oder `all` gesetzt werden. Wenn
 
 ### Versteckt
 
-Verstecken Sie einen Subagenten im Autovervollständigungsmenü `@` mit `hidden: true`. Nützlich für interne Subagenten, die nur programmgesteuert von anderen Agenten über das Task-Tool aufgerufen werden sollten.
+Blenden Sie einen Agenten mit `hidden: true` aus dem `@`-Autovervollständigungsmenü aus.
 
 ```json title="ocpp.json"
 {
@@ -549,43 +549,10 @@ Verstecken Sie einen Subagenten im Autovervollständigungsmenü `@` mit `hidden:
 }
 ```
 
-Dies wirkt sich nur auf die Benutzersichtbarkeit im Autovervollständigungsmenü aus. Versteckte Agenten können weiterhin vom Modell über das Aufgabentool aufgerufen werden, sofern die Berechtigungen dies zulassen.
+Dies betrifft nur die Sichtbarkeit im Autovervollständigungsmenü.
 
 :::note
 Gilt nur für `mode: subagent`-Agenten.
-:::
-
----
-
-### Task-Berechtigungen
-
-Steuern Sie, welche Subagenten ein Agent über das Task-Tool mit `permission.task` aufrufen kann. Verwendet Glob-Muster für eine flexible Zuordnung.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-Bei der Einstellung `deny` wird der Subagent vollständig aus der Beschreibung des Aufgabentools entfernt, sodass das Modell nicht versucht, ihn aufzurufen.
-
-:::tip
-Die Regeln werden der Reihe nach ausgewertet und die **letzte übereinstimmende Regel gewinnt**. Im obigen Beispiel entspricht `orchestrator-planner` sowohl `*` (verweigern) als auch `orchestrator-*` (zulassen), aber da `orchestrator-*` nach `*` kommt, ist das Ergebnis `allow`.
-:::
-
-:::tip
-Benutzer können jeden Subagenten immer direkt über das Autovervollständigungsmenü `@` aufrufen, auch wenn die Aufgabenberechtigungen des Agenten dies verweigern würden.
 :::
 
 ---

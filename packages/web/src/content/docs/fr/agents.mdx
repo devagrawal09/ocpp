@@ -34,9 +34,7 @@ Nous les verrons ci-dessous.
 
 ### Sous-agents
 
-Les sous-agents sont des assistants spécialisés que les agents primaires peuvent appeler pour des tâches spécifiques. Vous pouvez également les invoquer manuellement en **@ les mentionnant** dans vos messages.
-
-OC++ est livré avec trois sous-agents intégrés, **General**, **Explore** et **Scout**. Nous les verrons ci-dessous.
+Les sous-agents sont des sessions enfants qu'un agent démarre avec `tools.subagent` pour travailler sur une tâche. `tools.subagent` ne prend aucun agent : un sous-agent n'a pas de prompt prédéfini, s'exécute avec le modèle et le driver de la session qui l'a démarré sauf si l'appel passe `model` ou `driver`, et peut appeler exactement les outils que l'appel lui transmet. Les agents en `mode: subagent`, y compris les agents intégrés ci-dessous, ne servent pas à démarrer des sous-agents ; ils restent uniquement pour que les sessions de sous-agent qu'une version antérieure a démarrées avec eux continuent de fonctionner.
 
 ---
 
@@ -120,13 +118,7 @@ Agent système caché qui crée des résumés de session. Il s'exécute automati
 
 1. Pour les agents primaires, utilisez la touche **Tab** pour les parcourir au cours d'une session. Vous pouvez également utiliser votre raccourci clavier `switch_agent` configuré.
 
-2. Les sous-agents peuvent être invoqués :
-   - **Automatiquement** par les agents primaires pour des tâches spécialisées en fonction de leurs descriptions.
-   - Manuellement en **@ mentionnant** un sous-agent dans votre message. Par exemple :
-
-     ```txt frame="none"
-     @general help me search for this function
-     ```
+2. Les sous-agents sont démarrés par l'agent avec lequel vous travaillez, via `tools.subagent`. Décrivez dans votre message le travail à déléguer ; mentionner un agent avec **@** ne change pas la façon dont un sous-agent s'exécute.
 
 3. **Navigation entre les sessions** : lorsque les sous-agents créent leurs propres sessions enfants, vous pouvez naviguer entre la session parent et toutes les sessions enfants en utilisant :
    - **\<Leader>+Right** (ou votre combinaison de touches `session_child_cycle` configurée) pour avancer via parent → enfant1 → enfant2 → ... → parent
@@ -354,7 +346,7 @@ Ce chemin est relatif à l'emplacement du fichier de configuration. Cela fonctio
 Utilisez la configuration `model` pour remplacer le modèle de cet agent. Utile pour utiliser différents modèles optimisés pour différentes tâches. Par exemple, un modèle de planification plus rapide, un modèle de mise en œuvre plus performant.
 
 :::tip
-Si vous ne spécifiez pas de modèle, les agents primaires utilisent le [modèle globalement configuré](/docs/config#models) tandis que les sous-agents utiliseront le modèle de l'agent primaire qui a appelé le sous-agent.
+Si vous ne spécifiez pas de modèle, les agents principaux utilisent le [modèle configuré globalement](/docs/config#models). Un sous-agent démarré avec `tools.subagent` s'exécute avec le modèle de la session qui l'a démarré sauf si l'appel passe `model`.
 :::
 
 ```json title="ocpp.json"
@@ -550,7 +542,7 @@ L'option `mode` peut être définie sur `primary`, `subagent` ou `all`. Si aucun
 
 ### Masqué
 
-Masquez un sous-agent du menu de saisie semi-automatique `@` avec `hidden: true`. Utile pour les sous-agents internes qui ne doivent être invoqués que par programme par d'autres agents via l'outil Tâche.
+Masquez un agent du menu de saisie semi-automatique `@` avec `hidden: true`.
 
 ```json title="ocpp.json"
 {
@@ -563,43 +555,10 @@ Masquez un sous-agent du menu de saisie semi-automatique `@` avec `hidden: true`
 }
 ```
 
-Cela affecte uniquement la visibilité de l'utilisateur dans le menu de saisie semi-automatique. Les agents masqués peuvent toujours être invoqués par le modèle via l'outil Tâche si les autorisations le permettent.
+Cela n'affecte que la visibilité dans le menu de saisie semi-automatique.
 
 :::note
 S'applique uniquement aux agents `mode: subagent`.
-:::
-
----
-
-### Autorisations de tâches
-
-Contrôlez quels sous-agents un agent peut appeler via l'outil Tâche avec `permission.task`. Utilise des patterns glob pour une correspondance flexible.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-Lorsqu'il est défini sur `deny`, le sous-agent est entièrement supprimé de la description de l'outil Tâche, de sorte que le modèle ne tentera pas de l'invoquer.
-
-:::tip
-Les règles sont évaluées dans l'ordre et la **dernière règle correspondante l'emporte**. Dans l'exemple ci-dessus, `orchestrator-planner` correspond à la fois à `*` (refuser) et à `orchestrator-*` (autoriser), mais comme `orchestrator-*` vient après `*`, le résultat est `allow`.
-:::
-
-:::tip
-Les utilisateurs peuvent toujours appeler n'importe quel sous-agent directement via le menu de saisie semi-automatique `@`, même si les autorisations de tâche de l'agent le refuseraient.
 :::
 
 ---

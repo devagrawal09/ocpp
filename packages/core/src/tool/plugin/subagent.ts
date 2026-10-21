@@ -89,7 +89,14 @@ const withChild = <A, E, R>(sessionID: SessionSchema.ID, effect: Effect.Effect<A
 const RUN_FIELDS = ["model", "driver", "harness", "tools", "outputSchema", "input", "inputSchema", "root"] as const
 const DELIVERED = "Delivered to the running subagent. Its result arrives with the call that is running it."
 
+/** Why a call that still passes agent fails: subagents no longer take an agent preset. */
+export const AGENT_REMOVED =
+  "agent was removed from tools.subagent: a subagent has no preset prompt. Pass description and message for a new subagent (sessionID and message to continue one), and model or driver if needed."
+
 export const Input = Schema.Struct({
+  agent: Schema.optionalKey(Schema.Never.annotate({ message: AGENT_REMOVED })).annotate({
+    description: "Removed: passing it fails. Describe the task in message, and pass model or driver to choose what runs it",
+  }),
   description: Schema.optionalKey(Schema.String).annotate({
     description:
       "A short 3-5 word label for the task, displayed to the user. Required for a new subagent; a continued session keeps its own title",

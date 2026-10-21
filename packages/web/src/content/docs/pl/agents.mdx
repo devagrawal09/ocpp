@@ -33,9 +33,7 @@ OC++ zawiera dwa wbudowane agenty główne: **Build** i **Plan**. Przyjrzymy si�
 
 ### Subagents (Subagenci)
 
-Subagenci to asystenci pomocniczy, których mogą przywoływać agenci główni w celu wykonania konkretnych zadań. Możesz także wywoływać ich ręcznie, **wzmiankując ich (@)** w swoich wiadomościach.
-
-OC++ ma trzech wbudowanych subagentów: **General**, **Explore** i **Scout**. Przyjrzymy się im poniżej.
+Subagenci to sesje podrzędne, które agent uruchamia za pomocą `tools.subagent`, aby pracowały nad zadaniem. `tools.subagent` nie przyjmuje agenta: subagent nie ma predefiniowanego promptu, działa na modelu i sterowniku sesji, która go uruchomiła, chyba że wywołanie przekaże `model` lub `driver`, i może wywoływać dokładnie te narzędzia, które przekaże mu wywołanie. Agenci z `mode: subagent`, w tym wbudowani opisani poniżej, nie są używani do uruchamiania subagentów; pozostają tylko po to, aby sesje subagentów uruchomione z nimi przez wcześniejszą wersję nadal działały.
 
 ---
 
@@ -119,13 +117,7 @@ Ukryty agent systemowy, który generuje podsumowanie sesji. Działa automatyczni
 
 1. W przypadku agentów głównych użyj klawisza **Tab**, aby przełączać się między nimi podczas sesji. Można to również zrobić za pomocą skrótu klawiszowego `switch_agent`.
 
-2. Subagentów można wywoływać:
-   - **Automatycznie** przez głównych agentów do specjalistycznych zadań na podstawie ich opisów.
-   - Ręcznie, **wzmiankując (@)** subagenta w swoich wiadomościach. Na przykład:
-
-     ```txt frame="none"
-     @explore help me search for this function
-     ```
+2. Subagentów uruchamia agent, z którym pracujesz, za pomocą `tools.subagent`. Opisz w wiadomości pracę, którą chcesz zlecić; wspomnienie agenta przez **@** nie zmienia sposobu działania subagenta.
 
 3. **Nawigacja pomiędzy sesjami**: Kiedy sesja ma sesje podrzędne, możesz nawigować pomiędzy sesją nadrzędną a sesjami podrzędnymi za pomocą:
    - **\<Leader>+Prawo** (lub skonfigurowanego klawisza `session_child_cycle`), aby przełączać się w dół: rodzic → dziecko 1 → dziecko 2 → ... → rodzic
@@ -353,7 +345,7 @@ Podaj niestandardowy prompt systemowy dla tego agenta za pomocą konfiguracji `p
 Użyj `model`, aby określić model dla tego agenta. Przydatne do używania różnych modeli do różnych zadań. Na przykład użycie modelu rozumowania do planowania, ale szybszego modelu do edycji.
 
 :::tip
-Jeśli model nie zostanie określony, agenci główni używają [modelu skonfigurowanego globalnie](/docs/config#models), a agenci podrzędni używają modelu agenta, który ich wywołał.
+Jeśli nie określisz modelu, agenci główni używają [globalnie skonfigurowanego modelu](/docs/config#models). Subagent uruchomiony za pomocą `tools.subagent` działa na modelu sesji, która go uruchomiła, chyba że wywołanie przekaże `model`.
 :::
 
 ```json title="ocpp.json"
@@ -549,7 +541,7 @@ Opcję `mode` można ustawić na `primary`, `subagent` lub `all`. Jeśli nie pod
 
 ### Hidden (Ukryty)
 
-Ukryj subagenta w menu autouzupełniania `@` za pomocą `hidden: true`. Przydatne w przypadku subagentów narzędziowych, którzy powinni być wywoływani tylko programowo przez innych agentów, a nie bezpośrednio przez użytkownika.
+Ukryj agenta w menu autouzupełniania `@` za pomocą `hidden: true`.
 
 ```json title="ocpp.json"
 {
@@ -562,43 +554,10 @@ Ukryj subagenta w menu autouzupełniania `@` za pomocą `hidden: true`. Przydatn
 }
 ```
 
-Wpływa to tylko na widoczność w menu autouzupełniania. Model nadal może wywoływać ukrytych agentów za pomocą narzędzia zadania, jeśli ma do nich dostęp.
+Wpływa to tylko na widoczność w menu autouzupełniania.
 
 :::note
 Dotyczy tylko agentów z `mode: subagent`.
-:::
-
----
-
-### Task Permissions (Uprawnienia zadań)
-
-Kontroluj, których subagentów może wywołać ten agent za pomocą narzędzia zadania, używając `permission.task`. Używa wzorców glob do elastycznego dopasowywania.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-Po ustawieniu wartości `deny` subagent zostanie usunięty z definicji narzędzia Zadania, więc model nie będzie nawet wiedział o jego istnieniu.
-
-:::tip
-Reguły są oceniane w kolejności i **wygrywa ostatnia pasująca reguła**. W powyższym przykładzie `orchestrator-planner` pasuje zarówno do `*` (odmowa), jak i `orchestrator-*` (zezwolenie), ale ponieważ `orchestrator-*` występuje po `*`, wynikiem jest `allow`.
-:::
-
-:::tip
-Zawsze możesz wywołać subagenta ręcznie, wspominając go bezpośrednio (`@`), nawet jeśli obecny agent ma uprawnienia ustawione na `deny`.
 :::
 
 ---

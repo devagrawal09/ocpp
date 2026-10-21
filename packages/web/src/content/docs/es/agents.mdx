@@ -34,9 +34,7 @@ mira estos a continuación.
 
 ### Subagentes
 
-Los subagentes son asistentes especializados que los agentes principales pueden invocar para tareas específicas. También puedes invocarlos manualmente **@ mencionándolos** en tus mensajes.
-
-OC++ viene con tres subagentes integrados, **General**, **Explore** y **Scout**. Veremos esto a continuación.
+Los subagentes son sesiones hijas que un agente inicia con `tools.subagent` para trabajar en una tarea. `tools.subagent` no recibe ningún agente: un subagente no tiene un prompt predefinido, se ejecuta con el modelo y el driver de la sesión que lo inició salvo que la llamada indique `model` o `driver`, y puede llamar exactamente a las herramientas que la llamada le pasa. Los agentes con `mode: subagent`, incluidos los integrados que se describen abajo, no se usan para iniciar subagentes; se mantienen para que las sesiones de subagente que una versión anterior inició con ellos sigan funcionando.
 
 ---
 
@@ -120,13 +118,7 @@ Agente del sistema oculto que crea resúmenes de sesiones. Se ejecuta automátic
 
 1. Para los agentes principales, use la tecla **Tab** para recorrerlos durante una sesión. También puede utilizar su combinación de teclas `switch_agent` configurada.
 
-2. Se pueden invocar subagentes:
-   - **Automáticamente** por agentes principales para tareas especializadas según sus descripciones.
-   - Manualmente **@ mencionando** un subagente en tu mensaje. Por ejemplo.
-
-     ```txt frame="none"
-     @general help me search for this function
-     ```
+2. Los subagentes los inicia el agente con el que trabajas, mediante `tools.subagent`. Describe en tu mensaje el trabajo que quieres delegar; mencionar un agente con **@** no cambia cómo se ejecuta un subagente.
 
 3. **Navegación entre sesiones**: cuando los subagentes crean sus propias sesiones secundarias, puede navegar entre la sesión principal y todas las sesiones secundarias usando:
    - **\<Leader>+Right** (or su combinación de teclas `session_child_cycle` configurada) para avanzar a través de padre → hijo1 → hijo2 → ... → padre
@@ -354,7 +346,7 @@ Esta ruta es relativa a donde se encuentra el archivo de configuración. Entonce
 Utilice la configuración `model` para anular el modelo de este agente. Útil para utilizar diferentes modelos optimizados para diferentes tareas. Por ejemplo, un modelo más rápido de planificación, un modelo más capaz de implementación.
 
 :::tip
-Si no especifica un modelo, los agentes primarios usarán el [modelo configurado globalmente](/docs/config#models), mientras que los subagentes usarán el modelo del agente primario que invocó al subagente.
+Si no especificas un modelo, los agentes primarios usan el [modelo configurado globalmente](/docs/config#models). Un subagente iniciado con `tools.subagent` se ejecuta con el modelo de la sesión que lo inició salvo que la llamada indique `model`.
 :::
 
 ```json title="ocpp.json"
@@ -550,7 +542,7 @@ La opción `mode` se puede configurar en `primary`, `subagent` o `all`. Si no se
 
 ### Oculto
 
-Oculte un subagente del menú de autocompletar `@` con `hidden: true`. Útil para subagentes internos que solo deben ser invocados mediante programación por otros agentes a través de la herramienta Tarea.
+Oculta un agente del menú de autocompletado `@` con `hidden: true`.
 
 ```json title="ocpp.json"
 {
@@ -563,43 +555,10 @@ Oculte un subagente del menú de autocompletar `@` con `hidden: true`. Útil par
 }
 ```
 
-Esto sólo afecta la visibilidad del usuario en el menú de autocompletar. El modelo aún puede invocar agentes ocultos a través de la herramienta Tarea si los permisos lo permiten.
+Esto solo afecta a la visibilidad en el menú de autocompletado.
 
 :::note
 Sólo aplica para agentes `mode: subagent`.
-:::
-
----
-
-### Permisos de tarea
-
-Controle qué subagentes puede invocar un agente a través de la herramienta Tarea con `permission.task`. Utiliza patrones globales para una combinación flexible.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-Cuando se establece en `deny`, el subagente se elimina por completo de la descripción de la herramienta Tarea, por lo que el modelo no intentará invocarlo.
-
-:::tip
-Las reglas se evalúan en orden y la **última regla coincidente gana**. En el ejemplo anterior, `orchestrator-planner` coincide con `*` (denegar) y `orchestrator-*` (permitir), pero como `orchestrator-*` viene después de `*`, el resultado es `allow`.
-:::
-
-:::tip
-Los usuarios siempre pueden invocar cualquier subagente directamente a través del menú de autocompletar `@`, incluso si los permisos de tarea del agente lo niegan.
 :::
 
 ---

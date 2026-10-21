@@ -33,9 +33,7 @@ OC++ kommer med to innebygde primære agenter, **Build** og **Plan**. Vi ser næ
 
 ### Underagenter
 
-Underagenter er spesialiserte assistenter som primære agenter kan påkalle for spesifikke oppgaver. Du kan også starte dem manuelt ved å **@ nevne** dem i meldingene dine.
-
-OC++ kommer med tre innebygde underagenter, **General**, **Explore** og **Scout**. Vi skal se på dette nedenfor.
+Underagenter er underordnede økter som en agent starter med `tools.subagent` for å jobbe med en oppgave. `tools.subagent` tar ingen agent: en underagent har ingen forhåndsinnstilt prompt, kjører på modellen og driveren til økten som startet den med mindre kallet angir `model` eller `driver`, og kan kalle nøyaktig de verktøyene kallet gir den. Agenter med `mode: subagent`, inkludert de innebygde nedenfor, brukes ikke til å starte underagenter; de finnes bare for at underagent-økter som en tidligere versjon startet med dem, fortsatt skal fungere.
 
 ---
 
@@ -119,13 +117,7 @@ Skjult systemagent som lager øktsammendrag. Den kjører automatisk og kan ikke 
 
 1. For primære agenter, bruk **Tab**-tasten for å bla gjennom dem under en økt. Du kan også bruke din konfigurerte `switch_agent` nøkkelbinding.
 
-2. Underagenter kan påkalles:
-   - **Automatisk** av primære agenter for spesialiserte oppgaver basert på deres beskrivelser.
-   - Manuelt ved å **@ nevne** en underagent i meldingen. For eksempel.
-
-     ```txt frame="none"
-     @general help me search for this function
-     ```
+2. Underagenter startes av agenten du jobber med, via `tools.subagent`. Beskriv arbeidet du vil delegere i meldingen din; å nevne en agent med **@** endrer ikke hvordan en underagent kjører.
 
 3. **Navigering mellom økter**: Når underagenter oppretter sine egne underordnede økter, kan du navigere mellom overordnede økter og alle underordnede økter ved å bruke:
    - **\<Leader>+Right** (eller din konfigurerte `session_child_cycle`-tastebinding) for å gå videre gjennom forelder → barn1 → barn2 → ... → forelder
@@ -353,7 +345,7 @@ Denne banen er i forhold til hvor konfigurasjonsfilen er plassert. Så dette fun
 Bruk `model`-konfigurasjonen for å overstyre modellen for denne agenten. Nyttig for bruk av ulike modeller optimalisert for ulike oppgaver. For eksempel en raskere modell for planlegging, en mer kapabel modell for implementering.
 
 :::tip
-Hvis du ikke spesifiserer en modell, bruker primæragenter [modell globalt konfigurert](/docs/config#models) mens subagenter vil bruke modellen til primæragenten som påkalte subagenten.
+Hvis du ikke angir en modell, bruker primæragenter den [globalt konfigurerte modellen](/docs/config#models). En underagent startet med `tools.subagent` kjører på modellen til økten som startet den med mindre kallet angir `model`.
 :::
 
 ```json title="ocpp.json"
@@ -549,7 +541,7 @@ Alternativet `mode` kan settes til `primary`, `subagent` eller `all`. Hvis ingen
 
 ### Skjult
 
-Skjul en underagent fra `@` autofullføringsmenyen med `hidden: true`. Nyttig for interne underagenter som bare skal påkalles programmatisk av andre agenter via oppgaveverktøyet.
+Skjul en agent fra `@`-autofullføringsmenyen med `hidden: true`.
 
 ```json title="ocpp.json"
 {
@@ -562,43 +554,10 @@ Skjul en underagent fra `@` autofullføringsmenyen med `hidden: true`. Nyttig fo
 }
 ```
 
-Dette påvirker kun brukersynlighet i autofullfør-menyen. Skjulte agenter kan fortsatt påkalles av modellen via oppgaveverktøyet hvis tillatelser tillater det.
+Dette påvirker bare synligheten i autofullføringsmenyen.
 
 :::note
 Gjelder kun `mode: subagent`-agenter.
-:::
-
----
-
-### Oppgavetillatelser
-
-Kontroller hvilke subagenter en agent kan påkalle via oppgaveverktøyet med `permission.task`. Bruker glob-mønstre for fleksibel matching.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-Når den er satt til `deny`, fjernes subagenten fullstendig fra oppgaveverktøybeskrivelsen, så modellen vil ikke forsøke å starte den.
-
-:::tip
-Reglene evalueres i rekkefølge, og den **siste samsvarsregelen vinner**. I eksemplet ovenfor samsvarer `orchestrator-planner` med både `*` (avslå) og `orchestrator-*` (tillat), men siden `orchestrator-*` kommer etter `*`, er resultatet `allow`.
-:::
-
-:::tip
-Brukere kan alltid starte en hvilken som helst underagent direkte via `@` autofullføringsmenyen, selv om agentens oppgavetillatelser ville nekte det.
 :::
 
 ---

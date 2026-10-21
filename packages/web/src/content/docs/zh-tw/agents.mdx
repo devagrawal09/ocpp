@@ -33,9 +33,7 @@ OC++ 內建了兩個主代理：**Build** 和 **Plan**。我們將在下面介�
 
 ### 子代理
 
-子代理是主代理可以呼叫來執行特定任務的專業助手。您也可以透過在訊息中 **@ 提及**它們來手動呼叫。
-
-OC++ 內建了三個子代理：**General**、**Explore** 和 **Scout**。我們將在下面介紹它們。
+子代理是代理使用 `tools.subagent` 啟動、用來處理某項任務的子工作階段。`tools.subagent` 不接受代理：子代理沒有預設提示詞，除非呼叫傳入 `model` 或 `driver`，否則使用啟動它的工作階段的模型與驅動程式執行，並且只能呼叫該呼叫傳入的工具。`mode: subagent` 的代理（包括下方的內建代理）不會用於啟動子代理；保留它們只是為了讓較早版本以它們啟動的子代理工作階段繼續運作。
 
 ---
 
@@ -119,13 +117,7 @@ _模式_：`primary`
 
 1. 對於主代理，在工作階段期間使用 **Tab** 鍵循環切換。您也可以使用設定的 `switch_agent` 快速鍵。
 
-2. 子代理可以透過以下方式呼叫：
-   - 由主代理根據其描述**自動**呼叫以執行專門任務。
-   - 透過在訊息中 **@ 提及**子代理來手動呼叫。例如：
-
-     ```txt frame="none"
-     @general help me search for this function
-     ```
+2. 子代理由與你協作的代理透過 `tools.subagent` 啟動。請在訊息中描述要委派的工作；用 **@** 提及某個代理不會改變子代理的執行方式。
 
 3. **工作階段間導覽**：當子代理建立自己的子工作階段時，您可以使用以下方式在父工作階段和所有子工作階段之間導覽：
    - **\<Leader>+Right**（或設定的 `session_child_cycle` 快速鍵）向前循環：父工作階段 → 子工作階段1 → 子工作階段2 → ... → 父工作階段
@@ -353,7 +345,7 @@ Markdown 檔案名稱即為代理名稱。例如，`review.md` 會建立一個�
 使用 `model` 設定為代理覆寫模型。適用於針對不同任務使用不同的最佳化模型。例如，用更快的模型進行規劃，用更強大的模型進行實作。
 
 :::tip
-如果您不指定模型，主代理將使用[全域設定的模型](/docs/config#models)，而子代理將使用呼叫它的主代理所使用的模型。
+如果未指定模型，主要代理會使用[全域設定的模型](/docs/config#models)。透過 `tools.subagent` 啟動的子代理，除非呼叫傳入 `model`，否則使用啟動它的工作階段的模型。
 :::
 
 ```json title="ocpp.json"
@@ -549,7 +541,7 @@ Only analyze code and suggest changes.
 
 ### 隱藏
 
-使用 `hidden: true` 將子代理從 `@` 自動補全選單中隱藏。適用於只應由其他代理透過 Task 工具以程式化方式呼叫的內部子代理。
+使用 `hidden: true` 可將代理從 `@` 自動完成選單中隱藏。
 
 ```json title="ocpp.json"
 {
@@ -562,43 +554,10 @@ Only analyze code and suggest changes.
 }
 ```
 
-這僅影響自動補全選單中的使用者可見性。如果權限允許，模型仍然可以透過 Task 工具呼叫隱藏的代理。
+這只會影響在自動完成選單中的可見性。
 
 :::note
 僅適用於 `mode: subagent` 的代理。
-:::
-
----
-
-### 任務權限
-
-使用 `permission.task` 控制代理可以透過 Task 工具呼叫哪些子代理。使用 glob 模式進行靈活匹配。
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-當設為 `deny` 時，子代理將從 Task 工具描述中完全移除，因此模型不會嘗試呼叫它。
-
-:::tip
-規則按順序評估，**最後匹配的規則優先**。在上面的範例中，`orchestrator-planner` 同時匹配 `*`（deny）和 `orchestrator-*`（allow），但由於 `orchestrator-*` 在 `*` 之後，所以結果為 `allow`。
-:::
-
-:::tip
-使用者始終可以透過 `@` 自動補全選單直接呼叫任何子代理，即使代理的任務權限會拒絕它。
 :::
 
 ---

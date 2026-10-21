@@ -519,7 +519,7 @@ describe("Code Mode resume", () => {
       Effect.gen(function* () {
         yield* register(location, [])
         const sessions = yield* Session.Service
-        const call = { agent: "reviewer", description: "review", message: "check it" }
+        const call = { description: "review", message: "check it" }
         const { session, executionID } = yield* crashed(
           location,
           "const review = await tools.subagent(" + JSON.stringify(call) + ")",

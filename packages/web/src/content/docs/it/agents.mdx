@@ -33,9 +33,7 @@ OC++ include due agenti primari integrati: **Build** e **Plan**. Li vediamo sott
 
 ### Subagenti
 
-I subagenti sono assistenti specializzati che gli agenti primari possono invocare per task specifici. Puoi anche invocarli manualmente **menzionandoli con @** nei tuoi messaggi.
-
-OC++ include tre subagenti integrati: **General**, **Explore** e **Scout**. Li vediamo sotto.
+I subagenti sono sessioni figlie che un agente avvia con `tools.subagent` per lavorare su un task. `tools.subagent` non accetta alcun agente: un subagente non ha un prompt predefinito, usa il modello e il driver della sessione che l'ha avviato a meno che la chiamata non passi `model` o `driver`, e può chiamare esattamente gli strumenti che la chiamata gli passa. Gli agenti con `mode: subagent`, inclusi quelli integrati descritti sotto, non vengono usati per avviare subagenti; restano solo perché le sessioni di subagenti che una versione precedente ha avviato con essi continuino a funzionare.
 
 ---
 
@@ -119,13 +117,8 @@ Agente di sistema nascosto che crea riassunti di sessione. Viene eseguito automa
 
 1. Per gli agenti primari, usa il tasto **Tab** per scorrerli durante una sessione. Puoi anche usare la scorciatoia `switch_agent` configurata.
 
-2. I subagenti possono essere invocati:
-   - **Automaticamente** dagli agenti primari per task specializzati in base alle loro descrizioni.
-   - Manualmente **menzionando con @** un subagente nel tuo messaggio. Per esempio:
+2. I subagenti vengono avviati dall'agente con cui lavori, tramite `tools.subagent`. Descrivi nel messaggio il lavoro che vuoi delegare; menzionare un agente con **@** non cambia il modo in cui un subagente viene eseguito.
 
-     ```txt frame="none"
-     @general help me search for this function
-     ```
    3. **Navigazione tra sessioni**: quando i subagenti creano le loro child session, puoi navigare tra la sessione padre e tutte le sessioni figlie usando:
    - **\<Leader>+Right** (o la scorciatoia `session_child_cycle` configurata) per ciclare in avanti tra parent → child1 → child2 → ... → parent
    - **\<Leader>+Left** (o la scorciatoia `session_child_cycle_reverse` configurata) per ciclare indietro tra parent ← child1 ← child2 ← ... ← parent
@@ -352,7 +345,7 @@ Questo path è relativo alla posizione del file di configurazione. Quindi funzio
 Usa la config `model` per sovrascrivere il modello per questo agente. Utile per usare modelli diversi ottimizzati per task diversi. Per esempio, un modello più veloce per la pianificazione e uno più capace per l'implementazione.
 
 :::tip
-Se non specifichi un modello, gli agenti primari usano il [modello configurato globalmente](/docs/config#models), mentre i subagenti useranno il modello dell'agente primario che li ha invocati.
+Se non specifichi un modello, gli agenti primari usano il [modello configurato globalmente](/docs/config#models). Un subagente avviato con `tools.subagent` usa il modello della sessione che l'ha avviato a meno che la chiamata non passi `model`.
 :::
 
 ```json title="ocpp.json"
@@ -548,7 +541,7 @@ Controlla la modalità dell'agente con la config `mode`. L'opzione `mode` determ
 
 ### Nascosto
 
-Nascondi un subagente dal menu autocomplete di `@` con `hidden: true`. Utile per subagenti interni che dovrebbero essere invocati solo programmaticamente da altri agenti tramite lo strumento Task.
+Nascondi un agente dal menu di completamento automatico `@` con `hidden: true`.
 
 ```json title="ocpp.json"
 {
@@ -561,43 +554,10 @@ Nascondi un subagente dal menu autocomplete di `@` con `hidden: true`. Utile per
 }
 ```
 
-Questo influisce solo sulla visibilità per l'utente nel menu autocomplete. Gli agenti nascosti possono comunque essere invocati dal modello tramite lo strumento Task se i permessi lo consentono.
+Questo influisce solo sulla visibilità nel menu di completamento automatico.
 
 :::note
 Si applica solo ad agenti con `mode: subagent`.
-:::
-
----
-
-### Permessi Task
-
-Controlla quali subagenti un agente può invocare tramite lo strumento Task con `permission.task`. Usa glob pattern per un matching flessibile.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-Quando è impostato a `deny`, il subagente viene rimosso interamente dalla descrizione dello strumento Task, quindi il modello non proverà a invocarlo.
-
-:::tip
-Le regole vengono valutate in ordine e **vince l'ultima regola che corrisponde**. Nell'esempio sopra, `orchestrator-planner` corrisponde sia a `*` (deny) sia a `orchestrator-*` (allow), ma dato che `orchestrator-*` viene dopo `*`, il risultato è `allow`.
-:::
-
-:::tip
-Gli utenti possono sempre invocare qualunque subagente direttamente dal menu autocomplete `@`, anche se i permessi task dell'agente lo negherebbero.
 :::
 
 ---

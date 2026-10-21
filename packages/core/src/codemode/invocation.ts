@@ -48,7 +48,7 @@ const layer = Layer.effect(
       if (!session) return yield* new InvocationError({ message: `Session not found: ${input.sessionID}` })
       const problem = yield* CodeModeHandler.problem(db, input.sessionID, input.handler, false)
       if (problem) return yield* new InvocationError({ message: problem })
-      const agent = yield* agents.select(session.agent)
+      const agent = yield* agents.select(Agent.sessionAgent(session))
       if (!agent.info) return yield* new InvocationError({ message: `Agent not found: ${agent.id}` })
       // Tools from MCP servers and OpenAPI documents load in the background; a run may call them.
       yield* mcpTools.flush

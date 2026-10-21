@@ -34,9 +34,7 @@ se på disse nedenfor.
 
 ### Subagent
 
-Subagenter er specialiserede assistenter, som primære agenter kan påbegynde sig til specifikke opgaver. Du kan også kalde dem manuelt ved at **@ nævne** dem i dine beskeder.
-
-OC++ leveres med tre indbyggede subagenter, **General**, **Explore** og **Scout**. Vi ser nærmere på dem nedenfor.
+Subagenter er underordnede sessioner, som en agent starter med `tools.subagent` for at arbejde på en opgave. `tools.subagent` tager ingen agent: en subagent har ingen forudindstillet prompt, kører på modellen og driveren fra den session, der startede den, medmindre kaldet angiver `model` eller `driver`, og kan kalde præcis de værktøjer, kaldet giver den. Agenter med `mode: subagent`, inklusive de indbyggede nedenfor, bruges ikke til at starte subagenter; de findes kun, så subagent-sessioner, som en tidligere version startede med dem, fortsat virker.
 
 ---
 
@@ -120,13 +118,7 @@ Skjult systemagent, der opretter sessionsoversigter. Den kører automatisk og ka
 
 1. For primære agenter skal du bruge tasten **Tab** til at bladre gennem dem under en session. Du kan også bruge din konfigurerede `switch_agent` nøglebinding.
 
-2. Subagenter kan påberåbes:
-   - **Automatisk** af primære agenter til specialiserede opgaver baseret på deres beskrivelser.
-   - Manuelt ved at **@ nævne** en underagent i din besked. F.eks.
-
-     ```txt frame="none"
-     @general help me search for this function
-     ```
+2. Subagenter startes af den agent, du arbejder med, via `tools.subagent`. Beskriv det arbejde, du vil uddelegere, i din besked; at nævne en agent med **@** ændrer ikke, hvordan en subagent kører.
 
 3. **Navigation mellem sessioner**: Når underagenter opretter deres egne underordnede sessioner, kan du navigere mellem den overordnede session og alle underordnede sessioner ved hjælp af:
    - **\<Leader>+Højre** (eller din konfigurerede `session_child_cycle`-tastebinding) for at cykle fremad gennem forælder → barn1 → barn2 →... → forælder
@@ -354,7 +346,7 @@ Denne sti er i forhold til, hvor konfigurationsfilen er placeret. Så dette virk
 Brug `model`-konfigurationen til at tilsidesætte modeller for denne agent. Nyttigt til brug af forskellige modeller optimeret til forskellige opgaver. For eksempel en hurtigere model til planlægning, en dygtig model til implementering.
 
 :::tip
-Hvis du ikke angiver en model, bruger primære agenter [model konfigureret globalt](/docs/config#models), mens subagenter vil bruge modeller for den primære agent, der påkaldte subagenten.
+Hvis du ikke angiver en model, bruger primære agenter den [globalt konfigurerede model](/docs/config#models). En subagent startet med `tools.subagent` kører på modellen fra den session, der startede den, medmindre kaldet angiver `model`.
 :::
 
 ```json title="ocpp.json"
@@ -550,7 +542,7 @@ Indstillingen `mode` kan indstilles til `primary`, `subagent` eller `all`. Hvis 
 
 ### Skjult (`hidden`)
 
-Skjul en underagent fra `@` autofuldførelsesmenuen med `hidden: true`. Nyttigt for interne underagenter, der kun bør startes programmatisk af andre agenter via opgaveværktøjet.
+Skjul en agent fra `@`-autofuldførelsesmenuen med `hidden: true`.
 
 ```json title="ocpp.json"
 {
@@ -563,43 +555,10 @@ Skjul en underagent fra `@` autofuldførelsesmenuen med `hidden: true`. Nyttigt 
 }
 ```
 
-Dette påvirker kun brugerens synlighed i autofuldførelsesmenuen. Skjulte agenter kan stadig påkaldes af modellen via opgaveværktøjet, hvis tilladelser tillader det.
+Dette påvirker kun synligheden i autofuldførelsesmenuen.
 
 :::note
 Gælder kun for `mode: subagent`-agent.
-:::
-
----
-
-### Opgavetilladelser (`permission.task`)
-
-Kontroller, hvilke subagenter en agent kan påkalde via opgaveværktøjet med `permission.task`. Bruger glob-mønstre til fleksibel matchning.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-Når den er indstillet til `deny`, fjernes subagenten helt fra opgaveværktøjsbeskrivelsen, så modeller vil ikke forsøge at starte den.
-
-:::tip
-Reglerne vurderer i rækkefølge, og den **sidste matchende regel vinder**. I eksemplet ovenfor matcher `orchestrator-planner` både `*` (afvis) og `orchestrator-*` (tillad), men da `orchestrator-*` kommer efter `*`, er resultatet `allow`.
-:::
-
-:::tip
-Brugere kan altid påkalde enhver underagent direkte via `@` autofuldførelsesmenuen, nægt agentens opgavetilladelser ville det.
 :::
 
 ---

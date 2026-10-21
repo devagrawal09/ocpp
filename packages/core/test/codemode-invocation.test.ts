@@ -1289,7 +1289,7 @@ describe("init.ts tool lists in executions", () => {
           ),
         )
         const pass = (tools: string) =>
-          'const given = tools.subagent({ agent: "general", description: "Read", message: "Read", tools: [' +
+          'const given = tools.subagent({ description: "Read", message: "Read", tools: [' +
           tools +
           "] })"
         const refused = yield* execute(context, pass("tools.read")).pipe(Effect.flip)

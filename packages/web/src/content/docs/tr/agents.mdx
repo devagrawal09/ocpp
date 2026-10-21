@@ -33,9 +33,7 @@ ocpp, **Build** ve **Plan** olmak üzere iki yerleşik birincil agent ile birlik
 
 ### Alt agent'lar
 
-Alt agent'lar, birincil agent'ların belirli görevler için çağırabileceği uzman yardımcılardır. Ayrıca mesajlarınızda **@ bahsederek** bunları manuel olarak da çağırabilirsiniz.
-
-OC++, **General**, **Explore** ve **Scout** olmak üzere üç yerleşik alt agent ile birlikte gelir. Buna aşağıda bakacağız.
+Alt agent'lar, bir agent'ın bir görev üzerinde çalışmak için `tools.subagent` ile başlattığı alt oturumlardır. `tools.subagent` agent almaz: bir alt agent'ın önceden ayarlanmış bir prompt'u yoktur, çağrı `model` veya `driver` geçmedikçe onu başlatan oturumun modeli ve sürücüsüyle çalışır ve yalnızca çağrının verdiği araçları çağırabilir. Aşağıdaki yerleşik olanlar dahil `mode: subagent` olan agent'lar alt agent başlatmak için kullanılmaz; yalnızca önceki bir sürümün onlarla başlattığı alt agent oturumları çalışmaya devam etsin diye korunur.
 
 ---
 
@@ -119,13 +117,7 @@ Oturum özetleri oluşturan gizli sistem agent'ı. Otomatik olarak çalışır v
 
 1. Birincil agent'lar için, oturum sırasında bunlar arasında geçiş yapmak için **Sekme** tuşunu kullanın. Yapılandırılmış `switch_agent` tuş bağınızı da kullanabilirsiniz.
 
-2. Alt agent'lar çağrılabilir:
-   - Açıklamalarına göre özel görevler için birincil agent'lar tarafından **otomatik olarak**.
-   - Mesajınızda bir alt agent'tan **@ bahsederek** manuel olarak. Örneğin.
-
-     ```txt frame="none"
-     @general help me search for this function
-     ```
+2. Alt agent'ları, birlikte çalıştığınız agent `tools.subagent` aracılığıyla başlatır. Devretmek istediğiniz işi mesajınızda açıklayın; bir agent'ı **@** ile anmak bir alt agent'ın nasıl çalıştığını değiştirmez.
 
 3. **Oturumlar arasında gezinme**: Alt agent'lar kendi alt oturumlarını oluşturduğunda, aşağıdakileri kullanarak ana oturum ile tüm alt oturumlar arasında gezinebilirsiniz:
    - **\<Leader>+Right** (veya yapılandırılmış `session_child_cycle` tuş atamanız) ebeveyn → çocuk1 → çocuk2 → ... → ebeveyn arasında ileri doğru geçiş yapmak için
@@ -353,7 +345,7 @@ Bu yol, yapılandırma dosyasının bulunduğu yere göredir. Yani bu hem global
 Bu agent'ın modelini geçersiz kılmak için `model` ayarını kullanın. Farklı bölümler için optimize edilmiş farklı modelleri kullanmak için kullanışlıdır. Örneğin planlama için daha hızlı bir model, uygulama için daha yetenekli bir model.
 
 :::tip
-Bir model belirtmezseniz, birincil agent'lar [küresel olarak yapılandırılmış modeli](/docs/config#models) kullanırken alt agent'lar, alt agent'ı çağıran birincil agent'ın modelini kullanır.
+Bir model belirtmezseniz birincil agent'lar [genel olarak yapılandırılmış modeli](/docs/config#models) kullanır. `tools.subagent` ile başlatılan bir alt agent, çağrı `model` geçmedikçe onu başlatan oturumun modeliyle çalışır.
 :::
 
 ```json title="ocpp.json"
@@ -549,7 +541,7 @@ Agent'ın modunu `mode` yapılandırmasıyla kontrol edin. `mode` seçeneği age
 
 ### Gizli
 
-`@` otomatik tamamlama menüsünden bir alt agent'ı `hidden: true` ile gizleyin. Yalnızca diğer agent'lar tarafından Task aracı aracılığıyla programlı olarak çağrılması gereken dahili alt agent'lar için kullanışlıdır.
+Bir agent'ı `hidden: true` ile `@` otomatik tamamlama menüsünden gizleyin.
 
 ```json title="ocpp.json"
 {
@@ -562,43 +554,10 @@ Agent'ın modunu `mode` yapılandırmasıyla kontrol edin. `mode` seçeneği age
 }
 ```
 
-Bu yalnızca otomatik menüdeki görünürlüğü etkiler. İzinler izin verirse, gizli agent'lar model tarafından Task aracı aracılığıyla çağrılmaya devam edilebilir.
+Bu yalnızca otomatik tamamlama menüsündeki görünürlüğü etkiler.
 
 :::note
 Yalnızca `mode: subagent` agent'ları için geçerlidir.
-:::
-
----
-
-### Görev izinleri
-
-`permission.task` ile bir agent'ın Task aracı aracılığıyla hangi alt agent'ları çağırabileceğini kontrol edin. Esnek eşleştirme için küresel desenleri kullanır.
-
-```json title="ocpp.json"
-{
-  "agent": {
-    "orchestrator": {
-      "mode": "primary",
-      "permission": {
-        "task": {
-          "*": "deny",
-          "orchestrator-*": "allow",
-          "code-reviewer": "ask"
-        }
-      }
-    }
-  }
-}
-```
-
-`deny` olarak ayarlandığında, alt agent Task aracı açıklamasından tamamen kaldırılır, böylece model onu çağırmaya çalışmaz.
-
-:::tip
-Kurallar sırayla değerlendirilir ve **son eşleşen kural kazanır**. Yukarıdaki örnekte `orchestrator-planner`, hem `*` (reddet) hem de `orchestrator-*` (izin ver) ile eşleşir, ancak `orchestrator-*`, `*`'den sonra geldiğinden sonuç `allow` olur.
-:::
-
-:::tip
-Kullanıcılar, agent'ın görev izinleri bunu reddetse bile, her zaman herhangi bir alt agent'ı `@` otomatik tamamlama menüsü aracılığıyla doğrudan çağırabilir.
 :::
 
 ---

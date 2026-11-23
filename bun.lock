@@ -114,6 +114,7 @@
         "@agentclientprotocol/sdk": "1.2.1",
         "@clack/prompts": "1.0.0-alpha.1",
         "@effect/platform-node": "catalog:",
+        "@modelcontextprotocol/sdk": "1.29.0",
         "@ocpp/client": "workspace:*",
         "@ocpp/plugin": "workspace:*",
         "@ocpp/schema": "workspace:*",
@@ -132,6 +133,7 @@
         "uqr": "0.1.3",
         "web-tree-sitter": "0.25.10",
         "ws": "8.21.0",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@ff-labs/fff-bin-darwin-arm64": "0.10.5",

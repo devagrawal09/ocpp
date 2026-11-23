@@ -77,6 +77,22 @@ it.effect("can describe a capability with no admitted tool calls", () =>
   }),
 )
 
+it.effect("keeps the default call budget while allowing explicit bounded workflow budgets", () =>
+  Effect.gen(function* () {
+    const fixture = setup()
+    const code = "for (let index = 0; index < 17; index += 1) tools.count({}); return true"
+    expect((yield* fixture.run({ code, tools: ["count"] })).output).toMatchObject({
+      ok: false,
+      error: { kind: "ToolCallLimitExceeded" },
+    })
+    expect(fixture.counter.count).toBe(16)
+    expect(
+      (yield* fixture.run({ code, tools: ["count"], maxToolCalls: 100, timeoutMs: 120_000 })).output,
+    ).toMatchObject({ ok: true, value: true })
+    expect(fixture.counter.count).toBe(33)
+  }),
+)
+
 it.effect("takes plain data in and returns plain data without notebook declarations", () =>
   Effect.gen(function* () {
     const { run } = setup()

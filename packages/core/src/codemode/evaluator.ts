@@ -11,7 +11,8 @@ const Input = Schema.Struct({
   code: Schema.String,
   input: Schema.Json.pipe(Schema.optionalKey),
   tools: Schema.Array(Schema.String).pipe(Schema.optionalKey),
-  maxToolCalls: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16 })).pipe(Schema.optionalKey),
+  maxToolCalls: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 })).pipe(Schema.optionalKey),
+  timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 120_000 })).pipe(Schema.optionalKey),
 })
 
 const Output = Schema.Union([
@@ -32,7 +33,7 @@ export function tool(
     name: "evaluate",
     options: { namespace: "capability", acceptsToolHandles: true },
     description:
-      "Compile and run source over an explicit subset of your tools. Pass tool paths without the tools. prefix. Input is available as input. Returns a value or diagnostic; declarations are not installed in the notebook. No native eval or ambient filesystem/network access.",
+      "Compile and run source over an explicit subset of your tools. Pass tool paths without the tools. prefix. Input is available as input. Returns a value or diagnostic; declarations are not installed in the notebook. Defaults: 16 calls and 60 seconds; explicit maximums: 100 calls and 120 seconds. No native eval or ambient filesystem/network access.",
     input: Input,
     output: Output,
     execute: Effect.fn("CodeModeEvaluator.evaluate")(function* (input: typeof Input.Type, context: Tool.Context) {
@@ -79,7 +80,11 @@ export function tool(
               ),
             ),
           ),
-          limits: { timeoutMs: 60_000, maxToolCalls: input.maxToolCalls ?? 16, maxOutputBytes: 65_536 },
+          limits: {
+            timeoutMs: input.timeoutMs ?? 60_000,
+            maxToolCalls: input.maxToolCalls ?? 16,
+            maxOutputBytes: 65_536,
+          },
         }),
       )
       if (!result.ok) return { output: result, content: JSON.stringify(result) }

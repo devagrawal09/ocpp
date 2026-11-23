@@ -19,6 +19,36 @@ not future commitments. Source and tests remain authoritative for shipped behavi
 
 ## Now
 
+### Raise Code Mode Execution Allowances
+
+Status: planned; highest priority.
+
+Goal: raise overly restrictive Code Mode allowances so useful tool-composition
+programs can finish without prematurely hitting execution limits.
+
+Completion criteria:
+
+- Inventory the effective host and interpreter limits, including execution duration, tool-call count, output/log budgets, and notebook value sizes.
+- Identify limits that block real workloads and raise the relevant defaults, checking nested evaluation and subagent calls for lower effective ceilings.
+- Verify representative long-running, multi-tool, and larger-data programs that previously exhausted their allowances.
+- Preserve cancellation, bounded resource use, and atomic notebook saving; keep diagnostics explicit when a limit is reached.
+- Update limit documentation and regression tests with the new allowances.
+
+### Cancellation Fixes
+
+Status: planned.
+
+Goal: make stopping work reliable and make the scope and outcome of cancellation
+clear to the user.
+
+Completion criteria:
+
+- Reproduce and fix cancellation failures across session execution, Code Mode tool calls, and owned subagent work.
+- Test interruption during model streaming, tool execution, and child-session execution, plus cancellation of queued work where supported.
+- Preserve atomic notebook saving and distinguish user cancellation from shutdown recovery.
+- Ensure stopping one session does not interrupt unrelated sessions.
+- Show accurate stopping and terminal states, with regression tests for the affected paths.
+
 ### Code Mode Performance Baseline
 
 Status: planned.
@@ -44,6 +74,63 @@ Completion criteria:
 - A recorded baseline and documented interpretation of results. Regression thresholds follow baseline collection, rather than arbitrary initial targets.
 
 ## Next
+
+### UI Improvements
+
+Status: planned.
+
+Goal: improve everyday session navigation and interaction while preserving the
+existing visual language.
+
+Completion criteria:
+
+- Identify and address concrete friction in session navigation, composer interactions, and loading, empty, and error states.
+- Keep primary actions discoverable and provide clear feedback when work is running or an action fails.
+- Verify affected flows on desktop and mobile, with keyboard accessibility and RTL behavior covered.
+- Add focused UI regression coverage for the improved interactions.
+
+### Subagent Process UI
+
+Status: planned.
+
+Goal: make delegated work understandable without requiring users to navigate
+blindly between parent and child sessions.
+
+Completion criteria:
+
+- Show each subagent's task, relationship to its parent, and current execution status.
+- Make progress, results, errors, and cancellation outcomes accessible from the parent session.
+- Provide clear navigation into child sessions and back to the originating work.
+- Keep concurrent subagents distinguishable and verify live updates and restored session views.
+
+### Code Mode Process UI
+
+Status: planned.
+
+Goal: make Code Mode executions and their tool activity visible as coherent
+processes rather than opaque execution IDs.
+
+Completion criteria:
+
+- Show execution status, source, tool-call activity, and completion outcomes.
+- Surface saved notebook names, diagnostics, and cancellation or indeterminate outcomes.
+- Make parallel tool activity understandable without obscuring execution order or overwhelming the session timeline.
+- Verify that live and restored views agree with persisted execution state.
+
+### Session Logs UI
+
+Status: planned.
+
+Goal: make session activity and failures easy to inspect without reading raw
+service logs.
+
+Completion criteria:
+
+- Present available session logs and execution diagnostics with clear source attribution and chronological ordering.
+- Support searching or filtering and copying relevant entries for debugging.
+- Distinguish logs, tool activity, and user-visible messages, and make truncation explicit.
+- Preserve reading position while new entries arrive and keep large log views responsive.
+- Cover live updates, restored sessions, empty states, and failure states in UI tests.
 
 ### Broader Code Mode Performance Coverage
 
@@ -78,6 +165,49 @@ Promote this work when the evaluation harness and comparison methodology are
 agreed; complete it with a repeatable task set and a report of quality and cost.
 
 ## Completed
+
+### Jev-First Repository Command
+
+Implemented an opt-in session-local `/jev` command with progressive repository
+discovery, project instructions, persistent cross-task capability reuse, bounded
+generation budgets, per-action recovery checkpoints, corrections, and reviewable
+handoffs. The installed command repaired an isolated worktree fixture after
+failed acquisitions and an instruction-discovery fix; independent tests passed
+with test bytes unchanged. The smoke task used six steps and five generation
+attempts, not an untuned reliability benchmark. Deterministic mechanism tests
+also cover reuse, nested evaluation, partial-batch recovery, and instruction paging.
+
+The recorded scratch-loop baseline is unchanged. Full-library activation,
+sequential writers, manual fallback, and next-invocation corrections remain
+explicit limits. Broad daily-task reliability and economic advantage are not
+validated. See [usage and limits](.ocpp/experiments/decision-loop/JEV.md).
+Oversized-checkpoint recovery now uses a bounded judgment view without rewriting
+the full execution context, and resumes skip unchanged repository discovery.
+Regression tests cover large/escaped inputs, recovery, and explicit question
+budget diagnostics; broad-task judgment quality remains unvalidated.
+The command now checks evaluator availability before touching task state. A
+separate development server that predates the evaluator API must be restarted
+or its UI reconnected to the updated service; restarting the elected service
+alone does not update that process.
+
+### Persistent Decision-First Capability Library
+
+Status: completed; explicitly requested extension of the capability-loop experiment.
+
+Added a separate library-backed execution command without changing the recorded
+5/9 baseline. Validated generated source is saved automatically and reloaded in
+later executions with the current workspace. Generation receives existing source
+and execution evidence and can compose pinned revisions or explicitly supersede
+narrow capabilities without deleting dependencies. Acquisition waits for prior
+execution evidence; the existing batched decision loop and capability-owned
+execution policies are unchanged.
+
+Deterministic tests cover cross-workspace reuse, composition after supersession,
+generation context, evidence ordering, invalid admission, and retained failure
+diagnostics. These checks prove mechanism behavior, not autonomous transfer or
+cost improvement. Shared-library executions are sequential in this initial version.
+
+See [contract, usage, and limitations](.ocpp/experiments/decision-loop/LIBRARY.md).
 
 ### Decision-First Capability Loop: Repeatability Phase
 
